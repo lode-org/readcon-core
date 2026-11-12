@@ -88,14 +88,17 @@ within a type block and ensure thread-safety for parallel parsing.
 
 - =ConFrameIterator= :: Lazy frame-by-frame parser with =next()= and
   =forward()= (skip without parsing atom data).
-- =read_all_frames()= :: Convenience function using memmap2 for large
-  trajectory files. With the =parallel= feature, Rayon parse turns on
-  automatically when the buffer is at least 48 KiB.
-- =read_all_frames_with_threads(path, n)= :: =None= or =0= is that
-  automatic policy, =1= is sequential, =n >= 2= pins a Rayon pool
-  (sequential fallback when =parallel= is off).
+- =read_all_frames()= :: Map a plain file of at least 64 KiB, and
+  read a smaller or compressed file into one buffer. Parsing stays on
+  the calling thread.
+- =read_all_frames_with_threads(path, n)= :: =None=, =0=, and =1= parse
+  on the calling thread. =n >= 2= pins a Rayon pool when =parallel= is
+  on, and parses sequentially otherwise. Equal-length frames, including
+  a whitespace tail, skip the header walk.
 - =parse_frames_parallel()= / =parse_frames_parallel_with_threads()=
-  :: Rayon-based parallel parsing behind the =parallel= feature gate.
+  :: Walk headers on the calling thread, then parse the spans on a
+  Rayon pool. The text entry does this even when the frames share a
+  length. The byte entry (=frames_from_bytes=) uses the equal-span scan.
 
 * FFI layer (ffi.rs)
 
@@ -122,11 +125,12 @@ Per-frame metadata accessors:
   =rkr_free_string()=.
 - =rkr_frame_energy(handle)=, =rkr_frame_time(handle)=, etc. :: Typed
   accessors for common metadata keys.
-- =rkr_read_all_frames= :: Same automatic policy as
-  =read_all_frames= for the features the library was built with. The
-  published C prefix enables =parallel=.
+- =rkr_read_all_frames= :: The calling thread, the same path as
+  =read_all_frames=. The published C prefix enables =parallel=, which
+  the =n_threads= entry uses.
 - =rkr_read_all_frames_n_threads(filename, num_frames, n_threads)= ::
-  =0= auto, =1= sequential, =n_threads >= 2= a Rayon pool.
+  =0= and =1= stay on the calling thread. =n_threads >= 2= pins a
+  Rayon pool when the library was built with =parallel=.
 - =rkr_has_parallel_support()= :: =1= when Rayon is linked.
 - =RKRStatus= :: Prefixed C-compatible status codes such as
   =RKR_STATUS_SUCCESS=, =RKR_STATUS_NULL_POINTER=, and

@@ -136,8 +136,8 @@ CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV on one runner, me
 ``h5md_vs_con.py``. How to re-run and what each gate means:
 :doc:`benchmarks`.
 
-Uncompressed files under 64 kibibytes (KiB) are read into memory, and larger ones can use the optional mmap.
-With the ``parallel`` feature, Rayon parses multi-frame text of 48 KiB or more in parallel.
+A plain file under 64 KiB is read into memory. A larger plain file is mapped. Compressed input is decoded into a buffer.
+With the ``parallel`` feature, a caller who asks for two or more threads parses a multi-frame file on a Rayon pool. The default read stays on the calling thread. Equal-length frames skip the header walk.
 
 What is the sections mechanism?
 -------------------------------

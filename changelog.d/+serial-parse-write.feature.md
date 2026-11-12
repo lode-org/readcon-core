@@ -1,0 +1,1 @@
+Coordinate and velocity rows scan the common decimal form directly. Writers reuse repeated float spellings and format atom ids in base 10. A convel section is copied into one flat buffer. These paths stay on the calling thread.

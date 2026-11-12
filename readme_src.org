@@ -40,7 +40,8 @@ See [[file:docs/orgmode/benchmarks.org][docs/orgmode/benchmarks.org]].
   auto-detect on legacy =.convel= without a =sections= key.
 - *Lazy iteration:* ~ConFrameIterator~; =next_with_raw_span= keeps the on-disk blob for corpus ingest.
 - *Hot path:* [[https://github.com/aldanor/fast-float-rust][fast-float2]], [[https://docs.rs/memmap2][memmap2]], Cachegrind-tracked scenarios.
-- *Parallel frames:* Rayon behind the ~parallel~ Cargo feature.
+- *Parallel frames:* Rayon behind the ~parallel~ Cargo feature. The default read stays on the calling thread. Two or more threads parse a multi-frame file, and equal-length frames skip the header walk.
+- *Python frames:* ~read_con~ keeps one coordinate slab. ~xyz~ views one row. ~coords_array~, ~velocities_array~, and ~forces_array~ copy the parsed buffers before ~.atoms~ is built. ~iter_con~ and trajectory indexing move the parsed frame and match a bulk read.
 - *Bindings:* Python (PyO3), Julia (ccall), C (shipped header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [[https://github.com/metatensor/metatensor][metatensor]].
 - *Metadata helpers:* Typed =energy=, =frame_index=, =time=, =timestep=, =neb_bead=, =neb_band= across bindings; raw JSON still available.
 - *Validation:* =validate=true= enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.

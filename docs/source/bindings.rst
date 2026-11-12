@@ -32,9 +32,9 @@ task.
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Count frames (skip walk)                                       | ``iterators::count_frames``                    | ``readcon.count_frames``                                           | n/a                                                                | ``count_frames``                                                 | ``rkr_count_frames``                                              | ``count_frames``                           |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Coordinates on a loaded frame                                  | SoA on ``ConFrame``                            | ``frame.xyz`` (SoA copy); ``coords_array()`` walks ``.atoms``      | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
+    | Coordinates on a loaded frame                                  | SoA on ``ConFrame``                            | ``xyz`` views the slab; ``coords_array()`` copies                  | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
-    | Parallel multi-frame parse                                     | yes (``parallel``; 48 KiB gate; ``n_threads``) | yes (``n_threads``; wheels enable ``parallel``)                    | no (iterator walk)                                                 | yes (optional ``n_threads``; needs a ``parallel`` lib)           | yes (``rkr_read_all_frames_n_threads``)                           | yes (``read_all_frames(path, n)``)         |
+    | Parallel multi-frame parse                                     | yes (``parallel``; ``n_threads >= 2``)     | yes (``read_con(..., n_threads=n)``; wheels enable ``parallel``) | no (iterator walk)                                                 | yes (optional ``n_threads``; needs a ``parallel`` lib)           | yes (``rkr_read_all_frames_n_threads``)                           | yes (``read_all_frames(path, n)``)         |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Builder API                                                    | ``ConFrameBuilder``                            | ``PyConFrameBuilder``                                              | ``ConFrameBuilder``                                                | ``rkr_frame_new`` + ``rkr_frame_add_atom_full``                  | ``rkr_frame_new`` + ``rkr_frame_add_atom_full``                   | ``readcon::ConFrameBuilder``               |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
@@ -292,7 +292,28 @@ NumPy array views and DLPack interop (v0.10.0+)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Every per-atom quantity has a contiguous NumPy ndarray accessor (type-grouped
-``atom_data`` order). Prefer **DLPack** for cross-framework hand-off: read
+``atom_data`` order).
+
+``read_con`` keeps one ``[frames, N, 3]`` coordinate slab for the trajectory.
+``frame.xyz`` is a view of that frame's row, and a later read of ``xyz``
+returns the same view. ``coords_array``, ``velocities_array``, and
+``forces_array`` allocate a fresh array. Before ``.atoms`` is built they
+copy once from the slab or the parsed structure-of-arrays. After
+``.atoms`` exists they walk the Python atoms, so an edit shows up on the
+next call and a write into a previous return value does not. ``vel`` and
+``frc`` copy the parsed velocity and force arrays while the Rust frame is
+still held.
+
+``iter_con``, the streaming reader, and ``ConTrajectory`` indexing move the
+parsed frame into the wrapper. Those paths match ``read_all_frames`` on
+the same file, including velocities and forces.
+
+A velocity-only atom, the usual ``.convel`` row, keeps its three
+components inline. A force-only atom does the same. A frame that has
+both sections shares one slab of ``n * 6`` floats (every velocity, then
+every force) instead of a boxed tail on each atom.
+
+Prefer **DLPack** for cross-framework hand-off: read
 ``ndim``, ``shape``, and ``dtype`` (code/bits) from the tensor—do **not** assume the
 host language must allocate ``f64`` / ``real64`` copies. On-disk CON numerics are
 IEEE binary64 today, and current exports report ``kDLFloat`` / 64 for vectors and

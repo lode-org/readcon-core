@@ -190,8 +190,11 @@ the code, not a promise about every host):
 - Atom vectors: sized from the CON header before filling
 - File load: =read_to_string= below 64 KiB, mmap at/above (=MMAP_THRESHOLD= in
   =src/compression.rs=)
-- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and =parallel= is on
-  (=PARALLEL_BYTES_THRESHOLD= in =src/iterators.rs=). Sequential vs
+- Multi-frame parse stays on the calling thread until the caller asks
+  for two or more workers. Equal-length frames, including a whitespace
+  tail, then skip the header walk (=SCAN_EQUAL_SPAN= in
+  =src/iterators.rs=). A plain file of at least 64 KiB is mapped
+  (=MMAP_THRESHOLD= in =src/compression.rs=). Sequential vs
   pinned workers: =examples/wall_scale_harness.rs= writes
   =benches/results/wall_scale.json= (host, date, commit). That JSON is
   Table io in =paper/cpc/main.tex=. Do not mix it with the Python

@@ -314,30 +314,54 @@ larger files.
 Parallel parsing
 ~~~~~~~~~~~~~~~~
 
-Behind the ``parallel`` feature gate, multi-frame files can be parsed
-concurrently using rayon. ``read_all_frames`` (and the C symbol
-``rkr_read_all_frames``) turns that path on automatically for files of
-at least 48 KiB. ``read_all_frames_with_threads`` /
-``rkr_read_all_frames_n_threads`` / ``readcon.read_con(..., n_threads=n)``
-pin the worker count: ``1`` is sequential, ``n >`` 2= is a Rayon pool,
-``0=/=None`` is the automatic policy.
+The ``parallel`` feature links Rayon. The ``python`` and ``mpi`` features
+turn it on. A build without ``parallel`` parses on the calling thread
+for every thread count.
+
+``read_all_frames``, ``rkr_read_all_frames``, and ``readcon.read_con`` with
+``n_threads`` omitted, ``0``, or ``1`` parse on the calling thread.
+``read_all_frames_with_threads``, ``rkr_read_all_frames_n_threads``, and
+``readcon.read_con(..., n_threads=n)`` with ``n >= 2`` use a Rayon pool of
+that size. The byte readers keep that pool for the life of the process.
+
+A plain file of at least 64 KiB is mapped. A smaller file, and any
+compressed file, is read into one buffer.
+
+On the byte readers (``frames_from_bytes``, ``read_all_frames_with_threads``,
+and the phased reader behind ``read_con``), equal-length frames skip the
+header walk. The first frame's byte length tiles the buffer. A
+whitespace tail after the last frame still takes this path. The calling
+thread checks each worker boundary, and the pool parses whole frames
+into the vector it returns. A file whose frames differ in length walks
+headers on the calling thread, using an AVX2 newline skip when the CPU
+supports it. ``frames_from_text`` and ``parse_frames_parallel`` always walk
+the headers, then parse the spans on the pool.
+
+``read_positions_with_threads`` writes one row-major ``f64`` buffer. When
+several spans fail, the error is the earliest span, the same span a
+serial walk reports. Unit expressions share one process-wide table.
 
 .. code:: rust
 
     #[cfg(feature = "parallel")]
-    use readcon_core::iterators::{frames_from_text, parse_frames_parallel};
+    use readcon_core::iterators::{frames_from_bytes, read_all_frames_with_threads};
 
-    let contents = std::fs::read_to_string("large_trajectory.con").unwrap();
-    let sequential = frames_from_text(&contents, Some(1)).unwrap();
-    let results = parse_frames_parallel(&contents);
-    let frames: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
+    let bytes = std::fs::read("large_trajectory.con").unwrap();
+    let sequential = frames_from_bytes(&bytes, Some(1)).unwrap();
+    let frames = frames_from_bytes(&bytes, Some(8)).unwrap();
+    let from_path = read_all_frames_with_threads(
+        std::path::Path::new("large_trajectory.con"),
+        Some(8),
+    ).unwrap();
+    assert_eq!(frames.len(), sequential.len());
+    assert_eq!(from_path.len(), frames.len());
 
 Python (wheels enable ``parallel``):
 
 .. code:: python
 
-    frames = readcon.read_con("large_trajectory.con")            # auto
-    seq = readcon.read_con("large_trajectory.con", n_threads=1)  # sequential
+    frames = readcon.read_con("large_trajectory.con")            # calling thread
+    seq = readcon.read_con("large_trajectory.con", n_threads=1)  # calling thread
     pinned = readcon.read_con("large_trajectory.con", n_threads=8)
     assert readcon.has_parallel_support()
 
@@ -346,11 +370,11 @@ C (published prefix is built with ``parallel``):
 .. code:: c
 
     uintptr_t n = 0;
-    RKRConFrame **auto_p = rkr_read_all_frames(path, &n);
-    RKRConFrame **seq = rkr_read_all_frames_n_threads(path, &n, 1);
+    RKRConFrame **serial = rkr_read_all_frames(path, &n);
+    RKRConFrame **one = rkr_read_all_frames_n_threads(path, &n, 1);
     RKRConFrame **pool = rkr_read_all_frames_n_threads(path, &n, 8);
     if (!rkr_has_parallel_support()) {
-        /* seq and pool are the same sequential path */
+        /* one and pool are the same sequential path */
     }
 
 Python

@@ -964,9 +964,10 @@ mod aos_soa_agreement_tests {
 
 /// Reads all frames from a file.
 ///
-/// The bytes are read into one owned buffer and parsed on the calling
-/// thread. A worker pool runs only when [`read_all_frames_with_threads`]
-/// is asked for two or more threads.
+/// A plain file of at least 64 KiB is mapped. A smaller file, and any
+/// compressed file, is read into one buffer. Parsing stays on the
+/// calling thread. A worker pool runs only when
+/// [`read_all_frames_with_threads`] is asked for two or more threads.
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     read_all_frames_with_threads(path, None)
 }
@@ -1003,8 +1004,9 @@ pub fn frames_from_text(
 ///
 /// `None`, `Some(0)`, and `Some(1)` parse on the calling thread.
 /// `Some(n)` with `n >= 2` pins a Rayon pool when `parallel` is on.
-/// The file is read into one owned buffer. The caller who wants a map
-/// uses the streaming iterator.
+/// A plain file of at least 64 KiB is mapped. A smaller file, and any
+/// compressed file, is read into one buffer. The streaming iterator
+/// is the path that yields one frame at a time.
 pub fn read_all_frames_with_threads(
     path: &Path,
     num_threads: Option<usize>,
@@ -1812,12 +1814,11 @@ fn finish_results(
 /// Header walk on the calling thread.
 #[cfg(feature = "parallel")]
 pub const SCAN_SERIAL: u8 = 0;
-/// Newline index in chunks, then a header walk on the calling thread.
+/// Chunked newline index used by [`frame_start_offsets_with_threads`].
 ///
-/// Frames that do not share one byte length take this path. The newline
-/// bytes are split across the pool. The header walk is not, because a
-/// later frame start is the end of the skip, and that end is not known
-/// until the skip runs.
+/// The pool parser does not select this kind. Equal-length frames use
+/// [`SCAN_EQUAL_SPAN`]. Every other file uses [`SCAN_SERIAL`]: an AVX2
+/// header walk on the calling thread when the CPU supports it.
 #[cfg(feature = "parallel")]
 pub const SCAN_INDEXED: u8 = 1;
 /// Equal-length frames. Each worker boundary is checked.
@@ -1926,10 +1927,11 @@ fn parse_frames_parallel_bytes(
 
 /// Scan, slot allocation, and worker parse of `bytes`.
 ///
-/// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
-/// stays on the calling thread. `None` follows [`scan_thread_count`].
-/// The pool build is `pool_s`. The pool join is `pool_join_s`.
-/// Neither one is inside the scan or the parse.
+/// `Some(n)` with `n >= 2` uses a pool of that size. `None`, `Some(0)`,
+/// and `Some(1)` stay on the calling thread. The pool build is `pool_s`.
+/// The pool join is `pool_join_s`. Neither one is inside the scan or
+/// the parse. Equal-length frames, including a whitespace tail, use
+/// [`SCAN_EQUAL_SPAN`] and skip the header walk.
 #[cfg(feature = "parallel")]
 fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     let parse_workers = match num_threads {
@@ -2378,10 +2380,16 @@ pub fn frame_start_offsets_with_threads(
 
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
 ///
-/// Phase 1: frame starts from a serial [`ConFrameIterator::forward_fast`]
-/// walk. The header names each block's line count, so the walk does not
-/// parse atom rows. Phase 2 parses those spans on a Rayon pool and
-/// stores the frames in file order. See [`parse_frames_parallel_with_threads`].
+/// Phase 1 walks frame starts on the calling thread with
+/// [`ConFrameIterator::forward_fast`]. The header names each block's
+/// line count, so the walk does not parse atom rows. Phase 2 parses
+/// those spans on a Rayon pool and stores the frames in file order.
+/// See [`parse_frames_parallel_with_threads`].
+///
+/// [`frames_from_bytes`] and [`read_all_frames_with_threads`] take a
+/// shorter scan when every frame has the same length, including a
+/// whitespace tail after the last frame. This text entry always walks
+/// the headers, then parses the spans on the pool.
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -3580,13 +3588,18 @@ mod phased_read_tests {
     }
 
     #[test]
-    fn a_whitespace_tail_skips_the_equal_span_walk() {
-        let mut text = fixture("cuh2.con").repeat(3);
-        text.push('\n');
-        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
-        let serial = frames_from_text(&text, Some(1)).expect("serial");
-        let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+    fn a_whitespace_tail_uses_the_equal_span_walk() {
+        let text = fixture("cuh2.con").repeat(3);
+        let tailed = format!("{text}\n");
+        let bounds = equal_span_boundaries(tailed.as_bytes(), 4).expect("whitespace tail");
+        assert_eq!(bounds.len(), 3);
+        let serial = frames_from_text(&tailed, Some(1)).expect("serial");
+        let parallel = frames_from_bytes_phased(tailed.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(parallel.scan_kind, SCAN_EQUAL_SPAN);
         assert_eq!(parallel.frames, serial);
+
+        let dirty = format!("{tailed}x");
+        assert!(equal_span_boundaries(dirty.as_bytes(), 4).is_none());
     }
 
     #[test]

@@ -507,9 +507,11 @@ impl PyConFrame {
 
     /// Coordinates as a numpy `[N, 3] float64` view.
     ///
-    /// A frame from `read_con` views one row of the trajectory slab.
-    /// A later read of `xyz` returns that same view. `coords_array()`
-    /// still walks `.atoms` so in-place Atom edits show up.
+    /// A frame from `read_con` views one row of the shared trajectory
+    /// slab. A later read of `xyz` returns that same view.
+    /// [`Self::coords_array`] copies the slab or the parsed SoA once
+    /// before `.atoms` is built. After that it walks the Python atoms,
+    /// so an in-place edit shows up on the next call.
     #[getter]
     fn xyz<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
         if let Some(slab) = &self.slab {

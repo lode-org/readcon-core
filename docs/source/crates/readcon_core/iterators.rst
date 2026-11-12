@@ -49,10 +49,17 @@
       :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"parse_frames_parallel"},{"type":"punctuation","value":"("},{"type":"name","value":"file_contents"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"&"},{"type":"link","value":"str","target":"str"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"link","value":"Result","target":"Result"},{"type":"punctuation","value":"<"},{"type":"link","value":"types","target":"types"},{"type":"punctuation","value":"::"},{"type":"name","value":"ConFrame"},{"type":"punctuation","value":", "},{"type":"link","value":"error","target":"error"},{"type":"punctuation","value":"::"},{"type":"name","value":"ParseError"},{"type":"punctuation","value":">"},{"type":"punctuation","value":">"}]
 
       Parses frames in parallel using rayon, splitting on frame boundaries.
-      
-      Phase 1: sequential scan to find byte offsets of each frame's start.
-      Phase 2: parallel parse of each frame slice using rayon.
-      
+
+      Phase 1 walks frame starts on the calling thread. The header names
+      each block's line count, so the walk does not parse atom rows.
+      Phase 2 parses those spans on a Rayon pool and stores the frames
+      in file order.
+
+      ``frames_from_bytes`` and ``read_all_frames_with_threads`` skip that
+      header walk when every frame has the same length, including a
+      whitespace tail after the last frame. This text entry always walks
+      the headers.
+
       Requires the ``parallel`` feature.
 
    .. rust:function:: readcon_core::iterators::read_all_frames
@@ -61,11 +68,11 @@
       :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"read_all_frames"},{"type":"punctuation","value":"("},{"type":"name","value":"path"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"&"},{"type":"link","value":"Path","target":"Path"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Result","target":"Result"},{"type":"punctuation","value":"<"},{"type":"link","value":"Vec","target":"Vec"},{"type":"punctuation","value":"<"},{"type":"link","value":"types","target":"types"},{"type":"punctuation","value":"::"},{"type":"name","value":"ConFrame"},{"type":"punctuation","value":">"},{"type":"punctuation","value":", "},{"type":"link","value":"Box","target":"Box"},{"type":"punctuation","value":"<"},{"type":"keyword","value":"dyn"},{"type":"space"},{"type":"link","value":"std","target":"std"},{"type":"punctuation","value":"::"},{"type":"name","value":"error"},{"type":"punctuation","value":"::"},{"type":"name","value":"Error"},{"type":"punctuation","value":">"},{"type":"punctuation","value":">"}]
 
       Reads all frames from a file.
-      
-      For files smaller than 64 KiB, uses a simple ``read_to_string`` to avoid
-      the fixed overhead of mmap (VMA creation, page fault, munmap). For larger
-      trajectory files, uses memory-mapped I/O to let the OS page cache handle
-      the data.
+
+      A plain file of at least 64 KiB is mapped. A smaller file, and any
+      compressed file, is read into one buffer. Parsing stays on the
+      calling thread. A worker pool runs only when
+      ``read_all_frames_with_threads`` is asked for two or more threads.
 
    .. rust:function:: readcon_core::iterators::read_first_frame
       :index: 0
