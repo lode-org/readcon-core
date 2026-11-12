@@ -55,8 +55,19 @@ if ! grep -q 'reproducible-tar.sh' scripts/package-cxx.sh \
     || ! grep -q -- '--owner=0' scripts/reproducible-tar.sh \
     || ! grep -q -- '--group=0' scripts/reproducible-tar.sh \
     || ! grep -q -- '--numeric-owner' scripts/reproducible-tar.sh \
-    || ! grep -q 'gzip -n' scripts/reproducible-tar.sh; then
+    || ! grep -q 'gzip -n' scripts/reproducible-tar.sh \
+    || ! grep -q 'gtar' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--files-from' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--uid 0' scripts/reproducible-tar.sh \
+    || ! grep -q 'safe.directory' scripts/source-date-epoch.sh; then
     die "cxx and clib archives must use SOURCE_DATE_EPOCH, sorted names, uid 0, and gzip -n"
+fi
+if ! grep -q 'safe.directory /io/src' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'safe.directory' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/ci_cxx.yml; then
+    die "tarball workflows must mark mounted checkouts safe and install GNU tar on macOS"
 fi
 if ! grep -q 'record-cxx-wrap.sh' scripts/release-prep.sh; then
     die "release-prep.sh must pin the wrap from the slim cxx archive"

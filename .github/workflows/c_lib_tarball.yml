@@ -90,6 +90,23 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # BSD tar rejects GNU --sort=name. gtar is GNU tar; reproducible-tar.sh
+      # uses it, and falls back to a sorted file list when it is absent.
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install gnu-tar
+
+      # Host gitconfig does not enter the manylinux container. That job
+      # marks /io, /io/src, and /io/packager inside the container as well.
+      - name: Mark checkouts as safe git directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/src"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/packager"
+
       - name: Linux BFD linker
         if: runner.os == 'Linux'
         run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=bfd" >> "$GITHUB_ENV"
@@ -130,6 +147,11 @@ jobs:
             "$MANYLINUX_IMAGE" \
             bash -lc '
               set -euo pipefail
+              if command -v git >/dev/null 2>&1; then
+                git config --global --add safe.directory /io
+                git config --global --add safe.directory /io/src
+                git config --global --add safe.directory /io/packager
+              fi
               export PATH="/io/src/.ci-cargo/bin:$PATH"
               if ! command -v rustc >/dev/null 2>&1; then
                 curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \

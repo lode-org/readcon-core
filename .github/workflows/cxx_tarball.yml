@@ -52,6 +52,23 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      # Host gitconfig is invisible inside a container. source-date-epoch.sh
+      # marks the tree it is reading. gtar covers a future macOS runner;
+      # reproducible-tar.sh still sorts a BSD tar list when gtar is absent.
+      - name: Mark the checkout as a safe git directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ -d "$GITHUB_WORKSPACE/uploader" ]; then
+            git config --global --add safe.directory "$GITHUB_WORKSPACE/uploader"
+          fi
+
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install gnu-tar
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

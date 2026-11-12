@@ -6,6 +6,8 @@ not create a release, move a tag, or publish crates or wheels.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -39,6 +41,10 @@ FAKE_GH = textwrap.dedent(
         if seen < int(os.environ.get("GH_VIEW_FAILS", "0")):
             sys.stderr.write("release not found\\n")
             sys.exit(1)
+        if "assets" in cmd:
+            sys.stdout.write(os.environ.get("GH_ASSETS_JSON", '{"assets":[]}'))
+            sys.stdout.write("\\n")
+            sys.exit(0)
         print(os.environ.get("GH_TAG", "v0.20.0"))
         sys.exit(0)
     if cmd[:2] == ["release", "upload"]:
@@ -178,6 +184,72 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             log,
         )
 
+    def test_matching_sha256_is_skipped(self) -> None:
+        digest = hashlib.sha256(b"archive").hexdigest()
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": self.asset.name,
+                        "digest": f"sha256:{digest}",
+                    }
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v0.20.0", str(self.asset)],
+            extra_env={"GH_ASSETS_JSON": payload},
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn(f"skip {self.asset.name}: existing sha256 matches", done.stdout)
+        self.assertIn("nothing to upload", done.stdout)
+        self.assertNotIn("release upload", log)
+
+    def test_different_sha256_is_not_overwritten(self) -> None:
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": self.asset.name,
+                        "digest": "sha256:" + ("ab" * 32),
+                    }
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v0.20.0", str(self.asset)],
+            extra_env={"GH_ASSETS_JSON": payload},
+        )
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(f"refusing to overwrite {self.asset.name}", done.stderr)
+        self.assertIn("release sha256: " + ("ab" * 32), done.stderr)
+        self.assertIn("different bytes", done.stderr)
+        self.assertNotIn("release upload", log)
+        self.assertNotIn("api ", log)
+
+    def test_new_asset_uploads_and_match_is_skipped(self) -> None:
+        other = self.asset.with_name("readcon-core-cxx-0.20.0-vendor.tar.gz")
+        other.write_text("vendor", encoding="utf-8")
+        digest = hashlib.sha256(b"archive").hexdigest()
+        payload = json.dumps(
+            {
+                "assets": [
+                    {"name": self.asset.name, "digest": f"sha256:{digest}"},
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v0.20.0", str(self.asset), str(other)],
+            extra_env={"GH_ASSETS_JSON": payload},
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn(f"skip {self.asset.name}: existing sha256 matches", done.stdout)
+        self.assertIn(
+            "release upload v0.20.0 --repo lode-org/readcon-core --clobber", log
+        )
+        self.assertIn(str(other), log)
+        self.assertNotIn(str(self.asset), log)
+
     def test_gh_release_calls_pass_repo(self) -> None:
         done, log = self._with_fake_gh(["--tag", "v0.20.0", str(self.asset)])
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -185,7 +257,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
         upload = "release upload v0.20.0 --repo lode-org/readcon-core --clobber"
         self.assertIn(view, log)
         self.assertIn(upload, log)
-        self.assertEqual(log.count("--repo lode-org/readcon-core"), 2)
+        self.assertEqual(log.count("--repo lode-org/readcon-core"), 3)
 
     def test_wait_gives_up_without_creating_a_release(self) -> None:
         done, log = self._with_fake_gh(
@@ -248,6 +320,8 @@ class TarballWorkflowTriggerTest(unittest.TestCase):
         self.assertIn("gh release upload", text)
         self.assertIn("--clobber", text)
         self.assertIn('--repo "$repo"', text)
+        self.assertIn("existing sha256 matches", text)
+        self.assertIn("refusing to overwrite", text)
         self.assertNotIn("2>&1", text)
         for banned in (
             "gh release create",

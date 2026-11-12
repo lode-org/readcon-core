@@ -21,6 +21,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # source-date-epoch.sh also marks a container bind-mount, where this
+      # host gitconfig is not visible. gtar covers a future macOS runner.
+      - name: Mark the checkout as a safe git directory
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install gnu-tar
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 

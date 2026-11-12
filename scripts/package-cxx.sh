@@ -50,8 +50,9 @@ else
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}"
 fi
 
-# Tag committer date when v$VERSION exists, else the recorded pin or HEAD.
-# Exported before cargo package so the crate and the outer archive share it.
+# Committed source-date-epoch pin when one is present, else the v$VERSION
+# tag or HEAD. Exported before cargo package so the crate and the outer
+# archive share it. A container bind-mount is marked safe.directory.
 SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
 export SOURCE_DATE_EPOCH
 
@@ -188,7 +189,13 @@ bash "$SCRIPT_DIR/reproducible-tar.sh" \
     "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
-SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+if command -v sha256sum >/dev/null 2>&1; then
+    SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+    SHA="$(shasum -a 256 "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+else
+    SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz")"
+fi
 echo "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 echo "sha256:${SHA}"
 echo "${SHA}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz.sha256"
