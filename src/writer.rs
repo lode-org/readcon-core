@@ -52,20 +52,17 @@ impl From<WriteError> for io::Error {
 
 /// Numeric text representation for CON frame fields.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum FloatFormat {
     /// A fixed number of digits after the decimal point.
     DecimalPlaces(usize),
     /// The shortest scientific representation preserving each finite f64.
     /// Signed zero is preserved; decimal precision does not limit this mode.
+    /// CON-num.6 (D13): the default writer round-trips binary64.
+    #[default]
     RoundTrip,
 }
 
-impl Default for FloatFormat {
-    fn default() -> Self {
-        // CON-num.6 (D13): the default writer round-trips binary64.
-        Self::RoundTrip
-    }
-}
 
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///

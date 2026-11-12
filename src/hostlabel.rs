@@ -24,14 +24,13 @@ pub fn normalize_cpu(raw: &str) -> String {
 pub fn cpu_model() -> String {
     if let Ok(text) = fs::read_to_string("/proc/cpuinfo") {
         for line in text.lines() {
-            if line.to_ascii_lowercase().starts_with("model name") {
-                if let Some((_, value)) = line.split_once(':') {
+            if line.to_ascii_lowercase().starts_with("model name")
+                && let Some((_, value)) = line.split_once(':') {
                     let value = value.trim();
                     if !value.is_empty() {
                         return normalize_cpu(value);
                     }
                 }
-            }
         }
     }
     "unknown".to_string()

@@ -1412,7 +1412,7 @@ fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error
         dest.copy_from_slice(src);
         return Ok(());
     }
-    for (i, slot) in dest.chunks_exact_mut(3).enumerate() {
+    for (i, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
         slot.copy_from_slice(&frame.positions.as_f64_row(i));
     }
     Ok(())
@@ -1738,13 +1738,11 @@ fn numa_remote_pages() -> i64 {
     let mut remote = 0i64;
     for line in text.lines() {
         for token in line.split_whitespace() {
-            if let Some(rest) = token.strip_prefix('N') {
-                if let Some((node, pages)) = rest.split_once('=') {
-                    if node != "0" {
+            if let Some(rest) = token.strip_prefix('N')
+                && let Some((node, pages)) = rest.split_once('=')
+                    && node != "0" {
                         remote += pages.parse::<i64>().unwrap_or(0);
                     }
-                }
-            }
         }
     }
     remote
@@ -2363,11 +2361,10 @@ fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
 
 #[cfg(feature = "parallel")]
 fn recycle_starts(starts: Vec<usize>) {
-    if let Ok(mut slot) = START_CACHE.lock() {
-        if starts.capacity() >= slot.capacity() {
+    if let Ok(mut slot) = START_CACHE.lock()
+        && starts.capacity() >= slot.capacity() {
             *slot = starts;
         }
-    }
 }
 
 #[cfg(feature = "parallel")]
@@ -3408,7 +3405,7 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
         if let Some(src) = frame.positions.f64_slice() {
             dest.copy_from_slice(src);
         } else {
-            for (row, slot) in dest.chunks_exact_mut(3).enumerate() {
+            for (row, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                 slot.copy_from_slice(&frame.positions.as_f64_row(row));
             }
         }

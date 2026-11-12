@@ -142,7 +142,9 @@ fn assert_file(path: &Path) {
                 )
             }
         }
-        if expected.is_ok() && threads == 1 {
+        if let Ok(want) = expected.as_ref()
+            && threads == 1
+        {
             let frames = read_all_frames_with_threads(path, Some(threads))
                 .unwrap_or_else(|err| panic!("{} frames threads {threads}: {err}", path.display()));
             let mut flat = Vec::new();
@@ -151,7 +153,7 @@ fn assert_file(path: &Path) {
                     flat.extend_from_slice(&[atom.x, atom.y, atom.z]);
                 }
             }
-            bits(expected.as_ref().unwrap(), &flat);
+            bits(want, &flat);
         }
     }
 }

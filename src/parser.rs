@@ -2194,12 +2194,11 @@ pub fn parse_declared_sections<'a>(
                     applied += 1;
                 }
                 other => {
-                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR) {
-                        if let Some(arity) = section_row_arity(header, other) {
+                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR)
+                        && let Some(arity) = section_row_arity(header, other) {
                             skip_unknown_section(lines, header, other, arity)?;
                             continue;
                         }
-                    }
                     return Err(ParseError::UnknownSection(other.to_string()));
                 }
             }

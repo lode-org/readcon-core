@@ -908,14 +908,13 @@ impl PyConFrame {
         };
         let mut out = Vec::with_capacity(arr.len());
         for item in arr.iter() {
-            if let Ok(pair) = item.cast::<pyo3::types::PyList>() {
-                if pair.len() == 2 {
+            if let Ok(pair) = item.cast::<pyo3::types::PyList>()
+                && pair.len() == 2 {
                     let i: u32 = pair.get_item(0)?.extract()?;
                     let j: u32 = pair.get_item(1)?.extract()?;
                     out.push((i, j).into_pyobject(py)?.into_any().unbind());
                     continue;
                 }
-            }
             if let Ok(obj) = item.cast::<PyDict>() {
                 let i: u32 = obj
                     .get_item("i")?
@@ -925,13 +924,12 @@ impl PyConFrame {
                     .get_item("j")?
                     .ok_or_else(|| PyValueError::new_err("bonds entry missing j"))?
                     .extract()?;
-                if let Some(order_v) = obj.get_item("order")? {
-                    if !order_v.is_none() {
+                if let Some(order_v) = obj.get_item("order")?
+                    && !order_v.is_none() {
                         let order: i32 = order_v.extract()?;
                         out.push((i, j, order).into_pyobject(py)?.into_any().unbind());
                         continue;
                     }
-                }
                 out.push((i, j).into_pyobject(py)?.into_any().unbind());
                 continue;
             }
@@ -2897,14 +2895,12 @@ fn write_python_frame(
     frame: &PyRef<'_, PyConFrame>,
     write: &mut impl FnMut(&ConFrame) -> PyResult<()>,
 ) -> PyResult<()> {
-    if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
-        if let Some(inner) = frame.inner.as_ref() {
-            if inner.positions.nrows() > 0 {
+    if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+        && let Some(inner) = frame.inner.as_ref()
+            && inner.positions.nrows() > 0 {
                 write(inner)?;
                 return Ok(());
             }
-        }
-    }
     let rust_frame = frame.to_con_frame(py)?;
     write(&rust_frame)
 }
@@ -4308,12 +4304,11 @@ fn py_text_frames<'py>(
     let mut prev: Option<&[String]> = None;
     let mut prev_row: Option<Py<pyo3::types::PyTuple>> = None;
     for frame in text.chunks(stride) {
-        if let (Some(old), Some(row)) = (prev, prev_row.as_ref()) {
-            if old == frame {
+        if let (Some(old), Some(row)) = (prev, prev_row.as_ref())
+            && old == frame {
                 frames.append(row.clone_ref(py))?;
                 continue;
             }
-        }
         let row = if width == 1 {
             pyo3::types::PyTuple::new(
                 py,
@@ -4608,11 +4603,10 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>) -> PyResult<()> {
         .collect();
     let bytes = crate::extxyz_scan::extxyz_bytes(n_frames, n_atoms, cell, &sources)
         .map_err(PyValueError::new_err)?;
-    if let Some(parent) = std::path::Path::new(path).parent() {
-        if !parent.as_os_str().is_empty() {
+    if let Some(parent) = std::path::Path::new(path).parent()
+        && !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
         }
-    }
     std::fs::write(path, bytes).map_err(|_| PyValueError::new_err("write"))
 }
 

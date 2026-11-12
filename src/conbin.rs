@@ -177,11 +177,10 @@ pub(crate) fn dev_nums(dev: u64) -> (u64, u64) {
 /// A missing tree means one queue.
 #[cfg(target_os = "linux")]
 fn hw_queue_count(dev: u64) -> usize {
-    if let Some(text) = queue_text(dev, "nr_hw_queues") {
-        if let Ok(count) = text.trim().parse::<usize>() {
+    if let Some(text) = queue_text(dev, "nr_hw_queues")
+        && let Ok(count) = text.trim().parse::<usize>() {
             return count.max(1);
         }
-    }
     let (major, minor) = dev_nums(dev);
     let mut dir = std::path::PathBuf::from(format!("/sys/dev/block/{major}:{minor}"));
     if dir.join("partition").is_file() {
@@ -807,7 +806,7 @@ fn wait_resident(addr: usize, off: usize, len: usize, page: usize) -> Result<(),
     // call, so EINVAL is the old-kernel miss and one byte of each page is
     // read. EAGAIN is a transient kernel resource (man 2 madvise) and is
     // retried once per page of the range. Any other errno is returned.
-    if page == 0 || (addr + off) % page != 0 {
+    if page == 0 || !(addr + off).is_multiple_of(page) {
         return Err("madvise address is not page-aligned".into());
     }
     let start = (addr + off) as *mut libc::c_void;
@@ -1922,8 +1921,10 @@ mod tests {
             std::io::Read::read_to_end(&mut File::open(&path).unwrap(), &mut raw).unwrap();
             let off = raw.len() - 2 * n * 8;
             let want: Vec<f64> = raw[off..]
-                .chunks_exact(8)
-                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|chunk| f64::from_le_bytes(*chunk))
                 .collect();
             assert_eq!(pos.as_slice(), &want[..n]);
             assert_eq!(vel.as_slice(), &want[n..]);

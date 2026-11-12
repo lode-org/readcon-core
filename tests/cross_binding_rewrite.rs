@@ -35,11 +35,10 @@ fn accepted_cases() -> Vec<Accepted> {
             continue;
         }
         if line == "[[valid]]" || line == "[[invalid]]" {
-            if valid {
-                if let Some(case) = current.take() {
+            if valid
+                && let Some(case) = current.take() {
                     cases.push(case);
                 }
-            }
             valid = line == "[[valid]]";
             current = valid.then(|| Accepted {
                 id: String::new(),
@@ -60,11 +59,10 @@ fn accepted_cases() -> Vec<Accepted> {
             _ => {}
         }
     }
-    if valid {
-        if let Some(case) = current {
+    if valid
+        && let Some(case) = current {
             cases.push(case);
         }
-    }
     cases
 }
 

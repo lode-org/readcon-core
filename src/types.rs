@@ -1338,16 +1338,14 @@ impl ConFrame {
                 self.positions.set_f64_row(i, [a.x, a.y, a.z]);
             }
             self.atom_ids[i] = a.atom_id;
-            if has_vel {
-                if let Some(v) = a.velocity() {
+            if has_vel
+                && let Some(v) = a.velocity() {
                     self.velocities.set_f64_row(i, v);
                 }
-            }
-            if has_frc {
-                if let Some(f) = a.force() {
+            if has_frc
+                && let Some(f) = a.force() {
                     self.forces.set_f64_row(i, f);
                 }
-            }
             if has_eng {
                 self.atom_energies.set_f64(i, a.energy().unwrap_or(0.0));
             }
@@ -1357,11 +1355,10 @@ impl ConFrame {
             if has_spn {
                 self.spins.set_f64(i, a.spin().unwrap_or(0.0));
             }
-            if has_mm {
-                if let Some(m) = a.magmom() {
+            if has_mm
+                && let Some(m) = a.magmom() {
                     self.magmoms.set_f64_row(i, m);
                 }
-            }
             if has_dsp && let Some(d) = a.displacement() {
                 self.displacements.set_f64_row(i, d);
             }
@@ -2447,7 +2444,7 @@ impl ConFrameBuilder {
                 found: spreads.len(),
             });
         }
-        for (i, chunk) in spreads.chunks_exact(3).enumerate() {
+        for (i, chunk) in spreads.as_chunks::<3>().0.iter().enumerate() {
             let row = [chunk[0], chunk[1], chunk[2]];
             if !spread_row_ok(row) {
                 return Err(invalid_spread(i));
@@ -3170,16 +3167,14 @@ impl ConFrameBuilder {
         for (i, a) in atom_data.iter().enumerate() {
             pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
-            if has_vel {
-                if let Some(v) = a.velocity() {
+            if has_vel
+                && let Some(v) = a.velocity() {
                     vel.set_f64_row(i, v);
                 }
-            }
-            if has_frc {
-                if let Some(f) = a.force() {
+            if has_frc
+                && let Some(f) = a.force() {
                     frc.set_f64_row(i, f);
                 }
-            }
             if has_eng {
                 eng.set_f64(i, a.energy().unwrap_or(0.0));
             }
@@ -3189,11 +3184,10 @@ impl ConFrameBuilder {
             if has_spn {
                 spn.set_f64(i, a.spin().unwrap_or(0.0));
             }
-            if has_mag {
-                if let Some(m) = a.magmom() {
+            if has_mag
+                && let Some(m) = a.magmom() {
                     mag.set_f64_row(i, m);
                 }
-            }
             if has_dsp && let Some(d) = a.displacement() {
                 dsp.set_f64_row(i, d);
             }
@@ -3433,16 +3427,14 @@ pub fn con_frame_from_atom_data_with_positions(
     }
     for (i, a) in atom_data.iter().enumerate() {
         ids_arr[i] = a.atom_id;
-        if has_vel {
-            if let Some(v) = a.velocity() {
+        if has_vel
+            && let Some(v) = a.velocity() {
                 vel.set_f64_row(i, v);
             }
-        }
-        if has_frc {
-            if let Some(f) = a.force() {
+        if has_frc
+            && let Some(f) = a.force() {
                 frc.set_f64_row(i, f);
             }
-        }
         if has_eng {
             eng.set_f64(i, a.energy().unwrap_or(0.0));
         }
@@ -3452,11 +3444,10 @@ pub fn con_frame_from_atom_data_with_positions(
         if has_spn {
             spn.set_f64(i, a.spin().unwrap_or(0.0));
         }
-        if has_mm {
-            if let Some(m) = a.magmom() {
+        if has_mm
+            && let Some(m) = a.magmom() {
                 mm.set_f64_row(i, m);
             }
-        }
         if has_dsp && let Some(d) = a.displacement() {
             dsp.set_f64_row(i, d);
         }
