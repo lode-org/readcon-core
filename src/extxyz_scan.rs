@@ -1,3 +1,4 @@
+// Copyright (c) readcon-core developers
 //! Sequential extended-XYZ scan.
 //!
 //! One byte buffer, fixed token walks, and plain arrays. The comment
@@ -7,12 +8,30 @@ use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
+pub struct XyzColumn {
+    pub name: String,
+    pub kind: u8,
+    pub width: usize,
+    /// Text values for an `S` column. Empty for a numeric column.
+    pub text: Vec<String>,
+    /// Numeric values for an `R`, `I`, or `L` column, in column-major
+    /// order within each atom. Empty for a text column.
+    pub real: Vec<f64>,
+}
+
+#[derive(Debug, Clone)]
 pub struct XyzTables {
     pub n_frames: usize,
     pub n_atoms: usize,
     pub positions: Vec<f64>,
     pub masses: Vec<f64>,
     pub cell: Vec<f64>,
+    /// One symbol per atom, frame by frame. Empty strings when the file
+    /// has no `species` column.
+    pub species: Vec<String>,
+    /// Every per-atom column named by `Properties`, including species,
+    /// positions, masses and forces.
+    pub columns: Vec<XyzColumn>,
 }
 
 fn trim(bytes: &[u8]) -> &[u8] {
@@ -43,11 +62,9 @@ fn next_token(line: &[u8], mut index: usize) -> Option<(usize, usize)> {
 }
 
 fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
-    let (value, consumed) =
+    let (value, _consumed) =
         fast_float2::parse_partial::<f64, _>(bytes).map_err(|_| "float".to_string())?;
-    if consumed == 0 {
-        return Err("float".to_string());
-    }
+    // fast_float2 only returns Ok after consuming at least one digit.
     Ok(value)
 }
 
@@ -55,60 +72,94 @@ fn quoted_after<'a>(line: &'a [u8], key: &[u8]) -> Option<&'a [u8]> {
     let mut index = 0;
     while index + key.len() <= line.len() {
         if &line[index..index + key.len()] == key {
-            let mut cursor = index + key.len();
-            if cursor < line.len() && line[cursor] == b'"' {
-                cursor += 1;
-                let start = cursor;
-                while cursor < line.len() && line[cursor] != b'"' {
-                    cursor += 1;
+            let mut mark = index + key.len();
+            if mark < line.len() && line[mark] == b'"' {
+                mark += 1;
+                let start = mark;
+                while mark < line.len() && line[mark] != b'"' {
+                    mark += 1;
                 }
-                return Some(&line[start..cursor]);
+                return Some(&line[start..mark]);
             }
-            let start = cursor;
-            while cursor < line.len() && !line[cursor].is_ascii_whitespace() {
-                cursor += 1;
+            let start = mark;
+            while mark < line.len() && !line[mark].is_ascii_whitespace() {
+                mark += 1;
             }
-            return Some(&line[start..cursor]);
+            return Some(&line[start..mark]);
         }
         index += 1;
     }
     None
 }
 
-fn column_layout(properties: &[u8]) -> Result<(usize, Option<usize>), String> {
+struct ColumnSpec {
+    name: String,
+    kind: u8,
+    width: usize,
+    offset: usize,
+}
+
+fn property_columns(properties: &[u8]) -> Result<Vec<ColumnSpec>, String> {
     let mut offset = 0;
-    let mut pos = None;
-    let mut mass = None;
+    let mut columns = Vec::new();
     let mut rest = properties;
+    let mut saw_pos = false;
     while !rest.is_empty() {
         let name_end = rest
             .iter()
             .position(|byte| *byte == b':')
             .ok_or("properties")?;
-        let name = &rest[..name_end];
+        let name = std::str::from_utf8(&rest[..name_end]).map_err(|_| "properties")?;
         rest = &rest[name_end + 1..];
         let kind_end = rest
             .iter()
             .position(|byte| *byte == b':')
             .ok_or("properties")?;
+        if kind_end != 1 {
+            return Err("properties".to_string());
+        }
+        let kind = rest[0];
+        if !matches!(kind, b'S' | b'R' | b'I' | b'L') {
+            return Err("properties".to_string());
+        }
         rest = &rest[kind_end + 1..];
         let count_end = rest
             .iter()
             .position(|byte| *byte == b':')
             .unwrap_or(rest.len());
         let count = parse_f64(&rest[..count_end])? as usize;
-        if name == b"pos" {
-            pos = Some(offset);
-        } else if name == b"masses" {
-            mass = Some(offset);
+        if count == 0 {
+            return Err("properties".to_string());
         }
+        if name == "pos" {
+            saw_pos = true;
+            if count != 3 {
+                return Err("pos".to_string());
+            }
+        }
+        columns.push(ColumnSpec {
+            name: name.to_string(),
+            kind,
+            width: count,
+            offset,
+        });
         offset += count;
         if count_end == rest.len() {
             break;
         }
         rest = &rest[count_end + 1..];
     }
-    Ok((pos.ok_or("pos")?, mass))
+    if !saw_pos {
+        return Err("pos".to_string());
+    }
+    Ok(columns)
+}
+
+fn logical_value(token: &[u8]) -> f64 {
+    match token {
+        b"T" | b"t" | b"1" | b"true" | b"True" | b"TRUE" => 1.0,
+        _ => 0.0,
+    }
 }
 
 fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
@@ -118,9 +169,6 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
         rest = trim(rest);
         let (value, consumed) =
             fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "lattice".to_string())?;
-        if consumed == 0 {
-            return Err("lattice".to_string());
-        }
         *slot = value;
         rest = rest.get(consumed..).unwrap_or(b"");
     }
@@ -141,33 +189,38 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
     Ok([la, lb, lc, alpha, beta, gamma])
 }
 
-fn atom_values(
-    line: &[u8],
-    pos_col: usize,
-    mass_col: Option<usize>,
-) -> Result<(f64, f64, f64, f64), String> {
+fn tokens(line: &[u8]) -> Vec<&[u8]> {
+    let mut found = Vec::new();
     let mut index = 0;
-    let mut column = 0;
-    let mut coords = [0.0; 3];
-    let mut mass = f64::NAN;
-    let mut got = 0;
     while let Some((start, end)) = next_token(line, index) {
-        if column >= pos_col && column < pos_col + 3 {
-            coords[column - pos_col] = parse_f64(&line[start..end])?;
-            got += 1;
-        } else if Some(column) == mass_col {
-            mass = parse_f64(&line[start..end])?;
-        }
-        column += 1;
+        found.push(&line[start..end]);
         index = end;
-        if got == 3 && mass_col.map(|item| column > item).unwrap_or(true) {
-            break;
-        }
     }
-    if got != 3 {
+    found
+}
+
+fn push_atom(line: &[u8], specs: &[ColumnSpec], columns: &mut [XyzColumn]) -> Result<(), String> {
+    let words = tokens(line);
+    let need = specs
+        .last()
+        .map(|spec| spec.offset + spec.width)
+        .unwrap_or(0);
+    if words.len() < need {
         return Err("atom".to_string());
     }
-    Ok((coords[0], coords[1], coords[2], mass))
+    for (spec, column) in specs.iter().zip(columns.iter_mut()) {
+        for slot in 0..spec.width {
+            let token = words[spec.offset + slot];
+            match spec.kind {
+                b'S' => column
+                    .text
+                    .push(String::from_utf8_lossy(token).into_owned()),
+                b'L' => column.real.push(logical_value(token)),
+                _ => column.real.push(parse_f64(token)?),
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
@@ -187,45 +240,78 @@ pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
             index += 1;
         }
     }
-    let mut positions = Vec::new();
-    let mut masses = Vec::new();
     let mut cell = Vec::new();
-    let mut cursor = 0;
+    let mut columns: Vec<XyzColumn> = Vec::new();
+    let mut specs: Vec<ColumnSpec> = Vec::new();
+    let mut mark = 0;
     let mut n_atoms = 0;
     let mut n_frames = 0;
-    while cursor < lines.len() {
-        let count_line = trim(lines[cursor]);
+    while mark < lines.len() {
+        let count_line = trim(lines[mark]);
         if count_line.is_empty() {
-            cursor += 1;
+            mark += 1;
             continue;
         }
         let count = parse_f64(count_line)? as usize;
-        if cursor + 1 >= lines.len() {
+        if mark + 1 >= lines.len() {
             return Err("comment".to_string());
         }
-        let comment = lines[cursor + 1];
+        let comment = lines[mark + 1];
         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
         let properties = quoted_after(comment, b"Properties=").ok_or("properties")?;
-        let (pos_col, mass_col) = column_layout(properties)?;
+        let frame_specs = property_columns(properties)?;
         let frame_cell = lattice_cell(lattice)?;
-        cursor += 2;
-        if cursor + count > lines.len() {
+        if n_frames == 0 {
+            columns = frame_specs
+                .iter()
+                .map(|spec| XyzColumn {
+                    name: spec.name.clone(),
+                    kind: spec.kind,
+                    width: spec.width,
+                    text: Vec::new(),
+                    real: Vec::new(),
+                })
+                .collect();
+            specs = frame_specs;
+            n_atoms = count;
+        } else if count != n_atoms
+            || frame_specs.len() != specs.len()
+            || frame_specs.iter().zip(specs.iter()).any(|(left, right)| {
+                left.name != right.name || left.kind != right.kind || left.width != right.width
+            })
+        {
+            return Err("properties".to_string());
+        }
+        mark += 2;
+        if mark + count > lines.len() {
             return Err("atoms".to_string());
         }
-        for line in &lines[cursor..cursor + count] {
-            let (x, y, z, mass) = atom_values(line, pos_col, mass_col)?;
-            positions.push(x);
-            positions.push(y);
-            positions.push(z);
-            masses.push(mass);
+        for line in &lines[mark..mark + count] {
+            push_atom(line, &specs, &mut columns)?;
         }
         cell.extend_from_slice(&frame_cell);
-        cursor += count;
+        mark += count;
         n_frames += 1;
-        n_atoms = count;
     }
     if n_frames == 0 {
         return Err("no frames".to_string());
+    }
+    let mut positions = Vec::new();
+    let mut masses = vec![f64::NAN; n_frames * n_atoms];
+    let mut species = vec![String::new(); n_frames * n_atoms];
+    for column in &columns {
+        if column.name == "pos" {
+            positions.clone_from(&column.real);
+        } else if column.name == "masses" || column.name == "mass" {
+            if column.width == 1 {
+                masses.clone_from(&column.real);
+            }
+        } else if column.name == "species" && column.width == 1 {
+            species.clone_from(&column.text);
+        }
+    }
+    if positions.len() != n_frames * n_atoms * 3 {
+        return Err("pos".to_string());
     }
     Ok(XyzTables {
         n_frames,
@@ -233,6 +319,8 @@ pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
         positions,
         masses,
         cell,
+        species,
+        columns,
     })
 }
 
@@ -241,9 +329,174 @@ pub fn tables_from_extxyz_path(path: &Path) -> Result<XyzTables, String> {
     tables_from_extxyz_bytes(&bytes)
 }
 
+fn format_number(value: f64) -> String {
+    if value.is_nan() {
+        return "nan".to_string();
+    }
+    format!("{value}")
+}
+
+fn cos_sin(degrees: f64) -> (f64, f64) {
+    if (degrees - 90.0).abs() < 1e-8 {
+        return (0.0, 1.0);
+    }
+    if degrees.abs() < 1e-8 {
+        return (1.0, 0.0);
+    }
+    if (degrees - 180.0).abs() < 1e-8 {
+        return (-1.0, 0.0);
+    }
+    let radians = degrees.to_radians();
+    (radians.cos(), radians.sin())
+}
+
+pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], String> {
+    if cell.len() < 6 {
+        return Err("cell".to_string());
+    }
+    let (a, b, c) = (cell[0], cell[1], cell[2]);
+    let (cos_a, _sin_a) = cos_sin(cell[3]);
+    let (cos_b, _sin_b) = cos_sin(cell[4]);
+    let (cos_g, sin_g) = cos_sin(cell[5]);
+    let bx = b * cos_g;
+    let by = b * sin_g;
+    let cx = c * cos_b;
+    let cy = if sin_g.abs() < 1e-15 {
+        0.0
+    } else {
+        c * (cos_a - cos_b * cos_g) / sin_g
+    };
+    let cz2 = c * c - cx * cx - cy * cy;
+    let cz = if cz2 > 0.0 { cz2.sqrt() } else { 0.0 };
+    Ok([a, 0.0, 0.0, bx, by, 0.0, cx, cy, cz])
+}
+
+/// One per-atom column the writer can format without taking ownership.
+pub trait ExtxyzSource {
+    fn column_name(&self) -> &str;
+    fn column_kind(&self) -> u8;
+    fn column_width(&self) -> usize;
+    fn write_fields(&self, base: usize, out: &mut Vec<u8>);
+}
+
+impl ExtxyzSource for XyzColumn {
+    fn column_name(&self) -> &str {
+        &self.name
+    }
+
+    fn column_kind(&self) -> u8 {
+        self.kind
+    }
+
+    fn column_width(&self) -> usize {
+        self.width
+    }
+
+    fn write_fields(&self, base: usize, out: &mut Vec<u8>) {
+        for slot in 0..self.width {
+            if slot > 0 {
+                out.push(b' ');
+            }
+            if self.kind == b'S' {
+                out.extend_from_slice(self.text[base + slot].as_bytes());
+            } else {
+                let text = format_number(self.real[base + slot]);
+                out.extend_from_slice(text.as_bytes());
+            }
+        }
+    }
+}
+
+/// Write species, the lattice, `pbc`, and every per-atom column.
+///
+/// `columns` are borrowed. The only large buffer this allocates is the
+/// output text.
+pub fn extxyz_bytes(
+    n_frames: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&dyn ExtxyzSource],
+) -> Result<Vec<u8>, String> {
+    if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
+        return Err("frames".to_string());
+    }
+    if cell.len() < n_frames * 6 {
+        return Err("cell".to_string());
+    }
+    let properties = columns
+        .iter()
+        .map(|column| {
+            format!(
+                "{}:{}:{}",
+                column.column_name(),
+                column.column_kind() as char,
+                column.column_width()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(":");
+    let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
+    for frame in 0..n_frames {
+        let lattice = lattice_from_cell(&cell[frame * 6..frame * 6 + 6])?;
+        let lattice_text = lattice
+            .iter()
+            .map(|value| format_number(*value))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let header = format!(
+            "{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n"
+        );
+        out.extend_from_slice(header.as_bytes());
+        for atom in 0..n_atoms {
+            for (index, column) in columns.iter().enumerate() {
+                if index > 0 {
+                    out.push(b' ');
+                }
+                let base = (frame * n_atoms + atom) * column.column_width();
+                column.write_fields(base, &mut out);
+            }
+            out.push(b'\n');
+        }
+    }
+    Ok(out)
+}
+
+/// Write species, the lattice, `pbc`, and every per-atom column.
+pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
+    let columns: Vec<&dyn ExtxyzSource> = tables
+        .columns
+        .iter()
+        .map(|column| column as &dyn ExtxyzSource)
+        .collect();
+    extxyz_bytes(tables.n_frames, tables.n_atoms, &tables.cell, &columns)
+}
+
+pub fn write_extxyz_path(path: &Path, tables: &XyzTables) -> Result<(), String> {
+    let bytes = tables_to_extxyz_bytes(tables)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|_| "write".to_string())?;
+    }
+    fs::write(path, bytes).map_err(|_| "write".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_quoted_value_and_a_bare_value_both_return_the_bytes() {
+        assert_eq!(quoted_after(b"Lattice=10 0", b"Lattice="), Some(&b"10"[..]));
+        assert_eq!(
+            quoted_after(b"Lattice=\"10 0\" tail", b"Lattice="),
+            Some(&b"10 0"[..])
+        );
+        assert_eq!(quoted_after(b"no key", b"Lattice="), None);
+        assert!(property_columns(b"pos").is_err());
+        let columns = property_columns(b"species:S:1:pos:R:3:masses:R:1").unwrap();
+        assert_eq!(columns[0].name, "species");
+        assert_eq!(columns[1].offset, 1);
+        assert_eq!(columns[2].offset, 4);
+    }
 
     #[test]
     fn one_frame_keeps_lattice_position_and_mass() {
@@ -258,7 +511,162 @@ Cu 4.0 5.0 6.0 63.546
         assert_eq!(tables.n_atoms, 2);
         assert_eq!(tables.positions, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         assert_eq!(tables.masses, vec![63.546, 63.546]);
+        assert_eq!(tables.species, vec!["Cu".to_string(), "Cu".to_string()]);
+        assert!(tables.columns.iter().any(|column| column.name == "species"));
         assert!((tables.cell[0] - 10.0).abs() < 1e-12);
         assert!((tables.cell[3] - 90.0).abs() < 1e-8);
+    }
+
+    #[test]
+    fn forces_and_species_round_trip_from_the_small_fixture() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("bench/h2h/fixtures/small-1.extxyz");
+        let tables = tables_from_extxyz_path(&path).unwrap();
+        assert_eq!(tables.n_frames, 1);
+        assert_eq!(tables.n_atoms, 10);
+        assert!(tables.species.iter().all(|symbol| symbol == "Cu"));
+        let forces = tables
+            .columns
+            .iter()
+            .find(|column| column.name == "forces")
+            .unwrap();
+        assert_eq!(forces.width, 3);
+        assert!((forces.real[3] - 0.25).abs() < 1e-12);
+        assert!((forces.real[4] - 0.5).abs() < 1e-12);
+        assert!((forces.real[5] - 1.0).abs() < 1e-12);
+        let names: Vec<_> = tables
+            .columns
+            .iter()
+            .map(|column| column.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["species", "pos", "masses", "forces"]);
+    }
+
+    #[test]
+    fn written_bytes_reread_with_the_same_species_and_forces() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("bench/h2h/fixtures/small-n.extxyz");
+        let tables = tables_from_extxyz_path(&path).unwrap();
+        let bytes = tables_to_extxyz_bytes(&tables).unwrap();
+        let again = tables_from_extxyz_bytes(&bytes).unwrap();
+        assert_eq!(again.species, tables.species);
+        assert_eq!(again.positions, tables.positions);
+        assert_eq!(again.masses, tables.masses);
+        let forces = |item: &XyzTables| {
+            item.columns
+                .iter()
+                .find(|column| column.name == "forces")
+                .unwrap()
+                .real
+                .clone()
+        };
+        assert_eq!(forces(&again), forces(&tables));
+        assert!((again.cell[3] - 90.0).abs() < 1e-8);
+    }
+
+    #[test]
+    fn frames_cover_quotes_angles_blank_lines_and_errors() {
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos:R:3\nCu nope 0 0\n"
+            )
+            .unwrap_err(),
+            "float"
+        );
+        let text = "\r\n2\r\nLattice=\"10 0 0 0 12 0 0 0 14\" Properties=species:S:1:pos:R:3:masses:R:1\r\nCu 1 2 3 63.546\r\nCu 4 5 6 63.546\r\n";
+        let tables = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        assert_eq!(tables.n_frames, 1);
+        assert_eq!(tables.n_atoms, 2);
+        assert_eq!(tables.positions.len(), 6);
+        assert_eq!(tables.masses[0], 63.546);
+        assert!((tables.cell[0] - 10.0).abs() < 1e-9);
+
+        let no_newline =
+            b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3\nH 0 1 2";
+        let one = tables_from_extxyz_bytes(no_newline).unwrap();
+        assert_eq!(one.positions, vec![0.0, 1.0, 2.0]);
+        assert!(one.masses[0].is_nan());
+
+        assert_eq!(tables_from_extxyz_bytes(b"\n\n").unwrap_err(), "no frames");
+        assert_eq!(tables_from_extxyz_bytes(b"1\n").unwrap_err(), "comment");
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"2\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos:R:3\nH 0 0 0\n"
+            )
+            .unwrap_err(),
+            "atoms"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nnote\nH 0 0 0\n").unwrap_err(),
+            "lattice"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nLattice=\"1 0 0 0 1 0 0 0 1\"\nH 0 0 0\n").unwrap_err(),
+            "properties"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=masses:R:1\nH 1\n"
+            )
+            .unwrap_err(),
+            "pos"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nLattice=\"1 0 0\" Properties=pos:R:3\nH 0 0 0\n")
+                .unwrap_err(),
+            "lattice"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos\nH 0 0 0\n")
+                .unwrap_err(),
+            "properties"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos:R:x\nH 0 0 0\n"
+            )
+            .unwrap_err(),
+            "float"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos:R:3\nH 0 nope 2\n"
+            )
+            .unwrap_err(),
+            "float"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"nope 0 0 0 1 0 0 0 1\" Properties=pos:R:3\nH 0 0 0\n"
+            )
+            .unwrap_err(),
+            "lattice"
+        );
+        assert_eq!(tables_from_extxyz_bytes(b"abc\n").unwrap_err(), "float");
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nLattice=\"1 0 0 Properties=pos:R:3\nH 0 0 0\n")
+                .unwrap_err(),
+            "lattice"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=\nH 0 0 0\n")
+                .unwrap_err(),
+            "pos"
+        );
+        assert_eq!(
+            tables_from_extxyz_bytes(
+                b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3\n\n"
+            )
+            .unwrap_err(),
+            "atom"
+        );
+
+        let missing = tables_from_extxyz_path(std::path::Path::new("/no/such/extxyz")).unwrap_err();
+        assert_eq!(missing, "read");
+        let path = std::env::temp_dir().join(format!("readcon-extxyz-{}.xyz", std::process::id()));
+        std::fs::write(&path, no_newline).unwrap();
+        let from_path = tables_from_extxyz_path(&path).unwrap();
+        assert_eq!(from_path.n_frames, 1);
+        std::fs::remove_file(&path).unwrap();
     }
 }

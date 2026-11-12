@@ -7,7 +7,7 @@ use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
+use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyString, PyTuple};
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -2248,6 +2248,12 @@ fn read_all_frames(
 
 /// Read frames from a .con or .convel file path.
 ///
+/// `n_threads` is `None`, `0`, or `1` for the calling thread, and
+/// `n >= 2` for a Rayon pool of that size. A plain file of 64 KiB or
+/// more stays mapped. `.gz` and `.zst` are chosen from the extension
+/// and from the magic bytes. A pipe, including `/dev/stdin`, is read
+/// through the same open: it is not mapped.
+///
 /// With `comm` (an mpi4py communicator, needs the `mpi` build feature)
 /// this is collective and returns only this rank's block of frames;
 /// concatenating the blocks of ranks `0..size` in rank order gives the
@@ -2824,17 +2830,150 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
     Ok(dict.into())
 }
 
+enum OutputCodec {
+    Plain,
+    Gzip,
+    Zstd,
+}
+
+fn output_codec(path: &str, compression: Option<&str>) -> PyResult<OutputCodec> {
+    match compression {
+        Some("none") => Ok(OutputCodec::Plain),
+        Some("gzip") => Ok(OutputCodec::Gzip),
+        Some("zstd") => Ok(OutputCodec::Zstd),
+        Some(other) => Err(PyIOError::new_err(format!(
+            "unknown compression: {other}. Use \"gzip\", \"zstd\" or \"none\"."
+        ))),
+        None => Ok(
+            match crate::compression::detect_compression_from_extension(Path::new(path)) {
+                crate::compression::Compression::Gzip => OutputCodec::Gzip,
+                crate::compression::Compression::Zstd => OutputCodec::Zstd,
+                crate::compression::Compression::None => OutputCodec::Plain,
+            },
+        ),
+    }
+}
+
+/// Convert and write one frame at a time. The Rust frame is dropped before
+/// the next Python frame is converted.
+fn stream_frames(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    write: impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    stream_frames_range(py, frames, 0, None, write)
+}
+
+fn stream_frames_range(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    start: usize,
+    stop: Option<usize>,
+    write: impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    if let Ok(list) = frames.cast::<ConFrameList>() {
+        return stream_frame_list(py, list, start, stop, write);
+    }
+    stream_python_frames(py, frames, start, stop, write)
+}
+
+/// `read_con` stores the parsed frames and builds a Python frame only when
+/// that index is touched. Writing walks the stored frames, so the write does
+/// not fill that cache and does not keep a second trajectory.
+fn stream_frame_list(
+    py: Python<'_>,
+    list: &Bound<'_, ConFrameList>,
+    start: usize,
+    stop: Option<usize>,
+    mut write: impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    let n = list.borrow().len_frames();
+    let end = stop.unwrap_or(n).min(n);
+    for index in start..end {
+        let stored = {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            slots.get(index).and_then(|slot| slot.as_ref()).is_some()
+        };
+        if stored {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            let frame = slots
+                .get(index)
+                .and_then(|slot| slot.as_ref())
+                .expect("stored frame");
+            write(frame)?;
+            continue;
+        }
+        let obj = list.borrow().frame_obj(py, index)?;
+        let frame = obj.bind(py).borrow();
+        write_python_frame(py, &frame, &mut write)?;
+    }
+    Ok(())
+}
+
+fn stream_python_frames(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    start: usize,
+    stop: Option<usize>,
+    mut write: impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    for (index, item) in PyIterator::from_object(frames)?.enumerate() {
+        if index < start {
+            continue;
+        }
+        if stop.is_some_and(|end| index >= end) {
+            break;
+        }
+        let item = item?;
+        let frame = item.extract::<PyRef<'_, PyConFrame>>().map_err(|_| {
+            PyTypeError::new_err("frames must be an iterable of readcon.ConFrame objects")
+        })?;
+        write_python_frame(py, &frame, &mut write)?;
+    }
+    Ok(())
+}
+
+fn write_python_frame(
+    py: Python<'_>,
+    frame: &PyRef<'_, PyConFrame>,
+    write: &mut impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+        if let Some(inner) = frame.inner.as_ref() {
+            if inner.positions.nrows() > 0 {
+                write(inner)?;
+                return Ok(());
+            }
+        }
+    }
+    let rust_frame = frame.to_con_frame(py)?;
+    write(&rust_frame)
+}
+
+fn flush_writer<W: std::io::Write>(writer: &mut ConFrameWriter<W>) -> PyResult<()> {
+    writer
+        .flush()
+        .map_err(|err| PyIOError::new_err(format!("flush error: {err}")))
+}
+
 /// Write frames to a .con or .convel file path.
 ///
+/// One frame is converted and written, then dropped, before the next frame
+/// is converted. A `read_con` result is written from the stored frames, so
+/// the write does not build a Python frame per index or a second trajectory.
+/// The caller keeps the input frames. The writer buffer is flushed before
+/// this function returns.
+///
 /// The `compression` argument controls output compression:
-/// - `None` (default): auto-detect from extension (.gz = gzip, else uncompressed)
-/// - `"gzip"`: force gzip compression
-/// - `"none"`: force uncompressed
+/// - `None` (default): codec from the path extension (`.gz` gzip, `.zst` zstd)
+/// - `"gzip"`, `"zstd"`, or `"none"`
 ///
 /// `append=True` extends an existing uncompressed file instead of replacing
 /// it. The bytes match one `write_con` of the old frames followed by these
 /// frames when the existing file was written by readcon. Gzip, zstd, and
-/// `comm=` are refused. The file is flushed before this function returns.
+/// `comm=` are refused.
 /// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
 #[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false))]
@@ -2855,73 +2994,97 @@ fn write_con(
             "append is not supported with comm=",
         ));
     }
-    let rust_frames = py_frames_to_rust(py, frames)?;
+    let codec = output_codec(path, compression)?;
     if let Some(comm) = comm {
-        if compression.is_some_and(|c| c != "none") || path.ends_with(".gz") || canonical {
+        if !matches!(codec, OutputCodec::Plain) || canonical {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "comm= writes uncompressed, non-canonical output only",
             ));
         }
+        let rust_frames = py_frames_to_rust(py, frames)?;
         return write_con_mpi(py, path, &rust_frames, precision, comm, mode);
     }
-
-    let use_gzip = match compression {
-        Some("gzip") => true,
-        Some("none") => false,
-        Some(other) => {
-            return Err(PyIOError::new_err(format!(
-                "unknown compression: {other}. Use \"gzip\" or \"none\"."
-            )));
-        }
-        None => path.ends_with(".gz"),
-    };
-
-    if append {
-        if use_gzip {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "append is only supported for an uncompressed file",
-            ));
-        }
-        let mut writer = match precision {
-            Some(precision) => ConFrameWriter::from_path_append_with_precision(path, precision)
-                .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
-            None => ConFrameWriter::from_path_append(path)
-                .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
-        }
-        .canonical(canonical);
-        writer
-            .extend(rust_frames.iter())
-            .map_err(|e| PyIOError::new_err(format!("write error: {e}")))?;
-        writer
-            .flush()
-            .map_err(|e| PyIOError::new_err(format!("flush error: {e}")))?;
-        return Ok(());
+    if append && !matches!(codec, OutputCodec::Plain) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "append is only supported for an uncompressed file",
+        ));
     }
 
-    if use_gzip {
-        let mut writer = match precision {
-            Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
-                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
-            None => ConFrameWriter::from_path_gzip(path)
-                .map_err(|e| PyIOError::new_err(format!("failed to create gzip writer: {e}")))?,
+    match codec {
+        OutputCodec::Gzip => {
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
+                    .map_err(|e| {
+                    PyIOError::new_err(format!("failed to create gzip writer: {e}"))
+                })?,
+                None => ConFrameWriter::from_path_gzip(path).map_err(|e| {
+                    PyIOError::new_err(format!("failed to create gzip writer: {e}"))
+                })?,
+            }
+            .canonical(canonical);
+            stream_frames(py, frames, |frame| {
+                writer
+                    .write_frame(frame)
+                    .map_err(|e| write_err_to_py(py, e))
+            })?;
+            flush_writer(&mut writer)
         }
-        .canonical(canonical);
-        writer
-            .extend(rust_frames.iter())
-            .map_err(|e| write_err_to_py(py, e))?;
-    } else {
-        let mut writer = match precision {
-            Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
-                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
-            None => ConFrameWriter::from_path(path)
-                .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+        OutputCodec::Zstd => {
+            #[cfg(feature = "zstd")]
+            {
+                let mut writer = match precision {
+                    Some(precision) => {
+                        ConFrameWriter::from_path_zstd_with_precision(path, precision).map_err(
+                            |e| PyIOError::new_err(format!("failed to create zstd writer: {e}")),
+                        )?
+                    }
+                    None => ConFrameWriter::from_path_zstd(path).map_err(|e| {
+                        PyIOError::new_err(format!("failed to create zstd writer: {e}"))
+                    })?,
+                }
+                .canonical(canonical);
+                stream_frames(py, frames, |frame| {
+                    writer
+                        .write_frame(frame)
+                        .map_err(|e| write_err_to_py(py, e))
+                })?;
+                flush_writer(&mut writer)
+            }
+            #[cfg(not(feature = "zstd"))]
+            {
+                let _ = (precision, canonical, frames, py);
+                Err(PyIOError::new_err(
+                    "zstd compression requires readcon built with the zstd feature",
+                ))
+            }
         }
-        .canonical(canonical);
-        writer
-            .extend(rust_frames.iter())
-            .map_err(|e| write_err_to_py(py, e))?;
+        OutputCodec::Plain => {
+            let mut writer = if append {
+                match precision {
+                    Some(precision) => {
+                        ConFrameWriter::from_path_append_with_precision(path, precision)
+                            .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?
+                    }
+                    None => ConFrameWriter::from_path_append(path)
+                        .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
+                }
+            } else {
+                match precision {
+                    Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
+                        .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+                    None => ConFrameWriter::from_path(path)
+                        .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
+                }
+            }
+            .canonical(canonical);
+            stream_frames(py, frames, |frame| {
+                writer
+                    .write_frame(frame)
+                    .map_err(|e| write_err_to_py(py, e))
+            })?;
+            flush_writer(&mut writer)
+        }
     }
-    Ok(())
 }
 
 /// Collective write: every rank passes its own frames (possibly none)
@@ -2968,15 +3131,20 @@ fn write_con_mpi(
 }
 
 /// Write frames to a string in .con format.
+///
+/// `start` and `stop` select a half-open index range. A `read_con` result
+/// is written from the stored frames, so the range does not build a Python
+/// frame per index. One frame is serialized and dropped before the next.
 #[pyfunction]
-#[pyo3(signature = (frames, precision=None, *, canonical=false))]
+#[pyo3(signature = (frames, precision=None, *, canonical=false, start=0, stop=None))]
 fn write_con_string(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
     precision: Option<usize>,
     canonical: bool,
+    start: usize,
+    stop: Option<usize>,
 ) -> PyResult<String> {
-    let rust_frames = py_frames_to_rust(py, frames)?;
     let mut buffer: Vec<u8> = Vec::new();
     {
         let mut writer = match precision {
@@ -2984,9 +3152,11 @@ fn write_con_string(
             None => ConFrameWriter::new(&mut buffer),
         }
         .canonical(canonical);
-        writer
-            .extend(rust_frames.iter())
-            .map_err(|e| write_err_to_py(py, e))?;
+        stream_frames_range(py, frames, start, stop, |frame| {
+            writer
+                .write_frame(frame)
+                .map_err(|e| write_err_to_py(py, e))
+        })?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))
 }
@@ -4015,6 +4185,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_pdb, m)?)?;
     m.add_function(wrap_pyfunction!(read_extxyz, m)?)?;
+    m.add_function(wrap_pyfunction!(write_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_first, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles_nth, m)?)?;
@@ -4102,34 +4273,343 @@ fn chemfiles_opts_from_kwargs(
     }
 }
 
-/// Read an extended XYZ file into positions, masses and the cell.
-///
-/// The comment line gives the lattice and the column order. Positions
-/// have shape `(frames, atoms, 3)`. Masses have shape `(frames, atoms)`.
-/// The cell has shape `(frames, 6)`.
-#[pyfunction]
-fn read_extxyz<'py>(
+fn interned_symbol<'a>(
+    py: Python<'_>,
+    intern: &mut std::collections::HashMap<&'a str, Py<pyo3::types::PyString>>,
+    token: &'a str,
+) -> Py<pyo3::types::PyString> {
+    if let Some(found) = intern.get(token) {
+        return found.clone_ref(py);
+    }
+    let created = pyo3::types::PyString::new(py, token).unbind();
+    intern.insert(token, created.clone_ref(py));
+    created
+}
+
+/// One tuple per frame. A repeated symbol is one string object, and a
+/// frame that matches the previous frame is that same tuple. Tuples are
+/// immutable, so sharing a row cannot let one frame change another.
+fn py_text_frames<'py>(
     py: Python<'py>,
-    path: &str,
-) -> PyResult<(
-    Bound<'py, numpy::PyArray3<f64>>,
-    Bound<'py, numpy::PyArray2<f64>>,
-    Bound<'py, numpy::PyArray2<f64>>,
-)> {
-    let tables = crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(path))
+    text: &[String],
+    n_atoms: usize,
+    width: usize,
+) -> PyResult<Bound<'py, PyList>> {
+    let frames = PyList::empty(py);
+    if n_atoms == 0 || width == 0 || text.is_empty() {
+        return Ok(frames);
+    }
+    let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
+    let stride = n_atoms.saturating_mul(width);
+    let mut prev: Option<&[String]> = None;
+    let mut prev_row: Option<Py<pyo3::types::PyTuple>> = None;
+    for frame in text.chunks(stride) {
+        if let (Some(old), Some(row)) = (prev, prev_row.as_ref()) {
+            if old == frame {
+                frames.append(row.clone_ref(py))?;
+                continue;
+            }
+        }
+        let row = if width == 1 {
+            pyo3::types::PyTuple::new(
+                py,
+                frame
+                    .iter()
+                    .map(|token| interned_symbol(py, &mut intern, token)),
+            )?
+        } else {
+            let mut groups = Vec::with_capacity(frame.len() / width);
+            for group in frame.chunks(width) {
+                groups.push(pyo3::types::PyTuple::new(
+                    py,
+                    group
+                        .iter()
+                        .map(|token| interned_symbol(py, &mut intern, token)),
+                )?);
+            }
+            pyo3::types::PyTuple::new(py, groups)?
+        };
+        let owned = row.unbind();
+        frames.append(owned.clone_ref(py))?;
+        prev = Some(frame);
+        prev_row = Some(owned);
+    }
+    Ok(frames)
+}
+
+/// Read an extended XYZ file.
+///
+/// The comment line gives the lattice and the column order. The returned
+/// dict holds ``positions`` with shape `(frames, atoms, 3)`, ``masses``
+/// with shape `(frames, atoms)`, ``cell`` with shape `(frames, 6)`,
+/// ``species`` as one symbol tuple per frame, and ``arrays``, a dict of
+/// every per-atom `Properties` column. A real column is one float array.
+/// A text column is a list of tuples. A repeated symbol is one string
+/// object, and a frame whose symbols match the previous frame is that
+/// same tuple. ``arrays['species']`` is ``species``. ``arrays['pos']``
+/// and ``arrays['masses']`` are the top-level slabs.
+#[pyfunction]
+fn read_extxyz<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, PyDict>> {
+    let path_owned = path.to_string();
+    let mut tables = py
+        .detach(move || {
+            crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(&path_owned))
+        })
         .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
-    let positions =
-        ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
-            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
-    let masses = ndarray::Array2::from_shape_vec((tables.n_frames, tables.n_atoms), tables.masses)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
-    let cell = ndarray::Array2::from_shape_vec((tables.n_frames, 6), tables.cell)
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
-    Ok((
-        positions.into_pyarray(py),
-        masses.into_pyarray(py),
-        cell.into_pyarray(py),
-    ))
+    let n_frames = tables.n_frames;
+    let n_atoms = tables.n_atoms;
+    let positions = ndarray::Array3::from_shape_vec(
+        (n_frames, n_atoms, 3),
+        std::mem::take(&mut tables.positions),
+    )
+    .unwrap()
+    .into_pyarray(py);
+    let masses =
+        ndarray::Array2::from_shape_vec((n_frames, n_atoms), std::mem::take(&mut tables.masses))
+            .unwrap()
+            .into_pyarray(py);
+    let cell = ndarray::Array2::from_shape_vec((n_frames, 6), std::mem::take(&mut tables.cell))
+        .unwrap()
+        .into_pyarray(py);
+    let arrays = PyDict::new(py);
+    let mut shared_species: Option<Bound<'py, PyList>> = None;
+    for column in tables.columns.drain(..) {
+        if column.kind == b'S' {
+            let built = py_text_frames(py, &column.text, n_atoms, column.width)?;
+            if column.name == "species" && column.width == 1 {
+                shared_species = Some(built.clone());
+            }
+            arrays.set_item(column.name, built)?;
+        } else if column.name == "pos" && column.width == 3 {
+            // The top-level slab is this column. One array, not a second copy.
+            arrays.set_item(column.name, &positions)?;
+        } else if (column.name == "masses" || column.name == "mass") && column.width == 1 {
+            arrays.set_item(column.name, &masses)?;
+        } else if column.width == 1 {
+            let values = ndarray::Array2::from_shape_vec((n_frames, n_atoms), column.real).unwrap();
+            arrays.set_item(column.name, values.into_pyarray(py))?;
+        } else {
+            let values =
+                ndarray::Array3::from_shape_vec((n_frames, n_atoms, column.width), column.real)
+                    .unwrap();
+            arrays.set_item(column.name, values.into_pyarray(py))?;
+        }
+    }
+    let species = match shared_species {
+        Some(found) => found,
+        None => py_text_frames(py, &tables.species, n_atoms, 1)?,
+    };
+    let dict = PyDict::new(py);
+    dict.set_item("positions", positions)?;
+    dict.set_item("masses", masses)?;
+    dict.set_item("cell", cell)?;
+    dict.set_item("species", species)?;
+    dict.set_item("arrays", arrays)?;
+    Ok(dict)
+}
+
+struct TextColumn<'a> {
+    name: &'a str,
+    tokens: &'a [&'a str],
+}
+
+struct RealColumn<'a> {
+    name: &'a str,
+    width: usize,
+    values: &'a [f64],
+}
+
+impl crate::extxyz_scan::ExtxyzSource for TextColumn<'_> {
+    fn column_name(&self) -> &str {
+        self.name
+    }
+
+    fn column_kind(&self) -> u8 {
+        b'S'
+    }
+
+    fn column_width(&self) -> usize {
+        1
+    }
+
+    fn write_fields(&self, base: usize, out: &mut Vec<u8>) {
+        out.extend_from_slice(self.tokens[base].as_bytes());
+    }
+}
+
+impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
+    fn column_name(&self) -> &str {
+        self.name
+    }
+
+    fn column_kind(&self) -> u8 {
+        b'R'
+    }
+
+    fn column_width(&self) -> usize {
+        self.width
+    }
+
+    fn write_fields(&self, base: usize, out: &mut Vec<u8>) {
+        for slot in 0..self.width {
+            if slot > 0 {
+                out.push(b' ');
+            }
+            let text = format!("{}", self.values[base + slot]);
+            out.extend_from_slice(text.as_bytes());
+        }
+    }
+}
+
+/// Write an extended XYZ file from the dict returned by ``read_extxyz``.
+///
+/// Species, positions, the lattice, ``pbc`` and every per-atom column,
+/// including forces, are written. Numeric columns are borrowed from the
+/// caller's arrays. The binding does not allocate a second copy of them.
+#[pyfunction]
+fn write_extxyz(path: &str, data: &Bound<'_, PyDict>) -> PyResult<()> {
+    let positions = data
+        .get_item("positions")?
+        .ok_or_else(|| PyValueError::new_err("positions"))?;
+    let pos = positions.cast::<PyArray3<f64>>()?;
+    let shape = {
+        let view = pos.readonly();
+        view.as_array().shape().to_vec()
+    };
+    if shape.len() != 3 || shape[2] != 3 {
+        return Err(PyValueError::new_err("positions"));
+    }
+    let n_frames = shape[0];
+    let n_atoms = shape[1];
+    if data.get_item("species")?.is_none() {
+        return Err(PyValueError::new_err("species"));
+    }
+    let cell_obj = data
+        .get_item("cell")?
+        .ok_or_else(|| PyValueError::new_err("cell"))?;
+    let cell_array = cell_obj.cast::<PyArray2<f64>>()?.clone();
+    let arrays_obj = data
+        .get_item("arrays")?
+        .ok_or_else(|| PyValueError::new_err("arrays"))?;
+    let arrays = arrays_obj.cast::<PyDict>()?;
+    let mut text_names = Vec::new();
+    let mut text_items: Vec<Vec<Bound<'_, PyString>>> = Vec::new();
+    let mut real3_meta: Vec<(String, usize)> = Vec::new();
+    let mut real3_arrays: Vec<Bound<'_, PyArray3<f64>>> = Vec::new();
+    let mut real2_names = Vec::new();
+    let mut real2_arrays: Vec<Bound<'_, PyArray2<f64>>> = Vec::new();
+    let mut order = Vec::new();
+    for (key, value) in arrays.iter() {
+        let name: String = key.extract()?;
+        if let Ok(wide) = value.cast::<PyArray3<f64>>() {
+            let view = wide.readonly();
+            let width = *view.as_array().shape().get(2).unwrap_or(&1);
+            if view.as_slice().is_err() {
+                return Err(PyValueError::new_err(format!("column {name}")));
+            }
+            drop(view);
+            real3_meta.push((name, width));
+            real3_arrays.push(wide.clone());
+            order.push(1u8);
+        } else if let Ok(thin) = value.cast::<PyArray2<f64>>() {
+            let view = thin.readonly();
+            if view.as_slice().is_err() {
+                return Err(PyValueError::new_err(format!("column {name}")));
+            }
+            drop(view);
+            real2_names.push(name);
+            real2_arrays.push(thin.clone());
+            order.push(2u8);
+        } else {
+            let mut items = Vec::new();
+            let frames = value
+                .try_iter()
+                .map_err(|_| PyValueError::new_err(format!("column {name}")))?;
+            for frame in frames {
+                let frame = frame?;
+                for atom in frame.try_iter()? {
+                    items.push(atom?.cast::<PyString>()?.clone());
+                }
+            }
+            text_names.push(name);
+            text_items.push(items);
+            order.push(0u8);
+        }
+    }
+    let cell_view = cell_array.readonly();
+    let cell = cell_view.as_slice()?;
+    let real3_views: Vec<_> = real3_arrays.iter().map(|array| array.readonly()).collect();
+    let real2_views: Vec<_> = real2_arrays.iter().map(|array| array.readonly()).collect();
+    let mut real3_slices = Vec::with_capacity(real3_views.len());
+    for view in &real3_views {
+        real3_slices.push(view.as_slice()?);
+    }
+    let mut real2_slices = Vec::with_capacity(real2_views.len());
+    for view in &real2_views {
+        real2_slices.push(view.as_slice()?);
+    }
+    let mut text_refs = Vec::with_capacity(text_items.len());
+    for items in &text_items {
+        let mut refs = Vec::with_capacity(items.len());
+        for item in items {
+            refs.push(item.to_str()?);
+        }
+        text_refs.push(refs);
+    }
+    let mut texts = Vec::new();
+    let mut reals = Vec::new();
+    let mut plan = Vec::new();
+    let mut text_index = 0;
+    let mut real3_index = 0;
+    let mut real2_index = 0;
+    for kind in &order {
+        match kind {
+            0 => {
+                texts.push(TextColumn {
+                    name: &text_names[text_index],
+                    tokens: &text_refs[text_index],
+                });
+                plan.push((0u8, texts.len() - 1));
+                text_index += 1;
+            }
+            1 => {
+                reals.push(RealColumn {
+                    name: &real3_meta[real3_index].0,
+                    width: real3_meta[real3_index].1,
+                    values: real3_slices[real3_index],
+                });
+                plan.push((1u8, reals.len() - 1));
+                real3_index += 1;
+            }
+            _ => {
+                reals.push(RealColumn {
+                    name: &real2_names[real2_index],
+                    width: 1,
+                    values: real2_slices[real2_index],
+                });
+                plan.push((1u8, reals.len() - 1));
+                real2_index += 1;
+            }
+        }
+    }
+    let sources: Vec<&dyn crate::extxyz_scan::ExtxyzSource> = plan
+        .iter()
+        .map(|(kind, index)| {
+            if *kind == 0 {
+                &texts[*index] as &dyn crate::extxyz_scan::ExtxyzSource
+            } else {
+                &reals[*index] as &dyn crate::extxyz_scan::ExtxyzSource
+            }
+        })
+        .collect();
+    let bytes = crate::extxyz_scan::extxyz_bytes(n_frames, n_atoms, cell, &sources)
+        .map_err(PyValueError::new_err)?;
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
+        }
+    }
+    std::fs::write(path, bytes).map_err(|_| PyValueError::new_err("write"))
 }
 
 /// Read a PDB file into positions, masses and the cell.

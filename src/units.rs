@@ -375,6 +375,15 @@ fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usiz
 }
 
 /// Multiplicative factor: `value_in_to = factor * value_in_from`.
+///
+/// The names are the ones accepted in a CON `units` object. The table is
+/// built once per process and reused by every reader.
+///
+/// ```
+/// use readcon_core::units::unit_conversion_factor;
+/// let meters = unit_conversion_factor("angstrom", "m").unwrap();
+/// assert!((meters - 1.0e-10).abs() < 1.0e-20);
+/// ```
 pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, ParseError> {
     let (f_from, d_from) = parse_unit_expression(from_unit)?;
     let (f_to, d_to) = parse_unit_expression(to_unit)?;

@@ -1151,6 +1151,35 @@ impl ConFrameWriter<File> {
     /// its own line. A file this writer produced already ends in a newline,
     /// and appending the remaining frames reproduces one whole-file write.
     /// Gzip and zstd paths are refused: a compressed member cannot be extended.
+    ///
+    /// `write_frame` fills a one-frame scratch buffer and a [`std::io::BufWriter`].
+    /// [`Self::flush`] pushes that buffer to the file before the writer is dropped.
+    ///
+    /// ```
+    /// use readcon_core::iterators::read_all_frames;
+    /// use readcon_core::types::ConFrameBuilder;
+    /// use readcon_core::writer::ConFrameWriter;
+    /// let path = std::env::temp_dir().join(format!(
+    ///     "readcon-append-doc-{}",
+    ///     std::process::id()
+    /// ));
+    /// let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    /// builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+    /// let frame = builder.build().unwrap();
+    /// {
+    ///     let mut writer = ConFrameWriter::from_path(&path).unwrap();
+    ///     writer.write_frame(&frame).unwrap();
+    ///     writer.flush().unwrap();
+    /// }
+    /// {
+    ///     let mut writer = ConFrameWriter::from_path_append(&path).unwrap();
+    ///     writer.write_frame(&frame).unwrap();
+    ///     writer.flush().unwrap();
+    /// }
+    /// let frames = read_all_frames(&path).unwrap();
+    /// assert_eq!(frames.len(), 2);
+    /// let _ = std::fs::remove_file(&path);
+    /// ```
     pub fn from_path_append<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         Ok(Self::new(open_uncompressed_append(path.as_ref())?))
     }

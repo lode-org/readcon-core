@@ -201,8 +201,8 @@ def load_readcon(path: Path, threads: int) -> np.ndarray:
 def load_extxyz_readcon(path: Path) -> np.ndarray:
     import readcon
 
-    positions, _masses, _cell = readcon.read_extxyz(os.fspath(path))
-    return np.asarray(positions, dtype=np.float64)
+    tables = readcon.read_extxyz(os.fspath(path))
+    return np.asarray(tables["positions"], dtype=np.float64)
 
 
 def load_ase(path: Path, fmt: str | None) -> np.ndarray:
