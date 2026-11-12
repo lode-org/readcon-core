@@ -67,6 +67,9 @@ chemfiles-from-sources = ["chemfiles", "chemfiles/build-from-sources"]
 cuda = ["dep:cudarc"]
 # Formal PEG (Pest) for CON/convel; not used on the I/O hot path.
 grammar = ["dep:pest", "dep:pest_derive"]
+# Prototypes in `scout`: lazy coordinate columns, zstd dictionaries,
+# byte-shuffle columns, and an opt-in low-rank fit. Not the CON reader.
+scout = ["dep:zstd", "zstd/zdict_builder"]
 
 [dependencies]
 # v0.11 storage abstraction. The `Array` trait + DLPack export pattern
@@ -220,3 +223,7 @@ path = "examples/cachegrind_harness.rs"
 [[example]]
 name = "chemfiles_xyz_time"
 required-features = ["chemfiles"]
+
+[[example]]
+name = "scout_bench"
+required-features = ["scout"]

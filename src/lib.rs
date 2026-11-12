@@ -24,6 +24,8 @@ pub mod parser;
 pub mod pdb_scan;
 /// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
 pub mod rcso;
+#[cfg(feature = "scout")]
+pub mod scout;
 pub mod storage_dtype;
 pub mod stream;
 pub mod trajectory;
