@@ -1,5 +1,5 @@
-CON 3.1 states the eOn saddle-search checkpoint as a versioned text grammar.
-The format defines per-component masks, atom identifiers and velocity time units.
-Two corpora of legal and illegal files decide what a conforming reader accepts.
-A climbing-image band resumed from CON 3.1 repeats the uninterrupted run bit for bit.
-Read times are measured against ASE, chemfiles, h5py and native trajectory readers.
+readcon-core reads and writes CON 3.1, a versioned grammar for atomistic checkpoints.
+Every frame keeps atom ids, per-axis masks, masses and a declared velocity time unit.
+One Rust core serves C, C++, Fortran, Julia and Python; eOn reads CON through it.
+readcon-db stores CON corpora in LMDB; readcon-ops matches frames by atom identity.
+Stored atom ids keep NEB, dimer and AKMC images paired across restarts and codes.

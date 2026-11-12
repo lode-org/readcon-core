@@ -561,6 +561,8 @@ readcon-db & \texttt{select} & return frames by element, formula or topology \\
 readcon-db & \texttt{dedup-export} & export unique frames \\
 readcon-db & \texttt{annotate-topology} & store the d-SEAMS fingerprint \\
 readcon-db & \texttt{find-by-topology} & select by that fingerprint \\
+readcon-db & \texttt{index-canonical} & hash each frame in increasing atom-id order \\
+readcon-db & \texttt{find-by-atom-order} & return frames that share that hash, with the permutation \\
 readcon-db & \texttt{shard} & split the corpus \\
 readcon-db & \texttt{compact} & reclaim space \\
 readcon-db & \texttt{h5md-velocities} & write velocities as H5MD \\
@@ -645,7 +647,7 @@ other \(\clauseUncovered\) state no duty of a reader.
 This section is the call table of Section~\ref{sec:implementation}.
 \begin{table}[tbp]
 \centering
-\caption{The four atom-id calls of the released API in readcon-core 0.21.0.
+\caption{The four atom-id calls of the released API in readcon-core 0.22.0.
 In C++ the consistency check is the free function.
 The other three C++ calls are members of \texttt{ConFrame}.}
 \label{tab:correspondence}
@@ -821,14 +823,13 @@ Figure~\ref{fig:claisen-land} is the plane of reaction progress and orthogonal d
 
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
-A CON row stores the id beside the position, and readcon returns the id with the position.
-The released API in readcon-core 0.21.0 checks the correspondence on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
-It is not a third Claisen result.
-Pairing rows by file position puts the reactant oxygen against the shifted C5, a raw, unwrapped step of 15.761~\text{\AA}.
-The minimum image of that pairing is 2.272~\text{\AA}.
+A CON row stores the id beside the position, and readcon-core 0.22.0 returns the id with the position.
+The oxygen-first product, with C5 one cell of \(18\,\text{\AA}\) along \(+x\), is the file of Section~\ref{sec:fidelity}.
+The index-wise oxygen step there is 15.7607~\text{\AA}.
 Pairing by id follows the vinyl-ether O--C4 bond, 1.360~\text{\AA}, to the C4\({=}\)O carbonyl of pent-4-enal, 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
+The unit test requires that index-wise oxygen step to exceed 5~\text{\AA} and checks the id-matched oxygen displacement of 0.150~\text{\AA}.
 A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
-The first file slot of that image then differs by 3.615~\text{\AA}, and the id-matched atom of id 0 moves 0.018~\text{\AA}.
+The same test requires the file-slot step of that image to exceed 1.5~\text{\AA} and the id-matched step of atom 0 to stay under 0.1~\text{\AA}.
 Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
 Frame indices count from zero, so frame 2 is the third image.
 

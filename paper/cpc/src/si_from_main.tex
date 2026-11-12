@@ -88,6 +88,8 @@ Section~\ref{sec:h2h} times these readers, and the writers that provide a write 
 A frame key is 12 bytes: the trajectory id as a big-endian 64-bit integer, then the frame index as a big-endian 32-bit integer.
 The record is the CON text, optionally compressed with zstd \cite{colletZstandardCompressionApplicationzstd2021}.
 The exact identity of a frame is the xxHash3-128 of that text.
+\texttt{index-canonical} reorders the frame into increasing \texttt{atom\_id}, under the strict check of symbol, mass and fixed mask, and stores the xxHash3-128 of that round-trip text.
+\texttt{find-by-atom-order} returns each stored frame with that hash and the permutation from the query, so a band image grouped by element is the same saddle.
 The indexes are the atom count, the symbol, the element counts, the formula, as in \texttt{Cu:2|H:2}, the energy, the maximum force, the mass, the volume, the periodic flags, the metadata, the flags and the topology.
 The metadata holds the time, the NEB bead and the band, the charge and the magnetic moment.
 \texttt{annotate-topology} runs the d-SEAMS fingerprint, a cutoff graph to two hops, with nauty or a Weisfeiler--Lehman colouring.
