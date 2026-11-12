@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Bugfixes
+
+- Fortran `builder%add_atom` and `builder%add_atom_full` take the per-axis fixed
+  flags, the atom id, and the mass in the `rkr_frame_add_atom_full` order.
+  Optional velocity and force follow the mass.
+
+
 ## v0.19.0 - 2026-11-12
 
 ### Features

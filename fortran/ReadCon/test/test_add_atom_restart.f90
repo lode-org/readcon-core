@@ -116,8 +116,8 @@ contains
     bd = new_builder(cell, ang, header="image 3")
     call check_true(bd%valid(), "new_builder")
     do i = 1, n
-      call require_ok(bd%add_atom(trim(sym(i)), pos(1, i), pos(2, i), pos(3, i), ids(i), &
-           mass(i), fx(i), fy(i), fz(i), velocity=vel(:, i)), "add_atom " // trim(sym(i)))
+      call require_ok(bd%add_atom(trim(sym(i)), pos(1, i), pos(2, i), pos(3, i), fx(i), &
+           fy(i), fz(i), ids(i), mass(i), velocity=vel(:, i)), "add_atom " // trim(sym(i)))
     end do
     ! set_metadata_json replaces the whole object, so the energy goes in after it.
     call require_ok(bd%set_metadata_json('{"units":{"length":"angstrom","energy":"eV",' // &
@@ -174,10 +174,10 @@ contains
     type(frame_t) :: got
     type(catom_t) :: at
     bd = new_builder(cell, ang)
-    call require_ok(bd%add_atom("Cu", 0.5_real64, 0.25_real64, 0.125_real64, 41_int64, &
-         63.546_real64, .false., .true., .false.), "plain add_atom 1")
-    call require_ok(bd%add_atom("Cu", 1.5_real64, 1.25_real64, 1.125_real64, 9_int64, &
-         63.546_real64, .true., .false., .true.), "plain add_atom 2")
+    call require_ok(bd%add_atom("Cu", 0.5_real64, 0.25_real64, 0.125_real64, .false., &
+         .true., .false., 41_int64, 63.546_real64), "plain add_atom 1")
+    call require_ok(bd%add_atom("Cu", 1.5_real64, 1.25_real64, 1.125_real64, .true., &
+         .false., .true., 9_int64, 63.546_real64), "plain add_atom 2")
     call write_one(bd, path)
     call check_true(len(first_line(path)) == 0, "plain line 1 empty")
     got = read_first_frame(path)
