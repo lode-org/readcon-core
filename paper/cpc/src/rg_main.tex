@@ -1093,7 +1093,7 @@ A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(
 That labelling was first run with the setup of the identity band: eight images between the endpoints, ten images in the band, an S-IDPP start
 \cite{smidstrupImprovedInitialGuess2014}, and the published climbing-image settings.
 The climbing image oscillated, and the band did not converge.
-The same labelling was then given sixteen images between the endpoints, eighteen in the band, a maximum step of \(0.05\,\text{\AA}\) against \(0.1\,\text{\AA}\), and a cap of 2000 iterations against 1000, with the climber held on (Figure~\ref{fig:claisen-band}).
+The same labelling was then given sixteen images between the endpoints, eighteen in the band, a maximum step of \(0.05\,\text{\AA}\) against \(0.1\,\text{\AA}\), and a cap of 2000 iterations against 1000, with the climber held on (Figure~\ref{fig:claisen-band}, Figure~\ref{fig:claisen-land}).
 The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
 A further climbing-image-only continuation oscillated between about \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
 Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
@@ -1129,6 +1129,17 @@ Each label is the barrier of that band, the highest image above the reactant.
 The profiles are the journal figures of chemparseplot
 \cite{goswamiChemparseplot2026}.}
 \label{fig:claisen-band}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
+\caption{The two Claisen bands on the plane of reaction progress and orthogonal deviation
+\cite{goswamiTwodimensionalRmsdProjections2026,goswamiChemparseplot2026}.
+The identity-order band climbs one ridge from the reactant to the product near 0.6~eV.
+The renumbered band wanders at large deviation through images near 4~eV, because the product it is aiming for is a different atom assignment.
+Faint curves are earlier iterations and the heavy curve is the final path.}
+\label{fig:claisen-land}
 \end{figure}
 
 
