@@ -1333,12 +1333,22 @@ Every force evaluation builds its EMT calculators afresh, so a step
 depends on the positions alone.
 The ASE trajectory with identifiers in tags and H5MD written and read
 with h5py return the same row.
-POSCAR with the height held as FixScaled moves one coordinate by
-\(\num{\rfFileScaledNum}\,\text{\AA}\) and shifts the resumed barrier by
-\(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\).
-Six decimals move the file by \(\num{\rfFileSixNum}\,\text{\AA}\) and
-the barrier by \(\num{\rfDeSixNum}\,\mathrm{eV}\), and extended XYZ
-written by ASE moves them by \(\num{\rfFileXyzNum}\,\text{\AA}\) and
+Two columns of Table~\ref{tab:restartfmt} are different quantities.
+File is the largest coordinate change on the written round trip.
+Max displacement is how far the resumed band sits from the uninterrupted
+band, and that displacement is what Figure~\ref{fig:restartfmt} plots.
+POSCAR with the height held as FixScaled moves one written coordinate by
+\(\num{\rfFileScaledNum}\,\text{\AA}\).
+The resumed band moves by \(\num{\rfDispScaledLoNum}\) to
+\(\num{\rfDispScaledHiNum}\,\text{\AA}\) and the barrier by
+\(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\),
+the range over the four host builds.
+Six decimals move the written file by \(\num{\rfFileSixNum}\,\text{\AA}\)
+and the resumed band by \(\num{\rfDispSixNum}\,\text{\AA}\), with a barrier
+shift of \(\num{\rfDeSixNum}\,\mathrm{eV}\).
+Extended XYZ written by ASE moves the written file by
+\(\num{\rfFileXyzNum}\,\text{\AA}\) and the resumed band by
+\(\num{\rfDispXyzNum}\,\text{\AA}\), with a barrier shift of
 \(\num{\rfDeXyzNum}\,\mathrm{eV}\), all in the same step count.
 Extended XYZ carries the identifier only under ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
 Each shift is printed to the figures on which reruns on the
@@ -1347,11 +1357,14 @@ linear-algebra builds of four host generations agree, or as their range
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
-\caption{\textbf{The CON 3.1 restart lies on the uninterrupted band.}
-Energy of each image above the first image, from the stored EMT bands.
-The uninterrupted band and the shortest CON 3.1 round trip overlie each
-other. Extended XYZ, six decimals and the ASE trajectory are drawn
-together.}
+\caption{Difference of each resumed band from the uninterrupted band.
+Filled circles are the maximum coordinate displacement of that band, the Max displacement column of Table~\ref{tab:restartfmt}, and filled squares are the absolute barrier shift $|\Delta E^\ddagger|$, on one logarithmic axis.
+A hollow marker is exactly zero, drawn on the labelled floor.
+CON 3.1 is bit-identical.
+H5MD and the ASE trajectory are exactly zero.
+The whisker on POSCAR is the range of the same quantity over the four host builds: displacement \(\rfDispScaled\)\,\AA{} and barrier shift \(\rfDeScaled\)\,eV.
+The File column is a different quantity, the largest coordinate change on the written round trip: six decimals \(\rfFileSix\)\,\AA{} and extended XYZ \(\rfFileXyz\)\,\AA{}.
+The circles are the resumed band, six decimals \(\rfDispSix\)\,\AA{} and \(\rfDeSix\)\,eV, extended XYZ \(\rfDispXyz\)\,\AA{} and \(\rfDeXyz\)\,eV.}
 \label{fig:restartfmt} \end{figure}
 
 \subsubsection{The mask and the prefactor}\label{sec:prefactor} A barrier
