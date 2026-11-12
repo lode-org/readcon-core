@@ -122,8 +122,8 @@ Rare-event methods resume a saddle search from a stored geometry and
 match atoms across frames by an identifier on each row.
 CON is the geometry file those methods exchange, and it had no
 specification.
-Here, we introduce readcon-core.
-CON 3.1 is a versioned grammar for that text.
+Here, we introduce readcon-core, the reference reader and writer of
+CON 3.1, a versioned grammar for that text.
 Two conformance corpora, 165 files in all, define which files a
 conforming reader accepts.
 The writer prints the shortest decimal that reads back as the same
@@ -247,6 +247,8 @@ The velocities of a file of an earlier version are read in the natural
 unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file
 (Listing~\ref{lst:py}).
+Atom-id correspondence is on the development branch and is not in this
+release.
 
 \noindent\textit{References:}
 \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026,goswamiReadconcoreConConvel2026}.
@@ -830,6 +832,22 @@ Python calls it through PyO3. An arrow runs from the caller to the code
 it calls.}
 \label{fig:architecture} \end{figure*}
 
+On the development branch the core pairs atoms by the column-5 id.
+\texttt{atom\_id\_permutation} returns, for each atom of the reference frame, the index of the same id in the other frame.
+\texttt{reorder\_like} rewrites that frame into the reference order, and positions, velocities, forces and bond endpoints move with the atom.
+\texttt{check\_atom\_id\_consistency} names the first frame of a band or a trajectory that disagrees with the first frame, by frame index and atom id.
+\texttt{minimum\_image\_displacements} returns the wrapped displacement of each matched pair.
+Python exposes the same four names.
+C exposes \texttt{rkr\_frame\_atom\_id\_permutation},\\
+\texttt{rkr\_frame\_reorder\_like},\\
+\texttt{rkr\_frames\_check\_atom\_ids}, and\\
+\texttt{rkr\_frame\_minimum\_image\_displacements}.\\
+C++ exposes \texttt{ConFrame::atom\_id\_permutation},\\
+\texttt{ConFrame::reorder\_like},\\
+\texttt{ConFrame::minimum\_image\_displacements}, and\\
+\texttt{check\_atom\_id\_consistency}.
+Strict mode is the default, and it also requires the mass and the fixed mask to agree.
+
 In the core, Algorithm~\ref{alg:parser} is the path reader of the
 release.
 A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is
@@ -1082,6 +1100,12 @@ The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one ano
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon returns the id with the position.
+On the development branch a Claisen-like allyl vinyl ether stores the product with oxygen first and with C5 one cell along \(+x\).
+Pairing rows by file position puts the reactant oxygen against that carbon, a step of 15.761~\text{\AA}.
+Pairing by id follows the oxygen from the 1.360~\text{\AA} ether bond to the 1.210~\text{\AA} carbonyl, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
+A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
+The first file slot of that image then differs by 3.615~\text{\AA}, and the id-matched atom of id 0 moves 0.018~\text{\AA}.
+Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
 
 \begin{figure}[tbp]
 \centering
@@ -1092,7 +1116,7 @@ Bond colour and width follow the GFN2-xTB Wiberg bond order, on the scale in the
 \cite{wibergApplicationPople1968,bannwarthExtendedTightbindingQuantum2021}.
 The drawings are xyzrender
 \cite{goodfellowGraphbasedInternalCoordinate2026}.
-On the chair the forming C5--C0 contact and the breaking C2--O bond are the partial bonds.
+On the chair the forming C5--C0 contact is the dotted bond, and the breaking C2--O is weakened.
 The labelled atoms are C0, C1, C2, C5 and O.
 The renumbered image has separated into C0--C1--C2\({=}\)O and C4--C5.}
 \label{fig:claisen-struct}
@@ -1116,10 +1140,11 @@ The profiles are drawn with chemparseplot
 \includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
 \caption{The two Claisen bands on the plane of reaction progress \(s\) and orthogonal deviation \(d\)
 \cite{goswamiTwodimensionalRmsdProjections2026}.
-The colour is the energy, on one scale for both panels, and both bands stay at \(d\le 0.74\,\text{\AA}\).
-The identity-order band climbs one ridge from the reactant to the product near 0.6~eV.
-The renumbered band reaches images near 4~eV, because its endpoint has a different atom assignment.
-Faint curves are earlier iterations and the heavy curve is the final path.
+The colour is a surface fitted to every stored iteration, on one scale for both panels, and both bands stay at \(d\le 0.74\,\text{\AA}\).
+Faint points are those iterations, and the bold path is the final band.
+The final identity-order band reaches 0.607~eV.
+The colour near 6~eV is iteration 0, whose highest image is 6.031~eV.
+The renumbered final band reaches images near 4~eV, because its endpoint has a different atom assignment.
 Drawn with chemparseplot
 \cite{goswamiChemparseplot2026}.}
 \label{fig:claisen-land}
@@ -1354,12 +1379,13 @@ Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same re
 \section{Performance}\label{sec:performance}
 
 \subsection{Computational details}\label{sec:compute}
-The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+, unless a later sentence names another arrangement.
-The one-core reads use readcon-core 0.18.1, compiled with rustc 1.91.0 and Python 3.12.3, and the remaining measurements use readcon-core 0.18.0, with rustc 1.88.0 for the shortest-decimal checks, NumPy 1.26.4 for the checks of the memory-mapped binary and Python 3.12.16 in those records, together with NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use a development build of eOn 3.6.0.
+The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.
+The one-core reads use readcon-core 0.18.1, compiled with rustc 1.91.0 and Python 3.12.3.
+The remaining measurements use readcon-core 0.18.0, with rustc 1.88.0 for the shortest-decimal checks, NumPy 1.26.4 for the checks of the memory-mapped binary and Python 3.12.16 in those records, together with NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use a development build of eOn 3.6.0.
 Each median is the type-7 median of six repeats after one warmup.
 
 \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}).
-The per-file matrices, the quartile triples and the rank-by-rank tables stay in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
+The per-file matrices, the quartile triples and the rank-by-rank tables are in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
 
 Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one copper extended XYZ file.
 On the \num{100000}-frame CON file the Rust reader takes 0.179~s, against 10.8~s for ASE's eon reader and 10.3~s for eOn \texttt{loadcons}.

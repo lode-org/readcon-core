@@ -109,7 +109,9 @@ def _render(atoms: Atoms, orders: dict[tuple[int, int], float], name: str) -> np
     xyz = WORK / f"{name}.xyz"
     ase_write(xyz, atoms)
     mol = xr.load(str(xyz), charge=0, multiplicity=1, quick=True)
-    mol = reaction.apply_wbo_style(mol, orders, max_contact=1.9)
+    # 0.20 drops the chair C1--C4 contact at 0.188 and the weaker
+    # cross-ring orders. The forming C5--C0 contact is 0.348.
+    mol = reaction.apply_wbo_style(mol, orders, minimum=0.20, max_contact=1.9)
     cfg = xr.build_config(
         "paton",
         canvas_size=1100,
@@ -217,27 +219,23 @@ def bands() -> None:
     plt.close(fig)
 
 
-def _expanded_hull(s: np.ndarray, d: np.ndarray, margin: float = 0.08):
-    """Convex hull of the projected images, grown by a small margin."""
+def _near_samples(s: np.ndarray, d: np.ndarray, margin: float = 0.06):
+    """Disks of a small radius around each projected image."""
     from matplotlib.path import Path as MplPath
-    from scipy.spatial import ConvexHull
 
-    pts = np.column_stack([np.asarray(s, dtype=float), np.asarray(d, dtype=float)])
-    hull = ConvexHull(pts)
-    verts = pts[hull.vertices]
-    center = verts.mean(axis=0)
-    grown = center + (verts - center) * (1.0 + margin)
-    path = MplPath(np.vstack([grown, grown[:1]]), closed=True)
-    return path, grown
+    circles = [
+        MplPath.circle((float(x), float(y)), radius=margin) for x, y in zip(s, d)
+    ]
+    return MplPath.make_compound_path(*circles)
 
 
 def landscape() -> None:
     """Both Claisen bands on the MethodsX (s, d) plane.
 
     Coordinates are the stored ``claisen_landscape.csv`` table. No forces
-    are stored, so the surface is the matern model. The fill is masked to
-    the convex hull of the sampled images plus a small margin, and both
-    panels share the colour scale of the recorded energies.
+    are stored, so the surface is the matern model fitted to every
+    iteration. Colour is drawn only within a small margin of a sampled
+    image, and both panels share the recorded energy scale.
     """
     import csv
 
@@ -288,11 +286,10 @@ def landscape() -> None:
         energy = np.array([row["E"] for row in band])
         s_all, d_all = project_to_sd(rr, rp, basis)
         farthest = max(farthest, float(np.max(d_all)))
-        clip, grown = _expanded_hull(s_all, d_all)
-        pad_s = 0.04
-        pad_d = 0.04
-        xlim = (float(grown[:, 0].min()) - pad_s, float(grown[:, 0].max()) + pad_s)
-        ylim = (float(grown[:, 1].min()) - pad_d, float(grown[:, 1].max()) + pad_d)
+        margin = 0.06
+        clip = _near_samples(s_all, d_all, margin)
+        xlim = (float(s_all.min()) - margin, float(s_all.max()) + margin)
+        ylim = (float(d_all.min()) - margin, float(d_all.max()) + margin)
         draw_filled = ax.contourf
 
         def contourf(x, y, z, levels=None, **kwargs):
@@ -348,10 +345,11 @@ def landscape() -> None:
                 s,
                 d,
                 color=RUHI_CYCLE[0] if last else "#5C6B73",
-                linewidth=1.5 if last else 0.6,
-                alpha=1.0 if last else 0.28,
-                marker="o" if last else None,
-                markersize=3.2,
+                linewidth=1.6 if last else 0,
+                linestyle="-" if last else "none",
+                alpha=1.0 if last else 0.45,
+                marker="o",
+                markersize=3.4 if last else 2.2,
                 zorder=30 if last else 20,
             )
         ax.set_xlim(*xlim)
