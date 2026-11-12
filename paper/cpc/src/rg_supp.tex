@@ -43,6 +43,8 @@ Elsevier%
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{xurl}
 \usepackage{seqsplit}
 \usepackage{xcolor}
@@ -94,7 +96,11 @@ belowskip=0.4em
 \renewcommand{\thesection}{S\arabic{section}}
 \renewcommand{\thetable}{S\arabic{table}}
 \renewcommand{\thefigure}{S\arabic{figure}}
-\AtBeginDocument{\renewcommand{\thelstlisting}{S\arabic{lstlisting}}}
+\renewcommand{\theequation}{S\arabic{equation}}
+\AtBeginDocument{%
+\renewcommand{\thelstlisting}{S\arabic{lstlisting}}%
+\renewcommand{\thealgorithm}{S\arabic{algorithm}}%
+}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black}
 \date{\today}
 \title{Supplementary material: CON 3.1 and readcon-core}
@@ -1626,6 +1632,7 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 
 
 
+\input{moved_main}
 \input{si_from_main}
 
 \FloatBarrier \section{The atom-id test}\label{sec:supp-atomid}
