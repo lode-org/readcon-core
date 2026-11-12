@@ -963,7 +963,7 @@ On a periodic frame it removes only the mean minimum-image translation, and the 
 \cite{gundeIRAShapeMatching2021}.
 \texttt{spacegroup} calls spglib.
 The API also provides \texttt{wulff\_vertices}.
-The three programs split the work as parse, store and compare.
+The three programs split the work as parse, store and compare (Table~\ref{tab:commands}).
 
 \begin{table}[tbp]
 \centering
@@ -1114,7 +1114,8 @@ The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon returns the id with the position.
 On the development branch the correspondence is checked on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
 It is not a third Claisen result.
-Pairing rows by file position puts the reactant oxygen against the shifted C5, a step of 15.761~\text{\AA}.
+Pairing rows by file position puts the reactant oxygen against the shifted C5, a raw, unwrapped step of 15.761~\text{\AA}.
+The minimum image of that pairing is 2.272~\text{\AA}.
 Pairing by id follows the vinyl-ether O--C4 bond, 1.360~\text{\AA}, to the C4\({=}\)O carbonyl of pent-4-enal, 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
 A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
 The first file slot of that image then differs by 3.615~\text{\AA}, and the id-matched atom of id 0 moves 0.018~\text{\AA}.
