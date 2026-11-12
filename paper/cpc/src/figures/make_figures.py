@@ -601,6 +601,210 @@ def pywrite() -> None:
     _save(fig, "pywrite", DOUBLE_CM)
 
 
+def _read_con(path: Path):
+    """One CON 3.1 frame as an ASE Atoms object, ordered by the file atom id."""
+    from ase import Atoms
+
+    symbols: list[str] = []
+    pos: list[tuple[float, float, float]] = []
+    ids: list[int] = []
+    sym = None
+    for line in path.read_text().splitlines():
+        parts = line.split()
+        if len(parts) == 1 and parts[0].isalpha():
+            sym = parts[0]
+            continue
+        if sym is None or len(parts) < 5:
+            continue
+        try:
+            xyz = (float(parts[0]), float(parts[1]), float(parts[2]))
+            aid = int(parts[4])
+        except ValueError:
+            continue
+        symbols.append(sym)
+        pos.append(xyz)
+        ids.append(aid)
+    order = np.argsort(ids)
+    atoms = Atoms(
+        symbols=[symbols[i] for i in order],
+        positions=np.asarray(pos, dtype=float)[order],
+    )
+    atoms.set_array("atom_id", np.asarray([ids[i] for i in order], dtype=int))
+    return atoms
+
+
+def _camera(right, up_hint) -> np.ndarray:
+    """Columns are the figure right, the figure up, and the view direction."""
+    r = np.asarray(right, dtype=float)
+    r = r / np.linalg.norm(r)
+    u = np.asarray(up_hint, dtype=float)
+    u = u - r * np.dot(u, r)
+    u = u / np.linalg.norm(u)
+    return np.column_stack((r, u, np.cross(r, u)))
+
+
+def _by_id(atoms, aid: int) -> np.ndarray:
+    ids = atoms.get_array("atom_id")
+    return atoms.positions[int(np.where(ids == aid)[0][0])]
+
+
+def claisen() -> None:
+    """Claisen bands, and the chair saddle against the separated fragments."""
+    from ase.data import atomic_numbers, covalent_radii
+    from ase.io.utils import PlottingVariables
+    from ase.visualize.plot import plot_atoms
+
+    use_latin_modern()
+    data = HERE.parents[2] / "data" / "claisen"
+    chem = np.loadtxt(data / "benchmark_band.dat", skiprows=1)
+    haus = np.loadtxt(data / "ira_band.dat", skiprows=1)
+
+    fig, ax = plt.subplots(figsize=(DOUBLE_CM / 2.54, 6.8 / 2.54))
+    ax.axhline(0.0, color="#BDBDBD", linewidth=0.4, zorder=0)
+    ax.plot(
+        chem[:, 1],
+        chem[:, 2],
+        color=TEAL,
+        marker="o",
+        markersize=3.4,
+        markerfacecolor="white",
+        markeredgewidth=0.8,
+        linewidth=1.05,
+        label="Chemical map",
+        zorder=3,
+    )
+    ax.plot(
+        haus[:, 1],
+        haus[:, 2],
+        color=VERMILLION,
+        marker="s",
+        markersize=3.0,
+        markerfacecolor="white",
+        markeredgewidth=0.7,
+        linewidth=1.05,
+        label="Hausdorff reassignment",
+        zorder=2,
+    )
+    ax.set_xlabel("Reaction coordinate (Å)")
+    ax.set_ylabel("Energy above the reactant (eV)")
+    ax.set_xlim(-0.6, 29.2)
+    ax.set_ylim(-0.95, 4.45)
+    ax.legend(frameon=False, loc="upper left")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    fig.tight_layout(pad=0.35)
+    _save(fig, "claisen_band", DOUBLE_CM)
+
+    ts = _read_con(data / "benchmark_order_ts.con")
+    frag = _read_con(data / "ira_order_highest.con")
+    c0, c5 = _by_id(ts, 0), _by_id(ts, 5)
+    c2, oxy = _by_id(ts, 2), _by_id(ts, 3)
+    forming = c5 - c0
+    opening = (c2 + oxy) / 2.0 - (c0 + c5) / 2.0
+    chair = _camera(opening, forming)
+    # A small tilt lifts the hydrogen that otherwise sits on C0.
+    tilt = np.radians(18.0)
+    cosine, sine = np.cos(tilt), np.sin(tilt)
+    up, look = chair[:, 1].copy(), chair[:, 2].copy()
+    chair[:, 1] = cosine * up + sine * look
+    chair[:, 2] = -sine * up + cosine * look
+    carbonyl = np.mean([_by_id(frag, i) for i in (0, 1, 2, 3)], axis=0)
+    allyl = np.mean([_by_id(frag, i) for i in (4, 5)], axis=0)
+    pieces = _camera(allyl - carbonyl, _by_id(frag, 3) - _by_id(frag, 2))
+
+    def _show(atoms, camera):
+        view = atoms.copy()
+        origin = view.positions.mean(axis=0)
+        view.set_positions((view.positions - origin) @ camera)
+        view.center(vacuum=1.2)
+        return view
+
+    def _bonds(atoms, factor=1.2):
+        pos = atoms.positions
+        symbols = atoms.get_chemical_symbols()
+        found = []
+        for i in range(len(atoms)):
+            for j in range(i + 1, len(atoms)):
+                rij = np.linalg.norm(pos[i] - pos[j])
+                reach = covalent_radii[atomic_numbers[symbols[i]]]
+                reach += covalent_radii[atomic_numbers[symbols[j]]]
+                if rij < factor * reach:
+                    found.append((i, j))
+        return found
+
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 8.6 / 2.54))
+    panels = (
+        (axes[0], _show(ts, chair), "(a)", [(0, 5)]),
+        (axes[1], _show(frag, pieces), "(b)", []),
+    )
+    for ax, view, tag, dashed in panels:
+        # plot_atoms draws at scale 1. The same scale keeps bonds on the atoms.
+        variables = PlottingVariables(
+            view, rotation="", radii=0.62, show_unit_cell=0, scale=1
+        )
+        xy = variables.positions[: len(view), :2]
+        plot_atoms(view, ax, radii=0.62, show_unit_cell=0)
+        for i, j in _bonds(view):
+            ax.plot(
+                [xy[i, 0], xy[j, 0]],
+                [xy[i, 1], xy[j, 1]],
+                color="#4A4A4A",
+                linewidth=1.05,
+                solid_capstyle="round",
+                zorder=0,
+            )
+        for i, j in dashed:
+            ax.plot(
+                [xy[i, 0], xy[j, 0]],
+                [xy[i, 1], xy[j, 1]],
+                color="#4A4A4A",
+                linewidth=0.85,
+                linestyle=(0, (1.6, 1.2)),
+                solid_capstyle="round",
+                zorder=0,
+            )
+        symbols = view.get_chemical_symbols()
+        ids = view.get_array("atom_id")
+        heavy = [k for k, symbol in enumerate(symbols) if symbol != "H"]
+        for k in heavy:
+            others = [xy[j] for j in heavy if j != k]
+            nearest = min(others, key=lambda point: np.linalg.norm(point - xy[k]))
+            direction = xy[k] - nearest
+            norm = np.linalg.norm(direction)
+            direction = np.array([0.0, 1.0]) if norm < 1e-8 else direction / norm
+            reach = variables.d[k] / 2.0 + 0.28
+            for hydrogen in [j for j, symbol in enumerate(symbols) if symbol == "H"]:
+                vec = xy[hydrogen] - xy[k]
+                along = float(np.dot(vec, direction))
+                if 0.0 < along < 1.6 and np.linalg.norm(vec - along * direction) < 0.34:
+                    reach = max(reach, along + 0.36)
+            spot = xy[k] + direction * reach
+            ax.text(
+                spot[0],
+                spot[1],
+                f"{symbols[k]}{int(ids[k])}",
+                ha="center",
+                va="center",
+                fontsize=7,
+                color=BLACK,
+                zorder=5,
+            )
+        ax.text(
+            0.02,
+            0.98,
+            tag,
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
+            color=BLACK,
+        )
+        ax.set_xlim(ax.get_xlim()[0] - 0.85, ax.get_xlim()[1] + 0.85)
+        ax.set_ylim(ax.get_ylim()[0] - 0.85, ax.get_ylim()[1] + 0.85)
+    fig.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99, wspace=0.02)
+    _save(fig, "claisen_structures", DOUBLE_CM)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     layout()

@@ -1,0 +1,41 @@
+{
+  "system": "Baker 17_claisen, allyl vinyl ether to 4-pentenal",
+  "model": "PET-MAD-S v1.1.0 TorchScript, metatrain 2026.3 export",
+  "eon": "3.6.0 build 579738a93",
+  "ira_mod": "2.2.0",
+  "benchmark_order": {
+    "directory": "mislabelled",
+    "meaning": "chemical [3,3] identity permutation of the benchmark files",
+    "converged": true,
+    "termination": "GOOD",
+    "barrier_eV": 0.60672,
+    "barrier_kcal_mol": 13.99,
+    "image_index_0based": 7,
+    "n_images_including_ends": 10,
+    "ci_force_eV_per_A": 0.041551,
+    "force_calls": 453,
+    "forming_C5_C0_A": 2.046,
+    "breaking_C2_O_A": 1.488,
+    "imaginary_cm-1_internal": [-542.51],
+    "character": "connected six-membered cyclic first-order saddle"
+  },
+  "ira_order": {
+    "kmax_factor": 3.0,
+    "hausdorff_A": 2.10925,
+    "rmsd_A": 1.44297,
+    "identity_kabsch_rmsd_A": 1.51901,
+    "permutation_product_atom_for_reactant_slot": [0, 4, 3, 1, 2, 5, 6, 7, 11, 12, 13, 9, 8, 10],
+    "n_atoms_reassigned": 10,
+    "directory_of_reported_band": "ira_final",
+    "iteration": 362,
+    "converged_to_0.05_eV_per_A": false,
+    "lowest_band_force_eV_per_A": 0.189,
+    "barrier_eV": 3.988144,
+    "barrier_kcal_mol": 91.97,
+    "image_index_0based": 8,
+    "n_images_including_ends": 18,
+    "heavy_fragments_at_2.5_A": [["C0", "C1", "C2", "O"], ["C4", "C5"]],
+    "imaginary_cm-1_internal": [-250.99, -135.17, -122.77],
+    "character": "two separated fragments, higher-order stationary point, not a converged first-order saddle"
+  }
+}

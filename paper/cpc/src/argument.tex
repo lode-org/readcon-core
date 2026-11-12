@@ -42,9 +42,17 @@ The band still returns a number.
 That number is the barrier of a different path.
 
 \section{The Claisen rearrangement}\label{sec:claisen}
-Allyl vinyl ether rearranges to 4-pentenal by a [3,3] sigmatropic shift.
-The reactant and the product contain the same atoms.
-The reaction path is the motion that breaks one C--O bond and forms one C--C bond through a six-membered cyclic saddle.
+Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
+\cite{bakerLocationTransitionStates1996}.
+The reactant and the product are the same fourteen atoms.
+The path breaks one C--O bond and forms one C--C bond through a six-membered chair.
+The endpoints are the benchmark CON frames, used as written.
+Energies and forces are PET-MAD-S, version 1.1.0, through metatomic
+\cite{mazitovPETMADLightweight2025,bigiMetatensorMetatomicFoundational2026}.
+The band is an OCI-NEB with a climbing image
+\cite{henkelmanClimbingImageNudged2000}, run in eOn 3.6.0 on one CPU
+\cite{rohitgoswamiTheochemuieonV3602026}.
+
 Label the atoms once, in the reactant.
 The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
 \begin{equation}
@@ -52,13 +60,59 @@ The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear i
 R(s)=(1-s)\,R^{\mathrm{R}}+s\,R^{\mathrm{P}},\qquad s\in[0,1].
 \end{equation}
 The path length of Eq.~\eqref{eq:lerp} is \(|R^{\mathrm{P}}-R^{\mathrm{R}}|\).
-A second labelling \(\Pi\) of the product, the order a canonical SMILES or an element-sorted file assigns, replaces the length by \(|\Pi R^{\mathrm{P}}-R^{\mathrm{R}}|\).
-Identical atoms then travel across the molecule, the six-membered cycle is absent from the interpolated images, and the NEB force of Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring} follows that crossing.
+A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
-\noindent\textbf{Placeholder for the HLEBot Claisen run.}
-The barrier, the path length and the image energies of the identity map and of the renumbered product are not in this draft.
-They will be inserted in this section when that run is in the record.
-No value is stated here.
+The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
+That band converges.
+It has ten images and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
+The barrier is 0.607~eV (14.0~kcal/mol).
+The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
+The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
+One internal mode is imaginary, at \(-542.5\,\mathrm{cm}^{-1}\).
+
+IRA reassigns the same product by the rotation and the permutation that minimise the Hausdorff distance, with \(k_{\max}\) factor 3
+\cite{gundeIRAShapeMatching2021}.
+The permutation is \([0,4,3,1,2,5,6,7,11,12,13,9,8,10]\), and it moves 10 of the 14 atoms.
+The Hausdorff distance is \(2.109\,\text{\AA}\).
+Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on this map and \(1.519\,\text{\AA}\) on the identity map.
+The shorter distance pairs the wrong nuclei for the [3,3] shift.
+
+The band on that product has eighteen images (Figure~\ref{fig:claisen-band}).
+Its force remains above \(0.05\,\mathrm{eV/\text{\AA}}\).
+The lowest value is \(0.189\,\mathrm{eV/\text{\AA}}\), at iteration 362.
+The highest image lies at 3.988~eV (92.0~kcal/mol).
+The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
+Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
+The image is a higher-order stationary point.
+The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
+
+A swap of H11 with H13, and no other change of label, produces a band different from the [3,3] map.
+The minimum-Hausdorff assignment minimises a distance.
+The chemical map is the atom id, and that id has to travel with the coordinates.
+A CON row stores the id beside the position, and readcon returns the id with the position.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_structures.pdf}
+\caption{Highest image of each band, drawn from the CON coordinates.
+(a)~The connected six-membered chair of the chemical map.
+The dashed segment is the forming C5--C0 contact.
+(b)~The highest image of the Hausdorff reassignment, with C0--C1--C2\({=}\)O separated from C4--C5.
+Labels are the atom ids stored on the rows.
+Carbon is grey, oxygen red and hydrogen white.}
+\label{fig:claisen-struct}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_band.pdf}
+\caption{Final bands for allyl vinyl ether to pent-4-enal.
+Energy of each image above the reactant, on one reaction coordinate.
+Circles follow the chemical correspondence carried by the atom ids.
+Squares follow the minimum-Hausdorff reassignment of the product.}
+\label{fig:claisen-band}
+\end{figure}
 
 \section{The same atom in the next frame}\label{sec:connectivity}
 The published d-SEAMS analyses read LAMMPS dump text.
