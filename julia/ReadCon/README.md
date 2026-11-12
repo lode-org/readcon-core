@@ -13,7 +13,9 @@ Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.
 ## Prebuilt C ABI (no local cargo)
 
 Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` (or wait
-for the `v*` tag workflow) and unpack the matching asset:
+for the `v*` tag workflow) and unpack the matching asset. A backfill leaves
+a published asset untouched when the rebuilt bytes differ and records a
+warning. A tag push treats that mismatch as an error.
 
 ```bash
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "VER={v}")]]]

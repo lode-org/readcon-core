@@ -341,12 +341,12 @@ Attach prebuilt C ABI to an existing tag
 
 ``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``. Both
 start on a ``v*`` tag push, with crates.io, cargo-dist, and wheels. They
-wait until the GitHub Release exists, then attach archives with
-``gh release upload --clobber``. They do not create the release and do not
-move the tag. ``workflow_dispatch`` input ``tag`` backfills an existing
-release the same way and does not publish crates or wheels. Use that to
-put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
-workflow (for example ``v0.14.7``):
+wait until the GitHub Release exists, then upload archives that are not
+already on the release with ``gh release upload --clobber``. They do not
+create the release and do not move the tag. ``workflow_dispatch`` input
+``tag`` backfills an existing release the same way and does not publish
+crates or wheels. Use that to put ``readcon-core-clib-$VER-$target.tar.gz``
+on a tag that predates the workflow (for example ``v0.14.7``):
 
 .. code:: shell
 
@@ -363,6 +363,20 @@ workflow (for example ``v0.14.7``):
 The packager comes from the selected workflow ref. Sources and the
 GitHub Release come from ``inputs.tag``. Windows + chemfiles is an
 **explicit skip** (Python wheel path only).
+
+The uploader skips an asset whose sha256 already matches. It does not
+replace an asset whose bytes differ. On a ``v*`` tag push that mismatch is
+an error and the published file stays. On a ``workflow_dispatch`` backfill
+the same mismatch is a ``::warning::`` and the published file stays, so the
+job can still attach an asset that is missing.
+
+Windows clib builds pass ``/Brepro`` to the MSVC linker and remap the crate
+root and the cargo home out of the binary. The Windows job builds the
+tarball twice from a clean target directory and fails when the sha256
+differs. Linux and macOS pack those same libraries a second time and fail
+the same check. ``scripts/reproducible-tar.sh`` dates members with
+``SOURCE_DATE_EPOCH``, owns them as uid 0, sorts the names, and runs
+``gzip -n``. PDB files are not shipped.
 
 cargo-dist release-PR path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

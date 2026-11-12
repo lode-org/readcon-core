@@ -3,12 +3,14 @@
 #
 # The only write is `gh release upload --clobber` for assets that are not
 # already on the release. An asset whose sha256 matches the published bytes
-# is skipped. An asset whose bytes differ is a hard error and is not
-# replaced. This script does not create a release, move a tag, publish
+# is skipped. An asset whose bytes differ is left in place. On a v* tag
+# push that mismatch is a hard error. A backfill (--backfill, or
+# GITHUB_EVENT_NAME=workflow_dispatch) prints a GitHub ::warning:: and the
+# job continues. This script does not create a release, move a tag, publish
 # crates, or publish wheels.
 #
 # Usage:
-#   scripts/upload-release-assets.sh --tag vX.Y.Z [--wait] [--dry-run] FILE...
+#   scripts/upload-release-assets.sh --tag vX.Y.Z [--wait] [--backfill] [--dry-run] FILE...
 #
 # --wait polls until the Release exists. A v* tag push needs that, because
 # cargo-dist creates the Release in a different workflow. A backfill omits
@@ -18,9 +20,10 @@ set -euo pipefail
 tag=""
 wait_for=0
 dry_run=0
+backfill=0
 
 usage() {
-  echo "usage: $0 --tag vX.Y.Z [--wait] [--dry-run] FILE..." >&2
+  echo "usage: $0 --tag vX.Y.Z [--wait] [--backfill] [--dry-run] FILE..." >&2
   exit 2
 }
 
@@ -35,6 +38,10 @@ while [ $# -gt 0 ]; do
       ;;
     --wait)
       wait_for=1
+      shift
+      ;;
+    --backfill)
+      backfill=1
       shift
       ;;
     --dry-run)
@@ -57,6 +64,12 @@ done
 
 # A pasted tag can carry a trailing newline from the dispatch form.
 tag=$(printf '%s' "$tag" | tr -d '[:space:]')
+
+# workflow_dispatch is the backfill. GITHUB_EVENT_NAME is set by Actions
+# even when the workflow forgot --backfill.
+if [ "$backfill" -eq 0 ] && [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+  backfill=1
+fi
 
 if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
   echo "tag must look like vX.Y.Z (got: ${tag:-<empty>})" >&2
@@ -126,7 +139,11 @@ if [ "$dry_run" -eq 1 ]; then
     printf ' %q' "$asset"
   done
   printf '\n'
-  echo "would skip an asset whose release sha256 matches and refuse one that differs"
+  if [ "$backfill" -eq 1 ]; then
+    echo "would warn and leave an asset whose bytes differ"
+  else
+    echo "would skip an asset whose release sha256 matches and refuse one that differs"
+  fi
   if [ "$wait_for" -eq 1 ]; then
     echo "would wait for existing release $tag"
   else
@@ -170,6 +187,7 @@ tag_sha() {
 assets_json="$(gh release view "$tag" --repo "$repo" --json assets)"
 pending=()
 blocked=0
+warned=0
 for asset in "$@"; do
   base=$(basename "$asset")
   local_sha=$(sha256_file "$asset")
@@ -191,6 +209,12 @@ for asset in "$@"; do
     echo "skip $base: existing sha256 matches"
     continue
   fi
+  if [ "$backfill" -eq 1 ]; then
+    # stdout, one line: Actions turns ::warning:: into an annotation.
+    echo "::warning::Published asset ${base} was left unchanged (release ${remote_sha}, local ${local_cmp})"
+    warned=1
+    continue
+  fi
   echo "refusing to overwrite $base" >&2
   echo "  release sha256: $remote_sha" >&2
   echo "  local sha256:   $local_cmp" >&2
@@ -203,7 +227,11 @@ if [ "$blocked" -ne 0 ]; then
 fi
 
 if [ "${#pending[@]}" -eq 0 ]; then
-  echo "every asset already matches the release sha256; nothing to upload"
+  if [ "$warned" -ne 0 ]; then
+    echo "no asset was uploaded; differing published assets were left untouched"
+  else
+    echo "every asset already matches the release sha256; nothing to upload"
+  fi
   exit 0
 fi
 

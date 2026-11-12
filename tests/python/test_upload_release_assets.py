@@ -77,6 +77,7 @@ def run_upload(
     merged = os.environ.copy()
     merged.pop("GH_TOKEN", None)
     merged.pop("GITHUB_TOKEN", None)
+    merged.pop("GITHUB_EVENT_NAME", None)
     if env:
         merged.update(env)
     return subprocess.run(
@@ -227,8 +228,81 @@ class UploadReleaseAssetsTest(unittest.TestCase):
         self.assertIn(f"refusing to overwrite {self.asset.name}", done.stderr)
         self.assertIn("release sha256: " + ("ab" * 32), done.stderr)
         self.assertIn("different bytes", done.stderr)
+        self.assertNotIn("::warning::", done.stdout)
+        self.assertNotIn("::warning::", done.stderr)
         self.assertNotIn("release upload", log)
         self.assertNotIn("api ", log)
+
+    def test_backfill_warns_and_leaves_a_different_asset(self) -> None:
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": self.asset.name,
+                        "digest": "sha256:" + ("ab" * 32),
+                    }
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v9.9.9", "--backfill", str(self.asset)],
+            extra_env={"GH_ASSETS_JSON": payload},
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("::warning::", done.stdout)
+        self.assertIn(self.asset.name, done.stdout)
+        self.assertIn("ab" * 32, done.stdout)
+        self.assertIn("left untouched", done.stdout)
+        self.assertNotIn("release upload", log)
+        self.assertNotIn("refusing to overwrite", done.stderr)
+
+    def test_dispatch_event_warns_without_the_flag(self) -> None:
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": self.asset.name,
+                        "digest": "sha256:" + ("cd" * 32),
+                    }
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v9.9.9", str(self.asset)],
+            extra_env={
+                "GH_ASSETS_JSON": payload,
+                "GITHUB_EVENT_NAME": "workflow_dispatch",
+            },
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("::warning::", done.stdout)
+        self.assertNotIn("release upload", log)
+
+    def test_backfill_uploads_a_new_asset_and_warns_on_the_old(self) -> None:
+        other = self.asset.with_name("readcon-core-clib-9.9.9.tar.gz")
+        other.write_text("fresh", encoding="utf-8")
+        payload = json.dumps(
+            {
+                "assets": [
+                    {
+                        "name": self.asset.name,
+                        "digest": "sha256:" + ("ef" * 32),
+                    }
+                ]
+            }
+        )
+        done, log = self._with_fake_gh(
+            ["--tag", "v9.9.9", "--backfill", str(self.asset), str(other)],
+            extra_env={"GH_ASSETS_JSON": payload},
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("::warning::", done.stdout)
+        self.assertIn(self.asset.name, done.stdout)
+        self.assertIn(
+            "release upload v9.9.9 --repo lode-org/readcon-core --clobber", log
+        )
+        self.assertIn(str(other), log)
+        self.assertNotIn(str(self.asset), log)
 
     def test_new_asset_uploads_and_match_is_skipped(self) -> None:
         other = self.asset.with_name("readcon-core-cxx-9.9.9-vendor.tar.gz")
@@ -364,6 +438,8 @@ class TarballWorkflowTriggerTest(unittest.TestCase):
         self.assertIn("packager/scripts/upload-release-assets.sh", clib)
         self.assertIn("github.event_name != 'workflow_dispatch'", cxx)
         self.assertIn("github.event_name != 'workflow_dispatch'", clib)
+        self.assertIn("--backfill", cxx)
+        self.assertIn("--backfill", clib)
 
     def test_workflow_gh_release_calls_pass_repo(self) -> None:
         for path in (

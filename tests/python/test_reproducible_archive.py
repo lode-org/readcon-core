@@ -261,7 +261,9 @@ class ReproducibleTarTest(unittest.TestCase):
                 if (Path(part) / "gtar").exists():
                     continue
                 parts.append(part)
-            self._assert_stable({"PATH": os.pathsep.join(parts)})
+            self._assert_stable(
+                {"PATH": os.pathsep.join(parts), "REPRO_TAR_EXPECT": "bsd"}
+            )
 
     def _assert_stable(self, env: dict[str, str]) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -279,10 +281,25 @@ class ReproducibleTarTest(unittest.TestCase):
             members = _members(out_a)
             names = [item.name for item in members]
             self.assertEqual(names, sorted(names))
+            expect_root = env.get("REPRO_TAR_EXPECT") == "bsd"
             for item in members:
                 self.assertEqual(item.mtime, 1794454673)
                 self.assertEqual(item.uid, 0)
                 self.assertEqual(item.gid, 0)
+                self.assertEqual(item.pax_headers, {})
+                if expect_root:
+                    self.assertEqual(item.uname, "root")
+                    self.assertEqual(item.gname, "root")
+                else:
+                    self.assertEqual(item.uname, "")
+                    self.assertEqual(item.gname, "")
+                if item.isdir():
+                    self.assertEqual(item.mode, 0o755)
+                else:
+                    self.assertEqual(item.mode, 0o644)
+            raw = out_a.read_bytes()
+            self.assertEqual(raw[3] & 0x08, 0)
+            self.assertEqual(int.from_bytes(raw[4:8], "little"), 0)
 
 
 if __name__ == "__main__":

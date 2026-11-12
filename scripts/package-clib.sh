@@ -94,8 +94,9 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
-# Same archive metadata as the cxx tarball. The shared library bytes are
-# whatever the build produced; the tar header no longer follows the clock.
+# Same archive metadata as the cxx tarball. The tar header is
+# SOURCE_DATE_EPOCH. Windows also links with /Brepro and remapped paths
+# so the DLL and import library bytes stay put across two builds.
 SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
 export SOURCE_DATE_EPOCH
 
@@ -234,6 +235,10 @@ else
         fi
         (
             cd "$ROOT_DIR"
+            # shellcheck disable=SC1091
+            source "$SCRIPT_DIR/reproducible-rustflags.sh"
+            reproducible_rustflags "$ROOT_DIR" "$TARGET"
+            export CARGO_INCREMENTAL=0
             feat_args=()
             if [[ -n "$FEATURES" ]]; then
                 feat_args=(--features "$FEATURES")
@@ -275,6 +280,10 @@ fi
 
 if find "$DEST" -name 'cbindgen.toml' -o -name 'cbindgen' | grep -q .; then
     echo "package-clib: tarball must not contain cbindgen" >&2
+    exit 1
+fi
+if find "$DEST" -name '*.pdb' -print | grep -q .; then
+    echo "package-clib: tarball must not contain PDB files" >&2
     exit 1
 fi
 

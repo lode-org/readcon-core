@@ -129,5 +129,5 @@ jobs:
           if [ "$UPLOAD_WAIT" = "true" ]; then
             bash "$script" --tag "$RELEASE_TAG" --wait "$@"
           else
-            bash "$script" --tag "$RELEASE_TAG" "$@"
+            bash "$script" --tag "$RELEASE_TAG" --backfill "$@"
           fi

@@ -40,9 +40,21 @@ if [[ ! -d "$TAR_DIR/$ARCHIVE_NAME" ]]; then
     exit 1
 fi
 
+# Directories are 0755. Shared libraries stay executable. Every other
+# file is 0644, so a Windows ACL cannot change the tar mode between runs.
+# chmod can bump mtime on some hosts; the stamp below puts it back.
+archive_root="$TAR_DIR/$ARCHIVE_NAME"
+find "$archive_root" -type d -exec chmod 0755 {} +
+find "$archive_root" -type f -exec chmod 0644 {} +
+find "$archive_root" -type f \
+    \( -name '*.dll' -o -name '*.dylib' -o -name '*.so' -o -name '*.so.*' \) \
+    -exec chmod 0755 {} +
+
 # Stamp the staging tree. Some bsdtar builds have no --mtime flag; the
 # header time is then the file mtime, which has to already be the epoch.
-python3 - "$SOURCE_DATE_EPOCH" "$TAR_DIR/$ARCHIVE_NAME" <<'PY'
+# AppleDouble and xattrs become pax headers. Keep them out of the archive.
+export COPYFILE_DISABLE=1
+python3 - "$SOURCE_DATE_EPOCH" "$archive_root" <<'PY'
 import os
 import sys
 
@@ -64,6 +76,10 @@ for dirpath, dirnames, filenames in os.walk(root, topdown=False, followlinks=Fal
     stamp(dirpath)
 PY
 
+# Member order and the gzip header follow the C locale, not the runner clock.
+export LC_ALL=C
+export TZ=UTC
+
 is_gnu() {
     # grep -q can SIGPIPE tar and, with pipefail, hide a GNU tar.
     "$1" --version 2>&1 | grep 'GNU tar' >/dev/null
@@ -76,13 +92,20 @@ elif is_gnu tar; then
     TAR_BIN="tar"
 fi
 
+# --format=gnu stores mtime only. pax would also store atime and ctime,
+# which differ every run. --numeric-owner leaves uname and gname empty.
 if [[ -n "$TAR_BIN" ]]; then
-    "$TAR_BIN" -C "$TAR_DIR" \
-        --sort=name \
-        --mtime="@${SOURCE_DATE_EPOCH}" \
-        --owner=0 --group=0 --numeric-owner \
-        -cf "$tar_path" \
-        "$ARCHIVE_NAME"
+    gnu_args=(
+        -C "$TAR_DIR"
+        --format=gnu
+        --sort=name
+        --mtime="@${SOURCE_DATE_EPOCH}"
+        --owner=0 --group=0 --numeric-owner
+    )
+    if "$TAR_BIN" --help 2>&1 | grep -F -q -- '--no-xattrs'; then
+        gnu_args+=(--no-xattrs)
+    fi
+    "$TAR_BIN" "${gnu_args[@]}" -cf "$tar_path" "$ARCHIVE_NAME"
 else
     list="$(mktemp)"
     (
@@ -91,17 +114,41 @@ else
     ) > "$list"
     # macOS bsdtar accepts --mtime. The libarchive build in some Linux
     # packages does not; the tree was stamped above either way.
+    # gnutar format keeps long vendor paths and does not store atime/ctime.
+    # ustar cannot. --no-xattrs drops SCHILY pax headers when libarchive
+    # would otherwise copy them. An empty array is unbound on bash 3.2.
     mtime_args=()
     if tar --mtime "@${SOURCE_DATE_EPOCH}" -cf /dev/null --files-from /dev/null >/dev/null 2>&1; then
         mtime_args=(--mtime "@${SOURCE_DATE_EPOCH}")
     fi
-    # gnutar format keeps long vendor paths. ustar cannot.
-    # An empty "${mtime_args[@]}" is an unbound variable on bash 3.2.
-    if [[ ${#mtime_args[@]} -gt 0 ]]; then
+    xattr_args=()
+    if tar --help 2>&1 | grep -F -q -- '--no-xattrs'; then
+        xattr_args=(--no-xattrs)
+    fi
+    if [[ ${#mtime_args[@]} -gt 0 && ${#xattr_args[@]} -gt 0 ]]; then
         tar -C "$TAR_DIR" \
             --format gnutar \
             --no-recursion \
             "${mtime_args[@]}" \
+            "${xattr_args[@]}" \
+            --uid 0 --gid 0 \
+            --uname root --gname root \
+            -cf "$tar_path" \
+            --files-from "$list"
+    elif [[ ${#mtime_args[@]} -gt 0 ]]; then
+        tar -C "$TAR_DIR" \
+            --format gnutar \
+            --no-recursion \
+            "${mtime_args[@]}" \
+            --uid 0 --gid 0 \
+            --uname root --gname root \
+            -cf "$tar_path" \
+            --files-from "$list"
+    elif [[ ${#xattr_args[@]} -gt 0 ]]; then
+        tar -C "$TAR_DIR" \
+            --format gnutar \
+            --no-recursion \
+            "${xattr_args[@]}" \
             --uid 0 --gid 0 \
             --uname root --gname root \
             -cf "$tar_path" \

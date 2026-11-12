@@ -211,7 +211,11 @@ tarball (=scripts/package-clib.sh= →
 =readcon-core-clib-$VERSION-$target.tar.gz=) is the Julia / Fortran /
 =pkg-config= consumer path; attach it to an existing tag with
 =.github/workflows/c_lib_tarball.yml= (=workflow_dispatch= =tag=).
-Windows + chemfiles is not a clib asset. Maintainers only:
+The archive is packed with =scripts/reproducible-tar.sh=
+(=SOURCE_DATE_EPOCH=, uid 0, sorted names, =gzip -n=). The Windows DLL
+is linked with =/Brepro= so a second build of the same commit has the
+same bytes. A backfill warns and leaves a published asset whose bytes
+differ. Windows + chemfiles is not a clib asset. Maintainers only:
 =scripts/regen-capi-headers.sh=.
 
 The

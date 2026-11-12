@@ -97,6 +97,20 @@ jobs:
         shell: bash
         run: brew install gnu-tar
 
+      # The published Windows archive has empty uname and no pax headers,
+      # which is GNU tar --numeric-owner. bsdtar on Windows writes atime
+      # and ctime into pax headers and the bytes move.
+      - name: Require GNU tar on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! tar --version 2>&1 | head -n 1 | grep -q 'GNU tar'; then
+            echo "Windows clib archives need GNU tar" >&2
+            tar --version >&2 || true
+            exit 1
+          fi
+
       # Host gitconfig does not enter the manylinux container. That job
       # marks /io, /io/src, and /io/packager inside the container as well.
       - name: Mark checkouts as safe git directories
@@ -186,6 +200,51 @@ jobs:
             "${feat_args[@]}"
           ls -lh dist-clib
 
+      # Windows links twice from an empty target directory. /Brepro and the
+      # path remap live in package-clib.sh; a cache hit would hide a linker
+      # timestamp. Linux and macOS pack the libraries just built a second
+      # time, which checks the tar header without another compile.
+      - name: Prove the clib tarball is reproducible
+        shell: bash
+        env:
+          CARGO_FEATURES: ${{ matrix.features }}
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+          CARGO_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-clib-rebuild
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            rm -rf src/target
+            feat_args=()
+            if [ -n "${CARGO_FEATURES:-}" ]; then
+              feat_args=(--features "${CARGO_FEATURES}")
+            fi
+            bash packager/scripts/package-clib.sh dist-clib-rebuild \
+              --root src \
+              --target "$CARGO_TARGET" \
+              "${feat_args[@]}"
+          elif [ "$RUNNER_OS" = "Linux" ]; then
+            docker run --rm \
+              -e CARGO_TARGET \
+              -v "$GITHUB_WORKSPACE":/io \
+              -w /io \
+              "$MANYLINUX_IMAGE" \
+              bash -lc 'bash /io/packager/scripts/package-clib.sh /io/dist-clib-rebuild --root /io/src --target "$CARGO_TARGET" --no-build'
+          else
+            bash packager/scripts/package-clib.sh dist-clib-rebuild \
+              --root src \
+              --target "$CARGO_TARGET" \
+              --no-build
+          fi
+          shopt -s nullglob
+          first=(dist-clib/readcon-core-clib-*.tar.gz)
+          second=(dist-clib-rebuild/readcon-core-clib-*.tar.gz)
+          if [ "${#first[@]}" -ne 1 ] || [ "${#second[@]}" -ne 1 ]; then
+            echo "expected one clib tarball in each directory" >&2
+            exit 1
+          fi
+          python3 packager/scripts/compare-repro-archives.py "${first[0]}" "${second[0]}"
+
       - name: Require clib names to match the tag
         shell: bash
         env:
@@ -233,7 +292,7 @@ jobs:
           if [ "$UPLOAD_WAIT" = "true" ]; then
             bash "$script" --tag "$RELEASE_TAG" --wait "$@"
           else
-            bash "$script" --tag "$RELEASE_TAG" "$@"
+            bash "$script" --tag "$RELEASE_TAG" --backfill "$@"
           fi
 
   # Explicit skip: do not silently omit Windows chemfiles from the matrix.

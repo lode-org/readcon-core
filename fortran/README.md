@@ -60,6 +60,8 @@ fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
 Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` to attach
 those assets to an existing GitHub Release (same `v*` tag push and
 `workflow_dispatch` input as `cxx_tarball.yml`).
+A backfill leaves a published asset untouched when the rebuilt bytes differ
+and records a warning. A tag push treats that mismatch as an error.
 Windows + chemfiles is not a clib asset; use Linux/macOS tarballs.
 
 ## DLPack (builder, full C ABI parity)
