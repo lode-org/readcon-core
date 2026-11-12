@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from version_sot import (
     changelog_headings,
     generated_targets,
     heading_re,
+    read_version,
     render_wrap,
 )
 
@@ -38,7 +40,12 @@ def test_render_wrap_matches_the_sidecar():
 def test_render_wrap_refuses_to_keep_the_previous_digest():
     wrap = ROOT / "packaging" / "wrapdb" / "readcon-core.wrap"
     original = wrap.read_text(encoding="utf-8")
-    stale = original.replace("0.22.0", "0.21.0")
+    current = read_version()
+    major, minor, patch = current.split(".", 2)
+    patch_num = re.match(r"\d+", patch)
+    assert patch_num is not None
+    other = f"{major}.{minor}.{int(patch_num.group(0)) + 1}"
+    stale = original.replace(current, other)
     assert stale != original
     wrap.write_text(stale, encoding="utf-8")
     try:
@@ -46,9 +53,14 @@ def test_render_wrap_refuses_to_keep_the_previous_digest():
             render_wrap()
         except SystemExit as exc:
             message = str(exc)
-            assert "0.21.0" in message
+            assert other in message
             assert "record-cxx-wrap.sh" in message
         else:
             raise AssertionError("stale wrap was retargeted")
     finally:
         wrap.write_text(original, encoding="utf-8")
+
+
+def test_version_sot_tests_do_not_embed_the_package_version():
+    source = Path(__file__).read_text(encoding="utf-8")
+    assert read_version() not in source
