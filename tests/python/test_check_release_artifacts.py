@@ -108,6 +108,70 @@ class ReleaseArtifactGuard(unittest.TestCase):
             0,
         )
 
+    def test_scratch_dist_manifests_are_accepted_when_the_version_matches(self) -> None:
+        name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
+        body = {
+            "announcement_tag": "v0.19.0",
+            "releases": [{"app_version": "0.19.0", "artifacts": [name]}],
+            "artifacts": {name: {"name": name}},
+        }
+        encoded = json.dumps(body)
+        self.assertEqual(
+            run(
+                "v0.19.0",
+                "0.19.0",
+                {
+                    name: "b",
+                    "x86_64-unknown-linux-gnu-dist-manifest.json": encoded,
+                    "global-dist-manifest.json": encoded,
+                    "plan-dist-manifest.json": encoded,
+                },
+            ),
+            0,
+        )
+
+    def test_scratch_dist_manifest_version_must_match_the_tag(self) -> None:
+        name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
+        bad = {
+            "announcement_tag": "v0.17.3",
+            "releases": [{"app_version": "0.17.3", "artifacts": [name]}],
+            "artifacts": {},
+        }
+        self.assertNotEqual(
+            run(
+                "v0.19.0",
+                "0.19.0",
+                {name: "b", "global-dist-manifest.json": json.dumps(bad)},
+            ),
+            0,
+        )
+
+    def test_release_host_installs_python_312_before_the_check(self) -> None:
+        yml = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        setup = yml.find(
+            "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
+        )
+        check = yml.find("Require dist metadata to match the tag")
+        self.assertGreater(setup, 0)
+        self.assertLess(setup, check)
+        self.assertIn('python-version: "3.12"', yml)
+        self.assertIn(
+            'allow-dirty = ["ci"]', (ROOT / "dist-workspace.toml").read_text()
+        )
+
+    def test_dist_backfill_uploads_without_publishing_or_tagging(self) -> None:
+        yml = (ROOT / ".github/workflows/dist_backfill.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", yml)
+        self.assertIn("gh release upload", yml)
+        self.assertIn("--clobber", yml)
+        self.assertIn("ref: ${{ needs.plan.outputs.tag }}", yml)
+        self.assertIn("packager/scripts/check_release_artifacts.py", yml)
+        self.assertNotIn("gh release create", yml)
+        self.assertNotIn("cargo publish", yml)
+        self.assertNotIn("twine", yml)
+        self.assertNotIn("git tag", yml)
+        self.assertNotIn("softprops/action-gh-release", yml)
+
     def test_dist_binary_passes_when_manifest_version_matches(self) -> None:
         name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
         manifest = {
