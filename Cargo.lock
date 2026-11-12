@@ -1544,6 +1544,7 @@ dependencies = [
  "memchr",
  "memmap2",
  "metatensor",
+ "metatensor-sys",
  "mpi",
  "ndarray",
  "numpy",
