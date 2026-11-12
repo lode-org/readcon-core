@@ -384,7 +384,6 @@ that parse, store and compare a frame.
 The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
-Of the readers tested, only readcon-core returns all four restart fields.
 CON 3.1 is the first written specification of CON, and readcon-core is the only reader tested that returns the mask, the id, the masses and the time unit together.
 
 \input{argument}
@@ -1045,7 +1044,7 @@ The short-decimal session uses rustc 1.88.0.
 The mapped-binary notes use NumPy 1.26.4.
 Python 3.12.16 appears in the stored-campaign records.
 NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2 each ran with one thread where that library was timed.
-The eOn client is release 3.6.0.
+The loadcons timings use a development build of eOn 3.6.0.
 Each median is the type-7 median of six repeats after one warmup.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
