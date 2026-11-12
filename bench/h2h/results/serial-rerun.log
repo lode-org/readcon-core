@@ -7,7 +7,7 @@ cpu_model Intel Xeon Processor
 protocol warmup=1 samples=6 excluded_from_percentile=warmup
 percentile numpy method=linear type=7
 clock perf_counter or CLOCK_MONOTONIC around the read
-readcon 0.18.1
+readcon
 python 3.12.3
 rustc 1.88.0
 gcc 13.3.0
