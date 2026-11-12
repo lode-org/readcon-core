@@ -776,3 +776,210 @@ A restart therefore cannot repeat an L-BFGS path from the geometry alone.
 The uninterrupted Morse band, on eOn's Morse potential, takes 946 optimiser steps and 4737 force calls, and the barrier is 1.37~eV (Figure~\ref{fig:restart}).
 The round trip reaches the same barrier, with a shift of 0, in 922 optimiser steps and 4617 force calls on the resumed leg.
 Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
+
+\section{The three applications in full}\label{sec:supp-applications}
+This section is the full text of Section~\ref{sec:validation}.
+The Claisen landscape is Figure~\ref{fig:claisen-land} and the restart drift is Figure~\ref{fig:restartfmt}.
+\subsection{Applications as first written}
+\subsection{Claisen}
+Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
+\cite{bakerLocationTransitionStates1996}.
+The reactant and the product are the same fourteen atoms.
+The path breaks one C--O bond and forms one C--C bond through a six-membered chair.
+The endpoints are the benchmark CON frames, used as written.
+Energies and forces are PET-MAD-S, version 1.1.0, through metatomic
+\cite{mazitovPETMADLightweight2025,bigiMetatensorMetatomicFoundational2026}.
+The band is an OCI-NEB with a climbing image
+\cite{henkelmanClimbingImageNudged2000}, run in eOn 3.6.0 on one CPU
+\cite{rohitgoswamiTheochemuieonV3602026}.
+A climbing image aligned to a Hessian eigenmode has the same pairing of the atoms
+\cite{goswamiEnhancedClimbingImage2026}.
+
+Label the atoms once, in the reactant.
+The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
+\begin{equation}
+\label{eq:lerp}
+R(s)=(1-s)\,R^{\mathrm{R}}+s\,R^{\mathrm{P}},\qquad s\in[0,1].
+\end{equation}
+The path length of Eq.~\eqref{eq:lerp} is \(|R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
+
+The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
+That band converges.
+It has ten images, eight of them between the endpoints, and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
+The barrier is 0.607~eV (14.0~kcal/mol).
+The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
+The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
+One internal mode is imaginary, at \(-542.5\,\mathrm{cm}^{-1}\).
+
+IRA reassigns the same product by the minimum-Hausdorff permutation (Section~\ref{sec:supp-claisen-protocol}).
+The shorter distance pairs the wrong nuclei, and that band does not meet the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
+Its highest image lies at 3.988~eV (92.0~kcal/mol), separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
+Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
+Figure~\ref{fig:claisen-land} is the plane of reaction progress and orthogonal deviation.
+
+The minimum-Hausdorff assignment minimises a distance.
+The chemical map is the atom id, and that id has to travel with the coordinates.
+A CON row stores the id beside the position, and readcon returns the id with the position.
+The released API in readcon-core 0.21.0 checks the correspondence on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
+It is not a third Claisen result.
+Pairing rows by file position puts the reactant oxygen against the shifted C5, a raw, unwrapped step of 15.761~\text{\AA}.
+The minimum image of that pairing is 2.272~\text{\AA}.
+Pairing by id follows the vinyl-ether O--C4 bond, 1.360~\text{\AA}, to the C4\({=}\)O carbonyl of pent-4-enal, 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
+A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
+The first file slot of that image then differs by 3.615~\text{\AA}, and the id-matched atom of id 0 moves 0.018~\text{\AA}.
+Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
+Frame indices count from zero, so frame 2 is the third image.
+
+The chair, the separated renumbered image and the two final bands are Figures~\ref{fig:claisen-struct} and~\ref{fig:claisen-band} (Section~\ref{sec:supp-claisen-draw}).
+The plane of reaction progress and orthogonal deviation is Figure~\ref{fig:claisen-land}.
+
+
+
+
+\subsection{Connectivity tracking in d-SEAMS}
+One trajectory suffices because the comparison is between two encodings of the same frames.
+The system is mW water, 4096 molecules, and an 81-frame window around a CHILL+ ice core.
+The same frames were written as CON and as XYZ with the atom order permuted independently in every frame.
+The quench, the cutoff and the command that rebuilds Figure~\ref{fig:water} are in Sections~\ref{sec:supp-water-protocol} and~\ref{sec:supp-water}.
+
+Persistence is the mean, over frames \(t\), of the fraction of a per-atom relation that is still true one lag later,
+\begin{equation}
+\label{eq:persist}
+P(\tau)=\left\langle\frac{|A(t)\cap A(t+\tau)|}{|A(t)|}\right\rangle_{t},
+\end{equation}
+with \(A(t)\) the set of neighbour pairs, or of molecule labels, at frame \(t\) (Figure~\ref{fig:water}).
+A neighbour drawn uniformly among the other molecules has chance \(z/(N-1)\), about 0.001, with \(z\) the number of neighbours of a molecule and \(N=4096\).
+Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}\), about 0.63, where \(p_k\) is the fraction of molecules of class \(k\).
+Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at about 0.001 on the permuted XYZ at every lag.
+The CHILL+ type of a molecule persists at 0.800, 0.790, 0.785 and 0.771 on CON, and at 0.630--0.631 on the permuted XYZ.
+Six-ring membership is 0.996--0.997 on CON and 0.995 on the permuted XYZ, because almost every molecule already sits in a six-ring, so it does not separate them.
+Ring counts and ice counts match on every frame of the two files.
+A whole-frame total survives the new order.
+Following one molecule as it joins the ice nucleus uses the atom id.
+
+The 81 frames, 4096 atoms each, were ingested into a readcon-db corpus and selected back by the formula \texttt{O:4096}.
+All 81 frames returned, bitwise identical in the positions and in the cell.
+The median wall time of that ingest and select is 0.578~s on the machine of Section~\ref{sec:compute}, and the eight repeats span 0.571--0.596~s.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/water_persistence.pdf}
+\caption{Persistence of per-atom relations on one mW nucleation trajectory, against the lag in frames.
+(a)~Neighbour pairs.
+(b)~CHILL+ ice type.
+Circles are the CON frames.
+Squares are the same frames written as XYZ with the atom order permuted independently in every frame.
+The dashed line is the chance agreement of the ice type, 0.630--0.631.}
+\label{fig:water}
+\end{figure}
+
+
+seams-core reads a \texttt{.con} file through readcon-core and keeps the stored id as the lookup key.
+The call names, the triclinic cell, and the corpus select are Section~\ref{sec:supp-dseams-api}.
+
+\subsection{Resumed saddle searches}
+\subsubsection{Requirements on a restart file}
+
+Table~\ref{tab:requirements} states five requirements.
+Each is a field a later step reads.
+
+\begin{table}[tbp]
+\centering
+\small
+\caption{Requirements on a restart state, the step that reads each field, and the failure measured when the field is missing.}
+\label{tab:requirements}
+\begin{tabular}{p{0.22\linewidth}p{0.32\linewidth}p{0.36\linewidth}}
+\toprule
+Requirement & Step that reads it & Failure measured here \\
+\midrule
+R1, per-axis mask & Surface search, prefactor & Height constraint dropped; barrier \(+36.9\,\mathrm{meV}\) \\
+R2, persistent id & Band and event table & Id lost on completed foreign round trips \\
+R3, declared time unit & Dynamics & Kinetic energy scaled by \(103.64\) \\
+R4, binary64 geometry, cell, periodicity & Resume of a search & \(10^{-9}\) to \(10^{-6}\,\text{\AA}\), or periodicity rewritten \\
+R5, versioned grammar & Any second reader & One file, four answers from five readers \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Section~\ref{sec:supp-requirements} states what each requirement is.
+A resume can match the coordinates and still take a different next step, because an optimiser may keep a history the file does not store.
+The subsections below measure that on one band.
+
+Table~\ref{tab:survey} records \(\surveyRoutes\) round trips.
+Only the CON 3.1 route returns every field from places that its own specification defines.
+Extended XYZ returns the mask and the identifiers through ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
+The other routes are in Section~\ref{sec:supp-rounds}.
+
+\subsubsection{A climbing-image band through every route}
+The protocol, the fixed parameters and the route-by-route results are Sections~\ref{sec:supp-protocol} and~\ref{sec:supp-restart}, Table~\ref{tab:params} and Table~\ref{tab:restartfmt} (Section~\ref{sec:supp-restart-tables}).
+Uninterrupted, the band converges in \(\rfStepsUnint\) steps and
+\(\rfCallsUnint\) force calls, with barrier
+\(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the
+middle image.
+We interrupt it after \(K\) steps, write it, read it back and resume it
+to \(f_{\mathrm{band}}\), once per route.
+A file that drops the hold resumes another relaxation, because the held height is not a stationary point of the free adsorbate.
+
+The shortest CON round trip changes no coordinate, and the resumed band
+is the uninterrupted band bit for bit: the same \(\rfStepsCon\) steps,
+\(\rfModesCon\) free modes on the middle image, and the same coordinates
+and energy on every image (Figure~\ref{fig:restartfmt}).
+Every force evaluation builds its EMT calculators afresh, so a step
+depends on the positions alone.
+The ASE trajectory with identifiers in tags and H5MD written and read
+with h5py return the same row.
+Two columns of Table~\ref{tab:restartfmt} are different quantities.
+File is the largest coordinate change on the written round trip.
+Max displacement is how far the resumed band sits from the uninterrupted
+band, and that displacement is what Figure~\ref{fig:restartfmt} plots.
+POSCAR with the height held as FixScaled moves one written coordinate by
+\(\num{\rfFileScaledNum}\,\text{\AA}\).
+The resumed band moves by \(\num{\rfDispScaledLoNum}\) to
+\(\num{\rfDispScaledHiNum}\,\text{\AA}\) and the barrier by
+\(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\),
+the range over the four host builds.
+Six decimals move the written file by \(\num{\rfFileSixNum}\,\text{\AA}\)
+and the resumed band by \(\num{\rfDispSixNum}\,\text{\AA}\), with a barrier
+shift of \(\num{\rfDeSixNum}\,\mathrm{eV}\).
+Extended XYZ written by ASE moves the written file by
+\(\num{\rfFileXyzNum}\,\text{\AA}\) and the resumed band by
+\(\num{\rfDispXyzNum}\,\text{\AA}\), with a barrier shift of
+\(\num{\rfDeXyzNum}\,\mathrm{eV}\), all in the same step count.
+Extended XYZ carries the identifier only under ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
+Each shift is printed to the figures on which reruns on the
+linear-algebra builds of four host generations agree, or as their range
+(Section~\ref*{sec:supp-restart}).
+
+
+\subsubsection{The mask and the prefactor} A barrier
+is one number, and the harmonic prefactor needs the free modes at the
+saddle.
+The rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor of Eq.~\eqref{eq:vineyard}.
+A mask that frees one more component can move the saddle itself, besides
+adding a mode to each product.
+We wrote the endpoints of the same slab through each route and read them
+back before relaxing them, converged a climbing-image band with the fast
+inertial relaxation engine (FIRE)
+\cite{bitzekStructuralRelaxationMade2006}, and took the Hessian of the
+highest image.
+With the height held, the barrier is \(\eFiveBarrierHeld\,\mathrm{eV}\)
+on a path of \(\eFivePathHeld\,\text{\AA}\).
+The highest image has \(\eFiveModesHeld\) free modes, one imaginary mode
+of \(\eFiveImagHeld\,\mathrm{meV}\) with \(\eFiveWeightHeld\) of its
+weight on the lateral motion of the adatom, and a prefactor of
+\(\num{\eFivePrefactorHeldNum}\,\mathrm{Hz}\).
+CON 3.1, the ASE trajectory, FixScaled POSCAR and h5py H5MD all return
+that prefactor (Table~\ref{tab:prefactor-routes}).
+If the reader drops the height constraint, the band crosses a different
+saddle at \(0.68\,\mathrm{eV}\), with a prefactor 37 times larger.
+A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\) (Section~\ref{sec:supp-velunit}).
+
+The route-by-route prefactors are Table~\ref{tab:prefactor-routes} (Section~\ref{sec:supp-restart-tables}).
+
+
+\subsubsection{eOn resuming a Morse band}
+eOn's L-BFGS memory is stored in no geometry file, so a restart cannot repeat that path from the geometry alone (Section~\ref{sec:supp-morse}).
+The uninterrupted Morse barrier is 1.37~eV, the round trip shifts it by 0, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}).
+
