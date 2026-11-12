@@ -59,7 +59,9 @@ def _hydrogens(carbons):
         (12, carbons[4], [0.4, 0.4, 0.8]),
         (13, carbons[4], [0.5, -0.5, -0.6]),
     ]
-    return [("H", atom_id, _h(origin, direction)) for atom_id, origin, direction in sites]
+    return [
+        ("H", atom_id, _h(origin, direction)) for atom_id, origin, direction in sites
+    ]
 
 
 def _claisen():
@@ -157,8 +159,12 @@ def test_claisen_positional_zip_is_the_wrong_displacement():
     assert len(reactant_rows) == 14
     bonds = [(0, 1, 1.336), (1, 2, 1.360), (2, 3, 1.430), (3, 4, 1.504), (4, 5, 1.336)]
     for i, j, length in bonds:
-        assert _norm(_sub(_xyz(reactant_rows, i), _xyz(reactant_rows, j))) == pytest.approx(length)
-    assert _norm(_sub(_xyz(product_rows, 1), _xyz(product_rows, 2))) == pytest.approx(1.210)
+        assert _norm(
+            _sub(_xyz(reactant_rows, i), _xyz(reactant_rows, j))
+        ) == pytest.approx(length)
+    assert _norm(_sub(_xyz(product_rows, 1), _xyz(product_rows, 2))) == pytest.approx(
+        1.210
+    )
     # The stored product C5 is the periodic image. The bond length uses the
     # unwrapped geometry, checked through the minimum image below.
     c1_product = _xyz(reactant_rows, 0) + np.array([0.04, 0.02, 0.0])
@@ -183,13 +189,18 @@ def test_claisen_positional_zip_is_the_wrong_displacement():
     assert _norm(disp[oxygen]) == pytest.approx(0.150)
     chemical = c5_true - c5_r
     assert disp[c5] == pytest.approx(chemical)
-    raw_c5 = product.xyz[next(i for i, a in enumerate(product.atoms) if a.atom_id == 5)] - c5_r
+    raw_c5 = (
+        product.xyz[next(i for i, a in enumerate(product.atoms) if a.atom_id == 5)]
+        - c5_r
+    )
     assert abs(raw_c5[0]) > 10.0
     zip_c5 = product.xyz[c5] - reactant.xyz[c5]
     assert _norm(zip_c5 - disp[c5]) > 1.0
 
     ordered = readcon.reorder_like(reactant, product)
-    assert [atom.atom_id for atom in ordered.atoms] == [atom.atom_id for atom in reactant.atoms]
+    assert [atom.atom_id for atom in ordered.atoms] == [
+        atom.atom_id for atom in reactant.atoms
+    ]
     assert ordered.atoms[c5].vx == pytest.approx(0.2)
     assert ordered.atoms[oxygen].fx == pytest.approx(0.4)
     c2 = next(i for i, atom in enumerate(reactant.atoms) if atom.atom_id == 1)

@@ -182,7 +182,7 @@ fn frame_span(path: &Path) -> Option<usize> {
     match iter.forward_fast() {
         Some(Ok(())) => {
             let span = iter.byte_pos();
-            if span >= 2 && !map.is_empty() && map.len() % span == 0 {
+            if span >= 2 && !map.is_empty() && map.len().is_multiple_of(span) {
                 Some(span)
             } else {
                 None
@@ -193,7 +193,6 @@ fn frame_span(path: &Path) -> Option<usize> {
 }
 
 struct RankSample {
-    wall_s: f64,
     open_s: f64,
     map_s: f64,
     fault_s: f64,
@@ -307,11 +306,9 @@ fn time_span(
     let t = Instant::now();
     world.barrier();
     let barrier_s = t.elapsed().as_secs_f64();
-    let wall_s = wall0.elapsed().as_secs_f64();
     let fault1 = majflt();
     let touch1 = minflt();
     RankSample {
-        wall_s,
         open_s,
         map_s,
         fault_s,
@@ -384,7 +381,7 @@ fn main() {
     let mut total = n_frames as u64;
     world.process_at_rank(0).broadcast_into(&mut total);
     let total = total as usize;
-    if total == 0 || total % ranks != 0 {
+    if total == 0 || !total.is_multiple_of(ranks) {
         if comm.rank() == 0 {
             write_refusal(
                 out_path,
@@ -446,7 +443,7 @@ fn main() {
     let file_len = fs::metadata(path)
         .map(|meta| meta.len() as usize)
         .unwrap_or(0);
-    if span < 2 || file_len % span != 0 || file_len / span != total {
+    if span < 2 || !file_len.is_multiple_of(span) || file_len / span != total {
         if comm.rank() == 0 {
             write_refusal(out_path, "frames do not share one byte length");
         }

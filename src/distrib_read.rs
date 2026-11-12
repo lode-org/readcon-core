@@ -103,8 +103,10 @@ fn encode_u64s(v: &[u64]) -> Vec<u8> {
 }
 
 fn decode_u64s(b: &[u8]) -> Vec<u64> {
-    b.chunks_exact(8)
-        .map(|c| u64::from_le_bytes(c.try_into().unwrap()))
+    b.as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| u64::from_le_bytes(*c))
         .collect()
 }
 
@@ -402,7 +404,7 @@ fn tiled_span(path: &Path) -> Option<(usize, usize)> {
         return None;
     }
     let span = iter.byte_pos();
-    if span < 2 || len % span != 0 {
+    if span < 2 || !len.is_multiple_of(span) {
         return None;
     }
     let n = len / span;
@@ -635,7 +637,7 @@ fn read_scatter(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<Rank
         // point-to-point sends instead (same decision on every rank).
         let all = bytes_of(fc);
         if idx.data_len <= i32::MAX as u64 {
-            let part = Partition::new(&all[..], &counts[..], &displs[..]);
+            let part = Partition::new(all, &counts[..], &displs[..]);
             root.scatter_varcount_into_root(&part, buf);
         } else {
             for k in 1..p {

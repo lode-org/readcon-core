@@ -51,8 +51,7 @@ impl From<WriteError> for io::Error {
 }
 
 /// Numeric text representation for CON frame fields.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum FloatFormat {
     /// A fixed number of digits after the decimal point.
     DecimalPlaces(usize),
@@ -62,7 +61,6 @@ pub enum FloatFormat {
     #[default]
     RoundTrip,
 }
-
 
 /// A writer that can serialize and write `ConFrame` objects to any output stream.
 ///

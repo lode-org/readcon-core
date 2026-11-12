@@ -1740,9 +1740,10 @@ fn numa_remote_pages() -> i64 {
         for token in line.split_whitespace() {
             if let Some(rest) = token.strip_prefix('N')
                 && let Some((node, pages)) = rest.split_once('=')
-                    && node != "0" {
-                        remote += pages.parse::<i64>().unwrap_or(0);
-                    }
+                && node != "0"
+            {
+                remote += pages.parse::<i64>().unwrap_or(0);
+            }
         }
     }
     remote
@@ -2362,9 +2363,10 @@ fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
 #[cfg(feature = "parallel")]
 fn recycle_starts(starts: Vec<usize>) {
     if let Ok(mut slot) = START_CACHE.lock()
-        && starts.capacity() >= slot.capacity() {
-            *slot = starts;
-        }
+        && starts.capacity() >= slot.capacity()
+    {
+        *slot = starts;
+    }
 }
 
 #[cfg(feature = "parallel")]

@@ -535,14 +535,13 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         // metatensor blocks (feature on in coverage)
         #[cfg(feature = "metatensor")]
         {
-            let mut block: *mut metatensor::c_api::mts_block_t = ptr::null_mut();
             for export in [
                 rkr_frame_metatensor_positions_block as unsafe extern "C" fn(_, _) -> _,
                 rkr_frame_metatensor_velocities_block,
                 rkr_frame_metatensor_forces_block,
                 rkr_frame_metatensor_atom_energies_block,
             ] {
-                block = ptr::null_mut();
+                let mut block: *mut metatensor::c_api::mts_block_t = ptr::null_mut();
                 let st = export(frame, &mut block);
                 if st == RKRStatus::RKR_STATUS_SUCCESS && !block.is_null() {
                     rkr_mts_block_free(block);

@@ -178,9 +178,10 @@ pub(crate) fn dev_nums(dev: u64) -> (u64, u64) {
 #[cfg(target_os = "linux")]
 fn hw_queue_count(dev: u64) -> usize {
     if let Some(text) = queue_text(dev, "nr_hw_queues")
-        && let Ok(count) = text.trim().parse::<usize>() {
-            return count.max(1);
-        }
+        && let Ok(count) = text.trim().parse::<usize>()
+    {
+        return count.max(1);
+    }
     let (major, minor) = dev_nums(dev);
     let mut dir = std::path::PathBuf::from(format!("/sys/dev/block/{major}:{minor}"));
     if dir.join("partition").is_file() {

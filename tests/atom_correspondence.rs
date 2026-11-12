@@ -10,10 +10,12 @@ use readcon_core::ffi::{
     rkr_last_error_message,
 };
 use readcon_core::iterators::ConFrameIterator;
+use readcon_core::storage_dtype::{FloatArray1, FloatArray2};
 use readcon_core::types::{Bond, ConFrame, ConFrameBuilder};
 use readcon_core::writer::write_frames_to_string;
 use readcon_core::{
-    atom_id_permutation, check_atom_id_consistency, minimum_image_displacements, reorder_like,
+    CorrespondenceError, atom_id_permutation, check_atom_id_consistency, minimum_image_delta,
+    minimum_image_displacements, reorder_like,
 };
 use std::ffi::CStr;
 
@@ -393,17 +395,24 @@ fn strict_mass_and_fixed_mask_are_optional() {
     let strict = atom_id_permutation(&reference, &other, IdentityCheck::Strict).unwrap_err();
     assert!(matches!(
         strict,
-        readcon_core::CorrespondenceError::Mass { atom_id: 1, .. }
+        CorrespondenceError::Mass { atom_id: 1, .. }
     ));
     assert!(strict.to_string().contains("mass"));
+    assert_eq!(strict.frame_index(), Some(1));
+    assert_eq!(strict.atom_id(), Some(1));
+    assert_eq!(strict.atom_index(), Some(1));
     // Mass is checked before the mask, so a mask-only frame is separate.
     let mut mask_only = reference.clone();
     mask_only.atom_data[1].fixed = [true, false, false];
     let mask = atom_id_permutation(&reference, &mask_only, IdentityCheck::Strict).unwrap_err();
     assert!(matches!(
         mask,
-        readcon_core::CorrespondenceError::Fixed { atom_id: 1, .. }
+        CorrespondenceError::Fixed { atom_id: 1, .. }
     ));
+    assert!(mask.to_string().contains("fixed mask"));
+    assert_eq!(mask.frame_index(), Some(1));
+    assert_eq!(mask.atom_id(), Some(1));
+    assert_eq!(mask.atom_index(), Some(1));
     assert!(atom_id_permutation(&reference, &other, IdentityCheck::Lenient).is_ok());
 
     let mut symbol = reference.clone();
@@ -411,8 +420,12 @@ fn strict_mass_and_fixed_mask_are_optional() {
     let err = atom_id_permutation(&reference, &symbol, IdentityCheck::Lenient).unwrap_err();
     assert!(matches!(
         err,
-        readcon_core::CorrespondenceError::Symbol { atom_id: 1, .. }
+        CorrespondenceError::Symbol { atom_id: 1, .. }
     ));
+    assert!(err.to_string().contains("symbol"));
+    assert_eq!(err.frame_index(), Some(1));
+    assert_eq!(err.atom_id(), Some(1));
+    assert_eq!(err.atom_index(), Some(1));
 
     let missing = build(
         &[Placed {
@@ -427,8 +440,16 @@ fn strict_mass_and_fixed_mask_are_optional() {
     let err = atom_id_permutation(&reference, &missing, IdentityCheck::Lenient).unwrap_err();
     assert!(matches!(
         err,
-        readcon_core::CorrespondenceError::Missing { atom_id: 1, .. }
+        CorrespondenceError::Missing {
+            atom_id: 1,
+            reference_index: 1,
+            ..
+        }
     ));
+    assert!(err.to_string().contains("missing atom_id 1"));
+    assert_eq!(err.frame_index(), Some(1));
+    assert_eq!(err.atom_id(), Some(1));
+    assert_eq!(err.atom_index(), Some(1));
 }
 
 #[test]
@@ -443,7 +464,13 @@ fn the_first_bad_frame_is_the_one_reported() {
         .unwrap_err();
     assert_eq!(err.frame_index(), Some(1));
     assert_eq!(err.atom_id(), Some(good.atom_data[2].atom_id));
-    assert!(check_atom_id_consistency(&[], IdentityCheck::Strict).is_err());
+    let empty = check_atom_id_consistency(&[], IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(empty, CorrespondenceError::EmptySequence));
+    assert!(empty.to_string().contains("at least one frame"));
+    assert_eq!(empty.frame_index(), None);
+    assert_eq!(empty.atom_id(), None);
+    assert_eq!(empty.atom_index(), None);
+    check_atom_id_consistency(&[good], IdentityCheck::Strict).unwrap();
 }
 
 #[test]
@@ -527,4 +554,239 @@ fn c_abi_reports_the_permutation_and_the_offender() {
         free_rkr_frame(a);
         free_rkr_frame(b);
     }
+}
+
+fn cu_h() -> ConFrame {
+    build(
+        &[
+            Placed {
+                symbol: "Cu",
+                id: 10,
+                pos: [0.0, 0.0, 0.0],
+                mass: 63.546,
+            },
+            Placed {
+                symbol: "H",
+                id: 11,
+                pos: [1.2, 0.0, 0.0],
+                mass: 1.008,
+            },
+        ],
+        None,
+        None,
+    )
+}
+
+fn expect_section(err: &CorrespondenceError, section: &str, rows: usize, atoms: usize) {
+    match err {
+        CorrespondenceError::SectionLength {
+            section: got,
+            rows: got_rows,
+            atoms: got_atoms,
+        } => {
+            assert_eq!(*got, section);
+            assert_eq!(*got_rows, rows);
+            assert_eq!(*got_atoms, atoms);
+        }
+        other => panic!("expected a {section} length error, got {other}"),
+    }
+    let text = err.to_string();
+    assert!(text.contains(section), "{text}");
+    assert!(text.contains(&format!("{rows} rows")), "{text}");
+    assert!(text.contains(&format!("{atoms} atoms")), "{text}");
+    assert_eq!(err.frame_index(), None);
+    assert_eq!(err.atom_id(), None);
+    assert_eq!(err.atom_index(), None);
+}
+
+#[test]
+fn an_extra_atom_is_named() {
+    let reference = cu_h();
+    let extra = build(
+        &[
+            Placed {
+                symbol: "Cu",
+                id: 10,
+                pos: [0.0, 0.0, 0.0],
+                mass: 63.546,
+            },
+            Placed {
+                symbol: "H",
+                id: 11,
+                pos: [1.2, 0.0, 0.0],
+                mass: 1.008,
+            },
+            Placed {
+                symbol: "O",
+                id: 12,
+                pos: [2.0, 0.0, 0.0],
+                mass: 15.999,
+            },
+        ],
+        None,
+        None,
+    );
+    let err = atom_id_permutation(&reference, &extra, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::Extra {
+            frame_index: 1,
+            atom_id: 12,
+            atom_index: 2,
+        }
+    ));
+    assert_eq!(err.frame_index(), Some(1));
+    assert_eq!(err.atom_id(), Some(12));
+    assert_eq!(err.atom_index(), Some(2));
+    assert!(err.to_string().contains("not in the reference frame"));
+}
+
+#[test]
+fn a_short_section_is_rejected() {
+    let reference = cu_h();
+    let sections = [
+        "masses",
+        "positions",
+        "velocities",
+        "forces",
+        "energies",
+        "charges",
+        "spins",
+        "magmoms",
+        "displacements",
+        "spreads",
+    ];
+    for section in sections {
+        let mut other = reference.clone();
+        match section {
+            "masses" => other.masses = FloatArray1::zeros(other.masses.kind(), 1),
+            "positions" => other.positions = FloatArray2::zeros(other.positions.kind(), 1, 3),
+            "velocities" => other.velocities = FloatArray2::zeros(other.velocities.kind(), 1, 3),
+            "forces" => other.forces = FloatArray2::zeros(other.forces.kind(), 1, 3),
+            "energies" => other.atom_energies = FloatArray1::zeros(other.atom_energies.kind(), 1),
+            "charges" => other.charges = FloatArray1::zeros(other.charges.kind(), 1),
+            "spins" => other.spins = FloatArray1::zeros(other.spins.kind(), 1),
+            "magmoms" => other.magmoms = FloatArray2::zeros(other.magmoms.kind(), 1, 3),
+            "displacements" => {
+                other.displacements = FloatArray2::zeros(other.displacements.kind(), 1, 3);
+            }
+            "spreads" => other.spreads = FloatArray2::zeros(other.spreads.kind(), 1, 3),
+            _ => unreachable!(),
+        }
+        let err = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap_err();
+        expect_section(&err, section, 1, 2);
+    }
+}
+
+#[test]
+fn a_bond_endpoint_past_the_atom_list_is_rejected() {
+    let reference = cu_h();
+    let mut other = reference.clone();
+    other.header.set_bonds(&[Bond::new(5, 0)]);
+    let err = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::BondEndpoint { index: 5, atoms: 2 }
+    ));
+    assert!(err.to_string().contains("bond endpoint 5"));
+    assert_eq!(err.frame_index(), None);
+    assert_eq!(err.atom_id(), None);
+    assert_eq!(err.atom_index(), None);
+
+    let mut other = reference.clone();
+    other.header.set_bonds(&[Bond::new(0, 9)]);
+    let err = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::BondEndpoint { index: 9, atoms: 2 }
+    ));
+    assert!(err.to_string().contains("bond endpoint 9"));
+}
+
+#[test]
+fn non_finite_coordinates_and_deltas_are_rejected() {
+    let reference = cu_h();
+    let mut moved = reference.clone();
+    moved.positions.set_f64_row(0, [f64::NAN, 0.0, 0.0]);
+    let err = minimum_image_displacements(&moved, &reference, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::NonFiniteCoordinate {
+            frame_index: 0,
+            atom_id: 10,
+            atom_index: 0,
+        }
+    ));
+    assert!(err.to_string().contains("non-finite coordinate"));
+    assert_eq!(err.frame_index(), Some(0));
+    assert_eq!(err.atom_id(), Some(10));
+    assert_eq!(err.atom_index(), Some(0));
+
+    let mut other = reference.clone();
+    other.positions.set_f64_row(1, [0.0, f64::INFINITY, 0.0]);
+    let err = minimum_image_displacements(&reference, &other, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::NonFiniteCoordinate {
+            frame_index: 1,
+            atom_id: 11,
+            atom_index: 1,
+        }
+    ));
+    assert_eq!(err.atom_index(), Some(1));
+    assert!(err.to_string().contains("non-finite coordinate"));
+
+    let err = minimum_image_delta(
+        reference.header.cell_matrix(),
+        [true; 3],
+        [f64::NAN, 0.0, 1.0],
+    )
+    .unwrap_err();
+    assert!(matches!(err, CorrespondenceError::NonFiniteDelta));
+    assert!(err.to_string().contains("cartesian delta is non-finite"));
+    assert_eq!(err.frame_index(), None);
+    assert_eq!(err.atom_id(), None);
+    assert_eq!(err.atom_index(), None);
+}
+
+#[test]
+fn an_empty_frame_rebuilds_type_runs_and_rejects_a_stray_section() {
+    let empty = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0])
+        .build()
+        .expect("zero atoms");
+    let ordered = reorder_like(&empty, &empty, IdentityCheck::Strict).unwrap();
+    assert_eq!(ordered.header.natm_types, 0);
+    assert!(ordered.header.natms_per_type.is_empty());
+    assert!(ordered.header.masses_per_type.is_empty());
+
+    let mut stray_rows = empty.clone();
+    stray_rows.velocities = FloatArray2::zeros(stray_rows.velocities.kind(), 1, 3);
+    let err = reorder_like(&empty, &stray_rows, IdentityCheck::Strict).unwrap_err();
+    expect_section(&err, "velocities", 1, 0);
+
+    let mut stray_col = empty.clone();
+    stray_col.charges = FloatArray1::zeros(stray_col.charges.kind(), 1);
+    let err = reorder_like(&empty, &stray_col, IdentityCheck::Strict).unwrap_err();
+    expect_section(&err, "charges", 1, 0);
+}
+
+#[test]
+fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
+    let reference = cu_h();
+    let mut other = reference.clone();
+    other.atom_data[0].x += 0.3;
+    let kind = reference.positions.kind();
+    let mut reference = reference;
+    reference.positions = FloatArray2::zeros(kind, 0, 3);
+    other.positions = FloatArray2::zeros(kind, 0, 3);
+
+    let disp = minimum_image_displacements(&reference, &other, IdentityCheck::Strict).unwrap();
+    assert!((disp[0][0] - 0.3).abs() < 1e-12);
+    assert!(disp[0][1].abs() < 1e-12);
+    assert!(disp[1][0].abs() < 1e-12);
+
+    let ordered = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap();
+    assert_eq!(ordered.positions.nrows(), 0);
+    assert!((ordered.atom_data[0].x - other.atom_data[0].x).abs() < 1e-12);
+    assert_eq!(ordered.atom_data[0].atom_id, 10);
 }

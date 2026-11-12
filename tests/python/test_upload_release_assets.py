@@ -41,7 +41,10 @@ FAKE_GH = textwrap.dedent(
         state = pathlib.Path(os.environ["GH_STATE"])
         seen = int(state.read_text(encoding="utf-8") or "0")
         state.write_text(str(seen + 1), encoding="utf-8")
-        if seen < int(os.environ.get("GH_VIEW_FAILS", "0")):
+        fails = int(os.environ.get("GH_VIEW_FAILS", "0"))
+        # Negative means the release never appears. A fixed count can be
+        # exhausted inside the wait window when each view is cheap.
+        if fails < 0 or seen < fails:
             sys.stderr.write("release not found\\n")
             sys.exit(1)
         if "assets" in cmd:
@@ -339,7 +342,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
     def test_wait_gives_up_without_creating_a_release(self) -> None:
         done, log = self._with_fake_gh(
             ["--tag", "v9.9.9", "--wait", str(self.asset)],
-            view_fails=99,
+            view_fails=-1,
             extra_env={"UPLOAD_POLL_SECONDS": "0", "UPLOAD_WAIT_TIMEOUT": "1"},
         )
         self.assertNotEqual(done.returncode, 0)
