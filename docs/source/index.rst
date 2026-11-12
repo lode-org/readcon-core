@@ -111,6 +111,7 @@ Site map
    evolution
    architecture
    benchmarks
+   fidelity
    chemfiles-explain
 
 .. toctree::

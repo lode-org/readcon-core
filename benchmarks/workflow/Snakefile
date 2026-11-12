@@ -558,6 +558,27 @@ rule h2h:
         "bench/h2h/results.json",
 
 
+# Fidelity round-trip and the serial timing of those same reads and writes.
+# The asv classes under bench/fidelity/asv time one call. This rule records
+# one warmup and six samples, plus the field table.
+
+
+rule fidelity:
+    output:
+        "bench/fidelity/results/fidelity.json",
+        "bench/fidelity/results/fidelity.csv",
+        "bench/fidelity/results/timing.json",
+        "bench/fidelity/results/timing.csv",
+        "bench/fidelity/logs/timing.log",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        mkdir -p bench/fidelity/results bench/fidelity/logs bench/fidelity/work
+        taskset -c 0 python bench/fidelity/asv/drive.py all
+        """
+
+
 # Serial headline and the parallel scaling curve. The asv class times one
 # read_con call. This rule runs the warmup-plus-six campaign.
 rule h2h_parallel_frames:

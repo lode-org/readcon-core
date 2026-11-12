@@ -115,6 +115,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    evolution
    architecture
    benchmarks
+   fidelity
    chemfiles-explain
 
 .. toctree::
