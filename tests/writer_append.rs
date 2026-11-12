@@ -14,8 +14,57 @@ use readcon_core::types::{ConFrame, ConFrameBuilder};
 use readcon_core::writer::{ConFrameWriter, write_frames_to_string, write_frames_to_vec};
 use std::ffi::{CStr, CString};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+fn plain_library(dir: &Path) -> bool {
+    let so = dir.join("libreadcon_core.so");
+    if !so.is_file() {
+        return dir.join("libreadcon_core.a").is_file();
+    }
+    let listed = Command::new("nm")
+        .args(["-D"])
+        .arg(&so)
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default();
+    !listed.contains("PyExc_BaseException")
+}
+
+fn library_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let mut dir = std::env::current_exe().unwrap();
+    dir.pop();
+    for _ in 0..8 {
+        if plain_library(&dir) {
+            dirs.push(dir.clone());
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    let build = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
+    if let Ok(entries) = fs::read_dir(&build) {
+        for entry in entries.flatten() {
+            let out = entry.path().join("out");
+            if plain_library(&out) {
+                dirs.push(out);
+            }
+        }
+    }
+    assert!(!dirs.is_empty(), "libreadcon_core was not built");
+    dirs
+}
+
+fn link_flags() -> Vec<String> {
+    let mut flags = Vec::new();
+    for dir in library_dirs() {
+        flags.push(format!("-L{}", dir.display()));
+        flags.push(format!("-Wl,-rpath,{}", dir.display()));
+    }
+    flags.push("-lreadcon_core".to_string());
+    flags
+}
 
 fn frame(id: u64, x: f64) -> ConFrame {
     let mut builder = ConFrameBuilder::new([4.0, 4.0, 4.0], [90.0, 90.0, 90.0]);
@@ -195,26 +244,30 @@ fn c_append_flush_and_string_match_the_file() {
 #[test]
 fn cpp_append_flush_and_string_match_the_file() {
     let dir = tempfile::tempdir().unwrap();
-    let mut lib_dir = std::env::current_exe().unwrap();
-    lib_dir.pop();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/c/test_writer_append.cpp");
     let binary = dir.path().join("test_writer_append");
-    let status = Command::new("g++")
+    let mut command = Command::new("g++");
+    command
         .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", "include"])
-        .arg(&source)
-        .arg(format!("-L{}", lib_dir.display()))
-        .arg("-lreadcon_core")
-        .arg(format!("-Wl,-rpath,{}", lib_dir.display()))
-        .arg("-o")
-        .arg(&binary)
-        .status()
-        .expect("g++");
+        .arg(&source);
+    for flag in link_flags() {
+        command.arg(flag);
+    }
+    let status = command.arg("-o").arg(&binary).status().expect("g++");
     assert!(
         status.success(),
         "g++ failed to compile the C++ writer test"
     );
     let run = Command::new(&binary)
         .arg(dir.path())
+        .env(
+            "LD_LIBRARY_PATH",
+            library_dirs()
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(":"),
+        )
         .status()
         .expect("run cpp writer test");
     assert!(run.success(), "C++ append, flush, or string check failed");
