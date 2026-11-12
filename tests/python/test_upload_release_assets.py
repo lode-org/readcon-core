@@ -2,6 +2,9 @@
 
 The uploader's only write is `gh release upload --clobber`. A backfill must
 not create a release, move a tag, or publish crates or wheels.
+
+Tags and asset names use the synthetic version 9.9.9. The script accepts any
+vX.Y.Z, and this file must not embed the package version.
 """
 
 from __future__ import annotations
@@ -45,7 +48,7 @@ FAKE_GH = textwrap.dedent(
             sys.stdout.write(os.environ.get("GH_ASSETS_JSON", '{"assets":[]}'))
             sys.stdout.write("\\n")
             sys.exit(0)
-        print(os.environ.get("GH_TAG", "v0.20.0"))
+        print(os.environ.get("GH_TAG", "v9.9.9"))
         sys.exit(0)
     if cmd[:2] == ["release", "upload"]:
         if "--clobber" not in cmd:
@@ -89,7 +92,7 @@ def run_upload(
 class UploadReleaseAssetsTest(unittest.TestCase):
     def test_dry_run_is_clobber_upload_and_does_not_call_gh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            asset = Path(tmp) / "readcon-core-cxx-0.20.0.tar.gz"
+            asset = Path(tmp) / "readcon-core-cxx-9.9.9.tar.gz"
             asset.write_text("archive", encoding="utf-8")
             bin_dir = Path(tmp) / "bin"
             bin_dir.mkdir()
@@ -97,7 +100,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             gh.write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
             gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
             done = run_upload(
-                ["--tag", "v0.20.0", "--dry-run", str(asset)],
+                ["--tag", "v9.9.9", "--dry-run", str(asset)],
                 {
                     "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
                     "GITHUB_REPOSITORY": "lode-org/readcon-core",
@@ -105,27 +108,27 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(
-            "would run: gh release upload v0.20.0 --repo lode-org/readcon-core --clobber",
+            "would run: gh release upload v9.9.9 --repo lode-org/readcon-core --clobber",
             done.stdout,
         )
-        self.assertIn("readcon-core-cxx-0.20.0.tar.gz", done.stdout)
-        self.assertIn("would require existing release v0.20.0", done.stdout)
+        self.assertIn("readcon-core-cxx-9.9.9.tar.gz", done.stdout)
+        self.assertIn("would require existing release v9.9.9", done.stdout)
         self.assertNotIn("would wait", done.stdout)
 
     def test_dry_run_wait_is_still_only_an_upload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            asset = Path(tmp) / "readcon-core-clib-0.20.0.tar.gz"
+            asset = Path(tmp) / "readcon-core-clib-9.9.9.tar.gz"
             asset.write_text("archive", encoding="utf-8")
             done = run_upload(
-                ["--tag", " v0.20.0\n", "--wait", "--dry-run", str(asset)],
+                ["--tag", " v9.9.9\n", "--wait", "--dry-run", str(asset)],
                 {"GITHUB_REPOSITORY": "lode-org/readcon-core"},
             )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(
-            "gh release upload v0.20.0 --repo lode-org/readcon-core --clobber",
+            "gh release upload v9.9.9 --repo lode-org/readcon-core --clobber",
             done.stdout,
         )
-        self.assertIn("would wait for existing release v0.20.0", done.stdout)
+        self.assertIn("would wait for existing release v9.9.9", done.stdout)
         for banned in (
             "release create",
             "cargo publish",
@@ -139,48 +142,48 @@ class UploadReleaseAssetsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             asset = Path(tmp) / "asset.tar.gz"
             asset.write_text("archive", encoding="utf-8")
-            for tag in ("main", "v0.20", "refs/tags/v0.20.0", ""):
+            for tag in ("main", "v9.9", "refs/tags/v9.9.9", ""):
                 done = run_upload(["--tag", tag, "--dry-run", str(asset)])
                 self.assertNotEqual(done.returncode, 0, tag)
             ok = run_upload(
-                ["--tag", "v0.20.0-rc.1", "--dry-run", str(asset)],
+                ["--tag", "v9.9.9-rc.1", "--dry-run", str(asset)],
                 {"GITHUB_REPOSITORY": "lode-org/readcon-core"},
             )
             self.assertEqual(ok.returncode, 0, ok.stderr)
 
     def test_backfill_refuses_a_missing_release(self) -> None:
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", str(self.asset)], view_fails=1
+            ["--tag", "v9.9.9", str(self.asset)], view_fails=1
         )
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("release not found", done.stderr)
         self.assertIn("does not exist", done.stderr)
-        self.assertIn("release view v0.20.0 --repo lode-org/readcon-core", log)
+        self.assertIn("release view v9.9.9 --repo lode-org/readcon-core", log)
         self.assertNotIn("release upload", log)
         self.assertNotIn("api ", log)
 
     def test_wait_uploads_without_moving_the_tag(self) -> None:
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", "--wait", str(self.asset)],
+            ["--tag", "v9.9.9", "--wait", str(self.asset)],
             view_fails=1,
             shas="abc,abc",
         )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(
-            "release upload v0.20.0 --repo lode-org/readcon-core --clobber",
+            "release upload v9.9.9 --repo lode-org/readcon-core --clobber",
             log,
         )
         self.assertEqual(log.count("api "), 2)
 
     def test_moved_tag_fails_the_upload(self) -> None:
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", str(self.asset)],
+            ["--tag", "v9.9.9", str(self.asset)],
             shas="abc,def",
         )
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("moved during upload", done.stderr)
         self.assertIn(
-            "release upload v0.20.0 --repo lode-org/readcon-core --clobber",
+            "release upload v9.9.9 --repo lode-org/readcon-core --clobber",
             log,
         )
 
@@ -197,7 +200,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             }
         )
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", str(self.asset)],
+            ["--tag", "v9.9.9", str(self.asset)],
             extra_env={"GH_ASSETS_JSON": payload},
         )
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -217,7 +220,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             }
         )
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", str(self.asset)],
+            ["--tag", "v9.9.9", str(self.asset)],
             extra_env={"GH_ASSETS_JSON": payload},
         )
         self.assertNotEqual(done.returncode, 0)
@@ -228,7 +231,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
         self.assertNotIn("api ", log)
 
     def test_new_asset_uploads_and_match_is_skipped(self) -> None:
-        other = self.asset.with_name("readcon-core-cxx-0.20.0-vendor.tar.gz")
+        other = self.asset.with_name("readcon-core-cxx-9.9.9-vendor.tar.gz")
         other.write_text("vendor", encoding="utf-8")
         digest = hashlib.sha256(b"archive").hexdigest()
         payload = json.dumps(
@@ -239,29 +242,29 @@ class UploadReleaseAssetsTest(unittest.TestCase):
             }
         )
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", str(self.asset), str(other)],
+            ["--tag", "v9.9.9", str(self.asset), str(other)],
             extra_env={"GH_ASSETS_JSON": payload},
         )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(f"skip {self.asset.name}: existing sha256 matches", done.stdout)
         self.assertIn(
-            "release upload v0.20.0 --repo lode-org/readcon-core --clobber", log
+            "release upload v9.9.9 --repo lode-org/readcon-core --clobber", log
         )
         self.assertIn(str(other), log)
         self.assertNotIn(str(self.asset), log)
 
     def test_gh_release_calls_pass_repo(self) -> None:
-        done, log = self._with_fake_gh(["--tag", "v0.20.0", str(self.asset)])
+        done, log = self._with_fake_gh(["--tag", "v9.9.9", str(self.asset)])
         self.assertEqual(done.returncode, 0, done.stderr)
-        view = "release view v0.20.0 --repo lode-org/readcon-core"
-        upload = "release upload v0.20.0 --repo lode-org/readcon-core --clobber"
+        view = "release view v9.9.9 --repo lode-org/readcon-core"
+        upload = "release upload v9.9.9 --repo lode-org/readcon-core --clobber"
         self.assertIn(view, log)
         self.assertIn(upload, log)
         self.assertEqual(log.count("--repo lode-org/readcon-core"), 3)
 
     def test_wait_gives_up_without_creating_a_release(self) -> None:
         done, log = self._with_fake_gh(
-            ["--tag", "v0.20.0", "--wait", str(self.asset)],
+            ["--tag", "v9.9.9", "--wait", str(self.asset)],
             view_fails=99,
             extra_env={"UPLOAD_POLL_SECONDS": "0", "UPLOAD_WAIT_TIMEOUT": "1"},
         )
@@ -271,7 +274,7 @@ class UploadReleaseAssetsTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        self.asset = Path(self._tmp.name) / "readcon-core-cxx-0.20.0.tar.gz"
+        self.asset = Path(self._tmp.name) / "readcon-core-cxx-9.9.9.tar.gz"
         self.asset.write_text("archive", encoding="utf-8")
 
     def tearDown(self) -> None:
