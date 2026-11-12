@@ -34,6 +34,7 @@ fn main() {
             rss_main(&kind, Path::new(&path));
         }
         Some("campaign") => campaign(),
+        Some("thermal") => thermal(),
         _ => {
             eprintln!("usage: scout_bench campaign | scout_bench rss <kind> <path>");
             std::process::exit(2);
@@ -265,6 +266,35 @@ fn run_kind(kind: &str, path: &Path) -> Result<usize, String> {
             let values = decode_lowrank(&bytes)?;
             std::hint::black_box(&values);
             Ok(values.len())
+        }
+        "fzstd" => {
+            let bytes = fs::read(path).map_err(|err| err.to_string())?;
+            let raw = zstd::bulk::decompress(&bytes, 512 << 20).map_err(|err| err.to_string())?;
+            let mut values = Vec::with_capacity(raw.len() / 8);
+            for chunk in raw.chunks_exact(8) {
+                values.push(f64::from_le_bytes(chunk.try_into().unwrap()));
+            }
+            std::hint::black_box(&values);
+            Ok(values.len())
+        }
+        "gzip-positions" => {
+            use std::io::Read;
+            let file = File::open(path).map_err(|err| err.to_string())?;
+            let mut decoder = flate2::read::GzDecoder::new(file);
+            let mut text = Vec::new();
+            decoder
+                .read_to_end(&mut text)
+                .map_err(|err| err.to_string())?;
+            let got = positions_from_con_bytes(&text).map_err(|err| err.to_string())?;
+            std::hint::black_box(&got.positions);
+            Ok(got.positions.len())
+        }
+        "zstd-positions" => {
+            let bytes = fs::read(path).map_err(|err| err.to_string())?;
+            let text = zstd::bulk::decompress(&bytes, 512 << 20).map_err(|err| err.to_string())?;
+            let got = positions_from_con_bytes(&text).map_err(|err| err.to_string())?;
+            std::hint::black_box(&got.positions);
+            Ok(got.positions.len())
         }
         other => Err(format!("unknown kind {other}")),
     }
@@ -1175,4 +1205,100 @@ fn write_massif(log_dir: &Path, rows: &[MassifRow]) {
 
 fn escape(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Size and decode time for one thermal CON trajectory.
+///
+/// Arms: the CON text, gzip of that text, zstd of that text, shuffle+zstd of
+/// the parsed f64 column, and plain zstd of the same column. Checks are
+/// bit-exact before the clock.
+fn thermal() {
+    ensure_pinned();
+    let path = PathBuf::from(env::args().nth(2).expect("thermal CON path"));
+    let scratch = path.parent().unwrap().join("codecs");
+    fs::create_dir_all(&scratch).unwrap();
+    let text = fs::read(&path).unwrap();
+    let authority = read_positions_with_threads(&path, Some(1)).unwrap();
+    let parsed = positions_from_con_bytes(&text).unwrap();
+    assert_eq!(parsed.positions.len(), authority.values.len());
+    for (got, expect) in parsed.positions.iter().zip(&authority.values) {
+        assert_eq!(got.to_bits(), expect.to_bits());
+    }
+    let gz_path = scratch.join("thermal.con.gz");
+    {
+        use std::io::Write as _;
+        let mut encoder = flate2::write::GzEncoder::new(
+            File::create(&gz_path).unwrap(),
+            flate2::Compression::new(6),
+        );
+        encoder.write_all(&text).unwrap();
+        encoder.finish().unwrap();
+    }
+    let zst_path = scratch.join("thermal.con.zst");
+    fs::write(&zst_path, compress_zstd(&text, 3).unwrap()).unwrap();
+    let shuffle_path = scratch.join("thermal.rcshuf");
+    let n_atoms = authority.n_atoms as u64;
+    fs::write(
+        &shuffle_path,
+        encode_shuffled(
+            &authority.values,
+            authority.n_frames as u64,
+            n_atoms,
+            [0.0; 6],
+            3,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let raw: Vec<u8> = authority
+        .values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    let fzstd_path = scratch.join("thermal.f64.zst");
+    fs::write(&fzstd_path, compress_zstd(&raw, 3).unwrap()).unwrap();
+    let gz_back = {
+        use std::io::Read;
+        let mut decoder = flate2::read::GzDecoder::new(File::open(&gz_path).unwrap());
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+        buf
+    };
+    assert_eq!(gz_back, text, "gzip round trip");
+    let zst_back = zstd::bulk::decompress(&fs::read(&zst_path).unwrap(), text.len()).unwrap();
+    assert_eq!(zst_back, text, "zstd text round trip");
+    let (shuffled, _, _, _) = decode_shuffled(&fs::read(&shuffle_path).unwrap()).unwrap();
+    for (got, expect) in shuffled.iter().zip(&authority.values) {
+        assert_eq!(got.to_bits(), expect.to_bits());
+    }
+    let fz = zstd::bulk::decompress(&fs::read(&fzstd_path).unwrap(), raw.len()).unwrap();
+    assert_eq!(fz, raw, "plain f64 zstd round trip");
+    let arms = [
+        arm("thermal-text", "positions", &path),
+        arm("thermal-gzip", "gzip-positions", &gz_path),
+        arm("thermal-zstd", "zstd-positions", &zst_path),
+        arm("thermal-shuffle", "shuffle", &shuffle_path),
+        arm("thermal-f64-zstd", "fzstd", &fzstd_path),
+    ];
+    println!(
+        "thermal-check bit_exact=yes frames={} atoms={}",
+        authority.n_frames, authority.n_atoms
+    );
+    for spec in &arms {
+        let timed = time_arm(spec);
+        let mem = rss_child(spec);
+        println!(
+            "arm {} bytes={} median_s={:.9e} iqr_s={:.9e} q25_s={:.9e} q75_s={:.9e} warmup_s={:.9e} hwm_kib={} over_input_kib={} samples={:?}",
+            spec.name,
+            mem.file_bytes,
+            timed.median_s,
+            timed.iqr_s,
+            timed.q25_s,
+            timed.q75_s,
+            timed.warmup_s,
+            mem.hwm_kib,
+            mem.over_input_kib,
+            timed.samples
+        );
+    }
 }

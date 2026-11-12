@@ -1,4 +1,5 @@
 pub mod array;
+mod columns;
 pub mod compression;
 pub mod conbin;
 #[cfg(feature = "cuda")]

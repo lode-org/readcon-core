@@ -1316,39 +1316,6 @@ impl PyConFrame {
     }
 }
 
-fn push_positions(storage: crate::storage_dtype::Array2Storage, out: &mut Vec<f64>) {
-    match storage {
-        crate::storage_dtype::Array2Storage::F64(arr) => {
-            if let Some(slice) = arr.as_slice() {
-                out.extend_from_slice(slice);
-            } else {
-                for row in arr.rows() {
-                    out.extend(row.iter().copied());
-                }
-            }
-        }
-        other => {
-            for i in 0..other.nrows() {
-                out.extend_from_slice(&other.as_f64_row(i));
-            }
-        }
-    }
-}
-
-fn expand_masses(frame: &ConFrame) -> Vec<f64> {
-    let mut masses = Vec::with_capacity(frame.atom_data.len());
-    for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
-        let mass = frame
-            .header
-            .masses_per_type
-            .get(type_index)
-            .copied()
-            .unwrap_or(0.0);
-        masses.extend(std::iter::repeat_n(mass, count));
-    }
-    masses
-}
-
 fn frame_from_arrays(
     positions: &[f64],
     masses: &[f64],
@@ -1450,34 +1417,24 @@ fn frame_from_arrays(
 fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let path_owned = path.to_owned();
     let parse_start = std::time::Instant::now();
-    let frames = py
+    let columns = py
         .detach(|| {
-            crate::iterators::read_all_frames_with_threads(Path::new(&path_owned), None)
+            crate::iterators::read_coord_columns(Path::new(&path_owned), None)
                 .map_err(|err| err.to_string())
         })
         .map_err(PyIOError::new_err)?;
     let parse_s = parse_start.elapsed().as_secs_f64();
     let convert_start = std::time::Instant::now();
-    let n_frames = frames.len();
-    let n_atoms = frames
-        .first()
-        .map(|frame| frame.atom_data.len())
-        .unwrap_or(0);
-    let uniform = frames.iter().all(|frame| frame.atom_data.len() == n_atoms);
-    if !uniform {
+    let n_frames = columns.block.n_frames;
+    let n_atoms = columns.block.n_atoms;
+    if columns.masses.len() != n_frames * n_atoms || columns.cells.len() != n_frames * 6 {
         return Err(PyValueError::new_err(
             "read_coords needs the same atom count in every frame",
         ));
     }
-    let mut positions = Vec::with_capacity(n_frames * n_atoms * 3);
-    let mut masses = Vec::with_capacity(n_frames * n_atoms);
-    let mut cell = Vec::with_capacity(n_frames * 6);
-    for frame in frames {
-        cell.extend_from_slice(&frame.header.boxl);
-        cell.extend_from_slice(&frame.header.angles);
-        masses.extend(expand_masses(&frame));
-        push_positions(frame.positions, &mut positions);
-    }
+    let positions = columns.block.values;
+    let masses = columns.masses;
+    let cell = columns.cells;
     let convert_s = convert_start.elapsed().as_secs_f64();
     let copy_start = std::time::Instant::now();
     let pos = ndarray::Array3::from_shape_vec((n_frames, n_atoms, 3), positions)
@@ -2049,15 +2006,18 @@ fn con_frame_list(
         _ => frames.into_iter().map(Some).collect(),
     });
     let t_return = std::time::Instant::now();
-    let obj = Py::new(py, ConFrameList {
-        frames: std::sync::Mutex::new(stored),
-        cache: std::sync::Mutex::new(cache),
-        slab,
-        n_atoms,
-        workers,
-        phases: std::sync::Mutex::new(record),
-        pool: std::sync::Mutex::new(pool),
-    })?;
+    let obj = Py::new(
+        py,
+        ConFrameList {
+            frames: std::sync::Mutex::new(stored),
+            cache: std::sync::Mutex::new(cache),
+            slab,
+            n_atoms,
+            workers,
+            phases: std::sync::Mutex::new(record),
+            pool: std::sync::Mutex::new(pool),
+        },
+    )?;
     let return_s = t_return.elapsed().as_secs_f64();
     let list_s = t_list.elapsed().as_secs_f64();
     let accounted = slab_s + release_s + python_build_s + return_s;
@@ -3154,30 +3114,34 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
             .call_method0("tolist")?
             .extract()?;
         if cellpar.len() == 6 && cellpar.iter().all(|value| value.is_finite()) {
-            ([cellpar[0], cellpar[1], cellpar[2]], [
-                cellpar[3], cellpar[4], cellpar[5],
-            ])
+            (
+                [cellpar[0], cellpar[1], cellpar[2]],
+                [cellpar[3], cellpar[4], cellpar[5]],
+            )
         } else {
             (lengths, raw_angles)
         }
     } else {
-        (lengths, [
-            if raw_angles[0].is_finite() {
-                raw_angles[0]
-            } else {
-                90.0
-            },
-            if raw_angles[1].is_finite() {
-                raw_angles[1]
-            } else {
-                90.0
-            },
-            if raw_angles[2].is_finite() {
-                raw_angles[2]
-            } else {
-                90.0
-            },
-        ])
+        (
+            lengths,
+            [
+                if raw_angles[0].is_finite() {
+                    raw_angles[0]
+                } else {
+                    90.0
+                },
+                if raw_angles[1].is_finite() {
+                    raw_angles[1]
+                } else {
+                    90.0
+                },
+                if raw_angles[2].is_finite() {
+                    raw_angles[2]
+                } else {
+                    90.0
+                },
+            ],
+        )
     };
 
     // Extract fixed atom info from constraints

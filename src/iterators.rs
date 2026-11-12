@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_declared_sections, LineStream};
+use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
 use std::path::Path;
 
@@ -166,11 +166,7 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad {
-            invalid_utf8()
-        } else {
-            err
-        }
+        if self.utf8_bad { invalid_utf8() } else { err }
     }
 }
 
@@ -1020,6 +1016,7 @@ pub fn read_all_frames_with_threads(
 /// `frame * n_atoms * 3`. The returned buffer is the only retained
 /// coordinate storage. A file whose frames do not share one atom count
 /// is rejected, because the buffer is rectangular.
+#[derive(Debug)]
 pub struct PositionBlock {
     pub n_frames: usize,
     pub n_atoms: usize,
@@ -1038,6 +1035,29 @@ pub fn read_positions_with_threads(
         crate::compression::FileContents::Mapped(map) => fill_position_block(map, num_threads),
     }?;
     Ok(block)
+}
+
+/// Masses and cell that belong with [`read_positions_with_threads`].
+///
+/// The column walker fills these when it certifies the file. Otherwise they
+/// come from the frame parser, which is the same source as before.
+pub struct CoordColumns {
+    pub block: PositionBlock,
+    pub masses: Vec<f64>,
+    pub cells: Vec<f64>,
+}
+
+pub fn read_coord_columns(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<CoordColumns, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let bytes = contents.as_bytes();
+    if let Some(columns) = certified_columns(bytes, num_threads)? {
+        return Ok(columns);
+    }
+    let frames = frames_from_bytes(bytes, num_threads)?;
+    Ok(columns_from_frames(&frames))
 }
 
 fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::ParseError> {
@@ -1087,7 +1107,242 @@ fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error
     Ok(())
 }
 
+fn certified_columns(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Option<CoordColumns>, error::ParseError> {
+    let parsed = match crate::columns::positions_from_con_bytes(bytes) {
+        Ok(parsed) if parsed.stock => parsed,
+        _ => return Ok(None),
+    };
+    if parsed.n_frames == 0 {
+        return Ok(Some(CoordColumns {
+            block: PositionBlock {
+                n_frames: 0,
+                n_atoms: 0,
+                values: Vec::new(),
+            },
+            masses: Vec::new(),
+            cells: Vec::new(),
+        }));
+    }
+    let Some(n_atoms) = parsed.rectangular_atoms() else {
+        return Err(error::ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    };
+    let values = if parallel_threads(num_threads) {
+        parallel_column_values(bytes, &parsed, n_atoms, num_threads)?
+    } else {
+        parsed.positions
+    };
+    Ok(Some(CoordColumns {
+        block: PositionBlock {
+            n_frames: parsed.n_frames,
+            n_atoms,
+            values,
+        },
+        masses: parsed.masses,
+        cells: parsed.cells,
+    }))
+}
+
+fn parallel_threads(num_threads: Option<usize>) -> bool {
+    // `None`, `Some(0)`, and `Some(1)` stay on the calling thread, matching
+    // `read_all_frames` and `frames_from_text`. A pool runs only for an
+    // explicit count of two or more.
+    #[cfg(feature = "parallel")]
+    {
+        matches!(num_threads, Some(n) if n >= 2)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+        false
+    }
+}
+
+fn parallel_column_values(
+    bytes: &[u8],
+    parsed: &crate::columns::ConPositions,
+    n_atoms: usize,
+    num_threads: Option<usize>,
+) -> Result<Vec<f64>, error::ParseError> {
+    let stride = n_atoms * 3;
+    if stride == 0 {
+        return Ok(Vec::new());
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = (bytes, num_threads);
+        return Ok(parsed.positions.clone());
+    }
+    #[cfg(feature = "parallel")]
+    let mut values = vec![0.0_f64; parsed.n_frames * stride];
+    #[cfg(feature = "parallel")]
+    let fill_one = |index: usize, dest: &mut [f64]| {
+        let span = &parsed.spans[index];
+        let slice = crate::columns::positions_from_con_bytes(&bytes[span.start..span.end])?;
+        if slice.counts.first().copied() != Some(n_atoms) || slice.positions.len() != stride {
+            return Err(error::ParseError::InvalidCount(
+                "frame atom count does not match the first frame".into(),
+            ));
+        }
+        dest.copy_from_slice(&slice.positions);
+        Ok(())
+    };
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        let mut run = || match values
+            .par_chunks_mut(stride)
+            .enumerate()
+            .find_map_first(|(index, dest)| fill_one(index, dest).err())
+        {
+            Some(err) => Err(err),
+            None => Ok(()),
+        };
+        match num_threads {
+            Some(n) if n >= 2 => {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(n)
+                    .build()
+                    .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
+                pool.install(run)?;
+            }
+            _ => run()?,
+        }
+        return Ok(values);
+    }
+}
+
+/// Build frames from a certified column walk when every frame shares one
+/// header prefix and has no vector section. Anything else returns `None`
+/// and the caller uses the frame parser.
+fn frames_from_columns(bytes: &[u8]) -> Result<Option<Vec<types::ConFrame>>, error::ParseError> {
+    let parsed = match crate::columns::positions_for_frames(bytes) {
+        Ok(parsed) if parsed.stock && !parsed.has_section && !parsed.counts.contains(&0) => parsed,
+        _ => return Ok(None),
+    };
+    if parsed.n_frames == 0 || parsed.components.len() != parsed.n_frames {
+        return Ok(None);
+    }
+    let head0 = parsed.head_ends[0] - parsed.spans[0].start;
+    if parsed
+        .spans
+        .iter()
+        .zip(&parsed.head_ends)
+        .any(|(span, end)| {
+            end - span.start != head0
+                || bytes[span.start..*end] != bytes[parsed.spans[0].start..parsed.head_ends[0]]
+        })
+    {
+        return Ok(None);
+    }
+    let template = match ConFrameIterator::from_bytes(&bytes[parsed.spans[0].clone()]).next() {
+        Some(Ok(frame)) => frame.header,
+        Some(Err(err)) => return Err(err),
+        None => return Ok(None),
+    };
+    let mut frames = Vec::with_capacity(parsed.n_frames);
+    let mut atom_at = 0usize;
+    for frame_index in 0..parsed.n_frames {
+        let n = parsed.counts[frame_index];
+        let mut header = template.clone();
+        let cell = &parsed.cells[frame_index * 6..frame_index * 6 + 6];
+        header.boxl = [cell[0], cell[1], cell[2]];
+        header.angles = [cell[3], cell[4], cell[5]];
+        let (symbol, count) = &parsed.components[frame_index];
+        if *count != n {
+            return Ok(None);
+        }
+        header.natm_types = 1;
+        header.natms_per_type = vec![n];
+        header.masses_per_type = vec![parsed.masses[atom_at]];
+        let mut atom_data = Vec::with_capacity(n);
+        let mut ids = Vec::with_capacity(n);
+        let mut flat = Vec::with_capacity(n * 3);
+        for _ in 0..n {
+            let base = atom_at * 3;
+            let xyz = [
+                parsed.positions[base],
+                parsed.positions[base + 1],
+                parsed.positions[base + 2],
+            ];
+            let bits = parsed.flags[atom_at];
+            let fixed = [bits & 1 != 0, bits & 2 != 0, bits & 4 != 0];
+            let id = parsed.ids[atom_at];
+            ids.push(id);
+            flat.extend_from_slice(&xyz);
+            atom_data.push(types::AtomDatum::coords(
+                std::sync::Arc::clone(symbol),
+                xyz[0],
+                xyz[1],
+                xyz[2],
+                fixed,
+                id,
+            ));
+            atom_at += 1;
+        }
+        let positions = crate::storage_dtype::FloatArray2::from_f64_row_major(n, 3, flat);
+        frames.push(types::con_frame_coords_only_with_ids(
+            header, atom_data, positions, ids,
+        ));
+    }
+    Ok(Some(frames))
+}
+
+fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
+    let n_frames = frames.len();
+    let n_atoms = frames
+        .first()
+        .map(|frame| frame.positions.nrows())
+        .unwrap_or(0);
+    let mut values = Vec::with_capacity(n_frames * n_atoms * 3);
+    let mut masses = Vec::with_capacity(n_frames * n_atoms);
+    let mut cells = Vec::with_capacity(n_frames * 6);
+    for frame in frames {
+        cells.extend_from_slice(&frame.header.boxl);
+        cells.extend_from_slice(&frame.header.angles);
+        if let Some(src) = frame.positions.f64_slice() {
+            values.extend_from_slice(src);
+        } else {
+            for row in 0..frame.positions.nrows() {
+                values.extend_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+        for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
+            let mass = frame
+                .header
+                .masses_per_type
+                .get(type_index)
+                .copied()
+                .unwrap_or(0.0);
+            masses.extend(std::iter::repeat_n(mass, count));
+        }
+    }
+    CoordColumns {
+        block: PositionBlock {
+            n_frames,
+            n_atoms,
+            values,
+        },
+        masses,
+        cells,
+    }
+}
+
 fn fill_position_block(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<PositionBlock, error::ParseError> {
+    if let Some(columns) = certified_columns(bytes, num_threads)? {
+        return Ok(columns.block);
+    }
+    fill_position_block_legacy(bytes, num_threads)
+}
+
+fn fill_position_block_legacy(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, error::ParseError> {
@@ -1178,6 +1433,11 @@ pub fn frames_from_bytes(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, error::ParseError> {
+    if !parallel_threads(num_threads) {
+        if let Some(frames) = frames_from_columns(bytes)? {
+            return Ok(frames);
+        }
+    }
     #[cfg(feature = "parallel")]
     {
         if let Some(n) = num_threads.filter(|n| *n >= 2) {
@@ -1263,7 +1523,7 @@ fn sample_llc_misses() -> i64 {
         config: u64,
         rest: [u64; 14],
     }
-    let mut attr = PerfEventAttr {
+    let attr = PerfEventAttr {
         typ: 3,
         size: std::mem::size_of::<PerfEventAttr>() as u32,
         // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
@@ -1289,11 +1549,7 @@ fn sample_llc_misses() -> i64 {
     unsafe {
         libc::close(fd);
     }
-    if n == 8 {
-        value as i64
-    } else {
-        -1
-    }
+    if n == 8 { value as i64 } else { -1 }
 }
 
 /// Pages that do not sit on node 0.
@@ -1676,8 +1932,8 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache(
-) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache()
+-> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -1723,11 +1979,7 @@ pub fn process_minflt() -> i64 {
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
     let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if raw > 0 {
-        raw as usize
-    } else {
-        4096
-    }
+    if raw > 0 { raw as usize } else { 4096 }
 }
 
 /// Fault one word on each page of `values`.
@@ -2250,11 +2502,7 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 {
-        1
-    } else {
-        requested
-    }
+    if len < 2 { 1 } else { requested }
 }
 
 fn collect_frame_starts(scanner: ConFrameIterator<'_>, skip_whitespace_tail: bool) -> Vec<usize> {
@@ -3743,9 +3991,11 @@ mod frame_equality_tests {
             .map(|frame| frame.expect("convel"))
             .collect();
         assert_eq!(frames.len(), 3);
-        assert!(frames
-            .iter()
-            .all(|frame| frame.atom_data[0].velocity().is_some()));
+        assert!(
+            frames
+                .iter()
+                .all(|frame| frame.atom_data[0].velocity().is_some())
+        );
         assert_eq!(frames[0].positions.nrows(), 5);
         // Every stored coordinate and velocity bit matches the general parser.
         let mut frame_i = 0usize;

@@ -170,6 +170,10 @@ required-features = ["rpc"]
 name = "default_read_threads"
 required-features = ["parallel"]
 
+[[test]]
+name = "column_read_path"
+required-features = ["parallel"]
+
 [[bench]]
 name = "iterator_bench"
 harness = false
@@ -227,3 +231,6 @@ required-features = ["chemfiles"]
 [[example]]
 name = "scout_bench"
 required-features = ["scout"]
+
+[[example]]
+name = "lj_cu_md"
