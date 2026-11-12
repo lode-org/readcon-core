@@ -1,62 +1,62 @@
 # NAME=value: a variable the script reads, with its default; after env, the environment
 # of the command that follows. $ENV is the environment of the python3 that runs the
-# script, $TMP a temporary directory the script makes. Each bench/*.py script below
+# script, $TMP a temporary directory the script makes. Each *.py script below
 # reads BENCH_RESULTS=the result directory, the directory of its records;
 # make_payloads.py, cpp_reads.py, cachegrind.py, h2h.py and binary_formats.py read
 # READCON_SRC=., the readcon-core tree whose files they read and build. reads.py,
 # memray_peaks.py, cachegrind.py, h2h.py and binary_formats.py run their cells through
-# bench/interleave.py, which reads BENCH_SEED=20261104 and BENCH_ROUNDS=11: one untimed
+# interleave.py, which reads BENCH_SEED=20261104 and BENCH_ROUNDS=11: one untimed
 # round and then BENCH_ROUNDS rounds, each a new shuffle of the cells by that seed, each
 # run of a cell a new process.
-python3 paper/cpc/bench/make_payloads.py                        # cpc-bench-payloads
+python3 make_payloads.py                        # cpc-bench-payloads
 #   BENCH_WORK=the work directory BENCH_N_FRAMES=10000 BENCH_SIZE_ROWS=1e6
 #   BENCH_SIZES=1e3,1e4,1e5,1e6
-python3 paper/cpc/bench/provenance.py                                # cpc-bench-provenance
-python3 paper/cpc/bench/cpp_reads.py                            # cpc-bench-cpp
+python3 provenance.py                                # cpc-bench-provenance
+python3 cpp_reads.py                            # cpc-bench-cpp
 #   RC_PAYLOADS=the work directory CHEMFILES_PREFIX=$ENV
-#   BENCH_NATIVE_OUT=paper/cpc/bench/work/native
+#   BENCH_NATIVE_OUT=work/native
 #   CXX=$ENV/bin/x86_64-conda-linux-gnu-c++;
 #   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build --release --lib \
 #     --features parallel --manifest-path $READCON_SRC/Cargo.toml, then builds
 #   readcon_read and chemfiles_read with $CXX -O3 -std=c++17 -DNDEBUG and runs each of
 #   the five cells once, as reads.py does, against the checksums of payloads.json
-python3 paper/cpc/bench/reads.py                                # cpc-bench-reads
+python3 reads.py                                # cpc-bench-reads
 #   RC_PAYLOADS=the work directory; per run of a Python cell:
-#   python3 paper/cpc/bench/bench_child.py READER THREADS
+#   python3 bench_child.py READER THREADS
 #   and per run of a C++ cell, with RAYON_NUM_THREADS, OMP_NUM_THREADS,
 #   OPENBLAS_NUM_THREADS and MKL_NUM_THREADS at THREADS:
 #   taskset -c CORES $BENCH_NATIVE_OUT/PROGRAM CONTRACT $RC_PAYLOADS/PAYLOAD \
 #     $RC_PAYLOADS/WARMUP THREADS
 #   CORES is 0 for a cell at one thread and 0-7 for a cell at eight; a run prints READY,
 #   and the line that starts its clock follows once the payload is in the page cache
-python3 paper/cpc/bench/memray_peaks.py                         # cpc-bench-memray
+python3 memray_peaks.py                         # cpc-bench-memray
 #   RC_PAYLOADS=the work directory; per run of a cell:
-#   python3 paper/cpc/bench/memray_peaks.py --child READER THREADS $TMP/read.bin
+#   python3 memray_peaks.py --child READER THREADS $TMP/read.bin
 #   reads the warm-up file of READER, then its payload inside memray.Tracker
-python3 paper/cpc/bench/cachegrind.py                           # cpc-bench-cachegrind
+python3 cachegrind.py                           # cpc-bench-cachegrind
 #   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build --release \
 #     --example cachegrind_harness --features chemfiles-from-sources; per run of each
 #   scenario NAME that the program lists:
 #   valgrind --tool=cachegrind --cachegrind-out-file=$TMP/NAME.out --branch-sim=no \
 #     --error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
-bash paper/cpc/bench/build_chemfiles.sh                         # cpc-bench-chemfiles
-#   CHEMFILES_BUILDS=paper/cpc/bench/work/chemfiles CHEMFILES_JOBS=4 GCC=/usr/bin/gcc
+bash build_chemfiles.sh                         # cpc-bench-chemfiles
+#   CHEMFILES_BUILDS=work/chemfiles CHEMFILES_JOBS=4 GCC=/usr/bin/gcc
 #   GXX=/usr/bin/g++ CLANG=/usr/bin/clang CLANGXX=/usr/bin/clang++
-python3 paper/cpc/bench/h2h.py                                  # cpc-bench-h2h
+python3 h2h.py                                  # cpc-bench-h2h
 #   --steps payloads,python,cpp by default;
 #   BENCH_WORK=the work directory (its files go to $BENCH_WORK/h2h),
 #   CHEMFILES_BUILDS as for build_chemfiles.sh, CARGO_TARGET_DIR=$BENCH_WORK/h2h/target
 #   GXX=/usr/bin/g++ CLANGXX=/usr/bin/clang++;
 #   per campaign, with its CON file, its .rcbin image RCBIN and its peer files in PEERS,
 #   per run of each call NAME:
-#   python3 paper/cpc/bench/h2h_child.py NAME CON RCBIN PEERS 10000
+#   python3 h2h_child.py NAME CON RCBIN PEERS 10000
 #   and per run of each call NAME whose peak it records:
 #   python3 -m memray run -q -o $TMP/NAME.bin -f --native $TMP/NAME.py
 #   the C++ step runs cargo build --release --features parallel --lib in $READCON_SRC,
 #   builds $TMP/cpp_ratio_gccO2, _gccO3, _clangO2 and _clangO3 with the build_cell of
 #   $READCON_SRC/benches/cpp_peer_matrix.py, and per run of each cell:
 #   BINARY MODE FILE
-python3 paper/cpc/bench/binary_formats.py                       # cpc-bench-binary-formats
+python3 binary_formats.py                       # cpc-bench-binary-formats
 #   --steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
 #   (its files go to $W=$BENCH_WORK/binary_formats), GCC=/usr/bin/gcc GXX=/usr/bin/g++;
 #   build fetches the sources of build.json, checks their SHA-256, runs the compiler
@@ -67,14 +67,14 @@ python3 paper/cpc/bench/binary_formats.py                       # cpc-bench-bina
 #   check runs DRIVER dump MODE THREADS FILE POS BOX for each cell, and time runs
 #   DRIVER time MODE THREADS FILE per run of each cell, after interleave.settle for
 #   the settle_ms of $BENCH_RESULTS/binary_formats/settle.json
-python3 paper/cpc/bench/settle_period.py                        # cpc-bench-settle
+python3 settle_period.py                        # cpc-bench-settle
 #   --record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
 #   READCON_SRC as for binary_formats.py, whose readcon_read it hashes; BENCH_ROUNDS
 #   trials; binary_formats.py --steps time then times the cells after the new period
 
 cargo build --release --features zstd,parallel --example corpus31_report
 python3 paper/cpc/scripts/corpus31_results.py                   # cpc-corpus31
-#   target/release/examples/corpus31_report [--threads N] paper/cpc/data/corpus31
+#   target/release/examples/corpus31_report [--threads N] corpus31
 #   at the default thread count and at N = 1, 2 and 8
 cargo build --release                                # cpc-clib, then cpc-clib-parallel:
 env CARGO_TARGET_DIR=target/clib-parallel cargo build --release --features parallel
@@ -95,7 +95,7 @@ env CARGO_TARGET_DIR=target/cli cargo build --release --features zstd \
 python3 paper/cpc/scripts/referee_probes.py --check             # cpc-probes
 #   READCON_CLI=target/cli/release/readcon-core
 #   READCON_LIB=target/release/libreadcon_core.so; --check compares the reads with
-#   paper/cpc/data/referee_probes.json and writes nothing, and the run without --check
+#   referee_probes.json and writes nothing, and the run without --check
 #   writes that record. It runs $READCON_CLI FILE [OUT] in $TMP, and each read of a
 #   probe that has a time and memory limit in a child:
 #   python3 paper/cpc/scripts/referee_probes.py --child READER
@@ -104,7 +104,7 @@ python3 paper/cpc/scripts/mutant_differential.py                # cpc-mutants
 #   indep_reader.read_text and readcon.read_con_string
 python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
 #   reads docs/orgmode/spec.org, both corpus manifests, the probes of
-#   paper/cpc/data/referee_probes.json and the tests under tests/ and src/
+#   referee_probes.json and the tests under tests/ and src/
 python3 paper/cpc/scripts/bench_readers.py                      # reader exchange
 #   readcon-core 0.18.0, read_con and read_positions, on the 100000-frame CON file.
 #   LARGE_FRAMES=100000. Each arm is one fresh process, six times, interleaved.

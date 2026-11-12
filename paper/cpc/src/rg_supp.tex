@@ -318,7 +318,7 @@ The test-run record keeps the commands, the toolchain and what the program print
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
 \begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core 0.18.1.
-\texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{paper/\allowbreak cpc/\allowbreak data/\allowbreak src\_anchors.toml} and fails when an anchor matches no line or more than one.}
+\texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
 \toprule
@@ -348,20 +348,21 @@ Binary image: payload-offset check & \texttt{\srcRcbinCrc} \\
 \end{table}
 
 \FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
-\path{paper/cpc/data/corpus31} contains the \cthreeoneFiles{} files of that corpus, which \texttt{scripts/\allowbreak make\_corpus31.py} writes byte for byte, and its \texttt{manifest.toml} names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
-\path{paper/cpc/data/corpus31-results.json} is the record of \texttt{scripts/\allowbreak corpus31\_results.py}: the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
-\texttt{scripts/\allowbreak corpus\_paths.py} writes \path{paper/cpc/data/corpus_paths.json}.
+\texttt{corpus31} contains the \cthreeoneFiles{} files of that corpus, which \texttt{scripts/\allowbreak make\_corpus31.py} writes byte for byte, and its \texttt{manifest.toml} names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
+\texttt{corpus31-results.json} is the record of \texttt{scripts/\allowbreak corpus31\_results.py}: the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
+\texttt{scripts/\allowbreak corpus\_paths.py} writes \texttt{corpus\_paths.json}.
 It reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
 The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
 Every file takes \cpathsReadKinds{} reads, except that the \cpathsNotText{} files that are not UTF-8 take no \texttt{read\_con\_string} read.
 All \cpathsMatch{} of the \cpathsReads{} reads return the outcome of the manifest entry of their file, with its frame count or error class (Table~\ref{tab:corpus-paths}).
 The record keeps the verdict of every read with the builds that made them.
-\path{paper/cpc/data/every_path.json} is the record of \texttt{scripts/\allowbreak every\_path\_count.py}, which runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
+\texttt{every\_path.json} is the record of \texttt{scripts/\allowbreak every\_path\_count.py}, which runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
 Table~\ref{tab:corpus31-open} lists the \cthreeoneNotExplicit{} entries whose outcome no clause decides by name, each with the reading that its manifest entry records and that readcon-core follows.
-Table~\ref{tab:corpus-crosscheck} is the run of \texttt{scripts/\allowbreak corpus\_crosscheck.py} over both corpora, beside the independent reader \texttt{scripts/\allowbreak indep\_reader.py}; \path{paper/cpc/data/corpus_crosscheck.json} and \path{paper/cpc/data/corpus_crosscheck.csv} record the outcome of every reader on every file.
+Table~\ref{tab:corpus-crosscheck} is the run of \texttt{scripts/\allowbreak corpus\_crosscheck.py} over both corpora, beside the independent reader \texttt{scripts/\allowbreak indep\_reader.py}; \texttt{corpus\_crosscheck.json} and \texttt{corpus\_crosscheck.csv} record the outcome of every reader on every file.
 
-\path{paper/cpc/data/spec/mutant_differential.json} is the record of \texttt{scripts/\allowbreak mutant\_differential.py}.
-A case takes one of the \mutantFiles{} files of \path{paper/cpc/data/corpus31} under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
+\texttt{mutant\_differential.json} is the record.\\
+\texttt{scripts/\allowbreak mutant\_differential.py} writes it.
+A case takes one of the \mutantFiles{} files of \texttt{corpus31} under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
 The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
 Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and \texttt{\texttt{-}\texttt{-}check} reruns them.
@@ -374,7 +375,7 @@ The first variant is a count line with the wrong number of tokens and a token th
 The second variant is line 2 with a number such as \texttt{1e999}, which the JSON grammar of Request for Comments (RFC)~8259 admits and binary64 cannot represent.
 The independent reader rejects such a number anywhere in line 2, and readcon-core keeps it in an unreserved key and reads on; no clause requires either reading.
 The third variant is a last byte that is a carriage return, of which CON-file.3 states nothing: readcon-core reads it as a line end, so the input ends in trailing whitespace, and the independent reader takes it for line 1 of a further frame, which ends before its line 2.
-\path{paper/cpc/data/spec/clause_coverage.json}, the record of \texttt{scripts/\allowbreak clause\_coverage.py}, lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
+\texttt{clause\_coverage.json}, the record of \texttt{scripts/\allowbreak clause\_coverage.py}, lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
 No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given consumer, since no writer of readcon-core takes a consumer or a target version; CON-section.10 and CON-section.11, which govern how a later revision adds a reserved section name; and CON-section.18, a SHOULD on the energies a producer stores, whose reader side CON-section.19, accepting a frame whose energy differs from the sum of its energies rows, \texttt{tests/\allowbreak spec\_clause\_gaps.rs::\allowbreak con\_section\_19\_energy\_sum\_mismatch\_does\_not\_reject\_the\_frame} reads.
 
 The test \texttt{differential\_\allowbreak corpus\_\allowbreak mutations\_\allowbreak agree\_\allowbreak across\_\allowbreak entry\_\allowbreak points} of \texttt{src/\allowbreak iterators.rs} draws 140 cases, each conformance file and each test file with one of four edits: a form feed, a no-break space, two blank lines, or a further section at its end.
@@ -390,7 +391,7 @@ One case in every 305 is also padded with blank lines past the mapping threshold
 
 \input{figures/generated/corpus_crosscheck}
 
-Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame (\path{paper/cpc/data/failure/version_safety.csv}).
+Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame (\texttt{version\_safety.csv}).
 The Python module and the C library follow the rule on each row.
 They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labelled fs in the natural unit.
 The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
@@ -439,7 +440,7 @@ Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 20.0" Pro
 and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0 T T T 3} and \texttt{Pt 1.3859292911256331 1.3859292911256331 7.8 F F T 41}.
 The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, print the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
 The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.16.1, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.10.0 and Open Babel 3.2.1.
-On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals (\path{paper/cpc/data/failure/drift_extxyz.json}).
+On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals (\texttt{drift\_extxyz.json}).
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
 \FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbours} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
@@ -569,7 +570,6 @@ That is the set of versions that was run.
 The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.11.0-rc1 still have no CON reader \cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfiles0110rc12025,frauxChemfilesConIssue2025}.
 The input-format table of the OVITO 3.17.2 manual names XYZ, extended XYZ, POSCAR and PDBx/mmCIF, and it names neither CON nor convel nor H5MD \cite{ovitoManual3172}.
 That table is not a rerun of the opener.
-The development changelog of ASE dated 2026-11-09 is not part of release 3.29.0, and it records a fix for extended XYZ reading when Python is run with the optimisation flag \cite{aseChangelog20261109}.
 The survey and the drift files were not read under that flag.
 OVITO 3.17.2 \texttt{import\_file} on the 32-atom, 100000-frame CON file
 raises \texttt{RuntimeError}: it cannot detect the format.
@@ -591,8 +591,8 @@ The measurements other than the one-core timings use readcon-core~\readconversio
 The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.18.1.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 \texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
-The version history of Table~\ref{tab:versions}, \texttt{data/\allowbreak spec/\allowbreak versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py \texttt{-}\texttt{-}measure}, which runs no readcon-core code, so the table does not list it.
-Nor does it list \texttt{data/\allowbreak spec/\allowbreak clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
+The version history of Table~\ref{tab:versions}, \texttt{versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py \texttt{-}\texttt{-}measure}, which runs no readcon-core code, so the table does not list it.
+Nor does it list \texttt{clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
 
 \input{figures/generated/version_map}
 
@@ -608,16 +608,16 @@ On a host without TeX Live, \texttt{scripts/\allowbreak build\_tex\_tectonic.sh}
 \path{paper/cpc/environment/conda-linux-64.txt} lists the conda-forge packages of that environment with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and \path{requirements.txt} beside it the packages that pip adds; \texttt{scripts/\allowbreak export\_env.py} wrote both from the package records of the environment.
 \texttt{pip install .} builds the readcon module from the checkout.
 \texttt{scripts/\allowbreak regen\_paper.py} rewrites every table, figure and macro from the records without timing anything, and \texttt{scripts/\allowbreak build\_tex.sh} or \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents.
-\texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \path{paper/cpc/data/trace/numbers.csv}.
+\texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \texttt{numbers.csv}.
 
 The measurements are separate steps, each of which rewrites its own records.
 \texttt{regen\_paper.py \texttt{-}\texttt{-}measure} reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
 \texttt{scripts/\allowbreak test\_run.py \texttt{-}\texttt{-}checkout} runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
-\texttt{evidence/\allowbreak e1\_restart.py} reruns the eOn band, \texttt{scripts/\allowbreak run\_restart\_walls.py} the wall times of Table~\ref{tab:restartfmt}, and \texttt{scripts/\allowbreak file\_sizes.py} the sizes of Table~\ref{tab:sizes}.
-For the performance records, \texttt{bench/\allowbreak make\_payloads.py} writes the timed files, \texttt{bench/\allowbreak release.py} the provenance record, \texttt{bench/\allowbreak cpp\_reads.py} builds and checks the C++ programs, and \texttt{bench/\allowbreak reads.py}, \texttt{bench/\allowbreak memray\_peaks.py} and \texttt{bench/\allowbreak cachegrind.py} write the timing, heap and Cachegrind records; \texttt{bench/\allowbreak build\_chemfiles.sh} and then \texttt{bench/\allowbreak h2h.py} write the head-to-head records, and \texttt{bench/\allowbreak settle\_period.py} and \texttt{bench/\allowbreak binary\_formats.py} the records of the native readers.
-For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build \texttt{-}\texttt{-}release} builds and that \texttt{cargo build \texttt{-}\texttt{-}release \texttt{-}\texttt{-}features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \path{paper/cpc/data/referee_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
+\texttt{e1\_restart.py} reruns the eOn band, \texttt{scripts/\allowbreak run\_restart\_walls.py} the wall times of Table~\ref{tab:restartfmt}, and \texttt{scripts/\allowbreak file\_sizes.py} the sizes of Table~\ref{tab:sizes}.
+For the performance records, \texttt{make\_payloads.py} writes the timed files, \texttt{release.py} the provenance record, \texttt{cpp\_reads.py} builds and checks the C++ programs, and \texttt{reads.py}, \texttt{memray\_peaks.py} and \texttt{cachegrind.py} write the timing, heap and Cachegrind records; \texttt{build\_chemfiles.sh} and then \texttt{h2h.py} write the head-to-head records, and \texttt{settle\_period.py} and \texttt{binary\_formats.py} the records of the native readers.
+For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build \texttt{-}\texttt{-}release} builds and that \texttt{cargo build \texttt{-}\texttt{-}release \texttt{-}\texttt{-}features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \texttt{referee\_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
 Listing~\ref{lst:measure} gives the command line of each of these performance and conformance scripts, the environment variables it reads with their defaults, and the command lines it runs for each cell, file or build, among them those of memray, Valgrind and cargo.
-The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3 and rewrites \texttt{data/\allowbreak spec/\allowbreak version\_drift.json}.
+The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3 and rewrites \texttt{version\_drift.json}.
 
 \begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.18.1.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
@@ -732,8 +732,7 @@ Thread scaling of that read is Figure~\ref{fig:threads}.
 \centering
 \scriptsize
 \caption{Coordinate shift on each round trip of the survey frame.
-The shift is the same quantity as Table~\ref{tab:survey}.
-A bar chart of these rows drew every recorded shift at the same length.}
+The shift is the same quantity as Table~\ref{tab:survey}.}
 \label{fig:matrix}
 \begin{tabular}{@{}llr@{}}
 \toprule
@@ -1341,8 +1340,7 @@ This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which re
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
 \caption{Barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
-The right panel is the difference, 0.0369~eV.
-Drawn from the first image, the two curves sit on each other.}
+The right panel is the difference, 0.0369~eV.}
 \label{fig:asemask} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1382,8 +1380,7 @@ The hash is of the serialized frame.}
 
 \begin{figure}[tbp] \centering
 \scriptsize
-\caption{Each illegal file in the stored error record.
-The bar chart drew every file at height 1.}
+\caption{Each illegal file in the stored error record, and the error class the reader returns.}
 \label{fig:supp-errors}
 \begin{tabular}{@{}ll@{}}
 \toprule
@@ -1412,8 +1409,7 @@ per-type-zero & InvalidCount \\
 \label{fig:supp-restart} \end{figure}
 
 \begin{figure}[tbp] \centering
-\caption{Hashed images in each run of the 0.18.0 measurements.
-Every run has the same count, so the bar chart was flat.}
+\caption{Hashed images in each run of the 0.18.0 measurements.}
 \label{fig:supp-dedup}
 \begin{tabular}{@{}lr@{}}
 \toprule
@@ -1431,8 +1427,7 @@ adatom frozen & 7 \\
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
 \caption{Barrier shift of each stored EMT band from the uninterrupted band.
-A zero is drawn at the labelled floor.
-The five energy curves lie on one another.}
+An exact zero is drawn at the labelled floor.}
 \label{fig:supp-neb} \end{figure}
 
 \section{Readers on one core}
@@ -1585,7 +1580,7 @@ readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
 \end{table}
 
 A thermal copper trajectory, 2048 atoms and 1200 frames at \SI{306}{\kelvin} with the Heinz 12-6 potential, is the compression check.
-Shuffle followed by zstd is 2.33 times smaller than the text, and about the same size as gzip or zstd of that text.
+Shuffle followed by zstd is 2.33 times smaller than the text, and the size of gzip or zstd of that text.
 It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
 Table~\ref{tab:gzip} is the compressed read and the gzip write, again six repeats after one warmup on one core.
 The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.

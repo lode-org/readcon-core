@@ -681,7 +681,7 @@ The same labelling was then given sixteen images between the endpoints, eighteen
 Figure~\ref{fig:claisen-land} is the plane of \(s\) and \(d\), the RMSD-based reaction progress and the orthogonal deviation of the MethodsX projection, drawn with chemparseplot
 \cite{goswamiTwodimensionalRmsdProjections2026,goswamiChemparseplot2026}.
 The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
-A further climbing-image-only continuation oscillated between about \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
+A further climbing-image-only continuation oscillated between \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
 Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
 The highest image of the eighteen-image band lies at 3.988~eV (92.0~kcal/mol).
 The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
@@ -781,7 +781,7 @@ Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same re
 \section{The three applications in full}\label{sec:supp-applications}
 This section is the full text of Section~\ref{sec:validation}.
 The Claisen landscape is Figure~\ref{fig:claisen-land} and the restart drift is Figure~\ref{fig:restartfmt}.
-\subsection{Applications as first written}
+\subsection{The three studies}
 \subsection{Claisen}
 Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
 \cite{bakerLocationTransitionStates1996}.
@@ -851,9 +851,9 @@ Persistence is the mean, over frames \(t\), of the fraction of a per-atom relati
 P(\tau)=\left\langle\frac{|A(t)\cap A(t+\tau)|}{|A(t)|}\right\rangle_{t},
 \end{equation}
 with \(A(t)\) the set of neighbour pairs, or of molecule labels, at frame \(t\) (Figure~\ref{fig:water}).
-A neighbour drawn uniformly among the other molecules has chance \(z/(N-1)\), about 0.001, with \(z\) the number of neighbours of a molecule and \(N=4096\).
-Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}\), about 0.63, where \(p_k\) is the fraction of molecules of class \(k\).
-Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at about 0.001 on the permuted XYZ at every lag.
+A neighbour drawn uniformly among the other molecules has chance at \(z/(N-1)\), with \(N=4096\).
+Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}\), 0.630 to 0.631, where \(p_k\) is the fraction of molecules of class \(k\).
+Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at 0.001 on the permuted XYZ at every lag.
 The CHILL+ type of a molecule persists at 0.800, 0.790, 0.785 and 0.771 on CON, and at 0.630--0.631 on the permuted XYZ.
 Six-ring membership is 0.996--0.997 on CON and 0.995 on the permuted XYZ, because almost every molecule already sits in a six-ring, so it does not separate them.
 Ring counts and ice counts match on every frame of the two files.
@@ -871,8 +871,7 @@ The median wall time of that ingest and select is 0.578~s on the machine of Sect
 (a)~Neighbour pairs.
 (b)~CHILL+ ice type.
 Circles are the CON frames.
-Squares are the same frames written as XYZ with the atom order permuted independently in every frame.
-The dashed line is the chance agreement of the ice type, 0.630--0.631.}
+Squares in (a) are the permuted XYZ. In (b) that series lies on the dashed chance line, 0.630 to 0.631.}
 \label{fig:water}
 \end{figure}
 
@@ -984,3 +983,21 @@ The route-by-route prefactors are Table~\ref{tab:prefactor-routes} (Section~\ref
 eOn's L-BFGS memory is stored in no geometry file, so a restart cannot repeat that path from the geometry alone (Section~\ref{sec:supp-morse}).
 The uninterrupted Morse barrier is 1.37~eV, the round trip shifts it by 0, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}).
 
+
+\section{Atom correspondence}\label{sec:identity}
+This section is the correspondence argument removed from the main text.
+A rare-event method compares two geometries atom by atom.
+The path, the tangent, the displacement, the Hessian and the rate are defined only when atom \(i\) in image A is atom \(i\) in image B.
+Write the \(3N\) Cartesian coordinates of an image, in one fixed order, as the vector \(R\).
+The tangent and the spring are Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring} in Section~\ref{sec:claisen}.
+A permutation matrix \(\Pi\) applied to one image replaces \(R\) by \(\Pi R\).
+The differences in Eq.~\eqref{eq:tangent} then connect different atoms, and the spring in Eq.~\eqref{eq:spring} pulls along that wrong chord.
+The dimer axis, the Cartesian RMSD and the Vineyard prefactor pair the same slots (Section~\ref{sec:supp-pairing}, Eqs.~\eqref{eq:dimer}, \eqref{eq:rmsd} and~\eqref{eq:vineyard}).
+A permutation reorders the Hessian, and a mask that frees one more component changes which eigenvalues enter the prefactor.
+A file that stores coordinates and element symbols, and no atom index, leaves the map to the next program.
+An XYZ written and read through a SMILES canonicalisation, an Open Babel conversion or an RDKit molecule rebuild can return the atoms in a new order.
+A POSCAR groups atoms by the element block.
+A LAMMPS dump written with atoms sorted by type does the same.
+In each case Eq.~\eqref{eq:tangent} is evaluated on a vector whose slots no longer name the atoms of the previous image.
+The band still returns a number.
+That number is the barrier of a different path.

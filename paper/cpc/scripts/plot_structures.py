@@ -158,7 +158,7 @@ def main() -> None:
     try:
         panels = [
             ("survey Pt(100)", survey_frame(), "survey.svg"),
-            ("timing CuH2", REPO / "resources/test/cuh2.con", "cuh2.svg"),
+            ("CuH₂", REPO / "resources/test/cuh2.con", "cuh2.svg"),
             ("EMT Pt(100) hop", pt_slab_middle(), "pt_slab.svg"),
         ]
         written = []

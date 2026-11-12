@@ -81,15 +81,15 @@ controlled).}
 \toprule
 Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
 \midrule
-pread & 1 & guest drop & 3.0708 (2.8267 to 3.8110) & 1563.1 & 4735008 \\
+pread & 1 & cold & 3.0708 (2.8267 to 3.8110) & 1563.1 & 4735008 \\
 pread & 1 & warm & 2.4222 (2.3441 to 2.6418) & 1981.7 & 4735012 \\
-mapped & 1 & guest drop & 1.8443 (1.7338 to 1.9078) & 2602.6 & 4734900 \\
+mapped & 1 & cold & 1.8443 (1.7338 to 1.9078) & 2602.6 & 4734900 \\
 mapped & 1 & warm & 0.2415 (0.2307 to 0.2747) & 19871.9 & 4734904 \\
-h5py & 1 & guest drop & 3.0729 (2.6581 to 4.2668) & 1562.0 & 4735788 \\
+h5py & 1 & cold & 3.0729 (2.6581 to 4.2668) & 1562.0 & 4735788 \\
 h5py & 1 & warm & 2.4124 (2.3719 to 2.5334) & 1989.8 & 4736300 \\
-pread & 8 & guest drop & 1.5140 (1.2922 to 1.8403) & 3170.4 & 4735264 \\
+pread & 8 & cold & 1.5140 (1.2922 to 1.8403) & 3170.4 & 4735264 \\
 pread & 8 & warm & 0.4114 (0.3843 to 0.4197) & 11668.2 & 4735264 \\
-mapped & 8 & guest drop & 1.5664 (1.3673 to 1.9114) & 3064.4 & 4735360 \\
+mapped & 8 & cold & 1.5664 (1.3673 to 1.9114) & 3064.4 & 4735360 \\
 mapped & 8 & warm & 0.1101 (0.1072 to 0.1165) & 43582.0 & 4735360 \\
 \bottomrule
 \end{tabular}}
@@ -113,15 +113,15 @@ controlled).}
 \toprule
 Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
 \midrule
-pread & 1 & guest drop & 3.2126 (2.8225 to 3.8666) & 1494.1 & 4689984 \\
+pread & 1 & cold & 3.2126 (2.8225 to 3.8666) & 1494.1 & 4689984 \\
 pread & 1 & warm & 2.9315 (2.7362 to 3.0299) & 1637.4 & 4690000 \\
-mapped & 1 & guest drop & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
+mapped & 1 & cold & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
 mapped & 1 & warm & 0.9173 (0.9140 to 0.9887) & 5232.5 & 4690016 \\
-h5py & 1 & guest drop & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
+h5py & 1 & cold & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
 h5py & 1 & warm & 2.7408 (2.6431 to 2.8928) & 1751.3 & 4736684 \\
-pread & 8 & guest drop & 2.0895 (2.0158 to 3.1192) & 2297.2 & 4690432 \\
+pread & 8 & cold & 2.0895 (2.0158 to 3.1192) & 2297.2 & 4690432 \\
 pread & 8 & warm & 1.1063 (1.0692 to 1.2108) & 4338.6 & 4690436 \\
-mapped & 8 & guest drop & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
+mapped & 8 & cold & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
 mapped & 8 & warm & 0.9293 (0.9121 to 0.9431) & 5165.2 & 4690424 \\
 \bottomrule
 \end{tabular}}
@@ -198,7 +198,7 @@ A file written and never read, then read by one stream after that drop,
 took 1.831 s, then 1.758 s, then 1.609 s.
 A file read many times took 1.605 s and 1.708 s.
 Each recorded \texttt{read\_bytes} of the whole file.
-\texttt{Cached} was about 312000 kB before each of those reads.
+\texttt{Cached} was 312000 kB before each of those reads.
 The never-read file's first read was the slowest of the five, 1.14 times
 the fastest.
 The guest page cache was dropped before every guest-drop sample.
@@ -250,21 +250,21 @@ controlled).}
 \toprule
 Reader & Threads & Cache & Upper median (s) & MB/s & RSS \\
 \midrule
-plain map & 1 & guest drop & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
-readahead & 1 & guest drop & 1.0515 (0.9978 to 1.2141) & 4564.8 & 4690416 \\
-split & 1 & guest drop & 1.3572 (1.2174 to 1.4151) & 3536.7 & 4690240 \\
-O\_DIRECT & 1 & guest drop & 1.6519 (1.4851 to 1.9446) & 2905.7 & 4690128 \\
-h5py & 1 & guest drop & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
+plain map & 1 & cold & 2.3343 (2.1735 to 2.5727) & 2056.3 & 4690076 \\
+readahead & 1 & cold & 1.0515 (0.9978 to 1.2141) & 4564.8 & 4690416 \\
+split & 1 & cold & 1.3572 (1.2174 to 1.4151) & 3536.7 & 4690240 \\
+O\_DIRECT & 1 & cold & 1.6519 (1.4851 to 1.9446) & 2905.7 & 4690128 \\
+h5py & 1 & cold & 3.3113 (3.0086 to 7.0523) & 1449.6 & 4736628 \\
 plain map & 1 & warm & 0.9173 (0.9140 to 0.9887) & 5232.5 & 4690016 \\
 readahead & 1 & warm & 0.8734 (0.8521 to 0.9273) & 5495.9 & 4690272 \\
 split & 1 & warm & 0.9000 (0.8694 to 1.0086) & 5333.5 & 4690248 \\
 O\_DIRECT & 1 & warm & 1.7614 (1.4944 to 1.8873) & 2725.1 & 4690136 \\
 h5py & 1 & warm & 2.7408 (2.6431 to 2.8928) & 1751.3 & 4736684 \\
-plain map & 8 & guest drop & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
-readahead & 8 & guest drop & 1.0217 (0.9683 to 1.1867) & 4698.2 & 4690812 \\
-split & 8 & guest drop & 1.2101 (0.9608 to 1.4188) & 3966.5 & 4689924 \\
-O\_DIRECT & 8 & guest drop & 1.5320 (1.4677 to 1.5830) & 3133.2 & 4690436 \\
-h5py & 8 & guest drop & 1.4268 (1.2302 to 1.8428) & 3364.2 & 5124632 \\
+plain map & 8 & cold & 1.9069 (1.8371 to 2.0154) & 2517.2 & 4690408 \\
+readahead & 8 & cold & 1.0217 (0.9683 to 1.1867) & 4698.2 & 4690812 \\
+split & 8 & cold & 1.2101 (0.9608 to 1.4188) & 3966.5 & 4689924 \\
+O\_DIRECT & 8 & cold & 1.5320 (1.4677 to 1.5830) & 3133.2 & 4690436 \\
+h5py & 8 & cold & 1.4268 (1.2302 to 1.8428) & 3364.2 & 5124632 \\
 plain map & 8 & warm & 0.9293 (0.9121 to 0.9431) & 5165.2 & 4690424 \\
 readahead & 8 & warm & 0.1779 (0.1726 to 0.1870) & 26977.5 & 4690248 \\
 split & 8 & warm & 0.1821 (0.1733 to 0.1927) & 26363.2 & 4690372 \\
