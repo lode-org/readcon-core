@@ -1,7 +1,7 @@
 #+title: Fidelity head-to-head
 #+options: toc:nil num:nil ^:nil
 
-The fidelity run reads one set of CON and convel files with every reader and, where the tool has a writer, writes them back. =reader= is what that tool kept in memory. =round_trip= is what =readcon.read_con= finds in the file the tool wrote. Both columns use the same words: =exact=, =within_tolerance=, =reordered=, =mismatch=, =label_changed=, =absent=, =not_representable=, =read_error=, =write_error=, =not_installed=.
+The fidelity run reads one set of CON and convel files with every reader and, where the tool has a writer, writes them back. =reader= is what that tool kept in memory. =round_trip= is what =readcon.read_con= finds in the file the tool wrote. Both columns use the same words: =exact=, =within_tolerance=, =reordered=, =mismatch=, =label_changed=, =absent=, =not_representable=, =read_error=, =write_error=, =unavailable=. =unavailable= means the tool could not be imported. chemfiles, ASE, and eOn are optional.
 
 Fixtures, under =bench/fidelity/fixtures/=:
 

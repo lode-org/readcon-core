@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "reproducible-rustflags.sh"
 
 
-def flags(env: dict[str, str]) -> tuple[list[str], str, str]:
+def flags(env: dict[str, str]) -> tuple[list[str], str, str, str, str]:
     merged = os.environ.copy()
     for key in (
         "RUSTFLAGS",
@@ -26,6 +26,9 @@ def flags(env: dict[str, str]) -> tuple[list[str], str, str]:
         "GITHUB_WORKSPACE",
         "USERPROFILE",
         "HOME",
+        "MSYS2_ENV_CONV_EXCL",
+        "MSYS_NO_PATHCONV",
+        "MSYS2_ARG_CONV_EXCL",
     ):
         merged.pop(key, None)
     merged.update(env)
@@ -36,6 +39,8 @@ reproducible_rustflags "$ROOT_DIR" "$TARGET"
 printf '%s\\n' "${{CARGO_ENCODED_RUSTFLAGS}}"
 printf 'CFLAGS=%s\\n' "${{CFLAGS-}}"
 printf 'RUSTFLAGS=%s\\n' "${{RUSTFLAGS-unset}}"
+printf 'MSYS2_ENV_CONV_EXCL=%s\\n' "${{MSYS2_ENV_CONV_EXCL-}}"
+printf 'MSYS_NO_PATHCONV=%s\\n' "${{MSYS_NO_PATHCONV-}}"
 """
     done = subprocess.run(
         ["bash", "-c", script],
@@ -47,13 +52,19 @@ printf 'RUSTFLAGS=%s\\n' "${{RUSTFLAGS-unset}}"
     )
     if done.returncode != 0:
         raise AssertionError(done.stderr)
-    encoded, cflags, rustflags = done.stdout.splitlines()
-    return encoded.split("\x1f"), cflags.removeprefix("CFLAGS="), rustflags
+    encoded, cflags, rustflags, excl, nopath = done.stdout.splitlines()
+    return (
+        encoded.split("\x1f"),
+        cflags.removeprefix("CFLAGS="),
+        rustflags,
+        excl.removeprefix("MSYS2_ENV_CONV_EXCL="),
+        nopath.removeprefix("MSYS_NO_PATHCONV="),
+    )
 
 
 class ReproducibleRustflagsTest(unittest.TestCase):
     def test_windows_brepro_and_backslash_remap(self) -> None:
-        words, cflags, rustflags = flags(
+        words, cflags, rustflags, excl, nopath = flags(
             {
                 "ROOT_DIR": r"D:\a\readcon-core\readcon-core\src",
                 "TARGET": "x86_64-pc-windows-msvc",
@@ -63,6 +74,12 @@ class ReproducibleRustflagsTest(unittest.TestCase):
             }
         )
         self.assertEqual(rustflags, "RUSTFLAGS=unset")
+        self.assertEqual(nopath, "1")
+        self.assertEqual(
+            excl.split(";"),
+            ["CARGO_ENCODED_RUSTFLAGS", "CFLAGS", "CXXFLAGS"],
+        )
+        self.assertTrue(all("\r" not in word for word in words))
         self.assertIn("/Brepro", cflags)
         self.assertEqual(words[0], "-C")
         self.assertEqual(words[1], "link-arg=-fuse-ld=bfd")
@@ -99,7 +116,7 @@ class ReproducibleRustflagsTest(unittest.TestCase):
         self.assertEqual(words[alt[0] - 1], "-C")
 
     def test_linux_keeps_the_linker_flag_and_skips_brepro(self) -> None:
-        words, cflags, _rustflags = flags(
+        words, cflags, _rustflags, excl, nopath = flags(
             {
                 "ROOT_DIR": "/io/src",
                 "TARGET": "x86_64-unknown-linux-gnu",
@@ -110,6 +127,8 @@ class ReproducibleRustflagsTest(unittest.TestCase):
             }
         )
         self.assertEqual(cflags, "-DHAVE_UNISTD_H")
+        self.assertEqual(nopath, "1")
+        self.assertIn("CARGO_ENCODED_RUSTFLAGS", excl.split(";"))
         self.assertNotIn("link-arg=/Brepro", words)
         remaps = [word for word in words if word.startswith("--remap-path-prefix=")]
         self.assertEqual(

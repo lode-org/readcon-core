@@ -4,7 +4,8 @@ One core, one warmup, six samples. The median and the interquartile range
 use the type-7 percentile (NumPy ``linear``). A field is ``exact`` when the
 values match, ``within_tolerance`` when the tool's writer rounds them inside
 the tolerance named on the row, and ``not_representable`` when that tool has
-no place for the field. The citation is a file and line in that tool.
+no place for the field. A missing import of chemfiles, ASE, or eOn is
+``unavailable``. The citation is a file and line in that tool.
 """
 
 from __future__ import annotations
@@ -653,9 +654,14 @@ class ToolError(Exception):
 
 
 def _require_plugin(fmt: str) -> None:
-    from ase.io.formats import ioformats
-
-    found = ioformats[fmt]
+    try:
+        from ase.io.formats import ioformats
+    except ModuleNotFoundError as exc:
+        raise ToolError(f"ase did not import: {exc}") from exc
+    try:
+        found = ioformats[fmt]
+    except KeyError as exc:
+        raise ToolError(f"ase format {fmt} is not installed") from exc
     module = getattr(found, "module", "")
     name = getattr(module, "__name__", module)
     if name != "ase_readcon.io":
@@ -716,7 +722,10 @@ def _ase_record(atoms, ids_known: bool) -> dict:
 
 
 def _read_ase(path: Path, fmt: str):
-    import ase.io
+    try:
+        import ase.io
+    except ModuleNotFoundError as exc:
+        raise ToolError(f"ase did not import: {exc}") from exc
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -728,7 +737,10 @@ def _read_ase(path: Path, fmt: str):
 
 
 def _write_ase(path: Path, images, fmt: str) -> list[str]:
-    import ase.io
+    try:
+        import ase.io
+    except ModuleNotFoundError as exc:
+        raise ToolError(f"ase did not import: {exc}") from exc
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with warnings.catch_warnings(record=True) as caught:
@@ -817,7 +829,10 @@ def _eon_record(structure, box_to_length_angle) -> dict:
 
 
 def chemfiles_con_error(path: Path) -> str:
-    import chemfiles
+    try:
+        import chemfiles
+    except ModuleNotFoundError as exc:
+        raise ToolError(f"chemfiles did not import: {exc}", CITE_CF) from exc
 
     chemfiles.set_warnings_callback(lambda _message: None)
     try:
@@ -1059,7 +1074,7 @@ def run_fidelity() -> dict:
                 missing = (
                     "not installed" in exc.detail or "did not import" in exc.detail
                 )
-                trip = "not_installed" if missing else "not_representable"
+                trip = "unavailable" if missing else "not_representable"
                 if not missing and tool != "chemfiles":
                     trip = "read_error"
                 for row in _error_rows(exc.detail, exc.citation, trip, trip):
@@ -1210,18 +1225,34 @@ def run_fidelity() -> dict:
     }
 
 
+def _module_version(name: str) -> str:
+    try:
+        module = __import__(name)
+    except ModuleNotFoundError:
+        return ""
+    return str(getattr(module, "__version__", ""))
+
+
+def _chemfiles_info() -> tuple[str, list[str], bool]:
+    try:
+        import chemfiles
+    except ModuleNotFoundError:
+        return "", [], False
+    names = sorted(item.name for item in chemfiles.formats_list())
+    has_con = any(name.upper() == "CON" for name in names)
+    return str(getattr(chemfiles, "__version__", "")), names, has_con
+
+
 def _versions() -> dict:
-    import ase
-    import chemfiles
     import readcon
 
-    names = sorted(item.name for item in chemfiles.formats_list())
+    chem_version, names, has_con = _chemfiles_info()
     return {
         "readcon": readcon.__version__,
-        "ase": ase.__version__,
-        "chemfiles": getattr(chemfiles, "__version__", ""),
+        "ase": _module_version("ase"),
+        "chemfiles": chem_version,
         "chemfiles_formats": names,
-        "chemfiles_has_con": any(name.upper() == "CON" for name in names),
+        "chemfiles_has_con": has_con,
         "numpy": np.__version__,
         "eon_commit": eon_commit(),
         "eon_root": str(eon_root() or ""),
@@ -1278,7 +1309,7 @@ def run_timing() -> dict:
                         detail = f"{type(exc).__name__}: {exc}"
                         citation = ""
                     if "not installed" in detail or "did not import" in detail:
-                        status = "not_installed"
+                        status = "unavailable"
                     elif "can not find a format" in detail:
                         status = "not_representable"
                     elif op == "write":
@@ -1330,7 +1361,12 @@ def _csv_fidelity(path: Path, rows: list[dict]) -> None:
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fields,
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -1351,7 +1387,12 @@ def _csv_timing(path: Path, rows: list[dict]) -> None:
         "detail",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fields,
+            extrasaction="ignore",
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow(row)

@@ -65,6 +65,14 @@ def test_claisen_positional_zip_error():
     assert perm[report["reactant_ids"].index(2)] == report["product_ids"].index(2)
 
 
+def _importable(name: str) -> bool:
+    try:
+        __import__(name)
+    except ModuleNotFoundError:
+        return False
+    return True
+
+
 def test_fidelity_table_records_each_tool():
     doc = campaign.run_fidelity()
     rows = doc["rows"]
@@ -88,8 +96,12 @@ def test_fidelity_table_records_each_tool():
     assert {row["round_trip"] for row in kept} == {"exact"}
     chem = [row for row in rows if row["tool"] == "chemfiles"]
     assert chem
-    assert {row["reader"] for row in chem} == {"not_representable"}
-    assert all("FormatFactory.cpp:139" in row["citation"] for row in chem)
+    if _importable("chemfiles"):
+        assert {row["reader"] for row in chem} == {"not_representable"}
+        assert all("FormatFactory.cpp:139" in row["citation"] for row in chem)
+    else:
+        assert {row["reader"] for row in chem} == {"unavailable"}
+        assert {row["round_trip"] for row in chem} == {"unavailable"}
     slab = [
         row
         for row in rows
@@ -97,9 +109,17 @@ def test_fidelity_table_records_each_tool():
         and row["fixture"] == "pt100_slab.con"
         and row["field"] == "fixed_mask"
     ]
-    assert slab[0]["reader"] == "mismatch"
-    assert slab[0]["n_differ"] == 1
-    assert "ase/io/eon.py:139" in slab[0]["citation"]
+    assert slab
+    if _importable("ase"):
+        assert slab[0]["reader"] == "mismatch"
+        assert slab[0]["n_differ"] == 1
+        assert "ase/io/eon.py:139" in slab[0]["citation"]
+    else:
+        assert slab[0]["reader"] == "unavailable"
+    eon_rows = [row for row in rows if row["tool"] == "eon-python"]
+    assert eon_rows
+    if campaign.eon_root() is None:
+        assert {row["reader"] for row in eon_rows} == {"unavailable"}
     zip_row = next(
         row
         for row in rows

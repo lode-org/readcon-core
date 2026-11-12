@@ -96,6 +96,7 @@ if ! grep -q 'dist-clib-rebuild' .github/workflows/c_lib_tarball.yml \
     || ! grep -q -- '--backfill' .github/workflows/c_lib_tarball.yml \
     || ! grep -q 'reproducible-rustflags.sh' scripts/package-clib.sh \
     || ! grep -q 'link-arg=/Brepro' scripts/reproducible-rustflags.sh \
+    || ! grep -q 'MSYS2_ENV_CONV_EXCL' scripts/reproducible-rustflags.sh \
     || ! grep -q 'remap-path-prefix' scripts/reproducible-rustflags.sh \
     || ! grep -q '::warning::' scripts/upload-release-assets.sh \
     || ! grep -q -- '--backfill' scripts/upload-release-assets.sh \

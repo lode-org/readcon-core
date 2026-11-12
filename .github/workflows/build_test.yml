@@ -38,8 +38,8 @@ jobs:
       - name: Install Meson, Ninja, Valgrind
         run: |
           python -m pip install meson ninja
-          sudo snap install valgrind --classic
-          sudo apt-get update && sudo apt-get install -y libc6-dbg --fix-missing
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends valgrind libc6-dbg --fix-missing
 
       - name: C/C++ distribution gate
         run: bash scripts/check-cxx-dist.sh

@@ -30,6 +30,8 @@ jobs:
       run: bash scripts/check_conventional_commits.sh
 
     - name: Audit for large files
-      uses: HaoZeke/large-file-auditor@v0.1.0
-      with:
-        file-size-threshold: "1M"
+      # The v0.1.0 action mirror-clones every ref. fetch-depth 0 fetches
+      # every branch, so paper/restore's generated claisen_wbo.pdf (1.74 MiB
+      # and 1.71 MiB) failed this job on main, including at v0.21.0.
+      # Those blobs are not reachable from this branch. Audit HEAD.
+      run: bash scripts/audit_large_files.sh

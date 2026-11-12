@@ -16,8 +16,8 @@ HERE = Path(__file__).resolve().parent
 DEST = HERE / "fixtures"
 sys.path.insert(0, str(HERE))
 
-import geom
-import readcon
+import geom  # noqa: E402
+import readcon  # noqa: E402
 
 NEB_SRC = ROOT / "resources" / "examples" / "neb_band.con"
 CONVEL_SRC = ROOT / "resources" / "test" / "tiny_multi_cuh2.convel"

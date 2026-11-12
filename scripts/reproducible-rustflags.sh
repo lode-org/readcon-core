@@ -15,6 +15,13 @@
 # rustup home, the crate root, and GITHUB_WORKSPACE are remapped. Longer
 # prefixes are listed first so a cargo home under the crate root matches
 # the cargo-home label.
+#
+# Git Bash rewrites POSIX paths in the environment of a native program.
+# link-arg=/Brepro becomes \Brepro, and link.exe then fails with LNK1181
+# because it looks for \Brepro.obj. A remap label /src becomes
+# C:\Program Files\Git\src. MSYS2_ENV_CONV_EXCL keeps the encoded flags
+# and the C compiler flags literal. Windows CPython writes CR LF on a
+# pipe; those CRs are stripped so a remap prefix still matches the path.
 
 # Bash nested functions cannot see a parent's local array. The remap
 # list is global for that reason and cleared on every call.
@@ -123,9 +130,10 @@ reproducible_rustflags() {
         sorted="$(
             printf '%s\n' "${REPRO_PAIRS[@]}" | python3 -c '
 import sys
+sys.stdout.reconfigure(newline="\n")
 rows = []
 for line in sys.stdin:
-    line = line.rstrip("\n")
+    line = line.rstrip("\r\n")
     if not line:
         continue
     path, label = line.split("\t", 1)
@@ -140,6 +148,7 @@ for path, label in rows:
 '
         )"
         while IFS= read -r line; do
+            line="${line%$'\r'}"
             [[ -n "$line" ]] || continue
             path="${line%%$'\t'*}"
             label="${line#*$'\t'}"
@@ -167,6 +176,24 @@ for path, label in rows:
 
     unset RUSTFLAGS
     export CARGO_ENCODED_RUSTFLAGS
+
+    # Set after cygpath. A local export would disappear when this function
+    # returns, and cargo runs in the caller.
+    excl="${MSYS2_ENV_CONV_EXCL:-}"
+    local name
+    for name in CARGO_ENCODED_RUSTFLAGS CFLAGS CXXFLAGS; do
+        case ";${excl};" in
+            *";${name};"*) ;;
+            *) excl="${excl:+${excl};}${name}" ;;
+        esac
+    done
+    MSYS2_ENV_CONV_EXCL="$excl"
+    export MSYS2_ENV_CONV_EXCL
+    unset excl
+    MSYS_NO_PATHCONV=1
+    export MSYS_NO_PATHCONV
+    MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:-*}"
+    export MSYS2_ARG_CONV_EXCL
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
