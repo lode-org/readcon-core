@@ -31,7 +31,7 @@ The Cartesian RMSD between reactant and product has the same dependence,
 \end{equation}
 The sum is a distance between matched atoms.
 The permutation-invariant distance minimises Eq.~\eqref{eq:rmsd} over rotations and over the \(M_1!M_2!\cdots\) maps of identical elements
-\cite{sadeghiMetricsConfigurationSpace2013,deFindingReactionPathways2019,goswamiTwodimensionalRmsdProjections2026}.
+\cite{sadeghiMetricsConfigurationSpace2013,deFindingReactionPathways2019,goswamiTwodimensionalRmsdProjections2026,goswamiChemparseplot2026}.
 Two-sided searches need that map before the first image is placed
 \cite{deFindingReactionPathways2019,goswamiReproducibleOrchestrationBest2026}.
 The image-dependent pair potential builds its target from the distances \(d_{ab}\) of a chosen map and then runs NEB on that objective
@@ -68,6 +68,8 @@ Energies and forces are PET-MAD-S, version 1.1.0, through metatomic
 The band is an OCI-NEB with a climbing image
 \cite{henkelmanClimbingImageNudged2000}, run in eOn 3.6.0 on one CPU
 \cite{rohitgoswamiTheochemuieonV3602026}.
+A climbing image aligned to a Hessian eigenmode has the same pairing of the atoms
+\cite{goswamiEnhancedClimbingImage2026}.
 
 Label the atoms once, in the reactant.
 The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
@@ -130,7 +132,9 @@ The renumbered image has separated into C0--C1--C2\({=}\)O and C4--C5.}
 Energy of each image above the reactant, joined in path order.
 The chemical map follows the atom ids.
 The Hausdorff reassignment follows the minimum-Hausdorff permutation of the product.
-Each label is the barrier of that band, the highest image above the reactant.}
+Each label is the barrier of that band, the highest image above the reactant.
+The profiles are the journal figures of chemparseplot
+\cite{goswamiChemparseplot2026}.}
 \label{fig:claisen-band}
 \end{figure}
 
@@ -260,6 +264,10 @@ A file that moves a coordinate or drops the mask returns a different one.
 \section{The readcon tools}\label{sec:ecosystem}
 readcon-core parses CON and convel and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
 C, C++, Fortran, Julia and Python call that parser.
+The Fortran binding is there because scientific codes still call Fortran
+\cite{kedwardStateFortran2022}.
+A quantum-chemistry input parser is held to the same standard, that the text it reads is the calculation it runs
+\cite{goswamiWailordParsers2022}.
 Algorithm~\ref{alg:parser} is the path reader of the timed release, readcon-core 0.18.1.
 The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\_positions}\) both return that column, and the coordinates match.
 The same read and write keep \texttt{atom\_id}.
