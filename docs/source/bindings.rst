@@ -361,7 +361,6 @@ CUDA). Legacy
 .. code:: python
 
     import numpy as np
-    import torch
     import readcon
 
     frame = readcon.read_first_frame("trajectory.con")
@@ -372,13 +371,22 @@ CUDA). Legacy
     energies = frame.energies_array()     # Optional shape (N,)
     atom_ids = frame.atom_ids_array()     # typically uint64
 
-    # Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
-    coords_torch = torch.from_dlpack(coords)
-    assert coords_torch.shape == (len(frame), 3)
-
     # atom_id reverse index for O(1) lookup by file column-5 id.
     idx = frame.build_atom_id_index()      # dict[int, int]
     position = idx.get(42)                 # Optional[int]
+
+Torch is optional. When it is installed, the same array is a zero-copy DLPack
+tensor:
+
+.. code:: python
+
+    import torch
+    import readcon
+
+    frame = readcon.read_first_frame("trajectory.con")
+    coords = frame.coords_array()
+    coords_torch = torch.from_dlpack(coords)
+    assert coords_torch.shape == (len(frame), 3)
 
 - ASE conversion preserves ``atom_id`` through an ``atom_id`` array,
   velocities through ASE velocities, forces through a

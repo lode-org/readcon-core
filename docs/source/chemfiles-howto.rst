@@ -138,7 +138,7 @@ format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
     assert frame.has_bonds
     print(readcon.select_on_frame(frame, "bonds: all")["matches"])
     print(readcon.select_on_frame(frame, "angles: all")["matches"])
-    print(readcon.select_on_frame(frame, "is_bonded"))  # pair context
+    print(readcon.select_on_frame(frame, "pairs: is_bonded(#1, #2)"))  # pair context
 
 .. code:: rust
 
