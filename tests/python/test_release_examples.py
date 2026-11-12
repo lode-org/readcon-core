@@ -1,4 +1,4 @@
-"""Examples from the 0.19 how-to: threads, append, gzip, stdin text, units."""
+"""Examples from the how-to: threads, append, gzip, stdin text, coordinates."""
 
 from pathlib import Path
 
@@ -32,6 +32,27 @@ def test_append_then_gzip_extension(tmp_path: Path) -> None:
     back = readcon.read_con(str(gzip_path))
     assert len(back) == 1
     assert back[0].atoms[0].x == 2.0
+
+
+def test_read_positions_and_read_coords_are_the_fast_path(tmp_path: Path) -> None:
+    path = tmp_path / "one.con"
+    frame = readcon.ConFrame(
+        (10.0, 10.0, 10.0),
+        (90.0, 90.0, 90.0),
+        [readcon.Atom("H", 1.25, 0.0, 0.0, atom_id=1, mass=1.0)],
+    )
+    readcon.write_con(str(path), [frame])
+    positions = readcon.read_positions(str(path))
+    one_thread = readcon.read_positions(str(path), n_threads=1)
+    coords = readcon.read_coords(str(path))
+    assert positions.shape == one_thread.shape == (1, 1, 3)
+    assert positions[0, 0, 0] == 1.25
+    assert one_thread[0, 0, 0] == positions[0, 0, 0]
+    assert coords["positions"][0, 0, 0] == positions[0, 0, 0]
+    assert coords["masses"][0, 0] == 1.0
+    assert list(coords["cell"][0]) == [10.0, 10.0, 10.0, 90.0, 90.0, 90.0]
+    assert coords["n_frames"] == 1
+    assert coords["n_atoms"] == 1
 
 
 def test_string_round_trip_is_the_stdin_text_path() -> None:

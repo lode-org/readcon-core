@@ -1127,6 +1127,12 @@ pub struct PositionBlock {
     pub values: Vec<f64>,
 }
 
+/// Read every frame's coordinates through the column walker.
+///
+/// `num_threads` of `None`, `Some(0)`, and `Some(1)` stay on the calling
+/// thread. `Some(n)` with `n >= 2` uses that many workers when `parallel`
+/// is enabled. The buffer is rectangular: frames that do not share one
+/// atom count are an error. Python `read_positions` returns this buffer.
 pub fn read_positions_with_threads(
     path: &Path,
     num_threads: Option<usize>,
@@ -1151,6 +1157,10 @@ pub struct CoordColumns {
     pub cells: Vec<f64>,
 }
 
+/// Positions, masses, and cells for a stock CON or convel file.
+///
+/// A certified file is one coordinate pass. Anything else uses the frame
+/// reader. Python `read_coords` returns these columns.
 pub fn read_coord_columns(
     path: &Path,
     num_threads: Option<usize>,

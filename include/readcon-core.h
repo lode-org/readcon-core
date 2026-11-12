@@ -2032,7 +2032,11 @@ struct RKRPositionBlock *rkr_read_positions_n_threads(const char *filename_c,
                                                       uintptr_t n_threads);
 
 /**
- * Like `rkr_read_positions_n_threads` with one worker.
+ * Coordinates of every frame, one worker, no frame objects.
+ * Like `rkr_read_positions_n_threads` with one worker. On success the
+ * caller owns the handle and reads row-major `x y z` doubles from
+ * `rkr_position_block_values` until `rkr_free_position_block`. A file
+ * whose frames do not share one atom count returns NULL.
  *
  * # Safety
  * Same contract as `rkr_read_positions_n_threads`.
@@ -2051,10 +2055,14 @@ struct RKRPositionBlock *rkr_read_positions(const char *filename_c,
 const double *rkr_position_block_values(const struct RKRPositionBlock *block);
 
 /**
- * Frees a handle from `rkr_read_positions`. NULL is a no-op.
+ * Frees a handle from `rkr_read_positions` or
+ * `rkr_read_positions_n_threads`, including its coordinate buffer.
+ * NULL is a no-op. The pointer from `rkr_position_block_values` is
+ * invalid after this call.
  *
  * # Safety
- * block is NULL or the pointer from `rkr_read_positions`.
+ * block is NULL or the pointer from `rkr_read_positions` or
+ * `rkr_read_positions_n_threads`.
  */
 void rkr_free_position_block(struct RKRPositionBlock *block);
 

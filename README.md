@@ -96,7 +96,8 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
     (velocities, forces, energies, charges, spins, magmoms, displacements, spreads). Velocities also
     auto-detect on legacy `.convel` without a `sections` key.
 -   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
--   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
+-   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios. Stock CON and convel coordinates go through the column walker: Python `read_positions` / `read_coords`, and C `rkr_read_positions` freed with `rkr_free_position_block`.
+-   **Fortran builder:** `builder%add_atom` and `builder%add_atom_full` take the fixed flags, then the atom id, then the mass, matching `rkr_frame_add_atom_full`.
 -   **Parallel frames:** Rayon behind the `parallel` Cargo feature. Pass `n_threads` of 2 or more. The default read stays on the calling thread. Equal-length frames skip the serial header walk.
 -   **Writers:** append an uncompressed file, flush the 8 KiB buffer, and stream one Python frame at a time. `.gz` and `.zst` select the codec.
 -   **ASE:** the `ase-readcon` package registers `readcon-con` and `readcon-convel` on `ase.ioformats`.

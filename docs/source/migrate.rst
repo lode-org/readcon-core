@@ -12,6 +12,33 @@ How-to — migrate a stack onto CON
 
 :doc:`The frequently asked questions <faq>` explain what a code gains by moving onto .con, and what ``readcon-db``, the frame application programming interface (API) and the plotting tools add.
 
+Moving to 0.20
+--------------
+
+``builder%add_atom`` and ``builder%add_atom_full`` take the per-axis fixed
+flags before the atom id and the mass. That is the ``rkr_frame_add_atom_full``
+order. A caller that still passes the id and the mass first is on the
+previous public argument order:
+
+.. code:: fortran
+
+   ! previous public order
+   st = bd%add_atom(symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
+   ! current public order
+   st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass)
+   st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, &
+        velocity=vel, force=frc)
+
+``velocity`` and ``force`` are optional rank-1 arrays of length 3 and still
+follow the mass. ``add_atom`` takes ``velocity`` only.
+
+Stock CON and convel files read coordinates through the column walker.
+Python ``read_positions`` returns one ``(frames, atoms, 3)`` array and
+``read_coords`` adds masses and the cell. C ``rkr_read_positions`` returns
+that column without building frame objects. Free the handle with
+``rkr_free_position_block``. Frames that do not share one atom count are
+an error.
+
 Moving to 0.19
 --------------
 

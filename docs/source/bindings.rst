@@ -43,6 +43,8 @@ task.
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Coordinates on a loaded frame                                       | SoA on ``ConFrame``                            | ``frame.xyz`` (SoA copy); ``coords_array()`` walks ``.atoms``               | via frame fields                                                   | ``frame%xyz_ptr`` (zero-copy)                                    | ``rkr_frame_xyz_f64`` (zero-copy)                                 | ``xyz_f64()`` (zero-copy)                  |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
+    | Coordinate column                                                   | ``read_positions_with_threads``                | ``read_positions`` / ``read_coords``                                        | n/a                                                                | n/a                                                              | ``rkr_read_positions`` / ``rkr_free_position_block``              | same C calls                               |
+    +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Parallel multi-frame parse                                          | yes (``parallel``; 48 KiB gate; ``n_threads``) | yes (``n_threads``; wheels enable ``parallel``)                             | no (iterator walk)                                                 | yes (optional ``n_threads``; needs a ``parallel`` lib)           | yes (``rkr_read_all_frames_n_threads``)                           | yes (``read_all_frames(path, n)``)         |
     +---------------------------------------------------------------------+------------------------------------------------+-----------------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
     | Builder API                                                         | ``ConFrameBuilder``                            | ``PyConFrameBuilder``                                                       | ``ConFrameBuilder``                                                | ``rkr_frame_new`` + ``rkr_frame_add_atom_full``                  | ``rkr_frame_new`` + ``rkr_frame_add_atom_full``                   | ``readcon::ConFrameBuilder``               |
@@ -227,8 +229,10 @@ Usage
 
     import readcon
 
-    # Read frames
-    frames = readcon.read_con("path/to/file.con")
+         # Read frames. read_positions / read_coords are the coordinate fast path.
+         frames = readcon.read_con("path/to/file.con")
+         positions = readcon.read_positions("path/to/file.con")  # (frames, atoms, 3)
+         coords = readcon.read_coords("path/to/file.con")        # positions, masses, cell
     first = readcon.read_first_frame("path/to/file.con")
     for frame in readcon.iter_con("path/to/file.con"):
         pass
@@ -592,6 +596,31 @@ Free with ``free_con_frame_iterator``; frames from ``con_frame_iterator_next`` w
 ``free_rkr_frame``. Bulk path: ``rkr_read_all_frames`` / ``free_rkr_frame_array`` or
 ``free_rkr_frame_ptr_array`` (outer pointer array only).
 
+Coordinate column
+^^^^^^^^^^^^^^^^^
+
+``rkr_read_positions`` reads every frame's coordinates in one pass and does
+not build frame objects. On success ``*n_frames`` and ``*n_atoms`` are set and
+the caller owns the handle. ``rkr_position_block_values`` is row-major ``x y z``,
+index ``frame * n_atoms * 3 + atom * 3``. ``rkr_free_position_block`` frees the
+handle and that buffer. NULL is a no-op, and the values pointer is invalid
+afterwards. ``rkr_read_positions_n_threads`` is the same call with a worker
+count. A count below 2 stays on the calling thread. A file whose frames do
+not share one atom count returns NULL, and ``rkr_last_error_message`` has the
+text. The C++ header includes this C API.
+
+.. code:: c
+
+   uintptr_t n_frames = 0, n_atoms = 0;
+   struct RKRPositionBlock *block =
+       rkr_read_positions("trajectory.con", &n_frames, &n_atoms);
+   if (block != NULL) {
+       const double *xyz = rkr_position_block_values(block);
+       printf("frames=%zu atoms=%zu x0=%.6f\n",
+              (size_t)n_frames, (size_t)n_atoms, xyz[0]);
+       rkr_free_position_block(block);
+   }
+
 Frame section buffers (no AoS required)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -938,6 +967,19 @@ Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
     st = frame_metatensor_positions_block(fr, block)  ! fat lib
     call mts_block_free_rkr(block)
     call fr%free()
+
+``builder%add_atom`` and ``builder%add_atom_full`` follow
+``rkr_frame_add_atom_full``: symbol, coordinates, then the three fixed
+flags, then the atom id, then the mass. Optional ``velocity`` and ``force``
+are length-3 arrays after the mass. A caller that still passes the atom
+id and the mass before the fixed flags is on the previous public order.
+
+.. code:: fortran
+
+   st = bd%add_atom("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
+        1_int64, 1.0d0)
+   st = bd%add_atom_full("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
+        1_int64, 1.0d0, velocity=vel, force=frc)
 
 Per-axis ``fixed_x`` / ``fixed_y`` / ``fixed_z`` are on ``catom_t`` (issue #19).
 Full API: ``frame_t``, ``iterator_t``, ``builder_t``, ``writer_t``, all six DLPack
