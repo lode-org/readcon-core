@@ -1069,6 +1069,15 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
 /// `Some(n)` with `n >= 2` uses a Rayon pool of that size when the
 /// `parallel` feature is on. Builds without `parallel` always parse
 /// sequentially.
+///
+/// ```
+/// use readcon_core::iterators::frames_from_text;
+/// let text = include_str!("../resources/test/tiny_multi_cuh2.con");
+/// let one = frames_from_text(text, Some(1)).unwrap();
+/// let pool = frames_from_text(text, Some(2)).unwrap();
+/// assert_eq!(one.len(), pool.len());
+/// assert!(one.len() >= 2);
+/// ```
 pub fn frames_from_text(
     text: &str,
     num_threads: Option<usize>,
@@ -2633,6 +2642,16 @@ pub fn count_frames(path: &Path) -> Result<usize, LoadError> {
 ///
 /// More efficient than `read_all_frames` for single-frame access because it
 /// stops parsing after the first frame rather than collecting all of them.
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use readcon_core::iterators::read_first_frame;
+/// let frame = read_first_frame(std::path::Path::new("resources/test/tiny_cuh2.con"))?;
+/// println!("{:?} {}", frame.header.boxl, frame.atom_data.len());
+/// assert!(!frame.atom_data.is_empty());
+/// # Ok(())
+/// # }
+/// ```
 pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;

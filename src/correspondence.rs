@@ -8,6 +8,35 @@
 //!
 //! The cell is [`FrameHeader::cell_matrix`] and [`FrameHeader::pbc_effective`].
 //! The matrix is inverted here; lengths and angles are not rebuilt.
+//!
+//! ```
+//! use readcon_core::types::ConFrameBuilder;
+//! use readcon_core::{
+//!     IdentityCheck, atom_id_permutation, check_atom_id_consistency,
+//!     minimum_image_displacements, reorder_like,
+//! };
+//!
+//! fn frame(rows: &[(u64, &str, f64)]) -> readcon_core::types::ConFrame {
+//!     let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+//!     for (id, symbol, x) in rows {
+//!         builder.add_atom(symbol, *x, 0.0, 0.0, [false; 3], *id, 12.0);
+//!     }
+//!     builder.build().unwrap()
+//! }
+//!
+//! let reactant = frame(&[(1, "C", 0.0), (2, "O", 1.0)]);
+//! let product = frame(&[(2, "O", 1.2), (1, "C", 0.1)]);
+//! let perm = atom_id_permutation(&reactant, &product, IdentityCheck::Strict).unwrap();
+//! assert_eq!(perm, vec![1, 0]);
+//! let ordered = reorder_like(&reactant, &product, IdentityCheck::Strict).unwrap();
+//! assert_eq!(ordered.atom_data[0].atom_id, 1);
+//! assert_eq!(ordered.atom_data[1].atom_id, 2);
+//! check_atom_id_consistency(&[reactant.clone(), product.clone()], IdentityCheck::Strict)
+//!     .unwrap();
+//! let disp = minimum_image_displacements(&reactant, &product, IdentityCheck::Strict).unwrap();
+//! assert_eq!(disp.len(), 2);
+//! assert!((disp[0][0] - 0.1).abs() < 1e-12);
+//! ```
 
 use crate::storage_dtype::{FloatArray1, FloatArray2};
 use crate::types::{Bond, ConFrame, ConFrameBuilder};
