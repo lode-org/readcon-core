@@ -1,3 +1,4 @@
+use crate::correspondence::{self, IdentityCheck};
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
 use crate::types::{ConFrame, ConFrameBuilder, meta};
@@ -87,6 +88,199 @@ pub unsafe extern "C" fn rkr_frame_atom_index_by_id(
         Some(idx) => idx as u64,
         None => u64::MAX,
     }
+}
+
+fn identity_check(strict: u8) -> IdentityCheck {
+    if strict == 0 {
+        IdentityCheck::Lenient
+    } else {
+        IdentityCheck::Strict
+    }
+}
+
+fn correspondence_fail(err: &correspondence::CorrespondenceError) -> RKRStatus {
+    let frame = err.frame_index().unwrap_or(0) as u64;
+    set_last_error(
+        RKRStatus::RKR_STATUS_VALIDATION_ERROR as i32,
+        &err.to_string(),
+        0,
+        frame,
+    );
+    RKRStatus::RKR_STATUS_VALIDATION_ERROR
+}
+
+fn frame_ref<'a>(handle: *const RKRConFrame) -> Option<&'a ConFrame> {
+    unsafe { (handle as *const ConFrame).as_ref() }
+}
+
+/// `perm[i]` is the index in `frame_b` of the atom whose `atom_id` equals
+/// `frame_a`'s atom `i`. `strict == 0` allows mass and fixed-mask
+/// differences. Symbol mismatches, duplicate ids, and missing or extra
+/// ids fail either way. The detail is `rkr_last_error_message`.
+///
+/// # Safety
+/// Both handles are valid. `out_perm` has room for `out_len` `uint64_t`
+/// values when it is non-null. An empty map may pass a null `out_perm`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_atom_id_permutation(
+    frame_a: *const RKRConFrame,
+    frame_b: *const RKRConFrame,
+    strict: u8,
+    out_perm: *mut u64,
+    out_len: usize,
+) -> RKRStatus {
+    let (Some(reference), Some(other)) = (frame_ref(frame_a), frame_ref(frame_b)) else {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    };
+    let perm = match correspondence::atom_id_permutation(reference, other, identity_check(strict)) {
+        Ok(perm) => perm,
+        Err(err) => return correspondence_fail(&err),
+    };
+    if perm.is_empty() {
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
+    if out_perm.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    if out_len < perm.len() {
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
+    }
+    for (i, index) in perm.iter().enumerate() {
+        unsafe { *out_perm.add(i) = *index as u64 };
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
+}
+
+/// Frame B stored in frame A's atom order. The caller owns the handle
+/// and frees it with `free_rkr_frame`. NULL on error; the detail is
+/// `rkr_last_error_message`.
+///
+/// # Safety
+/// Both handles are valid or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_reorder_like(
+    frame_a: *const RKRConFrame,
+    frame_b: *const RKRConFrame,
+    strict: u8,
+) -> *mut RKRConFrame {
+    let (Some(reference), Some(other)) = (frame_ref(frame_a), frame_ref(frame_b)) else {
+        return null_err(RKRStatus::RKR_STATUS_NULL_POINTER);
+    };
+    match correspondence::reorder_like(reference, other, identity_check(strict)) {
+        Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(err) => {
+            correspondence_fail(&err);
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Compare `frames[1..]` with `frames[0]`. On failure writes the first
+/// offending frame index and atom id when the out pointers are non-null,
+/// and returns `RKR_STATUS_VALIDATION_ERROR`. On success those outputs
+/// are `UINT64_MAX` when the pointers are non-null.
+///
+/// # Safety
+/// `frames` points at `nframes` valid frame handles. Out pointers are
+/// null or writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frames_check_atom_ids(
+    frames: *const *const RKRConFrame,
+    nframes: usize,
+    strict: u8,
+    out_frame_index: *mut u64,
+    out_atom_id: *mut u64,
+) -> RKRStatus {
+    if nframes == 0 {
+        write_correspondence_outs(
+            &correspondence::CorrespondenceError::EmptySequence,
+            out_frame_index,
+            out_atom_id,
+        );
+        return correspondence_fail(&correspondence::CorrespondenceError::EmptySequence);
+    }
+    if frames.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let mut refs = Vec::with_capacity(nframes);
+    for i in 0..nframes {
+        let handle = unsafe { *frames.add(i) };
+        let Some(frame) = frame_ref(handle) else {
+            return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+        };
+        refs.push(frame);
+    }
+    match correspondence::check_atom_id_consistency_refs(&refs, identity_check(strict)) {
+        Ok(()) => {
+            if !out_frame_index.is_null() {
+                unsafe { *out_frame_index = u64::MAX };
+            }
+            if !out_atom_id.is_null() {
+                unsafe { *out_atom_id = u64::MAX };
+            }
+            RKRStatus::RKR_STATUS_SUCCESS
+        }
+        Err(err) => {
+            write_correspondence_outs(&err, out_frame_index, out_atom_id);
+            correspondence_fail(&err)
+        }
+    }
+}
+
+fn write_correspondence_outs(
+    err: &correspondence::CorrespondenceError,
+    out_frame_index: *mut u64,
+    out_atom_id: *mut u64,
+) {
+    if !out_frame_index.is_null() {
+        unsafe { *out_frame_index = err.frame_index().unwrap_or(0) as u64 };
+    }
+    if !out_atom_id.is_null() {
+        unsafe { *out_atom_id = err.atom_id().unwrap_or(u64::MAX) };
+    }
+}
+
+/// Row-major `(N, 3)` minimum-image displacements of frame A's atoms
+/// toward the same `atom_id` in frame B. The cell is frame A's.
+/// `out_len` counts doubles and must be at least `3 * N`.
+///
+/// # Safety
+/// Both handles are valid. `out_disp` is writable for `out_len` doubles
+/// when N is not zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_minimum_image_displacements(
+    frame_a: *const RKRConFrame,
+    frame_b: *const RKRConFrame,
+    strict: u8,
+    out_disp: *mut f64,
+    out_len: usize,
+) -> RKRStatus {
+    let (Some(reference), Some(other)) = (frame_ref(frame_a), frame_ref(frame_b)) else {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    };
+    let rows =
+        match correspondence::minimum_image_displacements(reference, other, identity_check(strict))
+        {
+            Ok(rows) => rows,
+            Err(err) => return correspondence_fail(&err),
+        };
+    if rows.is_empty() {
+        return RKRStatus::RKR_STATUS_SUCCESS;
+    }
+    if out_disp.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    if out_len < rows.len().saturating_mul(3) {
+        return note(RKRStatus::RKR_STATUS_BUFFER_TOO_SMALL);
+    }
+    for (i, row) in rows.iter().enumerate() {
+        unsafe {
+            *out_disp.add(i * 3) = row[0];
+            *out_disp.add(i * 3 + 1) = row[1];
+            *out_disp.add(i * 3 + 2) = row[2];
+        }
+    }
+    RKRStatus::RKR_STATUS_SUCCESS
 }
 /// Returns the atomic number for a chemical symbol, or 0 if the symbol
 /// is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and

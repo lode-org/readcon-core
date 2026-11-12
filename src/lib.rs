@@ -2,6 +2,7 @@ pub mod array;
 mod columns;
 pub mod compression;
 pub mod conbin;
+pub mod correspondence;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
 pub mod distrib;
@@ -77,6 +78,11 @@ pub const CON_SPEC_MINOR: u32 = 1;
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub use correspondence::{
+    CorrespondenceError, IdentityCheck, atom_id_permutation, check_atom_id_consistency,
+    minimum_image_delta, minimum_image_displacements, reorder_like,
+};
 
 #[cfg(test)]
 mod tests {

@@ -46,6 +46,7 @@ task.
 | Per-atom ~energies~ section | yes | yes | yes | yes | yes | yes |
 | Symbol <-> Z helpers | yes | ~symbol_to_atomic_number~ / ~atomic_number_to_symbol~ (Z = 92) | yes | ~rkr_symbol_to_z~ / ~rkr_z_to_symbol~ | ~rkr_symbol_to_z~ / ~rkr_z_to_symbol~ | ~readcon::symbol_to_z~ / ~z_to_symbol~ |
 | ~atom_id~ reverse index | ~build_atom_id_index~ | ~build_atom_id_index~ | ~build_atom_id_index~ | ~rkr_frame_atom_index_by_id~ | ~rkr_frame_atom_index_by_id~ | ~ConFrame::atom_index_by_id~ |
+| Atom correspondence by ~atom_id~ | ~atom_id_permutation~ | ~atom_id_permutation~ | n/a | n/a | ~rkr_frame_atom_id_permutation~ | ~ConFrame::atom_id_permutation~ |
 | Coords / forces / velocities / energies as NumPy ndarray | n/a (use AoS) | yes (~numpy~ ndarray + DLPack via NumPy 1.22+) | n/a | n/a | n/a | n/a |
 | Builder DLPack 1.0 export (owned ~DLManagedTensorVersioned~) | yes (~dlpk~) | via NumPy | n/a | yes (all six sections + ~dlpack_inspect~) | yes (~rkr_frame_builder_*_dlpack~ + ~rkr_dlpack_delete~) | yes (same C ABI) |
 | metatensor ~TensorBlock~ export | yes (~metatensor~ feature) | n/a | n/a | yes (opaque ~c_ptr~; link fat lib) | yes (gated C ABI) | yes (same C ABI) |

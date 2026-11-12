@@ -3812,6 +3812,120 @@ pyo3::create_exception!(readcon, InvalidMetadataJson, ConError);
 pyo3::create_exception!(readcon, IndexOutOfBounds, ConError);
 pyo3::create_exception!(readcon, MassMismatch, ConError);
 
+fn correspondence_to_py(err: crate::correspondence::CorrespondenceError) -> PyErr {
+    Python::attach(|py| {
+        let ty = py.get_type::<ValidationError>();
+        let inst = match ty.call1((err.to_string(),)) {
+            Ok(inst) => inst,
+            Err(err) => return err,
+        };
+        let _ = inst.setattr("line", 0u32);
+        if let Some(frame) = err.frame_index() {
+            let _ = inst.setattr("frame_index", frame);
+        }
+        if let Some(atom_id) = err.atom_id() {
+            let _ = inst.setattr("atom_id", atom_id);
+        }
+        if let Some(atom_index) = err.atom_index() {
+            let _ = inst.setattr("atom_index", atom_index);
+        }
+        PyErr::from_value(inst)
+    })
+}
+
+fn identity_check(strict: bool) -> crate::correspondence::IdentityCheck {
+    if strict {
+        crate::correspondence::IdentityCheck::Strict
+    } else {
+        crate::correspondence::IdentityCheck::Lenient
+    }
+}
+
+/// `perm[i]` is the index in `other` of the atom with the same `atom_id`
+/// as `reference` atom `i`.
+///
+/// `strict` (default true) also requires the mass and the fixed mask to
+/// agree. Duplicate ids, missing or extra ids, and a symbol mismatch fail
+/// in both modes. Failures raise `ValidationError` with `frame_index`,
+/// `atom_id`, and `atom_index` attributes when those name the failure.
+#[pyfunction]
+#[pyo3(signature = (reference, other, *, strict=true))]
+fn atom_id_permutation(
+    py: Python<'_>,
+    reference: &PyConFrame,
+    other: &PyConFrame,
+    strict: bool,
+) -> PyResult<Vec<usize>> {
+    let reference = reference.to_con_frame(py)?;
+    let other = other.to_con_frame(py)?;
+    crate::correspondence::atom_id_permutation(&reference, &other, identity_check(strict))
+        .map_err(correspondence_to_py)
+}
+
+/// Return `other` with its atoms stored in `reference` order.
+///
+/// Positions, velocities, forces, and the other per-atom sections move
+/// with each atom. Bond endpoints are remapped.
+#[pyfunction]
+#[pyo3(signature = (reference, other, *, strict=true))]
+fn reorder_like(
+    py: Python<'_>,
+    reference: &PyConFrame,
+    other: &PyConFrame,
+    strict: bool,
+) -> PyResult<PyConFrame> {
+    let reference = reference.to_con_frame(py)?;
+    let other = other.to_con_frame(py)?;
+    let frame = crate::correspondence::reorder_like(&reference, &other, identity_check(strict))
+        .map_err(correspondence_to_py)?;
+    PyConFrame::from_owned(py, frame)
+}
+
+/// Check that every frame names the same atoms as `frames[0]`.
+///
+/// The error is the first frame that disagrees, and the atom. A single
+/// frame checks that its ids are unique.
+#[pyfunction]
+#[pyo3(signature = (frames, *, strict=true))]
+fn check_atom_id_consistency(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    strict: bool,
+) -> PyResult<()> {
+    let rust_frames = py_frames_to_con(py, frames)?;
+    crate::correspondence::check_atom_id_consistency(&rust_frames, identity_check(strict))
+        .map_err(correspondence_to_py)
+}
+
+/// Minimum-image displacement of each reference atom toward the atom in
+/// `other` with the same `atom_id`. Shape `(N, 3)`, reference order.
+///
+/// The cell and the periodic flags are the reference frame's.
+#[pyfunction]
+#[pyo3(signature = (reference, other, *, strict=true))]
+fn minimum_image_displacements<'py>(
+    py: Python<'py>,
+    reference: &PyConFrame,
+    other: &PyConFrame,
+    strict: bool,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let reference = reference.to_con_frame(py)?;
+    let other = other.to_con_frame(py)?;
+    let rows = crate::correspondence::minimum_image_displacements(
+        &reference,
+        &other,
+        identity_check(strict),
+    )
+    .map_err(correspondence_to_py)?;
+    let mut data = Vec::with_capacity(rows.len().saturating_mul(3));
+    for row in rows {
+        data.extend_from_slice(&row);
+    }
+    let array = Array2::from_shape_vec((data.len() / 3, 3), data)
+        .map_err(|e| PyValueError::new_err(format!("displacement shape error: {e}")))?;
+    Ok(array.into_pyarray(py))
+}
+
 fn class_err_to_py(
     py: Python<'_>,
     class_name: &str,
@@ -4197,6 +4311,10 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select_atom_positions_on_frames, m)?)?;
     m.add_function(wrap_pyfunction!(symbol_to_atomic_number, m)?)?;
     m.add_function(wrap_pyfunction!(atomic_number_to_symbol, m)?)?;
+    m.add_function(wrap_pyfunction!(atom_id_permutation, m)?)?;
+    m.add_function(wrap_pyfunction!(reorder_like, m)?)?;
+    m.add_function(wrap_pyfunction!(check_atom_id_consistency, m)?)?;
+    m.add_function(wrap_pyfunction!(minimum_image_displacements, m)?)?;
     Ok(())
 }
 

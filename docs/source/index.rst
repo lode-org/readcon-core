@@ -99,6 +99,7 @@ Site map
 
    getting-started
    howto
+   atom-correspondence
    migrate
    chemfiles-howto
 

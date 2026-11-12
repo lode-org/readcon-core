@@ -278,6 +278,19 @@ class ConFrame {
     /// O(N) per call.
     std::optional<size_t> atom_index_by_id(uint64_t atom_id) const;
 
+    /// `perm[i]` is the index in `other` of this frame's atom `i`.
+    /// `strict` also requires the mass and the fixed mask to agree.
+    std::vector<size_t> atom_id_permutation(const ConFrame &other,
+                                            bool strict = true) const;
+
+    /// `other` stored in this frame's atom order.
+    ConFrame reorder_like(const ConFrame &other, bool strict = true) const;
+
+    /// Minimum-image displacement of each atom toward the same id in
+    /// `other`. The cell is this frame's.
+    std::vector<std::array<double, 3>>
+    minimum_image_displacements(const ConFrame &other, bool strict = true) const;
+
     uint32_t spec_version() const;
     std::string metadata_json() const;
 
@@ -1512,6 +1525,66 @@ ConFrame::atom_index_by_id(uint64_t atom_id) const {
         return std::nullopt;
     }
     return static_cast<size_t>(idx);
+}
+
+inline std::vector<size_t>
+ConFrame::atom_id_permutation(const ConFrame &other, bool strict) const {
+    const size_t n = rkr_frame_atom_count(frame_handle_.get());
+    std::vector<uint64_t> raw(n);
+    throw_on_error(rkr_frame_atom_id_permutation(
+                       frame_handle_.get(), other.frame_handle_.get(),
+                       strict ? 1 : 0, raw.empty() ? nullptr : raw.data(), n),
+                   "ConFrame::atom_id_permutation");
+    std::vector<size_t> perm(n);
+    for (size_t i = 0; i < n; ++i) {
+        perm[i] = static_cast<size_t>(raw[i]);
+    }
+    return perm;
+}
+
+inline ConFrame ConFrame::reorder_like(const ConFrame &other, bool strict) const {
+    RKRConFrame *raw = rkr_frame_reorder_like(
+        frame_handle_.get(), other.frame_handle_.get(), strict ? 1 : 0);
+    if (!raw) {
+        throw Error::from_last("ConFrame::reorder_like");
+    }
+    return ConFrame(raw);
+}
+
+inline std::vector<std::array<double, 3>>
+ConFrame::minimum_image_displacements(const ConFrame &other, bool strict) const {
+    const size_t n = rkr_frame_atom_count(frame_handle_.get());
+    std::vector<double> raw(n * 3);
+    throw_on_error(rkr_frame_minimum_image_displacements(
+                       frame_handle_.get(), other.frame_handle_.get(),
+                       strict ? 1 : 0, raw.empty() ? nullptr : raw.data(),
+                       raw.size()),
+                   "ConFrame::minimum_image_displacements");
+    std::vector<std::array<double, 3>> out(n);
+    for (size_t i = 0; i < n; ++i) {
+        out[i] = {raw[i * 3], raw[i * 3 + 1], raw[i * 3 + 2]};
+    }
+    return out;
+}
+
+/// Frame 0 is the reference. Throws on the first frame that disagrees.
+inline void check_atom_id_consistency(const std::vector<const ConFrame *> &frames,
+                                      bool strict = true) {
+    std::vector<const RKRConFrame *> raw;
+    raw.reserve(frames.size());
+    for (const ConFrame *frame : frames) {
+        if (frame == nullptr || frame->get_handle() == nullptr) {
+            throw Error(static_cast<int32_t>(RKR_STATUS_NULL_POINTER),
+                        "check_atom_id_consistency: null frame", 0, 0);
+        }
+        raw.push_back(frame->get_handle());
+    }
+    uint64_t frame_index = 0;
+    uint64_t atom_id = 0;
+    throw_on_error(
+        rkr_frames_check_atom_ids(raw.empty() ? nullptr : raw.data(), raw.size(),
+                                  strict ? 1 : 0, &frame_index, &atom_id),
+        "check_atom_id_consistency");
 }
 
 inline uint32_t ConFrame::spec_version() const {

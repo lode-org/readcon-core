@@ -11,6 +11,7 @@ How-to — CON I/O by language
 These pages answer **how do I …** once you already know the shape of a CON file
 from the :doc:\`tutorial\`. Pick a language section and copy the block that matches
 your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
+Pairing atoms across frames by column 5 is :doc:`atom-correspondence`.
 
 Requirement words
 -----------------

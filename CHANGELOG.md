@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Features
+
+- Match atoms across frames by `atom_id`. `atom_id_permutation` maps frame B
+  onto frame A. `reorder_like` returns B in A's order and carries positions,
+  velocities, forces, and the other per-atom sections. `check_atom_id_consistency`
+  names the first frame and atom that break a trajectory or NEB band.
+  `minimum_image_displacements` is the periodic displacement of those pairs,
+  using the reference cell. Rust, Python, C, and C++.
+
+### Documentation
+
+- How-to for atom correspondence across frames.
+
+
 ## v0.20.0 - 2026-11-12
 
 ### Features

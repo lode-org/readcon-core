@@ -495,6 +495,67 @@ uint64_t rkr_frame_atom_index_by_id(const struct RKRConFrame *frame_handle,
                                     uint64_t atom_id);
 
 /**
+ * `out_perm[i]` is the index in `frame_b` of the atom whose `atom_id`
+ * equals atom `i` of `frame_a`. `strict == 0` allows a mass or fixed-mask
+ * difference. Duplicate ids, missing or extra ids, and a symbol mismatch
+ * fail either way. The detail is `rkr_last_error_message`.
+ *
+ * `out_len` is the number of `uint64_t` slots. An empty map may pass a
+ * null `out_perm`.
+ *
+ * # Safety
+ * Both handles are valid. `out_perm` is writable for `out_len` values
+ * when it is non-null.
+ */
+enum RKRStatus rkr_frame_atom_id_permutation(const struct RKRConFrame *frame_a,
+                                             const struct RKRConFrame *frame_b,
+                                             uint8_t strict,
+                                             uint64_t *out_perm,
+                                             uintptr_t out_len);
+
+/**
+ * Frame B stored in frame A's atom order. The caller owns the handle
+ * and frees it with `free_rkr_frame`. Returns NULL on error; the detail
+ * is `rkr_last_error_message`.
+ *
+ * # Safety
+ * Both handles are valid or null.
+ */
+struct RKRConFrame *rkr_frame_reorder_like(const struct RKRConFrame *frame_a,
+                                           const struct RKRConFrame *frame_b,
+                                           uint8_t strict);
+
+/**
+ * Compare each frame after the first with `frames[0]`. On failure the
+ * out pointers, when non-null, receive the first offending frame index
+ * and atom id. On success those outputs are `UINT64_MAX`.
+ *
+ * # Safety
+ * `frames` points at `nframes` valid handles. Out pointers are null or
+ * writable.
+ */
+enum RKRStatus rkr_frames_check_atom_ids(const struct RKRConFrame *const *frames,
+                                         uintptr_t nframes,
+                                         uint8_t strict,
+                                         uint64_t *out_frame_index,
+                                         uint64_t *out_atom_id);
+
+/**
+ * Row-major `(N, 3)` minimum-image displacements of frame A's atoms
+ * toward the same `atom_id` in frame B. The cell is frame A's.
+ * `out_len` counts doubles and must be at least `3 * N`.
+ *
+ * # Safety
+ * Both handles are valid. `out_disp` is writable for `out_len` doubles
+ * when N is not zero.
+ */
+enum RKRStatus rkr_frame_minimum_image_displacements(const struct RKRConFrame *frame_a,
+                                                     const struct RKRConFrame *frame_b,
+                                                     uint8_t strict,
+                                                     double *out_disp,
+                                                     uintptr_t out_len);
+
+/**
  * Returns the atomic number for a chemical symbol, or 0 if the symbol
  * is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
  * is case-sensitive: "Fe" works, "fe" does not.

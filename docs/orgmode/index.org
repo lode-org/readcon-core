@@ -103,6 +103,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
 
    getting-started
    howto
+   atom-correspondence
    migrate
    chemfiles-howto
 
