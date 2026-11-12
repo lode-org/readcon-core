@@ -21,7 +21,7 @@
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
-This tree is package version 0.20.0.
+This tree is package version 0.21.0.
 Rare-event codes already checkpoint on CON. This library is the spec and
 the hourglass API so the rest of the atomistic stack reads the same file
 everywhere:
@@ -105,6 +105,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 -   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.
+-   **Correspondence:** `atom_id_permutation`, `reorder_like`, `check_atom_id_consistency`, and `minimum_image_displacements` pair frames by `atom_id` in Rust, Python, C, and C++.
 -   **Corpora:** Pair with [readcon-db](https://github.com/lode-org/readcon-db) (CON-text indexes, dedup, multi-reader; [docs](https://lode-org.github.io/readcon-db/docs/)).
 -   **RPC:** Cap'n Proto behind the `rpc` feature.
 

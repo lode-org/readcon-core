@@ -9,7 +9,8 @@ Python surface those calls correspond to. The snippets are the ones in
 ``tests/python/test_release_examples.py`` and the Rust doctests on
 ``ConFrameReader``, ``ConFrameWriter::from_path_append``, and
 ``unit_conversion_factor``. ``read_positions`` and ``read_coords`` are
-the fast coordinate path.
+the fast coordinate path. The atom correspondence calls pair frames by
+``atom_id``.
 
 .. _py-read-con:
 
@@ -135,6 +136,47 @@ same tuple. ``tables["arrays"]["pos"]`` is ``tables["positions"]``.
 ``stream=True`` decompresses and parses while it reads. ``mmap=True`` keeps
 a plain file of at least 64 KiB mapped. The ASE plugin uses ``stream=True``
 for a forward slice.
+
+.. _py-atom-correspondence:
+
+Atom correspondence
+-------------------
+
+.. code:: python
+
+   readcon.atom_id_permutation(reference, other, *, strict=True)
+   readcon.reorder_like(reference, other, *, strict=True)
+   readcon.check_atom_id_consistency(frames, *, strict=True)
+   readcon.minimum_image_displacements(reference, other, *, strict=True)
+
+These calls pair atoms by column 5, ``atom_id``, and not by row.
+``atom_id_permutation`` returns a ``list[int]``. Entry ``i`` is the index in
+``other`` of the atom with the ``atom_id`` of ``reference`` atom ``i``.
+``reorder_like`` returns a new ``ConFrame``, which is ``other`` in
+``reference`` order. Each atom keeps its position, velocity, force, and
+other per-atom values. Bond endpoints follow the new order.
+``check_atom_id_consistency`` takes a list of frames, such as a trajectory
+or a nudged elastic band (NEB), and returns ``None`` when every frame names the atoms of
+``frames[0]``. A single frame checks that its ids are unique.
+``minimum_image_displacements`` returns a ``float64`` array of shape
+``(N, 3)`` in ``reference`` order. The cell and the periodic flags are the
+reference frame's.
+
+Duplicate ids, a missing or extra id, and a symbol mismatch fail in both
+modes. ``strict=True`` also requires the masses (within ``1e-8``) and the
+fixed masks to agree. ``strict=False`` allows a mass or mask difference.
+A failure raises ``ValidationError``. Its ``frame_index``, ``atom_id``, and
+``atom_index`` attributes are set when the failure names them.
+
+C passes ``strict`` as a ``uint8_t``, with ``0`` for the lenient mass and
+mask check. The C calls are ``rkr_frame_atom_id_permutation``,
+``rkr_frame_reorder_like``, ``rkr_frames_check_atom_ids``, and
+``rkr_frame_minimum_image_displacements``. A C failure leaves the detail in
+``rkr_last_error_message``. The C++ wrappers are
+``ConFrame::atom_id_permutation``, ``ConFrame::reorder_like``,
+``ConFrame::minimum_image_displacements``, and
+``check_atom_id_consistency``. The Rust calls take ``IdentityCheck::Strict``
+or ``IdentityCheck::Lenient``. :doc:`atom-correspondence` is the how-to.
 
 ASE formats
 -----------

@@ -5,20 +5,23 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
-## Unreleased
+## v0.21.0 - 2026-11-12
 
 ### Features
 
 - Match atoms across frames by `atom_id`. `atom_id_permutation` maps frame B
   onto frame A. `reorder_like` returns B in A's order and carries positions,
-  velocities, forces, and the other per-atom sections. `check_atom_id_consistency`
-  names the first frame and atom that break a trajectory or NEB band.
-  `minimum_image_displacements` is the periodic displacement of those pairs,
-  using the reference cell. Rust, Python, C, and C++.
+  velocities, forces, and the other per-atom sections.
+  `check_atom_id_consistency` names the first frame and atom that break a
+  trajectory or NEB band. `minimum_image_displacements` is the periodic
+  displacement of those pairs, using the reference cell. Strict mode, the
+  default, also requires the masses and the fixed masks to agree. Rust, Python,
+  C, and C++.
 
 ### Documentation
 
-- How-to for atom correspondence across frames.
+- How-to for atom correspondence across frames. The Python and C reference
+  lists the four calls and the strict mode.
 
 
 ## v0.20.0 - 2026-11-12
@@ -1355,6 +1358,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.21.0]: https://github.com/lode-org/readcon-core/compare/v0.20.0...v0.21.0
 [v0.20.0]: https://github.com/lode-org/readcon-core/compare/v0.19.0...v0.20.0
 [v0.19.0]: https://github.com/lode-org/readcon-core/compare/v0.18.1...v0.19.0
 [v0.18.1]: https://github.com/lode-org/readcon-core/compare/v0.18.0...v0.18.1
