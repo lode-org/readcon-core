@@ -26,7 +26,18 @@ static int failures = 0;
 
 static char *copy_error(void) {
     const char *msg = rkr_last_error_message();
-    return msg == NULL ? NULL : strdup(msg);
+    size_t n;
+    char *out;
+    if (msg == NULL) {
+        return NULL;
+    }
+    n = strlen(msg);
+    out = malloc(n + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    memcpy(out, msg, n + 1);
+    return out;
 }
 
 static int uniform_atoms(struct RKRConFrame **frames, uintptr_t nframes, uintptr_t *n_atoms) {
