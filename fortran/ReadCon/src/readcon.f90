@@ -54,7 +54,7 @@ module readcon
   ! Package version. Stamped by cogapp from VERSION.
   ! https://cog.readthedocs.io/en/latest/
   ! [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, '  character(len=*), parameter :: readcon_version = "{v}"')]]]
-  character(len=*), parameter :: readcon_version = "0.21.0"
+  character(len=*), parameter :: readcon_version = "0.22.0"
   ! [[[end]]]
 
   type, bind(C), public :: catom_t

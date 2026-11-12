@@ -222,7 +222,7 @@ Version and spec queries
     import readcon
 
     print(readcon.__version__)       # e.g. "0.5.0"
-    print(readcon.CON_SPEC_VERSION)  # 2
+    print(readcon.CON_SPEC_VERSION)  # 3
 
 Usage
 ~~~~~
@@ -751,7 +751,7 @@ CMake FetchContent
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.21.0/readcon-core-cxx-0.21.0.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.22.0/readcon-core-cxx-0.22.0.tar.gz
       URL_HASH SHA256=1c4955c0e51d933d85c3704cd2cc6803505dfc6f1d58af9cecdc321f035f7f0f
     )
     FetchContent_MakeAvailable(readcon-core)

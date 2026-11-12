@@ -12,7 +12,7 @@ license: MIT
 repository-code: "https://github.com/lode-org/readcon-core"
 url: "https://lode-org.github.io/readcon-core"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "version: {v}")]]]
-version: 0.21.0
+version: 0.22.0
 # [[[end]]]
 date-released: "2026-10-31"
 identifiers:

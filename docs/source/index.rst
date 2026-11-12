@@ -30,9 +30,9 @@ CON corpora.
 
 .. code-block:: shell
 
-   pip install 'readcon==0.21.0'          # Python CON I/O
-   # pip install 'readcon-chemfiles==0.21.0'  # + foreign -> CON
-   cargo add readcon-core@0.21.0          # Rust
+   pip install 'readcon==0.22.0'          # Python CON I/O
+   # pip install 'readcon-chemfiles==0.22.0'  # + foreign -> CON
+   cargo add readcon-core@0.22.0          # Rust
    # cargo add readcon-db / pip install readcon-db
 
 Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.

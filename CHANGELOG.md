@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
-## Unreleased
+## v0.22.0 - 2026-11-12
 
 ### Bugfixes
 
@@ -13,19 +13,29 @@ All notable changes to this project will be documented in this file. See [conven
   `arrays["atom_id"]` is that column. A write puts the array back, and numbers
   the atoms `0 .. n-1` only when the array is absent. A later frame stored
   oxygen-first no longer gives a carbon the oxygen mass.
-- `ConFrame.has_velocities` is true when any atom carries a velocity, so an
-  oxygen-first frame keeps a later atom's velocity on the way into ASE.
 - The cachegrind harness test skips when `clang++` cannot see the libstdc++
   headers for rustc's host triple. CI images have those headers, and the
   harness still builds there.
+- `ConFrame.has_velocities` is true when any atom carries a velocity, so an
+  oxygen-first frame keeps a later atom's velocity on the way into ASE.
 
-### Documentation
+### Improved Documentation
 
+- Examples that query the library spec version use 3. The fidelity page names
+  `unavailable`, the status the campaign writes when a tool could not be
+  imported.
+- Python code blocks in the docs are executed as tests. Rust doctests cover
+  atom-id correspondence, parallel frame reads, and the append writer. The C,
+  C++, and Fortran examples are compiled and run.
 - The ASE how-to names `arrays["atom_id"]`, per-frame element order, and the
-  per-axis `FixCartesian` mask.
+  per-axis `FixCartesian` mask. The Python reference shows the install,
+  `ase.io.read` and `ase.io.write` with `format="readcon-con"` or
+  `format="readcon-convel"`, and what a round trip keeps: column 5, per-axis
+  masks, masses, velocities, and every frame.
 - Versions 1, 2, and 3.0 store velocities in the natural time unit. A header
   that says `fs` is not that unit. A rewrite labels the same numbers
-  `(amu*angstrom^2/eV)^0.5`, because minor 1 treats `units.time` as authoritative.
+  `(amu*angstrom^2/eV)^0.5`, because minor 1 treats `units.time` as
+  authoritative.
 
 
 ## v0.21.0 - 2026-11-12
@@ -1381,6 +1391,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.22.0]: https://github.com/lode-org/readcon-core/compare/v0.21.0...v0.22.0
 [v0.21.0]: https://github.com/lode-org/readcon-core/compare/v0.20.0...v0.21.0
 [v0.20.0]: https://github.com/lode-org/readcon-core/compare/v0.19.0...v0.20.0
 [v0.19.0]: https://github.com/lode-org/readcon-core/compare/v0.18.1...v0.19.0
