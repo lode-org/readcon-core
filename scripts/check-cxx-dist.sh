@@ -44,6 +44,27 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
 [[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
+[[ -x scripts/reproducible-tar.sh ]] || die "scripts/reproducible-tar.sh must be executable"
+[[ -x scripts/source-date-epoch.sh ]] || die "scripts/source-date-epoch.sh must be executable"
+[[ -x scripts/record-cxx-wrap.sh ]] || die "scripts/record-cxx-wrap.sh must be executable"
+if ! grep -q 'reproducible-tar.sh' scripts/package-cxx.sh \
+    || ! grep -q 'reproducible-tar.sh' scripts/package-clib.sh \
+    || ! grep -q 'SOURCE_DATE_EPOCH' scripts/package-cxx.sh \
+    || ! grep -q 'SOURCE_DATE_EPOCH' scripts/package-clib.sh \
+    || ! grep -q -- '--sort=name' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--owner=0' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--group=0' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--numeric-owner' scripts/reproducible-tar.sh \
+    || ! grep -q 'gzip -n' scripts/reproducible-tar.sh; then
+    die "cxx and clib archives must use SOURCE_DATE_EPOCH, sorted names, uid 0, and gzip -n"
+fi
+if ! grep -q 'record-cxx-wrap.sh' scripts/release-prep.sh; then
+    die "release-prep.sh must pin the wrap from the slim cxx archive"
+fi
+if ! grep -q 'refusing upload' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'readcon-core.sha256' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must refuse an upload whose digest differs from the wrap pin"
+fi
 [[ -x scripts/check-clib-dist.sh ]] || die "scripts/check-clib-dist.sh must be executable"
 [[ -x scripts/check_wrap_hash.sh ]] || die "scripts/check_wrap_hash.sh must be executable"
 if ! bash scripts/check_wrap_hash.sh; then

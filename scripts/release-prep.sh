@@ -48,6 +48,11 @@ echo "==> docs (orgbld + sphinx) and lychee"
 pixi r -e docs docbld
 pixi r -e docs linkcheck
 
+echo "==> pin the cxx wrap from the reproducible slim tarball"
+# One build writes the digest, the wrap, and the docs. The vendor
+# archive is not this pin. cxx_tarball.yml refuses a different upload.
+bash scripts/record-cxx-wrap.sh
+
 echo "==> C/C++ distribution gate (no cbindgen required)"
 scripts/check-cxx-dist.sh
 
@@ -64,7 +69,8 @@ git add VERSION Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemf
   include/readcon-core.h include/readcon-core-version.h include/readcon-core.hpp \
   cmake/ fortran/ReadCon/fpm.toml fortran/ReadCon/src/readcon.f90 fortran/README.md \
   julia/ReadCon/Project.toml julia/ReadCon/README.md CITATION.cff codemeta.json .zenodo.json \
-  packaging/wrapdb/readcon-core.wrap towncrier.toml readcon_meta.py docs/source docs/orgmode \
+  packaging/wrapdb/readcon-core.wrap packaging/wrapdb/readcon-core.sha256 \
+  packaging/wrapdb/source-date-epoch towncrier.toml readcon_meta.py docs/source docs/orgmode \
   2>/dev/null || true
 
 echo "Ready. Review, then:"

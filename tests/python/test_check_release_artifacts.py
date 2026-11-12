@@ -285,7 +285,7 @@ class ReleaseArtifactGuard(unittest.TestCase):
             text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
             self.assertIn("cygpath -w", text)
             self.assertIn("sys.argv[1]", text)
-            self.assertNotIn("Path(\"'\"$ROOT_DIR\"'", text)
+            self.assertNotIn('Path("\'"$ROOT_DIR"\'', text)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bin_dir = root / "bin"

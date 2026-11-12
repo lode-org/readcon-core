@@ -71,6 +71,18 @@ jobs:
           cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz.sha256" dist-cxx/
           ls -lh dist-cxx build-cxx/slim build-cxx/vendor
 
+      - name: Refuse a wrap pin that is not this build
+        run: |
+          set -euo pipefail
+          ver="$(tr -d '[:space:]' < VERSION)"
+          built="$(tr -d '[:space:]' < "dist-cxx/readcon-core-cxx-${ver}.tar.gz.sha256")"
+          pinned="$(tr -d '[:space:]' < packaging/wrapdb/readcon-core.sha256)"
+          if [ "$built" != "$pinned" ]; then
+            echo "refusing upload: built ${built} != wrap pin ${pinned}" >&2
+            echo "Run scripts/record-cxx-wrap.sh and commit that pin before tagging." >&2
+            exit 1
+          fi
+
       - name: Require tarball names to match the tag
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}

@@ -61,14 +61,25 @@ else
   die "sha256 sidecar '${sidecar}' does not match wrap '${source_hash}'"
 fi
 
-if command -v curl >/dev/null 2>&1; then
-  live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || live=""
-  if [[ -z "$live" ]]; then
-    ok "GitHub Release .sha256 not published yet (tag tarball)"
-  elif [[ "$live" == "$source_hash" ]]; then
-    ok "GitHub Release .sha256 matches wrap source_hash"
+if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
+  asset="$(mktemp)"
+  if curl -fsSL "$source_url" -o "$asset"; then
+    live="$(sha256sum "$asset" | awk '{print $1}')"
+    rm -f "$asset"
+    sidecar_live="$(curl -fsSL "${source_url}.sha256" | awk '{print $1}')" || sidecar_live=""
+    if [[ -n "$sidecar_live" && "$sidecar_live" != "$live" ]]; then
+      die "published ${source_url}.sha256 is '${sidecar_live}', asset is '${live}'"
+    elif [[ -n "$sidecar_live" ]]; then
+      ok "published .sha256 matches the asset"
+    fi
+    if [[ "$live" == "$source_hash" ]]; then
+      ok "published asset ${source_url} matches wrap source_hash"
+    else
+      die "published asset ${source_url} is '${live}', wrap has '${source_hash}'"
+    fi
   else
-    die "live ${source_url}.sha256 is '${live}', wrap has '${source_hash}'"
+    rm -f "$asset"
+    ok "GitHub Release asset not published yet (tag tarball)"
   fi
 fi
 

@@ -94,6 +94,11 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
+# Same archive metadata as the cxx tarball. The shared library bytes are
+# whatever the build produced; the tar header no longer follows the clock.
+SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
+export SOURCE_DATE_EPOCH
+
 detect_host() {
     if command -v rustc >/dev/null 2>&1; then
         rustc -vV | sed -n 's/^host: //p'
@@ -322,8 +327,11 @@ fpm test --flag "\$(pkg-config --cflags readcon-core) -cpp" \\
 this prefix instead of a local \`target/release\`.
 EOF
 
-tar -C "$TMP_DIR" -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
-gzip -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
+bash "$SCRIPT_DIR/reproducible-tar.sh" \
+    "$ROOT_DIR" \
+    "$TMP_DIR" \
+    "$ARCHIVE_NAME" \
+    "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
 SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
