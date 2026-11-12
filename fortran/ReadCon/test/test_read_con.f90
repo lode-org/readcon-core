@@ -110,8 +110,8 @@ program test_read_con
 
   cell = 10.0_real64; ang = 90.0_real64
   bd = new_builder(cell, ang)
-  st = bd%add_atom("O", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 15.999_real64, .false., .false., .false.)
-  st = bd%add_atom("H", 1.0_real64, 0.0_real64, 0.0_real64, 1_int64, 1.008_real64, .true., .false., .false.)
+  st = bd%add_atom("O", 0.0_real64, 0.0_real64, 0.0_real64, .false., .false., .false., 0_int64, 15.999_real64)
+  st = bd%add_atom("H", 1.0_real64, 0.0_real64, 0.0_real64, .true., .false., .false., 1_int64, 1.008_real64)
   st = bd%set_energy(-42.5_real64)
   st = bd%copy_positions(pos)
   if (st /= 0) nfail = nfail + 1
@@ -266,7 +266,7 @@ program test_read_con
     cell = 5.0_real64; ang = 90.0_real64
     bd2 = new_builder(cell, ang)
     if (.not. bd2%valid()) nfail = nfail + 1
-    st5 = bd2%add_atom("C", 0.0_real64, 0.0_real64, 0.0_real64, 0_int64, 12.0_real64, .false., .false., .false.)
+    st5 = bd2%add_atom("C", 0.0_real64, 0.0_real64, 0.0_real64, .false., .false., .false., 0_int64, 12.0_real64)
     st5 = bd2%set_frame_index(3_int64)
     meta = '{"con_spec_version":2}'
     st5 = bd2%set_metadata_json(trim(meta))

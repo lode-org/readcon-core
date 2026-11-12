@@ -127,11 +127,11 @@ contains
       return
     end if
     ! fixed_z is false. The old binding stored that flag as the atom id.
-    st = bd%add_atom("H", 0.0_real64, 0.0_real64, 0.0_real64, 1_int64, 1.008_real64, &
-         .true., .false., .false.)
+    st = bd%add_atom("H", 0.0_real64, 0.0_real64, 0.0_real64, .true., .false., .false., &
+         1_int64, 1.008_real64)
     call require_ok(st, "dup add 1")
-    st = bd%add_atom("H", 1.0_real64, 0.0_real64, 0.0_real64, 1_int64, 1.008_real64, &
-         .false., .true., .false.)
+    st = bd%add_atom("H", 1.0_real64, 0.0_real64, 0.0_real64, .false., .true., .false., &
+         1_int64, 1.008_real64)
     call require_ok(st, "dup add 2")
     fr = bd%build()
     if (.not. fr%valid()) then
@@ -201,9 +201,9 @@ contains
     id_h = 9_int64
 
     bd = new_builder(cell, ang)
-    st = bd%add_atom("Cu", cu_x, cu_y, cu_z, id_cu, cu_m, .true., .false., .true.)
+    st = bd%add_atom("Cu", cu_x, cu_y, cu_z, .true., .false., .true., id_cu, cu_m)
     call require_ok(st, "add_atom Cu")
-    st = bd%add_atom_full("H", h_x, h_y, h_z, id_h, h_m, .false., .true., .false., velocity=vel)
+    st = bd%add_atom_full("H", h_x, h_y, h_z, .false., .true., .false., id_h, h_m, velocity=vel)
     call require_ok(st, "add_atom_full H")
     st = bd%set_metadata_json(trim(units))
     call require_ok(st, "units")

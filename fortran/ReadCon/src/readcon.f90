@@ -557,16 +557,23 @@ module readcon
       type(c_ptr), value :: pb0, pb1, pob0, pob1
       type(c_ptr) :: c_rkr_frame_new
     end function
-    ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
+    ! include/readcon-core.h rkr_frame_add_atom_full:
+    ! builder, symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
     function c_rkr_frame_add_atom_full(b, sym, x, y, z, fx, fy, fz, aid, mass, vel, frc) &
          bind(C, name="rkr_frame_add_atom_full")
       import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
       type(c_ptr), value :: b
       character(kind=c_char), intent(in) :: sym(*)
-      real(c_double), value :: x, y, z, mass
+      real(c_double), value :: x
+      real(c_double), value :: y
+      real(c_double), value :: z
+      logical(c_bool), value :: fx
+      logical(c_bool), value :: fy
+      logical(c_bool), value :: fz
       integer(c_int64_t), value :: aid
-      logical(c_bool), value :: fx, fy, fz
-      type(c_ptr), value :: vel, frc
+      real(c_double), value :: mass
+      type(c_ptr), value :: vel
+      type(c_ptr), value :: frc
       integer(c_int) :: c_rkr_frame_add_atom_full
     end function
     function c_rkr_frame_builder_set_energy(b, e) bind(C, name="rkr_frame_builder_set_energy")
@@ -1377,25 +1384,26 @@ contains
     end if
   end subroutine
 
-  integer function bd_add_atom(self, symbol, x, y, z, atom_id, mass, &
-       fixed_x, fixed_y, fixed_z, velocity)
+  ! Same order as rkr_frame_add_atom_full: fixed flags, then atom id, then mass.
+  integer function bd_add_atom(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+       atom_id, mass, velocity)
     class(builder_t), intent(inout) :: self
     character(len=*), intent(in) :: symbol
     real(real64), intent(in) :: x, y, z, mass
-    integer(int64), intent(in) :: atom_id
     logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    integer(int64), intent(in) :: atom_id
     real(real64), intent(in), optional :: velocity(3)
-    bd_add_atom = bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
-         fixed_x, fixed_y, fixed_z, velocity=velocity)
+    bd_add_atom = bd_add_atom_full(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+         atom_id, mass, velocity=velocity)
   end function
 
-  integer function bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
-       fixed_x, fixed_y, fixed_z, velocity, force)
+  integer function bd_add_atom_full(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+       atom_id, mass, velocity, force)
     class(builder_t), intent(inout) :: self
     character(len=*), intent(in) :: symbol
     real(real64), intent(in) :: x, y, z, mass
-    integer(int64), intent(in) :: atom_id
     logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    integer(int64), intent(in) :: atom_id
     real(real64), intent(in), optional :: velocity(3), force(3)
     character(kind=c_char), allocatable :: cs(:)
     real(c_double), target :: vv(3), ff(3)
