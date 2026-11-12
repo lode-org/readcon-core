@@ -30,6 +30,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- Python `write_con` of a `read_con` result stamps the same header as the C,
+  Fortran, Julia, and MPI writers. The current spec, `con_spec_minor` when the
+  file omitted it, default units when the file omitted them, and the spec 2
+  constraint mask are written. A collective write and a serial write of that
+  result hash the same.
 - A vectorized newline skip now adds those lines to the file line. A parse
   error in a later frame reports that frame's line and index, including when
   several spans fail and the earliest slot is the one the serial walk would

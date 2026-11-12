@@ -1058,9 +1058,7 @@ impl PyConFrame {
         let mut writer = ConFrameWriter::from_path(Path::new(path))
             .map_err(|e| PyIOError::new_err(e.to_string()))?
             .canonical(canonical);
-        writer
-            .write_frame(&frame)
-            .map_err(|e| write_err_to_py(py, e))?;
+        write_stamped_frame(&mut writer, &frame).map_err(|e| write_err_to_py(py, e))?;
         Ok(())
     }
 }
@@ -2960,11 +2958,55 @@ fn flush_writer<W: std::io::Write>(writer: &mut ConFrameWriter<W>) -> PyResult<(
         .map_err(|err| PyIOError::new_err(format!("flush error: {err}")))
 }
 
+/// Write one frame with the header the C, Fortran, and Julia rewrites emit.
+///
+/// The atoms stay on `frame`. The stamp is the current spec, `con_spec_minor`
+/// when the file omitted it, and default units when the file omitted them.
+/// A spec 1 constraint flag is then written as the spec 2 mask. The caller's
+/// frame is left as it was.
+fn write_stamped_frame<W: std::io::Write>(
+    writer: &mut ConFrameWriter<W>,
+    frame: &ConFrame,
+) -> Result<(), crate::writer::WriteError> {
+    let mut stamped = frame.clone();
+    writer.write_frame_binding(&mut stamped)
+}
+
+/// Stored frames from a `read_con` result, in order.
+///
+/// A slot that is still held is cloned. A slot already moved into a Python
+/// frame is rebuilt from that frame. Collective and serial writes of the
+/// same result then start from the same frames.
+fn con_frame_list_stored(
+    py: Python<'_>,
+    list: &Bound<'_, ConFrameList>,
+) -> PyResult<Vec<ConFrame>> {
+    let n = list.borrow().len_frames();
+    let mut out = Vec::with_capacity(n);
+    for index in 0..n {
+        let cloned = {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            slots.get(index).and_then(|slot| slot.clone())
+        };
+        if let Some(frame) = cloned {
+            out.push(frame);
+            continue;
+        }
+        let obj = list.borrow().frame_obj(py, index)?;
+        out.push(obj.borrow(py).to_con_frame(py)?);
+    }
+    Ok(out)
+}
+
 /// Write frames to a .con or .convel file path.
 ///
 /// One frame is converted and written, then dropped, before the next frame
 /// is converted. A `read_con` result is written from the stored frames, so
 /// the write does not build a Python frame per index or a second trajectory.
+/// Those stored frames receive the same header stamp as a C, Fortran, or
+/// Julia rewrite, and a collective write of the same result uses those
+/// frames too, so the serial file and the collective file hash the same.
 /// The caller keeps the input frames. The writer buffer is flushed before
 /// this function returns.
 ///
@@ -3003,7 +3045,14 @@ fn write_con(
                 "comm= writes uncompressed, non-canonical output only",
             ));
         }
-        let rust_frames = py_frames_to_rust(py, frames)?;
+        // A read_con result keeps the parser's frames. Rebuilding each one
+        // through ConFrameBuilder changes the bytes the collective writer
+        // hashes against the serial write of the same result.
+        let rust_frames = if let Ok(list) = frames.cast::<ConFrameList>() {
+            con_frame_list_stored(py, list)?
+        } else {
+            py_frames_to_rust(py, frames)?
+        };
         return write_con_mpi(py, path, &rust_frames, precision, comm, mode);
     }
     if append && !matches!(codec, OutputCodec::Plain) {
@@ -3025,9 +3074,7 @@ fn write_con(
             }
             .canonical(canonical);
             stream_frames(py, frames, |frame| {
-                writer
-                    .write_frame(frame)
-                    .map_err(|e| write_err_to_py(py, e))
+                write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
             })?;
             flush_writer(&mut writer)
         }
@@ -3046,9 +3093,7 @@ fn write_con(
                 }
                 .canonical(canonical);
                 stream_frames(py, frames, |frame| {
-                    writer
-                        .write_frame(frame)
-                        .map_err(|e| write_err_to_py(py, e))
+                    write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
                 })?;
                 flush_writer(&mut writer)
             }
@@ -3080,9 +3125,7 @@ fn write_con(
             }
             .canonical(canonical);
             stream_frames(py, frames, |frame| {
-                writer
-                    .write_frame(frame)
-                    .map_err(|e| write_err_to_py(py, e))
+                write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
             })?;
             flush_writer(&mut writer)
         }
@@ -3155,9 +3198,7 @@ fn write_con_string(
         }
         .canonical(canonical);
         stream_frames_range(py, frames, start, stop, |frame| {
-            writer
-                .write_frame(frame)
-                .map_err(|e| write_err_to_py(py, e))
+            write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
         })?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))

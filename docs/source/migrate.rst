@@ -27,6 +27,10 @@ string object.
 ``write_con`` streams one frame at a time and flushes before it returns.
 ``append=True`` extends an uncompressed file. ``.gz`` and ``.zst`` select the
 codec from the extension. ``write_con_string`` takes ``start`` and ``stop``.
+A ``read_con`` result is written with the same header as the C, Fortran, and
+Julia rewrites: the current spec, ``con_spec_minor`` when the file omitted it,
+default units when the file omitted them, and the spec 2 constraint mask.
+A collective write of that result matches the serial write.
 
 The ASE formats are the ``ase-readcon`` package, entry point group
 ``ase.ioformats``, names ``readcon-con`` and ``readcon-convel``.

@@ -47,8 +47,10 @@ text when the stream is plain CON.
 
 One frame is converted and written, then dropped, before the next frame is
 converted. A ``read_con`` result is written from the stored frames, so the
-write does not build a Python frame per index. The writer buffer is flushed
-before the function returns.
+write does not build a Python frame per index. Those frames receive the same
+header stamp as the C, Fortran, and Julia rewrites, and ``comm=`` writes that
+same stored result, so the serial file and the collective file match. The
+writer buffer is flushed before the function returns.
 
 ``compression`` is ``None`` to take the codec from the extension
 (``.gz`` gzip, ``.zst`` zstd), or ``"gzip"``, ``"zstd"``, or ``"none"``.
@@ -64,7 +66,8 @@ A ``.zst`` write needs a build with the ``zstd`` feature.
                             start=0, stop=None)
 
 ``start`` and ``stop`` are a half-open index range. A ``read_con`` result in
-that range is written from the stored frames.
+that range is written from the stored frames, with the same header stamp as
+``write_con``.
 
 ``read_extxyz`` and ``write_extxyz``
 -------------------------------------
