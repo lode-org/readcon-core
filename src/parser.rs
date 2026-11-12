@@ -1996,6 +1996,7 @@ pub fn parse_velocity_section<'a>(
 /// `fx fy fz fixed_flag atom_id`).
 ///
 /// Returns `Ok(true)` if forces were found and parsed, `Ok(false)` otherwise.
+#[inline(never)]
 pub fn parse_force_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
@@ -2007,6 +2008,7 @@ pub fn parse_force_section<'a>(
     }
 
     let mut atom_idx: usize = 0;
+    let mut forces = Vec::with_capacity(atom_data.len());
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
             .next_line()
@@ -2032,11 +2034,12 @@ pub fn parse_force_section<'a>(
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
             if atom_idx < atom_data.len() {
-                atom_data[atom_idx].set_force(Some(vals));
+                forces.push(vals);
             }
             atom_idx += 1;
         }
     }
+    crate::types::apply_parsed_forces(atom_data, &forces);
 
     Ok(true)
 }
