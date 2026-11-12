@@ -451,7 +451,6 @@ Table~\ref{tab:format-context} is context for choosing a format.
 readcon reads neither XYZ nor HDF5.
 \input{figures/generated/host_macros}
 h5py reads the same frames in \rcHdfMedian~s.
-The all-frames tip arm takes \rcTipMedian~s on the coordinate file.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
@@ -787,6 +786,26 @@ $10^{6}$ $\times$ 1 & 0.4545 & 0.1501 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\section{Recorded reader exchange}
+The extended XYZ session runs every reader in one process, with the arms interleaved.
+The harness is a Snakemake rule called from an asv class.
+The files larger than ten atoms are generated for the session and are not stored in the tree.
+No CPU governor is visible on the host.
+
+\section{Short-decimal session}
+On the 160-frame file the medians are \SI{2.90}{\milli\second} for the Eisel--Lemire build, \SI{2.84}{\milli\second} for the short-decimal build, and \SI{8.83}{\milli\second} for the coordinate loop.
+On the 600-frame file they are \SI{16.3}{\milli\second}, \SI{15.5}{\milli\second} and \SI{52.3}{\milli\second}.
+The short path is $1.02$ and $1.05$ times the Eisel--Lemire build, and $3.11$ and $3.37$ times the coordinate loop.
+The Eisel--Lemire build is already $3.04$ and $3.21$ times that loop.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/fastpath.pdf}
+\caption{Short-decimal and Eisel--Lemire reads.
+The whisker runs from the first quartile to the third.}
+\label{fig:fast}
+\end{figure}
 
 \section{Short-decimal comparison}
 \label{sec:fast-table}
