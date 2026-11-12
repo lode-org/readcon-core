@@ -4392,6 +4392,129 @@ pub unsafe extern "C" fn rkr_read_all_frames_n_threads(
     }
 }
 
+/// Opaque owner of a coordinate column. The allocation is [`PositionOwned`].
+pub struct RKRPositionBlock {
+    _private: [u8; 0],
+}
+
+struct PositionOwned {
+    values: Vec<f64>,
+    n_frames: usize,
+    n_atoms: usize,
+}
+
+/// Coordinates of every frame, one row-major `f64` buffer from the column walker.
+///
+/// `*n_frames` and `*n_atoms` are set on success. The caller owns the
+/// returned handle and frees it with [`rkr_free_position_block`]. Values
+/// are borrowed with [`rkr_position_block_values`] until that free. A file
+/// whose frames do not share one atom count fails the same way
+/// [`crate::iterators::read_positions_with_threads`] does. `n_threads == 0`
+/// and `n_threads == 1` parse on the calling thread. `n_threads >= 2`
+/// reparses each recorded span on a Rayon pool when `parallel` is on.
+///
+/// Returns NULL on error. `rkr_last_error` carries the same class, message,
+/// line, and frame as [`rkr_read_all_frames`] for a file that reader rejects.
+///
+/// # Safety
+/// `filename_c`, `n_frames`, and `n_atoms` must be valid. The caller takes
+/// ownership of the returned handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_positions_n_threads(
+    filename_c: *const c_char,
+    n_frames: *mut usize,
+    n_atoms: *mut usize,
+    n_threads: usize,
+) -> *mut RKRPositionBlock {
+    if filename_c.is_null() || n_frames.is_null() || n_atoms.is_null() {
+        return null_err::<RKRPositionBlock>(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let filename = match unsafe { CStr::from_ptr(filename_c).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
+                &e.to_string(),
+                0,
+                0,
+            );
+            return ptr::null_mut();
+        }
+    };
+    let threads = if n_threads == 0 {
+        None
+    } else {
+        Some(n_threads)
+    };
+    match iterators::read_positions_with_threads(Path::new(filename), threads) {
+        Ok(block) => {
+            unsafe {
+                *n_frames = block.n_frames;
+                *n_atoms = block.n_atoms;
+            }
+            Box::into_raw(Box::new(PositionOwned {
+                n_frames: block.n_frames,
+                n_atoms: block.n_atoms,
+                values: block.values,
+            })) as *mut RKRPositionBlock
+        }
+        Err(err) => {
+            note_boxed(err);
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Like [`rkr_read_positions_n_threads`] on the calling thread.
+///
+/// # Safety
+/// Same contract as [`rkr_read_positions_n_threads`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_read_positions(
+    filename_c: *const c_char,
+    n_frames: *mut usize,
+    n_atoms: *mut usize,
+) -> *mut RKRPositionBlock {
+    unsafe { rkr_read_positions_n_threads(filename_c, n_frames, n_atoms, 1) }
+}
+
+/// Row-major `x y z` pointer for a block from [`rkr_read_positions`].
+///
+/// The pointer is valid until [`rkr_free_position_block`]. NULL when
+/// `block` is NULL.
+///
+/// # Safety
+/// `block` is null or a live handle from [`rkr_read_positions`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_position_block_values(block: *const RKRPositionBlock) -> *const f64 {
+    if block.is_null() {
+        return ptr::null();
+    }
+    let owned = unsafe { &*(block as *const PositionOwned) };
+    debug_assert_eq!(
+        owned.values.len(),
+        owned
+            .n_frames
+            .saturating_mul(owned.n_atoms)
+            .saturating_mul(3)
+    );
+    owned.values.as_ptr()
+}
+
+/// Frees a handle from [`rkr_read_positions`]. NULL is a no-op.
+///
+/// # Safety
+/// `block` is null or the pointer returned by [`rkr_read_positions`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_free_position_block(block: *mut RKRPositionBlock) {
+    if block.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(block as *mut PositionOwned));
+    }
+}
+
 /// Pack owned frames into a C array (`len == capacity`) and write `num_frames`.
 pub(crate) fn pack_frame_handles(
     frames: Vec<ConFrame>,

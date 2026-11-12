@@ -596,4 +596,66 @@ mod tests {
             "fallback {fallback}, expected exponents, long mantissas, and non-finite spellings"
         );
     }
+
+    #[test]
+    fn edge_tokens_match_fast_float_or_decline() {
+        for token in [
+            "-0.0",
+            "-0.00000000",
+            "0.0",
+            "-0",
+            "1e-10",
+            "1E+20",
+            "1.0e-320",
+            "2.2250738585072014e-308",
+            "1234567890123456789",
+            "12345678901234567890",
+            "inf",
+            "-Infinity",
+            "nan",
+            "1.0000000000000002",
+            "63.546000",
+            "  -2.5",
+        ] {
+            let _ = agree(token.as_bytes(), 0);
+        }
+    }
+
+    #[test]
+    fn corpus_coordinate_tokens_match_fast_float_or_decline() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        for dir in [
+            "resources/conformance/valid",
+            "resources/test",
+            "resources/examples",
+        ] {
+            let dir = root.join(dir);
+            if !dir.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                let name = path.file_name().unwrap().to_string_lossy();
+                if !(name.ends_with(".con") || name.ends_with(".convel")) {
+                    continue;
+                }
+                let bytes = std::fs::read(&path).unwrap();
+                let mut i = 0usize;
+                while i < bytes.len() {
+                    if bytes[i].is_ascii_digit()
+                        || bytes[i] == b'-'
+                        || bytes[i] == b'+'
+                        || bytes[i] == b'.'
+                    {
+                        let _ = agree(&bytes, i);
+                        while i < bytes.len() && !bytes[i].is_ascii_whitespace() {
+                            i += 1;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
+    }
 }

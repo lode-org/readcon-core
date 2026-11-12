@@ -5,7 +5,9 @@
 //! ```
 //!
 //! `default` calls [`readcon_core::iterators::read_all_frames`].
-//! `one` calls that read with a single worker. Repeats default to 6.
+//! `one` calls that read with a single worker.
+//! `positions` calls [`readcon_core::iterators::read_positions_with_threads`]
+//! on one thread, which is the column walker. Repeats default to 6.
 //! One untimed call runs first and is not a sample. The samples are
 //! the timed calls, in order.
 
@@ -19,6 +21,11 @@ fn read_frames(path: &Path, mode: &str) -> usize {
         "one" => readcon_core::iterators::read_all_frames_with_threads(path, Some(1))
             .expect("read")
             .len(),
+        "positions" => {
+            readcon_core::iterators::read_positions_with_threads(path, Some(1))
+                .expect("read")
+                .n_frames
+        }
         _ => readcon_core::iterators::read_all_frames(path)
             .expect("read")
             .len(),
@@ -28,7 +35,7 @@ fn read_frames(path: &Path, mode: &str) -> usize {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("usage: serial_probe FILE OUT.json [REPEATS] [default|one]");
+        eprintln!("usage: serial_probe FILE OUT.json [REPEATS] [default|one|positions]");
         std::process::exit(2);
     }
     let path = Path::new(&args[1]);
