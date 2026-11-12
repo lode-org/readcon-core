@@ -13,6 +13,24 @@
 
 @@rst::doc:`The frequently asked questions <faq>`@@ explain what a code gains by moving onto .con, and what =readcon-db=, the frame application programming interface (API) and the plotting tools add.
 
+* Moving to 0.19
+
+=read_all_frames= and =read_con= without =n_threads= stay on the calling
+thread. Pass =n_threads= of 2 or more for a Rayon pool. The older docs
+that described a 48 KiB automatic pool do not match this reader.
+
+=read_extxyz= returns a dict with =positions=, =masses=, =cell=, =species=,
+and =arrays=. It used to return a tuple of the three numeric arrays.
+Index the dict. =species= rows are tuples, and a repeated symbol is one
+string object.
+
+=write_con= streams one frame at a time and flushes before it returns.
+=append=True= extends an uncompressed file. =.gz= and =.zst= select the
+codec from the extension. =write_con_string= takes =start= and =stop=.
+
+The ASE formats are the =ase-readcon= package, entry point group
+=ase.ioformats=, names =readcon-con= and =readcon-convel=.
+
 * One-command convert (CLI)
 
 Build with chemfiles when the input is not already CON:

@@ -123,6 +123,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    spec
    implementation-notes
    bindings
+   python-api
    chemfiles-reference
    rpc
    mpi

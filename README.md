@@ -21,7 +21,7 @@
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
-This tree is package version 0.18.1.
+This tree is package version 0.19.0.
 Rare-event codes already checkpoint on CON. This library is the spec and
 the hourglass API so the rest of the atomistic stack reads the same file
 everywhere:
@@ -97,7 +97,9 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
     auto-detect on legacy `.convel` without a `sections` key.
 -   **Lazy iteration:** `ConFrameIterator`; `next_with_raw_span` keeps the on-disk blob for corpus ingest.
 -   **Hot path:** [fast-float2](https://github.com/aldanor/fast-float-rust), [memmap2](https://docs.rs/memmap2), Cachegrind-tracked scenarios.
--   **Parallel frames:** Rayon behind the `parallel` Cargo feature.
+-   **Parallel frames:** Rayon behind the `parallel` Cargo feature. Pass `n_threads` of 2 or more. The default read stays on the calling thread. Equal-length frames skip the serial header walk.
+-   **Writers:** append an uncompressed file, flush the 8 KiB buffer, and stream one Python frame at a time. `.gz` and `.zst` select the codec.
+-   **ASE:** the `ase-readcon` package registers `readcon-con` and `readcon-convel` on `ase.ioformats`.
 -   **Bindings:** Python (PyO3), Julia (ccall), C (shipped header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [metatensor](https://github.com/metatensor/metatensor).
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.

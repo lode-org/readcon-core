@@ -77,8 +77,11 @@ task.
     | Chemfiles import / selection                                   | yes (``chemfiles`` feature)                    | ``select_on_frame`` / ``select_atom_indices``                      | ``select_on_frame`` / ``select_atom_indices`` (FFI; chemfiles lib) | ``rkr_frame_select`` / ``read_chemfiles_first``                  | ``rkr_frame_select``                                              | ``ConFrame::select``                       |
     +----------------------------------------------------------------+------------------------------------------------+--------------------------------------------------------------------+--------------------------------------------------------------------+------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------+
 
+The Rust and Python stream readers decode zstd input only when compiled with the ``zstd`` feature.
+
 **Appending and in-memory writes.** ``ConFrameWriter::from_path_append``
-opens an existing uncompressed file at the end. ``ConFrameWriter::flush``
+opens an existing uncompressed file at the end. Each ``write_frame`` fills
+a one-frame scratch buffer and an 8 KiB ``BufWriter``. ``ConFrameWriter::flush``
 makes the bytes written so far parseable before the writer is dropped.
 ``write_frames_to_string`` returns those bytes and does not create a file.
 The same three calls are ``write_con(..., append=True)`` (flush is on
@@ -674,7 +677,7 @@ CMake FetchContent
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.18.1/readcon-core-cxx-0.18.1.tar.gz
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.19.0/readcon-core-cxx-0.19.0.tar.gz
       URL_HASH SHA256=2472eb5782a12dd61f847e26629587a57b3c1b5aa52de66e93c4caaa383e164a
     )
     FetchContent_MakeAvailable(readcon-core)

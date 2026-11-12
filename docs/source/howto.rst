@@ -314,13 +314,20 @@ larger files.
 Parallel parsing
 ~~~~~~~~~~~~~~~~
 
-Behind the ``parallel`` feature gate, multi-frame files can be parsed
-concurrently using rayon. ``read_all_frames`` (and the C symbol
-``rkr_read_all_frames``) turns that path on automatically for files of
-at least 48 KiB. ``read_all_frames_with_threads`` /
-``rkr_read_all_frames_n_threads`` / ``readcon.read_con(..., n_threads=n)``
-pin the worker count: ``1`` is sequential, ``n >`` 2= is a Rayon pool,
-``0=/=None`` is the automatic policy.
+The ``parallel`` feature parses many frames on a Rayon pool. Python wheels
+enable it. ``read_all_frames``, ``read_con`` with ``n_threads`` omitted, and
+``rkr_read_all_frames`` stay on the calling thread. There is no file-size
+cutoff that starts workers for you. A pool helps when the file has many
+frames and the coordinate parse is the cost. One frame does not pay for
+workers: starting a pool made that read slower.
+
+``None``, ``0``, and ``1`` are the calling thread. ``n >= 2`` is a pool of that
+size. Equal-length frames, including a whitespace tail, use equal-span
+boundaries, so the caller does not walk every header. Frames that do not
+share a length still walk headers on the caller, then parse the spans on
+the pool. A plain file of 64 KiB or more stays mapped. Smaller files, and
+gzip or zstd input, are read into one buffer. The unit table is built once
+and reused by the serial iterator, the C reader, and this pool.
 
 .. code:: rust
 
@@ -336,8 +343,8 @@ Python (wheels enable ``parallel``):
 
 .. code:: python
 
-    frames = readcon.read_con("large_trajectory.con")            # auto
-    seq = readcon.read_con("large_trajectory.con", n_threads=1)  # sequential
+    frames = readcon.read_con("large_trajectory.con")
+    seq = readcon.read_con("large_trajectory.con", n_threads=1)
     pinned = readcon.read_con("large_trajectory.con", n_threads=8)
     assert readcon.has_parallel_support()
 
@@ -352,6 +359,127 @@ C (published prefix is built with ``parallel``):
     if (!rkr_has_parallel_support()) {
         /* seq and pool are the same sequential path */
     }
+
+Appending, flushing, and buffering
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ConFrameWriter`` keeps one frame of text in a scratch buffer and writes
+that buffer through ``std::io::BufWriter`` (8 KiB). ``write_frame`` does not
+always reach the file. ``flush`` does, and dropping the writer flushes too.
+After ``flush`` returns, a reader sees a complete prefix.
+
+``OpenMode::Append`` and ``from_path_append`` extend an uncompressed file.
+A missing file is created. A non-empty file that does not end in a newline
+receives one. Gzip and zstd paths are refused. Python ``write_con(..., append=True)``
+streams one frame at a time and flushes before it returns. C is
+``create_writer_from_path_append_c`` and ``rkr_writer_flush``.
+
+.. code:: rust
+
+    use readcon_core::writer::ConFrameWriter;
+    let mut writer = ConFrameWriter::from_path_append("run.con").unwrap();
+    writer.write_frame(&frame).unwrap();
+    writer.flush().unwrap();
+
+.. code:: python
+
+    readcon.write_con("run.con", frames)
+    readcon.write_con("run.con", more, append=True)
+
+.. code:: c
+
+    RKRConFrameWriter *writer = create_writer_from_path_append_c("run.con");
+    rkr_writer_extend(writer, frames, n);
+    rkr_writer_flush(writer);
+    free_rkr_writer(writer);
+
+Compression by extension, and stdin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A path ending in ``.gz`` is gzip and ``.zst`` is zstd, on read and on write.
+The same choice is the magic bytes at the start of a read. Pass
+``compression="gzip"``, ``"zstd"``, or ``"none"`` to ``write_con`` to override the
+extension. A ``.zst`` write needs the ``zstd`` Cargo feature.
+``append=True`` is only for an uncompressed file.
+
+``ConFrameReader::new`` takes any ``std::io::Read``. Standard input is that
+reader. A fifo opened by path is not mapped: the path readers take the
+buffered branch for anything that is not a regular file of at least 64 KiB.
+Python ``read_con_string`` parses text you already read, including
+``sys.stdin.read()``.
+
+.. code:: rust
+
+    use readcon_core::stream::ConFrameReader;
+    use std::io::stdin;
+    for frame in ConFrameReader::new(stdin().lock()) {
+        let frame = frame.unwrap();
+        println!("{}", frame.atom_data.len());
+    }
+
+.. code:: python
+
+    import sys
+    import readcon
+    text = sys.stdin.read()
+    frames = readcon.read_con_string(text)
+    readcon.write_con("copy.con.gz", frames)
+
+Units
+~~~~~
+
+A CON ``units`` object names length, energy, and the other quantities.
+``unit_conversion_factor(from, to)`` returns the multiplier that takes a
+value in ``from`` into ``to``. The name table is built once per process.
+Readers share it, including the C reader and a parallel parse.
+Versions 1, 2, and 3.0 store velocities in the natural time unit.
+From minor 1, ``units.time`` is the velocity time unit.
+
+.. code:: rust
+
+    use readcon_core::units::unit_conversion_factor;
+    let meters = unit_conversion_factor("angstrom", "m").unwrap();
+
+.. code:: python
+
+    frame.metadata["units"] = {"length": "angstrom", "energy": "eV"}
+    text = readcon.write_con_string([frame])
+    assert readcon.read_con_string(text)[0].metadata["units"]["length"] == "angstrom"
+
+Extended XYZ
+~~~~~~~~~~~~
+
+``read_extxyz`` returns a dict. ``positions`` has shape ``(frames, atoms, 3)``,
+``masses`` is ``(frames, atoms)``, ``cell`` is ``(frames, 6)``, and ``species`` is
+one tuple of symbols per frame. ``arrays`` holds every per-atom column.
+A repeated symbol is one string, and a frame whose symbols match the
+previous frame is that same tuple. ``arrays["pos"]`` is ``positions``.
+``write_extxyz`` writes that dict back. A caller that unpacked a tuple
+from an older ``read_extxyz`` should index the dict.
+
+ASE plugin
+~~~~~~~~~~
+
+The ``ase-readcon`` package registers ``readcon-con`` and ``readcon-convel``
+on the ``ase.ioformats`` entry point. ASE loads that group when
+``ase.io.read`` or ``ase.io.write`` sees the format name.
+
+.. code:: shell
+
+    pip install readcon
+    pip install -e ase-readcon
+
+.. code:: python
+
+    from ase.io import read, write
+    images = read("run.con", index=":", format="readcon-con")
+    write("again.con", images, format="readcon-con")
+    write("again.convel", images, format="readcon-convel")
+
+A read walks ``iter_con(stream=True)`` unless the slice needs a length, in
+which case it uses ``count_frames`` and ``ConTrajectory``. A geometry write of
+one species uses ``write_coords``. Velocities and ``append=True`` go through
+``write_con``.
 
 Python
 ------
