@@ -7,7 +7,8 @@ kept in memory. ``round_trip`` is what ``readcon.read_con`` finds in the file
 the tool wrote. Both columns use the same words: ``exact``,
 ``within_tolerance``, ``reordered``, ``mismatch``, ``label_changed``,
 ``absent``, ``not_representable``, ``read_error``, ``write_error``,
-``not_installed``.
+``unavailable``. ``unavailable`` means the tool could not be imported.
+chemfiles, ASE, and eOn are optional.
 
 Fixtures, under ``bench/fidelity/fixtures/``:
 

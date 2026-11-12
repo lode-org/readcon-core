@@ -40,7 +40,7 @@ Rust
     use readcon_core::{CON_SPEC_VERSION, VERSION};
 
     // Library version
-    assert_eq!(CON_SPEC_VERSION, 2);
+    assert_eq!(CON_SPEC_VERSION, 3);
     println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
 
     // Per-frame version (from parsed file)
@@ -84,7 +84,7 @@ Python
 
     # Library version
     print(readcon.__version__)       # e.g. "0.6.0"
-    print(readcon.CON_SPEC_VERSION)  # 2
+    print(readcon.CON_SPEC_VERSION)  # 3
 
     # Per-frame version (from parsed file)
     frames = readcon.read_con("input.con")
@@ -139,7 +139,7 @@ Python: reading and attaching metadata
     frame = readcon.ConFrame(
         cell=[10.0, 10.0, 10.0],
         angles=[90.0, 90.0, 90.0],
-        atoms=[...],
+        atoms=[readcon.Atom("H", 0.0, 0.0, 0.0, atom_id=1, mass=1.0)],
     )
     frame.set_energy(-42.5)
     frame.set_frame_index(5)

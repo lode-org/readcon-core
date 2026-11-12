@@ -5,12 +5,12 @@ Python and C reference
 Rust items are documented on the types themselves. ``cargo doc --features python,parallel,zstd --no-deps``
 builds that reference. The C header ``include/readcon-core.h`` and the C++ header
 ``include/readcon-core.hpp`` document each exported function. This page is the
-Python surface those calls correspond to. The snippets are the ones in
-``tests/python/test_release_examples.py`` and the Rust doctests on
-``ConFrameReader``, ``ConFrameWriter::from_path_append``, and
-``unit_conversion_factor``. ``read_positions`` and ``read_coords`` are
-the fast coordinate path. The atom correspondence calls pair frames by
-``atom_id``.
+Python surface those calls correspond to. The snippets are executed by ``tests/python/test_doc_snippets.py`` and
+``tests/python/test_release_examples.py``. The Rust doctests cover
+``ConFrameReader``, ``ConFrameWriter::from_path_append``,
+``frames_from_text``, ``read_first_frame``, ``unit_conversion_factor``,
+and the ``atom_id`` correspondence helpers. ``read_positions`` and
+``read_coords`` are the fast coordinate path.
 
 .. _py-read-con:
 
@@ -195,14 +195,44 @@ Install ``ase-readcon`` next to ``readcon``. Its ``pyproject.toml`` publishes:
    readcon-con = "ase_readcon.io:readcon_con_format"
    readcon-convel = "ase_readcon.io:readcon_convel_format"
 
-ASE loads the ``ase.ioformats`` group. The format names are ``readcon-con``
-and ``readcon-convel``.
+Install both packages, then ASE loads the ``ase.ioformats`` group:
+
+.. code:: shell
+
+   pip install readcon ase
+   pip install -e ase-readcon
+
+The format names are ``readcon-con`` and ``readcon-convel``. A read of
+``index=":"`` returns every frame. A geometry file uses ``readcon-con``.
+A file with velocities uses ``readcon-convel``, and that writer keeps the
+velocities. Column 5 is ``arrays["atom_id"]``. A missing array is written
+as ``0 .. n-1``. ASE tags are not column 5. A hold on every axis is
+``FixAtoms``. A hold on some axes is ``FixCartesian`` with that mask.
+Masses are the per-atom masses from the file, including a later frame
+whose element order differs. The example below builds two frames, one
+atom fixed on every axis and one fixed on z only, then reads them back.
 
 .. code:: python
 
+   import readcon
+   from ase.constraints import FixAtoms, FixCartesian
    from ase.io import read, write
+
+   cu = readcon.Atom("Cu", 0.0, 0.0, 0.0, fixed=[True, True, True], atom_id=4, mass=63.546)
+   h = readcon.Atom("H", 1.2, 0.0, 0.0, fixed=[False, False, True], atom_id=9, mass=1.008)
+   h.vx, h.vy, h.vz = 0.1, 0.0, 0.0
+   frame = readcon.ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [cu, h])
+   readcon.write_con("run.con", [frame, frame])
    images = read("run.con", index=":", format="readcon-con")
+   assert len(images) == 2
+   assert list(images[0].arrays["atom_id"]) == [4, 9]
+   assert abs(images[0].get_masses()[0] - 63.546) < 1e-6
+   assert any(isinstance(c, FixAtoms) for c in images[0].constraints)
+   assert any(isinstance(c, FixCartesian) for c in images[0].constraints)
    write("again.convel", images, format="readcon-convel")
+   back = read("again.convel", index=":", format="readcon-convel")
+   assert list(back[1].arrays["atom_id"]) == [4, 9]
+   assert back[1].get_velocities()[1][0] != 0.0
 
 C writer calls
 --------------
