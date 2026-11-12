@@ -13,9 +13,9 @@ Requirement words
 
 The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
 
-`tutorial <chemfiles-tutorial.rst>`_; for tasks see `how-to <chemfiles-howto.rst>`_; for rationale see
-`explanation <chemfiles-explain.rst>`_. Binding-wide matrices live in `bindings <bindings.rst>`_; on-disk ``bonds``
-key in `spec <spec.rst>`_.
+:doc:`chemfiles-tutorial`; for tasks see :doc:`chemfiles-howto`; for rationale see
+:doc:`chemfiles-explain`. Binding-wide matrices live in :doc:`bindings`; on-disk ``bonds``
+key in :doc:`spec`.
 
 Feature and install matrix
 --------------------------
@@ -184,7 +184,7 @@ CON metadata keys (topology / sidecars)
     | ``chemfiles::…``              | Unmapped frame properties                                             |
     +-------------------------------+-----------------------------------------------------------------------+
 
-See `spec <spec.rst>`_ § frame topology for normative wording.
+See :doc:`spec` § frame topology for normative wording.
 
 Selection grammar (implemented on CON frames)
 ---------------------------------------------

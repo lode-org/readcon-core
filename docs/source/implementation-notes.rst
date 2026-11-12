@@ -14,7 +14,7 @@ Status
 ------
 
 These notes are informative for the CON format.
-The normative text is `the specification <spec.rst>`_.
+The normative text is :doc:`spec`.
 Nothing here changes a byte a conforming reader MUST accept.
 
 Absent values in the C ABI

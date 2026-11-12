@@ -32,7 +32,7 @@ Clause index
     ``docs/orgmode/clauses.tsv``, emitted by ``scripts/emit_clauses.py``
 
 In-memory API
-    `implementation notes <implementation-notes.rst>`_ (informative for this format)
+    :doc:`implementation-notes` (informative for this format)
 
 This document is the normative CON format. CON checkpoints come from
 rare-event work on eOn

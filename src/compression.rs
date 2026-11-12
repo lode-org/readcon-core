@@ -130,7 +130,7 @@ pub fn read_bytes_owned(path: &Path) -> Result<ByteSource, Box<dyn std::error::E
         Compression::None => {
             let mut bytes = Vec::with_capacity(metadata.len().saturating_add(4) as usize);
             bytes.extend_from_slice(&magic[..n]);
-            (&mut file).read_to_end(&mut bytes)?;
+            file.read_to_end(&mut bytes)?;
             Ok(ByteSource::Buf(bytes))
         }
         Compression::Gzip | Compression::Zstd => {

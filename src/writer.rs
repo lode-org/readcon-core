@@ -1209,7 +1209,6 @@ pub(crate) fn open_uncompressed_append(path: &Path) -> io::Result<File> {
     let mut file = OpenOptions::new()
         .create(true)
         .read(true)
-        .write(true)
         .append(true)
         .open(path)?;
     let len = file.seek(SeekFrom::End(0))?;

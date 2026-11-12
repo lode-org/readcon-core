@@ -129,7 +129,7 @@ Python:
     for path in Path("structures").glob("*.xyz"):
         readcon.convert_to_con(str(path), str(Path("con") / f"{path.stem}.con"))
 
-More chemfiles recipes: `chemfiles-howto.org <chemfiles-howto.rst>`_.
+More chemfiles recipes: :doc:`chemfiles-howto`.
 
 After conversion
 ----------------
@@ -139,13 +139,13 @@ After conversion
     +------------------------------+----------------------------------------------------------------------------------------------------------------+
     | Goal                         | Page                                                                                                           |
     +==============================+================================================================================================================+
-    | Learn native CON I/O         | `tutorial <tutorial.rst>`_                                                                                     |
+    | Learn native CON I/O         | :doc:`tutorial`                                                                                                |
     +------------------------------+----------------------------------------------------------------------------------------------------------------+
-    | Selection / bonds on CON     | `chemfiles-howto <chemfiles-howto.rst>`_, `faq <faq.rst>`_                                                     |
+    | Selection / bonds on CON     | :doc:`chemfiles-howto`, :doc:`faq`                                                                             |
     +------------------------------+----------------------------------------------------------------------------------------------------------------+
-    | Declared sections / validate | `faq <faq.rst>`_, `spec <spec.rst>`_                                                                           |
+    | Declared sections / validate | :doc:`faq`, :doc:`spec`                                                                                        |
     +------------------------------+----------------------------------------------------------------------------------------------------------------+
-    | Link C / Fortran / Julia     | `bindings <bindings.rst>`_, `howto <howto.rst>`_                                                               |
+    | Link C / Fortran / Julia     | :doc:`bindings`, :doc:`howto`                                                                                  |
     +------------------------------+----------------------------------------------------------------------------------------------------------------+
     | readcon-db                   | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/docs/>`_ |
     +------------------------------+----------------------------------------------------------------------------------------------------------------+

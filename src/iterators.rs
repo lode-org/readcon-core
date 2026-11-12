@@ -1931,6 +1931,7 @@ fn slot_cache()
 /// A fresh pool on every file made each worker fault its frames again.
 /// Reusing the workers lets the allocator hand back the pages just freed.
 #[cfg(feature = "parallel")]
+#[allow(clippy::type_complexity)]
 fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
     use std::sync::{Arc, Mutex, OnceLock};
     static CACHE: OnceLock<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
@@ -3124,7 +3125,7 @@ fn frames_from_bytes_phased_located(
                 .map_err(|error| error::LocatedParseError::new(error, 0, 0))?
         };
         let finish_s = t_finish.elapsed().as_secs_f64();
-        return Ok(PhasedByteTimes {
+        Ok(PhasedByteTimes {
             frames,
             pool_s: timed.pool_s,
             pool_join_s: timed.pool_join_s,
@@ -3143,7 +3144,7 @@ fn frames_from_bytes_phased_located(
             llc_misses: timed.llc_misses,
             numa_remote: timed.numa_remote,
             pool: timed.pool,
-        });
+        })
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -3688,8 +3689,8 @@ mod parallel_header_scan_tests {
 
     fn assert_slab(text: &str) {
         assert!(!text.is_empty());
-        for cuts in header_straddle_cuts(&text) {
-            assert_cuts_match(&text, &cuts);
+        for cuts in header_straddle_cuts(text) {
+            assert_cuts_match(text, &cuts);
         }
         let bare = text.trim_end_matches(['\n', '\r']);
         if !bare.is_empty() {
@@ -4287,7 +4288,7 @@ mod frame_equality_tests {
                 }
             }
             out.push_str("H\nCoordinates of Component 2\n");
-            out.push_str(&format!("   8.6823    9.947   11.733 0  6\n"));
+            out.push_str("   8.6823    9.947   11.733 0  6\n");
             out.push_str(&format!("  -7.9421    9.947   {shift:.6} 0  7\n"));
         }
         out
@@ -4352,7 +4353,7 @@ mod frame_equality_tests {
                 continue;
             }
             let cols: Vec<&str> = token.split_whitespace().collect();
-            if cols.len() < 4 || reference_ok(&cols[0]).is_none() {
+            if cols.len() < 4 || reference_ok(cols[0]).is_none() {
                 continue;
             }
             if cols[3].parse::<u64>().is_err() {
@@ -4427,7 +4428,7 @@ mod frame_equality_tests {
             if cols.len() < 5 {
                 continue;
             }
-            if reference_ok(&cols[0]).is_none() || cols[3].parse::<u64>().is_err() {
+            if reference_ok(cols[0]).is_none() || cols[3].parse::<u64>().is_err() {
                 continue;
             }
             let row = if velocities { vel_row } else { coord_row };

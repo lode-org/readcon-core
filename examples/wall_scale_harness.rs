@@ -144,25 +144,25 @@ fn main() {
     json.push_str("{\n");
     json.push_str("  \"protocol\": \"sequential vs Rayon n-thread parse of repeated cuh2.con; write-path is ConFrameWriter to an in-memory buffer; skip/nth/span use the same payload\",\n");
     json.push_str(&format!("  \"host\": \"{}\",\n", cpu_model()));
-    json.push_str(&format!("  \"date_utc\": \"{}\",\n", date));
+    json.push_str(&format!("  \"date_utc\": \"{date}\",\n"));
     json.push_str(&format!("  \"commit\": \"{}\",\n", git_commit()));
     json.push_str("  \"features\": \"parallel\",\n");
-    json.push_str(&format!("  \"ncpus\": {},\n", ncpus));
-    json.push_str(&format!("  \"n_frames\": {},\n", n_frames));
-    json.push_str(&format!("  \"n_atoms\": {},\n", n_atoms));
-    json.push_str(&format!("  \"repeats\": {},\n", repeats));
+    json.push_str(&format!("  \"ncpus\": {ncpus},\n"));
+    json.push_str(&format!("  \"n_frames\": {n_frames},\n"));
+    json.push_str(&format!("  \"n_atoms\": {n_atoms},\n"));
+    json.push_str(&format!("  \"repeats\": {repeats},\n"));
     json.push_str("  \"fixture\": \"resources/test/cuh2.con\",\n");
     json.push_str(&format!("  \"payload_bytes\": {},\n", text.len()));
-    json.push_str(&format!("  \"sequential_ms\": {:.6},\n", seq_ms));
-    json.push_str(&format!("  \"auto_ms\": {:.6},\n", auto_ms));
-    json.push_str(&format!("  \"write_100_frames_ms\": {:.6},\n", write_ms));
-    json.push_str(&format!("  \"skip_100_frames_ms\": {:.6},\n", skip_ms));
-    json.push_str(&format!("  \"read_nth_last_ms\": {:.6},\n", nth_last_ms));
-    json.push_str(&format!("  \"frame_start_offsets_ms\": {:.6},\n", span_ms));
+    json.push_str(&format!("  \"sequential_ms\": {seq_ms:.6},\n"));
+    json.push_str(&format!("  \"auto_ms\": {auto_ms:.6},\n"));
+    json.push_str(&format!("  \"write_100_frames_ms\": {write_ms:.6},\n"));
+    json.push_str(&format!("  \"skip_100_frames_ms\": {skip_ms:.6},\n"));
+    json.push_str(&format!("  \"read_nth_last_ms\": {nth_last_ms:.6},\n"));
+    json.push_str(&format!("  \"frame_start_offsets_ms\": {span_ms:.6},\n"));
     json.push_str("  \"parallel\": {\n");
     for (i, (n, ms)) in scale.iter().enumerate() {
         let comma = if i + 1 == scale.len() { "" } else { "," };
-        json.push_str(&format!("    \"n{}\": {:.6}{}\n", n, ms, comma));
+        json.push_str(&format!("    \"n{n}\": {ms:.6}{comma}\n"));
     }
     json.push_str("  }\n");
     json.push_str("}\n");
@@ -178,12 +178,12 @@ fn main() {
 
 fn chrono_like_utc() -> String {
     // RFC3339 minute precision without pulling chrono.
-    let out = Command::new("date")
+
+    Command::new("date")
         .args(["-u", "+%Y-%m-%dT%H:%MZ"])
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".into());
-    out
+        .unwrap_or_else(|| "unknown".into())
 }

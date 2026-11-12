@@ -1747,7 +1747,7 @@ impl ConFrameList {
         let n = self.len_frames();
         if let Ok(slice) = key.cast::<pyo3::types::PySlice>() {
             let ind = slice.indices(n as isize)?;
-            let mut out = Vec::with_capacity(ind.slicelength as usize);
+            let mut out = Vec::with_capacity(ind.slicelength);
             for step in 0..ind.slicelength as isize {
                 let index = (ind.start + step * ind.step) as usize;
                 out.push(self.frame_obj(py, index)?);
@@ -1975,6 +1975,7 @@ fn scan_kind_name(kind: u8) -> &'static str {
     "serial"
 }
 
+#[allow(clippy::too_many_arguments)]
 fn con_frame_list(
     py: Python<'_>,
     mut frames: Vec<ConFrame>,
@@ -2075,6 +2076,7 @@ fn con_frame_list(
     Ok(obj)
 }
 
+#[allow(clippy::type_complexity)]
 fn load_phased(
     py: Python<'_>,
     path: &str,
@@ -3695,6 +3697,7 @@ struct ConBinMapping {
     map: memmap2::MmapMut,
 }
 
+#[allow(clippy::type_complexity)]
 fn arrays_from_map<'py, T>(
     py: Python<'py>,
     map: memmap2::MmapMut,
@@ -3731,6 +3734,7 @@ where
 /// of both arrays and stays mapped until both arrays are freed.
 #[pyfunction]
 #[pyo3(signature = (path, n_threads=1))]
+#[allow(clippy::type_complexity)]
 fn read_conbin<'py>(
     py: Python<'py>,
     path: &str,
@@ -3979,6 +3983,7 @@ mod batch_location_tests {
     /// all map these readers through `box_to_count_fail`. A count error
     /// in the second frame is file line 20, frame 1.
     #[test]
+    #[allow(clippy::type_complexity)]
     fn batch_readers_keep_the_later_frame_location() {
         let path = later_frame_path();
         let cases: [(
@@ -4035,6 +4040,7 @@ mod batch_location_tests {
         path
     }
 
+    #[allow(clippy::type_complexity)]
     fn class_cases() -> [(
         Option<usize>,
         fn(&std::path::Path, Option<usize>) -> CountFail,
@@ -4355,7 +4361,7 @@ fn read_extxyz<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, PyDict>>
         .detach(move || {
             crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(&path_owned))
         })
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let n_frames = tables.n_frames;
     let n_atoms = tables.n_atoms;
     let positions = ndarray::Array3::from_shape_vec(
@@ -4618,6 +4624,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>) -> PyResult<()> {
 /// `(frames, atoms)`. The cell has shape `(frames, 6)` and stores
 /// lengths then angles. One scan fills those arrays.
 #[pyfunction]
+#[allow(clippy::type_complexity)]
 fn read_pdb<'py>(
     py: Python<'py>,
     path: &str,
@@ -4627,7 +4634,7 @@ fn read_pdb<'py>(
     Bound<'py, numpy::PyArray2<f64>>,
 )> {
     let tables = crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(path))
-        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err))?;
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let positions =
         ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
             .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
@@ -4656,6 +4663,7 @@ fn read_pdb<'py>(
 /// Raises ``RuntimeError`` if this wheel was built without chemfiles (install
 /// ``readcon-chemfiles``), ``OSError`` on I/O failure, ``ValueError`` on bad frames.
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 #[pyo3(signature = (path, *, skip=0, step=1, stop=None, topology=None, format=None, guess_bonds=false))]
 fn read_chemfiles(
     py: Python<'_>,

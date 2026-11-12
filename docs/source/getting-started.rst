@@ -28,11 +28,11 @@ Pick **one** language. Version pins match this tree (``0.19.0``).
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
     | readcon-db         | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `readcon-db docs <https://lode-org.github.io/readcon-db/docs/>`_ · `readcon-db on PyPI <https://pypi.org/project/readcon-db/>`_ |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | `bindings <bindings.rst>`_                                                                                                      |
+    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | `bindings <bindings.rst>`_                                                                                                      |
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                 |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | Prebuilt C ABI     | ``readcon-core-clib-$VER-$target.tar.gz`` on the GitHub Release                     | `bindings <bindings.rst>`_ (Julia / Fortran / ``pkg-config``)                                                                   |
+    | Prebuilt C ABI     | ``readcon-core-clib-$VER-$target.tar.gz`` on the GitHub Release                     | :doc:`bindings` (Julia / Fortran / ``pkg-config``)                                                                              |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
@@ -84,7 +84,7 @@ From a checkout of this repository:
 
     julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'
 
-Language API notes: `bindings <bindings.rst>`_.
+Language API notes: :doc:`bindings`.
 
 Fortran / C / C++
 ~~~~~~~~~~~~~~~~~
@@ -164,25 +164,25 @@ Documentation follows `Diátaxis <https://diataxis.fr/>`_. Use one quadrant at a
     +-------------------------------------------------+------------------------------------------------+-------------+
     | Goal                                            | Page                                           | Kind        |
     +=================================================+================================================+=============+
-    | Learn CON I/O end-to-end                        | `tutorial <tutorial.rst>`_                     | Tutorial    |
+    | Learn CON I/O end-to-end                        | :doc:`tutorial`                                | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Migrate foreign formats → CON (+ db, selection) | `migrate <migrate.rst>`_                       | How-to      |
+    | Migrate foreign formats → CON (+ db, selection) | :doc:`migrate`                                 | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Task recipes by language                        | `howto <howto.rst>`_                           | How-to      |
+    | Task recipes by language                        | :doc:`howto`                                   | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | XYZ / PDB / GRO → CON                           | `chemfiles-tutorial <chemfiles-tutorial.rst>`_ | Tutorial    |
+    | XYZ / PDB / GRO → CON                           | :doc:`chemfiles-tutorial`                      | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Batch convert / C conversion API                | `chemfiles-howto <chemfiles-howto.rst>`_       | How-to      |
+    | Batch convert / C conversion API                | :doc:`chemfiles-howto`                         | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why conversion is optional; bonds               | `chemfiles-explain <chemfiles-explain.rst>`_   | Explanation |
+    | Why conversion is optional; bonds               | :doc:`chemfiles-explain`                       | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why CON / sections / stack                      | `faq <faq.rst>`_, `evolution <evolution.rst>`_ | Explanation |
+    | Why CON / sections / stack                      | :doc:`faq`, :doc:`evolution`                   | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | On-disk format                                  | `spec <spec.rst>`_                             | Reference   |
+    | On-disk format                                  | :doc:`spec`                                    | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | API tables                                      | `bindings <bindings.rst>`_                     | Reference   |
+    | API tables                                      | :doc:`bindings`                                | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Measurements (ASV / Cachegrind / peers)         | `benchmarks <benchmarks.rst>`_                 | Explanation |
+    | Measurements (ASV / Cachegrind / peers)         | :doc:`benchmarks`                              | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
 
 See :doc:`the frequently asked questions <faq>` for the package or optional feature that each task needs and for the library layout.

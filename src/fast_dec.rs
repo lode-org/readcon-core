@@ -409,7 +409,7 @@ mod tests {
             out.push(b'-');
         }
         match kind % 8 {
-            0 | 1 | 2 => {
+            0..=2 => {
                 // In-range form: 1..=19 digits, optional dot, optional trailing dot.
                 let digits = 1 + rng.below(19);
                 let lead_zero = rng.below(2) == 0;
@@ -462,7 +462,7 @@ mod tests {
                 out.push(b'0');
                 out.push(b'.');
                 let zeros = 20 + rng.below(340);
-                out.extend(std::iter::repeat(b'0').take(zeros));
+                out.extend(std::iter::repeat_n(b'0', zeros));
                 out.push(b'1');
             }
             6 => {
@@ -474,7 +474,7 @@ mod tests {
             _ => {
                 // Leading zeros, a short body, and a trailing dot.
                 let zeros = rng.below(8);
-                out.extend(std::iter::repeat(b'0').take(zeros));
+                out.extend(std::iter::repeat_n(b'0', zeros));
                 let body = 1 + rng.below(12);
                 push_digits(rng, out, body, false);
                 out.push(b'.');

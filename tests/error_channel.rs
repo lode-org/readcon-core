@@ -258,7 +258,7 @@ fn class_names_and_write_errors_cover_every_variant() {
     assert_eq!(ParseError::UnsupportedVersion(0).line(), 2);
     assert_eq!(ParseError::IncompleteVelocitySection.line(), 0);
 
-    let write_io = WriteError::from(io::Error::new(io::ErrorKind::Other, "disk"));
+    let write_io = WriteError::from(io::Error::other("disk"));
     assert!(write_io.to_string().contains("disk"));
     assert!(std::error::Error::source(&write_io).is_some());
     let write_fmt = WriteError::Format(ParseError::InvalidCount("x".into()));

@@ -46,7 +46,7 @@ Saddle, dimer, and NEB pipelines already depend on that payload.
 and metatensor export **out** of it.
 `index\_proj <https://docs.rs/readcon-core/latest/readcon_core/index_proj/>`_
 and ``readcon-db`` index corpora that stay CON text. Spec:
-`spec.org <spec.rst>`_. Design history: `evolution.org <evolution.rst>`_.
+:doc:`spec`. Design history: :doc:`evolution`.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -139,7 +139,7 @@ CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV on one runner, me
 (``ci_benchmark.yml``, suite in ``benchmarks/``). Local peer scripts:
 ``benches/compare_readers.py``, ``multiformat_traj.py``, ``ase_traj_vs_con.py``,
 ``h5md_vs_con.py``. How to re-run and what each gate means:
-`benchmarks.org <benchmarks.rst>`_.
+:doc:`benchmarks`.
 
 Uncompressed files under 64 kibibytes (KiB) are read into memory, and larger ones can use the optional mmap.
 With the ``parallel`` feature, Rayon parses multi-frame text of 48 KiB or more in parallel.
@@ -240,7 +240,7 @@ contributions, declare ``energies`` alongside ``forces``:
 
 Charges, spins, magmoms, displacements, and spreads use the same wire format: list
 them in ``sections`` and emit the matching component blocks (see
-`spec.org <spec.rst>`_). Example fixtures:
+:doc:`spec`). Example fixtures:
 ``resources/test/tiny_cuh2_charges_spins_magmoms.con``,
 ``resources/test/tiny_cuh2_displacements.con``,
 ``resources/test/tiny_cuh2_spreads.con``.
@@ -355,7 +355,7 @@ What is the stack for?
 
 One on-disk checkpoint and one ``rkr_*`` ABI, instead of each code
 hand-rolling XYZ and its own atoms type. Migration guide:
-`migrate.org <migrate.rst>`_ (``readcon-core convert``,
+:doc:`migrate` (``readcon-core convert``,
 ``readcon.convert_to_con``).
 
 .. table::
@@ -498,7 +498,7 @@ Selection needs a chemfiles build such as the ``readcon-chemfiles`` wheel, and t
     print(h_idx)
     # topology: frame.select("angles: all") when metadata bonds are present
 
-Recipes are in `chemfiles-howto <./chemfiles-howto.rst>`_, `howto <./howto.rst>`_ and `bindings <./bindings.rst>`_.
+Recipes are in :doc:`chemfiles-howto`, :doc:`howto` and :doc:`bindings`.
 
 What the plotting tools add
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -559,7 +559,7 @@ maps foreign structures into ``ConFrame`` / CON so the rest of the stack speaks
 one format. The durable interchange is CON (constraints, ``atom_id``, sections,
 JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
 keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
-How-to: `migrate.org <migrate.rst>`_, `chemfiles-tutorial <chemfiles-tutorial.rst>`_.
+How-to: :doc:`migrate`, :doc:`chemfiles-tutorial`.
 
 Why an hourglass C ABI?
 -----------------------

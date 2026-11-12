@@ -327,7 +327,7 @@ Feature matrix plot
 
 CON v2 on the wire can carry positions, velocities, forces, unit cell,
 per-direction constraints, ``atom_id``, structured JSON, compression, multi-frame
-concatenation, and streaming iteration — see `spec.org <spec.rst>`_.
+concatenation, and streaming iteration — see :doc:`spec`.
 
 Statistical analysis (optional)
 -------------------------------

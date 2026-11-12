@@ -13,7 +13,7 @@ Requirement words
 
 The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
 
-(`howto <howto.rst>`_) or finish `the chemfiles tutorial <chemfiles-tutorial.rst>`_ once.
+(:doc:`howto`) or finish :doc:`chemfiles-tutorial` once.
 
 How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 ----------------------------------------------------------------

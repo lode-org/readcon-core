@@ -383,6 +383,6 @@ for campaign screening (``readcon-db``), Cap'n Proto RPC. Lean builds return
 ``RKR_STATUS_FEATURE_DISABLED`` for missing features. UTF-8 CON remains
 authoritative on disk and in corpora.
 
-Related work and roles: `faq.org <faq.rst>`_. Spec:
-`spec.org <spec.rst>`_. Evolution: `evolution.org <evolution.rst>`_.
-Measurements: `benchmarks.org <benchmarks.rst>`_.
+Related work and roles: :doc:`faq`. Spec:
+:doc:`spec`. Evolution: :doc:`evolution`.
+Measurements: :doc:`benchmarks`.

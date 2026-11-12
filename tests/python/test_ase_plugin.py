@@ -17,17 +17,16 @@ if str(_PLUGIN) not in sys.path:
 
 def _ensure_formats() -> None:
     """Register the plugin when ASE has not loaded the entry point."""
-    import ase.io.formats as formats
+    from ase.io.formats import define_io_format, ioformats
     from ase_readcon.io import readcon_con_format, readcon_convel_format
 
-    registry = formats.ioformats
     for name, fmt in (
         ("readcon-con", readcon_con_format),
         ("readcon-convel", readcon_convel_format),
     ):
-        if name in registry:
+        if name in ioformats:
             continue
-        registry[name] = fmt
+        define_io_format(name, **fmt._asdict(), external=True)
 
 
 _ensure_formats()

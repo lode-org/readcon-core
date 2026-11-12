@@ -1601,6 +1601,7 @@ where
 /// The symbol `Arc` is bumped once for the whole block. Cloning it per atom
 /// was a visible share of the coordinate parse.
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 fn ingest_coord_rows_f64<'a, L>(
     lines: &mut L,
     n: usize,
