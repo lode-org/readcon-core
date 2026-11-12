@@ -73,6 +73,83 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
     parse_con(bytes, true, true)
 }
 
+/// Write one frame's coordinates, masses, and cell into the caller buffers.
+///
+/// `frame` is one span from the frame-start scan. A metadata line this walker
+/// does not certify returns an error so the caller can use the frame parser.
+pub(crate) fn fill_frame_positions(
+    frame: &[u8],
+    dest: &mut [f64],
+    masses: &mut [f64],
+    cell: &mut [f64],
+) -> Result<(), ParseError> {
+    let mut pos = 0usize;
+    skip_line(frame, &mut pos)?;
+    let meta = read_line(frame, &mut pos)?;
+    if !stock_meta_line(meta) {
+        return Err(ParseError::ValidationError(
+            "column walker declined this metadata line".into(),
+        ));
+    }
+    let spec = spec_version(meta)?;
+    let box_line = utf8_line(read_line(frame, &mut pos)?)?;
+    let boxl = parse_line_of_n_f64(box_line, 3)?;
+    let ang_line = utf8_line(read_line(frame, &mut pos)?)?;
+    let angles = parse_line_of_n_f64(ang_line, 3)?;
+    if cell.len() < 6 {
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    cell[..3].copy_from_slice(&boxl);
+    cell[3..6].copy_from_slice(&angles);
+    skip_line(frame, &mut pos)?;
+    skip_line(frame, &mut pos)?;
+    let types_line = utf8_line(read_line(frame, &mut pos)?)?;
+    let natm_types = parse_count_line(types_line, 1)?[0];
+    if natm_types == 0 {
+        if dest.is_empty() && masses.is_empty() {
+            return Ok(());
+        }
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    let count_line = utf8_line(read_line(frame, &mut pos)?)?;
+    let counts = parse_count_line(count_line, natm_types)?;
+    if counts.contains(&0) {
+        return Err(ParseError::InvalidCount(
+            "each per-type count must be >= 1".into(),
+        ));
+    }
+    let mass_line = utf8_line(read_line(frame, &mut pos)?)?;
+    let mass_vals = parse_line_of_n_f64(mass_line, natm_types)?;
+    let mut written = 0usize;
+    for (count, mass) in counts.iter().zip(&mass_vals) {
+        skip_line(frame, &mut pos)?;
+        skip_line(frame, &mut pos)?;
+        for atom in 0..*count {
+            let (row, next) = parse_coord_row_at(frame, pos, spec, atom as u64)?;
+            let at = written * 3;
+            if at + 3 > dest.len() || written >= masses.len() {
+                return Err(ParseError::InvalidCount(
+                    "frame atom count does not match the first frame".into(),
+                ));
+            }
+            dest[at..at + 3].copy_from_slice(&row.0);
+            masses[written] = *mass;
+            pos = next;
+            written += 1;
+        }
+    }
+    if written * 3 != dest.len() || written != masses.len() {
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn parse_con(bytes: &[u8], rich: bool, stop_on_section: bool) -> Result<ConPositions, ParseError> {
     let mut pos = 0usize;
     let mut out = ConPositions {
@@ -206,8 +283,8 @@ fn parse_one_frame(
     let mut head_end = *pos;
     for (count, mass) in counts.iter().zip(&masses) {
         let symbol_line = utf8_line(read_line(bytes, pos)?)?;
-        let symbol: Arc<str> = Arc::from(symbol_line.trim());
         if rich {
+            let symbol: Arc<str> = Arc::from(symbol_line.trim());
             out.components.push((symbol, *count));
         }
         skip_line(bytes, pos)?;

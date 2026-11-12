@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{LineStream, parse_declared_sections};
+use crate::parser::{parse_declared_sections, LineStream};
 use crate::{error, types};
 use std::path::Path;
 
@@ -166,7 +166,11 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad { invalid_utf8() } else { err }
+        if self.utf8_bad {
+            invalid_utf8()
+        } else {
+            err
+        }
     }
 }
 
@@ -1111,6 +1115,13 @@ fn certified_columns(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<Option<CoordColumns>, error::ParseError> {
+    // Two or more threads take frame starts from the AVX2 skip, then parse
+    // coordinates on the pool. The skip does not decode coordinate text.
+    // A failure falls back to the frame parser and keeps its message.
+    let parallel = parallel_threads(num_threads);
+    if parallel {
+        return parallel_stock_columns(bytes, num_threads);
+    }
     let parsed = match crate::columns::positions_from_con_bytes(bytes) {
         Ok(parsed) if parsed.stock => parsed,
         _ => return Ok(None),
@@ -1131,11 +1142,7 @@ fn certified_columns(
             "frame atom count does not match the first frame".into(),
         ));
     };
-    let values = if parallel_threads(num_threads) {
-        parallel_column_values(bytes, &parsed, n_atoms, num_threads)?
-    } else {
-        parsed.positions
-    };
+    let values = parsed.positions;
     Ok(Some(CoordColumns {
         block: PositionBlock {
             n_frames: parsed.n_frames,
@@ -1162,57 +1169,139 @@ fn parallel_threads(num_threads: Option<usize>) -> bool {
     }
 }
 
+fn parallel_stock_columns(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Option<CoordColumns>, error::ParseError> {
+    let boundaries = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
+    if boundaries.is_empty() {
+        return Ok(Some(CoordColumns {
+            block: PositionBlock {
+                n_frames: 0,
+                n_atoms: 0,
+                values: Vec::new(),
+            },
+            masses: Vec::new(),
+            cells: Vec::new(),
+        }));
+    }
+    let end0 = boundaries.get(1).copied().unwrap_or(bytes.len());
+    let first = match crate::columns::positions_from_con_bytes(&bytes[boundaries[0]..end0]) {
+        Ok(parsed) if parsed.stock => parsed,
+        _ => return Ok(None),
+    };
+    let Some(n_atoms) = first.rectangular_atoms() else {
+        return Err(error::ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    };
+    if n_atoms == 0 {
+        // A later frame may carry atoms. The serial column walk is the one
+        // that reports a count that does not match the first frame.
+        return certified_columns(bytes, Some(1));
+    }
+    match parallel_column_values(bytes, &boundaries, n_atoms, num_threads) {
+        Ok((values, masses, cells)) => Ok(Some(CoordColumns {
+            block: PositionBlock {
+                n_frames: boundaries.len(),
+                n_atoms,
+                values,
+            },
+            masses,
+            cells,
+        })),
+        Err(_) => Ok(None),
+    }
+}
+
 fn parallel_column_values(
     bytes: &[u8],
-    parsed: &crate::columns::ConPositions,
+    boundaries: &[usize],
     n_atoms: usize,
     num_threads: Option<usize>,
-) -> Result<Vec<f64>, error::ParseError> {
+) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>), error::ParseError> {
     let stride = n_atoms * 3;
-    if stride == 0 {
-        return Ok(Vec::new());
+    let n_frames = boundaries.len();
+    if stride == 0 || n_frames == 0 {
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
     #[cfg(not(feature = "parallel"))]
     {
         let _ = (bytes, num_threads);
-        return Ok(parsed.positions.clone());
+        return Err(error::ParseError::ValidationError(
+            "column walker declined this metadata line".into(),
+        ));
     }
     #[cfg(feature = "parallel")]
-    let mut values = vec![0.0_f64; parsed.n_frames * stride];
-    #[cfg(feature = "parallel")]
-    let fill_one = |index: usize, dest: &mut [f64]| {
-        let span = &parsed.spans[index];
-        let slice = crate::columns::positions_from_con_bytes(&bytes[span.start..span.end])?;
-        if slice.counts.first().copied() != Some(n_atoms) || slice.positions.len() != stride {
-            return Err(error::ParseError::InvalidCount(
-                "frame atom count does not match the first frame".into(),
-            ));
-        }
-        dest.copy_from_slice(&slice.positions);
-        Ok(())
-    };
-    #[cfg(feature = "parallel")]
     {
-        use rayon::prelude::*;
-        let mut run = || match values
-            .par_chunks_mut(stride)
-            .enumerate()
-            .find_map_first(|(index, dest)| fill_one(index, dest).err())
+        let mut values = vec![0.0_f64; n_frames * stride];
+        let mut masses = vec![0.0_f64; n_frames * n_atoms];
+        let mut cells = vec![0.0_f64; n_frames * 6];
+        let workers = match num_threads {
+            Some(n) if n >= 2 => n,
+            _ => 1,
+        };
+        let ranges = byte_balanced_ranges(boundaries, bytes.len(), workers);
+        let mut value_parts: Vec<&mut [f64]> = Vec::with_capacity(ranges.len());
+        let mut mass_parts: Vec<&mut [f64]> = Vec::with_capacity(ranges.len());
+        let mut cell_parts: Vec<&mut [f64]> = Vec::with_capacity(ranges.len());
         {
-            Some(err) => Err(err),
-            None => Ok(()),
+            let mut value_rest = values.as_mut_slice();
+            let mut mass_rest = masses.as_mut_slice();
+            let mut cell_rest = cells.as_mut_slice();
+            for &(start, end) in &ranges {
+                let frames = end - start;
+                let (value_head, value_tail) = value_rest.split_at_mut(frames * stride);
+                let (mass_head, mass_tail) = mass_rest.split_at_mut(frames * n_atoms);
+                let (cell_head, cell_tail) = cell_rest.split_at_mut(frames * 6);
+                value_parts.push(value_head);
+                mass_parts.push(mass_head);
+                cell_parts.push(cell_head);
+                value_rest = value_tail;
+                mass_rest = mass_tail;
+                cell_rest = cell_tail;
+            }
+        }
+        let run = || {
+            use rayon::prelude::*;
+            match value_parts
+                .into_par_iter()
+                .zip(mass_parts)
+                .zip(cell_parts)
+                .zip(ranges)
+                .find_map_first(|(((dest, mass), cell), (start, end))| {
+                    for (offset, index) in (start..end).enumerate() {
+                        let span_start = boundaries[index];
+                        let span_end = boundaries.get(index + 1).copied().unwrap_or(bytes.len());
+                        let slot = &mut dest[offset * stride..(offset + 1) * stride];
+                        let mass_slot = &mut mass[offset * n_atoms..(offset + 1) * n_atoms];
+                        let cell_slot = &mut cell[offset * 6..(offset + 1) * 6];
+                        if let Err(err) = crate::columns::fill_frame_positions(
+                            &bytes[span_start..span_end],
+                            slot,
+                            mass_slot,
+                            cell_slot,
+                        ) {
+                            return Some(err);
+                        }
+                    }
+                    None
+                }) {
+                Some(err) => Err(err),
+                None => Ok(()),
+            }
         };
         match num_threads {
             Some(n) if n >= 2 => {
-                let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(n)
-                    .build()
-                    .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
-                pool.install(run)?;
+                if let Some(pool) = shared_pool(n) {
+                    pool.install(run)?;
+                } else {
+                    run()?;
+                }
             }
             _ => run()?,
         }
-        return Ok(values);
+        Ok((values, masses, cells))
     }
 }
 
@@ -1549,7 +1638,11 @@ fn sample_llc_misses() -> i64 {
     unsafe {
         libc::close(fd);
     }
-    if n == 8 { value as i64 } else { -1 }
+    if n == 8 {
+        value as i64
+    } else {
+        -1
+    }
 }
 
 /// Pages that do not sit on node 0.
@@ -1932,8 +2025,8 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache()
--> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache(
+) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -1979,7 +2072,11 @@ pub fn process_minflt() -> i64 {
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
     let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if raw > 0 { raw as usize } else { 4096 }
+    if raw > 0 {
+        raw as usize
+    } else {
+        4096
+    }
 }
 
 /// Fault one word on each page of `values`.
@@ -2502,7 +2599,11 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 { 1 } else { requested }
+    if len < 2 {
+        1
+    } else {
+        requested
+    }
 }
 
 fn collect_frame_starts(scanner: ConFrameIterator<'_>, skip_whitespace_tail: bool) -> Vec<usize> {
@@ -3991,11 +4092,9 @@ mod frame_equality_tests {
             .map(|frame| frame.expect("convel"))
             .collect();
         assert_eq!(frames.len(), 3);
-        assert!(
-            frames
-                .iter()
-                .all(|frame| frame.atom_data[0].velocity().is_some())
-        );
+        assert!(frames
+            .iter()
+            .all(|frame| frame.atom_data[0].velocity().is_some()));
         assert_eq!(frames[0].positions.nrows(), 5);
         // Every stored coordinate and velocity bit matches the general parser.
         let mut frame_i = 0usize;
