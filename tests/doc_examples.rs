@@ -61,7 +61,10 @@ fn link_flags() -> Vec<String> {
 }
 
 fn gxx() -> String {
-    std::env::var("CXX").unwrap_or_else(|_| "g++".to_string())
+    // Coverage exports CXX=clang++, which promotes header warnings to
+    // errors. The example is compiled with g++, the same driver as the
+    // other C++ checks.
+    "g++".to_string()
 }
 
 #[test]
