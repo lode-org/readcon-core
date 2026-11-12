@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 
+include!("metatensor_link.rs");
+
 static CWD: Mutex<()> = Mutex::new(());
 
 fn plain_library(dir: &std::path::Path) -> bool {
@@ -51,13 +53,7 @@ fn library_dirs() -> Vec<PathBuf> {
 }
 
 fn link_flags() -> Vec<String> {
-    let mut flags = Vec::new();
-    for dir in library_dirs() {
-        flags.push(format!("-L{}", dir.display()));
-        flags.push(format!("-Wl,-rpath,{}", dir.display()));
-    }
-    flags.push("-lreadcon_core".to_string());
-    flags
+    link_flags_for(&library_dirs())
 }
 
 fn gxx() -> String {
@@ -87,14 +83,7 @@ fn c_and_cpp_examples_match_frames_by_atom_id() {
     );
     let run = Command::new(&binary)
         .arg(dir.path())
-        .env(
-            "LD_LIBRARY_PATH",
-            library_dirs()
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(":"),
-        )
+        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
         .status()
         .expect("run documented C and C++ example");
     assert!(run.success(), "documented C and C++ example failed");
@@ -159,14 +148,7 @@ end program
         String::from_utf8_lossy(&linked.stderr)
     );
     let run = Command::new(&binary)
-        .env(
-            "LD_LIBRARY_PATH",
-            library_dirs()
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(":"),
-        )
+        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
         .status()
         .expect("run fortran example");
     assert!(run.success(), "documented Fortran add_atom example failed");

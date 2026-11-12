@@ -17,6 +17,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+include!("metatensor_link.rs");
+
 fn plain_library(dir: &Path) -> bool {
     let so = dir.join("libreadcon_core.so");
     if !so.is_file() {
@@ -57,13 +59,7 @@ fn library_dirs() -> Vec<PathBuf> {
 }
 
 fn link_flags() -> Vec<String> {
-    let mut flags = Vec::new();
-    for dir in library_dirs() {
-        flags.push(format!("-L{}", dir.display()));
-        flags.push(format!("-Wl,-rpath,{}", dir.display()));
-    }
-    flags.push("-lreadcon_core".to_string());
-    flags
+    link_flags_for(&library_dirs())
 }
 
 fn frame(id: u64, x: f64) -> ConFrame {
@@ -260,14 +256,7 @@ fn cpp_append_flush_and_string_match_the_file() {
     );
     let run = Command::new(&binary)
         .arg(dir.path())
-        .env(
-            "LD_LIBRARY_PATH",
-            library_dirs()
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(":"),
-        )
+        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
         .status()
         .expect("run cpp writer test");
     assert!(run.success(), "C++ append, flush, or string check failed");
