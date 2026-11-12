@@ -13,7 +13,7 @@ Thin `ccall` bindings over `libreadcon_core` (same ABI as `include/readcon-core.
 ## Prebuilt C ABI (no local cargo)
 
 Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` (or wait
-for the `release` hook) and unpack the matching asset:
+for the `v*` tag workflow) and unpack the matching asset:
 
 ```bash
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, "VER={v}")]]]

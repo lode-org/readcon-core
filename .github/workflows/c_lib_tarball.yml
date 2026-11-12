@@ -5,22 +5,38 @@ name: C ABI library tarball
 #
 # Attach-to-tag: workflow_dispatch inputs.tag works like cxx_tarball.yml so
 # an already-published tag (v0.14.7) can receive clib assets later.
-# The packager (scripts/package-clib.sh) comes from the *workflow ref*
-# (the branch selected in Actions). Sources and the Release tag come from
-# inputs.tag (dispatch) or github.ref (release published). That split is
-# required because v0.14.7 does not contain package-clib.sh.
+# The packager (scripts/package-clib.sh and scripts/upload-release-assets.sh)
+# comes from the workflow ref. Sources and the Release tag come from
+# inputs.tag (dispatch) or github.ref (v* tag push). That split is required
+# because v0.14.7 does not contain package-clib.sh.
+#
+# Do not trigger on the release event. cargo-dist runs `gh release create`
+# with GITHUB_TOKEN, and events from that token do not start workflows. The
+# release event last started this workflow on v0.14.9, when a person
+# published the release. A v* tag push starts it alongside crates.io,
+# cargo-dist, and the wheel workflow.
+#
+# The upload waits until that Release exists, then runs
+# `gh release upload --clobber`. It does not create a release, move a tag,
+# or publish crates or wheels. workflow_dispatch input `tag` backfills an
+# existing release the same way, without waiting and without publishing.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Git tag to checkout and attach clib tarballs to
+        description: Existing vX.Y.Z tag whose GitHub Release should receive clib tarballs
         required: true
         type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: clib-tarball-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_HTTP_MULTIPLEXING: "false"
@@ -60,12 +76,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: packager
+          persist-credentials: false
 
       - name: Checkout tag sources
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           path: src
+          persist-credentials: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -162,17 +180,29 @@ jobs:
             --dist "$GITHUB_WORKSPACE/dist-clib"
 
       - name: Upload tarball to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          files: |
-            dist-clib/readcon-core-clib-*.tar.gz
-            dist-clib/readcon-core-clib-*.tar.gz.sha256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          UPLOAD_WAIT: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          script="$GITHUB_WORKSPACE/packager/scripts/upload-release-assets.sh"
+          # Unmatched globs stay literal, and the uploader rejects those paths.
+          set -- dist-clib/readcon-core-clib-*.tar.gz \
+            dist-clib/readcon-core-clib-*.tar.gz.sha256 \
             dist-clib/Artifacts-*.toml
-          fail_on_unmatched_files: true
-          append_body: true
-          body: |
-            Prebuilt C ABI: `readcon-core-clib-$VERSION-$target.tar.gz` (shipped headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required. Julia/Fortran: unpack and set `READCON_CORE_LIB` / `PKG_CONFIG_PATH`. Windows + chemfiles is not a clib asset (Python wheel path only).
+          for asset in "$@"; do
+            if [ ! -f "$asset" ]; then
+              echo "missing clib asset: $asset" >&2
+              exit 1
+            fi
+          done
+          if [ "$UPLOAD_WAIT" = "true" ]; then
+            bash "$script" --tag "$RELEASE_TAG" --wait "$@"
+          else
+            bash "$script" --tag "$RELEASE_TAG" "$@"
+          fi
 
   # Explicit skip: do not silently omit Windows chemfiles from the matrix.
   # Official prebuilt libchemfiles for x86_64-pc-windows-msvc is the Python

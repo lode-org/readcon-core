@@ -63,6 +63,17 @@ if ! grep -q 'windows-chemfiles-skip' .github/workflows/c_lib_tarball.yml \
     || ! grep -q 'Windows + chemfiles is not a clib' .github/workflows/c_lib_tarball.yml; then
     die "c_lib_tarball.yml must skip Windows chemfiles explicitly"
 fi
+if ! grep -Fq "'v*'" .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'workflow_dispatch:' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'upload-release-assets.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'persist-credentials: false' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must run on v* tags, accept workflow_dispatch, and upload without git credentials"
+fi
+if grep -q 'types: \[published\]' .github/workflows/cxx_tarball.yml \
+    || grep -q 'action-gh-release' .github/workflows/cxx_tarball.yml \
+    || grep -q 'cargo publish' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must not use the release event, create the release, or publish crates"
+fi
 if ! grep -q 'READCON_CORE_LIB' julia/ReadCon/src/wrapper.jl \
     || ! grep -q 'READCON_LIB_PATH' julia/ReadCon/src/wrapper.jl; then
     die "Julia wrapper must honor READCON_CORE_LIB and READCON_LIB_PATH"

@@ -66,8 +66,16 @@ fi
 grep -q 'package-clib.sh' .github/workflows/c_lib_tarball.yml \
     || die "c_lib_tarball.yml must call scripts/package-clib.sh"
 if ! grep -q 'workflow_dispatch:' .github/workflows/c_lib_tarball.yml \
-    || ! grep -q 'tag:' .github/workflows/c_lib_tarball.yml; then
-    die "c_lib_tarball.yml must support workflow_dispatch with a tag input"
+    || ! grep -q 'tag:' .github/workflows/c_lib_tarball.yml \
+    || ! grep -Fq "'v*'" .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'upload-release-assets.sh' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'persist-credentials: false' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must run on v* tags, accept a tag input, and upload without git credentials"
+fi
+if grep -q 'types: \[published\]' .github/workflows/c_lib_tarball.yml \
+    || grep -q 'action-gh-release' .github/workflows/c_lib_tarball.yml \
+    || grep -q 'cargo publish' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must not use the release event, create the release, or publish crates"
 fi
 
 # Windows chemfiles stays the official prebuilt wheel, never from-sources.

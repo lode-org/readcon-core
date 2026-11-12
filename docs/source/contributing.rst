@@ -227,9 +227,9 @@ Workflows
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
     | crates.io                 | ``crates_publish.yml``     | ``v*`` tag                                 | ``cargo publish --locked``                                 |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release                             | Attach slim + vendor C/C++ source tarballs                 |
+    | cxx tarball               | ``cxx_tarball.yml``        | ``v*`` tag + ``workflow_dispatch``         | Attach slim + vendor C/C++ source tarballs                 |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | clib tarball              | ``c_lib_tarball.yml``      | GitHub Release + ``workflow_dispatch`` tag | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
+    | clib tarball              | ``c_lib_tarball.yml``      | ``v*`` tag + ``workflow_dispatch``         | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
 
 Benchmark regression detection
@@ -313,8 +313,8 @@ Mental model (new contributor)
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
           ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-          ├─► workflow "cxx source tarball": after the GitHub Release exists
-          └─► workflow "C ABI library tarball": prebuilt clib (or dispatch tag later)
+          ├─► workflow "cxx source tarball": v* tag, upload after the Release exists
+          └─► workflow "C ABI library tarball": v* tag (or dispatch tag later)
 
 .. table::
 
@@ -331,18 +331,27 @@ Mental model (new contributor)
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
-    | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
+    | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (``v*`` tag; upload after the Release exists)                 |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
-    | Tag publish | Prebuilt C ABI tarballs                | ``.github/workflows/c_lib_tarball.yml`` (``release`` or ``workflow_dispatch`` ``tag``)              |
+    | Tag publish | Prebuilt C ABI tarballs                | ``.github/workflows/c_lib_tarball.yml`` (``v*`` tag or ``workflow_dispatch`` ``tag``)               |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 Attach prebuilt C ABI to an existing tag
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``: ``release``
-published, or ``workflow_dispatch`` with required ``inputs.tag``. Use this
-to put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
-workflow (for example ``v0.14.7``).
+``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``. Both
+start on a ``v*`` tag push, with crates.io, cargo-dist, and wheels. They
+wait until the GitHub Release exists, then attach archives with
+``gh release upload --clobber``. They do not create the release and do not
+move the tag. ``workflow_dispatch`` input ``tag`` backfills an existing
+release the same way and does not publish crates or wheels. Use that to
+put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
+workflow (for example ``v0.14.7``):
+
+.. code:: shell
+
+    gh workflow run cxx_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v0.14.7
+    gh workflow run c_lib_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v0.14.7
 
 1. Open Actions → **C ABI library tarball**.
 
