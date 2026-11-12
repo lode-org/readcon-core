@@ -1,0 +1,139 @@
+repo lode-org/readcon-core
+branch perf/parallel-frames
+rev f37398e4950d3c2dc34738aeefdb494890a1ae55
+pinned_core 0
+online_cpus 0-7
+cpu_model Intel Xeon Processor
+protocol warmup=1 samples=6 excluded_from_percentile=warmup
+percentile numpy method=linear type=7
+clock perf_counter or CLOCK_MONOTONIC around the read
+readcon 0.18.1
+python 3.12.3
+rustc 1.88.0
+gcc 13.3.0
+numpy 2.5.4
+ase 3.29.0
+chemfiles 0.10.4
+ovito 3.17.2
+pymatgen 2026.10.24
+eon 579738a9387e8d0ea55496f45dd057812cfab892
+vesin 0.6.2
+eon_reader eon.fileio.loadcons
+input file=con-100k path=bench/h2h/work/parallel-frames/frames-32x100000.con bytes=136700001 sha256=714884370e98579a3c52cce2825bbae65e8513240fc9eeab24fdd30c6f105564
+input file=convel path=bench/h2h/work/parallel-frames/frames-32x100000.convel bytes=258400000 sha256=f73fb8ebd5fed8bfb77f41c2f5e0e7c702d5edf1e1c6270a536ba2afae87d3f8
+input file=con-1e6 path=bench/h2h/work/inputs/con-1000000x1.con bytes=39589039 sha256=c49a4a1d1a50948fcc9399381b3e7e13c4ec199021110c1a3d387ce9ab9089ca
+input file=extxyz path=bench/h2h/work/parallel-frames/copper-32x100000.extxyz bytes=124700000 sha256=5d43ac3bfcdd8c37d133f57e6433bbaf11cd5b618559c6ff7e32989e02d4c9a9
+samples_begin
+sample file=con-100k reader=readcon-rust pinned_core=0 index=1 seconds=4.119508000e-01
+sample file=con-100k reader=readcon-rust pinned_core=0 index=2 seconds=2.937298000e-01
+sample file=con-100k reader=readcon-rust pinned_core=0 index=3 seconds=2.961071000e-01
+sample file=con-100k reader=readcon-rust pinned_core=0 index=4 seconds=3.062528000e-01
+sample file=con-100k reader=readcon-rust pinned_core=0 index=5 seconds=3.389339000e-01
+sample file=con-100k reader=readcon-rust pinned_core=0 index=6 seconds=2.956783000e-01
+summary file=con-100k reader=readcon-rust pinned_core=0 n=6 median_s=3.011799500e-01 iqr_s=3.497812500e-02 q25_s=2.957855000e-01 q75_s=3.307636250e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=1 seconds=5.865663000e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=2 seconds=4.866145000e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=3 seconds=4.686891000e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=4 seconds=4.696937000e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=5 seconds=4.837101000e-01
+sample file=con-100k reader=readcon-python pinned_core=0 index=6 seconds=4.848105000e-01
+summary file=con-100k reader=readcon-python pinned_core=0 n=6 median_s=4.842603000e-01 iqr_s=1.296570000e-02 q25_s=4.731978000e-01 q75_s=4.861635000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=1 seconds=3.671401000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=2 seconds=3.263717000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=3 seconds=3.252798000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=4 seconds=3.540375000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=5 seconds=3.247046000e-01
+sample file=con-100k reader=readcon-c pinned_core=0 index=6 seconds=3.237520000e-01
+summary file=con-100k reader=readcon-c pinned_core=0 n=6 median_s=3.258257500e-01 iqr_s=2.227265000e-02 q25_s=3.248484000e-01 q75_s=3.471210500e-01
+sample file=con-100k reader=ase-eon pinned_core=0 index=1 seconds=1.067420000e+01
+sample file=con-100k reader=ase-eon pinned_core=0 index=2 seconds=1.067504000e+01
+sample file=con-100k reader=ase-eon pinned_core=0 index=3 seconds=1.066440000e+01
+sample file=con-100k reader=ase-eon pinned_core=0 index=4 seconds=1.073957000e+01
+sample file=con-100k reader=ase-eon pinned_core=0 index=5 seconds=1.059957000e+01
+sample file=con-100k reader=ase-eon pinned_core=0 index=6 seconds=1.055309000e+01
+summary file=con-100k reader=ase-eon pinned_core=0 n=6 median_s=1.066930000e+01 iqr_s=5.905250000e-02 q25_s=1.061577750e+01 q75_s=1.067483000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=1 seconds=1.001402000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=2 seconds=1.005504000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=3 seconds=1.018887000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=4 seconds=1.032504000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=5 seconds=1.030649000e+01
+sample file=con-100k reader=eon-loadcons pinned_core=0 index=6 seconds=1.006749000e+01
+summary file=con-100k reader=eon-loadcons pinned_core=0 n=6 median_s=1.012818000e+01 iqr_s=2.189325000e-01 q25_s=1.005815250e+01 q75_s=1.027708500e+01
+sample file=convel reader=readcon-rust pinned_core=0 index=1 seconds=4.826657000e-01
+sample file=convel reader=readcon-rust pinned_core=0 index=2 seconds=3.703913000e-01
+sample file=convel reader=readcon-rust pinned_core=0 index=3 seconds=3.693160000e-01
+sample file=convel reader=readcon-rust pinned_core=0 index=4 seconds=3.689635000e-01
+sample file=convel reader=readcon-rust pinned_core=0 index=5 seconds=3.677737000e-01
+sample file=convel reader=readcon-rust pinned_core=0 index=6 seconds=3.724400000e-01
+summary file=convel reader=readcon-rust pinned_core=0 n=6 median_s=3.698536500e-01 iqr_s=2.876200000e-03 q25_s=3.690516250e-01 q75_s=3.719278250e-01
+sample file=convel reader=readcon-python pinned_core=0 index=1 seconds=5.354234000e-01
+sample file=convel reader=readcon-python pinned_core=0 index=2 seconds=5.363227000e-01
+sample file=convel reader=readcon-python pinned_core=0 index=3 seconds=5.348862000e-01
+sample file=convel reader=readcon-python pinned_core=0 index=4 seconds=5.354818000e-01
+sample file=convel reader=readcon-python pinned_core=0 index=5 seconds=5.298995000e-01
+sample file=convel reader=readcon-python pinned_core=0 index=6 seconds=5.334226000e-01
+summary file=convel reader=readcon-python pinned_core=0 n=6 median_s=5.351548000e-01 iqr_s=1.678700000e-03 q25_s=5.337885000e-01 q75_s=5.354672000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=1 seconds=4.521693000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=2 seconds=4.127235000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=3 seconds=4.097413000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=4 seconds=4.103188000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=5 seconds=4.092569000e-01
+sample file=convel reader=readcon-c pinned_core=0 index=6 seconds=4.099795000e-01
+summary file=convel reader=readcon-c pinned_core=0 n=6 median_s=4.101491500e-01 iqr_s=2.321475000e-03 q25_s=4.098008500e-01 q75_s=4.121223250e-01
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=1 seconds=7.509516000e-02
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=2 seconds=6.575834000e-02
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=3 seconds=6.487787000e-02
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=4 seconds=6.473060000e-02
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=5 seconds=6.433390000e-02
+sample file=con-1e6 reader=readcon-rust pinned_core=0 index=6 seconds=6.426010000e-02
+summary file=con-1e6 reader=readcon-rust pinned_core=0 n=6 median_s=6.480423500e-02 iqr_s=1.105147500e-03 q25_s=6.443307500e-02 q75_s=6.553822250e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=1 seconds=5.555583000e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=2 seconds=5.176484000e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=3 seconds=5.141666000e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=4 seconds=5.157995000e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=5 seconds=5.156575000e-02
+sample file=con-1e6 reader=readcon-python pinned_core=0 index=6 seconds=5.125216000e-02
+summary file=con-1e6 reader=readcon-python pinned_core=0 n=6 median_s=5.157285000e-02 iqr_s=2.646850000e-04 q25_s=5.145393250e-02 q75_s=5.171861750e-02
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=1 seconds=1.429923000e+00
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=2 seconds=1.394743000e+00
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=3 seconds=1.358196000e+00
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=4 seconds=1.341638000e+00
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=5 seconds=1.370679000e+00
+sample file=con-1e6 reader=ase-eon pinned_core=0 index=6 seconds=1.386004000e+00
+summary file=con-1e6 reader=ase-eon pinned_core=0 n=6 median_s=1.378341500e+00 iqr_s=3.124150000e-02 q25_s=1.361316750e+00 q75_s=1.392558250e+00
+sample file=extxyz reader=readcon pinned_core=0 index=1 seconds=2.675775000e-01
+sample file=extxyz reader=readcon pinned_core=0 index=2 seconds=2.636818000e-01
+sample file=extxyz reader=readcon pinned_core=0 index=3 seconds=2.630774000e-01
+sample file=extxyz reader=readcon pinned_core=0 index=4 seconds=2.630489000e-01
+sample file=extxyz reader=readcon pinned_core=0 index=5 seconds=2.633838000e-01
+sample file=extxyz reader=readcon pinned_core=0 index=6 seconds=2.632201000e-01
+summary file=extxyz reader=readcon pinned_core=0 n=6 median_s=2.633019500e-01 iqr_s=4.942250000e-04 q25_s=2.631130750e-01 q75_s=2.636073000e-01
+sample file=extxyz reader=chemfiles pinned_core=0 index=1 seconds=1.063384000e+00
+sample file=extxyz reader=chemfiles pinned_core=0 index=2 seconds=1.068559000e+00
+sample file=extxyz reader=chemfiles pinned_core=0 index=3 seconds=1.068813000e+00
+sample file=extxyz reader=chemfiles pinned_core=0 index=4 seconds=1.070674000e+00
+sample file=extxyz reader=chemfiles pinned_core=0 index=5 seconds=1.071257000e+00
+sample file=extxyz reader=chemfiles pinned_core=0 index=6 seconds=1.069617000e+00
+summary file=extxyz reader=chemfiles pinned_core=0 n=6 median_s=1.069215000e+00 iqr_s=1.787250000e-03 q25_s=1.068622500e+00 q75_s=1.070409750e+00
+sample file=extxyz reader=ovito pinned_core=0 index=1 seconds=3.325602000e+00
+sample file=extxyz reader=ovito pinned_core=0 index=2 seconds=3.308679000e+00
+sample file=extxyz reader=ovito pinned_core=0 index=3 seconds=3.311670000e+00
+sample file=extxyz reader=ovito pinned_core=0 index=4 seconds=3.308616000e+00
+sample file=extxyz reader=ovito pinned_core=0 index=5 seconds=3.307256000e+00
+sample file=extxyz reader=ovito pinned_core=0 index=6 seconds=3.309187000e+00
+summary file=extxyz reader=ovito pinned_core=0 n=6 median_s=3.308933000e+00 iqr_s=2.417500000e-03 q25_s=3.308631750e+00 q75_s=3.311049250e+00
+sample file=extxyz reader=ase pinned_core=0 index=1 seconds=9.695660000e+00
+sample file=extxyz reader=ase pinned_core=0 index=2 seconds=9.688314000e+00
+sample file=extxyz reader=ase pinned_core=0 index=3 seconds=9.818252000e+00
+sample file=extxyz reader=ase pinned_core=0 index=4 seconds=9.714151000e+00
+sample file=extxyz reader=ase pinned_core=0 index=5 seconds=9.879077000e+00
+sample file=extxyz reader=ase pinned_core=0 index=6 seconds=1.010430000e+01
+summary file=extxyz reader=ase pinned_core=0 n=6 median_s=9.766201500e+00 iqr_s=1.635880000e-01 q25_s=9.700282750e+00 q75_s=9.863870750e+00
+sample file=extxyz reader=pymatgen pinned_core=0 index=1 seconds=2.461921000e+01
+sample file=extxyz reader=pymatgen pinned_core=0 index=2 seconds=2.438428000e+01
+sample file=extxyz reader=pymatgen pinned_core=0 index=3 seconds=2.381789000e+01
+sample file=extxyz reader=pymatgen pinned_core=0 index=4 seconds=2.436111000e+01
+sample file=extxyz reader=pymatgen pinned_core=0 index=5 seconds=2.354080000e+01
+sample file=extxyz reader=pymatgen pinned_core=0 index=6 seconds=2.446298000e+01
+summary file=extxyz reader=pymatgen pinned_core=0 n=6 median_s=2.437269500e+01 iqr_s=4.896100000e-01 q25_s=2.395369500e+01 q75_s=2.444330500e+01
+samples_end
