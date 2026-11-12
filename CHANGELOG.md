@@ -5,13 +5,22 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
-## Unreleased
+## v0.20.0 - 2026-11-12
+
+### Features
+
+- Stock CON and convel files fill Rust `read_positions_with_threads`, Python
+  `read_positions` and `read_coords`, and C `rkr_read_positions` from one
+  coordinate pass. `rkr_free_position_block` frees that block.
+  `rkr_read_positions` returns NULL when the frames do not share one atom
+  count. Python `read_positions` is the `(frames, atoms, 3)` array.
+  `read_coords` adds the masses and the cell.
 
 ### Bugfixes
 
-- Fortran `builder%add_atom` and `builder%add_atom_full` take the per-axis fixed
-  flags, the atom id, and the mass in the `rkr_frame_add_atom_full` order.
-  Optional velocity and force follow the mass.
+- Fortran `builder%add_atom` and `builder%add_atom_full` take the per-axis
+  fixed flags, the atom id, and the mass in the `rkr_frame_add_atom_full`
+  order. Optional velocity and force follow the mass.
 
 
 ## v0.19.0 - 2026-11-12
@@ -1330,6 +1339,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.20.0]: https://github.com/lode-org/readcon-core/compare/v0.19.0...v0.20.0
 [v0.19.0]: https://github.com/lode-org/readcon-core/compare/v0.18.1...v0.19.0
 [v0.18.1]: https://github.com/lode-org/readcon-core/compare/v0.18.0...v0.18.1
 [v0.18.0]: https://github.com/lode-org/readcon-core/compare/v0.17.3...v0.18.0
