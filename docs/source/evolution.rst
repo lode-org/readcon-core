@@ -4,12 +4,17 @@ Format Evolution and Design Rationale
 
 
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 Purpose
 -------
 
 Why CON v2 and v3 look the way they do. Each section names the
 rejected alternatives, then the constraint that decided the layout.
-Independent implementers should be able to reconstruct the same
+Independent implementers SHOULD be able to reconstruct the same
 choices from this page and the spec.
 
 Version 1 to version 2 feature matrix
@@ -132,12 +137,12 @@ and their order. The parser reads exactly those sections. Benefits:
   velocity detection (backward compatible).
 
 - The writer auto-populates ``sections`` from the frame data, so users
-  never need to set it manually.
+  are not required to set it manually.
 
 The optional ``validate=true`` metadata flag lets producers ask readers
 to verify that declared sections match coordinate blocks exactly:
 component symbols, labels, fixed masks, atom ids, numeric finiteness,
-metadata schema, and physical header invariants must all agree. This
+metadata schema, and physical header invariants MUST all agree. This
 keeps the default reader permissive for existing files while giving
 v2 producers a strict interoperability contract.
 
@@ -195,7 +200,7 @@ since v0.10.0, using the same magic-byte detection pattern (``28 b5 2f fd`` for 
 written through ``ConFrameWriter::from_path_zstd`` and the same
 ``read_all_frames`` entry point. Builds without the feature still detect
 zstd magic bytes and return a clear error pointing at the feature flag,
-so consumers never see a corrupt parse on a zstd file.
+so consumers MUST NOT see a corrupt parse on a zstd file.
 
 Why text CON stays the on-disk authority (not bcon, not RCSO)
 -------------------------------------------------------------
@@ -329,17 +334,17 @@ Compatibility expectations
 
 .. table::
 
-    +---------------------------+--------------------------------------------------------------------+
-    | Writer / reader           | Expectation                                                        |
-    +===========================+====================================================================+
-    | Legacy (no JSON line 2)   | Permissive read as implicit v1; writers should emit ≥ v2 JSON      |
-    +---------------------------+--------------------------------------------------------------------+
-    | v2 JSON without ``units`` | Readable by v3 implementations; new writes should add ``units``    |
-    +---------------------------+--------------------------------------------------------------------+
-    | v3 with ``units``         | Preferred interchange for new tools                                |
-    +---------------------------+--------------------------------------------------------------------+
-    | Unknown future version    | Strict mode errors; permissive mode may warn and best-effort parse |
-    +---------------------------+--------------------------------------------------------------------+
+    +---------------------------+----------------------------------------------------------------------+
+    | Writer / reader           | Expectation                                                          |
+    +===========================+======================================================================+
+    | Legacy (no JSON line 2)   | Permissive read as implicit v1; writers SHOULD emit v2 JSON or newer |
+    +---------------------------+----------------------------------------------------------------------+
+    | v2 JSON without ``units`` | Readable by v3 implementations; new writes SHOULD add ``units``      |
+    +---------------------------+----------------------------------------------------------------------+
+    | v3 with ``units``         | Preferred interchange for new tools                                  |
+    +---------------------------+----------------------------------------------------------------------+
+    | Unknown future version    | Strict mode errors; permissive mode MAY warn and best-effort parse   |
+    +---------------------------+----------------------------------------------------------------------+
 
 Optional sections beyond velocities / forces / energies
 -------------------------------------------------------
@@ -348,7 +353,7 @@ The declared-section mechanism already supports new optional section names
 without a format major. ``charges`` / ``spins`` (scalar, like ``energies``) and
 ``magmoms`` / ``displacements`` / ``spreads`` (3-vector, like ``velocities``) are reserved on the
 **current** v2/v3 surface. Files use ``con_spec_version`` 2 or 3; omit the sections when unused.
-Do not invent ``con_spec_version: 4`` solely for optional physics blocks.
+Writers MUST NOT invent ``con_spec_version: 4`` solely for optional physics blocks.
 
 Gaps the spec still leaves to implementers
 ------------------------------------------

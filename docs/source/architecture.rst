@@ -4,6 +4,11 @@ Library architecture
 
 
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 Overview
 --------
 
@@ -84,7 +89,7 @@ Parser (parser.rs)
   the scalar / 3-vector paths for ``energies`` / ``charges`` / ``spins`` /
   ``magmoms`` / ``displacements`` / ``spreads``) \:\: Optional blocks after coordinates. Spec-v2+ files declare
   sections in JSON metadata; files without a ``sections`` key can still
-  auto-detect velocities by blank separator. Declared sections must be
+  auto-detect velocities by blank separator. Declared sections MUST be
   present at their declared position. If JSON metadata sets ``validate``
   to ``true``, section parser paths verify component symbols, exact
   labels, fixed masks, and atom ids against the coordinate blocks
@@ -155,7 +160,7 @@ Version and spec constants:
 
 ``rkr_library_version()``
     Returns library version string (e.g.
-    ``"0.5.2"``). The pointer is static; do not free it.
+    ``"0.5.2"``). The pointer is static. Callers MUST NOT free it.
 
 Per-frame metadata accessors:
 
@@ -166,7 +171,7 @@ Per-frame metadata accessors:
 
 ``rkr_frame_metadata_json(handle)``
     Returns the full JSON metadata
-    line as a heap-allocated C string. The caller must free with
+    line as a heap-allocated C string. The caller MUST free with
     ``rkr_free_string()``.
 
 ``rkr_frame_energy(handle)``, ``rkr_frame_time(handle)``, etc.
@@ -227,6 +232,10 @@ as JSON-compatible values and convert the live atom list into a Rust
 ``ConFrame`` at write time. ``read_first_frame(path)`` uses the Rust
 first-frame reader; ``iter_con(path)`` exposes a Python iterator for
 loop-oriented frame processing.
+With ``stream=True`` that iterator wraps the Rust ``stream::ConFrameReader``, which keeps a buffer of whole lines from any ``std::io::Read``.
+Each frame is parsed from those lines by the same ``ConFrameIterator`` as the in-memory readers.
+The reader returns a frame only when the end of the stream is reached, or when, after any blank lines, a line with text and one more line follow the parser's cursor.
+That is as far as the parser looks ahead, so frame ends match the in-memory readers.
 
 ASE conversion maps all-fixed atoms to ``FixAtoms`` and partial masks to
 ``FixCartesian``, preserving ``atom_id`` through a named ASE array.
@@ -271,7 +280,7 @@ produces:
 The header is shipped pre-generated at ``include/readcon-core.h``.
 CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
-install that file. None of them run cbindgen. The cxx source tarball
+install that file. They MUST NOT run cbindgen. The cxx source tarball
 (``scripts/package-cxx.sh`` → ``readcon-core-cxx-$VERSION.tar.gz`` on the
 GitHub Release) is the FetchContent / wrapdb URL. The prebuilt C ABI
 tarball (``scripts/package-clib.sh`` →
@@ -289,7 +298,7 @@ cbindgen at install time. Optional metatensor C exports are gated
 (``metatensor.h`` first). Fat builds write
 ``target/<profile>/readcon-metatensor.env`` for include/lib. Ownership:
 ``tensor_block_into_raw_mts`` then ``mts_block_free`` only (bindings page).
-Maintainers may draft a header with ``scripts/regen-capi-headers.sh``.
+Maintainers MAY draft a header with ``scripts/regen-capi-headers.sh``.
 That tool is not a consumer or CI dependency. CI compiles C/C++ against
 the committed header and checks that the library exports the declared
 ``rkr_*`` symbols.
@@ -305,8 +314,8 @@ C ABI stability contract (``rkr_*``)
 ------------------------------------
 
 The published C surface is the ``rkr_*`` API in the shipped
-``include/readcon-core.h``. Consumers compile against that header; they
-do not run cbindgen. The C++ wrapper (``include/readcon-core.hpp``) is a
+``include/readcon-core.h``. Consumers compile against that header. They
+MUST NOT run cbindgen. The C++ wrapper (``include/readcon-core.hpp``) is a
 header-only RAII layer over the same symbols.
 
 What is frozen in 0.14.x \*\*
@@ -323,7 +332,7 @@ What is frozen in 0.14.x \*\*
   unsigned integers, ``NULL`` for absent strings.
 
 - Error policy: functions that allocate or validate return ``NULL`` or a
-  negative ``RKRStatus``; they do not abort the process. Builder
+  negative ``RKRStatus``. They MUST NOT abort the process. Builder
   ``rkr_frame_builder_build`` returns ``NULL`` on ``MassMismatch`` and other
   ``ParseError`` cases.
 
@@ -331,7 +340,7 @@ What is frozen in 0.14.x \*\*
   header; a lean build returns that status instead of hiding the
   symbol.
 
-- Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI does not
+- Periodic-table helpers stay at Z=1..92 plus D/T. The C ABI MUST NOT
   grow a Z=118 table.
 
 What is not a 1.0 freeze \*\*
@@ -341,14 +350,14 @@ The crate, wheels, and Fortran package are 0.19.0. PyPI still reports
 ``Development Status :: 4 - Beta``. A ``1.0.0`` cut is the production
 classifier and the SONAME/semver major bump. Until that tag:
 
-- Additive ``rkr_*`` symbols may appear in a 0.14.z patch.
+- Additive ``rkr_*`` symbols MAY appear in a 0.14.z patch.
 
-- Existing 0.14.x signatures, sentinels, and ownership do not change
+- Existing 0.14.x signatures, sentinels, and ownership MUST NOT change
   in a patch.
 
 - A breaking C change requires a 0.15+ minor (0.x semver) and a
   matching header/SONAME bump. Downstream packagers that ship
-  ``run_exports`` should pin an ``upper_bound`` of ``x.x`` for that reason.
+  ``run_exports`` SHOULD pin an ``upper_bound`` of ``x.x`` for that reason.
 
 Drift check \*\*
 ~~~~~~~~~~~~~~~~
@@ -374,6 +383,6 @@ for campaign screening (``readcon-db``), Cap'n Proto RPC. Lean builds return
 ``RKR_STATUS_FEATURE_DISABLED`` for missing features. UTF-8 CON remains
 authoritative on disk and in corpora.
 
-Related work and roles: :doc:`faq`. Spec:
-:doc:`spec`. Evolution: :doc:`evolution`.
-Measurements: :doc:`benchmarks`.
+Related work and roles: `faq.org <faq.rst>`_. Spec:
+`spec.org <spec.rst>`_. Evolution: `evolution.org <evolution.rst>`_.
+Measurements: `benchmarks.org <benchmarks.rst>`_.

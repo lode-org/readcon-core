@@ -59,7 +59,11 @@ def _same(left, right, where):
 
 
 def test_moved_paths_match_read_all_frames(tmp_path):
-    names = ("tiny_multi_cuh2.con", "tiny_multi_cuh2.convel", "tiny_cuh2_vel_forces.con")
+    names = (
+        "tiny_multi_cuh2.con",
+        "tiny_multi_cuh2.convel",
+        "tiny_cuh2_vel_forces.con",
+    )
     for name in names:
         src = os.path.join(RESOURCES, name)
         text = open(src).read()

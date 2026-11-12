@@ -6,7 +6,12 @@ Frequently Asked Questions
 .. note::
 
    Explanation (why the format looks like this). Learning path:
-   :doc:`tutorial`. Task recipes: :doc:`howto`.
+   :doc:`tutorial`.    Task recipes: :doc:`howto`.
+
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
 
 What CON is for
 ---------------
@@ -41,7 +46,7 @@ Saddle, dimer, and NEB pipelines already depend on that payload.
 and metatensor export **out** of it.
 `index\_proj <https://docs.rs/readcon-core/latest/readcon_core/index_proj/>`_
 and ``readcon-db`` index corpora that stay CON text. Spec:
-:doc:`spec`. Design history: :doc:`evolution`.
+`spec.org <spec.rst>`_. Design history: `evolution.org <evolution.rst>`_.
 
 Is frame topology (``bonds``) required?
 ---------------------------------------
@@ -74,7 +79,7 @@ selection **symbols** but error clearly until that feature is linked. Docs for
 conversion live under ``docs/orgmode/chemfiles-*.org``; language APIs in
 ``bindings.org``; on-disk ``bonds`` in ``spec.org``.
 
-On **import** only, display names such as ``H1`` versus types such as ``H`` may be
+On **import** only, display names such as ``H1`` versus types such as ``H`` MAY be
 kept in sidecars (``chemfiles_atom_names`` / ``chemfiles_atom_types``); the on-disk
 column remains a single ``symbol``. Hand-built frames without sidecars use
 ``symbol`` for both.
@@ -89,7 +94,7 @@ ordering vanishes after one read-write cycle.
 
 This matters for:
 
-- **NEB calculations**: interpolated images must maintain consistent
+- **NEB calculations**: interpolated images MUST maintain consistent
   atom ordering across the band. If atom ordering drifts, the
   interpolation produces nonsense.
 
@@ -134,7 +139,7 @@ CI: Cachegrind I-refs (``ci_cachegrind.yml``). PRs: Python ASV on one runner, me
 (``ci_benchmark.yml``, suite in ``benchmarks/``). Local peer scripts:
 ``benches/compare_readers.py``, ``multiformat_traj.py``, ``ase_traj_vs_con.py``,
 ``h5md_vs_con.py``. How to re-run and what each gate means:
-:doc:`benchmarks`.
+`benchmarks.org <benchmarks.rst>`_.
 
 Uncompressed files under 64 kibibytes (KiB) are read into memory, and larger ones can use the optional mmap.
 With the ``parallel`` feature, Rayon parses multi-frame text of 48 KiB or more in parallel.
@@ -165,18 +170,18 @@ and their order. Known names on the v2/v3 surface:
 
 Optional physics blocks such as ``charges`` / ``spins`` / ``magmoms`` /
 ``displacements`` / ``spreads`` use the same
-declared-section channel; they do not require a new ``con_spec_version``.
+declared-section channel. They MUST NOT require a new ``con_spec_version``.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
 separator):
 
-- Declared sections fix what the reader must consume
+- Declared sections fix what the reader MUST consume
 
 - New section names need no positional guesswork once reserved in the spec
 
 - Section order is explicit
 
-Declared sections must be present at the declared position. Use an
+Declared sections MUST be present at the declared position. Use an
 empty ``sections`` array (``[]``) to state that no additional per-atom
 sections follow.
 When the key is absent, the reader keeps the blank-separator fallback
@@ -195,14 +200,14 @@ not satisfy strict ordering and schema invariants:
 
     {"con_spec_version":2,"sections":["velocities"],"validate":true}
 
-In this mode, ``sections`` must be present. Readers verify the
+In this mode, ``sections`` MUST be present. Readers verify the
 declared section order, exact component labels, component symbols,
 integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
 counts and masses, and the JSON types of reserved metadata keys.
 
 Can I store forces, energies, charges, spins, magmoms, displacements, spreads?
----------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 Yes. Per-frame total energy lives in JSON under the ``energy`` key.
 Per-atom data uses declared ``sections``:
@@ -217,6 +222,7 @@ Per-atom data uses declared ``sections``:
 
 - **Displacement vectors** (3-vector, Angstrom, e.g. a normal mode):
   ``displacements``
+
 - **Spreads** (3-vector, Angstrom): ``spreads``, the root-mean-square
   spread of each atom along x, y, z about its written coordinates; a
   standard deviation, 0 for a classical point
@@ -234,7 +240,7 @@ contributions, declare ``energies`` alongside ``forces``:
 
 Charges, spins, magmoms, displacements, and spreads use the same wire format: list
 them in ``sections`` and emit the matching component blocks (see
-:doc:`spec`). Example fixtures:
+`spec.org <spec.rst>`_). Example fixtures:
 ``resources/test/tiny_cuh2_charges_spins_magmoms.con``,
 ``resources/test/tiny_cuh2_displacements.con``,
 ``resources/test/tiny_cuh2_spreads.con``.
@@ -349,7 +355,7 @@ What is the stack for?
 
 One on-disk checkpoint and one ``rkr_*`` ABI, instead of each code
 hand-rolling XYZ and its own atoms type. Migration guide:
-:doc:`migrate` (``readcon-core convert``,
+`migrate.org <migrate.rst>`_ (``readcon-core convert``,
 ``readcon.convert_to_con``).
 
 .. table::
@@ -419,26 +425,25 @@ The library is worth using even from one code in one language, because the code 
 
 .. table::
 
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Layer                       | What you get                                                                                                                       |
-    +=============================+====================================================================================================================================+
-    | Frame API                   | Read, write and builders; ``energy``, sections, fixed masks and ``atom_id`` without new types                                      |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Many frames and compression | Lazy iterators, gzip and zstd, a fast parse path; a trajectory stays a sequence of .con frames                                     |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Selection                   | ``select_atoms`` / ``rkr_frame_select`` (``name H``, bonds and angles when the frame has topology)                                 |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Hourglass ``rkr_*``         | The same behaviour in Fortran, C, C++, Python, Julia and Rust as the stack grows                                                   |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | ``readcon-db``              | Lightning Memory-Mapped Database (LMDB) collections of .con text: energy, formula and section indexes, deduplication, many readers |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Plotting                    | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ on the same checkpoints      |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Ingress                     | Chemfiles: .xyz, Protein Data Bank (PDB), .gro and other formats to .con through one convert path                                  |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
-    | Performance checks          | Cachegrind instruction counts on ``main``; Python ASV on one runner, memray peaks on pull requests; peer scripts under             |
-    |                             | ``benches/``                                                                                                                       |
-    +-----------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Layer                       | What you get                                                                                                                        |
+    +=============================+=====================================================================================================================================+
+    | Frame API                   | Read, write and builders; ``energy``, sections, fixed masks and ``atom_id`` without new types                                       |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Many frames and compression | Lazy iterators, gzip and zstd, a fast parse path; a trajectory stays a sequence of .con frames                                      |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Selection                   | ``select_atoms`` / ``rkr_frame_select`` (``name H``, bonds and angles when the frame has topology)                                  |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Hourglass ``rkr_*``         | The same behaviour in Fortran, C, C++, Python, Julia and Rust as the stack grows                                                    |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | ``readcon-db``              | Lightning Memory-Mapped Database (LMDB) collections of .con text: energy, formula and section indexes, deduplication, many readers  |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Plotting                    | `chemparseplot <https://chemparseplot.rgoswami.me>`_ / `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_ on the same checkpoints       |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Ingress                     | Chemfiles: .xyz, Protein Data Bank (PDB), .gro and other formats to .con through one convert path                                   |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
+    | Performance checks          | Cachegrind instruction counts on ``main``; Python ASV on one runner, memray peaks on pull requests; peer scripts under ``benches/`` |
+    +-----------------------------+-------------------------------------------------------------------------------------------------------------------------------------+
 
 After the move, the structure object, the selector, ``readcon-db`` and the plots all read .con files.
 The format rules are in :doc:`the specification <spec>`.
@@ -493,7 +498,7 @@ Selection needs a chemfiles build such as the ``readcon-chemfiles`` wheel, and t
     print(h_idx)
     # topology: frame.select("angles: all") when metadata bonds are present
 
-Recipes are in :doc:`chemfiles-howto`, :doc:`howto` and :doc:`bindings`.
+Recipes are in `chemfiles-howto <./chemfiles-howto.rst>`_, `howto <./howto.rst>`_ and `bindings <./bindings.rst>`_.
 
 What the plotting tools add
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -540,7 +545,7 @@ LMDB corpus on top of it (indexes for energy / formula / section
 presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 (optionally gzip/zstd) and ``iter_con`` / ``forward`` cover trajectory-style loads
 in ``readcon-core`` itself. Large corpora stay CON text; ``readcon-db``
-indexes them. Do not switch the on-disk structure to another dialect
+indexes them. Campaigns MUST NOT switch the on-disk structure to another dialect
 for screening.
 
 Install: ``cargo add readcon-db`` / ``pip install readcon-db``.
@@ -554,7 +559,7 @@ maps foreign structures into ``ConFrame`` / CON so the rest of the stack speaks
 one format. The durable interchange is CON (constraints, ``atom_id``, sections,
 JSON, hourglass ABI). Convert at the edge when inputs arrive as XYZ/PDB/GRO;
 keep CON for optimizers, campaigns (``readcon-db``), selection, and plotting.
-How-to: :doc:`migrate`, :doc:`chemfiles-tutorial`.
+How-to: `migrate.org <migrate.rst>`_, `chemfiles-tutorial <chemfiles-tutorial.rst>`_.
 
 Why an hourglass C ABI?
 -----------------------

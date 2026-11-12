@@ -12,6 +12,11 @@ These pages answer **how do I …** once you already know the shape of a CON fil
 from the :doc:\`tutorial\`. Pick a language section and copy the block that matches
 your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 Querying the spec version
 -------------------------
 
@@ -271,13 +276,13 @@ Control the number of decimal places in output coordinates:
     use std::fs::File;
     use readcon_core::writer::ConFrameWriter;
 
-   // Default text round-trips every finite binary64 value.
-   let file = File::create("output.con").unwrap();
-   let mut writer = ConFrameWriter::new(file);
+    // Default text round-trips every finite binary64 value.
+    let file = File::create("output.con").unwrap();
+    let mut writer = ConFrameWriter::new(file);
 
-   // Fixed decimals are lossy. Ask for them explicitly.
-   let file = File::create("fixed.con").unwrap();
-   let mut writer = ConFrameWriter::with_precision(file, 6);
+    // Fixed decimals are lossy. Ask for them explicitly.
+    let file = File::create("fixed.con").unwrap();
+    let mut writer = ConFrameWriter::with_precision(file, 6);
 
 Reading a single frame efficiently
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -311,6 +316,32 @@ larger files.
     let frames = read_all_frames(Path::new("large_trajectory.con")).unwrap();
     println!("Loaded {} frames", frames.len());
 
+Reading a compressed trajectory in bounded memory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The path readers above decompress a ``.con.gz`` or ``.con.zst`` file into one buffer before parsing, so memory grows with the decompressed size.
+``ConFrameReader`` decodes and parses while it reads, and its buffer stays near one frame plus its read size (1 MiB, one mebibyte, by default).
+
+.. code:: rust
+
+    use readcon_core::stream::ConFrameReader;
+    use std::path::Path;
+
+    let mut atoms = 0;
+    for frame in ConFrameReader::open(Path::new("long_run.con.gz")).unwrap() {
+        atoms += frame.unwrap().atom_data.len();
+    }
+    println!("Atoms over all frames: {atoms}");
+
+``ConFrameReader::new`` takes any ``std::io::Read``, such as a socket or a decoder you have set up yourself.
+``forward()`` skips a frame without building it.
+Frames and parse errors are those of ``ConFrameIterator::from_bytes`` over the whole stream.
+The reader stops after the first error.
+When the source fails, the reader first returns the frames that ``from_bytes`` finds in the bytes read before the failure, then the input or output error.
+A frame is returned once the stream has ended, or once a line with text and one more line follow it, because the parser looks that far ahead to decide where a frame ends.
+A frame larger than one read makes the buffer grow to that frame plus one read.
+For a frame longer than eight reads, an eighth of the frame takes the place of that read.
+
 Parallel parsing
 ~~~~~~~~~~~~~~~~
 
@@ -321,7 +352,7 @@ cutoff that starts workers for you. A pool helps when the file has many
 frames and the coordinate parse is the cost. One frame does not pay for
 workers: starting a pool made that read slower.
 
-``None``, ``0``, and ``1`` are the calling thread. ``n >= 2`` is a pool of that
+``None``, ``0``, and ``1`` are the calling thread. ``n >`` 2= is a pool of that
 size. Equal-length frames, including a whitespace tail, use equal-span
 boundaries, so the caller does not walk every header. Frames that do not
 share a length still walk headers on the caller, then parse the spans on
@@ -398,7 +429,7 @@ Compression by extension, and stdin
 
 A path ending in ``.gz`` is gzip and ``.zst`` is zstd, on read and on write.
 The same choice is the magic bytes at the start of a read. Pass
-``compression="gzip"``, ``"zstd"``, or ``"none"`` to ``write_con`` to override the
+``compression``"gzip"``, ="zstd"``, or ``"none"`` to ``write_con`` to override the
 extension. A ``.zst`` write needs the ``zstd`` Cargo feature.
 ``append=True`` is only for an uncompressed file.
 
@@ -528,6 +559,25 @@ Reading and inspecting frames
             print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
             print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
 
+Streaming a large or compressed trajectory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``iter_con(path)`` reads the whole file into memory before the first frame, and decompresses a gzip file whole.
+For a long run, ask it to stream:
+
+.. code:: python
+
+    import readcon
+
+    energies = []
+    for frame in readcon.iter_con("long_run.con.gz", stream=True):
+        energies.append(frame.energy)
+
+Memory then stays near one frame plus 1 MiB, whatever the file size.
+The frames are the same as without ``stream=True``.
+The loop raises ``OSError`` at a damaged frame, after it has processed the frames before it.
+Without ``stream=True``, invalid UTF-8 (Unicode Transformation Format, 8-bit) is raised by ``iter_con`` itself, before any frame.
+
 Working with convel velocity data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -583,13 +633,9 @@ Writing frames
     # Write to file
     readcon.write_con("output.con", frames)
 
-    # Write to string. The bytes match the file write.
+    # Write to string
     output = readcon.write_con_string(frames)
     print(output)
-
-    # Append to an uncompressed file. Gzip and zstd are refused.
-    readcon.write_con("output.con", frames[:1])
-    readcon.write_con("output.con", frames[1:], append=True)
 
 Writing with custom precision
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -602,12 +648,12 @@ Pass the ``precision`` keyword to control decimal places:
 
     import readcon
 
-   # Default text round-trips every finite binary64 value.
-   readcon.write_con("output.con", frames)
+    # Default text round-trips every finite binary64 value.
+    readcon.write_con("output.con", frames)
 
-   # Fixed decimals are lossy. Ask for them explicitly.
-   readcon.write_con("fixed.con", frames, precision=6)
-   output = readcon.write_con_string(frames, precision=17)
+    # Fixed decimals are lossy. Ask for them explicitly.
+    readcon.write_con("fixed.con", frames, precision=6)
+    output = readcon.write_con_string(frames, precision=17)
 
 ASE Atoms conversion
 ~~~~~~~~~~~~~~~~~~~~
@@ -615,7 +661,7 @@ ASE Atoms conversion
 /Added in v0.4.0.  atom\_id, velocity, mass, forces, and per-axis
 fixed-mask transfer are preserved.
 
-Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE must be
+Convert between ``ConFrame`` and ASE ``Atoms`` objects.  ASE MUST be
 installed (it is an optional dependency).  The conversion preserves
 atom\_id (via a custom per-atom array), velocities, forces, masses,
 and per-axis fixed masks.
@@ -909,13 +955,13 @@ Collecting and writing frames
         all_frames.push_back(std::move(frame));
     }
 
-   // Default text round-trips every finite binary64 value.
-   readcon::ConFrameWriter writer("output.con");
-   writer.extend(all_frames);
+    // Default text round-trips every finite binary64 value.
+    readcon::ConFrameWriter writer("output.con");
+    writer.extend(all_frames);
 
-   // Fixed decimals are lossy. Ask for them explicitly.
-   readcon::ConFrameWriter fixed_writer("fixed.con", 6);
-   fixed_writer.extend(all_frames);
+    // Fixed decimals are lossy. Ask for them explicitly.
+    readcon::ConFrameWriter fixed_writer("fixed.con", 6);
+    fixed_writer.extend(all_frames);
 
 Integration with eOn
 ~~~~~~~~~~~~~~~~~~~~
@@ -1031,10 +1077,20 @@ Chemfiles — convert other formats into CON
 
 Foreign formats are a separate how-to track:
 
-- Tutorial: :doc:`chemfiles-tutorial`
+- Tutorial: `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
 
-- How-to: :doc:`chemfiles-howto`
+- How-to: `chemfiles-howto.org <chemfiles-howto.rst>`_
 
-- Explanation: :doc:`chemfiles-explain`
+- Explanation: `chemfiles-explain.org <chemfiles-explain.rst>`_
 
-- Reference: :doc:`chemfiles-reference`
+- Reference: `chemfiles-reference.org <chemfiles-reference.rst>`_
+
+Exact numeric CON output from C
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``create_writer_from_path_round_trip_c(path)`` retains every finite binary64
+value, including forces below the precision of fixed decimal output.
+Use ``rkr_writer_extend`` to append frames and ``rkr_writer_flush`` to check
+for write failures before calling ``free_rkr_writer``. Decimal-place
+formatting is available through ``create_writer_from_path_with_precision_c``.
+Seventeen decimal places do not preserve every binary64 value.

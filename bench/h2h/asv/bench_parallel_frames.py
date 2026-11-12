@@ -61,7 +61,9 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
     WORK.mkdir(parents=True, exist_ok=True)
     paths = input_paths()
     stamp = WORK / "stamp.json"
-    if stamp.exists() and all(path.exists() and path.stat().st_size > 0 for path in paths.values()):
+    if stamp.exists() and all(
+        path.exists() and path.stat().st_size > 0 for path in paths.values()
+    ):
         found = json.loads(stamp.read_text(encoding="utf-8"))
         if found.get("frames") == N_FRAMES and found.get("atoms") == N_ATOMS:
             return paths
@@ -96,9 +98,7 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
         )
         xyz_parts.append(f"{N_ATOMS}\n{lattice}\n")
         xyz_parts.append(
-            "".join(
-                f"Cu {row[0]:.8f} {row[1]:.8f} {row[2]:.8f}\n" for row in frame
-            )
+            "".join(f"Cu {row[0]:.8f} {row[1]:.8f} {row[2]:.8f}\n" for row in frame)
         )
         if frame_index % 2000 == 1999:
             _flush(paths, con_parts, vel_parts, xyz_parts)
@@ -119,7 +119,9 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
     return paths
 
 
-def _flush(paths: dict[str, Path], con: list[str], vel: list[str], xyz: list[str]) -> None:
+def _flush(
+    paths: dict[str, Path], con: list[str], vel: list[str], xyz: list[str]
+) -> None:
     if con:
         with paths["con"].open("a", encoding="utf-8") as handle:
             handle.write("".join(con))
@@ -300,7 +302,9 @@ def run_series(reader: str, path: Path, threads: int) -> dict:
         os.fspath(path),
         str(threads),
     ]
-    proc = subprocess.run(command, capture_output=True, text=True, env=series_env(), check=False)
+    proc = subprocess.run(
+        command, capture_output=True, text=True, env=series_env(), check=False
+    )
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout)[-500:].replace("\n", " ")
         raise RuntimeError(err or f"{reader} exited {proc.returncode}")
@@ -359,7 +363,16 @@ def series_main(reader: str, path: str, threads: int) -> None:
         if not ok(got):
             raise SystemExit(f"sample result {got!r}")
         del got
-    print(json.dumps({"warmup_s": warmup_s, "samples": samples, "reader": reader, "threads": threads}))
+    print(
+        json.dumps(
+            {
+                "warmup_s": warmup_s,
+                "samples": samples,
+                "reader": reader,
+                "threads": threads,
+            }
+        )
+    )
 
 
 def check_readcon(paths: dict[str, Path], coords: np.ndarray, log: list[str]) -> None:
@@ -397,7 +410,14 @@ def readers_for(kind: str) -> list[str]:
         return ["readcon", "ase_eon", "chemfiles", "ovito", "mdanalysis"]
     if kind == "convel":
         return ["readcon", "ase_eon"]
-    return ["readcon_extxyz", "ase_extxyz", "chemfiles", "ovito", "mdanalysis", "pymatgen"]
+    return [
+        "readcon_extxyz",
+        "ase_extxyz",
+        "chemfiles",
+        "ovito",
+        "mdanalysis",
+        "pymatgen",
+    ]
 
 
 def check_reader(reader: str, path: Path, coords: np.ndarray) -> str | None:
@@ -419,13 +439,15 @@ def campaign() -> None:
     coords = reference()
     paths = fresh_inputs(coords) if "--rewrite" in sys.argv else write_inputs(coords)
     log: list[str] = []
-    head = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
+    head = subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+    ).strip()
     branch = subprocess.check_output(
         ["git", "-C", str(ROOT), "rev-parse", "--abbrev-ref", "HEAD"], text=True
     ).strip()
     log.extend(
         [
-            f"repo lode-org/readcon-core",
+            "repo lode-org/readcon-core",
             f"branch {branch}",
             f"rev {head}",
             f"nproc {os.cpu_count()}",
@@ -484,7 +506,10 @@ def campaign() -> None:
                         ("threads", 1),
                         ("mask", doc["mask"]),
                         ("warmup_s", f"{doc['warmup_s']:.9e}"),
-                        ("samples_s", ",".join(f"{item:.9e}" for item in doc["samples"])),
+                        (
+                            "samples_s",
+                            ",".join(f"{item:.9e}" for item in doc["samples"]),
+                        ),
                         ("median_s", f"{median:.9e}"),
                         ("iqr_s", f"{iqr:.9e}"),
                     )
@@ -519,7 +544,8 @@ def campaign() -> None:
                         f"threads={threads}",
                         f"mask={doc['mask']}",
                         f"warmup_s={doc['warmup_s']:.9e}",
-                        "samples_s=" + ",".join(f"{item:.9e}" for item in doc["samples"]),
+                        "samples_s="
+                        + ",".join(f"{item:.9e}" for item in doc["samples"]),
                         f"median_s={median:.9e}",
                         f"iqr_s={iqr:.9e}",
                     ]
@@ -543,14 +569,22 @@ def campaign() -> None:
     log.append("exit_code 0")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     LOG.write_text("\n".join(log) + "\n", encoding="utf-8")
-    print("\n".join(line for line in log if line.startswith(("headline", "scale", "nproc", "online"))))
+    print(
+        "\n".join(
+            line
+            for line in log
+            if line.startswith(("headline", "scale", "nproc", "online"))
+        )
+    )
 
 
 class TimeParallelFrames:
     """One ``read_con`` call. The campaign records the warmup and six samples."""
 
     timeout = 600
-    params = [(name, threads) for name in ("con", "convel") for threads in THREAD_WIDTHS]
+    params = [
+        (name, threads) for name in ("con", "convel") for threads in THREAD_WIDTHS
+    ]
     param_names = ["file", "threads"]
 
     def setup(self, file: str, threads: int):

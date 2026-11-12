@@ -15,9 +15,7 @@ def _hwm_kib() -> int:
 
 
 def test_gzip_write_does_not_retain_every_frame(tmp_path):
-    atoms = [
-        readcon.Atom("Cu", float(i % 10), 1.0, 2.0, atom_id=i) for i in range(48)
-    ]
+    atoms = [readcon.Atom("Cu", float(i % 10), 1.0, 2.0, atom_id=i) for i in range(48)]
     frame = readcon.ConFrame((20.0, 20.0, 20.0), (90.0, 90.0, 90.0), atoms)
     frames = [frame] * 6000
     before = _hwm_kib()
@@ -41,9 +39,7 @@ def test_gzip_write_does_not_retain_every_frame(tmp_path):
 
 
 def test_con_frame_list_write_does_not_build_every_python_frame(tmp_path):
-    atoms = [
-        readcon.Atom("Cu", float(i % 10), 1.0, 2.0, atom_id=i) for i in range(48)
-    ]
+    atoms = [readcon.Atom("Cu", float(i % 10), 1.0, 2.0, atom_id=i) for i in range(48)]
     frame = readcon.ConFrame((20.0, 20.0, 20.0), (90.0, 90.0, 90.0), atoms)
     src = tmp_path / "src.con.gz"
     readcon.write_con(str(src), [frame] * 20000)

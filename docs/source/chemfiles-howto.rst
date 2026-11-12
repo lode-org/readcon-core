@@ -8,7 +8,12 @@ How-to — Chemfiles conversion and selection
    Diátaxis *how-to guides*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-(:doc:`howto`) or finish :doc:`chemfiles-tutorial` once.
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
+(`howto <howto.rst>`_) or finish `the chemfiles tutorial <chemfiles-tutorial.rst>`_ once.
 
 How to convert a single structure file (XYZ, PDB, GRO, …) to CON
 ----------------------------------------------------------------
@@ -27,7 +32,7 @@ How to convert a single structure file (XYZ, PDB, GRO, …) to CON
     w.write_frame(&frame)?;
 
 Chemfiles selects the reader from the path. If the format has topology, CON
-line-2 JSON may include ``bonds`` (0-based ``atom_data`` indices after import
+line-2 JSON MAY include ``bonds`` (0-based ``atom_data`` indices after import
 remap) and ``chemfiles_residues``. Line-2 ``units.time`` is ``ps`` (chemfiles
 velocities are Å/ps), not the CON-native default ``fs``.
 
@@ -141,8 +146,8 @@ format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
     let r = evaluate_selection_on_con_frame("angles: all", frame)?;
     assert_eq!(r.context_size, 3);
 
-Angles/dihedrals are **derived by chemfiles from bonds** at projection time;
-you do not store angle arrays on disk in v0.13.
+Angles and dihedrals are **derived by chemfiles from bonds** at projection time.
+Writers MUST NOT store angle arrays on disk in v0.13.
 
 How to use the C API for selection
 ----------------------------------
@@ -177,7 +182,7 @@ How to install lean CON I/O only (no libchemfiles)
     cargo build                            # stubs; FeatureDisabled on import/select
 
 Selection symbols still import in Python/Rust; they error clearly. Use this
-for CI that must not compile CMake/chemfiles.
+for CI that MUST NOT compile CMake/chemfiles.
 
 How to install full chemfiles support
 -------------------------------------
@@ -189,7 +194,7 @@ How to install full chemfiles support
     cargo build --features chemfiles
     maturin develop --features python,chemfiles
 
-Do not install ``readcon`` and ``readcon-chemfiles`` together (module clash).
+Users MUST NOT install ``readcon`` and ``readcon-chemfiles`` together (module clash).
 
 How to batch-convert a directory of foreign trajectories
 --------------------------------------------------------

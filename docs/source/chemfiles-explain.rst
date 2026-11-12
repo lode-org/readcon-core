@@ -12,6 +12,11 @@ Explanation — Chemfiles ingress and CON topology
    *Full ecosystem* — eOn, rgpot, LODE consumers; chemparseplot, rgpycrumbs,
    pychum for viz and inputs.
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 
 
 .. note::
@@ -19,7 +24,7 @@ Explanation — Chemfiles ingress and CON topology
    Diátaxis *explanation*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
-:doc:`chemfiles-tutorial` and :doc:`chemfiles-howto`.
+`tutorial <chemfiles-tutorial.rst>`_ and `how-to <chemfiles-howto.rst>`_.
 
 Why drive conversion from other formats at all?
 -----------------------------------------------
@@ -137,7 +142,7 @@ indices (type-grouped order on that frame). Typical strings:
 - **Empty topology**: without ``bonds``, topology selectors return no matches (not
   a hard error unless the string is invalid).
 
-Under the hood, evaluation may go through a small optional ingress stack
+Under the hood, evaluation MAY go through a small optional ingress stack
 (currently chemfiles when that feature is linked). Callers do not need to care:
 the public APIs (``select_on_frame``, ``select_atom_indices``, ``rkr_frame_select``,
 trajectory helpers such as ``select_atom_positions_on_frames``) all speak CON
@@ -150,9 +155,9 @@ Selection only sees what the frame stores (plus a few import sidecars). In
 particular:
 
 - **No residues**: there is no residue table, so ``resname`` and residue-centric
-  filters have nothing to attach to. Import does not invent residues.
+  filters have nothing to attach to. Import MUST NOT invent residues.
 
-- **Thin properties**: optional ``chemfiles_atom_properties`` (and similar) may
+- **Thin properties**: optional ``chemfiles_atom_properties`` (and similar) MAY
   carry a subset of foreign keys after conversion; most per-atom property maps
   from other formats are dropped.
 
@@ -161,11 +166,11 @@ particular:
 
 - **No geometry minidialect**: distance / angle / dihedral **threshold** strings
   that depend on carefully staged extra atoms (as in some third-party test
-  suites) are not part of the CON regression surface. A string may still parse;
+  suites) are not part of the CON regression surface. A string MAY still parse;
   that is not a promise of behaviour from another toolkit.
 
-APIs and install matrices: :doc:`bindings`,
-:doc:`chemfiles-reference` (feature-gated conversion stack).
+APIs and install matrices: `bindings <bindings.rst>`_,
+`reference <chemfiles-reference.rst>`_ (feature-gated conversion stack).
 
 Place in the broader stack
 --------------------------

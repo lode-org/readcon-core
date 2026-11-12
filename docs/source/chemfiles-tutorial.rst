@@ -36,7 +36,7 @@ Convert other formats into CON
 
 This tutorial is **learning-oriented**: one successful path from a **non-CON** file
 into CON. Prefer ``pip install readcon-chemfiles`` (or Rust ``--features chemfiles``).
-For native CON files without conversion, start with :doc:`tutorial` instead.
+For native CON files without conversion, start with `tutorial <tutorial.rst>`_ instead.
 
 What you will build
 -------------------
