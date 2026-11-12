@@ -112,7 +112,11 @@ def _write(filename, images, velocities: bool, append: bool) -> None:
     path = os.fspath(filename)
     if isinstance(images, Atoms):
         images = [images]
-    batch = None if append or velocities or not images else _batch_geometry(images)
+    batch = (
+        None
+        if append or velocities or not images or _custom_atom_ids(images)
+        else _batch_geometry(images)
+    )
     if batch is not None:
         positions, masses, cell, symbol = batch
         readcon.write_coords(path, positions, masses, cell, symbol=symbol)
@@ -124,27 +128,60 @@ def _write(filename, images, velocities: bool, append: bool) -> None:
     readcon.write_con(path, frames)
 
 
+def _custom_atom_ids(images) -> bool:
+    """True when column 5 is present and is not the fallback 0..n-1."""
+    for atoms in images:
+        if "atom_id" not in atoms.arrays:
+            continue
+        ids = np.asarray(atoms.arrays["atom_id"]).reshape(-1)
+        if ids.shape != (len(atoms),) or not np.array_equal(ids, np.arange(len(atoms))):
+            return True
+    return False
+
+
 def _read_bulk(path: str):
     """Build every frame from readcon's coordinate arrays.
 
-    Returns None when the file needs the per-frame path (velocities or a
-    partial constraint). The copper-grid trajectory does not.
+    Returns None when a frame carries velocities, forces, or a per-axis
+    constraint. Those need the frame objects. Element order and column 5
+    are read per frame: a later frame may store oxygen before carbon.
     """
     probe = next(readcon.iter_con(path, stream=True), None)
     if probe is None or _needs_slow_frame(probe):
         return None
-    symbols = [atom.symbol for atom in probe.atoms]
-    numbers = np.array([atomic_numbers[symbol] for symbol in symbols], dtype=int)
-    fixed = [all(atom.fixed) for atom in probe.atoms]
     meta = dict(probe.metadata)
     pbc = meta.get("pbc", [False, False, False])
     info = {key: value for key, value in meta.items() if key not in _RESERVED}
-    constraint = FixAtoms(indices=np.flatnonzero(np.asarray(fixed, dtype=bool)))
     data = readcon.read_coords(path)
+    if data.get("has_section") or data.get("partial_fixed"):
+        return None
+    if "atom_ids" not in data or "fixed" not in data or not data.get("species"):
+        return None
     positions = np.asarray(data["positions"])
     masses = np.asarray(data["masses"])
     cell = np.asarray(data["cell"])
+    atom_ids = np.asarray(data["atom_ids"])
+    fixed = np.asarray(data["fixed"])
     n_frames = int(data["n_frames"])
+    n_atoms = int(data["n_atoms"])
+    species = data["species"]
+    if atom_ids.shape != (n_frames, n_atoms) or fixed.shape != (n_frames, n_atoms):
+        return None
+    if len(species) == 1:
+        numbers = _numbers_from_runs(species[0])
+        if numbers is None or numbers.shape != (n_atoms,):
+            return None
+        numbers_per_frame = None
+    elif len(species) == n_frames:
+        numbers_per_frame = []
+        for runs in species:
+            row = _numbers_from_runs(runs)
+            if row is None or row.shape != (n_atoms,):
+                return None
+            numbers_per_frame.append(row)
+        numbers = None
+    else:
+        return None
     started = time.perf_counter()
     same_cell = n_frames == 0 or bool(np.all(cell == cell[0]))
     cell_matrix = cellpar_to_cell(cell[0]) if same_cell and n_frames else None
@@ -152,15 +189,20 @@ def _read_bulk(path: str):
     mass_row = np.ascontiguousarray(masses[0]) if same_mass and n_frames else None
     images = []
     for index in range(n_frames):
+        held = np.flatnonzero(fixed[index] == 7)
+        frame_numbers = numbers if numbers is not None else numbers_per_frame[index]
         atoms = Atoms(
-            numbers=numbers,
+            numbers=np.array(frame_numbers, dtype=int, copy=True),
             positions=positions[index],
             cell=cell_matrix
             if cell_matrix is not None
             else cellpar_to_cell(cell[index]),
             pbc=pbc,
             masses=mass_row if mass_row is not None else masses[index],
-            constraint=constraint,
+            constraint=FixAtoms(indices=held) if held.size else None,
+        )
+        atoms.set_array(
+            "atom_id", np.array(atom_ids[index], dtype=np.uint64, copy=True)
         )
         if info:
             atoms.info.update(info)
@@ -168,6 +210,22 @@ def _read_bulk(path: str):
     last_split["parse_s"] = float(data["parse_s"])
     last_split["atoms_s"] = time.perf_counter() - started
     return images
+
+
+def _numbers_from_runs(runs):
+    """Atomic numbers for one frame's `(symbol, count)` runs, or None."""
+    if not runs:
+        return np.zeros(0, dtype=int)
+    parts = []
+    for symbol, count in runs:
+        try:
+            number = atomic_numbers[symbol]
+        except KeyError:
+            return None
+        parts.append(np.full(int(count), number, dtype=int))
+    if not parts:
+        return np.zeros(0, dtype=int)
+    return np.concatenate(parts)
 
 
 def _needs_slow_frame(frame) -> bool:
@@ -231,6 +289,10 @@ def _frame_to_atoms(frame) -> Atoms:
 
 
 def _atoms_to_frame(atoms: Atoms, velocities: bool):
+    # Column 5 is arrays["atom_id"]. A missing array is 0..n-1, not ASE tags.
+    if "atom_id" not in atoms.arrays:
+        atoms = atoms.copy()
+        atoms.set_array("atom_id", np.arange(len(atoms), dtype=np.uint64))
     frame = readcon.ConFrame.from_ase(atoms)
     if not velocities:
         for atom in frame.atoms:

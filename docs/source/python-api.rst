@@ -46,9 +46,15 @@ remains the path that returns frames, metadata, and optional sections.
 calling thread, and ``n >= 2`` for a Rayon pool of that size when the
 build has ``parallel``. ``read_coords`` returns a dict. ``positions`` has
 that same shape, ``masses`` is ``(frames, atoms)``, and ``cell`` is
-``(frames, 6)`` with lengths then angles. The dict also carries
-``n_frames``, ``n_atoms``, ``parse_s``, ``convert_s``, and ``copy_s``.
-A file whose frames do not share one atom count raises ``ValueError``.
+``(frames, 6)`` with lengths then angles. ``atom_ids`` is column 5 and
+``fixed`` is the column-4 bitmask, both ``(frames, atoms)``. ``species``
+is one list of ``(symbol, count)`` runs when every frame uses that order,
+and one list per frame when a later frame does not. ``has_section`` is
+true when a frame carries velocities or another per-atom section.
+``partial_fixed`` is true when a mask holds some axes only. The dict also
+carries ``n_frames``, ``n_atoms``, ``parse_s``, ``convert_s``, and
+``copy_s``. A file whose frames do not share one atom count raises
+``ValueError``.
 
 .. code:: python
 

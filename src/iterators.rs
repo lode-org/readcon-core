@@ -1155,6 +1155,18 @@ pub struct CoordColumns {
     pub block: PositionBlock,
     pub masses: Vec<f64>,
     pub cells: Vec<f64>,
+    /// Column 5, file order, length `n_frames * n_atoms` when identity was read.
+    pub atom_ids: Vec<u64>,
+    /// Decoded column-4 bitmask, same length as `atom_ids` when identity was read.
+    pub fixed: Vec<u8>,
+    /// One run-length element list when every frame matches, otherwise one per frame.
+    ///
+    /// Each run is `(symbol, count)` in file order. An empty list means identity
+    /// was not collected.
+    pub species: Vec<Vec<(String, usize)>>,
+    pub has_section: bool,
+    /// True when any atom is held on some axes and free on others.
+    pub partial_fixed: bool,
 }
 
 /// Positions, masses, and cells for a stock CON or convel file.
@@ -1167,7 +1179,7 @@ pub fn read_coord_columns(
 ) -> Result<CoordColumns, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let bytes = contents.as_bytes();
-    if let Ok(Some(columns)) = certified_columns(bytes, num_threads) {
+    if let Ok(Some(columns)) = certified_columns(bytes, num_threads, true) {
         return Ok(columns);
     }
     let frames = frames_from_bytes_located(bytes, num_threads)?;
@@ -1177,8 +1189,13 @@ pub fn read_coord_columns(
 fn certified_columns(
     bytes: &[u8],
     num_threads: Option<usize>,
+    identity: bool,
 ) -> Result<Option<CoordColumns>, error::LocatedParseError> {
-    let parsed = match crate::columns::positions_from_con_bytes(bytes) {
+    let mut parsed = match if identity {
+        crate::columns::positions_with_identity(bytes)
+    } else {
+        crate::columns::positions_from_con_bytes(bytes)
+    } {
         Ok(parsed) if parsed.stock => parsed,
         _ => return Ok(None),
     };
@@ -1191,6 +1208,11 @@ fn certified_columns(
             },
             masses: Vec::new(),
             cells: Vec::new(),
+            atom_ids: Vec::new(),
+            fixed: Vec::new(),
+            species: Vec::new(),
+            has_section: false,
+            partial_fixed: false,
         }));
     }
     let Some(n_atoms) = parsed.rectangular_atoms() else {
@@ -1212,11 +1234,25 @@ fn certified_columns(
             index as u64,
         ));
     };
+    let ColumnIdentity {
+        atom_ids,
+        fixed,
+        species,
+        partial_fixed,
+    } = if identity {
+        match frame_identity(&parsed, n_atoms) {
+            Some(identity) => identity,
+            None => return Ok(None),
+        }
+    } else {
+        ColumnIdentity::default()
+    };
+    let has_section = parsed.has_section;
     let values = if parallel_column_threads(num_threads) {
         parallel_column_values(bytes, &parsed, n_atoms, num_threads)
             .map_err(|err| error::LocatedParseError::new(err, 0, 0))?
     } else {
-        parsed.positions
+        std::mem::take(&mut parsed.positions)
     };
     Ok(Some(CoordColumns {
         block: PositionBlock {
@@ -1226,7 +1262,60 @@ fn certified_columns(
         },
         masses: parsed.masses,
         cells: parsed.cells,
+        atom_ids,
+        fixed,
+        species,
+        has_section,
+        partial_fixed,
     }))
+}
+
+/// Column 5, the fixed mask, and the element runs for one coordinate read.
+#[derive(Default)]
+struct ColumnIdentity {
+    atom_ids: Vec<u64>,
+    fixed: Vec<u8>,
+    species: Vec<Vec<(String, usize)>>,
+    partial_fixed: bool,
+}
+
+/// Column 5, the fixed mask, and element runs. `None` when the rich columns
+/// do not partition the frames, so the caller uses the frame parser.
+fn frame_identity(parsed: &crate::columns::ConPositions, n_atoms: usize) -> Option<ColumnIdentity> {
+    let n = parsed.n_frames.saturating_mul(n_atoms);
+    if parsed.ids.len() != n || parsed.flags.len() != n {
+        return None;
+    }
+    let mut runs = Vec::with_capacity(parsed.n_frames);
+    let mut components = parsed.components.iter();
+    for &count in &parsed.counts {
+        let mut left = count;
+        let mut frame_runs = Vec::new();
+        while left > 0 {
+            let (symbol, width) = components.next()?;
+            if *width == 0 || *width > left {
+                return None;
+            }
+            frame_runs.push((symbol.to_string(), *width));
+            left -= *width;
+        }
+        runs.push(frame_runs);
+    }
+    if components.next().is_some() {
+        return None;
+    }
+    let partial_fixed = parsed.flags.iter().any(|flag| *flag != 0 && *flag != 7);
+    let species = if runs.windows(2).all(|pair| pair[0] == pair[1]) {
+        runs.into_iter().take(1).collect()
+    } else {
+        runs
+    };
+    Some(ColumnIdentity {
+        atom_ids: parsed.ids.clone(),
+        fixed: parsed.flags.clone(),
+        species,
+        partial_fixed,
+    })
 }
 
 fn parallel_column_threads(num_threads: Option<usize>) -> bool {
@@ -1304,6 +1393,11 @@ fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
     let mut values = Vec::with_capacity(n_frames * n_atoms * 3);
     let mut masses = Vec::with_capacity(n_frames * n_atoms);
     let mut cells = Vec::with_capacity(n_frames * 6);
+    let mut atom_ids = Vec::with_capacity(n_frames * n_atoms);
+    let mut fixed = Vec::with_capacity(n_frames * n_atoms);
+    let mut runs = Vec::with_capacity(n_frames);
+    let mut has_section = false;
+    let mut partial_fixed = false;
     for frame in frames {
         cells.extend_from_slice(&frame.header.boxl);
         cells.extend_from_slice(&frame.header.angles);
@@ -1323,7 +1417,37 @@ fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
                 .unwrap_or(0.0);
             masses.extend(std::iter::repeat_n(mass, count));
         }
+        has_section |= frame.has_velocities()
+            || frame.has_forces()
+            || frame.has_energies()
+            || frame.has_charges()
+            || frame.has_spins()
+            || frame.has_magmoms()
+            || frame.has_displacements()
+            || frame.has_spreads();
+        let mut frame_runs: Vec<(String, usize)> = Vec::new();
+        for atom in &frame.atom_data {
+            atom_ids.push(atom.atom_id);
+            let mask = crate::types::encode_fixed_bitmask(atom.fixed);
+            if mask != 0 && mask != 7 {
+                partial_fixed = true;
+            }
+            fixed.push(mask);
+            if let Some((symbol, count)) = frame_runs.last_mut()
+                && symbol == atom.symbol.as_ref()
+            {
+                *count += 1;
+                continue;
+            }
+            frame_runs.push((atom.symbol.to_string(), 1));
+        }
+        runs.push(frame_runs);
     }
+    let species = if runs.windows(2).all(|pair| pair[0] == pair[1]) {
+        runs.into_iter().take(1).collect()
+    } else {
+        runs
+    };
     CoordColumns {
         block: PositionBlock {
             n_frames,
@@ -1332,6 +1456,11 @@ fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
         },
         masses,
         cells,
+        atom_ids,
+        fixed,
+        species,
+        has_section,
+        partial_fixed,
     }
 }
 
@@ -1422,7 +1551,7 @@ fn fill_position_block(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, error::LocatedParseError> {
-    match certified_columns(bytes, num_threads) {
+    match certified_columns(bytes, num_threads, false) {
         Ok(Some(columns)) => return Ok(columns.block),
         Ok(None) => {}
         Err(err) => return Err(err),

@@ -64,6 +64,15 @@ pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError
     parse_con(bytes, false, false)
 }
 
+/// Coordinates plus column 5, the fixed mask, and the per-type symbol runs.
+///
+/// The position walker still skips vector sections by line count. `ids`,
+/// `flags`, and `components` are filled so a later frame can keep an element
+/// order that is not the first frame's.
+pub fn positions_with_identity(bytes: &[u8]) -> Result<ConPositions, ParseError> {
+    parse_con(bytes, true, false)
+}
+
 /// Like [`positions_from_con_bytes`], also keeping ids, flags, and symbols
 /// so a frame can be rebuilt without a second numeric scan.
 #[allow(dead_code)]

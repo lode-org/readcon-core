@@ -440,34 +440,22 @@ impl PyConFrame {
 
     #[getter]
     fn has_velocities(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_velocity))
+        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_velocity))
     }
 
     #[getter]
     fn has_forces(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_forces))
+        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_forces))
     }
 
     #[getter]
     fn has_displacements(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_displacement))
+        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_displacement))
     }
 
     #[getter]
     fn has_spreads(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self
-            .py_atoms(py)?
-            .first()
-            .is_some_and(PyAtomDatum::has_spread))
+        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_spread))
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -599,7 +587,7 @@ impl PyConFrame {
         py: Python<'py>,
     ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_velocity) {
+        if !atoms.iter().any(PyAtomDatum::has_velocity) {
             return Ok(None);
         }
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
@@ -618,7 +606,7 @@ impl PyConFrame {
     /// force data.
     fn forces_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_forces) {
+        if !atoms.iter().any(PyAtomDatum::has_forces) {
             return Ok(None);
         }
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
@@ -640,7 +628,7 @@ impl PyConFrame {
         py: Python<'py>,
     ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_displacement) {
+        if !atoms.iter().any(PyAtomDatum::has_displacement) {
             return Ok(None);
         }
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
@@ -666,7 +654,7 @@ impl PyConFrame {
     /// or `None` when the frame declares no `"spreads"` section.
     fn spreads_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
         let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_spread) {
+        if !atoms.iter().any(PyAtomDatum::has_spread) {
             return Ok(None);
         }
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
@@ -692,7 +680,7 @@ impl PyConFrame {
     /// per-atom energies (only a frame-total energy in metadata).
     fn energies_array<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
         let atoms = self.py_atoms(py)?;
-        if !atoms.first().is_some_and(PyAtomDatum::has_energy) {
+        if !atoms.iter().any(PyAtomDatum::has_energy) {
             return Ok(None);
         }
         let data: Vec<f64> = atoms
@@ -1410,8 +1398,11 @@ fn frame_from_arrays(
 /// Read coordinates as one contiguous array.
 ///
 /// The parse runs without the GIL. The returned positions are the parser's
-/// coordinate block moved into NumPy. Per-frame cell and masses travel beside
-/// that array. `parse_s`, `convert_s` and `copy_s` split the time.
+/// coordinate block moved into NumPy. Per-frame cell, masses, column 5, and
+/// the fixed mask travel beside that array. `species` is one `(symbol, count)`
+/// run-length list when every frame uses that element order, and one list per
+/// frame when a later frame does not. `parse_s`, `convert_s` and `copy_s`
+/// split the time.
 #[pyfunction]
 fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let path_owned = path.to_owned();
@@ -1434,6 +1425,11 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     let positions = columns.block.values;
     let masses = columns.masses;
     let cell = columns.cells;
+    let atom_ids = columns.atom_ids;
+    let fixed = columns.fixed;
+    let species = columns.species;
+    let has_section = columns.has_section;
+    let partial_fixed = columns.partial_fixed;
     let convert_s = convert_start.elapsed().as_secs_f64();
     let copy_start = std::time::Instant::now();
     let pos = ndarray::Array3::from_shape_vec((n_frames, n_atoms, 3), positions)
@@ -1446,6 +1442,17 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     dict.set_item("positions", pos.into_pyarray(py))?;
     dict.set_item("masses", mass.into_pyarray(py))?;
     dict.set_item("cell", cell_arr.into_pyarray(py))?;
+    if atom_ids.len() == n_frames * n_atoms && fixed.len() == n_frames * n_atoms {
+        let ids = ndarray::Array2::from_shape_vec((n_frames, n_atoms), atom_ids)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let mask = ndarray::Array2::from_shape_vec((n_frames, n_atoms), fixed)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        dict.set_item("atom_ids", ids.into_pyarray(py))?;
+        dict.set_item("fixed", mask.into_pyarray(py))?;
+    }
+    dict.set_item("species", species)?;
+    dict.set_item("has_section", has_section)?;
+    dict.set_item("partial_fixed", partial_fixed)?;
     dict.set_item("n_frames", n_frames)?;
     dict.set_item("n_atoms", n_atoms)?;
     dict.set_item("parse_s", parse_s)?;

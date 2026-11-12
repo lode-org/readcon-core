@@ -141,6 +141,106 @@ def test_constraints_round_trip(tmp_path):
     np.testing.assert_allclose(got.get_masses(), atoms.get_masses())
 
 
+def test_atom_id_round_trip_on_the_bulk_path(tmp_path):
+    """Column 5 survives a single-species read of every frame and the write back."""
+    images = []
+    for shift, ident in ((0.0, [4, 9, 1]), (0.2, [8, 3, 6])):
+        atoms = Atoms(
+            "Cu3",
+            positions=[[0.0 + shift, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+            cell=[5.0, 5.0, 5.0],
+            pbc=True,
+        )
+        atoms.set_array("atom_id", np.array(ident, dtype=np.uint64))
+        images.append(atoms)
+    path = tmp_path / "ids.con"
+    write(path, images, format="readcon-con")
+    got = read(path, index=":", format="readcon-con")
+    assert len(got) == 2
+    np.testing.assert_array_equal(got[0].arrays["atom_id"], [4, 9, 1])
+    np.testing.assert_array_equal(got[1].arrays["atom_id"], [8, 3, 6])
+    np.testing.assert_allclose(got[1].positions, images[1].positions)
+
+
+def test_claisen_species_order_round_trip(tmp_path):
+    """Oxygen-first product keeps its masses when the reactant was carbon-first.
+
+    The bulk reader used to stamp frame 0's elements onto later frames, so a
+    carbon was built with the oxygen mass and the write raised MassMismatch.
+    """
+    _tests = Path(__file__).resolve().parent
+    if str(_tests) not in sys.path:
+        sys.path.insert(0, str(_tests))
+    from test_atom_correspondence import _claisen, _frame
+
+    reactant_rows, product_rows, *_rest = _claisen()
+    reactant = _frame(reactant_rows)
+    product = _frame(product_rows)
+    source = tmp_path / "band.con"
+    readcon.write_con(str(source), [reactant, product])
+    images = read(source, index=":", format="readcon-con")
+    out = tmp_path / "back.con"
+    write(out, images, format="readcon-con")
+    back = read(out, index=":", format="readcon-con")
+    original = readcon.read_con(str(source))
+    assert len(back) == len(original) == 2
+    for got, frame in zip(back, original):
+        assert got.get_chemical_symbols() == [atom.symbol for atom in frame.atoms]
+        np.testing.assert_allclose(
+            got.get_masses(), [atom.mass for atom in frame.atoms]
+        )
+        np.testing.assert_array_equal(
+            got.arrays["atom_id"], [atom.atom_id for atom in frame.atoms]
+        )
+        np.testing.assert_allclose(
+            got.positions, [(atom.x, atom.y, atom.z) for atom in frame.atoms]
+        )
+
+
+def test_oxygen_first_velocity_reaches_ase(tmp_path):
+    """A velocity on a later atom is not dropped because the first atom is still."""
+    _tests = Path(__file__).resolve().parent
+    if str(_tests) not in sys.path:
+        sys.path.insert(0, str(_tests))
+    from test_atom_correspondence import _claisen, _frame
+
+    _reactant, product_rows, *_rest = _claisen()
+    product = _frame(product_rows, velocity=(5, (0.2, -0.1, 0.05)))
+    atoms = product.to_ase()
+    carbon = next(i for i, atom in enumerate(product.atoms) if atom.atom_id == 5)
+    np.testing.assert_allclose(atoms.get_velocities()[carbon], [0.2, -0.1, 0.05])
+    path = tmp_path / "product.convel"
+    write(path, atoms, format="readcon-convel")
+    got = read(path, format="readcon-convel")
+    np.testing.assert_allclose(got.get_velocities()[carbon], [0.2, -0.1, 0.05])
+    assert got.get_chemical_symbols()[0] == "O"
+    np.testing.assert_allclose(got.get_masses()[0], 15.999)
+
+
+def test_pt100_adatom_fixed_in_z_only(tmp_path):
+    """Per-axis FixCartesian on the Pt(100) adatom survives the plugin."""
+    from ase.build import add_adsorbate, fcc100
+
+    slab = fcc100("Pt", (3, 3, 3), vacuum=7.0)
+    a0 = slab.cell[0, 0] / 3
+    add_adsorbate(slab, "Pt", 1.5, position=(0.5 * a0, 0.5 * a0))
+    n = len(slab)
+    bottom = [i for i, tag in enumerate(slab.get_tags()) if tag == 3]
+    slab.set_constraint(
+        [
+            FixAtoms(indices=bottom),
+            FixCartesian(n - 1, mask=(False, False, True)),
+        ]
+    )
+    path = tmp_path / "slab.con"
+    write(path, slab, format="readcon-con")
+    got = read(path, index=":", format="readcon-con")
+    assert len(got) == 1
+    assert _fixed_indices(got[0]) == bottom
+    assert _cartesian(got[0]) == [(n - 1, [False, False, True])]
+    np.testing.assert_allclose(got[0].positions, slab.positions)
+
+
 def test_multiframe_index_does_not_call_read_con(tmp_path, monkeypatch):
     images = [_atoms(i * 0.1) for i in range(5)]
     path = tmp_path / "many.con"

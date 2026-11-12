@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Bugfixes
+
+- The ASE `readcon-con` reader keeps each frame's element order and column 5.
+  `arrays["atom_id"]` is that column. A write puts the array back, and numbers
+  the atoms `0 .. n-1` only when the array is absent. A later frame stored
+  oxygen-first no longer gives a carbon the oxygen mass.
+- `ConFrame.has_velocities` is true when any atom carries a velocity, so an
+  oxygen-first frame keeps a later atom's velocity on the way into ASE.
+- The cachegrind harness test skips when `clang++` cannot see the libstdc++
+  headers for rustc's host triple. CI images have those headers, and the
+  harness still builds there.
+
+### Documentation
+
+- The ASE how-to names `arrays["atom_id"]`, per-frame element order, and the
+  per-axis `FixCartesian` mask.
+- Versions 1, 2, and 3.0 store velocities in the natural time unit. A header
+  that says `fs` is not that unit. A rewrite labels the same numbers
+  `(amu*angstrom^2/eV)^0.5`, because minor 1 treats `units.time` as authoritative.
+
+
 ## v0.21.0 - 2026-11-12
 
 ### Features

@@ -464,8 +464,13 @@ A CON ``units`` object names length, energy, and the other quantities.
 ``unit_conversion_factor(from, to)`` returns the multiplier that takes a
 value in ``from`` into ``to``. The name table is built once per process.
 Readers share it, including the C reader and a parallel parse.
-Versions 1, 2, and 3.0 store velocities in the natural time unit.
-From minor 1, ``units.time`` is the velocity time unit.
+Versions 1, 2, and 3.0 store velocities in the natural time unit
+``(amu*angstrom^2/eV)^0.5`` (about 10.18 fs). A ``units.time`` label of
+``fs`` on those versions describes the header. It is not the unit of the
+numbers (CON-units.8, CON-units.9). A rewrite stamps minor 1. From
+minor 1, ``units.time`` is authoritative (CON-units.10), so the writer
+replaces ``fs`` with that natural-unit spelling. The numbers stay as
+they were. From minor 1, ``units.time`` is the velocity time unit.
 
 .. code:: rust
 
@@ -509,9 +514,23 @@ on the ``ase.ioformats`` entry point. ASE loads that group when
     write("again.convel", images, format="readcon-convel")
 
 A read walks ``iter_con(stream=True)`` unless the slice needs a length, in
-which case it uses ``count_frames`` and ``ConTrajectory``. A geometry write of
-one species uses ``write_coords``. Velocities and ``append=True`` go through
-``write_con``.
+which case it uses ``count_frames`` and ``ConTrajectory``. A geometry file
+with no per-axis constraint is built from ``read_coords``. Each frame keeps
+its own element order, so a later frame stored oxygen-first stays
+oxygen-first and each atom keeps that element's mass. Velocities, forces,
+and a per-axis mask use the frame objects.
+
+Column 5 is the per-atom array ``atom_id``. A read sets
+``atoms.arrays["atom_id"]``. A write puts that array back into column 5.
+When the array is absent the atoms are numbered ``0 .. n-1``. ASE tags are
+not column 5.
+
+A hold on every axis is ``FixAtoms``. A hold on some axes is
+``FixCartesian`` with that mask, for example a Pt(100) adatom held in z
+only. The mask round-trips.
+
+A geometry write of one species and sequential ids uses ``write_coords``.
+Custom ids, velocities, and ``append=True`` go through ``write_con``.
 
 Python
 ------
