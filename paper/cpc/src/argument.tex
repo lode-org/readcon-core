@@ -142,16 +142,34 @@ The figure and the numbers are not in this draft.
 No value is stated here.
 
 \section{The fields the rate actually reads}\label{sec:fields}
-CON 3.1 stores, on each frame, the coordinates, the cell, the periodic flags, a three-bit mask, an integer identifier, the mass, and, from minor 1, the velocities with a declared time unit.
-Each field is an input of one of the equations above.
+CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id, and a velocity section with its own time unit.
+Each field enters one of the equations above.
 
-The identifier is the index \(a\) in Eq.~\eqref{eq:rmsd} and the slot of \(R\) in Eq.~\eqref{eq:tangent}.
-It is written on the coordinate row, so a later file that groups rows by element still names the same atom.
-The mask deletes Cartesian components from the free set \(n\) in Eq.~\eqref{eq:vineyard}.
+Column 5 is the atom id, and it holds the original index.
+A rewrite that groups the rows by element recovers that order from the column.
+ASE's eon reader ignores the column
+\cite{larsenAtomicSimulationEnvironmenta2017}.
+XYZ and extended XYZ carry no atom id
+\cite{kermodeLibatomsExtxyzV0462026}.
+A LAMMPS dump and an H5MD file can carry one
+\cite{thompsonLammpsFlexibleSimulation2022,buylH5mdStructuredEfficient2014}.
+readcon keeps \texttt{atom\_id} through the read and the write, so the identity survives the reordering.
+A NEB band, a dimer and an AKMC comparison of images need that identity.
+It holds when the writer leaves \texttt{atom\_id} stable.
+XYZ cannot store that id.
+
+Column 4 is a per-axis mask, an integer from 0 to 7, Eq.~\eqref{eq:mask}.
+The mask removes Cartesian components from the free set \(n\) in Eq.~\eqref{eq:vineyard}.
 A constrained dimer or a constrained band holds those components fixed.
 On the Pt(100) adatom the held height selects one saddle.
 Dropping the hold selects another, \(0.68\,\mathrm{eV}\) with a prefactor 37 times larger (Section~\ref{sec:prefactor}).
-The mass enters the kinetic energy and the mass-weighted Hessian.
+ASE's eon reader passes the column through \texttt{bool}, and its writer emits only 0 or 1, so a mask on one axis is stored as a hold on all three.
+Extended XYZ and H5MD have no element for the mask.
+POSCAR stores it as selective dynamics
+\cite{vaspwikiPoscar2026}.
+The ASE bridge in readcon writes a partial mask back as the same integer.
+
+The mass \(m_a\) is stored on the atom.
 The Lagrangian of the nuclei is
 \begin{equation}
 \label{eq:lagrangian}
@@ -159,36 +177,61 @@ L=\sum_{a=1}^{N}\tfrac12 m_a|\dot r_a|^{2}-V(R).
 \end{equation}
 A ring-polymer instanton discretises a periodic path in imaginary time, and the action weights each bead by the same masses
 \cite{richardsonRingpolymerInstanton2018}.
-A file that omits \(m_a\) forces the dynamics program to invent one.
-The cell of that frame defines the minimum image inside \(|R_{i+1}-R_i|\) when the boundary conditions are periodic.
+XTC, TRR and DCD keep those masses in a separate topology file
+\cite{abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}.
+The cell of the frame is the \(3\times 3\) matrix used for the minimum image inside \(|R_{i+1}-R_i|\).
+
 A velocity \(v_a\) is the momentum in Eq.~\eqref{eq:lagrangian} divided by \(m_a\).
-Read in the wrong time unit, the same digits scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
+The velocities occupy a declared section, and the reader uses the time unit that section names.
+Archived eOn documents its natural unit as the constant \(\velEonFs\,\mathrm{fs}\).
+The same digits read as \(\text{\AA}/\mathrm{fs}\) scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
+ASE's eon writer writes no velocities.
+
+From version 3.5, eOn reads CON through readcon
+\cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}.
+The ase-readcon plugin registers the formats \texttt{readcon-con} and \texttt{readcon-convel}.
+The readcon-chemfiles bridge reads XYZ, PDB, GRO and LAMMPS dump text into a \texttt{ConFrame}
+\cite{frauxChemfileschemfilesVersion01042023}.
+Residue records and per-atom properties that are not CON columns are left out of that frame.
 
 Section~\ref{sec:cases} measures these fields on one restarted band.
 A CON 3.1 round trip returns the uninterrupted barrier.
 A file that moves a coordinate or drops the mask returns a different one.
 
 \section{The readcon tools}\label{sec:ecosystem}
-readcon-core is the reader and writer of one frame.
+readcon-core 0.20.0 is the reader and writer of one frame.
 It parses CON and convel, checks the grammar, and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
 C, C++, Fortran, Julia and Python call that parser.
 Algorithm~\ref{alg:parser} is the path reader.
 The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\_positions}\) both return that column, and the coordinates match.
+The same read and write keep \texttt{atom\_id}.
 
-readcon-db stores a campaign as CON text in an embedded key-value store, with secondary indexes on atom count, composition, energy, maximum force and the presence of forces or velocities.
-A query intersects those indexes and then decodes the selected frames with readcon-core.
-seams-core ingests a \texttt{.con} trajectory into that corpus and selects by element or formula over the shard roots, then decodes the \(N\)th hit (Section~\ref{sec:connectivity}).
-The stored bytes are the CON text.
-An xxHash3-128 of that text is the exact identity of a frame.
-The corpus is the CON file.
-The index is the lookup.
+readcon-db 0.2.1, under the MIT licence, from lode-org/readcon-db, stores the corpus in LMDB.
+A frame key is 12 bytes: the trajectory id as a big-endian 64-bit integer, then the frame index as a big-endian 32-bit integer.
+The record is the CON text, optionally compressed with zstd
+\cite{colletZstandardCompressionApplicationzstd2021}.
+The exact identity of a frame is the xxHash3-128 of that text.
+The indexes are the atom count, the symbol, the element counts, the formula, as in \texttt{Cu:2|H:2}, the energy, the maximum force, the mass, the volume, the periodic flags, the metadata, the flags and the topology.
+The metadata holds the time, the NEB bead and the band, the charge and the magnetic moment.
+\texttt{annotate-topology} runs the d-SEAMS fingerprint, a cutoff graph to two hops, with nauty or a Weisfeiler--Lehman colouring.
+The resulting key names the bonded graph up to relabelling: a rooted-neighbourhood certificate on each atom, and a ring census
+\cite{trochetDiffusionPointDefects2015}.
+That key is separate from the byte hash.
+The commands are \texttt{ingest}, \texttt{select}, \texttt{dedup-export}, \texttt{annotate-topology}, \texttt{find-by-topology}, \texttt{shard}, \texttt{compact} and \texttt{h5md-velocities}.
+\texttt{select} takes \texttt{-{}-formula}, \texttt{-{}-require-*}, \texttt{-{}-topo-key} and \texttt{-{}-neb-bead-*}.
+The corpus is also a Python module and a C and Fortran interface.
+seams-core selects from it by element or by formula (Section~\ref{sec:connectivity}).
+In the AKMC catalog amsel, each process stores its barrier, its prefactor and its mode, and points at three frames of the corpus: the reactant, the saddle and the product.
+The saddle carries a displacements section with the same fixed-flag column and the same \texttt{atom\_id} column as the coordinates.
 
-readcon-ops compares two frames and removes rigid motion.
-It does not open a file.
-\(\texttt{identical}\) matches atoms by index, so a second atom cannot claim a site already taken, which is Eq.~\eqref{eq:rmsd} with the stored order.
-\(\texttt{internal\_motion}\) removes a rigid rotation by the Kabsch fit, with the masses as optional weights, and on a periodic frame removes only the mean minimum-image translation.
-\(\texttt{spacegroup}\) calls spglib.
-\(\texttt{rotational\_match}\) calls the iterative rotations and assignments alignment when that binding is present
-\cite{goswamiReproducibleOrchestrationBest2026}.
+readcon-ops 0.1.1, under the BSD 3-clause licence, from lode-org/readcon-ops, is a Python API.
+It has no command line and no file input or output.
+The argument is a \texttt{ConFrame} or a pyeonclient object, and the distances come from lode-org/minimage.
+\texttt{identical(a, b, eps)} matches atoms of one element under the minimum image, and each index is claimed once.
+\texttt{internal\_motion} removes a rotation by the Kabsch fit, with the masses as optional weights.
+On a periodic frame it removes only the mean minimum-image translation, and the correspondence is the index.
+\texttt{rotational\_match} calls the iterative rotations and assignments alignment through pyeonclient
+\cite{gundeIRAShapeMatching2021}.
+\texttt{spacegroup} calls spglib.
+The API also provides \texttt{wulff\_vertices}.
 The three programs split the work as parse, store and compare.
-The index \(a\) is the same integer in all three.
