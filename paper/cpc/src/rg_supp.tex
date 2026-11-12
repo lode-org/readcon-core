@@ -730,9 +730,32 @@ The frame layout is Figure~\ref{fig:layout} of the main text.
 Thread scaling of that read is Figure~\ref{fig:threads}.
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=\linewidth]{figures/generated/matrix.pdf}
-\caption{Compatibility codes for the checkpoint fields.}
+\scriptsize
+\caption{Coordinate shift on each round trip of the survey frame.
+The shift is the same quantity as Table~\ref{tab:survey}.
+A bar chart of these rows drew every recorded shift at the same length.}
 \label{fig:matrix}
+\begin{tabular}{@{}llr@{}}
+\toprule
+Format & Writer to reader & Shift (\AA) \\
+\midrule
+CON 3.1 & readcon-core to readcon-core & exact \\
+extended XYZ & ASE to ASE & \num{4.7e-9} \\
+extended XYZ & ASE to chemfiles & \num{4.7e-9} \\
+extended XYZ & ASE to OVITO & \num{4.7e-9} \\
+extended XYZ & ASE to MDAnalysis & \num{2.2e-7} \\
+extended XYZ & chemfiles to chemfiles & \num{4.9e-6} \\
+extended XYZ & chemfiles to ASE & \num{4.9e-6} \\
+extended XYZ & OVITO to OVITO & \num{8.9e-16} \\
+extended XYZ & OVITO to ASE & exact \\
+ASE trajectory & ASE to ASE & exact \\
+POSCAR, FixScaled & ASE to ASE & \num{4.5e-17} \\
+H5MD & MDAnalysis to MDAnalysis & \num{2.2e-7} \\
+H5MD, private mask & h5py to h5py & exact \\
+XYZ & Open Babel to Open Babel & \num{4.9e-6} \\
+CIF & Open Babel to Open Babel & \num{6.7e-5} \\
+\bottomrule
+\end{tabular}
 \end{figure}
 \begin{figure}[htbp]
 \centering
@@ -1317,7 +1340,9 @@ This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which re
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Image energies with the adatom height held and freed.}
+\caption{Barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
+The right panel is the difference, 0.0369~eV.
+Drawn from the first image, the two curves sit on each other.}
 \label{fig:asemask} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1346,7 +1371,8 @@ The composition-query time is Figure~\ref{fig:db-query}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf}
-\caption{Stored frames against unique frame hashes in the deduplication record.}
+\caption{Stored frames, 24000, and unique frame hashes, 7, on a logarithmic axis.
+The hash is of the serialized frame.}
 \label{fig:db-dedup} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1355,9 +1381,25 @@ The composition-query time is Figure~\ref{fig:db-query}.
 \label{fig:supp-anatomy} \end{figure}
 
 \begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
-\caption{One bar for each illegal file in the stored error record.}
-\label{fig:supp-errors} \end{figure}
+\scriptsize
+\caption{Each illegal file in the stored error record.
+The bar chart drew every file at height 1.}
+\label{fig:supp-errors}
+\begin{tabular}{@{}ll@{}}
+\toprule
+File & Error \\
+\midrule
+missing-spec-version & MissingSpecVersion \\
+v3-missing-units & InvalidUnits \\
+v3-bad-units & InvalidUnits \\
+column-4-out-of-range & InvalidFixedFlag \\
+unsupported-spec-version & UnsupportedVersion \\
+unknown-section & UnknownSection \\
+validate-true-missing-sections & InvalidMetadataJson \\
+per-type-zero & InvalidCount \\
+\bottomrule
+\end{tabular}
+\end{figure}
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf}
@@ -1370,13 +1412,27 @@ The composition-query time is Figure~\ref{fig:db-query}.
 \label{fig:supp-restart} \end{figure}
 
 \begin{figure}[tbp] \centering
-\includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf}
-\caption{Hashed images in each run of the 0.18.0 measurements.}
-\label{fig:supp-dedup} \end{figure}
+\caption{Hashed images in each run of the 0.18.0 measurements.
+Every run has the same count, so the bar chart was flat.}
+\label{fig:supp-dedup}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Run & Hashed images \\
+\midrule
+uninterrupted & 7 \\
+round trip & 7 \\
+six decimals & 7 \\
+height held & 7 \\
+adatom frozen & 7 \\
+\bottomrule
+\end{tabular}
+\end{figure}
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
-\caption{The five stored EMT bands, as energy above the first image.}
+\caption{Barrier shift of each stored EMT band from the uninterrupted band.
+A zero is drawn at the labelled floor.
+The five energy curves lie on one another.}
 \label{fig:supp-neb} \end{figure}
 
 \section{Readers on one core}

@@ -78,7 +78,7 @@ Elsevier%
 \input{figures/generated/db_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
-\newcommand{\DOIPENDING}{The version DOI for this release is not minted.}
+% The 0.21.0 release and the 0.18.x timing archive are named in Data availability.
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros
 % are defined first.
@@ -156,7 +156,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 \end{highlights}
 
 \begin{graphicalabstract}
-\includegraphics[width=5cm]{figures/generated/toc.pdf}
+\includegraphics[width=\textwidth]{figures/generated/toc.pdf}
 \end{graphicalabstract}
 
 \end{frontmatter}\hypersetup{pageanchor=true}
@@ -531,17 +531,10 @@ seams-core selects from the corpus by element or by formula (Section~\ref{sec:co
 In the AKMC catalog amsel, each process stores its barrier, its prefactor and its mode, and points at three frames: the reactant, the saddle and the product.
 The saddle carries a displacements section with the same fixed-flag column and the same \texttt{atom\_id} column as the coordinates.
 
-readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is a Python API.
-It has no command line and no file input or output.
-The argument is a \texttt{ConFrame} or a pyeonclient object, and the distances come from lode-org/minimage.
-\(\texttt{identical}(a, b, \epsilon_r)\) matches atoms of one element under the minimum image, and each index is claimed once.
-The tolerance argument is \(\epsilon_r\).
-\texttt{internal\_motion} removes a rotation by the Kabsch fit, with the masses as optional weights.
-On a periodic frame it removes only the mean minimum-image translation, and the correspondence is the index.
-\texttt{rotational\_match} calls the iterative rotations and assignments alignment through pyeonclient
-\cite{gundeIRAShapeMatching2021}.
-\texttt{spacegroup} calls spglib.
-The API also provides \texttt{wulff\_vertices}.
+readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
+It takes a \texttt{ConFrame}.
+\texttt{identical} matches atoms of one element under the minimum image, \texttt{internal\_motion} removes a rigid motion, \texttt{rotational\_match} aligns by iterative rotations and assignments, and \texttt{wulff\_vertices} returns a Wulff construction.
+On the Claisen endpoints the same minimum-image comparison gives a positional step of 15.761~\text{\AA} and a minimum image of 2.272~\text{\AA}, while the id-matched vinyl-ether bond is 1.360~\text{\AA} (Section~\ref{sec:supp-applications}).
 The three programs split the work as parse, store and compare (Table~\ref{tab:commands}, Section~\ref{sec:supp-commands}).
 
 \subsection{Installation and usage}
@@ -598,33 +591,27 @@ Drawn with chemparseplot
 \end{figure}
 
 \subsection{Connectivity in d-SEAMS}\label{sec:connectivity}
-On 4096 molecules of mW water, neighbour pairs persist at 0.955 on the CON frames and at about 0.001 when the same frames are written in a new atom order (Figure~\ref{fig:water}).
-A whole-frame count does not tell the two files apart.
-d-SEAMS follows one molecule by the stored id.
-The quench and the persistence definition are Section~\ref{sec:supp-applications}.
+A LAMMPS dump sorted by id already carries an atom id and a box, and H5MD carries an id and a velocity unit.
+Neither is the checkpoint eOn writes: CON 3.1 carries the per-component mask, the id and the time unit in one file that eOn, ASE and d-SEAMS read.
+On 4096 molecules of mW water, neighbour pairs persist at 0.955 when the id is kept and at about 0.001 when the file order is not that id (Figure~\ref{fig:water}).
+The quench is Section~\ref{sec:supp-applications}.
 
 \subsection{Resumed saddle searches}\label{sec:cases}
 \label{sec:requirements}
-The uninterrupted EMT band converges in \(\rfStepsUnint\) steps with barrier \(\rfBarrierUnint\,\mathrm{eV}\).
-The shortest CON round trip is that band, bit for bit (Figure~\ref{fig:restartfmt}).
-File, in Table~\ref{tab:restartfmt}, is the largest coordinate change on the written round trip.
-Max displacement is how far the resumed band sits from the uninterrupted band, and that is what the circles in Figure~\ref{fig:restartfmt} show.
-Six decimals move the written file by \(\num{\rfFileSixNum}\,\text{\AA}\) and the resumed band by \(\num{\rfDispSixNum}\,\text{\AA}\), with a barrier shift of \(\num{\rfDeSixNum}\,\mathrm{eV}\).
-Extended XYZ moves the written file by \(\num{\rfFileXyzNum}\,\text{\AA}\) and the resumed band by \(\num{\rfDispXyzNum}\,\text{\AA}\), with a barrier shift of \(\num{\rfDeXyzNum}\,\mathrm{eV}\).
-The ASE trajectory and the H5MD file written with a private mask dataset return the same row.
-POSCAR with the height held as FixScaled moves one written coordinate by \(\num{\rfFileScaledNum}\,\text{\AA}\), and the resumed band moves by \(\num{\rfDispScaledLoNum}\) to \(\num{\rfDispScaledHiNum}\,\text{\AA}\).
-H5MD as specified has no mask element; the private dataset is not that specification (Section~\ref{sec:supp-applications}).
+The failures that change the physics are the lost \(z\) hold and a misread velocity unit (Figure~\ref{fig:restartfmt}).
+Dropping the hold moves the barrier from 0.6446~eV to 0.6815~eV, 36.9~meV, and multiplies the prefactor by 37.
+Reading the natural unit as \(\text{\AA}/\mathrm{fs}\) multiplies the kinetic energy by 103.64.
+Six decimals, extended XYZ and POSCAR shift the barrier by \(\num{\rfDeSixNum}\), \(\num{\rfDeXyzNum}\) and at most \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\).
+Those float-rounding rows, and the file shift beside them, are Table~\ref{tab:restartfmt}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
-\caption{Difference of each resumed band from the uninterrupted band, from the stored EMT records of Table~\ref{tab:restartfmt}.
-Filled circles are the maximum coordinate displacement of that band, the Max displacement column of that table, and filled squares are the absolute barrier shift $|\Delta E^\ddagger|$, on one logarithmic axis.
-A hollow marker is exactly zero, drawn on the labelled floor.
-CON 3.1 is bit-identical.
-H5MD and the ASE trajectory are exactly zero.
-The whisker on POSCAR is the range of the same quantity over the four host builds: displacement \(\rfDispScaled\)\,\AA{} and barrier shift \(\rfDeScaled\)\,eV.
-The File column is a different quantity, the largest coordinate change on the written round trip: six decimals \(\rfFileSix\)\,\AA{} and extended XYZ \(\rfFileXyz\)\,\AA{}.
-The circles are the resumed band, six decimals \(\rfDispSix\)\,\AA{} and \(\rfDeSix\)\,eV, extended XYZ \(\rfDispXyz\)\,\AA{} and \(\rfDeXyz\)\,eV.}
+\caption{The two restart failures that change the result, from the stored EMT records.
+Left: the barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
+The difference is 36.9~meV and the prefactor grows by a factor of 37.
+Right: kinetic energy when the file's time unit is kept, and when the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of 103.64.
+Six decimals, extended XYZ and POSCAR shift the barrier by \(\rfDeSix\), \(\rfDeXyz\) and at most \(3.7\times 10^{-14}\)~eV.
+Those rows are Table~\ref{tab:restartfmt}.}
 \label{fig:restartfmt} \end{figure}
 
 \subsubsection{The mask and the prefactor}\label{sec:prefactor}
@@ -637,8 +624,12 @@ The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by 
 
 \subsection{Computational details}\label{sec:compute}
 The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.
-The one-core reads use readcon-core 0.18.1, compiled with rustc 1.91.0 and Python 3.12.3.
-The remaining measurements use readcon-core 0.18.0, with rustc 1.88.0 for the shortest-decimal checks, NumPy 1.26.4 for the checks of the memory-mapped binary and Python 3.12.16 in those records, together with NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use a development build of eOn 3.6.0.
+The one-core coordinate reads use readcon-core 0.18.1, rustc 1.91.0 and Python 3.12.3.
+Listing~\ref{lst:testrun} is the example program of that same 0.18.1 checkout, and that listing records rustc 1.88.0.
+The other measurements use readcon-core 0.18.0 and rustc 1.88.0.
+Python is 3.12.16 in those records.
+The memory-mapped binary notes record rustc 1.88.0, Python 3.12.3 and NumPy 1.26.4, on kernel 6.12.94+ rather than 6.12.113+.
+The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use a development build of eOn 3.6.0.
 The final chemfiles 0.11.0 record is separate from that release candidate
 \cite{frauxChemfiles01102026}.
 Each median is the type-7 median of six repeats after one warmup.
@@ -757,11 +748,12 @@ Dropping the height constraint on the Pt(100) adatom changes the prefactor by a 
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
-readcon-core v0.21.0 is available from \url{https://github.com/lode-org/readcon-core} under the MIT licence.
-The concept record is \url{https://doi.org/10.5281/zenodo.18753567}.
+readcon-core 0.21.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
+The Zenodo record \url{https://doi.org/10.5281/zenodo.18753567} archives the readcon-core 0.18.0 and 0.18.1 builds whose timings are printed here.
+It is not a record of 0.21.0.
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
 The one-core timings of Section~\ref{sec:performance} use readcon-core 0.18.1.
-Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents from the stored records: install the recorded environment, then run \texttt{scripts/build\_tex.sh}.
+Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents from the stored records.
 The timed numbers are those records.
 The supplementary material states the grammar, the corpora, the version of each stored record, and the commands that rebuild the tables.
 The CON reader shipped with eOn is under the BSD 3-clause licence of the eOn Development Team, and no build of readcon-core links it.

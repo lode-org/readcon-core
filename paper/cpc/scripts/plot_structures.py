@@ -74,15 +74,22 @@ def survey_frame() -> Atoms:
 
 
 def pt_slab_middle() -> Atoms:
+    """Middle image of the stored band, or the Pt(100) slab that band uses."""
     band = ROOT / "data" / "failure" / "bands" / "uninterrupted.npz"
-    z = np.load(band)
-    mid = z["pos"].shape[0] // 2
-    return Atoms(
-        numbers=z["numbers"],
-        positions=z["pos"][mid],
-        cell=z["cell"],
-        pbc=[True, True, True],
-    )
+    if band.is_file():
+        z = np.load(band)
+        mid = z["pos"].shape[0] // 2
+        return Atoms(
+            numbers=z["numbers"],
+            positions=z["pos"][mid],
+            cell=z["cell"],
+            pbc=[True, True, True],
+        )
+    from ase.build import add_adsorbate, fcc100
+
+    slab = fcc100("Pt", size=(3, 3, 3), vacuum=6.0)
+    add_adsorbate(slab, "Pt", height=1.75, position="hollow")
+    return slab
 
 
 def _isolate(svg: str, prefix: str) -> tuple[str, str]:
