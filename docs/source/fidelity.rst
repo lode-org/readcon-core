@@ -1,5 +1,5 @@
 Fidelity head-to-head
-====================
+=====================
 
 The fidelity run reads one set of CON and convel files with every reader and,
 where the tool has a writer, writes them back. ``reader`` is what that tool
