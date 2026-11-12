@@ -999,13 +999,20 @@ Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same re
 \subsection{The velocity unit}
 A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\) (Section~\ref{sec:supp-velunit}).
 
-\section{One measured read time}\label{sec:performance}
-Timings are readcon-core 0.18.1.
-Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on the copper extended XYZ file.
-The hardware is Section~\ref{sec:compute}.
-\texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files.
-Every other median, the memory and the distributed reads are in Section~\ref{sec:si-timings} of the supplementary material.
-The supplement states the commands that rebuild the tables.
+\section{Performance}\label{sec:performance}
+The one-core column walker is readcon-core 0.18.1.
+A caption that names the stored campaign is readcon-core 0.18.0.
+The machine, unless a caption says otherwise, is the Xeon of Section~\ref{sec:compute}: one core, one warmup, six repeats, and the type-7 median.
+\texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}).
+The per-file matrices, the quartile triples and the rank-by-rank tables stay in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
+
+Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one copper extended XYZ file.
+Rust, Python and the C reader are the readcon-core bindings.
+ASE is the eon reader on CON and the extended XYZ reader on the copper file.
+chemfiles, OVITO and pymatgen are on that extended XYZ file.
+MDAnalysis is on the plain XYZ sizes of Figure~\ref{fig:trajxyz}.
+The Fortran binding is the reader-exchange session of Table~\ref{tab:conread}, not the 0.18.1 column walker.
+The writes of the million-atom frame and of the 10000-frame file are Table~\ref{tab:xyzwrite}.
 
 \begin{table}[tbp]
 \centering
@@ -1036,6 +1043,108 @@ extended XYZ (s) & 0.301 & 1.52 & 3.32 & 9.97 & 23.6 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{table}[tbp]
+\centering
+\caption{CON read of \num{100000} frames of 32 atoms in the readcon-core 0.18.0 reader-exchange session, on the Xeon of Section~\ref{sec:compute}.
+The resident set is the peak of the fresh process, in mebibytes.
+The triple is the first quartile, the median and the third quartile, in seconds.}
+\label{tab:conread}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Reader & Resident set & First, median, third \\
+\midrule
+readcon C & 553.8 & 0.3613, 0.3747, 0.3936 \\
+readcon Fortran & 554.2 & 0.4850, 0.5044, 0.5364 \\
+eOn, current & 921.2 & 0.8397, 0.8544, 0.8646 \\
+eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/trajxyz.pdf}
+\caption{Median plain-XYZ read against size, on one core of the Xeon in Section~\ref{sec:compute}.
+The files are one frame of \(10^{6}\) atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.
+Readers are readcon-core Rust and Python, ASE \texttt{iread}, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0 and MDTraj 1.11.0.
+The axis is logarithmic.}
+\label{fig:trajxyz}
+\end{figure*}
+
+\begin{table}[tbp]
+\centering
+\caption{Median extended XYZ write time in seconds, readcon-core 0.18.1, one core of the Xeon in Section~\ref{sec:compute}, six repeats after one warmup.
+The files are one frame of \(10^{6}\) atoms and \num{10000} frames of 100 atoms.}
+\label{tab:xyzwrite}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Writer & \(10^{6}\) atoms & \num{10000} frames \\
+\midrule
+readcon, Rust & 0.487 & 0.431 \\
+readcon, Python & 0.442 & 0.411 \\
+ASE extxyz & 3.74 & 4.26 \\
+ASE cextxyz & 0.948 & 1.47 \\
+extxyz 0.4.6 & 0.906 & 1.19 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/timings.pdf}
+\caption{Median extended XYZ read of the million-atom frame and of the \num{10000}-frame file, readcon-core 0.18.1, one core of the Xeon in Section~\ref{sec:compute}.
+The whisker runs from the first quartile to the third.
+On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.
+The resident set and the massif heap of the same reads are Table~\ref{tab:extxyz-h2h}.}
+\label{fig:timings}
+\end{figure*}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/threads.pdf}
+\caption{Thread scaling of the readcon-core 0.18.0 full-frame read on the ten-thousand-frame file, from an interleaved run on the Xeon of Section~\ref{sec:compute}.
+Left: speedup.
+Right: parallel efficiency.
+The rank-by-rank tables are Section~\ref{sec:supp-mpi}.}
+\label{fig:threads}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf}
+\caption{Distributed read of 4000 frames of 64 copper atoms on the Xeon of Section~\ref{sec:compute}, readcon-core 0.18.0 stored campaign.
+The marker is the type-7 median and the whisker is the type-7 interquartile range.
+Shared mode and scatter mode are the two series.}
+\label{fig:mpi-host}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/memory.pdf}
+\caption{Resident set added by the recorded read, after the import, in the readcon-core 0.18.0 full-frame session on the Xeon of Section~\ref{sec:compute}.
+The per-file resident set and massif heap are Tables~\ref{tab:extxyz-h2h} and~\ref{tab:heap}.}
+\label{fig:memory}
+\end{figure}
+
+On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and the composition query has a cold median of 0.00131~s (Figure~\ref{fig:db-throughput}, Figure~\ref{fig:db-query}).
+ASE's database ingests at 199 frames/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s.
+The cold query medians are 0.0417~s for the ASE database and 0.0212~s for a directory of CON files.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Ingest rate on 1000 frames, readcon-core 0.18.0 stored campaign, on the Xeon of Section~\ref{sec:compute}.
+The bandwidth and the disk footprint of the same copies are Figures~\ref{fig:db-bandwidth} and~\ref{fig:db-disk}.}
+\label{fig:db-throughput}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Composition-query time on 1000 frames, readcon-core 0.18.0 stored campaign, on the Xeon of Section~\ref{sec:compute}.}
+\label{fig:db-query}
+\end{figure}
 
 \section{Computational details}\label{sec:compute}
 The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.

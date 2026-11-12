@@ -722,6 +722,7 @@ readcon-core 0.18.0 full-frame session.}
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
 \end{table}
 The frame layout is Figure~\ref{fig:layout} of the main text.
+Thread scaling of that read is Figure~\ref{fig:threads}.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{figures/generated/matrix.pdf}
@@ -736,14 +737,6 @@ A serial scan records where each frame starts.
 Each frame is then parsed on one of \(N\) workers.
 The frames are returned in file order.}
 \label{fig:pipeline}
-\end{figure}
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\linewidth]{figures/generated/threads.pdf}
-\caption{Thread scaling on the ten-thousand-frame file, from an interleaved run.
-Left: speedup.
-Right: parallel efficiency.}
-\label{fig:threads}
 \end{figure}
 \endgroup
 
@@ -865,28 +858,11 @@ Heap & 61.04 & 84.30 & 115.4 & 171.6 & 163.9 \\
 \section{CON}
 \label{sec:con-tables}
 A size check that repeats one copper grid is a synthetic lattice.
-Table~\ref{tab:conread} is the read of \num{100000} frames of 32 atoms.
-The resident set is the peak of the fresh process, in mebibytes.
-The triple is the first quartile, the median and the third quartile, in seconds.
+The C and Fortran reads of \num{100000} frames of 32 atoms are Table~\ref{tab:conread}.
 Table~\ref{tab:conwrite} is the write.
 For readcon and ASE the second number is the increase in the resident set, in mebibytes.
 The eOn row is the streaming write on core 0, one warmup and six repeats, and it states its own units.
 
-\begin{table}[htbp]
-\centering
-\caption{CON read. readcon-core 0.18.0 reader-exchange session.}
-\label{tab:conread}
-\begin{tabular}{@{}lrl@{}}
-\toprule
-Reader & Resident set & First, median, third \\
-\midrule
-readcon C & 553.8 & 0.3613, 0.3747, 0.3936 \\
-readcon Fortran & 554.2 & 0.4850, 0.5044, 0.5364 \\
-eOn, current & 921.2 & 0.8397, 0.8544, 0.8646 \\
-eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \begin{table}[htbp]
 \centering
@@ -957,12 +933,7 @@ The scale is logarithmic.}
 \label{fig:ratios}
 \end{figure}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/memory.pdf}
-\caption{readcon-core 0.18.0 full-frame session. Resident set added by the recorded read, after the import.}
-\label{fig:memory}
-\end{figure}
+The resident set added by that read is Figure~\ref{fig:memory}.
 
 \begin{figure}[htbp]
 \centering
@@ -1315,10 +1286,7 @@ filesystem with coherent flock across the ranks, and where flock is not
 coherent they fall back to the blocking broadcast.
 \input{figures/generated/mpi_host_table}
 
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf}
-\caption{Distributed read on the Xeon. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
-\label{fig:mpi-host} \end{figure}
+The same distributed read is Figure~\ref{fig:mpi-host}.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
 The figures record the database and MPI campaigns on the Intel Xeon Processor.
@@ -1357,20 +1325,14 @@ This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which re
 \caption{MPI ingest time against rank count.}
 \label{fig:mpi-weak} \end{figure}
 
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
-\caption{Ingest rate.}
-\label{fig:db-throughput} \end{figure}
+The ingest rate is Figure~\ref{fig:db-throughput}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
 \caption{Ingest bandwidth.}
 \label{fig:db-bandwidth} \end{figure}
 
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
-\caption{Composition-query time.}
-\label{fig:db-query} \end{figure}
+The composition-query time is Figure~\ref{fig:db-query}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
@@ -1429,15 +1391,6 @@ ASE's own extxyz reader takes \SI{1.91}{\second}.
 On the \num{10000}-frame file the order changes.
 The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
 
-\begin{figure*}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/timings.pdf}
-\caption{Median extended XYZ read on one core.
-The whisker runs from the first quartile to the third.
-On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.}
-\label{fig:timings}
-\end{figure*}
-
 \begin{table}[tbp]
 \centering
 \caption{Median extended XYZ read time in seconds.}
@@ -1460,23 +1413,6 @@ On the million-atom frame the Python binding writes in \SI{0.442}{\second}, fast
 extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's extxyz writer \SI{3.74}{\second}.
 On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
 The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
-
-\begin{table}[tbp]
-\centering
-\caption{Median extended XYZ write time in seconds.}
-\label{tab:xyzwrite}
-\begin{tabular}{@{}lrr@{}}
-\toprule
-Writer & $10^{6}$ atoms & \num{10000} frames \\
-\midrule
-readcon, Rust & 0.487 & 0.431 \\
-readcon, Python & 0.442 & 0.411 \\
-ASE extxyz & 3.74 & 4.26 \\
-ASE cextxyz & 0.948 & 1.47 \\
-extxyz 0.4.6 & 0.906 & 1.19 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 chemfiles 0.10.4 reads the same two copper files in \SI{0.455}{\second} and \SI{0.567}{\second}.
 OVITO 3.17.2 reads them in \SI{0.150}{\second} and \SI{0.657}{\second}.
@@ -1515,15 +1451,7 @@ MDTraj & 0.790 & 0.781 & 2.64 \\
 \end{tabular}
 \end{table}
 
-\begin{figure*}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/trajxyz.pdf}
-\caption{Median XYZ read on one core.
-The axis is logarithmic.
-The Rust reader is fastest on each file.
-The Python binding is second on each file.}
-\label{fig:trajxyz}
-\end{figure*}
+The three sizes are Figure~\ref{fig:trajxyz}.
 
 \subsection{CON}
 \label{sec:conread}
