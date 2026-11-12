@@ -1,0 +1,14 @@
+thermal file=bench/h2h/work/thermal/cu-lj-300k.con
+generator examples/lj_cu_md.rs
+potential Heinz 12-6 Cu sigma_A=2.616 epsilon_kcal=4.72 epsilon_eV=0.204679
+atoms 2048 frames 1200 box_A 28.92 mean_temperature_K 305.91
+protocol warmup=1 samples=6 type7 core=0
+check bit_exact=yes
+gzip is flate2 level 6 then the column walker; zstd text is level 3 then the column walker
+shuffle is byte-shuffle plus zstd level 3 of the f64 column; f64-zstd is plain zstd level 3 of that column
+thermal-check bit_exact=yes frames=1200 atoms=2048
+arm thermal-text bytes=104439639 median_s=1.061194430e-1 iqr_s=1.615288000e-3 q25_s=1.055616262e-1 q75_s=1.071769142e-1 warmup_s=1.123278160e-1 hwm_kib=182000 over_input_kib=80009 samples=[0.109201402, 0.107527216, 0.106112877, 0.106126009, 0.105377876, 0.105323646]
+arm thermal-gzip bytes=43754855 median_s=4.634572450e-1 iqr_s=4.654501250e-3 q25_s=4.610629860e-1 q75_s=4.657174873e-1 warmup_s=4.684708410e-1 hwm_kib=182308 over_input_kib=139579 samples=[0.464955017, 0.461959473, 0.460764157, 0.460117277, 0.465971644, 0.466691524]
+arm thermal-zstd bytes=43677019 median_s=2.459140630e-1 iqr_s=2.012779000e-3 q25_s=2.451762283e-1 q75_s=2.471890073e-1 warmup_s=2.557712790e-1 hwm_kib=224892 over_input_kib=182239 samples=[0.24872661, 0.246204645, 0.247517128, 0.245027144, 0.244370802, 0.245623481]
+arm thermal-shuffle bytes=44737847 median_s=9.845343850e-2 iqr_s=2.418476000e-3 q25_s=9.766523700e-2 q75_s=1.000837130e-1 warmup_s=1.052871620e-1 hwm_kib=219544 over_input_kib=175855 samples=[0.101102442, 0.10043329, 0.099034982, 0.097473213, 0.097871895, 0.097596351]
+arm thermal-f64-zstd bytes=55094123 median_s=1.150993590e-1 iqr_s=5.179912500e-3 q25_s=1.122889972e-1 q75_s=1.174689098e-1 warmup_s=1.200028440e-1 hwm_kib=172124 over_input_kib=118322 samples=[0.117617548, 0.113175723, 0.111507595, 0.111993422, 0.117022995, 0.119224872]
