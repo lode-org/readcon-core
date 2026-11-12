@@ -77,6 +77,7 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
 ///
 /// `frame` is one span from the frame-start scan. A metadata line this walker
 /// does not certify returns an error so the caller can use the frame parser.
+#[cfg(feature = "parallel")]
 pub(crate) fn fill_frame_positions(
     frame: &[u8],
     dest: &mut [f64],
