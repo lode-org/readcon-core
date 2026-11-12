@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Features
+
+- The `parallel` feature parses a multi-frame file on a Rayon pool when the caller asks for two or more threads. `read_all_frames`, `read_con()` with `n_threads` omitted, and `rkr_read_all_frames` stay on the calling thread. Equal-length frames, including a file that ends in whitespace, skip the header walk. A file whose frames differ in length walks headers on the calling thread, then the pool parses whole frames into the returned vector. `read_positions_with_threads` reports the earliest failing span. Unit expressions share one process-wide table. A plain file of at least 64 KiB is mapped.
+- `read_con` keeps one `[frames, N, 3]` coordinate slab. `frame.xyz` is a view of that frame's row. `coords_array`, `velocities_array`, and `forces_array` copy the parsed buffers once before `.atoms` is built, and walk the Python atoms afterwards so an edit shows up on the next call. `iter_con`, the streaming reader, and trajectory indexing move the parsed frame and match `read_all_frames`. A velocity-only or force-only atom keeps its vector inline. A frame with both sections shares one slab of velocities followed by forces.
+- Coordinate and velocity rows scan the common decimal form directly. Writers reuse repeated float spellings and format atom ids in base 10. A convel section is copied into one flat buffer. These paths stay on the calling thread.
+
 ## v0.18.1 - 2026-11-07
 
 ### Bugfixes
