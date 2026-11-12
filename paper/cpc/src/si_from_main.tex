@@ -130,7 +130,7 @@ Clinger's conversion applies when the spelling has no exponent marker, at most 1
 The mantissa is an integer that binary64 represents exactly.
 Division or multiplication by the matching power of ten, taken from the same table \texttt{fast\_float2} uses, produces the value.
 A sign is applied after the scaling.
-Any other spelling, including a decimal with \texttt{e} or \texttt{E}, is parsed by \texttt{fast\_float2}, an Eisel--Lemire kernel \cite{lemireNumberParsingGigabytes2021}.
+Any other spelling, including a decimal with \texttt{e} or \texttt{E}, is parsed by \texttt{fast\_float2}, an Eisel--Lemire conversion \cite{lemireNumberParsingGigabytes2021}.
 A non-finite result is rejected on both paths.
 The two paths agree bit for bit on the spellings the short path accepts.
 The mask is then an integer, 0 or 1 in version 1 and 0 through 7 from version 2, and the identifier is a decimal integer that does not pass through binary64.

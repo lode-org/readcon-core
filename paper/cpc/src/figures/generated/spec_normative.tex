@@ -25,7 +25,7 @@ Stable
 \item[Reference implementation]
 \href{https://github.com/lode-org/readcon-core}{readcon-core}
 \item[Surface grammar]
-\texttt{grammar/\allowbreak{}readcon.pest} (included in the appendix; not the hot
+the surface grammar (included in the appendix; not the hot
 path)
 \item[Clause index]
 The emitted clause index of the specification.
@@ -168,9 +168,9 @@ Line 3 is
 Line 4 is \texttt{alpha} \texttt{angle(b,c)}, \texttt{beta}
 \texttt{angle(a,c)}, \texttt{gamma} \texttt{angle(a,b)}, in degrees.
 \texttt{a} lies along x and \texttt{b} lies in the xy plane. eOn 3.6.0
-reads that placement at \texttt{client/\allowbreak{}ConFileIO.cpp:659-681} and writes
+reads that placement in the eOn cell reader and writes
 it at \texttt{:531-549}. ASE \texttt{cellpar\_to\_cell} uses the same
-orientation by default (\texttt{ase/\allowbreak{}geometry/\allowbreak{}cell.py:50},
+orientation by default (ASE's cell conversion,
 \texttt{ab\_normal=(0,0,1)}). \texttt{lattice\_vectors} is three row
 vectors in \texttt{units.length}, \texttt{{[}a,\ b,\ c{]}}.
 
@@ -199,13 +199,13 @@ absent or empty, and the legacy velocity fallback does not apply. That
 frame is legal with \texttt{validate} true. A per-type count of 0 is
 InvalidCount when the type count is 1 or more. ASE 3.29.0
 \texttt{write\_eon(Atoms())} writes type count 0, an empty line 8, and
-an unterminated empty line 9 (\texttt{ase/\allowbreak{}io/\allowbreak{}eon.py:277-307}).
+an unterminated empty line 9 (ASE's eOn writer).
 \texttt{ase.io.eon.read\_\allowbreak{}eon} then raises \texttt{IndexError} at
-\texttt{images{[}0{]}} (\texttt{ase/io/eon.py:188}). The
+\texttt{images{[}0{]}} (ASE's eOn reader). The
 \texttt{StopIteration} from the ninth \texttt{next()} is caught inside
 that function (\texttt{:177-179}).
 \texttt{ase.io.read(path,\ format="eon")} raises \texttt{StopIteration}
-from \texttt{ase/\allowbreak{}io/\allowbreak{}formats.py:821} (\texttt{next(\_iread(...))} on a
+from ASE's format dispatcher (\texttt{next(\_iread(...))} on a
 read that yields no image).
 
 \begin{description}
@@ -282,7 +282,7 @@ and z.
 Column 5 is the atom id. No base is implied. Grouping by type reorders
 atoms relative to a pre-group sequence. eOn 3.6.0 stable-sorts by
 ascending id when the ids are unique, and keeps file order when any id
-repeats (\texttt{client/\allowbreak{}ConFileIO.cpp:147-176} \texttt{matter\_order},
+repeats (the eOn matter order, \texttt{matter\_order},
 called at \texttt{:691}). v3.4.0 has the same function.
 
 \begin{description}
@@ -434,10 +434,9 @@ taken from \texttt{units}.
 
 The natural time unit used by eOn and by ASE, verified by an eOn 3.6.0
 round trip, is written exactly \texttt{(amu*angstrom\^{}2/eV)\^{}0.5}.
-That expression is a time. eOn hard-codes 10.1805055 fs
-(\texttt{include/\allowbreak{}eon/\allowbreak{}ParametersOptions.h:26}). A writer that
+That expression is a time. eOn hard-codes 10.1805055 fs. A writer that
 canonicalises the expression by inserting spaces is not using the pinned
-spelling. Names below are the ones \texttt{src/units.rs} of readcon-core 0.18.1
+spelling. Names below are the ones the unit table of readcon-core 0.18.1
 accepts for length, energy, mass, and time, compared case-insensitively.
 
 \begin{description}
@@ -507,7 +506,7 @@ spelling MUST be \texttt{InvalidNumberFormat}, except where
 \end{description}
 
 eOn \texttt{.convel} output at 6 digits after the decimal
-(\texttt{kConvelPrecision} in \texttt{client/\allowbreak{}ConFileIO.cpp:43}) is
+(\texttt{kConvelPrecision} in the eOn convel writer) is
 fixed-decimal and lossy. The kinetic-energy loss for that rounding was
 measured on one 336-atom Pt slab at 300 K (one Maxwell-Boltzmann draw)
 as 5.8e-7 relative.

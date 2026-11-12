@@ -8,7 +8,7 @@ The mapping flag (MAP) names the \texttt{mmap} flags.
 Non-uniform memory access (NUMA) names the machine layout.
 Tables~\ref{tab:conbin-mmap-sum} and \ref{tab:conbin-scale} report the
 resident set size (RSS) as \texttt{VmHWM}.
-\texttt{VmHWM} names the high-water mark the kernel keeps for each
+\texttt{VmHWM} names the high-water mark of the resident set for each
 process.
 A CON-bin file begins with one host page.
 On this machine that page is 4096 bytes.
@@ -43,7 +43,7 @@ The population call still faults base pages.
 
 Those base pages are what Table~\ref{tab:conbin-mmap-nosum} times, each
 reader in a fresh process after \texttt{drop\_caches} 3.
-That drop clears the guest page cache.
+That drop clears the page cache.
 The host cache was not controlled.
 The warm sample in that table is the next read in that same process.
 There is no untimed warm-up.
@@ -58,12 +58,8 @@ clock.
 Every sum in Table~\ref{tab:conbin-mmap-nosum} was
 \(-1.12499999625 \times 10^{16}\).
 
-The machine is an Intel Xeon, family 6, model 207, 8 cores, one NUMA
-node.
+The memory-mapped reads use the same Xeon.
 L3 is 320 MiB.
-MemTotal is 49342768 kB.
-The kernel is Linux 6.12.94+.
-These are the measurements of the memory-mapped binary reader, on a different kernel from the one-core reads of the main text (kernel 6.12.113+).
 The page size is 4096 bytes and \texttt{Hugepagesize} is 2048 kB.
 rustc is 1.88.0, Python is 3.12.3, h5py is 3.16.0 and NumPy is 1.26.4.
 
@@ -73,8 +69,7 @@ rustc is 1.88.0, Python is 3.12.3, h5py is 3.16.0 and NumPy is 1.26.4.
 Upper median of six repeats, range in parentheses.
 h5py in this table is one reader.
 RSS is the resident set after that read, in kB.
-Guest drop means the guest page cache was dropped (host cache not
-controlled).}
+Cold means the page cache was dropped before the read. The host cache was not controlled.}
 \label{tab:conbin-mmap-nosum}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
@@ -105,8 +100,7 @@ Upper median of six repeats.
 Warm is a new process.
 RSS is \texttt{VmHWM}, in kB. h5py in this table is the 1-thread cell of
 that session.
-Guest drop means the guest page cache was dropped (host cache not
-controlled).}
+Cold means the page cache was dropped before the read. The host cache was not controlled.}
 \label{tab:conbin-mmap-sum}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
@@ -134,14 +128,13 @@ mapped & 8 & warm & 0.9293 (0.9121 to 0.9431) & 5165.2 & 4690424 \\
 \texttt{max\_sectors\_kb} is 1280.
 Each hardware queue has depth 256 (\texttt{nr\_requests}).
 
-This host has one hardware queue, counted from \texttt{mq/},
-because \texttt{nr\_hw\_queues} is absent.
+This host has one hardware queue, because \texttt{nr\_hw\_queues} is absent.
 The default is one stream.
 Workers fault a piece with \texttt{MADV\_POPULATE\_READ}, then sum it.
 \texttt{mincore} only decides whether the whole file is already
 resident.
 The piece sums are added in file order.
-This disk records \texttt{queue/rotational} as 1.
+This disk records the rotational flag as 1.
 
 \texttt{read\_conbin} returns writable arrays over a
 \texttt{MAP\_PRIVATE} mapping (\texttt{memmap2} \texttt{map\_copy}).
@@ -177,7 +170,7 @@ For an h5py pool it is the parent's mark plus the sum of the workers'
 marks, an upper bound on the concurrent peak.
 \texttt{VmHWM} counts the pages a process maps.
 Page cache that no process maps stays outside that mark.
-The h5py guest-drop read fills the page cache and keeps its own arrays.
+The h5py cold read fills the page cache and keeps its own arrays.
 At 1 thread that cgroup high-water mark reaches 9431144 kB.
 The mapped read of the same file reaches 4709088 kB.
 The JSON records that cgroup mark for every sample.
@@ -190,9 +183,7 @@ The two later \texttt{O\_DIRECT} reads of that file were 2188.4
 MB/s and 2246.7 MB/s.
 The other two files' \texttt{O\_DIRECT} pairs were 5924.6
 MB/s then 2271.3 MB/s, and 2187.7 MB/s then 2158.6 MB/s.
-Guest drop in the tables means the guest page cache was dropped (host
-cache not controlled).
-The session JSON names that sample \texttt{guest\_drop}.
+Cold means the page cache was dropped before the read. The host cache was not controlled.
 Host RAM is unknown.
 A file written and never read, then read by one stream after that drop,
 took 1.831 s, then 1.758 s, then 1.609 s.
@@ -201,7 +192,7 @@ Each recorded \texttt{read\_bytes} of the whole file.
 \texttt{Cached} was 312000 kB before each of those reads.
 The never-read file's first read was the slowest of the five, 1.14 times
 the fastest.
-The guest page cache was dropped before every guest-drop sample.
+The page cache was dropped before every cold sample.
 The first read of each file in this session is the slowest sample of its
 cell.
 h5py at 1 thread took 7.0523 s (680.6 MB/s), 2.13 times its upper
@@ -210,7 +201,7 @@ One CON-bin stream at 6 threads took 7.2233 s (664.5 MB/s), 7.11 times
 its upper median.
 The next is O\_DIRECT at 2 threads, repeat 4, at 1.54 times.
 No sample records whether a host cache served it.
-Repeat 0 of the other guest-drop h5py cells is 0.92 to 1.19 times its
+Repeat 0 of the other cold h5py cells is 0.92 to 1.19 times its
 upper median.
 The samples are kept.
 The upper median absorbs the first reads.
@@ -219,16 +210,16 @@ The upper median absorbs the first reads.
 One job at depth 1 read at 1402.6 MB/s.
 One job at depth 256 read at 2680.0 MB/s.
 Eight jobs at depth 256, on disjoint spans, read at 3309.4 MB/s.
-One stream took 1.0515 s in the guest-drop column at 1 thread (4564.8
+One stream took 1.0515 s in the cold column at 1 thread (4564.8
 MB/s) and 1.0217 s at 8 threads (4698.2 MB/s).
 The slowest one-stream rate in that column is 4424.9 MB/s, at 5 threads.
 A stream per span took 1.3572 s at 1 thread and 1.2101 s at 8 threads.
 The probe read the benchmark file at 397.7 MB/s after the same drop.
-The guest-drop rates above 4000 MB/s in Table~\ref{tab:conbin-scale}
+The cold rates above 4000 MB/s in Table~\ref{tab:conbin-scale}
 therefore came from a host cache.
 They are not device rates.
 The default stays one stream, the simpler plan.
-Guest O\_DIRECT still meets a host cache.
+O\_DIRECT still meets a host cache.
 The measured rate is a cache rate.
 
 \begin{table}[ht] \centering
@@ -242,8 +233,7 @@ The resident set size (RSS) is \texttt{VmHWM}, in kB.
 An h5py pool adds the parent's mark and each worker's mark.
 The h5py 1-thread cell is the same cell as in
 Table~\ref{tab:conbin-mmap-sum}.
-Guest drop means the guest page cache was dropped (host cache not
-controlled).}
+Cold means the page cache was dropped before the read. The host cache was not controlled.}
 \label{tab:conbin-scale}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}

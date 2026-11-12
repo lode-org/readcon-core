@@ -123,7 +123,7 @@ This section states the CON 3.1 specification as readcon-core 0.18.1 distributes
 The relative difference between the parsed natural time unit and the eOn constant is \(2.07\times 10^{-8}\).
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
-The specification also points to an informative parsing expression grammar (PEG), \texttt{grammar/\allowbreak readcon.pest}, which is not reproduced.
+The specification also points to an informative parsing expression grammar (PEG), the surface grammar, which is not reproduced.
 The reader-compatibility notes and the references of the source are omitted, because they describe other programs.
 
 \input{figures/generated/spec_normative}
@@ -308,7 +308,7 @@ zstd input to a build without the \texttt{zstd} feature & Refused as unsupported
 
 \FloatBarrier \section{Test run and source lines}\label{sec:supp-testrun} Listing~\ref{lst:testrun} runs the \texttt{rust\_usage} example of the release on the file of Listing~\ref{lst:frame} in a clone of the bundle.
 The program prints the cell, the counts and the first five atoms with their fixed flags, identifiers and velocities.
-\texttt{scripts/\allowbreak test\_run.py} then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
+The test-run step then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
 In both modes the program reads the flat cell and prints its angles.
 In both modes it stops on the impossible cell with the error \texttt{cell angles do not form a real cell} in line~\trCellLine.
 The test-run record keeps the commands, the toolchain and what the program printed for each of the five files.
@@ -318,7 +318,7 @@ The test-run record keeps the commands, the toolchain and what the program print
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
 \begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core 0.18.1.
-\texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{src\_anchors.toml} and fails when an anchor matches no line or more than one.}
+The anchor step finds each range from the anchors of \texttt{src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
 \toprule
@@ -348,20 +348,18 @@ Binary image: payload-offset check & \texttt{\srcRcbinCrc} \\
 \end{table}
 
 \FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
-\texttt{corpus31} contains the \cthreeoneFiles{} files of that corpus, which \texttt{scripts/\allowbreak make\_corpus31.py} writes byte for byte, and its \texttt{manifest.toml} names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
-\texttt{corpus31-results.json} is the record of \texttt{scripts/\allowbreak corpus31\_results.py}: the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
-\texttt{scripts/\allowbreak corpus\_paths.py} writes \texttt{corpus\_paths.json}.
-It reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
+The corpus writer produces the \cthreeoneFiles{} files of that corpus byte for byte, and the manifest names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
+The corpus run records the outcome of every file at one, two and eight threads and the default, from the corpus report of readcon-core, and the build that read the files.
+The path check reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
 The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
 Every file takes \cpathsReadKinds{} reads, except that the \cpathsNotText{} files that are not UTF-8 take no \texttt{read\_con\_string} read.
 All \cpathsMatch{} of the \cpathsReads{} reads return the outcome of the manifest entry of their file, with its frame count or error class (Table~\ref{tab:corpus-paths}).
 The record keeps the verdict of every read with the builds that made them.
-\texttt{every\_path.json} is the record of \texttt{scripts/\allowbreak every\_path\_count.py}, which runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
+The path count runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
 Table~\ref{tab:corpus31-open} lists the \cthreeoneNotExplicit{} entries whose outcome no clause decides by name, each with the reading that its manifest entry records and that readcon-core follows.
-Table~\ref{tab:corpus-crosscheck} is the run of \texttt{scripts/\allowbreak corpus\_crosscheck.py} over both corpora, beside the independent reader \texttt{scripts/\allowbreak indep\_reader.py}; \texttt{corpus\_crosscheck.json} and \texttt{corpus\_crosscheck.csv} record the outcome of every reader on every file.
+Table~\ref{tab:corpus-crosscheck} is the cross-check over both corpora, beside the independent reader, and it records the outcome of every reader on every file.
 
-\texttt{mutant\_differential.json} is the record.\\
-\texttt{scripts/\allowbreak mutant\_differential.py} writes it.
+The mutant comparison records the cases.
 A case takes one of the \mutantFiles{} files of \texttt{corpus31} under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
 The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
@@ -375,10 +373,10 @@ The first variant is a count line with the wrong number of tokens and a token th
 The second variant is line 2 with a number such as \texttt{1e999}, which the JSON grammar of Request for Comments (RFC)~8259 admits and binary64 cannot represent.
 The independent reader rejects such a number anywhere in line 2, and readcon-core keeps it in an unreserved key and reads on; no clause requires either reading.
 The third variant is a last byte that is a carriage return, of which CON-file.3 states nothing: readcon-core reads it as a line end, so the input ends in trailing whitespace, and the independent reader takes it for line 1 of a further frame, which ends before its line 2.
-\texttt{clause\_coverage.json}, the record of \texttt{scripts/\allowbreak clause\_coverage.py}, lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
-No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given consumer, since no writer of readcon-core takes a consumer or a target version; CON-section.10 and CON-section.11, which govern how a later revision adds a reserved section name; and CON-section.18, a SHOULD on the energies a producer stores, whose reader side CON-section.19, accepting a frame whose energy differs from the sum of its energies rows, \texttt{tests/\allowbreak spec\_clause\_gaps.rs::\allowbreak con\_section\_19\_energy\_sum\_mismatch\_does\_not\_reject\_the\_frame} reads.
+The clause coverage lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
+No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given consumer, since no writer of readcon-core takes a consumer or a target version; CON-section.10 and CON-section.11, which govern how a later revision adds a reserved section name; and CON-section.18, a SHOULD on the energies a producer stores, whose reader side CON-section.19, accepting a frame whose energy differs from the sum of its energies rows, the energy-sum mismatch test reads.
 
-The test \texttt{differential\_\allowbreak corpus\_\allowbreak mutations\_\allowbreak agree\_\allowbreak across\_\allowbreak entry\_\allowbreak points} of \texttt{src/\allowbreak iterators.rs} draws 140 cases, each conformance file and each test file with one of four edits: a form feed, a no-break space, two blank lines, or a further section at its end.
+The test \texttt{differential\_\allowbreak corpus\_\allowbreak mutations\_\allowbreak agree\_\allowbreak across\_\allowbreak entry\_\allowbreak points} of the iterator tests draws 140 cases, each conformance file and each test file with one of four edits: a form feed, a no-break space, two blank lines, or a further section at its end.
 Each case is read from a string and from bytes at one to sixteen threads, by the stream reader at read sizes of 1 and 61 bytes and 1~MiB, and by the column reader with the positions alone and with every section, from bytes and streamed from the file.
 It is then written to a plain and a gzip file, and each file is read again at the same thread counts, with the stream reader and through the indexed trajectory.
 Every read returns the frame count, the coordinates and the section presence of the one-thread string read or stops with its error at the same line, and the trajectory refuses to open a file only when the string read rejects the case.
@@ -391,7 +389,7 @@ One case in every 305 is also padded with blank lines past the mapping threshold
 
 \input{figures/generated/corpus_crosscheck}
 
-Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame (\texttt{version\_safety.csv}).
+Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame.
 The Python module and the C library follow the rule on each row.
 They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labelled fs in the natural unit.
 The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
@@ -440,7 +438,7 @@ Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 20.0" Pro
 and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0 T T T 3} and \texttt{Pt 1.3859292911256331 1.3859292911256331 7.8 F F T 41}.
 The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, print the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
 The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.16.1, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.10.0 and Open Babel 3.2.1.
-On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals (\texttt{drift\_extxyz.json}).
+On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals.
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
 \FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbours} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
@@ -581,7 +579,7 @@ medians are 0.567~s and 0.657~s.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The readers timed on the Xeon are named in Section~\ref{sec:host}.
 
-\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process.
+The version-drift check gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process.
 On a file of two frames whose first line is empty, 0.17.0 returns no frames and 0.17.1, 0.17.2 and 0.17.3 return two frames.
 On a legacy velocity label in capitals or separated by tabs, 0.17.1 returns no frame and the other three return the frame.
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2 and 0.17.3 return no frame and 0.17.0 and 0.17.1 return the frame, and 0.17.3 returns the outcome of 0.17.2 on every probe.
@@ -590,49 +588,48 @@ On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
 The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.18.1.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
-\texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
-The version history of Table~\ref{tab:versions}, \texttt{versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py \texttt{-}\texttt{-}measure}, which runs no readcon-core code, so the table does not list it.
-Nor does it list \texttt{clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
+The provenance step writes the digests of the readcon module and of the library sources into each record.
+The version history of Table~\ref{tab:versions} is read from the specification at each release tag and runs no readcon-core code, so the table does not list it.
+Nor does the table list the clause coverage, which is read from the specification, the corpus manifests, the probes and the sources of the tests without running readcon-core.
 
 \input{figures/generated/version_map}
 
 Listing~\ref{lst:testrun} records a checkout of the sources.
-Listing~\ref{lst:repro} installs the Python environment that ran the scripts and rebuilds both documents.
+Listing~\ref{lst:repro} installs the Python environment of the measurements and rebuilds both documents.
 It needs git, conda and TeX Live or Tectonic.
-\texttt{scripts/\allowbreak build\_tex.sh} typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex \texttt{-}\texttt{-}version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
+The build step typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex \texttt{-}\texttt{-}version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
 Apart from the TeX sources of the two documents and the configuration, font map and format that the installation generates, every file that pdfTeX and BibTeX read for them belongs to one of nine Ubuntu packages.
 Seven of them have version \texttt{2023.20240207-1}: \texttt{texlive-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak recommended}, \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers} and \texttt{texlive-\allowbreak plain-\allowbreak generic}.
 The other two are \texttt{texlive-\allowbreak binaries}, at version \texttt{2023.20230311.66589-9build3}, and \texttt{lmodern}, at version \texttt{2.005-1}.
 \texttt{apt install} with the arguments \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers}, \texttt{texlive-\allowbreak plain-\allowbreak generic} and \texttt{lmodern} installs the nine with the packages they depend on.
-On a host without TeX Live, \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents with Tectonic~0.17.0 on the path, three rounds of each so that the labels of each document reach the other, and stops on an undefined reference, an overfull box or a float that fits on no page.
-\path{paper/cpc/environment/conda-linux-64.txt} lists the conda-forge packages of that environment with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and \path{requirements.txt} beside it the packages that pip adds; \texttt{scripts/\allowbreak export\_env.py} wrote both from the package records of the environment.
+On a host without TeX Live, the Tectonic build typesets both documents with Tectonic~0.17.0, three rounds of each so that the labels of each document reach the other, and stops on an undefined reference, an overfull box or a float that fits on no page.
+The recorded environment lists the conda-forge packages with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and the requirements list the packages that pip adds.
+The environment export wrote both from the package records of the environment.
 \texttt{pip install .} builds the readcon module from the checkout.
-\texttt{scripts/\allowbreak regen\_paper.py} rewrites every table, figure and macro from the records without timing anything, and \texttt{scripts/\allowbreak build\_tex.sh} or \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents.
-\texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \texttt{numbers.csv}.
+The paper regeneration rewrites every table, figure and macro from the records without timing anything, and the build step typesets both documents.
+The trace step then traces every printed number to its record.
 
 The measurements are separate steps, each of which rewrites its own records.
-\texttt{regen\_paper.py \texttt{-}\texttt{-}measure} reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
-\texttt{scripts/\allowbreak test\_run.py \texttt{-}\texttt{-}checkout} runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
-\texttt{e1\_restart.py} reruns the eOn band, \texttt{scripts/\allowbreak run\_restart\_walls.py} the wall times of Table~\ref{tab:restartfmt}, and \texttt{scripts/\allowbreak file\_sizes.py} the sizes of Table~\ref{tab:sizes}.
-For the performance records, \texttt{make\_payloads.py} writes the timed files, \texttt{release.py} the provenance record, \texttt{cpp\_reads.py} builds and checks the C++ programs, and \texttt{reads.py}, \texttt{memray\_peaks.py} and \texttt{cachegrind.py} write the timing, heap and Cachegrind records; \texttt{build\_chemfiles.sh} and then \texttt{h2h.py} write the head-to-head records, and \texttt{settle\_period.py} and \texttt{binary\_formats.py} the records of the native readers.
-For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build \texttt{-}\texttt{-}release} builds and that \texttt{cargo build \texttt{-}\texttt{-}release \texttt{-}\texttt{-}features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \texttt{referee\_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
-Listing~\ref{lst:measure} gives the command line of each of these performance and conformance scripts, the environment variables it reads with their defaults, and the command lines it runs for each cell, file or build, among them those of memray, Valgrind and cargo.
-The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3 and rewrites \texttt{version\_drift.json}.
+The measured regeneration reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
+The checkout step runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
+The eOn restart step reruns the eOn band, the wall-time step the times of Table~\ref{tab:restartfmt}, and the size step the sizes of Table~\ref{tab:sizes}.
+For the performance records, the payload step writes the timed files, the provenance step the record of the build, the C++ step builds and checks the C++ programs, and the read, heap and cachegrind steps write the timing, heap and cachegrind records.
+The chemfiles build and then the head-to-head step write the head-to-head records, and the settle and native-reader steps the records of the native readers.
+For the conformance records, the corpus step runs the corpus report of readcon-core over the CON 3.1 corpus, the path step reads both corpora through the readcon module and through the C library in the default build and the parallel build, the path-count step runs the reader-path tests and counts their inputs, the cross-check step runs the three readers of Table~\ref{tab:corpus-crosscheck}, the probe step runs the probes, the mutant step reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and the clause step lists what names each clause.
+The version-drift step reads each of four published wheels in its own process, the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3.
 
 \begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.18.1.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
 cd readcon-core
 git checkout v0.18.1
-conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt
+conda create -n readcon-cpc --file the recorded environment
 conda activate readcon-cpc
-python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt
+python3 -m pip install --no-deps -r the recorded requirements
 python3 -m pip install .
-python3 paper/cpc/scripts/regen_paper.py
-bash paper/cpc/scripts/build_tex.sh    # or bash paper/cpc/scripts/build_tex_tectonic.sh
-python3 paper/cpc/scripts/trace_numbers.py --check
+python3 regen_paper.py
+bash build_tex.sh
+python3 trace_numbers.py --check
 \end{lstlisting}
-
-\lstinputlisting[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]{measure-commands.lst}
 
 % A digital object identifier in the reference list stays on one line.
 \DeclareUrlCommand\path{\def\UrlFont{\footnotesize\ttfamily}\mathchardef\UrlBreakPenalty=10000 \mathchardef\UrlBigBreakPenalty=10000 }
