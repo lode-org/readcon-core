@@ -43,7 +43,7 @@ from pathlib import Path
 CPC = Path(__file__).resolve().parents[1]
 REPO = CPC.parents[1]
 READS = CPC / "data" / "trace" / "reads.json"
-SOURCE_DATE_EPOCH = "1793404800"
+SOURCE_DATE_EPOCH = "1794441600"
 
 MEASURE = [
     ["scripts/failure_matrix.py"],

@@ -76,7 +76,7 @@ That grammar admits a \texttt{d} or \texttt{D} exponent and reads \texttt{T}, \t
 It leaves open whether a comment line that is not key-value pairs makes a file plain XYZ or an error, and on such a file the default C path of libAtoms departs from the default periodicity while its Python parser fails.
 From extxyz 0.4.2 the C reader defaults to a whitespace split, with \texttt{use\_regex} false, and extxyz 0.4.6 keeps that default on \texttt{read\_dicts} \cite{kermodeExtxyz0422026}.
 The package ase-extxyz 0.1.2 registers that C parser with ASE as the format \texttt{cextxyz} \cite{kermodeAseExtxyz0122026}.
-The ASE extended XYZ arm in the stored campaigns calls \texttt{format='extxyz'}, the reader shipped in ASE 3.29.0, not \texttt{cextxyz}.
+The ASE extended XYZ arm in the 0.18.0 measurements calls \texttt{format='extxyz'}, the reader shipped in ASE 3.29.0, not \texttt{cextxyz}.
 extxyz-ng 0.0.2 is a Rust reader with Python bindings \cite{yuExtxyzNg0022026}.
 Section~\ref{sec:h2h} times these readers, and the writers that provide a write call, on one set of files.
 
@@ -114,7 +114,7 @@ The first four bytes select the envelope.
 A gzip stream is inflated into memory, and a zstd stream is inflated when the build includes that decoder.
 A plain file shorter than \SI{64}{\kibi\byte} is read into memory.
 A longer plain file stays mapped for the position-block reader.
-The full-frame read loads the bytes into one buffer on every size.
+The read of the whole file loads the bytes into one buffer on every size.
 With one worker, the boundary thread then parses the frames in order.
 With two or more workers, and a build that includes the pool, each worker parses its own span and the frames come back in file order.
 

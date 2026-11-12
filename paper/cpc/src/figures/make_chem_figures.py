@@ -24,7 +24,7 @@ import chemparseplot.plot.reaction as reaction
 from chemparseplot.plot.journal import journal_figure, apply_style
 from chemparseplot.parse.projection import compute_projection_basis, project_to_sd
 from chemparseplot.plot.neb import plot_landscape_surface, plot_neb_profile
-from chemparseplot.plot.palette import RUHI_CYCLE
+from chemparseplot.plot.palette import RUHI_COLORS, RUHI_CYCLE
 from chemparseplot.plot.theme import RUHI_THEME, setup_publication_theme
 
 HERE = Path(__file__).resolve().parent
@@ -45,6 +45,7 @@ def _read_con(path: Path) -> Atoms:
     """One CON 3.1 frame in the order the file writes the atoms."""
     symbols: list[str] = []
     pos: list[tuple[float, float, float]] = []
+    ids: list[int] = []
     sym = None
     for line in path.read_text().splitlines():
         parts = line.split()
@@ -55,13 +56,29 @@ def _read_con(path: Path) -> Atoms:
             continue
         try:
             xyz = (float(parts[0]), float(parts[1]), float(parts[2]))
+            ident = int(parts[4])
         except ValueError:
             continue
         symbols.append(sym)
         pos.append(xyz)
+        ids.append(ident)
     atoms = Atoms(symbols=symbols, positions=np.asarray(pos, dtype=float))
+    atoms.set_array("con_id", np.asarray(ids, dtype=int))
     atoms.center()
     return atoms
+
+
+def _atom_labels(atoms: Atoms) -> list[str]:
+    """1-indexed file order, for the atoms the caption names."""
+    specs = []
+    for index, (symbol, ident) in enumerate(
+        zip(atoms.get_chemical_symbols(), atoms.get_array("con_id")), start=1
+    ):
+        if symbol == "O":
+            specs.append(f"{index} O")
+        elif symbol == "C" and int(ident) in {0, 1, 2, 5}:
+            specs.append(f"{index} C{int(ident)}")
+    return specs
 
 
 def _wbo(atoms: Atoms, name: str) -> dict[tuple[int, int], float]:
@@ -93,17 +110,21 @@ def _render(atoms: Atoms, orders: dict[tuple[int, int], float], name: str) -> np
     ase_write(xyz, atoms)
     mol = xr.load(str(xyz), charge=0, multiplicity=1, quick=True)
     mol = reaction.apply_wbo_style(mol, orders, max_contact=1.9)
-    svg = str(
-        xr.render(
-            mol,
-            config="paton",
-            hy=True,
-            bo=False,
-            orient=False,
-            transparent=True,
-            canvas_size=640,
-        )
+    cfg = xr.build_config(
+        "paton",
+        canvas_size=1100,
+        hy=True,
+        bo=False,
+        orient=False,
+        transparent=True,
+        label_font_size=22,
     )
+    cfg.color_overrides = {
+        "C": RUHI_COLORS["teal"],
+        "O": RUHI_COLORS["coral"],
+        "H": RUHI_COLORS["sky"],
+    }
+    svg = str(xr.render(mol, config=cfg, labels=_atom_labels(atoms)))
     png = WORK / f"{name}.png"
     font = str(next(FONTS.glob("*Regular.ttf")))
     png.write_bytes(
@@ -136,13 +157,20 @@ def structures() -> None:
         for frame, order, (path, _) in zip(aligned, orders, names)
     ]
     apply_style("cpc")
-    fig, axes = journal_figure("cpc", columns="double", nrows=1, ncols=4)
+    fig, axes = journal_figure("cpc", columns="double", nrows=2, ncols=2)
     if not isinstance(axes, np.ndarray):
         axes = np.array([axes])
     for ax, image, (_, title) in zip(axes.ravel(), images, names):
         ax.imshow(image)
         ax.set_axis_off()
-        ax.set_title(title, fontsize=8)
+        ax.set_title(title, fontsize=9)
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    key = ScalarMappable(norm=Normalize(0, 3), cmap=reaction._bond_order_cmap())
+    key.set_array([])
+    bar = fig.colorbar(key, ax=axes.ravel().tolist(), fraction=0.046, pad=0.02)
+    bar.set_label("Wiberg bond order")
     fig.savefig(OUT / "claisen_wbo.pdf", metadata={"CreationDate": None})
     plt.close(fig)
 
@@ -189,24 +217,27 @@ def bands() -> None:
     plt.close(fig)
 
 
-def _hull_limits(s: np.ndarray, d: np.ndarray, margin: float = 0.08):
-    """Bounding box of the projected points, grown by a small margin."""
-    s_span = float(s.max() - s.min()) or 1.0
-    d_span = float(d.max() - d.min()) or 1.0
-    pad_s = max(margin * s_span, 0.04)
-    pad_d = max(margin * d_span, 0.04)
-    return (float(s.min()) - pad_s, float(s.max()) + pad_s), (
-        float(d.min()) - pad_d,
-        float(d.max()) + pad_d,
-    )
+def _expanded_hull(s: np.ndarray, d: np.ndarray, margin: float = 0.08):
+    """Convex hull of the projected images, grown by a small margin."""
+    from matplotlib.path import Path as MplPath
+    from scipy.spatial import ConvexHull
+
+    pts = np.column_stack([np.asarray(s, dtype=float), np.asarray(d, dtype=float)])
+    hull = ConvexHull(pts)
+    verts = pts[hull.vertices]
+    center = verts.mean(axis=0)
+    grown = center + (verts - center) * (1.0 + margin)
+    path = MplPath(np.vstack([grown, grown[:1]]), closed=True)
+    return path, grown
 
 
 def landscape() -> None:
     """Both Claisen bands on the MethodsX (s, d) plane.
 
     Coordinates are the stored ``claisen_landscape.csv`` table. No forces
-    are stored, so the surface is the matern model. The grid is the data
-    hull plus a small margin, and the colour scale is the recorded energies.
+    are stored, so the surface is the matern model. The fill is masked to
+    the convex hull of the sampled images plus a small margin, and both
+    panels share the colour scale of the recorded energies.
     """
     import csv
 
@@ -233,12 +264,15 @@ def landscape() -> None:
                 }
             )
     apply_style("cpc")
+    energies = [row["E"] for row in rows]
+    lo, hi = float(min(energies)), float(max(energies))
     fig, axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
     panels = (
         ("m", "Identity order", axes[0]),
         ("i", "Renumbered", axes[1]),
     )
-    mappables = []
+    painted = None
+    farthest = 0.0
     for key, title, ax in panels:
         band = [row for row in rows if row["b"] == key]
         final_it = max(row["it"] for row in band)
@@ -253,17 +287,21 @@ def landscape() -> None:
         rp = np.array([row["rp"] for row in band])
         energy = np.array([row["E"] for row in band])
         s_all, d_all = project_to_sd(rr, rp, basis)
-        xlim, ylim = _hull_limits(s_all, d_all)
-        lo, hi = float(energy.min()), float(energy.max())
+        farthest = max(farthest, float(np.max(d_all)))
+        clip, grown = _expanded_hull(s_all, d_all)
+        pad_s = 0.04
+        pad_d = 0.04
+        xlim = (float(grown[:, 0].min()) - pad_s, float(grown[:, 0].max()) + pad_s)
+        ylim = (float(grown[:, 1].min()) - pad_d, float(grown[:, 1].max()) + pad_d)
         draw_filled = ax.contourf
 
         def contourf(x, y, z, levels=None, **kwargs):
-            """Keep the colour scale on the recorded energies."""
+            """Put every energy fill on the recorded range of both bands."""
             values = np.asarray(z, dtype=float)
-            span = float(np.nanmax(values) - np.nanmin(values))
-            if span > (hi - lo) * 1.5 and hi > lo:
-                levels = np.linspace(lo, hi, 20)
+            if kwargs.get("colors") != "white":
+                levels = np.linspace(lo, hi, 21)
                 kwargs["extend"] = "both"
+                kwargs["cmap"] = "ruhi_diverging"
             return draw_filled(x, y, values, levels=levels, **kwargs)
 
         ax.contourf = contourf
@@ -284,16 +322,17 @@ def landscape() -> None:
             variance_label=lambda value: f"{value:.2g}",
         )
         ax.contourf = draw_filled
-        painted = next(
-            (
-                collection
-                for collection in ax.collections
-                if collection.__class__.__name__.startswith("QuadContour")
-            ),
-            None,
-        )
-        if painted is not None:
-            mappables.append(painted)
+        for collection in ax.collections:
+            collection.set_clip_path(clip, ax.transData)
+        if painted is None:
+            painted = next(
+                (
+                    collection
+                    for collection in ax.collections
+                    if collection.__class__.__name__.startswith("QuadContour")
+                ),
+                None,
+            )
         steps = sorted({row["it"] for row in band})
         for step in steps:
             path = sorted(
@@ -320,8 +359,11 @@ def landscape() -> None:
         ax.set_title(title, fontsize=8)
         ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)")
         ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)")
-    for ax, painted in zip(axes, mappables, strict=True):
-        fig.colorbar(painted, ax=ax, fraction=0.046, pad=0.04, label="Energy (eV)")
+    if painted is None:
+        raise SystemExit("The landscape surface did not draw a contour set")
+    bar = fig.colorbar(painted, ax=axes.ravel().tolist(), fraction=0.046, pad=0.03, label="Energy (eV)")
+    bar.set_ticks(np.round(np.linspace(lo, hi, 6), 2))
+    print(f"landscape max d = {farthest:.4f} A; energy {lo:.4f} to {hi:.4f} eV")
     fig.savefig(OUT / "claisen_landscape.pdf", metadata={"CreationDate": None})
     plt.close(fig)
 

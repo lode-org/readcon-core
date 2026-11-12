@@ -109,7 +109,7 @@ belowskip=0.4em
 
 \begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement holds the CON 3.1 specification, the reader rules, and the corpora.
 It records the restart protocol, the velocity case, and the timing tables.
-It also keeps the reader-exchange figures and the short-decimal session, each labelled with the release those numbers belong to.
+It also keeps the figures that compare readers and the shortest-decimal checks, each labelled with the release those numbers belong to.
 \end{abstract} \end{frontmatter}
 
 \section{Normative specification}\label{sec:spec-normative}
@@ -333,7 +333,6 @@ Finite numbers and masks & \texttt{\srcFiniteNumber} \\
 Legacy velocity block & \texttt{\srcLegacyVelocity} \\
 Declared sections and skipped sections & \texttt{\srcDeclaredSections} \\
 Velocity section without a time unit & \texttt{\srcVelocityTime} \\
-Path writer: temporary file, rename and removal & \texttt{\srcReplaceFile} \\
 All frames at the offsets of a frame index & \texttt{\srcReadIndexed} \\
 Trajectory open, with or without a written index & \texttt{\srcTrajectoryOpen} \\
 Binary image: layout check and copy & \texttt{\srcRcbinCopy} \\
@@ -582,7 +581,7 @@ On a legacy velocity label in capitals or separated by tabs, 0.17.1 returns no f
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2 and 0.17.3 return no frame and 0.17.0 and 0.17.1 return the frame, and 0.17.3 returns the outcome of 0.17.2 on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
-The stored campaigns use readcon-core~\readconversion{}.
+The measurements other than the one-core timings use readcon-core~\readconversion{}.
 The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.18.1.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 \texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
@@ -668,20 +667,20 @@ The error is the largest difference between a coordinate read and the binary64 s
 \footnotesize
 \caption{C++ reads of the coordinates and velocity campaigns at one thread, by the column reader and the frame iterator of readcon-core and by chemfiles.
 A time is the median of the runs of a cell, with their IQR, and a ratio is the readcon-core median over the chemfiles median.
-readcon-core 0.18.0 full-frame session.}
+readcon-core 0.18.0, returning every stored field.}
 \label{tab:h2h-cpp}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_cpp}}
 \end{table}
 
-These head-to-head tables are the readcon-core 0.18.0 full-frame session.
-They return velocities and every stored field, which is why they are slower than the column-walker arrays.
+These head-to-head tables are readcon-core 0.18.0 and return every stored field.
+They return velocities and every stored field, which is why they are slower than the reads that return coordinate arrays.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
 \caption{Python reads of the two head-to-head campaigns, with the peak heap of each read.
-readcon-core 0.18.0 full-frame session.}
+readcon-core 0.18.0, returning every stored field.}
 \label{tab:h2h-python}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_python}}
@@ -701,14 +700,14 @@ readcon-core 0.18.0 full-frame session.}
 \caption{C++ reads of the trajectory, each run a fresh process timed from the signal of the parent until it frees its frames.
 A time is the median of the runs of a cell, with their IQR.
 The last column is readcon-core time at one thread over the time of the reader of that row.
-readcon-core 0.18.0 full-frame session.}
+readcon-core 0.18.0, returning every stored field.}
 \label{tab:cpp}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_cpp}}
 \end{table}
 \input{figures/generated/r0174_macros}
 
-The 2.62~s and 1.35~s rows are that same 0.18.0 full-frame session, with and without velocities.
+The 2.62~s and 1.35~s rows are that same 0.18.0 read of every stored field, with and without velocities.
 
 \begin{table}[tbp]
 \centering
@@ -716,7 +715,7 @@ The 2.62~s and 1.35~s rows are that same 0.18.0 full-frame session, with and wit
 \caption{Python reads of the trajectory.
 A time is the median of the runs of a cell, with their IQR, and the peak heap is the median of the captures of the cell.
 The last column is readcon-core time over the time of the reader of that row.
-readcon-core 0.18.0 full-frame session.}
+readcon-core 0.18.0, returning every stored field.}
 \label{tab:perf}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
@@ -909,19 +908,19 @@ $10^{6}$ $\times$ 1 & 0.4545 & 0.1501 \\
 \end{tabular}
 \end{table}
 
-\section{Recorded reader exchange}
-The extended XYZ session runs every reader in one process, with the arms interleaved.
+\section{Comparison of readers}
+The extended XYZ timings run every reader in one process, one arm after another.
 The harness is a Snakemake rule called from an asv class.
-The files larger than ten atoms are generated for the session and are not stored in the tree.
+The files larger than ten atoms are generated for the timings and are not stored in the tree.
 No CPU governor is visible on the Xeon.
 
-The reader-exchange figures below are readcon-core 0.18.0.
-Those arms return full frames, so the times differ from the column-walker session, which returns arrays.
+The figures below are readcon-core 0.18.0.
+Those arms return full frames, so the times differ from the one-core reads, which return arrays.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{readcon-core 0.18.0 full-frame session: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
+\caption{readcon-core 0.18.0, returning every stored field: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
 The scale is logarithmic.}
 \label{fig:timing}
 \end{figure}
@@ -929,7 +928,7 @@ The scale is logarithmic.}
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{readcon-core 0.18.0 full-frame session. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
+\caption{readcon-core 0.18.0, returning every stored field. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
 \label{fig:ratios}
 \end{figure}
 
@@ -958,7 +957,7 @@ The whisker runs from the first quartile to the third.}
 
 \section{Short-decimal comparison}
 \label{sec:fast-table}
-Eight samples, interleaved.
+Eight samples, taken in turn.
 The triple is the first quartile, the median and the third quartile, in milliseconds.
 
 \begin{table}[htbp]
@@ -982,9 +981,9 @@ Coordinate loop & 8.789, 8.827, 8.859 & 52.17, 52.30, 52.36 \\
 \bibliographystyle{elsarticle-num}
 
 \section{Recorded timings}\label{sec:si-timings}
-The head-to-head is the column-walker session on the Intel Xeon Processor (family 6, model 207).
-Tables~\ref{tab:serial} and~\ref{tab:serial-xyz} give that session: one core, one warmup and six repeats.
-The column walker returns arrays.
+The head-to-head is the one-core read on the Intel Xeon Processor (family 6, model 207).
+Tables~\ref{tab:serial} and~\ref{tab:serial-xyz} give that read: one core, one warmup and six repeats.
+The one-core read returns arrays.
 ASE's eon reader builds \texttt{Atoms} objects, so the like-for-like row is Table~\ref{tab:plugin}: readcon-con takes 1.72~s and ASE takes 10.7~s.
 Section~\ref{sec:host} times \texttt{eon.fileio.loadcons} on every frame at 1 thread.
 It times \texttt{Matter.con2matter} on the first frame only, and that row is not a ratio against a full read.
@@ -994,7 +993,7 @@ Each entry is the type-7 median, with the interquartile range in parentheses.
 On the \num{100000}-frame CON file Rust and Python both take \SI{0.179}{\second}.
 \texttt{rkr\_read\_all\_frames} builds a frame object for each frame and takes \SI{0.345}{\second}.
 ASE's eon reader takes \SI{10.8}{\second} and \texttt{loadcons}, eOn's own Python reader, takes \SI{10.3}{\second}.
-In the reader-exchange session of readcon-core 0.18.0, eOn's C++ client, which embeds readcon-core, reads that file in 0.85~s.
+In the readcon-core 0.18.0 comparison, eOn's C++ client, which embeds readcon-core, reads that file in 0.85~s.
 The Rust resident set on that file is \SI{117}{\mebi\byte} above the file size.
 On the convel file Python takes \SI{0.216}{\second}, Rust \SI{0.241}{\second} and \texttt{rkr\_read\_all\_frames} \SI{0.430}{\second}.
 eOn \texttt{loadcons} takes \SI{11.0}{\second}.
@@ -1002,7 +1001,7 @@ ASE's eon reader does not read convel.
 On one CON frame of $10^{6}$ atoms Python takes \SI{0.0453}{\second}, Rust \SI{0.0518}{\second} and \texttt{rkr\_read\_all\_frames} \SI{0.172}{\second}.
 ASE's eon reader takes \SI{1.59}{\second} and eOn \texttt{loadcons} takes \SI{3.15}{\second}.
 The Rust resident set on that frame is \SI{41.7}{\mebi\byte} above the file size.
-\texttt{rkr\_read\_positions} reads coordinates through the column walker.
+\texttt{rkr\_read\_positions} reads coordinates and returns arrays.
 C \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on all three files (Table~\ref{tab:c-positions}).
 On the copper extended XYZ file readcon takes \SI{0.301}{\second}, chemfiles \SI{1.52}{\second}, OVITO \SI{3.32}{\second}, ASE \SI{9.97}{\second} and pymatgen \SI{23.6}{\second}.
 
@@ -1011,7 +1010,7 @@ On the copper extended XYZ file readcon takes \SI{0.301}{\second}, chemfiles \SI
 \scriptsize
 \setlength{\tabcolsep}{3pt}
 \caption{Serial reads on one core.
-The read path is the column walker.
+The read returns coordinate arrays.
 The C column is \texttt{rkr\_read\_all\_frames}, which builds a frame object for each frame.
 One warmup and six repeats.
 Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
@@ -1148,7 +1147,7 @@ momenta as velocities.
 On the copper-grid extended XYZ files, chemfiles 0.10.4 opened as XYZ
 and OVITO 3.17.2 both match the positions.
 On the million-atom copper-grid frame OVITO reads in 0.150~s and readcon in 0.287~s.
-That file is the copper grid of the extended XYZ session, not the column-walker extended XYZ file.
+That file is the copper grid of the extended XYZ timings, not the extended XYZ file of the one-core reads.
 On the 10000-frame file OVITO takes 0.657~s and readcon 0.294~s.
 The massif peaks on that file are 54.0~MiB for chemfiles 0.10.4 and 60.9~MiB for OVITO 3.17.2.
 
@@ -1301,13 +1300,13 @@ At eight ranks the warm strong-scaling speedups are 6.0\(\times\) for the shared
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf}
-\caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.18.0 full-frame session.}
+\caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.18.0, returning every stored field.}
 \label{fig:fairness} \end{figure}
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf}
 \caption{Frame rate of the full, field and coordinate Python reads at one and eight threads.
-This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which returns more than the column-walker arrays, so the times are longer than 0.179~s.}
+This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which returns more than the coordinate arrays of the one-core reads, so the times are longer than 0.179~s.}
 \label{fig:layers} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1366,7 +1365,7 @@ The composition-query time is Figure~\ref{fig:db-query}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf}
-\caption{Hashed images in each stored campaign run.}
+\caption{Hashed images in each run of the 0.18.0 measurements.}
 \label{fig:supp-dedup} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1421,9 +1420,9 @@ On the million-atom frame OVITO is the fastest of these readers.
 \subsection{Trajectory XYZ}
 \label{sec:trajxyz}
 Table~\ref{tab:trajxyz} and Figure~\ref{fig:trajxyz} are plain XYZ trajectories of copper: one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.
-The Rust reader is fastest in every column, at \SI{0.259}{\second}, \SI{0.276}{\second} and \SI{0.920}{\second}.
+The Rust reader is fastest on each file, at \SI{0.259}{\second}, \SI{0.276}{\second} and \SI{0.920}{\second}.
 The Python binding takes \SI{0.293}{\second}, \SI{0.282}{\second} and \SI{1.108}{\second}, with interquartile ranges \SI{0.0055}{\second}, \SI{0.0062}{\second} and \SI{0.0030}{\second}.
-It is second to the Rust reader in every column.
+The Python binding is second on each file.
 On the \num{100000}-frame file the Rust reader takes \SI{0.920}{\second} and the Python binding \SI{1.108}{\second}.
 A profile of that Python read shows no NumPy copies: \texttt{from\_owned\_array} and \texttt{memcpy} are 0.00\% of the samples.
 The remaining time is the newline and token scan the Rust reader also pays.
@@ -1459,7 +1458,7 @@ Table~\ref{tab:convel-one} is one convel frame, the survey frame, read on one co
 One warmup precedes six repeats, and the median is the type-7 median.
 The Python binding takes $\num{2.87e-5}$\,s and \SI{34}{\mebi\byte}.
 The Rust reader takes $\num{1.83e-5}$\,s and the C binding $\num{1.66e-5}$\,s.
-eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the current eOn client $\num{2.62e-5}$\,s and eOn 3.6.0 $\num{2.32e-5}$\,s.
+eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the development-build C++ client $\num{2.62e-5}$\,s and the eOn 3.6.0 C++ client $\num{2.32e-5}$\,s.
 ASE's eon reader stops at line 23, the velocity title.
 
 \begin{table}[tbp]
@@ -1476,8 +1475,8 @@ readcon, Python & \num{2.87e-5} \\
 readcon, Rust & \num{1.83e-5} \\
 readcon, C & \num{1.66e-5} \\
 eOn \texttt{loadcons} & \num{3.15e-4} \\
-eOn, current & \num{2.62e-5} \\
-eOn 3.6.0 & \num{2.32e-5} \\
+eOn C++ client, development build & \num{2.62e-5} \\
+eOn 3.6.0 C++ client & \num{2.32e-5} \\
 ASE eon & stops at line 23 \\
 \bottomrule
 \end{tabular}
