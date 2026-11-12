@@ -170,7 +170,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 % proseguard off rgoswami.Acronyms.
 \noindent\textbf{PROGRAM SUMMARY}
 
-\begin{small} \noindent\textit{Program Title:} readcon-core 0.20.0
+\begin{small} \noindent\textit{Program Title:} readcon-core 0.21.0
 
 \noindent\textit{CPC Library link to program files:} (to be added by
 Technical Editor)
@@ -227,7 +227,7 @@ A path writer opens the destination and truncates it, then writes the
 frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
-The library is readcon-core 0.20.0.
+The library is readcon-core 0.21.0.
 The measurements other than the one-core timings use readcon-core 0.18.0, and the one-core timings use readcon-core 0.18.1 (Data
 availability).
 The companion programs are readcon-db 0.2.1, under the MIT licence, at
@@ -247,8 +247,7 @@ The velocities of a file of an earlier version are read in the natural
 unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file
 (Listing~\ref{lst:py}).
-Atom-id correspondence is on the development branch and is not in this
-release.
+Atom-id correspondence is a released API in readcon-core 0.21.0.
 
 \noindent\textit{References:}
 \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026,goswamiReadconcoreConConvel2026}.
@@ -832,7 +831,7 @@ Python calls it through PyO3. An arrow runs from the caller to the code
 it calls.}
 \label{fig:architecture} \end{figure*}
 
-On the development branch the core pairs atoms by the column-5 id.
+The released API in readcon-core 0.21.0 pairs atoms by the column-5 id.
 \texttt{atom\_id\_permutation} returns the permutation \(\Pi\) of Section~\ref{sec:identity}: for each atom of the reference frame, the index of the same id in the other frame.
 \texttt{reorder\_like} rewrites that frame into the reference order, and positions, velocities, forces and bond endpoints move with the atom.
 \texttt{check\_atom\_id\_consistency} names the first frame of a band or a trajectory that disagrees with the first frame, by frame index and atom id.
@@ -842,7 +841,7 @@ Python, C and C++ expose the four calls (Table~\ref{tab:correspondence}).
 
 \begin{table}[tbp]
 \centering
-\caption{The four atom-id calls on the development branch.
+\caption{The four atom-id calls of the released API in readcon-core 0.21.0.
 In C++ the consistency check is the free function.
 The other three C++ calls are members of \texttt{ConFrame}.}
 \label{tab:correspondence}
@@ -993,8 +992,9 @@ readcon-ops & \texttt{rotational\_match} & align by iterative rotations and assi
 \end{table}
 
 \subsection{Installation and usage}
-Rust is \texttt{cargo add readcon-core}.
-Python is \texttt{pip install readcon}, and the chemfiles bridge is \texttt{pip install readcon-chemfiles}.
+Rust is \texttt{cargo add readcon-core@0.21.0}.
+Python is \texttt{pip install readcon==0.21.0},\linebreak
+and the chemfiles bridge is \texttt{pip install readcon-chemfiles}.
 Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}.
 C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
 readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}.
@@ -1112,7 +1112,7 @@ The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one ano
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon returns the id with the position.
-On the development branch the correspondence is checked on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
+The released API in readcon-core 0.21.0 checks the correspondence on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
 It is not a third Claisen result.
 Pairing rows by file position puts the reactant oxygen against the shifted C5, a raw, unwrapped step of 15.761~\text{\AA}.
 The minimum image of that pairing is 2.272~\text{\AA}.
@@ -1568,7 +1568,7 @@ Dropping the height constraint on the Pt(100) adatom changes the prefactor by a 
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
-readcon-core is available from \url{https://github.com/lode-org/readcon-core} under the MIT licence.
+readcon-core v0.21.0 is available from \url{https://github.com/lode-org/readcon-core} under the MIT licence.
 The concept record is \url{https://doi.org/10.5281/zenodo.18753567}.
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
 The one-core timings of Section~\ref{sec:performance} use readcon-core 0.18.1.
