@@ -234,8 +234,14 @@ def _parallel_force(rmsd_r: np.ndarray, rmsd_p: np.ndarray, energy: np.ndarray) 
     return -np.gradient(energy) / arc
 
 
-def _band_arrays(rows: list[dict], key: str):
-    """One stored band, images in path order within each iteration."""
+def _band_arrays(rows: list[dict], key: str, final_force: np.ndarray | None = None):
+    """One stored band, images in path order within each iteration.
+
+    ``final_force`` is the stored parallel force of the last iteration.
+    Earlier iterations then carry no slope: a slope taken from the energy
+    along a folded RMSD path is tens of eV per angstrom and collapses the
+    length scale. The last iteration uses the same projection plt-neb uses.
+    """
     band = [row for row in rows if row["b"] == key]
     steps = sorted({row["it"] for row in band})
     chunks = []
@@ -255,10 +261,16 @@ def _band_arrays(rows: list[dict], key: str):
     rmsd_r = np.concatenate([chunk[1] for chunk in chunks])
     rmsd_p = np.concatenate([chunk[2] for chunk in chunks])
     energy = np.concatenate([chunk[3] for chunk in chunks])
-    gradients = [
-        compute_synthetic_gradients(chunk[1], chunk[2], _parallel_force(*chunk[1:]))
-        for chunk in chunks
-    ]
+    if final_force is None:
+        gradients = [
+            compute_synthetic_gradients(chunk[1], chunk[2], _parallel_force(*chunk[1:]))
+            for chunk in chunks
+        ]
+    else:
+        gradients = [
+            (np.zeros_like(chunk[1]), np.zeros_like(chunk[1])) for chunk in chunks[:-1]
+        ]
+        gradients.append(compute_synthetic_gradients(final_r, final_p, final_force))
     grad_r = np.concatenate([pair[0] for pair in gradients])
     grad_p = np.concatenate([pair[1] for pair in gradients])
     step = np.concatenate([np.full(chunk[1].shape, chunk[0]) for chunk in chunks])
@@ -274,6 +286,25 @@ def _band_arrays(rows: list[dict], key: str):
         "grad_p": grad_p,
         "step": step,
     }
+
+
+def _clear_of_samples(ax, samples: np.ndarray, gap: float = 0.55) -> None:
+    """Move variance labels off the stored images and off each other."""
+    labels = [
+        text
+        for text in ax.texts
+        if text.get_text() and ("sigma" in text.get_text() or "σ" in text.get_text())
+    ]
+    if not len(labels) or len(samples) == 0:
+        return
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    anchor_x = xmin + 0.15 * (xmax - xmin)
+    for index, text in enumerate(labels):
+        spot_y = ymin + 0.22 + 0.28 * index
+        text.set_position((float(anchor_x), float(spot_y)))
+        text.set_ha("left")
+        text.set_va("center")
 
 
 def _viewport(rmsd_r, rmsd_p, final_r, final_p, basis):
@@ -324,8 +355,17 @@ def landscape() -> None:
     apply_style("cpc")
     prepared = []
     farthest = 0.0
+    stored_force = {
+        "i": np.loadtxt(DATA / "ira_band.dat", skiprows=1)[:, 3],
+    }
     for key, title in (("m", "Identity order"), ("i", "Renumbered")):
-        band = _band_arrays(rows, key)
+        # The renumbered final path folds in the RMSD plane. Fitting the
+        # length scale on that path alone, or on energy slopes of tens of
+        # eV/Å, either runs the scale to infinity or collapses it to a blob.
+        # The stored iterations together, with the stored parallel force on
+        # the final path, have a finite optimum near twice their spacing.
+        band = _band_arrays(rows, key, final_force=stored_force.get(key))
+        band["fit_steps"] = key != "i"
         basis = compute_projection_basis(band["final_r"], band["final_p"])
         _progress, deviation = project_to_sd(band["r"], band["p"], basis)
         farthest = max(farthest, float(np.max(np.abs(deviation))))
@@ -357,7 +397,7 @@ def landscape() -> None:
                 band["grad_r"],
                 band["grad_p"],
                 band["z"],
-                step_data=band["step"],
+                step_data=band["step"] if band["fit_steps"] else None,
                 method="grad_matern",
                 cmap="ruhi_diverging",
                 show_pts=True,
@@ -390,6 +430,8 @@ def landscape() -> None:
             ax.set_title(_title, fontsize=8)
             ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)")
             ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)")
+            progress, deviation = project_to_sd(band["r"], band["p"], basis)
+            _clear_of_samples(ax, np.column_stack([progress, deviation]))
         return norm, bars
 
     probe, probe_axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
@@ -411,7 +453,7 @@ def landscape() -> None:
             band["grad_r"],
             band["grad_p"],
             band["z"],
-            step_data=band["step"],
+            step_data=band["step"] if band["fit_steps"] else None,
             method="grad_matern",
             cmap="ruhi_diverging",
             show_pts=False,
