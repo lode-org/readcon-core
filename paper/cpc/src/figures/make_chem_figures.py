@@ -321,13 +321,13 @@ def landscape() -> None:
     """Both Claisen bands as chemparseplot reaction-valley landscapes.
 
     The stored table holds the aligned RMSD of every image. Gradients are
-    the library projection of that path, and ``plot_landscape_surface``
-    fits ``grad_matern`` on the final-path basis with the plt-neb window.
-    Nothing masks the surface. Both panels share the recorded energies.
+    the library projection of the stored parallel force. The renumbered
+    path folds, so its length scale stays at the median image spacing,
+    the documented starting value, instead of the optimum that flattens
+    the barrier. Each panel has its own colour scale. Nothing is masked.
     """
     import csv
 
-    from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize
 
     publication_style.register()
@@ -374,30 +374,87 @@ def landscape() -> None:
         )
         prepared.append((title, band, basis, xlim, ylim))
 
-    def _draw(fig, axes, lo, hi):
+    def _hold_initial_length_scale():
+        """Keep the documented starting length scale instead of a runaway fit."""
+        import rgpycrumbs.surfaces.gradient_matern as gradient_matern
+
+        original = gradient_matern.minimize_log_parameters
+
+        def keep(_loss, start):
+            return original.__globals__["jnp"].asarray(start)
+
+        gradient_matern.minimize_log_parameters = keep
+        return gradient_matern, original
+
+    fig, axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
+    for (_title, band, basis, xlim, ylim), ax in zip(prepared, axes, strict=True):
+        final_only = not band["fit_steps"]
+        n_final = len(band["final_r"])
+        lo = float(band["final_z"].min())
+        hi = float(band["final_z"].max())
         norm = Normalize(vmin=lo, vmax=hi)
-        bars = []
-        for (_title, band, basis, xlim, ylim), ax in zip(prepared, axes, strict=True):
-            draw_filled = ax.contourf
+        draw_filled = ax.contourf
 
-            def contourf(x, y, z, levels=None, **kwargs):
-                """One energy scale. Variance fills keep their own levels."""
-                if "cmap" in kwargs and lo < hi:
-                    kwargs["cmap"] = "ruhi_diverging"
-                    kwargs["norm"] = norm
-                    levels = np.linspace(lo, hi, 21)
-                    kwargs["extend"] = "both"
-                return draw_filled(x, y, z, levels=levels, **kwargs)
+        def contourf(x, y, z, levels=None, _draw=draw_filled, _norm=norm, _lo=lo, _hi=hi, **kwargs):
+            if "cmap" in kwargs and _hi > _lo:
+                kwargs["cmap"] = "ruhi_diverging"
+                kwargs["norm"] = _norm
+                levels = np.linspace(_lo, _hi, 21)
+                kwargs["extend"] = "both"
+            return _draw(x, y, z, levels=levels, **kwargs)
 
+        rmsd_r = band["final_r"] if final_only else band["r"]
+        rmsd_p = band["final_p"] if final_only else band["p"]
+        energy = band["final_z"] if final_only else band["z"]
+        grad_r = band["grad_r"][-n_final:] if final_only else band["grad_r"]
+        grad_p = band["grad_p"][-n_final:] if final_only else band["grad_p"]
+        if final_only:
+            early_r = band["r"][:-n_final]
+            early_p = band["p"][:-n_final]
+            early_s, early_d = project_to_sd(early_r, early_p, basis)
+            ax.scatter(
+                early_s,
+                early_d,
+                c="k",
+                s=11,
+                alpha=0.4,
+                linewidths=0,
+                zorder=18,
+            )
+            spacing = float(np.median(np.hypot(np.diff(rmsd_r), np.diff(rmsd_p))))
+            holder, original = _hold_initial_length_scale()
+            try:
+                ax.contourf = contourf
+                plot_landscape_surface(
+                    ax,
+                    rmsd_r,
+                    rmsd_p,
+                    grad_r,
+                    grad_p,
+                    energy,
+                    method="grad_matern",
+                    rbf_smooth=spacing,
+                    cmap="ruhi_diverging",
+                    show_pts=False,
+                    variance_threshold=0.05,
+                    project_path=True,
+                    basis=basis,
+                    xlim=xlim,
+                    ylim=ylim,
+                )
+            finally:
+                holder.minimize_log_parameters = original
+                ax.contourf = draw_filled
+        else:
             ax.contourf = contourf
             plot_landscape_surface(
                 ax,
-                band["r"],
-                band["p"],
-                band["grad_r"],
-                band["grad_p"],
-                band["z"],
-                step_data=band["step"] if band["fit_steps"] else None,
+                rmsd_r,
+                rmsd_p,
+                grad_r,
+                grad_p,
+                energy,
+                step_data=band["step"],
                 method="grad_matern",
                 cmap="ruhi_diverging",
                 show_pts=True,
@@ -408,78 +465,38 @@ def landscape() -> None:
                 ylim=ylim,
             )
             ax.contourf = draw_filled
-            bars.append(
-                plot_landscape_path_overlay(
-                    ax,
-                    band["final_r"],
-                    band["final_p"],
-                    band["final_z"],
-                    "ruhi_diverging",
-                    "Energy (eV)",
-                    project_path=True,
-                    basis=basis,
-                )
-            )
-            for collection in ax.collections:
-                array = collection.get_array()
-                if array is not None and np.issubdtype(np.asarray(array).dtype, np.floating):
-                    collection.set_norm(norm)
-            ax.set_xlim(*xlim)
-            ax.set_ylim(*ylim)
-            ax.set_box_aspect(1)
-            ax.set_title(_title, fontsize=8)
-            ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)")
-            ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)")
-            progress, deviation = project_to_sd(band["r"], band["p"], basis)
-            _clear_of_samples(ax, np.column_stack([progress, deviation]))
-        return norm, bars
-
-    probe, probe_axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
-    spans = []
-    for (_title, band, basis, xlim, ylim), ax in zip(prepared, probe_axes, strict=True):
-        original = ax.contourf
-
-        def contourf(x, y, z, levels=None, _original=original, **kwargs):
-            if "cmap" in kwargs:
-                values = np.asarray(z, dtype=float)
-                spans.append((float(np.nanmin(values)), float(np.nanmax(values))))
-            return _original(x, y, z, levels=levels, **kwargs)
-
-        ax.contourf = contourf
-        plot_landscape_surface(
+        plot_landscape_path_overlay(
             ax,
-            band["r"],
-            band["p"],
-            band["grad_r"],
-            band["grad_p"],
-            band["z"],
-            step_data=band["step"] if band["fit_steps"] else None,
-            method="grad_matern",
-            cmap="ruhi_diverging",
-            show_pts=False,
-            variance_threshold=0.05,
+            band["final_r"],
+            band["final_p"],
+            band["final_z"],
+            "ruhi_diverging",
+            "Energy (eV)",
             project_path=True,
             basis=basis,
-            xlim=xlim,
-            ylim=ylim,
         )
-    plt.close(probe)
-    lo = min(span[0] for span in spans)
-    hi = max(span[1] for span in spans)
-    fig, axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
-    norm, bars = _draw(fig, axes, lo, hi)
-    for bar in bars:
-        bar.remove()
-    shared = fig.colorbar(
-        ScalarMappable(norm=norm, cmap="ruhi_diverging"),
-        ax=axes.ravel().tolist(),
-        fraction=0.046,
-        pad=0.03,
-    )
-    shared.set_label("Energy (eV)")
-    print(f"landscape max |d| = {farthest:.4f} A; surface {lo:.4f} to {hi:.4f} eV")
+        for collection in ax.collections:
+            kind = collection.__class__.__name__
+            if kind == "LineCollection":
+                collection.set_linewidth(4.8)
+                collection.set_zorder(35)
+            if kind == "PathCollection":
+                sizes = np.atleast_1d(collection.get_sizes())
+                if sizes.size and float(np.nanmax(sizes)) >= 30:
+                    collection.set_sizes(np.full(sizes.shape, 78))
+                    collection.set_zorder(45)
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        ax.set_box_aspect(1)
+        ax.set_title(_title, fontsize=8)
+        ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)")
+        ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)")
+        progress, deviation = project_to_sd(band["r"], band["p"], basis)
+        _clear_of_samples(ax, np.column_stack([progress, deviation]))
+        print(_title, f"colour {lo:.3f} to {hi:.3f} eV")
     fig.savefig(OUT / "claisen_landscape.pdf", metadata={"CreationDate": None})
-    fig.savefig(OUT / "claisen_landscape.png", dpi=140, metadata={"CreationDate": None})
+    fig.savefig(OUT / "claisen_landscape.png", dpi=160, metadata={"CreationDate": None})
+    print(f"landscape max |d| = {farthest:.4f} A; figure {fig.get_size_inches()}")
     plt.close(fig)
 
 
