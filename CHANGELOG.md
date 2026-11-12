@@ -12,8 +12,8 @@ All notable changes to this project will be documented in this file. See [conven
 - A multi-frame read stays on the calling thread until the caller asks for two
   or more workers. Equal-length frames, including a whitespace tail, use
   equal-span boundaries, so the caller does not walk every header. A plain file
-  of 64 KiB or more stays mapped. The unit name table is built once and shared
-  by the serial reader, the C reader, and the pool.
+  of 64 KiB or more stays mapped. The unit name table is a static sorted
+  list shared by the serial reader, the C reader, and the pool.
 - Rust, C, C++, and Python can append an uncompressed CON file, flush the
   writer buffer, and keep one frame of text in a scratch buffer in front of an
   8 KiB `BufWriter`. `OpenMode::Append` and `write_con(..., append=True)`
@@ -30,6 +30,9 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- Unit names are a static sorted list looked up by binary search. Parsing a
+  unit no longer allocates a hash table, and the names and SI factors are
+  unchanged.
 - Python `write_con` of a `read_con` result stamps the same header as the C,
   Fortran, Julia, and MPI writers. The current spec, `con_spec_minor` when the
   file omitted it, default units when the file omitted them, and the spec 2
