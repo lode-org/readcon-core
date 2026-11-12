@@ -648,6 +648,60 @@ def _by_id(atoms, aid: int) -> np.ndarray:
     return atoms.positions[int(np.where(ids == aid)[0][0])]
 
 
+def water_persistence() -> None:
+    """Neighbour-pair and ice-type persistence for the mW nucleation window."""
+    use_latin_modern()
+    lag = np.array([1, 5, 10, 25], dtype=float)
+    neigh_con = np.array([0.955, 0.939, 0.927, 0.897])
+    neigh_xyz = np.full(4, 0.001)
+    ice_con = np.array([0.800, 0.790, 0.785, 0.771])
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.6 / 2.54), sharey=True)
+    series = (
+        (axes[0], neigh_con, neigh_xyz, False, "(a)"),
+        (axes[1], ice_con, None, True, "(b)"),
+    )
+    for ax, con, xyz, chance, tag in series:
+        ax.plot(
+            lag,
+            con,
+            color=TEAL,
+            marker="o",
+            markersize=4.2,
+            markerfacecolor="white",
+            markeredgewidth=0.9,
+            linewidth=1.05,
+            label="CON",
+            zorder=3,
+        )
+        if xyz is not None:
+            ax.plot(
+                lag,
+                xyz,
+                color=VERMILLION,
+                marker="s",
+                markersize=3.6,
+                markerfacecolor="white",
+                markeredgewidth=0.8,
+                linewidth=1.05,
+                label="Permuted XYZ",
+                zorder=2,
+            )
+        if chance:
+            ax.axhline(0.6305, color="#666666", linestyle=(0, (2.2, 1.4)), linewidth=0.8, zorder=1)
+            ax.plot([], [], color="#666666", linestyle=(0, (2.2, 1.4)), linewidth=0.8, label="Chance")
+        ax.set_xlabel(r"Lag $\tau$ (frames)")
+        ax.set_xlim(0, 27)
+        ax.set_ylim(-0.02, 1.05)
+        ax.set_xticks(lag)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.text(0.03, 0.97, tag, transform=ax.transAxes, ha="left", va="top", fontsize=9)
+        ax.legend(frameon=False, loc="center right")
+    axes[0].set_ylabel("Persistence")
+    fig.tight_layout(pad=0.4)
+    _save(fig, "water_persistence", DOUBLE_CM)
+
+
 def claisen() -> None:
     """Claisen bands, and the chair saddle against the separated fragments."""
     from ase.data import atomic_numbers, covalent_radii

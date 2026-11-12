@@ -157,16 +157,40 @@ The per-atom record is one line of frame, atom id, \(c_{ij}\) and ice type.
 readcon-db ingests a \texttt{.con} trajectory into an LMDB corpus.
 seams-core selects that corpus by element or by formula, across the shard roots of a campaign, and decodes the \(N\)th hit with the same reader.
 
-\begin{center}
-\fcolorbox{red}{red!6}{%
-\begin{minipage}{0.92\textwidth}
-\raggedright
-\textcolor{red}{\textbf{PLACEHOLDER: mW water demo}}\\[0.4em]
-The demo reads ring and hydrogen-bond persistence by id from a \texttt{.con} trajectory, the same trajectory written as XYZ and shuffled in frame order, and the round trip through readcon-db.
-The figure and the numbers are not in this draft.
-No value is stated here.
-\end{minipage}}
-\end{center}
+The analysis uses one nucleation trajectory of mW water, 4096 molecules
+\cite{molineroWaterModeledIntermediate2009}.
+The run was equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K, with a 10~fs step and a 200~fs damping time, in the LAMMPS build of 22~July~2025
+\cite{thompsonLammpsFlexibleSimulation2022}.
+An 81-frame window, from 659~ps to 739~ps after the quench, brackets the frame at 705~ps in which a 50-molecule CHILL+ ice core is present
+\cite{nguyenIdentificationClathrateHydrates2015}.
+The neighbour cutoff is \(3.5\,\text{\AA}\), primitive rings are counted up to seven members, and the ice label is the CHILL+ class, the published d-SEAMS settings
+\cite{goswamiDseamsDeferredStructural2020}.
+The same frames were written as CON and as XYZ, and the XYZ atom order was permuted independently in every frame.
+
+Persistence is the mean fraction of per-atom relations that are still true after a lag of \(\tau\) frames (Figure~\ref{fig:water}).
+Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at about 0.001 on the permuted XYZ at every lag.
+The CHILL+ type of a molecule persists at 0.800, 0.790, 0.785 and 0.771 on CON, and at 0.630--0.631 on the permuted XYZ, the chance agreement set by the liquid majority.
+Six-ring membership stays at 0.997--0.996 on CON and at 0.995 on the permuted XYZ, because nearly every molecule in the window already sits in some six-ring.
+Ring counts and ice counts match on every frame of the two files.
+A whole-frame total survives the new order.
+Following one molecule as it joins the ice nucleus uses the atom id.
+
+The 81 frames were ingested into a readcon-db corpus and selected back by the formula \texttt{O:4096}.
+All 81 frames returned.
+The maximum absolute error in the positions and in the cell is zero.
+The median wall time is 0.578~s, and the eight repeats on eight cores span 0.571--0.596~s.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/water_persistence.pdf}
+\caption{Persistence of per-atom relations on one mW nucleation trajectory, against the lag in frames.
+(a)~Neighbour pairs.
+(b)~CHILL+ ice type.
+Circles are the CON frames.
+Squares are the same frames written as XYZ with the atom order permuted independently in every frame.
+The dashed line is the chance agreement of the ice type, 0.630--0.631.}
+\label{fig:water}
+\end{figure}
 
 \section{The fields the rate actually reads}\label{sec:fields}
 CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id, and a velocity section with its own time unit.
