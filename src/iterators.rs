@@ -1305,82 +1305,6 @@ fn parallel_column_values(
     }
 }
 
-/// Build frames from a certified column walk when every frame shares one
-/// header prefix and has no vector section. Anything else returns `None`
-/// and the caller uses the frame parser.
-fn frames_from_columns(bytes: &[u8]) -> Result<Option<Vec<types::ConFrame>>, error::ParseError> {
-    let parsed = match crate::columns::positions_for_frames(bytes) {
-        Ok(parsed) if parsed.stock && !parsed.has_section && !parsed.counts.contains(&0) => parsed,
-        _ => return Ok(None),
-    };
-    if parsed.n_frames == 0 || parsed.components.len() != parsed.n_frames {
-        return Ok(None);
-    }
-    let head0 = parsed.head_ends[0] - parsed.spans[0].start;
-    if parsed
-        .spans
-        .iter()
-        .zip(&parsed.head_ends)
-        .any(|(span, end)| {
-            end - span.start != head0
-                || bytes[span.start..*end] != bytes[parsed.spans[0].start..parsed.head_ends[0]]
-        })
-    {
-        return Ok(None);
-    }
-    let template = match ConFrameIterator::from_bytes(&bytes[parsed.spans[0].clone()]).next() {
-        Some(Ok(frame)) => frame.header,
-        Some(Err(err)) => return Err(err),
-        None => return Ok(None),
-    };
-    let mut frames = Vec::with_capacity(parsed.n_frames);
-    let mut atom_at = 0usize;
-    for frame_index in 0..parsed.n_frames {
-        let n = parsed.counts[frame_index];
-        let mut header = template.clone();
-        let cell = &parsed.cells[frame_index * 6..frame_index * 6 + 6];
-        header.boxl = [cell[0], cell[1], cell[2]];
-        header.angles = [cell[3], cell[4], cell[5]];
-        let (symbol, count) = &parsed.components[frame_index];
-        if *count != n {
-            return Ok(None);
-        }
-        header.natm_types = 1;
-        header.natms_per_type = vec![n];
-        header.masses_per_type = vec![parsed.masses[atom_at]];
-        let mut atom_data = Vec::with_capacity(n);
-        let mut ids = Vec::with_capacity(n);
-        let mut flat = Vec::with_capacity(n * 3);
-        for _ in 0..n {
-            let base = atom_at * 3;
-            let xyz = [
-                parsed.positions[base],
-                parsed.positions[base + 1],
-                parsed.positions[base + 2],
-            ];
-            let bits = parsed.flags[atom_at];
-            let fixed = [bits & 1 != 0, bits & 2 != 0, bits & 4 != 0];
-            let id = parsed.ids[atom_at];
-            ids.push(id);
-            flat.extend_from_slice(&xyz);
-            atom_data.push(types::AtomDatum::coords(
-                std::sync::Arc::clone(symbol),
-                xyz[0],
-                xyz[1],
-                xyz[2],
-                fixed,
-                id,
-            ));
-            atom_at += 1;
-        }
-        let positions = crate::storage_dtype::FloatArray2::from_f64_row_major(n, 3, flat);
-        frames.push(types::con_frame_coords_only_with_ids(
-            header, atom_data, positions, ids,
-        ));
-    }
-    Ok(Some(frames))
-}
-
 fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
     let n_frames = frames.len();
     let n_atoms = frames
@@ -1522,11 +1446,6 @@ pub fn frames_from_bytes(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, error::ParseError> {
-    if !parallel_threads(num_threads) {
-        if let Some(frames) = frames_from_columns(bytes)? {
-            return Ok(frames);
-        }
-    }
     #[cfg(feature = "parallel")]
     {
         if let Some(n) = num_threads.filter(|n| *n >= 2) {

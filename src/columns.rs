@@ -64,15 +64,6 @@ pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError
     parse_con(bytes, false, false)
 }
 
-/// Like [`positions_from_con_bytes`], also keeping ids, flags, and symbols
-/// so a frame can be rebuilt without a second numeric scan.
-pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    // A vector section means the frame objects cannot be rebuilt from the
-    // coordinate column. Stop at the first one so the caller can fall back
-    // to the frame parser without a second full walk.
-    parse_con(bytes, true, true)
-}
-
 /// Write one frame's coordinates, masses, and cell into the caller buffers.
 ///
 /// `frame` is one span from the frame-start scan. A metadata line this walker
