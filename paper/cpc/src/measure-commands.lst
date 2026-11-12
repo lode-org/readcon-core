@@ -1,7 +1,7 @@
 # NAME=value: a variable the script reads, with its default; after env, the environment
 # of the command that follows. $ENV is the environment of the python3 that runs the
 # script, $TMP a temporary directory the script makes. Each bench/*.py script below
-# reads BENCH_RESULTS=paper/cpc/bench/results/r0174, the directory of its records;
+# reads BENCH_RESULTS=the result directory, the directory of its records;
 # make_payloads.py, cpp_reads.py, cachegrind.py, h2h.py and binary_formats.py read
 # READCON_SRC=., the readcon-core tree whose files they read and build. reads.py,
 # memray_peaks.py, cachegrind.py, h2h.py and binary_formats.py run their cells through
@@ -9,19 +9,19 @@
 # round and then BENCH_ROUNDS rounds, each a new shuffle of the cells by that seed, each
 # run of a cell a new process.
 python3 paper/cpc/bench/make_payloads.py                        # cpc-bench-payloads
-#   BENCH_WORK=paper/cpc/bench/work/r0174 BENCH_N_FRAMES=10000 BENCH_SIZE_ROWS=1e6
+#   BENCH_WORK=the work directory BENCH_N_FRAMES=10000 BENCH_SIZE_ROWS=1e6
 #   BENCH_SIZES=1e3,1e4,1e5,1e6
-python3 paper/cpc/bench/r0174.py                                # cpc-bench-provenance
+python3 paper/cpc/bench/provenance.py                                # cpc-bench-provenance
 python3 paper/cpc/bench/cpp_reads.py                            # cpc-bench-cpp
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174 CHEMFILES_PREFIX=$ENV
-#   BENCH_NATIVE_OUT=paper/cpc/bench/work/native0174
+#   RC_PAYLOADS=the work directory CHEMFILES_PREFIX=$ENV
+#   BENCH_NATIVE_OUT=paper/cpc/bench/work/native
 #   CXX=$ENV/bin/x86_64-conda-linux-gnu-c++;
-#   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build -{}-release -{}-lib \
-#     -{}-features parallel -{}-manifest-path $READCON_SRC/Cargo.toml, then builds
+#   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build --release --lib \
+#     --features parallel --manifest-path $READCON_SRC/Cargo.toml, then builds
 #   readcon_read and chemfiles_read with $CXX -O3 -std=c++17 -DNDEBUG and runs each of
 #   the five cells once, as reads.py does, against the checksums of payloads.json
 python3 paper/cpc/bench/reads.py                                # cpc-bench-reads
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174; per run of a Python cell:
+#   RC_PAYLOADS=the work directory; per run of a Python cell:
 #   python3 paper/cpc/bench/bench_child.py READER THREADS
 #   and per run of a C++ cell, with RAYON_NUM_THREADS, OMP_NUM_THREADS,
 #   OPENBLAS_NUM_THREADS and MKL_NUM_THREADS at THREADS:
@@ -30,150 +30,81 @@ python3 paper/cpc/bench/reads.py                                # cpc-bench-read
 #   CORES is 0 for a cell at one thread and 0-7 for a cell at eight; a run prints READY,
 #   and the line that starts its clock follows once the payload is in the page cache
 python3 paper/cpc/bench/memray_peaks.py                         # cpc-bench-memray
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174; per run of a cell:
-#   python3 paper/cpc/bench/memray_peaks.py -{}-child READER THREADS $TMP/read.bin
+#   RC_PAYLOADS=the work directory; per run of a cell:
+#   python3 paper/cpc/bench/memray_peaks.py --child READER THREADS $TMP/read.bin
 #   reads the warm-up file of READER, then its payload inside memray.Tracker
 python3 paper/cpc/bench/cachegrind.py                           # cpc-bench-cachegrind
-#   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build -{}-release \
-#     -{}-example cachegrind_harness -{}-features chemfiles-from-sources; per run of each
+#   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build --release \
+#     --example cachegrind_harness --features chemfiles-from-sources; per run of each
 #   scenario NAME that the program lists:
-#   valgrind -{}-tool=cachegrind -{}-cachegrind-out-file=$TMP/NAME.out -{}-branch-sim=no \
-#     -{}-error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
+#   valgrind --tool=cachegrind --cachegrind-out-file=$TMP/NAME.out --branch-sim=no \
+#     --error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
 bash paper/cpc/bench/build_chemfiles.sh                         # cpc-bench-chemfiles
 #   CHEMFILES_BUILDS=paper/cpc/bench/work/chemfiles CHEMFILES_JOBS=4 GCC=/usr/bin/gcc
 #   GXX=/usr/bin/g++ CLANG=/usr/bin/clang CLANGXX=/usr/bin/clang++
 python3 paper/cpc/bench/h2h.py                                  # cpc-bench-h2h
-#   -{}-steps payloads,python,cpp by default;
-#   BENCH_WORK=paper/cpc/bench/work/r0174 (its files go to $BENCH_WORK/h2h),
+#   --steps payloads,python,cpp by default;
+#   BENCH_WORK=the work directory (its files go to $BENCH_WORK/h2h),
 #   CHEMFILES_BUILDS as for build_chemfiles.sh, CARGO_TARGET_DIR=$BENCH_WORK/h2h/target
 #   GXX=/usr/bin/g++ CLANGXX=/usr/bin/clang++;
 #   per campaign, with its CON file, its .rcbin image RCBIN and its peer files in PEERS,
 #   per run of each call NAME:
 #   python3 paper/cpc/bench/h2h_child.py NAME CON RCBIN PEERS 10000
 #   and per run of each call NAME whose peak it records:
-#   python3 -m memray run -q -o $TMP/NAME.bin -f -{}-native $TMP/NAME.py
-#   the C++ step runs cargo build -{}-release -{}-features parallel -{}-lib in $READCON_SRC,
+#   python3 -m memray run -q -o $TMP/NAME.bin -f --native $TMP/NAME.py
+#   the C++ step runs cargo build --release --features parallel --lib in $READCON_SRC,
 #   builds $TMP/cpp_ratio_gccO2, _gccO3, _clangO2 and _clangO3 with the build_cell of
 #   $READCON_SRC/benches/cpp_peer_matrix.py, and per run of each cell:
 #   BINARY MODE FILE
 python3 paper/cpc/bench/binary_formats.py                       # cpc-bench-binary-formats
-#   -{}-steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
+#   --steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
 #   (its files go to $W=$BENCH_WORK/binary_formats), GCC=/usr/bin/gcc GXX=/usr/bin/g++;
 #   build fetches the sources of build.json, checks their SHA-256, runs the compiler
 #   commands that build.json lists and, in $W/readcon_read with the Cargo.lock of
-#   $READCON_SRC, env CARGO_TARGET_DIR=$W/target cargo build -{}-release; payloads runs
+#   $READCON_SRC, env CARGO_TARGET_DIR=$W/target cargo build --release; payloads runs
 #   $W/build/bin/gen DIR, then for each CON file and its decimals D (roundtrip, 6, 2)
 #   readcon_read write-con REF BOX FILE D and readcon_read write-rcbin CON RCBIN, twice;
 #   check runs DRIVER dump MODE THREADS FILE POS BOX for each cell, and time runs
 #   DRIVER time MODE THREADS FILE per run of each cell, after interleave.settle for
 #   the settle_ms of $BENCH_RESULTS/binary_formats/settle.json
 python3 paper/cpc/bench/settle_period.py                        # cpc-bench-settle
-#   -{}-record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
+#   --record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
 #   READCON_SRC as for binary_formats.py, whose readcon_read it hashes; BENCH_ROUNDS
-#   trials; binary_formats.py -{}-steps time then times the cells after the new period
+#   trials; binary_formats.py --steps time then times the cells after the new period
 
-cargo build -{}-release -{}-features zstd,parallel -{}-example corpus31_report
+cargo build --release --features zstd,parallel --example corpus31_report
 python3 paper/cpc/scripts/corpus31_results.py                   # cpc-corpus31
-#   target/release/examples/corpus31_report [-{}-threads N] paper/cpc/data/corpus31
+#   target/release/examples/corpus31_report [--threads N] paper/cpc/data/corpus31
 #   at the default thread count and at N = 1, 2 and 8
-cargo build -{}-release                                # cpc-clib, then cpc-clib-parallel:
-env CARGO_TARGET_DIR=target/clib-parallel cargo build -{}-release -{}-features parallel
+cargo build --release                                # cpc-clib, then cpc-clib-parallel:
+env CARGO_TARGET_DIR=target/clib-parallel cargo build --release --features parallel
 python3 paper/cpc/scripts/corpus_paths.py                       # cpc-corpus-paths
 #   READCON_LIB=target/release/libreadcon_core.so
 #   READCON_LIB_PARALLEL=target/clib-parallel/release/libreadcon_core.so; for BUILD
 #   wheel, clib and clib_parallel, the module and the two libraries:
-#   python3 paper/cpc/scripts/corpus_paths.py -{}-child BUILD $TMP/jobs.json
+#   python3 paper/cpc/scripts/corpus_paths.py --child BUILD $TMP/jobs.json
 python3 paper/cpc/scripts/every_path_count.py                   # cpc-every-path
 #   for each test file NAME that declares mod every_path:
 #   env CARGO_TARGET_DIR=target/every_path EVERY_PATH_LOG=$TMP/NAME.log \
-#     cargo test -{}-release -{}-features zstd,parallel -{}-test NAME
+#     cargo test --release --features zstd,parallel --test NAME
 python3 paper/cpc/scripts/corpus_crosscheck.py                  # cpc-crosscheck
-#   for each file: python3 paper/cpc/scripts/corpus_crosscheck.py -{}-child read_con FILE,
-#   with -{}-rewrite where its entry marks the rewrite, and -{}-child iter_con FILE
-env CARGO_TARGET_DIR=target/cli cargo build -{}-release -{}-features zstd \
-  -{}-bin readcon-core                                            # cpc-cli
-python3 paper/cpc/scripts/referee_probes.py -{}-check             # cpc-probes
+#   for each file: python3 paper/cpc/scripts/corpus_crosscheck.py --child read_con FILE,
+#   with --rewrite where its entry marks the rewrite, and --child iter_con FILE
+env CARGO_TARGET_DIR=target/cli cargo build --release --features zstd \
+  --bin readcon-core                                            # cpc-cli
+python3 paper/cpc/scripts/referee_probes.py --check             # cpc-probes
 #   READCON_CLI=target/cli/release/readcon-core
-#   READCON_LIB=target/release/libreadcon_core.so; -{}-check compares the reads with
-#   paper/cpc/data/referee_probes.json and writes nothing, and the run without -{}-check
+#   READCON_LIB=target/release/libreadcon_core.so; --check compares the reads with
+#   paper/cpc/data/referee_probes.json and writes nothing, and the run without --check
 #   writes that record. It runs $READCON_CLI FILE [OUT] in $TMP, and each read of a
 #   probe that has a time and memory limit in a child:
-#   python3 paper/cpc/scripts/referee_probes.py -{}-child READER
+#   python3 paper/cpc/scripts/referee_probes.py --child READER
 python3 paper/cpc/scripts/mutant_differential.py                # cpc-mutants
-#   -{}-seeds 1-7 -{}-cases 3000 by default; reads each mutant in this process with
+#   --seeds 1-7 --cases 3000 by default; reads each mutant in this process with
 #   indep_reader.read_text and readcon.read_con_string
 python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
 #   reads docs/orgmode/spec.org, both corpus manifests, the probes of
 #   paper/cpc/data/referee_probes.json and the tests under tests/ and src/
 python3 paper/cpc/scripts/bench_readers.py                      # reader exchange
-#   LARGE_FRAMES=100000. The script writes paper/cpc/logs/reader-exchange.log.
-#   It sets these variables in the child of every arm, from the checkout:
-#   READCON_BASE=paper/cpc/build/baseline-readcon
-#   READCON_V0173=paper/cpc/build/readcon-0.17.3
-#   EON_PKG=paper/cpc/bench/work/peers/eon
-#   EON_ALLFRAMES=paper/cpc/bench/work/eon_allframes
-#   READCON_BASE is the baseline module on PYTHONPATH for readcon_base.
-#   READCON_V0173 is readcon 0.17.3, built from
-#   commit 12ca800bc2212c565941e04094cba6b4d99a62e0.
-#   READCON_BASE is the baseline module, built from
-#   commit ac4f437989dea5aad9f75ff045af09ccf7127eba.
-#   The tip arms import the module built from the measurement commit:
-#   MATURIN_PEP517_ARGS="--features python" \
-#     python3 -m pip install --no-build-isolation .
-#   The 0.17.3 arm uses that command in a worktree of
-#   12ca800bc2212c565941e04094cba6b4d99a62e0, then
-#   --target paper/cpc/build/readcon-0.17.3.
-#   The baseline arm uses --target paper/cpc/build/baseline-readcon.
-#   Public tag v0.18.0 is commit
-#   d5e77f997438557c72c3b3e360d446310f85d6b7.
-#   It installs to paper/cpc/build/readcon-0.18.0.
-#   BENCH_VARIANT=public selects that module for
-#   readcon_full_t1, readcon_full_t8, readcon_pos_t1
-#   and readcon_pos_t8.
-#   EON_PKG is the eOn tree whose eon.fileio.loadcons the eon_py arm imports.
-#   EON_ALLFRAMES is the binary built from paper/cpc/bench/eon_allframes.cpp.
-#   Before the samples the script runs, from the repository root:
-#   /usr/bin/g++ -std=c++20 -O3 -DNDEBUG -pthread -DQUILL_DISABLE_NON_PREFIXED_MACROS
-#     -o paper/cpc/bench/work/eon_allframes paper/cpc/bench/eon_allframes.cpp
-#     -Ipaper/cpc/bench/work/peers/eon/include
-#     -Ipaper/cpc/bench/work/peers/eon/client/thirdparty
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/quill-11.1.0/include
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/inih-r62/cpp
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/nlohmann_json-3.12.0/single_include
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/highway-1.4.0
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/rgpot/third_party/vesin
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/readcon-core/include
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/rgpot/CppCore
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/rgpot/include
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/rgpot/CppCore/rgpot/rpc
-#     -Ipaper/cpc/bench/work/peers/eon/subprojects/rgpot/third_party/lepton/include
-#     -I/usr/include/eigen3
-#     -Lpaper/cpc/bench/work/peers/eon/build-h2h/subprojects/readcon-core
-#     -Wl,--disable-new-dtags
-#     -Wl,-rpath,$ORIGIN/peers/eon/build-h2h/subprojects/readcon-core
-#     -leonclib -lreadcon_core -lsocket_nwchem -lemt -lasap -lextpot
-#     -lrgpot_pot -llammps_pot -l:librgpot.so.4
-#   Each arm is one fresh process, six times, interleaved. The child command is
-#   python3 -c '<worker in bench_readers.py>' ARM FILE 100000 32
-#   and the script sets OMP_NUM_THREADS, OPENBLAS_NUM_THREADS, MKL_NUM_THREADS,
-#   NUMEXPR_NUM_THREADS and RAYON_NUM_THREADS to the thread count of that arm.
-#   readcon_full_t1: readcon.read_con(FILE, 1) on frames.con
-#   readcon_full_t8: readcon.read_con(FILE, 8) on frames.con
-#   readcon_pos_t1: readcon.read_positions(FILE, 1) on frames.con
-#   readcon_pos_t8: readcon.read_positions(FILE, 8) on frames.con
-#   readcon_base: readcon.read_con(FILE, 1) with READCON_BASE on PYTHONPATH
-#   readcon_v0173: readcon.read_con(FILE, 1) with READCON_V0173 on PYTHONPATH
-#   readcon_first: readcon.read_first_frame(FILE), one frame
-#   readcon_db: ConCorpus.append_trajectory_str then get_positions, an ingest
-#   ase_eon: ase.io.read(FILE, index=':', format='eon') then get_positions
-#   eon: Matter.con2matter(FILE), the first frame only
-#   eon_py: eon.fileio.loadcons(FILE), every frame, with EON_PKG on PYTHONPATH
-#   readcon_eon_api: $EON_ALLFRAMES FILE, read_all_frames then con2matter
-#   conbin: readcon.read_conbin on frames.conbin
-#   numpy: numpy.loadtxt usecols on frames.xyz
-#   chemfiles: chemfiles.Trajectory positions on frames.xyz
-#   ovito: pipeline.compute particles.positions on frames.xyz
-#   ase_extxyz: ase.io.read then get_positions on frames.xyz
-#   pymatgen: XYZ.from_file cart_coords on frames.xyz
-#   h5py: the position dataset of frames.h5md
-#   mdanalysis: Universe.atoms.positions on frames.h5md
+#   readcon-core 0.18.0, read_con and read_positions, on the 100000-frame CON file.
+#   LARGE_FRAMES=100000. Each arm is one fresh process, six times, interleaved.

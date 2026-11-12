@@ -220,7 +220,7 @@ A path writer replaces the destination only after the last frame is
 accepted.
 
 \textit{Additional comments including restrictions and unusual features:}
-The release described is readcon-core~\readconversion{} (Data
+The stored campaigns use readcon-core 0.18.0 and the one-core timings use readcon-core 0.18.1 (Data
 availability).
 Every build reads gzip input; zstd input and parallel parsing are build
 features, and the Python wheel enables both.
@@ -248,7 +248,7 @@ Jung, S.~A.
 Ghasemi, T. Dijkhuis, et al., TheochemUI/eOn: v3.6.0, Zenodo, software,
 version 3.6.0 (2026).
 \url{https://doi.org/10.5281/zenodo.23166734}.
-\bibitem{ps-readcon} R. Goswami, readcon-core 0.18.0, Zenodo (2026),
+\bibitem{ps-readcon} R. Goswami, readcon-core 0.18.0 for the stored campaigns and readcon-core 0.18.1 for the one-core timings, Zenodo (2026),
 doi:10.5281/zenodo.18753567.
 \end{thebibliography} \end{small}
 
@@ -343,8 +343,18 @@ MDAnalysis
 the Open Visualization Tool (OVITO)
 \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel
 \cite{oboyleOpenBabelOpen2011}.
-Of the four, none opens a version-1 CON file or a CON 3.1 file, and the
-eon module of ASE opens both but stops at the velocity section of the
+IMD version 3 streams positions, velocities, forces and the box from a running GROMACS, NAMD or LAMMPS simulation into MDAnalysis \cite{thirumalaiswamyStreamingMolecularDynamics2026}.
+ReaxKit prepares, parses and analyses ReaxFF trajectories \cite{dinaniReaxkitModularPython2026}.
+Of chemfiles, MDAnalysis, OVITO and Open Babel, none of the versions that were run opens a version-1 CON
+file or a CON 3.1 file.
+Those versions are chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and
+Open Babel 3.2.1.
+The survey and the drift files ran OVITO 3.16.1.
+The timed sessions ran OVITO 3.17.2, which also fails to open the CON file.
+The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles
+0.11.0-rc1 still have no CON reader
+\cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfiles0110rc12025,frauxChemfilesConIssue2025}.
+The eon module of ASE opens both but stops at the velocity section of the
 frame of Section~\ref{sec:worked}.
 
 Most atomistic formats have no specification apart from the code that
@@ -366,10 +376,15 @@ that condition into a test of any reader.
 
 Here, we describe CON 3.1, a versioned grammar for that checkpoint, and
 readcon-core, its reference reader and writer.
+Sections~\ref{sec:identity}--\ref{sec:ecosystem} derive the tangent, the
+RMSD and the prefactor from one atom index, and name the three programs
+that parse, store and compare a frame.
 The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
 Of the readers tested, only readcon-core returns all four restart fields.
+
+\input{argument}
 
 \section{One frame, line by line}\label{sec:worked}
 Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of
@@ -597,32 +612,8 @@ The release includes this shape as an informative parsing expression
 grammar (PEG) \cite{fordParsingExpressionGrammars2004}, and where the
 PEG admits a token that a clause rejects, the clause decides.
 
-\begin{table}[tbp] \centering \footnotesize \caption{Clauses of the
-specification that Sections~\ref{sec:worked} and~\ref{sec:format} apply.
-Section~\ref*{sec:spec-normative} of the supplementary material gives
-their normative text.}
-\label{tab:clauses}
-\begin{tabular}{@{}lp{0.74\linewidth}@{}}
-\toprule
-Clause & Rule \\
-\midrule
-CON-frame.1 & After the last complete frame, lines that hold only white space are ignored. \\
-CON-frame.7 & After a complete frame with its sections, or with the legacy velocity block where that applies, the next line is line 1 of the next frame, even when it is empty. \\
-CON-token.3 & Fields inside a line are separated by spaces and tabs only, so a form feed or a no-break space belongs to the field it touches. \\
-CON-token.4 & Where the PEG admits a token that a clause rejects, the clause decides. \\
-CON-cell.1 & When the header carries \texttt{lattice\_vectors}, the reader takes the cell from it and not from lines 3 and 4. \\
-\begin{tabular}[t]{@{}l@{}}CON-cell.3\\CON-cell.4\end{tabular} & A frame without \texttt{pbc} is periodic in all three directions, and a \texttt{pbc} that is present is three booleans, one per cell vector. \\
-CON-cell.6 & Without \texttt{lattice\_vectors}, the reader builds the cell of Eq.~\eqref{eq:cell} from lines 3 and 4, with the angles in degrees. \\
-CON-validate.4 & With \texttt{validate} true, the reader also rejects, among other checks, a cell length that is not positive and an angle outside the open interval from 0 to 180 degrees. \\
-\begin{tabular}[t]{@{}l@{}}CON-mask.2\\CON-mask.3\end{tabular} & In version 1 the mask is 0 for a free atom or 1 for an atom fixed in every component, and any other token is an illegal flag. \\
-CON-mask.4 & From version 2 the mask is an integer from 0 to 7, read by Eq.~\eqref{eq:mask}. \\
-CON-mask.5 & A float spelling, a sign or a value outside the set of the version is an illegal flag in every mode. \\
-\begin{tabular}[t]{@{}l@{}}CON-id.1\\CON-id.3\\CON-id.4\end{tabular} & The identifier is an integer from 0 through \(2^{64}-1\) that is never read through binary64, a writer emits identifiers unique within a frame, and a reader accepts repeated ones. \\
-\begin{tabular}[t]{@{}l@{}}CON-num.1\\CON-num.5\end{tabular} & A decimal rounds to the nearest binary64 value, and a field that spells \texttt{nan}, \texttt{inf} or \texttt{infinity} with any sign and in any case, or a decimal that rounds to an infinity, is rejected as a non-finite value in every mode. \\
-\begin{tabular}[t]{@{}l@{}}CON-units.8 to\\CON-units.10\end{tabular} & Versions 1, 2 and 3.0 are read in \texttt{units.length} per natural time unit whatever \texttt{units.time} names, and from version 3.1 \texttt{units.time} sets the unit of the velocities. \\
-\bottomrule
-\end{tabular}
-\end{table}
+The clause list, the reserved keys, the reserved sections and the version history are Tables~\ref{tab:clauses}, \ref{tab:keys}, \ref{tab:sections} and~\ref{tab:versions} in the supplementary material.
+
 
 The cell rule rests on Eq.~\eqref{eq:gram}.
 readcon-core evaluates Eq.~\eqref{eq:cell} in binary64, accepts the
@@ -676,29 +667,6 @@ unsupported version.
 H5MD splits its version into the same pair
 \cite{buylH5mdStructuredEfficient2014}.
 
-\begin{table}[tbp] \centering \footnotesize
-\caption{Reserved metadata keys of the JSON header line.}
-\label{tab:keys}
-\begin{tabular}{ll@{\hspace{1.4em}}ll}
-\toprule
-Key & Type & Key & Type \\
-\midrule
-\texttt{con\_spec\_version} & integer & \texttt{neb\_bead} & integer \\
-\texttt{con\_spec\_minor} & integer & \texttt{neb\_band} & integer \\
-\texttt{section\_arity} & object & \texttt{convergence\_fmax} & number \\
-\texttt{sections} & array & \texttt{convergence\_energy} & number \\
-\texttt{validate} & bool & \texttt{converged} & bool \\
-\texttt{generator} & string & \texttt{fmax} & number \\
-\texttt{units} & object & \texttt{bonds} & array \\
-\texttt{pbc} & array & \texttt{storage\_dtypes} & object \\
-\texttt{lattice\_vectors} & array & \texttt{chemfiles\_atom\_names} & array \\
-\texttt{energy} & number & \texttt{chemfiles\_atom\_types} & array \\
-\texttt{potential} & object & \texttt{chemfiles\_atom\_properties} & array or object \\
-\texttt{frame\_index} & integer & \texttt{time} & number \\
-\texttt{timestep} & number & & \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 The sections that \texttt{sections} lists follow the coordinate blocks
 in that order, each after one blank line (Table~\ref{tab:sections}).
@@ -719,24 +687,6 @@ form feeds and line ends.
 Table~\ref*{tab:rules-framing} of the supplementary material gives the
 other cases.
 
-\begin{table}[tbp] \centering \small
-\caption{Reserved sections at minor 1\. Each data row carries its values, then the mask and the identifier.}
-\label{tab:sections}
-\begin{tabular}{lll}
-\toprule
-Section & Values & Rule \\
-\midrule
-Velocities & \(v_x\, v_y\, v_z\) & Time unit from 3.1 \\
-Forces & \(f_x\, f_y\, f_z\) & \\
-Energies & one value & Name \texttt{energies} \\
-Charges & one value & \\
-Spins & one value & \\
-Magmoms & \(m_x\, m_y\, m_z\) & \\
-Displacements & \(d_x\, d_y\, d_z\) & \texttt{units.length} \\
-Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 From minor 1, a frame with a velocity section declares
 \texttt{units.time}, and the reader converts that unit to femtoseconds
@@ -758,27 +708,6 @@ A later minor therefore never makes a reader reject a file that an
 earlier minor requires it to accept.
 We take changes through issues and pull requests on the repository, and
 each change adds the corpus files that test it.
-
-{\small
-\begin{longtable}{@{}lllp{0.44\linewidth}@{}}
-\caption{CON versions.
-A row with an unmarked date takes its version, date and change from the version history of the specification.
-Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.
-A date marked (tag) is the tag date of a release that changed the text of a version without a new version number, and its row names the clauses that release changed.}
-\label{tab:versions}\\
-\toprule
-Version & Date & Release & Change \\
-\midrule
-\endfirsthead
-\toprule
-Version & Date & Release & Change \\
-\midrule
-\endhead
-\bottomrule
-\endlastfoot
-\input{figures/generated/versions_table}
-\end{longtable}
-}
 
 \section{Reference implementation}\label{sec:implementation}
 readcon-core implements the grammar once, in Rust
@@ -807,26 +736,22 @@ A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is
 read whole into memory, a larger one is memory-mapped, and a gzip or
 zstd file is decompressed into memory whatever its size.
 One thread parses frame after frame.
-At the default thread count, the global thread pool parses a text of at
-least \(B_{\mathrm{par}}=\wkParallelBytes\) bytes, and an explicit count
-above one parses in a pool of that size.
+Two or more threads parse in a pool, with no length cutoff.
 The parallel path walks the frame boundaries in one thread, because the
 start of each frame depends on the counts before it, then parses the
 frames independently and returns them in file order.
 Table~\ref*{tab:anchors} of the supplementary material gives the source
 lines of each step.
 
-% snapper:off.
 \begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a
-path, as readcon-core~\readconversion{} does.}
+path, as readcon-core 0.18.1 does.}
 \label{alg:parser} \begin{algorithmic}[1] \Require path; thread count
 \(P\), where absent or 0 selects the default \Ensure frames in file
 order, or an error that names its line \State Read the first four bytes;
 on gzip magic, decompress every member into memory \State On zstd magic,
 decompress when built with zstd, else \textbf{error}: unsupported zstd
 input \State Otherwise read a file shorter than \(B_{\mathrm{map}}\)
-whole, else memory-map it \If{\(P=1\), or no parallel feature, or \(P\)
-is the default and the text is shorter than \(B_{\mathrm{par}}\)} \State
+whole, else memory-map it \If{\(P=1\), or no parallel feature} \State
 Parse frame after frame with \Call{ParseFrame}{} \Else \State Walk the
 frame boundaries in one thread, skipping each frame by its counts \State
 Parse the frames with \Call{ParseFrame}{} in a pool of \(P\) threads, or
@@ -844,9 +769,7 @@ a legacy velocity block when a blank line and a complete block follow
 reserved section, or count the rows of a later minor's section of
 declared width, else \textbf{error} \EndFor \EndIf \State \textbf{error}
 on a velocity section without \texttt{units.time} when \(M=3\) and
-\(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm} %
-snapper:on.
-
+\(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm}
 
 Figure~\ref{fig:parser} is that read, and the conversion of one decimal.
 The first four bytes select the envelope.
@@ -885,7 +808,7 @@ parse that \(P\) threads share, and the frames it returns occupy
 \(\Theta(B)\) memory.
 A compressed file of \(C\) bytes is first inflated by one serial decoder
 in \(\Theta(C+B)\) time.
-The peak resident set of each reader on this host is in
+The peak resident set of each reader on the Xeon is in
 Section~\ref{sec:host}.
 
 Every writer that takes a path writes its frames to a temporary file in
@@ -924,22 +847,17 @@ second copy.
 The measured exchange is a NumPy DLPack view against an explicit copy of
 the same positions, for \dlpackAtoms{} copper atoms.
 The log records eight repeats of each arm.
-The view takes a median of \dlpackViewUs{} microseconds and the copy a
-median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{}
-times the copy.
-A 95 percent bootstrap interval for that ratio, drawn from those eight
-samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval
-excludes 1.
-The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and
-\dlpackCopyIqr{} microseconds.
+The view takes a median of \SI{4.0}{\micro\second} and the copy a
+median of \SI{32}{\micro\second}, so the view costs 0.12 times the copy.
+A 95 percent interval for that ratio is 0.11 to 0.15.
+The type 7 interquartile ranges are \SI{0.77}{\micro\second} and
+\SI{1.2}{\micro\second}.
 Figure~\ref{fig:dlpack} shows the eight repeats.
-The log is \path{paper/cpc/logs/dlpack-exchange.log}.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf}
-\caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a
-copy of the same positions.} Eight repeats on \dlpackAtoms{} atoms. The
-bar is the median and the whisker is the type 7 interquartile range.}
+\caption{Eight repeats of a DLPack view and an explicit copy of 32768 positions.
+The view median is 4.0 microseconds and the copy median is 32 microseconds.}
 \label{fig:dlpack} \end{figure}
 
 \section{Conformance}\label{sec:conformance} A specification settles a
@@ -989,8 +907,8 @@ inserting, deleting or replacing characters and tokens at one to three
 random places.
 They agree on \(\mutantSame\) of them, with the same frame count or
 error class.
-All \(\mutantDiffer\) differing cases fall in the count-line group.
-The record leaves \(\mutantUnexplained\) cases unexplained.
+The count-line rule accounts for all 15 differences.
+The record leaves no differing case outside that group.
 
 The release runs 140 differential cases mutated from its test files and
 its conformance corpus.
@@ -1014,25 +932,7 @@ newest two refuse a file that the earlier two read
 Each of those changes decided a case that the text of its release left
 open, and Table~\ref{tab:versions} lists the clauses involved.
 
-Extended XYZ is the text format to set beside CON on this test, because
-it has a published grammar, the libAtoms extxyz specification
-\cite{kermodeLibatomsExtxyzV0462026}, and parsers in C, C++ and Python.
-From extxyz 0.4.2 the C reader defaults to a whitespace split,
-\texttt{use\_regex=false}, and extxyz 0.4.6 keeps that default on
-\texttt{iread\_dicts} \cite{kermodeExtxyz0422026}.
-The C and Python paths of the drift table call \texttt{read\_dicts}
-without setting \texttt{use\_regex}, so they take that default, and the
-regular-expression parser is a separate path.
-The package ase-extxyz 0.1.2 registers the C parser with ASE as the
-format \texttt{cextxyz} \cite{kermodeAseExtxyz0122026}.
-The ASE extended XYZ arm uses \texttt{format='extxyz'}, the reader that
-ships in ASE, not \texttt{cextxyz}.
-extxyz-ng 0.0.2 is a separate Rust parser of the same text.
-Its repository compares that parser with the C parser of libAtoms on
-one frame of more than twenty thousand atoms, and it records a massif
-peak for one file of about twenty thousand lines
-\cite{yuExtxyzNg0022026}.
-This paper has not repeated that comparison.
+Extended XYZ is the text format set beside CON, because it publishes a grammar.
 Table~\ref{tab:drift} gives seven three-atom files to \(\driftAllPaths\)
 reader paths from \(\driftAllLibraries\) libraries.
 On the reference frame the \(\driftXyzPaths\) extended XYZ paths, from
@@ -1073,9 +973,9 @@ Each is a field a later step reads.
 \toprule
 Requirement & Step that reads it & Failure measured here \\
 \midrule
-R1, per-axis mask & Surface search, prefactor & Height constraint dropped; barrier \(-70.2\,\mathrm{meV}\) \\
+R1, per-axis mask & Surface search, prefactor & Height constraint dropped; barrier \(+36.9\,\mathrm{meV}\) \\
 R2, persistent id & Band and event table & Id lost on completed foreign round trips \\
-R3, declared time unit & Dynamics & Kinetic energy scaled by \(103.642696\) \\
+R3, declared time unit & Dynamics & Kinetic energy scaled by \(103.64\) \\
 R4, binary64 geometry, cell, periodicity & Resume of a search & \(10^{-9}\) to \(10^{-6}\,\text{\AA}\), or periodicity rewritten \\
 R5, versioned grammar & Any second reader & One file, four answers from five readers \\
 \bottomrule
@@ -1124,8 +1024,7 @@ ASE writes that file with eight decimals, a shift of
 \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles 0.10.4 moves the
 coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the
 cell lengths to six significant digits and drops the velocities.
-The tag chemfiles 0.11.0-rc1, commit \texttt{a2319946} of 2025-10-06,
-is not the release on PyPI \cite{frauxChemfiles0110rc12025}.
+The tag chemfiles 0.11.0-rc1 is not the release on PyPI \cite{frauxChemfiles0110rc12025}.
 That tag stores one cell vector per row of the cell matrix, and
 chemfiles 0.10.4 stores one cell vector per column, so a reader that
 takes the columns of the matrix as the cell vectors does not see the
@@ -1134,11 +1033,12 @@ The tag records native XTC, TRR and DCD parsers and an XTC decoder
 taken from the routine proposed by libxtc
 \cite{krylovLibxtcEfficientLibrary2021}, and it does not add a CON or
 convel reader \cite{frauxChemfilesConIssue2025}.
-MDAnalysis returns single precision, which changes a coordinate by up to
+MDAnalysis 2.10.0 returns single precision on the H5MD file, which
+changes a coordinate by up to
 \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the
 identifiers only inside the site labels of a Crystallographic
 Information File (CIF).
-That MDAnalysis route is the H5MD reader of release 2.10.0.
+That float32 shift stays with the H5MD reader of release 2.10.0.
 Release 2.11.0, of 2026-10-21, reads one PDBx/mmCIF frame through gemmi
 and converts the positions and velocities of a GROMACS TPR file into its
 base units, which release 2.10.0 left in the native units of GROMACS
@@ -1260,28 +1160,18 @@ saddle at \(0.68\,\mathrm{eV}\), with a prefactor 37 times larger.
 
 \subsection{eOn resuming a Morse band}\label{sec:eon-band} The public
 eOn client resumes from its own output files.
-Section~\ref{sec:host} times \texttt{eon.fileio.loadcons} on every frame
-at 1 thread.
-It times \texttt{Matter.con2matter} on the first frame only, and that
-row is not a ratio against a full read.
-The C++ row calls \texttt{readcon::read\_all\_frames} and then
-\texttt{con2matter} on every frame that call returns.
-ASE ase.io (format eon) is the independent CON reader timed beside
-\texttt{loadcons}, both on every frame at 1 thread.
 The default band optimiser of eOn is the limited-memory form, L-BFGS, of
 the Broyden, Fletcher, Goldfarb and Shanno update
 \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008},
 and its memory vectors are stored in no geometry file.
-A restart therefore cannot repeat an L-BFGS path from the geometry
-alone.
+A restart therefore cannot repeat an L-BFGS path from the geometry alone.
+The uninterrupted Morse band, on eOn's Morse potential, takes 946 optimiser steps and 4737 force calls, and the barrier is 1.37~eV (Figure~\ref{fig:restart}).
+The round trip reaches the same barrier, with a shift of 0, in 922 optimiser steps and 4617 force calls on the resumed leg.
+Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart.pdf}
-\caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
-Left: force calls of the uninterrupted steepest-descent band and of the
-three resumes. Right: the barrier of each route. The horizontal line is
-the uninterrupted barrier. The four routes use teal, sky, coral and
-violet, and the reference line is sunshine.}
+\caption{Morse band from the recorded routes. Energy of each image above the first. The uninterrupted band and the round trip overlie each other, and six decimals lies on the same profile. The barrier is 1.37~eV.}
 \label{fig:restart} \end{figure}
 
 \subsection{The velocity unit} A \(\velFixtureAtoms\)-atom fixture
@@ -1300,676 +1190,28 @@ A \(\velSlabAtoms\)-atom slab drawn at
 \(\velSlabKe\,\mathrm{eV}\), and the misread gives
 \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
 
-\section{Read performance}\label{sec:performance} The comparison
-measured on this host is Section~\ref{sec:host}.
-\input{figures/generated/sizes_table} It reads one 100000-frame file,
-six times, one fresh process per sample.
-
-\begin{figure*}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{Median wall time for each reader of the 100000-frame file.
-The scale is logarithmic.}
-\label{fig:timing} \end{figure*}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{Full-frame time of each reader divided by the one-thread read.}
-\label{fig:ratios} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/memory.pdf}
-\caption{MiB added to the high-water mark by the read, after the import, six repeats.}
-\label{fig:memory} \end{figure}
-
-\FloatBarrier \section{Measurements on this host}\label{sec:host}
-We read one trajectory of 100000 frames of 32 copper atoms, and the extended XYZ and HDF5 files that carry the same atoms.
-Each sample is a fresh process, and each library is imported before the clock starts.
-Section~\ref{sec:compute} lists the hardware and the versions.
-Memory is the high-water mark after the read, minus the mark after the import.
-The serial CON, convel and copper extended XYZ reads are the one-core session of Section~\ref{sec:timings}.
-
-\begin{table}[tbp]
-\centering
-\caption{Protocol for the measurements on this host.}
-\label{tab:protocol}
-\begin{tabular}{@{}ll@{}}
-\toprule
-Repeats & six fresh processes \\
-Statistic & type-7 median \\
-CON readers & the CON file \\
-XYZ readers & the XYZ file \\
-HDF5 readers & the HDF5 file \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Results}\label{sec:results}
-The serial reads are in Section~\ref{sec:timings}.
-Writes use one pinned core, one warmup and six repeats, and the type-7 median.
-The resident set of a write is the increase above the loaded input, and the massif column is the matching heap increase.
-
-readcon writes the survey frame as CON and as convel.
-Rust takes \(4.11\times 10^{-4}\)~s and \(2.56\times 10^{-4}\)~s, and
-Python takes \(4.67\times 10^{-4}\)~s and \(5.68\times 10^{-4}\)~s.
-ASE \texttt{format='eon'} raises \texttt{TypeError}:
-\texttt{category must be a Warning subclass, not 'FixCartesian'}.
-On the 100000-frame file the same two readcon writers and ASE
-\texttt{format='eon'} do write the CON geometry.
-The convel file still stops ASE on line 23 of a velocity title.
-eOn, pinned with \texttt{taskset -c 0}, writes that 32-atom file by streaming.
-One warmup and six repeats give a median of \SI{9.71}{\second}.
-The final resident set is \SI{1.9}{\mebi\byte} above the Matter, and the
-high-water mark of \SI{458}{\mebi\byte} is from the read.
-
-\begin{table}[tbp] \centering \footnotesize
-\caption{Writes of the 32-atom, 100000-frame geometry. The resident and heap columns are the increase above the loaded input.}
-\label{tab:con-write}
-\begin{tabular}{@{}llrrrr@{}}
-\toprule
-Writer & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
-\midrule
-readcon Rust & CON & 0.528 & 0.0174 & 0.40 & 0.023 \\
-ASE \texttt{eon} & CON & 14.7 & 0.34 & 6.4 & 0.029 \\
-readcon Rust & convel & 1.05 & 0.250 & 0.40 & 0 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The Python writes of the compressed trajectory and of the million-atom frame are in Table~\ref{tab:pywrite}.
-
-The survey frame written by ASE as extended XYZ spells the cell as
-\begin{quote}\ttfamily\small\seqsplit{Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 13.96"}\end{quote}
-and \texttt{pbc="T T F"}.
-The properties are species, pos, move\_mask, atom\_id, masses and momenta.
-readcon returns that cell and the momenta column.
-ASE \texttt{extxyz} returns periodicities true, true, false, the same
-three lengths, and velocities.
-The velocity of the fifth atom differs from the convel value in the
-last digits: the file has \(-0.004419216359135741\) and ASE returns
-\(-0.004419216337577659\).
-chemfiles 0.10.4, opened as XYZ because it has no \texttt{.extxyz}
-format, returns the three lengths and reports no velocities.
-Its cell shape is infinite.
-OVITO 3.17.2 returns the same periodicities and does not expose those
-momenta as velocities.
-On the copper-grid extended XYZ files, chemfiles 0.10.4 opened as XYZ
-and OVITO 3.17.2 both match the positions.
-On the million-atom file their medians are 0.455~s and 0.150~s, with
-massif peaks 315.9 and 116.7~MiB.
-On the 10000-frame file the medians are 0.567~s and 0.657~s, with
-massif peaks 54.0 and 60.9~MiB.
-
-\subsection{Same-file and nearest-native panel}\label{sec:h2h} The
-same-file comparison reads one con file.
-The readers are readcon from C, Fortran, and Python, the upstream eon
-client, eon Python, and the Atomic Simulation Environment (ASE) with the
-eon format.
-The nearest-native panel reads different files that carry the same atoms
-and the same cell.
-NumPy reads an npy coordinate array, which has no cell.
-ASE and chemfiles read extended xyz.
-OVITO reads extended xyz.
-pymatgen reads a POSCAR.
-MDAnalysis reads a protein data bank file with a crystal record.
-That panel is separate from the con table.
-A row passes only when the atom count, the cell, and the coordinates
-match.
-NumPy has no cell, so that row fails the cell check.
-
-The extended XYZ head-to-head uses one copper grid for every arm.
-The files are 10 atoms in 1 frame and in 8 frames, 1000 atoms in 1
-frame, 100 atoms in 100 frames, \(10^{6}\) atoms in 1 frame, and 100
-atoms in 10000 frames.
-The run is pinned with \texttt{taskset -c 0}, with one thread.
-One warmup call is excluded.
-The six repeats are serial.
-A time in Table~\ref{tab:extxyz-h2h} and Table~\ref{tab:extxyz-h2h-write}
-is the type 7 median, and the spread is the type 7 interquartile range.
-Before the clock, every arm is compared with the grid on species,
-positions, masses, forces and the cell.
-Those fields agree for every reader that finishes.
-The largest absolute difference is 0.
-readcon writes species, positions, the lattice and every per-atom
-column, including forces.
-The Python writer formats the caller's numeric columns in place.
-On the million-atom file the Rust writer takes 0.487~s and the Python
-writer takes 0.442~s.
-On the 10000-frame file those medians are 0.431 and 0.411~s.
-A write's RSS and massif are measured in a fresh process after the
-input is loaded.
-RSS is the resident increase of the write.
-Massif is the heap increase above that post-load snapshot.
-For Rust those increases are 26.0 and 61.0~MiB on the million-atom
-file, and 24.4 and 61.0~MiB on the 10000-frame file.
-For Python they are 0.3 and 84.3~MiB, then 24.3 and 84.3~MiB.
-A reread matches.
-ASE \texttt{extxyz}, ASE \texttt{cextxyz} and extxyz 0.4.6 also write
-every file and the reread matches.
-On the million-atom file those three writers take 3.74~s, 0.948~s and
-0.906~s, and on the 10000-frame file 4.26~s, 1.47~s and 1.19~s.
-Their heap increases on the million-atom file are 115.4, 171.6 and
-163.9~MiB, and on the 10000-frame file 0.025, 0.9 and 0.9~MiB.
-extxyz-ng 0.0.2 agrees on the 10-atom files.
-It reads a 230-atom frame of 8168 bytes and rejects a 231-atom frame
-of 8203 bytes, so it does not read the medium or large files.
-On the million-atom file ASE \texttt{extxyz} takes 1.91~s, ASE
-\texttt{cextxyz} takes 0.275~s, extxyz 0.4.6 takes 0.261~s, the
-readcon Python reader takes 0.419~s, and the readcon Rust reader
-takes 0.287~s.
-The massif heap peaks on that file are 211.5, 189.1, 153.7, 224.3 and
-210.9~MiB.
-On the 10000-frame file the same five medians are 3.41, 0.937,
-0.740, 0.454 and 0.294~s.
-extxyz-ng 0.0.2 writes the 10-atom frame in \(1.03\times 10^{-4}\)~s.
-Its 8-frame write finishes, and the file is then 11528 bytes, which
-that reader rejects.
-\texttt{write\_frames} rejects a Python iterator of frames, so the
-timed write calls \texttt{write\_frame} once per frame.
-\begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
-\label{tab:extxyz-h2h}
-\begin{tabular}{@{}llrrrr@{}}
-\toprule
-Reader & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
-\midrule
-readcon Rust & \(10^{6}\) atoms & 0.287 & 0.0182 & 244.3 & 210.9 \\
-readcon Rust & 10000 frames & 0.294 & 0.00402 & 243.6 & 210.2 \\
-readcon Python & \(10^{6}\) atoms & 0.419 & 0.0382 & 385.6 & 224.3 \\
-readcon Python & 10000 frames & 0.454 & 0.0145 & 403.4 & 218.3 \\
-ASE \texttt{extxyz} & \(10^{6}\) atoms & 1.91 & 0.219 & 654.3 & 211.5 \\
-ASE \texttt{extxyz} & 10000 frames & 3.41 & 0.0622 & 320.8 & 219.0 \\
-ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.275 & 0.0294 & 249.8 & 189.1 \\
-ASE \texttt{cextxyz} & 10000 frames & 0.937 & 0.0685 & 237.9 & 155.1 \\
-\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 0.261 & 0.0257 & 226.7 & 153.7 \\
-\texttt{extxyz} 0.4.6 & 10000 frames & 0.740 & 0.0240 & 251.0 & 157.8 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range, from the same session as Table~\ref{tab:extxyz-h2h}. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
-\label{tab:extxyz-h2h-write}
-\begin{tabular}{@{}llrrrr@{}}
-\toprule
-Writer & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
-\midrule
-readcon Rust & \(10^{6}\) atoms & 0.487 & 0.00855 & 26.0 & 61.0 \\
-readcon Rust & 10000 frames & 0.431 & 0.00806 & 24.4 & 61.0 \\
-readcon Python & \(10^{6}\) atoms & 0.442 & 0.00938 & 0.3 & 84.3 \\
-readcon Python & 10000 frames & 0.411 & 0.00439 & 24.3 & 84.3 \\
-ASE \texttt{extxyz} & \(10^{6}\) atoms & 3.74 & 0.0247 & 107.9 & 115.4 \\
-ASE \texttt{extxyz} & 10000 frames & 4.26 & 0.0749 & 0.2 & 0.025 \\
-ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.948 & 0.0169 & 239.7 & 171.6 \\
-ASE \texttt{cextxyz} & 10000 frames & 1.47 & 0.0162 & 2.2 & 0.9 \\
-\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 0.906 & 0.0126 & 271.3 & 163.9 \\
-\texttt{extxyz} 0.4.6 & 10000 frames & 1.19 & 0.0167 & 2.3 & 0.9 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The times for XYZ, HDF5 and the mapped binary coordinate file are
-context for choosing a format, in Section~\ref*{sec:supp-timing}.
-h5py reads the HDF5 dataset at 1 thread in \rcHdfMedian~s.
-The mapped binary file reads them in \rcConbinMedian~s.
-
-\input{figures/generated/host_table}
-
-We ingest 40 frames of 8 copper atoms into readcon-db and into the ASE
-database, six times each.
-readcon-db takes a median of \rcDbIngestMedian~s and the ASE database
-takes \rcAseDbMedian~s.
-Both stores keep all 40 frames.
-
-\input{figures/generated/mpi_macros}
-
-We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4
-and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches
-at each count.
-\mpiSharedLine.
-\mpiScatterLine.
-\mpiCompareLine.
-\mpiScatterIqrLine.
-Rank 0 reads the file once to build the index, and every other rank
-reads only its own byte range.
-In scatter mode the waiting ranks sleep on a file lock, which needs a
-filesystem with coherent flock across the ranks, and where flock is not
-coherent they fall back to the blocking broadcast.
-\input{figures/generated/mpi_host_table}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf}
-\caption{Distributed read on this host. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
-\label{fig:mpi-host} \end{figure}
-
-\FloatBarrier \section{Stored campaigns}\label{sec:stored}
-The figures in this section record the database and MPI campaigns.
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf}
-\caption{Wall-time ratio of readcon-core to each peer.}
-\label{fig:fairness} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf}
-\caption{Frame rate of the full, field and coordinate Python reads at one and eight threads.}
-\label{fig:layers} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.85\textwidth]{figures/generated/roofline.pdf}
-\caption{The same three Python reads at one and eight threads, in frames per second.}
-\label{fig:roofline} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Image energies for the height-held POSCAR band and the uninterrupted band.}
-\label{fig:asemask} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
-\caption{MPI read speedup against rank count.}
-\label{fig:mpi-strong} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
-\caption{MPI ingest time against rank count.}
-\label{fig:mpi-weak} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
-\caption{Ingest rate.}
-\label{fig:db-throughput} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
-\caption{Ingest bandwidth.}
-\label{fig:db-bandwidth} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
-\caption{Composition-query time.}
-\label{fig:db-query} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
-\caption{Allocated size of the stored 1000-frame copies.}
-\label{fig:db-disk} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf}
-\caption{Stored frames against unique frame hashes in the deduplication record.}
-\label{fig:db-dedup} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf}
-\caption{Byte width of each span of one stored CON frame.}
-\label{fig:supp-anatomy} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
-\caption{One bar for each illegal file in the stored error record.}
-\label{fig:supp-errors} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf}
-\caption{Count of exact mask, identifier, time unit and binary64 fields after a write and a read.}
-\label{fig:supp-fidelity} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf}
-\caption{Largest absolute component of the minimum-image displacement, in angstrom, along each stored resume.}
-\label{fig:supp-restart} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf}
-\caption{Hashed images in each stored campaign run.}
-\label{fig:supp-dedup} \end{figure}
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
-\caption{The five stored EMT bands, as energy above the first image.}
-\label{fig:supp-neb} \end{figure}
-
-\section{Readers on one core}
-\label{sec:timings}
-Timings use one core (Section~\ref{sec:compute} lists the hardware).
-Six repeats follow one warmup, and the median is the type-7 median.
-The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper}.
-
-Table~\ref{tab:serial} and Table~\ref{tab:serial-xyz} are a serial session on core 0, one warmup and six repeats.
-Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
-On the \num{100000}-frame CON file the Rust reader takes \SI{0.301}{\second}, the C binding \SI{0.326}{\second} and the Python binding \SI{0.484}{\second}.
-ASE's eon reader takes \SI{10.669}{\second} and eOn \texttt{loadcons} takes \SI{10.128}{\second}.
-On the convel file the Rust reader takes \SI{0.370}{\second}, the C binding \SI{0.410}{\second} and the Python binding \SI{0.535}{\second}.
-ASE cannot read that file.
-On one CON frame of $10^{6}$ atoms the Python binding takes \SI{0.0516}{\second} and the Rust reader takes \SI{0.0648}{\second}.
-ASE's eon reader takes \SI{1.378}{\second}.
-On the copper extended XYZ file readcon takes \SI{0.263}{\second}, chemfiles \SI{1.069}{\second}, OVITO \SI{3.309}{\second}, ASE \SI{9.766}{\second} and pymatgen \SI{24.373}{\second}.
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\caption{Serial CON reads on one core.
-One warmup and six repeats.
-Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
-A blank cell was not part of this comparison.}
-\label{tab:serial}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lrrrrr@{}}
-\toprule
-File & Rust & Python & C & ASE eon & \texttt{loadcons} \\
-\midrule
-\num{100000} frames & 0.301 (0.0350) & 0.484 (0.0130) & 0.326 (0.0223) & 10.669 (0.0591) & 10.128 (0.2189) \\
-convel & 0.370 (0.0029) & 0.535 (0.0017) & 0.410 (0.0023) & cannot read & \\
-$10^{6}$ atoms & 0.0648 (0.0011) & 0.0516 (0.0003) & & 1.378 (0.0312) & \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\caption{Serial read of the copper extended XYZ file on one core.
-One warmup and six repeats.
-Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
-\label{tab:serial-xyz}
-\begin{tabular}{@{}lrrrrr@{}}
-\toprule
-readcon & chemfiles & OVITO & ASE & pymatgen \\
-\midrule
-0.263 (0.0005) & 1.069 (0.0018) & 3.309 (0.0024) & 9.766 (0.1636) & 24.373 (0.4896) \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Extended XYZ}
-\label{sec:xyz}
-The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 atoms.
-Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
-On the single large frame, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}.
-The Rust reader takes \SI{0.287}{\second} and the Python binding \SI{0.419}{\second}.
-cextxyz and extxyz 0.4.6 are faster than readcon on that frame.
-ASE's own extxyz reader takes \SI{1.91}{\second}.
-On the \num{10000}-frame file the order changes.
-The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
-
-\begin{figure*}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/timings.pdf}
-\caption{Median extended XYZ read on one core.
-The whisker runs from the first quartile to the third.
-On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.}
-\label{fig:timings}
-\end{figure*}
-
-\begin{table}[tbp]
-\centering
-\caption{Median extended XYZ read time in seconds.}
-\label{tab:xyzread}
-\begin{tabular}{@{}lrr@{}}
-\toprule
-Reader & $10^{6}$ atoms & \num{10000} frames \\
-\midrule
-readcon, Rust & 0.287 & 0.294 \\
-readcon, Python & 0.419 & 0.454 \\
-ASE extxyz & 1.91 & 3.41 \\
-ASE cextxyz & 0.275 & 0.937 \\
-extxyz 0.4.6 & 0.261 & 0.740 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The writes of the same two files are in Table~\ref{tab:xyzwrite}.
-On the million-atom frame the Python binding writes in \SI{0.442}{\second}, faster than the Rust writer at \SI{0.487}{\second}.
-extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's extxyz writer \SI{3.74}{\second}.
-On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
-The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
-
-\begin{table}[tbp]
-\centering
-\caption{Median extended XYZ write time in seconds.}
-\label{tab:xyzwrite}
-\begin{tabular}{@{}lrr@{}}
-\toprule
-Writer & $10^{6}$ atoms & \num{10000} frames \\
-\midrule
-readcon, Rust & 0.487 & 0.431 \\
-readcon, Python & 0.442 & 0.411 \\
-ASE extxyz & 3.74 & 4.26 \\
-ASE cextxyz & 0.948 & 1.47 \\
-extxyz 0.4.6 & 0.906 & 1.19 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-chemfiles 0.10.4 reads the same two copper files in \SI{0.455}{\second} and \SI{0.567}{\second}.
-OVITO 3.17.2 reads them in \SI{0.150}{\second} and \SI{0.657}{\second}.
-On the million-atom frame OVITO is the fastest of these readers.
-
-\subsection{Trajectory XYZ}
-\label{sec:trajxyz}
-Table~\ref{tab:trajxyz} and Figure~\ref{fig:trajxyz} are plain XYZ trajectories of copper: one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.
-The Rust reader is fastest in every column, at \SI{0.259}{\second}, \SI{0.276}{\second} and \SI{0.920}{\second}.
-The Python binding takes \SI{0.293}{\second}, \SI{0.282}{\second} and \SI{1.108}{\second}, with interquartile ranges \SI{0.0055}{\second}, \SI{0.0062}{\second} and \SI{0.0030}{\second}.
-It is second to the Rust reader in every column.
-On the \num{100000}-frame file the Rust reader takes \SI{0.920}{\second} and the Python binding \SI{1.108}{\second}.
-A profile of that Python read shows no NumPy copies: \texttt{from\_owned\_array} and \texttt{memcpy} are 0.00\% of the samples.
-The remaining time is the newline and token scan the Rust reader also pays.
-MDAnalysis takes \SI{1.869}{\second} there \cite{michaudAgrawalMDAnalysisToolkit2011}, chemfiles 0.10.4 takes \SI{2.60}{\second}, chemfiles 0.11.0-rc1 takes \SI{2.24}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
-Every interquartile range is under 5 percent of its median, except chemfiles 0.10.4 on the \num{100000}-frame file, where the range is \SI{0.28}{\second}.
-
-\begin{table}[tbp]
-\centering
-\caption{Median XYZ read time in seconds.
-The Python row gives the interquartile range in parentheses.
-Columns are one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.}
-\label{tab:trajxyz}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Reader & $10^{6}$ & \num{10000} & \num{100000} \\
-\midrule
-readcon, Rust & 0.259 & 0.276 & 0.920 \\
-readcon, Python & 0.293 (0.0055) & 0.282 (0.0062) & 1.108 (0.0030) \\
-ASE \texttt{iread} & 1.74 & 3.60 & 25.6 \\
-chemfiles 0.10.4 & 0.364 & 0.490 & 2.60 \\
-chemfiles 0.11.0-rc1 & 0.359 & 0.412 & 2.24 \\
-MDAnalysis & 2.09 & 0.520 & 1.869 \\
-MDTraj & 0.790 & 0.781 & 2.64 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure*}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/trajxyz.pdf}
-\caption{Median XYZ read on one core.
-The axis is logarithmic.
-The Rust reader is fastest on each file.
-The Python binding is second on each file.}
-\label{fig:trajxyz}
-\end{figure*}
-
-\subsection{CON}
-\label{sec:conread}
-Table~\ref{tab:convel-one} is one convel frame, the survey frame, read on one core.
-One warmup precedes six repeats, and the median is the type-7 median.
-The Python binding takes $\num{2.87e-5}$\,s and \SI{34}{\mebi\byte}.
-The Rust reader takes $\num{1.83e-5}$\,s and the C binding $\num{1.66e-5}$\,s.
-eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the current eOn client $\num{2.62e-5}$\,s and eOn 3.6.0 $\num{2.32e-5}$\,s.
-ASE's eon reader stops at line 23, the velocity title.
-
-\begin{table}[tbp]
-\centering
-\caption{Median read of one convel frame, in seconds.
-The Python resident set is \SI{34}{\mebi\byte}.
-ASE stops at line 23.}
-\label{tab:convel-one}
-\begin{tabular}{@{}lr@{}}
-\toprule
-Reader & Median \\
-\midrule
-readcon, Python & \num{2.87e-5} \\
-readcon, Rust & \num{1.83e-5} \\
-readcon, C & \num{1.66e-5} \\
-eOn \texttt{loadcons} & \num{3.15e-4} \\
-eOn, current & \num{2.62e-5} \\
-eOn 3.6.0 & \num{2.32e-5} \\
-ASE eon & stops at line 23 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Figure~\ref{fig:conread} is the \num{100000}-frame CON read of Table~\ref{tab:serial}.
-chemfiles 0.10.4 and OVITO 3.17.2 do not open a file with the \texttt{.con} suffix.
-
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\columnwidth]{figures/generated/conread.pdf}
-\caption{Median read of \num{100000} CON frames of 32 atoms.
-The whisker is the interquartile range.}
-\label{fig:conread}
-\end{figure}
-
-A write of that coordinate file takes \SI{0.539}{\second} in Rust and adds \SI{0.40}{\mebi\byte} to the resident set, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
-The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
-eOn streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 0.
-Table~\ref{tab:conwrite} gives that row and the final resident set above the Matter.
-ASE's eon reader raises \texttt{ValueError} on the velocity title, so it does not read that file.
-ASE's eon writer raises \texttt{TypeError} on a frame held in one component.
-
-Table~\ref{tab:plugin} compares the ASE eon format with the readcon-con ASE plugin on the same \num{100000}-frame coordinate file.
-The readcon-con read takes \SI{1.72}{\second}.
-Of that time, the parse is \SI{0.432}{\second} and building the ASE \texttt{Atoms} objects is \SI{1.07}{\second}.
-The ASE eon read takes \SI{10.7}{\second}.
-The readcon-con write takes \SI{1.15}{\second} and the ASE eon write takes \SI{13.9}{\second}.
-
-\begin{table}[tbp]
-\centering
-\caption{ASE plugins on the \num{100000}-frame CON file.
-Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
-Six repeats follow one warmup, on one core.}
-\label{tab:plugin}
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Reader & Read & Write \\
-\midrule
-ASE eon & 10.7 (0.226) & 13.9 (0.178) \\
-readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The same \num{100000}-frame copper trajectory, which repeats one grid, is \SI{63.5}{\mega\byte} as plain text, \SI{492}{\kilo\byte} as gzip and \SI{181}{\kilo\byte} as zstd.
-Those ratios, 129 for gzip and 351 for zstd, belong to this repeated file and not to a general trajectory.
-Table~\ref{tab:gzip} is the compressed read and the gzip write, again six repeats after one warmup on one core.
-The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
-ASE's eon reader takes \SI{10.6}{\second}.
-Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
-On a gzip file of one frame of $10^{6}$ atoms the Rust reader takes \SI{0.100}{\second} and ASE's eon reader takes \SI{1.47}{\second}.
-ASE's xyz reader takes \SI{127}{\second} on that file and returns cell lengths of zero.
-The Rust writer emits the \num{100000}-frame file as gzip in \SI{0.561}{\second}.
-ASE's eon writer takes \SI{14.2}{\second}.
-
-\begin{table}[tbp]
-\centering
-\caption{Median time in seconds for gzip CON.
-The first two columns are reads.
-The last column is the write of the \num{100000}-frame file.
-A blank cell was not part of this comparison.}
-\label{tab:gzip}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
-\midrule
-readcon, Rust & 0.412 & 0.100 & 0.561 \\
-readcon, Python & 0.439 & & \\
-ASE eon & 10.6 & 1.47 & 14.2 \\
-gzip, then plain read & 0.643 & & \\
-ASE xyz & & 127 & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes.
-Each row is a type-7 median of six repeats after one warmup, on one core.
-The resident set and the massif heap are the increase above the loaded input.
-The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
-The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
-The gzip write of one frame of $10^{6}$ atoms takes \SI{0.704}{\second}, \SI{39.0}{\mebi\byte} and \SI{32.3}{\mebi\byte}.
-The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
-The heap of that zstd write matches the Rust writer.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{Python compressed writes.
-Time is the type-7 median in seconds.
-RSS and massif are the increase above the loaded input, in mebibytes.}
-\label{tab:pywrite}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-File & Time (s) & RSS & Massif \\
-\midrule
-trajectory gzip & 0.560 & 0.73 & 0.36 \\
-trajectory zstd & 0.467 & 3.47 & 3.55 \\
-$10^{6}$ atoms, gzip & 0.704 & 39.0 & 32.3 \\
-$10^{6}$ atoms, zstd & 0.198 & 39.0 & 35.5 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-readcon-db commits every 64 frames.
-It appends the same trajectory in \SI{6.25}{\second}, with a resident set of \SI{34.7}{\mebi\byte} and a heap of \SI{5.2}{\mebi\byte}.
-One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set of \SI{58.9}{\mebi\byte} and a heap of \SI{7.19}{\mebi\byte}.
-The coordinates match.
-ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
-
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{readcon-db on one core.
-Time is the type-7 median in seconds.
-RSS and massif are the increase above the loaded input, in mebibytes.
-The ASE rows are the same thousand random-frame reads.}
-\label{tab:rcdb}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Operation & Time (s) & RSS & Massif \\
-\midrule
-append & 6.25 & 34.7 & 5.2 \\
-1000 random-frame reads & 0.0242 & 58.9 & 7.19 \\
-ASE database, 1000 reads & 0.297 & & \\
-ASE trajectory, 1000 reads & 0.047 & & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure*}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/pywrite.pdf}
-\caption{Left: Python compressed-write medians.
-Right: one thousand random-frame reads.
-Both axes are linear and start at zero.}
-\label{fig:pywrite}
-\end{figure*}
-
-\subsection{The short decimal}
-\label{sec:fast}
-Short decimals take Clinger's exact path; the rest use Eisel--Lemire.
-
+\section{One measured read time}\label{sec:performance}
+On one core, the Rust column walker reads \(100\,000\) CON frames of 32 atoms in \(0.179\,\mathrm{s}\).
+ASE's eon reader takes \(10.8\,\mathrm{s}\) on that file.
+\texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files.
+Every other median, the memory and the distributed reads are in Section~\ref{sec:si-timings} of the supplementary material.
+The library is the checkout \texttt{v0.18.1}.
+The supplement states the commands that rebuild the tables from that checkout.
 
 \section{Computational details}\label{sec:compute}
-The timings use one core of an Intel Xeon with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.
-readcon-core 0.18.1 was compiled with rustc 1.91.0.
-Python 3.12.3, NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2 each ran with one thread.
+The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.
+The column-walker timings use readcon-core 0.18.1, compiled with rustc 1.91.0 and Python 3.12.3.
+The short-decimal session uses rustc 1.88.0.
+The mapped-binary notes use NumPy 1.26.4.
+Python 3.12.16 appears in the stored-campaign records.
+NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2 each ran with one thread where that library was timed.
 The eOn client is the current source and the released 3.6.0.
 Each median is the type-7 median of six repeats after one warmup.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 Here, we have described CON 3.1, a versioned grammar for the geometry a saddle search resumes from, and readcon-core, the reader and writer that implements it.
 A band resumed from CON 3.1 repeats the uninterrupted band, and dropping the height constraint changes the prefactor by a factor of 37.
-On one core the Rust reader takes 0.30~s for 100000 CON frames of 32 atoms, and ASE's eon reader takes 10.7~s.
+On one core the Rust reader takes 0.179~s for 100000 CON frames of 32 atoms, and ASE's eon reader takes 10.8~s.
 CON 3.1 gives any program a grammar it can test, a place for a later minor, and a checkpoint another code can resume.
 
 
@@ -1977,7 +1219,7 @@ CON 3.1 gives any program a grammar it can test, a place for a later minor, and 
 readcon-core is available from \url{https://github.com/lode-org/readcon-core} under the MIT licence.
 The concept record is \url{https://doi.org/10.5281/zenodo.18753567}.
 The stored campaigns use readcon-core~\readconversion{}.
-The one-core timings of Section~\ref{sec:timings} use readcon-core 0.18.1.
+The one-core timings of Section~\ref{sec:performance} use readcon-core 0.18.1.
 The supplementary material states the grammar, the corpora, the version of each stored record, and the commands that rebuild the tables.
 The CON reader shipped with eOn is under the BSD 3-clause licence of the eOn Development Team, and no build of readcon-core links it.
 

@@ -36,9 +36,8 @@ Mapping advice lists \texttt{MADV\_SEQUENTIAL}, \texttt{MADV\_HUGEPAGE},
 \texttt{MADV\_WILLNEED}, then \texttt{MADV\_POPULATE\_READ}.
 HUGEPAGE applies when transparent large pages are in madvise mode.
 File-backed large pages also require
-\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS}
-(\texttt{Documentation/\allowbreak admin-guide/\allowbreak mm/\allowbreak transhuge.rst}).
-This kernel's \texttt{/proc/config.gz} has that option unset, and
+\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS}.
+That option is unset, and
 \texttt{FilePmdMapped} stayed 0.
 The population call still faults base pages.
 
@@ -47,9 +46,6 @@ reader in a fresh process after \texttt{drop\_caches} 3.
 That drop clears the guest page cache.
 The host cache was not controlled.
 The warm sample in that table is the next read in that same process.
-Tables~\ref{tab:conbin-mmap-sum} and \ref{tab:conbin-scale} are the
-session with first sample at unix time 1793662535.
-Warm in that session is a new process.
 There is no untimed warm-up.
 Repeat 0 is the first touch of that cell and is kept.
 Six repeats.
@@ -64,14 +60,11 @@ Every sum in Table~\ref{tab:conbin-mmap-nosum} was
 
 The machine is an Intel Xeon, family 6, model 207, 8 cores, one NUMA
 node.
-Those fields are \texttt{/proc/cpuinfo} and
-\texttt{/sys/devices/system/node}.
-L3 is 320 MiB, and cpu0/cache/index3/size reads \texttt{327680K}.
+L3 is 320 MiB.
 MemTotal is 49342768 kB.
 The kernel is Linux 6.12.94+.
-The file system is ext4, from \texttt{/proc/mounts}.
-The page size is 4096 bytes and \texttt{Hugepagesize} is 2048 kB, from
-\texttt{/proc/meminfo}.
+This is the separate mapped-binary session, not the column-walker host of the main text (kernel 6.12.113+).
+The page size is 4096 bytes and \texttt{Hugepagesize} is 2048 kB.
 rustc is 1.88.0, Python is 3.12.3, h5py is 3.16.0 and NumPy is 1.26.4.
 
 \begin{table}[ht] \centering
@@ -156,14 +149,8 @@ A store copies the page.
 The file bytes stay as written.
 The map is the NumPy base of both arrays and is unmapped when both are
 freed.
-A store test writes through the mapping and reads the file back
-unchanged.
-Its name is
-\texttt{conbin::\allowbreak tests::\allowbreak a\_store\_copies\_\allowbreak the\_page\_and\_\allowbreak leaves\_the\_file}.
 Advice \texttt{MADV\_HUGEPAGE} is requested.
-File \texttt{/proc/config.gz} has
-\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS} unset, which is the switch
-\texttt{Documentation/\allowbreak admin-guide/\allowbreak mm/\allowbreak transhuge.rst} requires before
+\texttt{CONFIG\_READ\_ONLY\_THP\_FOR\_FS} is unset, which is the switch required before
 khugepaged can collapse file pages.
 \texttt{FilePmdMapped} stays 0.
 
@@ -195,9 +182,7 @@ At 1 thread that cgroup high-water mark reaches 9431144 kB.
 The mapped read of the same file reaches 4709088 kB.
 The JSON records that cgroup mark for every sample.
 The probe's queue and its cache type both read write through.
-\texttt{benches/cache\_probe.py} on this boot, boot id
-\texttt{7d1fc2c7-0885-41f6-9949-83f54b109ae2}, unix time 1793667550,
-read 1 GiB of the benchmark file at 397.7 MB/s after
+The cache probe read 1 GiB of the benchmark file at 397.7 MB/s after
 \texttt{drop\_caches} 3.
 After an \texttt{O\_DIRECT} write and the same drop, the buffered read
 was 2934.1 MB/s.
@@ -216,11 +201,6 @@ Each recorded \texttt{read\_bytes} of the whole file.
 \texttt{Cached} was about 312000 kB before each of those reads.
 The never-read file's first read was the slowest of the five, 1.14 times
 the fastest.
-Those times are in \texttt{fresh-reads.json}, from an earlier check on
-this guest.
-That file records no boot id.
-In the session with first sample at unix time 1793662535 the files were
-already on disk.
 The guest page cache was dropped before every guest-drop sample.
 The first read of each file in this session is the slowest sample of its
 cell.
@@ -230,20 +210,10 @@ One CON-bin stream at 6 threads took 7.2233 s (664.5 MB/s), 7.11 times
 its upper median.
 The next is O\_DIRECT at 2 threads, repeat 4, at 1.54 times.
 No sample records whether a host cache served it.
-The order seed is the boot id
-\texttt{7d1fc2c7-0885-41f6-9949-83f54b109ae2}.
-An earlier conbin\_scale.py session on this boot, first sample at unix
-time 1793658999, used that seed, so both sessions share one order.
-The shared first sample took 1.2492 s in that session and 7.2233 s in
-the session with first sample at unix time 1793662535.
 Repeat 0 of the other guest-drop h5py cells is 0.92 to 1.19 times its
 upper median.
 The samples are kept.
 The upper median absorbs the first reads.
-The fio unix time is 1793654445.
-This session's first sample is 1793662535.
-The gap is 8090 s, 134 minutes.
-That fio run recorded no boot id.
 \texttt{fio} 3.36 used \texttt{io\_uring}, \texttt{direct=1},
 \texttt{rw=read} and a 1310720-byte block.
 One job at depth 1 read at 1402.6 MB/s.
@@ -257,22 +227,13 @@ The probe read the benchmark file at 397.7 MB/s after the same drop.
 The guest-drop rates above 4000 MB/s in Table~\ref{tab:conbin-scale}
 therefore came from a host cache.
 They are not device rates.
-Two sessions on this boot share one order.
-The session that started at unix time 1793658999 used the earlier reader
-loop, which polled \texttt{smaps\_rollup}.
-Across the two sessions the guest-drop upper medians differ by 1.07 to
-1.45 times, and the warm upper medians by 1.02 to 1.35 times.
-That earlier session had split ahead at 2 and 8 threads after the drop.
-Its warm split led at 2, 3, 7 and 8 threads.
-No plan led at every thread count in both sessions.
 The default stays one stream, the simpler plan.
 Guest O\_DIRECT still meets a host cache.
 The measured rate is a cache rate.
 
 \begin{table}[ht] \centering
 \caption{Plain map, one stream, a stream per span, \texttt{O\_DIRECT}, and h5py.
-The session with first sample at unix time 1793662535, modes shuffled
-inside each repeat.
+Modes are shuffled inside each repeat.
 Warm is a new process.
 The parent waits on a barrier after the h5py workers import, then starts
 the clock.

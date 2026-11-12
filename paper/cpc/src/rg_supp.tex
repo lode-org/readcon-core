@@ -107,35 +107,14 @@ belowskip=0.4em
 \begin{document}
 % snapper:on
 
-\begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement gives the normative specification of CON 3.1.
-CON is a geometry format used in many codes, and readcon-core formalizes it.
-The supplement also states the reader rules.
-It then gives the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
-The last sections give the records beside a checkpoint with what each format's specification states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
+\begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement holds the CON 3.1 specification, the reader rules, and the corpora.
+It records the restart protocol, the velocity case, and the timing tables.
+It also keeps the reader-exchange figures and the short-decimal session, each labelled with the release those numbers belong to.
 \end{abstract} \end{frontmatter}
 
-We keep the specification, the corpora and the timing records in this supplement.
-We name the script that writes each table.
-We state a reader rule as an input and the outcome that follows from it.
-We measure a wall time as the median of at least six repeats.
-We place the type 7 interquartile range next to that median.
-We compare each peer on the same file and the same host.
-We call two reads equal when their coordinates match.
-We count the frames a reader returns and the bytes it keeps.
-We draw each restored figure from a record in this directory.
-We leave a version deposit unnamed until the record exists.
-We build the library from the release commit named in the manuscript.
-That commit is on the public main branch.
-We run one cell at a time on one host.
-We name the processor family and model, the model string, the clock, the core count, the memory, the kernel, the operating system and the compilers.
-
-\section{Normative specification}\label{sec:spec-normative} This section states the CON 3.1 specification as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} at git blob \texttt{\specTextBlob}.
-\texttt{scripts/\allowbreak gen\_spec\_supp.py -{}-as-is} typesets that file, and its \texttt{-{}-check} fails unless the typeset text matches the file.
-That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
-The library test \texttt{tests/\allowbreak ci\_gates.rs} runs \texttt{scripts/\allowbreak check\_spec\_text.sh}, which fails when the two differ.
-Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and they are left out here.
-The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (\texttt{bench/\allowbreak results/\allowbreak velocity\_case.json}).
-The reader it specifies is readcon-core~\readconversion{}.
+\section{Normative specification}\label{sec:spec-normative}
+This section states the CON 3.1 specification as readcon-core 0.18.1 distributes it.
+The relative difference between the parsed natural time unit and the eOn constant is \(2.07\times 10^{-8}\).
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
 The specification also points to an informative parsing expression grammar (PEG), \texttt{grammar/\allowbreak readcon.pest}, which is not reproduced.
@@ -145,7 +124,98 @@ The reader-compatibility notes and the references of the source are omitted, bec
 
 \input{figures/generated/corpus_table} \input{figures/generated/drift_table} \input{figures/generated/survey_table}
 
-\FloatBarrier \section{Reader rules}\label{sec:appendix-rules} Tables~\ref{tab:rules}, \ref{tab:rules-numbers} and~\ref{tab:rules-framing} collect the edge cases a reader applies, stated as input and outcome.
+\FloatBarrier \begin{table}[tbp] \centering \footnotesize \caption{Clauses of the
+specification that Sections~\ref{sec:worked} and~\ref{sec:format} apply.
+Section~\ref*{sec:spec-normative} of the supplementary material gives
+their normative text.}
+\label{tab:clauses}
+\begin{tabular}{@{}lp{0.74\linewidth}@{}}
+\toprule
+Clause & Rule \\
+\midrule
+CON-frame.1 & After the last complete frame, lines that hold only white space are ignored. \\
+CON-frame.7 & After a complete frame with its sections, or with the legacy velocity block where that applies, the next line is line 1 of the next frame, even when it is empty. \\
+CON-token.3 & Fields inside a line are separated by spaces and tabs only, so a form feed or a no-break space belongs to the field it touches. \\
+CON-token.4 & Where the PEG admits a token that a clause rejects, the clause decides. \\
+CON-cell.1 & When the header carries \texttt{lattice\_vectors}, the reader takes the cell from it and not from lines 3 and 4. \\
+\begin{tabular}[t]{@{}l@{}}CON-cell.3\\CON-cell.4\end{tabular} & A frame without \texttt{pbc} is periodic in all three directions, and a \texttt{pbc} that is present is three booleans, one per cell vector. \\
+CON-cell.6 & Without \texttt{lattice\_vectors}, the reader builds the cell of Eq.~\eqref{eq:cell} from lines 3 and 4, with the angles in degrees. \\
+CON-validate.4 & With \texttt{validate} true, the reader also rejects, among other checks, a cell length that is not positive and an angle outside the open interval from 0 to 180 degrees. \\
+\begin{tabular}[t]{@{}l@{}}CON-mask.2\\CON-mask.3\end{tabular} & In version 1 the mask is 0 for a free atom or 1 for an atom fixed in every component, and any other token is an illegal flag. \\
+CON-mask.4 & From version 2 the mask is an integer from 0 to 7, read by Eq.~\eqref{eq:mask}. \\
+CON-mask.5 & A float spelling, a sign or a value outside the set of the version is an illegal flag in every mode. \\
+\begin{tabular}[t]{@{}l@{}}CON-id.1\\CON-id.3\\CON-id.4\end{tabular} & The identifier is an integer from 0 through \(2^{64}-1\) that is never read through binary64, a writer emits identifiers unique within a frame, and a reader accepts repeated ones. \\
+\begin{tabular}[t]{@{}l@{}}CON-num.1\\CON-num.5\end{tabular} & A decimal rounds to the nearest binary64 value, and a field that spells \texttt{nan}, \texttt{inf} or \texttt{infinity} with any sign and in any case, or a decimal that rounds to an infinity, is rejected as a non-finite value in every mode. \\
+\begin{tabular}[t]{@{}l@{}}CON-units.8 to\\CON-units.10\end{tabular} & Versions 1, 2 and 3.0 are read in \texttt{units.length} per natural time unit whatever \texttt{units.time} names, and from version 3.1 \texttt{units.time} sets the unit of the velocities. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp] \centering \footnotesize
+\caption{Reserved metadata keys of the JSON header line.}
+\label{tab:keys}
+\begin{tabular}{ll@{\hspace{1.4em}}ll}
+\toprule
+Key & Type & Key & Type \\
+\midrule
+\texttt{con\_spec\_version} & integer & \texttt{neb\_bead} & integer \\
+\texttt{con\_spec\_minor} & integer & \texttt{neb\_band} & integer \\
+\texttt{section\_arity} & object & \texttt{convergence\_fmax} & number \\
+\texttt{sections} & array & \texttt{convergence\_energy} & number \\
+\texttt{validate} & bool & \texttt{converged} & bool \\
+\texttt{generator} & string & \texttt{fmax} & number \\
+\texttt{units} & object & \texttt{bonds} & array \\
+\texttt{pbc} & array & \texttt{storage\_dtypes} & object \\
+\texttt{lattice\_vectors} & array & \texttt{chemfiles\_atom\_names} & array \\
+\texttt{energy} & number & \texttt{chemfiles\_atom\_types} & array \\
+\texttt{potential} & object & \texttt{chemfiles\_atom\_properties} & array or object \\
+\texttt{frame\_index} & integer & \texttt{time} & number \\
+\texttt{timestep} & number & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp] \centering \small
+\caption{Reserved sections at minor 1\. Each data row carries its values, then the mask and the identifier.}
+\label{tab:sections}
+\begin{tabular}{lll}
+\toprule
+Section & Values & Rule \\
+\midrule
+Velocities & \(v_x\, v_y\, v_z\) & Time unit from 3.1 \\
+Forces & \(f_x\, f_y\, f_z\) & \\
+Energies & one value & Name \texttt{energies} \\
+Charges & one value & \\
+Spins & one value & \\
+Magmoms & \(m_x\, m_y\, m_z\) & \\
+Displacements & \(d_x\, d_y\, d_z\) & \texttt{units.length} \\
+Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+{\small
+\begin{longtable}{@{}lllp{0.44\linewidth}@{}}
+\caption{CON versions.
+A row with an unmarked date takes its version, date and change from the version history of the specification.
+Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.
+A date marked (tag) is the tag date of a release that changed the text of a version without a new version number, and its row names the clauses that release changed.}
+\label{tab:versions}\\
+\toprule
+Version & Date & Release & Change \\
+\midrule
+\endfirsthead
+\toprule
+Version & Date & Release & Change \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\input{figures/generated/versions_table}
+\end{longtable}
+}
+
+\section{Reader rules}\label{sec:appendix-rules} Tables~\ref{tab:rules}, \ref{tab:rules-numbers} and~\ref{tab:rules-framing} collect the edge cases a reader applies, stated as input and outcome.
 Each row restates clauses of Section~\ref{sec:spec-normative}.
 
 \begin{table}[tbp] \centering \small \caption{Reader rules for masks, identifiers, versions, metadata and sections.}
@@ -235,13 +305,13 @@ The program prints the cell, the counts and the first five atoms with their fixe
 \texttt{scripts/\allowbreak test\_run.py} then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
 In both modes the program reads the flat cell and prints its angles.
 In both modes it stops on the impossible cell with the error \texttt{cell angles do not form a real cell} in line~\trCellLine.
-\path{paper/cpc/data/test_run.json} keeps the commands, the toolchain and what the program printed for each of the five files.
+The test-run record keeps the commands, the toolchain and what the program printed for each of the five files.
 
 \input{figures/generated/test_run}
 
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
-\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of the \readconcommitrole{} \texttt{\readconcommitshort}.
+\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core 0.18.1.
 \texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{paper/\allowbreak cpc/\allowbreak data/\allowbreak src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
@@ -289,13 +359,12 @@ Table~\ref{tab:corpus-crosscheck} is the run of \texttt{scripts/\allowbreak corp
 A case takes one of the \mutantFiles{} files of \path{paper/cpc/data/corpus31} under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
 The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
-Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and \texttt{-{}-check} reruns them.
+Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and \texttt{\texttt{-}\texttt{-}check} reruns them.
 The comparison covers the verdicts and the frame counts or error classes and leaves out the lines, since the exceptions of the readcon module carry none.
 The record still keeps the error line of each reader.
 Each group has a variant of the independent reader that follows readcon-core on one rule.
 A differing case belongs to the first group whose variant returns the verdict and class of readcon-core.
 All \(\mutantDiffer\) differing cases fall in the count-line group.
-The record leaves \(\mutantUnexplained\) cases unexplained.
 The first variant is a count line with the wrong number of tokens and a token that is not an unsigned integer, so it breaks CON-error.3 and CON-num.9 on one line; CON-error.4 orders errors by line alone, and readcon-core checks the number of tokens first, the independent reader each token first.
 The second variant is line 2 with a number such as \texttt{1e999}, which the JSON grammar of Request for Comments (RFC)~8259 admits and binary64 cannot represent.
 The independent reader rejects such a number anywhere in line 2, and readcon-core keeps it in an unreserved key and reads on; no clause requires either reading.
@@ -308,7 +377,7 @@ Each case is read from a string and from bytes at one to sixteen threads, by the
 It is then written to a plain and a gzip file, and each file is read again at the same thread counts, with the stream reader and through the indexed trajectory.
 Every read returns the frame count, the coordinates and the section presence of the one-thread string read or stops with its error at the same line, and the trajectory refuses to open a file only when the string read rejects the case.
 One case in every 305 is also padded with blank lines past the mapping threshold and read as a mapped file at one to sixteen threads, and each read returns the outcome of a one-thread read of the padded text.
-\texttt{cargo test -{}-release -{}-lib differential\_corpus} runs it.
+\texttt{cargo test \texttt{-}\texttt{-}release --lib differential\_corpus} runs it.
 
 \begin{footnotesize} \input{figures/generated/corpus31_table} \end{footnotesize}
 
@@ -374,6 +443,8 @@ Velocities is how the file states the velocity unit.
 Metadata is the version or schema that another reader can apply.
 Indexed means frame \(k\) can be opened without a scan whose length is the number of earlier frames.
 Every row is a route measured in Table~\ref{tab:survey}.
+The cell ``no, periodicity'' is the measured OVITO 3.16.1 writer.
+OVITO 3.17.0 always writes \texttt{pbc}, so that cell is not a statement about 3.17.0.
 Tables~\ref{tab:spec-compare} and~\ref{tab:spec-compare-values} give, one row per format, the version, the atom identifiers, the per-component mask, the velocity time unit and the decimal round trip as each format's specification states them, for Table~\ref{tab:compare} and for other trajectory, structure and quantum-chemistry formats, with the source of every cell.
 The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2026,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
 GROMACS deprecates TNG in favour of H5MD, and the release of 2026-01-19 writes an experimental H5MD trajectory \cite{gromacsManual2026}.
@@ -381,6 +452,8 @@ Other records sit beside a saddle search without being measured here: the archiv
 Zarrtraj 0.3.4 reads and writes an H5MD trajectory stored as Zarr, under the name zarrmd, and it also reads H5MD stored as HDF5 \cite{woodsZarrtrajPythonPackage2026}.
 A zarrmd file follows the H5MD specification, except that the step and time of the box and of the positions are equal arrays rather than hard links, which Zarr cannot store.
 It adds no per-component mask.
+IMD version 3 streams positions, velocities, forces and the box from a running GROMACS, NAMD or LAMMPS simulation into MDAnalysis \cite{thirumalaiswamyStreamingMolecularDynamics2026}.
+ReaxKit prepares, parses and analyses ReaxFF trajectories \cite{dinaniReaxkitModularPython2026}.
 
 \begin{table}[tbp] \centering \scriptsize \caption{Restart record against the other routes of Table~\ref{tab:survey}.
 ``Scan'' means the reader walks the file to find a frame.
@@ -392,7 +465,7 @@ Record & Restart-exact & Velocities & Metadata & Indexed \\
 \midrule
 CON 3.1 & yes & declared & versioned & offsets \\
 extended XYZ, ASE writer & no, 8 decimals & no unit & comment & scan \\
-extended XYZ, OVITO writer & no, periodicity & no unit & comment & scan \\
+extended XYZ, OVITO writer & no, periodicity (OVITO 3.16.1) & no unit & comment & scan \\
 ASE trajectory, identifiers as tags & yes, by convention & no unit & ULM and ASE versions & yes \\
 POSCAR, FixScaled & no, mask only & no unit & none & no \\
 H5MD (h5py), private mask dataset & yes, mask by convention & declared & versioned & yes \\
@@ -404,7 +477,7 @@ CIF, Open Babel & no & omitted & none & no \\
 \input{figures/generated/survey_compare}
 
 \FloatBarrier \section{Restart protocol}\label{sec:supp-restart} The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
-Endpoints were relaxed with the Broyden-{}-Fletcher-{}-Goldfarb-{}-Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
+Endpoints were relaxed with the Broyden--Fletcher--Goldfarb--Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
 Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 The band is interrupted after step 25.
@@ -425,16 +498,15 @@ The root mean square over the Cartesian components is \(\velVerletRmsd\,\text{\A
 Each bar is the length of the displacement of one atom.}
 \label{fig:supp-velocity} \end{figure}
 
-Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN-{}-HNC system \cite{vanmourikAbInitioGlobal2001}.
+Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN--HNC system \cite{vanmourikAbInitioGlobal2001}.
 On both, readcon-core returns every atom free, the identifiers \texttt{0 1 2} and the declared natural unit.
 Frame 2 is a constructed probe with the identifiers \texttt{2 0 1} and hydrogen fixed on \(x\) alone.
-Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frames (\path{paper/cpc/bench/results/hcn_loss.csv}).
+Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frames.
 
 \input{figures/generated/hcn_table}
 
 \FloatBarrier \section{Timing}\label{sec:supp-timing}
 Section~\ref{sec:performance} of the main text reports the measurements in Section~\ref{sec:host}.
-Those logs are \path{paper/cpc/logs/reader-exchange-public.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015,kaliberaRigorousBenchmarkingReasonable2013}.
 The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.
@@ -450,8 +522,8 @@ The tensor exchange sits beside the metatensor layout \cite{bigiMetatensorMetato
 Table~\ref{tab:format-context} is context for choosing a format.
 readcon reads neither XYZ nor HDF5.
 \input{figures/generated/host_macros}
-h5py reads the same frames in \rcHdfMedian~s.
-The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
+h5py reads the same frames in 0.59~s.
+The mapped binary coordinate file reads those frames in 0.0076~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
 The extended XYZ head-to-head of Section~\ref{sec:h2h} is a separate run from that exchange.
@@ -485,7 +557,11 @@ extxyz-ng 0.0.2 & \(8.46\times 10^{-5}\) & \(4.67\times 10^{-4}\) & --- & --- \\
 \input{figures/generated/format_context}
 
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
-chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).
+The survey of Table~\ref{tab:survey} and the drift files ran OVITO 3.16.1.
+The timed sessions of Sections~\ref{sec:performance}, \ref{sec:host} and~\ref{sec:timings} and Table~\ref{tab:copper} ran OVITO 3.17.2, which also fails to open the CON file.
+chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
+That is the set of versions that was run.
+The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.11.0-rc1 still have no CON reader \cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfiles0110rc12025,frauxChemfilesConIssue2025}.
 The input-format table of the OVITO 3.17.2 manual names XYZ, extended XYZ, POSCAR and PDBx/mmCIF, and it names neither CON nor convel nor H5MD \cite{ovitoManual3172}.
 That table is not a rerun of the opener.
 The development changelog of ASE dated 2026-11-09 is not part of release 3.29.0, and it records a fix for extended XYZ reading when Python is run with the optimisation flag \cite{aseChangelog20261109}.
@@ -498,19 +574,19 @@ On the copper-grid extended XYZ files, opened by chemfiles as XYZ,
 the million-atom medians are 0.455~s and 0.150~s and the 10000-frame
 medians are 0.567~s and 0.657~s.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
-The readers timed on this host are named in Section~\ref{sec:host} of the main text.
+The readers timed on the Xeon are named in Section~\ref{sec:host} of the main text.
 
-\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process, and the four do not return the same outcome on every file (\path{paper/cpc/data/spec/version_drift.json}).
+\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process, and the four do not return the same outcome on every file.
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
 Only the second refuses a file with a legacy velocity label in capitals or separated by tabs, which the other three read.
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 The stored campaigns use readcon-core~\readconversion{}.
-The one-core timings of Section~\ref{sec:timings} of the main text use readcon-core 0.18.1.
+The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.18.1.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 \texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
-The version history of Table~\ref{tab:versions}, \texttt{data/\allowbreak spec/\allowbreak versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py -{}-measure}, which runs no readcon-core code, so the table does not list it.
+The version history of Table~\ref{tab:versions}, \texttt{data/\allowbreak spec/\allowbreak versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py \texttt{-}\texttt{-}measure}, which runs no readcon-core code, so the table does not list it.
 Nor does it list \texttt{data/\allowbreak spec/\allowbreak clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
 
 \input{figures/generated/version_map}
@@ -518,7 +594,7 @@ Nor does it list \texttt{data/\allowbreak spec/\allowbreak clause\_coverage.json
 Listing~\ref{lst:testrun} records a checkout of the sources.
 Listing~\ref{lst:repro} installs the Python environment that ran the scripts and rebuilds both documents.
 It needs git, conda and TeX Live or Tectonic.
-\texttt{scripts/\allowbreak build\_tex.sh} typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex -{}-version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
+\texttt{scripts/\allowbreak build\_tex.sh} typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex \texttt{-}\texttt{-}version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
 Apart from the TeX sources of the two documents and the configuration, font map and format that the installation generates, every file that pdfTeX and BibTeX read for them belongs to one of nine Ubuntu packages.
 Seven of them have version \texttt{2023.20240207-1}: \texttt{texlive-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak recommended}, \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers} and \texttt{texlive-\allowbreak plain-\allowbreak generic}.
 The other two are \texttt{texlive-\allowbreak binaries}, at version \texttt{2023.20230311.66589-9build3}, and \texttt{lmodern}, at version \texttt{2.005-1}.
@@ -530,29 +606,28 @@ On a host without TeX Live, \texttt{scripts/\allowbreak build\_tex\_tectonic.sh}
 \texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \path{paper/cpc/data/trace/numbers.csv}.
 
 The measurements are separate steps, each of which rewrites its own records.
-\texttt{regen\_paper.py -{}-measure} reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
-\texttt{scripts/\allowbreak test\_run.py -{}-checkout} runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
+\texttt{regen\_paper.py \texttt{-}\texttt{-}measure} reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
+\texttt{scripts/\allowbreak test\_run.py \texttt{-}\texttt{-}checkout} runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
 \texttt{evidence/\allowbreak e1\_restart.py} reruns the eOn band, \texttt{scripts/\allowbreak run\_restart\_walls.py} the wall times of Table~\ref{tab:restartfmt}, and \texttt{scripts/\allowbreak file\_sizes.py} the sizes of Table~\ref{tab:sizes}.
-For the performance records, \texttt{bench/\allowbreak make\_payloads.py} writes the timed files, \texttt{bench/\allowbreak r0174.py} the provenance record, \texttt{bench/\allowbreak cpp\_reads.py} builds and checks the C++ programs, and \texttt{bench/\allowbreak reads.py}, \texttt{bench/\allowbreak memray\_peaks.py} and \texttt{bench/\allowbreak cachegrind.py} write the timing, heap and Cachegrind records; \texttt{bench/\allowbreak build\_chemfiles.sh} and then \texttt{bench/\allowbreak h2h.py} write the head-to-head records, and \texttt{bench/\allowbreak settle\_period.py} and \texttt{bench/\allowbreak binary\_formats.py} the records of the native readers.
-For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build -{}-release} builds and that \texttt{cargo build -{}-release -{}-features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \path{paper/cpc/data/referee_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
+For the performance records, \texttt{bench/\allowbreak make\_payloads.py} writes the timed files, \texttt{bench/\allowbreak release.py} the provenance record, \texttt{bench/\allowbreak cpp\_reads.py} builds and checks the C++ programs, and \texttt{bench/\allowbreak reads.py}, \texttt{bench/\allowbreak memray\_peaks.py} and \texttt{bench/\allowbreak cachegrind.py} write the timing, heap and Cachegrind records; \texttt{bench/\allowbreak build\_chemfiles.sh} and then \texttt{bench/\allowbreak h2h.py} write the head-to-head records, and \texttt{bench/\allowbreak settle\_period.py} and \texttt{bench/\allowbreak binary\_formats.py} the records of the native readers.
+For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build \texttt{-}\texttt{-}release} builds and that \texttt{cargo build \texttt{-}\texttt{-}release \texttt{-}\texttt{-}features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \path{paper/cpc/data/referee_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
 Listing~\ref{lst:measure} gives the command line of each of these performance and conformance scripts, the environment variables it reads with their defaults, and the command lines it runs for each cell, file or build, among them those of memray, Valgrind and cargo.
 The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3 and rewrites \texttt{data/\allowbreak spec/\allowbreak version\_drift.json}.
 
-\begin{lstlisting}[caption={Rebuild of the paper in a checkout of the \readconcommitrole.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
+\begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.18.1.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
 cd readcon-core
-git checkout v0.18.0
-# the one-core timings use 0.18.1
-conda create -n readcon-cpc -{}-file paper/cpc/environment/conda-linux-64.txt
+git checkout v0.18.1
+conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt
 conda activate readcon-cpc
-python3 -m pip install -{}-no-deps -r paper/cpc/environment/requirements.txt
+python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt
 python3 -m pip install .
 python3 paper/cpc/scripts/regen_paper.py
 bash paper/cpc/scripts/build_tex.sh    # or bash paper/cpc/scripts/build_tex_tectonic.sh
-python3 paper/cpc/scripts/trace_numbers.py -{}-check
+python3 paper/cpc/scripts/trace_numbers.py --check
 \end{lstlisting}
 
-\lstinputlisting[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]{measure-commands.lst}
+\lstinputlisting[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]{measure-commands.lst}
 
 % A digital object identifier in the reference list stays on one line.
 \DeclareUrlCommand\path{\def\UrlFont{\footnotesize\ttfamily}\mathchardef\UrlBreakPenalty=10000 \mathchardef\UrlBigBreakPenalty=10000 }
@@ -560,27 +635,93 @@ python3 paper/cpc/scripts/trace_numbers.py -{}-check
 \section{Generated records}
 The binary-format, DLPack, ordering and head-to-head tables, and the layout figures, are generated with the records they name.
 \begingroup
-\refstepcounter{table}\label{tab:binary-ratios}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{The readcon-core median over the median of each native reader in the same read, both on one thread.
+The image is set against the all-frames reads.
+The two-decimal CON file has the precision of XTC and TNG, and the six-decimal file more than the binary32 of TRR and DCD.}
+\label{tab:binary-ratios}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/bf_ratios}}
-\refstepcounter{table}\label{tab:binary-formats}
+\end{table}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Reads of the same system by readcon-core and by the native readers of XTC, TRR, DCD and TNG.
+A time is the median of the runs of a cell, with their IQR.
+The error is the largest difference between a coordinate read and the binary64 source.}
+\label{tab:binary-formats}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/bf_table}}
-\refstepcounter{table}\label{tab:dlpack}
+\end{table}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{DLPack exchange and copy. Each row is one array length. The quartiles are type 7.}
+\label{tab:dlpack}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/dlpack_table}}
-\refstepcounter{table}\label{tab:h2h-cpp}
+\end{table}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{C++ reads of the coordinates and velocity campaigns at one thread, by the column reader and the frame iterator of readcon-core and by chemfiles.
+A time is the median of the runs of a cell, with their IQR, and a ratio is the readcon-core median over the chemfiles median.
+readcon-core 0.18.0 full-frame session.}
+\label{tab:h2h-cpp}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_cpp}}
-\refstepcounter{table}\label{tab:h2h-python}
+\end{table}
+
+These head-to-head tables are the readcon-core 0.18.0 full-frame session.
+They return velocities and every stored field, which is why they are slower than the column-walker arrays.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Python reads of the two head-to-head campaigns, with the peak heap of each read.
+readcon-core 0.18.0 full-frame session.}
+\label{tab:h2h-python}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_python}}
+\end{table}
 \input{figures/generated/ordering_table}
-\refstepcounter{table}\label{tab:cachegrind}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Instructions counted by Cachegrind for each scenario of the readcon-core benchmark program and for chemfiles C++, the median of the runs of a scenario with their IQR.}
+\label{tab:cachegrind}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_cachegrind}}
-\refstepcounter{table}\label{tab:cpp}
+\end{table}
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{C++ reads of the trajectory, each run a fresh process timed from the signal of the parent until it frees its frames.
+A time is the median of the runs of a cell, with their IQR.
+The last column is readcon-core time at one thread over the time of the reader of that row.
+readcon-core 0.18.0 full-frame session.}
+\label{tab:cpp}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_cpp}}
+\end{table}
 \input{figures/generated/r0174_macros}
-\refstepcounter{table}\label{tab:perf}
+
+The 2.62~s and 1.35~s rows are that same 0.18.0 full-frame session, with and without velocities.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Python reads of the trajectory.
+A time is the median of the runs of a cell, with their IQR, and the peak heap is the median of the captures of the cell.
+The last column is readcon-core time over the time of the reader of that row.
+readcon-core 0.18.0 full-frame session.}
+\label{tab:perf}
+\scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
-\begin{center}
-\includegraphics[width=\linewidth]{figures/generated/layout.pdf}
-\end{center}
+\end{table}
+The frame layout is Figure~\ref{fig:layout} of the main text.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{figures/generated/matrix.pdf}
@@ -610,7 +751,8 @@ Right: parallel efficiency.}
 \label{sec:supp-pairs}
 Table~\ref{tab:restart-pairs} is the climbing-image band through each writer and reader among Python, C, C++, Fortran and Julia.
 The Fortran rows call \texttt{rkr\_frame\_add\_atom\_full} in the C header order.
-The public Fortran \texttt{add\_atom} wrapper binds a different argument order, returns status \(-4\), and is not one of these rows.
+\texttt{builder\%add\_atom} and \texttt{builder\%add\_atom\_full} pass the fixed flags before the atom id and the mass, matching \texttt{rkr\_frame\_add\_atom\_full}.
+The round-trip test writes a frame through the builder and reads the same fields back.
 \input{figures/generated/restart_pairs}
 
 \section{MPI ranks}
@@ -626,6 +768,8 @@ Every repeat matched the serial bytes.
 \input{figures/generated/mpi_weak_cold}
 \input{figures/generated/mpi_weak_warm_full}
 
+\clearpage
+\clearpage
 \section{ABNF of one frame}
 \label{sec:appendix-abnf}
 The non-normative ABNF of one frame follows.
@@ -720,6 +864,7 @@ Heap & 61.04 & 84.30 & 115.4 & 171.6 & 163.9 \\
 
 \section{CON}
 \label{sec:con-tables}
+A size check that repeats one copper grid is a synthetic lattice.
 Table~\ref{tab:conread} is the read of \num{100000} frames of 32 atoms.
 The resident set is the peak of the fresh process, in mebibytes.
 The triple is the first quartile, the median and the third quartile, in seconds.
@@ -729,7 +874,7 @@ The eOn row is the streaming write on core 0, one warmup and six repeats, and it
 
 \begin{table}[htbp]
 \centering
-\caption{CON read.}
+\caption{CON read. readcon-core 0.18.0 reader-exchange session.}
 \label{tab:conread}
 \begin{tabular}{@{}lrl@{}}
 \toprule
@@ -745,7 +890,7 @@ eOn 3.6.0 & 1532.5 & 0.9797, 1.010, 1.039 \\
 
 \begin{table}[htbp]
 \centering
-\caption{Write of the 32-atom, \num{100000}-frame file.
+\caption{Supplement write of the 32-atom, \num{100000}-frame file, a separate session from the plain-text write in the main text (0.539~s here, 0.528~s there).
 For readcon and ASE the entry is the time in seconds, then the resident-set increase in mebibytes.
 The eOn streaming row is core 0, one warmup and six repeats.
 Its high-water mark is from the read.}
@@ -766,7 +911,8 @@ eOn, streaming & \multicolumn{2}{p{0.70\linewidth}}{9.71~s. Final RSS $+1.9$~MiB
 
 \section{chemfiles and OVITO}
 \label{sec:copper}
-Both readers open the copper extended XYZ files and do not open CON.
+Both readers, chemfiles 0.10.4 and OVITO 3.17.2, open the copper extended XYZ files and do not open CON.
+The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.11.0-rc1 still have no CON reader.
 Table~\ref{tab:copper} is the median read time in seconds.
 
 \begin{table}[htbp]
@@ -791,7 +937,39 @@ $10^{6}$ $\times$ 1 & 0.4545 & 0.1501 \\
 The extended XYZ session runs every reader in one process, with the arms interleaved.
 The harness is a Snakemake rule called from an asv class.
 The files larger than ten atoms are generated for the session and are not stored in the tree.
-No CPU governor is visible on the host.
+No CPU governor is visible on the Xeon.
+
+The reader-exchange figures below are readcon-core 0.18.0.
+Those arms return full frames, so the times differ from the column-walker session, which returns arrays.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/timing.pdf}
+\caption{readcon-core 0.18.0 full-frame session: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
+The scale is logarithmic.}
+\label{fig:timing}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
+\caption{readcon-core 0.18.0 full-frame session. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
+\label{fig:ratios}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/memory.pdf}
+\caption{readcon-core 0.18.0 full-frame session. Resident set added by the recorded read, after the import.}
+\label{fig:memory}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/roofline.pdf}
+\caption{The same three Python reads as the frame-rate figure, in frames per second.}
+\label{fig:roofline}
+\end{figure}
 
 \section{Short-decimal session}
 On the 160-frame file the medians are \SI{2.90}{\milli\second} for the Eisel--Lemire build, \SI{2.84}{\milli\second} for the short-decimal build, and \SI{8.83}{\milli\second} for the coordinate loop.
@@ -831,5 +1009,694 @@ Coordinate loop & 8.789, 8.827, 8.859 & 52.17, 52.30, 52.36 \\
 \raggedright
 
 \bibliographystyle{elsarticle-num}
+
+\section{Recorded timings}\label{sec:si-timings}
+The head-to-head is the column-walker session on the Intel Xeon Processor (family 6, model 207).
+Tables~\ref{tab:serial} and~\ref{tab:serial-xyz} give that session: one core, one warmup and six repeats.
+The column walker returns arrays.
+ASE's eon reader builds \texttt{Atoms} objects, so the like-for-like row is Table~\ref{tab:plugin}: readcon-con takes 1.72~s and ASE takes 10.7~s.
+Section~\ref{sec:host} times \texttt{eon.fileio.loadcons} on every frame at 1 thread.
+It times \texttt{Matter.con2matter} on the first frame only, and that row is not a ratio against a full read.
+The C++ row calls \texttt{readcon::read\_all\_frames} and then \texttt{con2matter} on every frame that call returns.
+ASE ase.io (format eon) is the independent CON reader timed beside \texttt{loadcons}, both on every frame at 1 thread.
+Each entry is the type-7 median, with the interquartile range in parentheses.
+On the \num{100000}-frame CON file Rust and Python both take \SI{0.179}{\second}.
+\texttt{rkr\_read\_all\_frames} builds a frame object for each frame and takes \SI{0.345}{\second}.
+ASE's eon reader takes \SI{10.8}{\second} and \texttt{loadcons}, eOn's own Python reader, takes \SI{10.3}{\second}.
+In the reader-exchange session of readcon-core 0.18.0, eOn's C++ client, which embeds readcon-core, reads that file in 0.85~s.
+The Rust resident set on that file is \SI{117}{\mebi\byte} above the file size.
+On the convel file Python takes \SI{0.216}{\second}, Rust \SI{0.241}{\second} and \texttt{rkr\_read\_all\_frames} \SI{0.430}{\second}.
+eOn \texttt{loadcons} takes \SI{11.0}{\second}.
+ASE's eon reader does not read convel.
+On one CON frame of $10^{6}$ atoms Python takes \SI{0.0453}{\second}, Rust \SI{0.0518}{\second} and \texttt{rkr\_read\_all\_frames} \SI{0.172}{\second}.
+ASE's eon reader takes \SI{1.59}{\second} and eOn \texttt{loadcons} takes \SI{3.15}{\second}.
+The Rust resident set on that frame is \SI{41.7}{\mebi\byte} above the file size.
+\texttt{rkr\_read\_positions} reads coordinates through the column walker.
+C \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on all three files (Table~\ref{tab:c-positions}).
+On the copper extended XYZ file readcon takes \SI{0.301}{\second}, chemfiles \SI{1.52}{\second}, OVITO \SI{3.32}{\second}, ASE \SI{9.97}{\second} and pymatgen \SI{23.6}{\second}.
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Serial reads on one core.
+The read path is the column walker.
+The C column is \texttt{rkr\_read\_all\_frames}, which builds a frame object for each frame.
+One warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
+A blank cell was not measured.}
+\label{tab:serial}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+File & Rust & Python & \texttt{rkr\_read\_all\_frames} & ASE eon & \texttt{loadcons} \\
+\midrule
+\num{100000} frames & 0.179 (0.0024) & 0.179 (0.0017) & 0.345 (0.074) & 10.8 (0.026) & 10.3 (0.20) \\
+convel & 0.241 (0.0017) & 0.216 (0.00087) & 0.430 (0.00055) & unsupported & 11.0 (0.14) \\
+$10^{6}$ atoms & 0.0518 (0.0012) & 0.0453 (0.00018) & 0.172 (0.0049) & 1.59 (0.096) & 3.15 (0.12) \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{Coordinate reads, C and Rust in one session.
+Core 0, one warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
+C calls \texttt{rkr\_read\_positions}.
+Rust calls \texttt{read\_positions}.
+The coordinates match.}
+\label{tab:c-positions}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+File & C & Rust \\
+\midrule
+\num{100000} frames, 32 atoms & 0.1791 (0.00116) & 0.1770 (0.00311) \\
+convel & 0.2246 (0.00346) & 0.2240 (0.00335) \\
+$10^{6}$ atoms & 0.05062 (0.000092) & 0.05056 (0.000442) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Serial read of \texttt{frames.xyz}, the copper extended XYZ file, on one core.
+pymatgen calls \texttt{XYZ.from\_file}.
+One warmup and six repeats.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
+\label{tab:serial-xyz}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+readcon & chemfiles & OVITO & ASE & pymatgen \\
+\midrule
+0.301 (0.0069) & 1.52 (0.0033) & 3.32 (0.043) & 9.97 (0.20) & 23.6 (0.42) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\input{figures/generated/sizes_table}
+
+\FloatBarrier \section{Measurements on the Xeon}\label{sec:host}
+We read one trajectory of 100000 frames of 32 copper atoms, and the extended XYZ and HDF5 files that carry the same atoms.
+Each sample is a fresh process, and each library is imported before the clock starts.
+Section~\ref{sec:compute} lists the hardware and the versions.
+Memory is the high-water mark after the read, minus the mark after the import.
+The serial CON, convel and copper extended XYZ reads are the one-core session of Section~\ref{sec:performance}.
+
+\begin{table}[tbp]
+\centering
+\caption{Protocol for the measurements on the Xeon.}
+\label{tab:protocol}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Repeats & six fresh processes \\
+Statistic & type-7 median \\
+CON readers & the CON file \\
+XYZ readers & the XYZ file \\
+HDF5 readers & the HDF5 file \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Results}\label{sec:results}
+The serial reads are in Section~\ref{sec:performance}.
+Writes use one pinned core, one warmup and six repeats, and the type-7 median.
+The resident set of a write is the increase above the loaded input, and the massif column is the matching heap increase.
+
+readcon writes the survey frame as CON and as convel.
+Rust takes \(4.11\times 10^{-4}\)~s and \(2.56\times 10^{-4}\)~s, and
+Python takes \(4.67\times 10^{-4}\)~s and \(5.68\times 10^{-4}\)~s.
+ASE's eon writer fails on a frame held in one component, and its reader stops at the velocity title.
+On the 100000-frame file the same two readcon writers and ASE
+\texttt{format='eon'} do write the CON geometry.
+The convel file still stops ASE on line 23 of a velocity title.
+eOn, pinned with \texttt{taskset -c 0}, writes that 32-atom file by streaming.
+One warmup and six repeats give a median of \SI{9.71}{\second}.
+The final resident set is \SI{1.9}{\mebi\byte} above the Matter, and the
+high-water mark of \SI{458}{\mebi\byte} is from the read.
+
+\begin{table}[tbp] \centering \footnotesize
+\caption{Plain-text write of the 32-atom, 100000-frame file, readcon-core 0.18.1.
+The resident and heap columns are the increase above the loaded input.}
+\label{tab:con-write}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Writer & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
+\midrule
+readcon Rust & CON & 0.528 & 0.0174 & 0.40 & 0.023 \\
+ASE \texttt{eon} & CON & 14.7 & 0.34 & 6.4 & 0.029 \\
+readcon Rust & convel & 1.05 & 0.250 & 0.40 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Python writes of the compressed trajectory and of the million-atom frame are in Table~\ref{tab:pywrite}.
+
+The survey frame written by ASE as extended XYZ spells the cell as
+\begin{quote}\ttfamily\footnotesize
+Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 13.96"
+\end{quote}
+and \texttt{pbc="T T F"}.
+The properties are species, pos, move\_mask, atom\_id, masses and momenta.
+readcon returns that cell and the momenta column.
+ASE \texttt{extxyz} returns periodicities true, true, false, the same
+three lengths, and velocities.
+The velocity of the fifth atom differs from the convel value in the
+last digits: the file has \(-0.004419216359135741\) and ASE returns
+\(-0.004419216337577659\).
+chemfiles 0.10.4, opened as XYZ because it has no \texttt{.extxyz}
+format, returns the three lengths and reports no velocities.
+Its cell shape is infinite.
+OVITO 3.17.2 returns the same periodicities and does not expose those
+momenta as velocities.
+On the copper-grid extended XYZ files, chemfiles 0.10.4 opened as XYZ
+and OVITO 3.17.2 both match the positions.
+On the million-atom copper-grid frame OVITO reads in 0.150~s and readcon in 0.287~s.
+That file is the copper grid of the extended XYZ session, not the column-walker extended XYZ file.
+On the 10000-frame file OVITO takes 0.657~s and readcon 0.294~s.
+The massif peaks on that file are 54.0~MiB for chemfiles 0.10.4 and 60.9~MiB for OVITO 3.17.2.
+
+\subsection{Same-file and nearest-native panel}\label{sec:h2h} The
+same-file comparison reads one con file.
+The readers are readcon from C, Fortran, and Python, the upstream eon
+client, eon Python, and the Atomic Simulation Environment (ASE) with the
+eon format.
+The nearest-native panel reads different files that carry the same atoms
+and the same cell.
+NumPy reads an npy coordinate array, which has no cell.
+ASE and chemfiles read extended xyz.
+OVITO reads extended xyz.
+pymatgen reads a POSCAR.
+MDAnalysis reads a protein data bank file with a crystal record.
+That panel is separate from the con table.
+A row passes only when the atom count, the cell, and the coordinates
+match.
+NumPy has no cell, so that row fails the cell check.
+
+The extended XYZ head-to-head uses one copper grid for every arm.
+The files are 10 atoms in 1 frame and in 8 frames, 1000 atoms in 1
+frame, 100 atoms in 100 frames, \(10^{6}\) atoms in 1 frame, and 100
+atoms in 10000 frames.
+The run is pinned with \texttt{taskset -c 0}, with one thread.
+One warmup call is excluded.
+The six repeats are serial.
+A time in Table~\ref{tab:extxyz-h2h} and Table~\ref{tab:extxyz-h2h-write}
+is the type 7 median, and the spread is the type 7 interquartile range.
+Before the clock, every arm is compared with the grid on species,
+positions, masses, forces and the cell.
+Those fields agree for every reader that finishes.
+The largest absolute difference is 0.
+readcon writes species, positions, the lattice and every per-atom
+column, including forces.
+The Python writer formats the caller's numeric columns in place.
+On the million-atom file the Rust writer takes 0.487~s and the Python
+writer takes 0.442~s.
+On the 10000-frame file those medians are 0.431 and 0.411~s.
+A write's RSS and massif are measured in a fresh process after the
+input is loaded.
+RSS is the resident increase of the write.
+Massif is the heap increase above that post-load snapshot.
+For Rust those increases are 26.0 and 61.0~MiB on the million-atom
+file, and 24.4 and 61.0~MiB on the 10000-frame file.
+For Python they are 0.3 and 84.3~MiB, then 24.3 and 84.3~MiB.
+A reread matches.
+ASE \texttt{extxyz}, ASE \texttt{cextxyz} and extxyz 0.4.6 also write
+every file and the reread matches.
+On the million-atom file those three writers take 3.74~s, 0.948~s and
+0.906~s, and on the 10000-frame file 4.26~s, 1.47~s and 1.19~s.
+Their heap increases on the million-atom file are 115.4, 171.6 and
+163.9~MiB, and on the 10000-frame file 0.025, 0.9 and 0.9~MiB.
+extxyz-ng 0.0.2 agrees on the 10-atom files.
+It reads a 230-atom frame of 8168 bytes and rejects a 231-atom frame
+of 8203 bytes, so it does not read the medium or large files.
+On the million-atom file ASE \texttt{extxyz} takes 1.91~s, ASE
+\texttt{cextxyz} takes 0.275~s, extxyz 0.4.6 takes 0.261~s, the
+readcon Python reader takes 0.419~s, and the readcon Rust reader
+takes 0.287~s.
+The massif heap peaks on that file are 211.5, 189.1, 153.7, 224.3 and
+210.9~MiB.
+On the 10000-frame file the same five medians are 3.41, 0.937,
+0.740, 0.454 and 0.294~s.
+extxyz-ng 0.0.2 writes the 10-atom frame in \(1.03\times 10^{-4}\)~s.
+Its 8-frame write finishes, and the file is then 11528 bytes, which
+that reader rejects.
+\texttt{write\_frames} rejects a Python iterator of frames, so the
+timed write calls \texttt{write\_frame} once per frame.
+\begin{table}[tbp] \centering \footnotesize
+\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
+\label{tab:extxyz-h2h}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Reader & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
+\midrule
+readcon Rust & \(10^{6}\) atoms & 0.287 & 0.0182 & 244.3 & 210.9 \\
+readcon Rust & 10000 frames & 0.294 & 0.00402 & 243.6 & 210.2 \\
+readcon Python & \(10^{6}\) atoms & 0.419 & 0.0382 & 385.6 & 224.3 \\
+readcon Python & 10000 frames & 0.454 & 0.0145 & 403.4 & 218.3 \\
+ASE \texttt{extxyz} & \(10^{6}\) atoms & 1.91 & 0.219 & 654.3 & 211.5 \\
+ASE \texttt{extxyz} & 10000 frames & 3.41 & 0.0622 & 320.8 & 219.0 \\
+ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.275 & 0.0294 & 249.8 & 189.1 \\
+ASE \texttt{cextxyz} & 10000 frames & 0.937 & 0.0685 & 237.9 & 155.1 \\
+\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 0.261 & 0.0257 & 226.7 & 153.7 \\
+\texttt{extxyz} 0.4.6 & 10000 frames & 0.740 & 0.0240 & 251.0 & 157.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp] \centering \footnotesize
+\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range, from the same session as Table~\ref{tab:extxyz-h2h}. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
+\label{tab:extxyz-h2h-write}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Writer & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
+\midrule
+readcon Rust & \(10^{6}\) atoms & 0.487 & 0.00855 & 26.0 & 61.0 \\
+readcon Rust & 10000 frames & 0.431 & 0.00806 & 24.4 & 61.0 \\
+readcon Python & \(10^{6}\) atoms & 0.442 & 0.00938 & 0.3 & 84.3 \\
+readcon Python & 10000 frames & 0.411 & 0.00439 & 24.3 & 84.3 \\
+ASE \texttt{extxyz} & \(10^{6}\) atoms & 3.74 & 0.0247 & 107.9 & 115.4 \\
+ASE \texttt{extxyz} & 10000 frames & 4.26 & 0.0749 & 0.2 & 0.025 \\
+ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.948 & 0.0169 & 239.7 & 171.6 \\
+ASE \texttt{cextxyz} & 10000 frames & 1.47 & 0.0162 & 2.2 & 0.9 \\
+\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 0.906 & 0.0126 & 271.3 & 163.9 \\
+\texttt{extxyz} 0.4.6 & 10000 frames & 1.19 & 0.0167 & 2.3 & 0.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The times for XYZ, HDF5 and the mapped binary coordinate file are
+context for choosing a format, in Section~\ref*{sec:supp-timing}.
+h5py reads the HDF5 dataset in \SI{0.59}{\second}.
+The mapped binary file reads the frames in \SI{0.0076}{\second}.
+
+\input{figures/generated/host_table}
+
+readcon-db ingests 40 frames in \SI{0.0047}{\second} and the ASE database in \SI{0.072}{\second}.
+Both stores keep all 40 frames.
+
+\input{figures/generated/mpi_macros}
+
+We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4
+and 8 ranks, in shared mode and in scatter mode, \mpiRepeats{} launches
+at each count.
+\mpiSharedLine.
+\mpiScatterLine.
+\mpiCompareLine.
+\mpiScatterIqrLine.
+Rank 0 reads the file once to build the index, and every other rank
+reads only its own byte range.
+In scatter mode the waiting ranks sleep on a file lock, which needs a
+filesystem with coherent flock across the ranks, and where flock is not
+coherent they fall back to the blocking broadcast.
+\input{figures/generated/mpi_host_table}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf}
+\caption{Distributed read on the Xeon. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
+\label{fig:mpi-host} \end{figure}
+
+\FloatBarrier \section{Stored campaigns}\label{sec:stored}
+The figures record the database and MPI campaigns on the Intel Xeon Processor.
+On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and 33.1~MB/s.
+ASE's database ingests at 199 frames/s and 0.216~MB/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s and 1.68~MB/s.
+A separate 40-frame ingest takes 0.0047~s in readcon-db and 0.072~s in the ASE database.
+The composition query on 1000 frames has cold medians of 0.00131~s for readcon-db, 0.0417~s for the ASE database and 0.0212~s for a directory of CON files, and warm medians of \(2.32\times 10^{-5}\)~s, 0.0321~s and 0.0139~s.
+The deduplication record stores 24000 frames and 7 unique frame hashes.
+One CON frame is 3826 bytes: preamble 280, coordinates 1429, mask 112, identifier 92, velocity header 30, velocity numbers 1860 and time unit 23.
+Of the four fidelity fields, CON 3.1 keeps the mask, the identifier and the binary64 coordinates exact and carries no time unit; the velocity file keeps all four exact; six decimals and extended XYZ keep the mask and the identifier and approximate the coordinates; the ASE trajectory and JSON keep the mask and the coordinates and lose the identifier; POSCAR, XYZ and CIF lose the mask and the identifier and approximate the coordinates.
+At eight ranks the warm strong-scaling speedups are 6.0\(\times\) for the shared read and 5.0\(\times\) for the scatter read, 5.9\(\times\) for the MPI-IO write and 4.4\(\times\) for the gather write, and 1.9\(\times\) for the one-writer ingest and 1.7\(\times\) for the four-shard ingest (Table~\ref{tab:mpi-strong}).
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf}
+\caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.18.0 full-frame session.}
+\label{fig:fairness} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.72\textwidth]{figures/generated/layers.pdf}
+\caption{Frame rate of the full, field and coordinate Python reads at one and eight threads.
+This is the velocity-plus-every-field Python read, readcon-core 0.18.0, which returns more than the column-walker arrays, so the times are longer than 0.179~s.}
+\label{fig:layers} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
+\caption{Image energies with the adatom height held and freed.}
+\label{fig:asemask} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_strong.pdf}
+\caption{MPI read speedup against rank count.}
+\label{fig:mpi-strong} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/mpi_weak.pdf}
+\caption{MPI ingest time against rank count.}
+\label{fig:mpi-weak} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
+\caption{Ingest rate.}
+\label{fig:db-throughput} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_bandwidth.pdf}
+\caption{Ingest bandwidth.}
+\label{fig:db-bandwidth} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/db_query_latency.pdf}
+\caption{Composition-query time.}
+\label{fig:db-query} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/db_disk_footprint.pdf}
+\caption{Allocated size of the stored 1000-frame copies.}
+\label{fig:db-disk} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.85\textwidth]{figures/generated/db_dedup.pdf}
+\caption{Stored frames against unique frame hashes in the deduplication record.}
+\label{fig:db-dedup} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/frame_anatomy.pdf}
+\caption{Byte width of each span of one stored CON frame.}
+\label{fig:supp-anatomy} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/error_classes.pdf}
+\caption{One bar for each illegal file in the stored error record.}
+\label{fig:supp-errors} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.92\textwidth]{figures/generated/roundtrip_fidelity.pdf}
+\caption{Count of exact mask, identifier, time unit and binary64 fields after a write and a read.}
+\label{fig:supp-fidelity} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/restart_diff.pdf}
+\caption{Largest absolute component of the minimum-image displacement, in angstrom, along each stored resume.}
+\label{fig:supp-restart} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=0.86\textwidth]{figures/generated/dedup_graph.pdf}
+\caption{Hashed images in each stored campaign run.}
+\label{fig:supp-dedup} \end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf}
+\caption{The five stored EMT bands, as energy above the first image.}
+\label{fig:supp-neb} \end{figure}
+
+\section{Readers on one core}
+\label{sec:timings}
+Timings use one core (Section~\ref{sec:compute} lists the hardware).
+Six repeats follow one warmup, and the median is the type-7 median.
+The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper}.
+
+\subsection{Extended XYZ}
+\label{sec:xyz}
+The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 atoms.
+Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
+On the single large frame, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}.
+The Rust reader takes \SI{0.287}{\second} and the Python binding \SI{0.419}{\second}.
+cextxyz and extxyz 0.4.6 are faster than readcon on that frame.
+ASE's own extxyz reader takes \SI{1.91}{\second}.
+On the \num{10000}-frame file the order changes.
+The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/timings.pdf}
+\caption{Median extended XYZ read on one core.
+The whisker runs from the first quartile to the third.
+On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.}
+\label{fig:timings}
+\end{figure*}
+
+\begin{table}[tbp]
+\centering
+\caption{Median extended XYZ read time in seconds.}
+\label{tab:xyzread}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Reader & $10^{6}$ atoms & \num{10000} frames \\
+\midrule
+readcon, Rust & 0.287 & 0.294 \\
+readcon, Python & 0.419 & 0.454 \\
+ASE extxyz & 1.91 & 3.41 \\
+ASE cextxyz & 0.275 & 0.937 \\
+extxyz 0.4.6 & 0.261 & 0.740 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The writes of the same two files are in Table~\ref{tab:xyzwrite}.
+On the million-atom frame the Python binding writes in \SI{0.442}{\second}, faster than the Rust writer at \SI{0.487}{\second}.
+extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's extxyz writer \SI{3.74}{\second}.
+On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
+The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
+
+\begin{table}[tbp]
+\centering
+\caption{Median extended XYZ write time in seconds.}
+\label{tab:xyzwrite}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Writer & $10^{6}$ atoms & \num{10000} frames \\
+\midrule
+readcon, Rust & 0.487 & 0.431 \\
+readcon, Python & 0.442 & 0.411 \\
+ASE extxyz & 3.74 & 4.26 \\
+ASE cextxyz & 0.948 & 1.47 \\
+extxyz 0.4.6 & 0.906 & 1.19 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+chemfiles 0.10.4 reads the same two copper files in \SI{0.455}{\second} and \SI{0.567}{\second}.
+OVITO 3.17.2 reads them in \SI{0.150}{\second} and \SI{0.657}{\second}.
+On the million-atom frame OVITO is the fastest of these readers.
+
+\subsection{Trajectory XYZ}
+\label{sec:trajxyz}
+Table~\ref{tab:trajxyz} and Figure~\ref{fig:trajxyz} are plain XYZ trajectories of copper: one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.
+The Rust reader is fastest in every column, at \SI{0.259}{\second}, \SI{0.276}{\second} and \SI{0.920}{\second}.
+The Python binding takes \SI{0.293}{\second}, \SI{0.282}{\second} and \SI{1.108}{\second}, with interquartile ranges \SI{0.0055}{\second}, \SI{0.0062}{\second} and \SI{0.0030}{\second}.
+It is second to the Rust reader in every column.
+On the \num{100000}-frame file the Rust reader takes \SI{0.920}{\second} and the Python binding \SI{1.108}{\second}.
+A profile of that Python read shows no NumPy copies: \texttt{from\_owned\_array} and \texttt{memcpy} are 0.00\% of the samples.
+The remaining time is the newline and token scan the Rust reader also pays.
+MDAnalysis takes \SI{1.869}{\second} there \cite{michaudAgrawalMDAnalysisToolkit2011}, chemfiles 0.10.4 takes \SI{2.60}{\second}, chemfiles 0.11.0-rc1 takes \SI{2.24}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
+Every interquartile range is under 5 percent of its median, except chemfiles 0.10.4 on the \num{100000}-frame file, where the range is \SI{0.28}{\second}.
+
+\begin{table}[tbp]
+\centering
+\caption{Median XYZ read time in seconds.
+The Python row gives the interquartile range in parentheses.
+Columns are one frame of $10^{6}$ atoms, \num{10000} frames of 100 atoms, and \num{100000} frames of 32 atoms.}
+\label{tab:trajxyz}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & $10^{6}$ & \num{10000} & \num{100000} \\
+\midrule
+readcon, Rust & 0.259 & 0.276 & 0.920 \\
+readcon, Python & 0.293 (0.0055) & 0.282 (0.0062) & 1.108 (0.0030) \\
+ASE \texttt{iread} & 1.74 & 3.60 & 25.6 \\
+chemfiles 0.10.4 & 0.364 & 0.490 & 2.60 \\
+chemfiles 0.11.0-rc1 & 0.359 & 0.412 & 2.24 \\
+MDAnalysis & 2.09 & 0.520 & 1.869 \\
+MDTraj & 0.790 & 0.781 & 2.64 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/trajxyz.pdf}
+\caption{Median XYZ read on one core.
+The axis is logarithmic.
+The Rust reader is fastest on each file.
+The Python binding is second on each file.}
+\label{fig:trajxyz}
+\end{figure*}
+
+\subsection{CON}
+\label{sec:conread}
+Table~\ref{tab:convel-one} is one convel frame, the survey frame, read on one core.
+One warmup precedes six repeats, and the median is the type-7 median.
+The Python binding takes $\num{2.87e-5}$\,s and \SI{34}{\mebi\byte}.
+The Rust reader takes $\num{1.83e-5}$\,s and the C binding $\num{1.66e-5}$\,s.
+eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the current eOn client $\num{2.62e-5}$\,s and eOn 3.6.0 $\num{2.32e-5}$\,s.
+ASE's eon reader stops at line 23, the velocity title.
+
+\begin{table}[tbp]
+\centering
+\caption{Median read of one convel frame, in seconds.
+The Python resident set is \SI{34}{\mebi\byte}.
+ASE stops at line 23.}
+\label{tab:convel-one}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Reader & Median \\
+\midrule
+readcon, Python & \num{2.87e-5} \\
+readcon, Rust & \num{1.83e-5} \\
+readcon, C & \num{1.66e-5} \\
+eOn \texttt{loadcons} & \num{3.15e-4} \\
+eOn, current & \num{2.62e-5} \\
+eOn 3.6.0 & \num{2.32e-5} \\
+ASE eon & stops at line 23 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:conread} is the \num{100000}-frame CON read of Table~\ref{tab:serial}.
+chemfiles 0.10.4 and OVITO 3.17.2 do not open a file with the \texttt{.con} suffix.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/generated/conread.pdf}
+\caption{Median read of \num{100000} CON frames of 32 atoms.
+The whisker is the interquartile range.}
+\label{fig:conread}
+\end{figure}
+
+A write of that coordinate file takes \SI{0.528}{\second} in Rust in the readcon-core 0.18.1 session of Table~\ref{tab:con-write}, and \SI{0.539}{\second} in the separate supplement session of Table~\ref{tab:conwrite}.
+The 0.18.1 session adds \SI{0.40}{\mebi\byte} to the resident set in Rust, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
+The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
+eOn streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 0.
+Table~\ref{tab:conwrite} gives that row and the final resident set above the Matter.
+ASE's eon writer fails on a frame held in one component, and its reader stops at the velocity title.
+
+Table~\ref{tab:plugin} compares the ASE eon format with the readcon-con ASE plugin on the same \num{100000}-frame coordinate file.
+The readcon-con read takes \SI{1.72}{\second}.
+Of that time, the parse is \SI{0.432}{\second} and building the ASE \texttt{Atoms} objects is \SI{1.07}{\second}.
+The ASE eon read takes \SI{10.7}{\second}.
+The readcon-con write takes \SI{1.15}{\second} and the ASE eon write takes \SI{13.9}{\second}.
+
+\begin{table}[tbp]
+\centering
+\caption{ASE plugins on the \num{100000}-frame CON file.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
+Six repeats follow one warmup, on one core.}
+\label{tab:plugin}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Reader & Read & Write \\
+\midrule
+ASE eon & 10.7 (0.226) & 13.9 (0.178) \\
+readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A thermal copper trajectory, 2048 atoms and 1200 frames at \SI{306}{\kelvin} with the Heinz 12-6 potential, is the compression check.
+Shuffle followed by zstd is 2.33 times smaller than the text, and about the same size as gzip or zstd of that text.
+It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
+Table~\ref{tab:gzip} is the compressed read and the gzip write, again six repeats after one warmup on one core.
+The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
+ASE's eon reader takes \SI{10.6}{\second}.
+Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
+On a gzip file of one frame of $10^{6}$ atoms the Rust reader takes \SI{0.100}{\second} and ASE's eon reader takes \SI{1.47}{\second}.
+ASE's xyz reader takes \SI{127}{\second} on that file and returns cell lengths of zero.
+The Rust writer emits the \num{100000}-frame file as gzip in \SI{0.561}{\second}.
+ASE's eon writer takes \SI{14.2}{\second}.
+
+\begin{table}[tbp]
+\centering
+\caption{Median time in seconds for gzip CON.
+The first two columns are reads.
+The last column is the write of the \num{100000}-frame file.
+A blank cell was not part of this comparison.}
+\label{tab:gzip}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
+\midrule
+readcon, Rust & 0.412 & 0.100 & 0.561 \\
+readcon, Python & 0.439 & & \\
+ASE eon & 10.6 & 1.47 & 14.2 \\
+gzip, then plain read & 0.643 & & \\
+ASE xyz & & 127 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes.
+Each row is a type-7 median of six repeats after one warmup, on one core.
+The resident set and the massif heap are the increase above the loaded input.
+The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
+The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
+The gzip write of one frame of $10^{6}$ atoms takes \SI{0.704}{\second}, \SI{39.0}{\mebi\byte} and \SI{32.3}{\mebi\byte}.
+The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
+The heap of that zstd write matches the Rust writer.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Python compressed writes.
+Time is the type-7 median in seconds.
+RSS and massif are the increase above the loaded input, in mebibytes.}
+\label{tab:pywrite}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+File & Time (s) & RSS & Massif \\
+\midrule
+trajectory gzip & 0.560 & 0.73 & 0.36 \\
+trajectory zstd & 0.467 & 3.47 & 3.55 \\
+$10^{6}$ atoms, gzip & 0.704 & 39.0 & 32.3 \\
+$10^{6}$ atoms, zstd & 0.198 & 39.0 & 35.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+readcon-db commits every 64 frames.
+It appends the same trajectory in \SI{6.25}{\second}, with a resident set of \SI{34.7}{\mebi\byte} and a heap of \SI{5.2}{\mebi\byte}.
+One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set of \SI{58.9}{\mebi\byte} and a heap of \SI{7.19}{\mebi\byte}.
+The coordinates match.
+ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{readcon-db on one core.
+Time is the type-7 median in seconds.
+RSS and massif are the increase above the loaded input, in mebibytes.
+The ASE rows are the same thousand random-frame reads.}
+\label{tab:rcdb}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Operation & Time (s) & RSS & Massif \\
+\midrule
+append & 6.25 & 34.7 & 5.2 \\
+1000 random-frame reads & 0.0242 & 58.9 & 7.19 \\
+ASE database, 1000 reads & 0.297 & & \\
+ASE trajectory, 1000 reads & 0.047 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/pywrite.pdf}
+\caption{Left: Python compressed-write medians.
+Right: one thousand random-frame reads.
+Both axes are linear and start at zero.}
+\label{fig:pywrite}
+\end{figure*}
+
+\subsection{The short decimal}
+\label{sec:fast}
+Short decimals take Clinger's exact path; the rest use Eisel--Lemire.
+On the two larger files the short path is 1.02 and 1.05 times the Eisel--Lemire build, and 3.1 to 3.4 times the eOn coordinate loop.
+On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire build 2.90~ms and the eOn loop 8.83~ms; on the 600-frame file, 15.5, 16.3 and 52.3~ms (Figure~\ref*{fig:fast}).
+
+
+
 
 \bibliography{rg_main} \end{document}

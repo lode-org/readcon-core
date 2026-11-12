@@ -1,0 +1,131 @@
+\section{A fixed atom index is part of the physics}\label{sec:identity}
+A rare-event method compares two geometries atom by atom.
+The path, the tangent, the displacement, the Hessian and the rate are defined only when atom \(i\) in image A is atom \(i\) in image B.
+Write the \(3N\) Cartesian coordinates of an image, in one fixed order, as the vector \(R\).
+The improved NEB tangent at image \(i\) is built from the forward and backward differences
+\begin{equation}
+\label{eq:tangent}
+\tau_i^{+}=R_{i+1}-R_i,\qquad \tau_i^{-}=R_i-R_{i-1},
+\end{equation}
+and the spring force lies along that tangent
+\cite{jonssonNudgedElasticBand1998,henkelmanImprovedTangentEstimate2000},
+\begin{equation}
+\label{eq:spring}
+F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
+\end{equation}
+A permutation matrix \(\Pi\) applied to one image replaces \(R\) by \(\Pi R\).
+The differences in Eq.~\eqref{eq:tangent} then connect different atoms, and the spring in Eq.~\eqref{eq:spring} pulls along that wrong chord.
+The Cartesian RMSD between reactant and product has the same dependence,
+\begin{equation}
+\label{eq:rmsd}
+\mathrm{RMSD}^{2}(R^{\mathrm{R}},R^{\mathrm{P}})=\frac{1}{N}\sum_{a=1}^{N}\big|r_a^{\mathrm{R}}-r_a^{\mathrm{P}}\big|^{2}.
+\end{equation}
+The sum is a distance between matched atoms.
+The permutation-invariant distance minimises Eq.~\eqref{eq:rmsd} over rotations and over the \(M_1!M_2!\cdots\) maps of identical elements
+\cite{sadeghiMetricsConfigurationSpace2013,deFindingReactionPathways2019,goswamiTwodimensionalRmsdProjections2026}.
+Two-sided searches need that map before the first image is placed
+\cite{deFindingReactionPathways2019,goswamiReproducibleOrchestrationBest2026}.
+The image-dependent pair potential builds its target from the distances \(d_{ab}\) of a chosen map and then runs NEB on that objective
+\cite{smidstrupImprovedInitialGuess2014}.
+A wrong map asks the band to turn the wrong pairs of atoms into neighbours.
+Harmonic transition-state theory has the same index.
+The Vineyard prefactor, Eq.~\eqref{eq:vineyard}, is a ratio of frequencies of the free Cartesian modes.
+Those modes are eigenvectors of the mass-weighted Hessian in the order of \(R\).
+A permutation reorders the Hessian, and a mask that frees one more component changes which eigenvalues enter the products.
+
+A file that stores coordinates and element symbols, and no atom index, leaves the map to the next program.
+An XYZ written and read through a SMILES canonicalisation, an Open Babel conversion or an RDKit molecule rebuild can return the atoms in a new order.
+A POSCAR groups atoms by the element block.
+A LAMMPS dump written with atoms sorted by type does the same.
+In each case Eq.~\eqref{eq:tangent} is evaluated on a vector whose slots no longer name the atoms of the previous image.
+The band still returns a number.
+That number is the barrier of a different path.
+
+\section{The Claisen rearrangement}\label{sec:claisen}
+Allyl vinyl ether rearranges to 4-pentenal by a [3,3] sigmatropic shift.
+The reactant and the product contain the same atoms.
+The reaction path is the motion that breaks one C--O bond and forms one C--C bond through a six-membered cyclic saddle.
+Label the atoms once, in the reactant.
+The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
+\begin{equation}
+\label{eq:lerp}
+R(s)=(1-s)\,R^{\mathrm{R}}+s\,R^{\mathrm{P}},\qquad s\in[0,1].
+\end{equation}
+The path length of Eq.~\eqref{eq:lerp} is \(|R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+A second labelling \(\Pi\) of the product, the order a canonical SMILES or an element-sorted file assigns, replaces the length by \(|\Pi R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+Identical atoms then travel across the molecule, the six-membered cycle is absent from the interpolated images, and the NEB force of Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring} follows that crossing.
+
+\noindent\textbf{Placeholder for the HLEBot Claisen run.}
+The barrier, the path length and the image energies of the identity map and of the renumbered product are not in this draft.
+They will be inserted in this section when that run is in the record.
+No value is stated here.
+
+\section{The same atom in the next frame}\label{sec:connectivity}
+A trajectory is a sequence of graphs on one vertex set.
+With a stable index the bond set at frame \(t\) is a set of pairs \((a,b)\) drawn from that vertex set, and the rings, the cages and the hydrogen-bond network are subgraphs of the same vertices
+\cite{goswamiDseamsDeferredStructural2020}.
+Frame \(t+1\) adds or removes edges.
+The identity of a ring is the identity of its vertices.
+A reader that reorders atoms replaces that comparison with a graph-isomorphism problem on every frame.
+d-SEAMS evaluates the ring and cage census on a coordinate set
+\cite{goswamiDseamsDeferredStructural2020}.
+readcon-db stores the topology key that census returns, so two frames that share a bonded graph share a key after a relaxation or a permutation of the file order (Section~\ref{sec:ecosystem}).
+
+\noindent\textbf{Placeholder for the d-SEAMS record.}
+The frame-to-frame ring and cage counts, and the topology keys of that trajectory, are not in this draft.
+They will be inserted in this section when that record arrives.
+No value is stated here.
+
+\section{The fields the rate actually reads}\label{sec:fields}
+CON 3.1 stores, on each frame, the coordinates, the cell, the periodic flags, a three-bit mask, an integer identifier, the mass, and, from minor 1, the velocities with a declared time unit.
+Each field is an input of one of the equations above.
+
+The identifier is the index \(a\) in Eq.~\eqref{eq:rmsd} and the slot of \(R\) in Eq.~\eqref{eq:tangent}.
+It is written on the coordinate row, so a later file that groups rows by element still names the same atom.
+The mask deletes Cartesian components from the free set \(n\) in Eq.~\eqref{eq:vineyard}.
+A constrained dimer or a constrained band holds those components fixed.
+On the Pt(100) adatom the held height selects one saddle.
+Dropping the hold selects another, \(0.68\,\mathrm{eV}\) with a prefactor 37 times larger (Section~\ref{sec:prefactor}).
+The mass enters the kinetic energy and the mass-weighted Hessian.
+The Lagrangian of the nuclei is
+\begin{equation}
+\label{eq:lagrangian}
+L=\sum_{a=1}^{N}\tfrac12 m_a|\dot r_a|^{2}-V(R).
+\end{equation}
+A ring-polymer instanton discretises a periodic path in imaginary time, and the action weights each bead by the same masses
+\cite{richardsonRingpolymerInstanton2018}.
+A file that omits \(m_a\) forces the dynamics program to invent one.
+The cell of that frame defines the minimum image inside \(|R_{i+1}-R_i|\) when the boundary conditions are periodic.
+A velocity \(v_a\) is the momentum in Eq.~\eqref{eq:lagrangian} divided by \(m_a\).
+Read in the wrong time unit, the same digits scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
+
+Section~\ref{sec:cases} measures these fields on one restarted band.
+A CON 3.1 round trip returns the uninterrupted barrier.
+A file that moves a coordinate or drops the mask returns a different one.
+
+\section{The readcon tools}\label{sec:ecosystem}
+readcon-core is the reader and writer of one frame.
+It parses CON and convel, checks the grammar, and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
+C, C++, Fortran, Julia and Python call that parser.
+Algorithm~\ref{alg:parser} is the path reader.
+The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\_positions}\) both return that column, and the coordinates match.
+
+readcon-db stores a campaign as CON text in an embedded key-value store, with secondary indexes on atom count, composition, energy, maximum force and the presence of forces or velocities.
+A query intersects those indexes and then decodes the selected frames with readcon-core.
+The stored bytes are the CON text.
+An xxHash3-128 of that text is the exact identity of a frame.
+A coarser identity is the topology key: d-SEAMS fingerprints the bonded graph, and readcon-db indexes that key so a later saddle with the same rings is found without decoding the corpus.
+This is the role of a kinetic database that stores a process by the local environment of the atoms that move
+\cite{terrellDatabaseAtomisticReaction2012,xuAdaptiveKineticMonte2008}.
+The corpus is the CON file.
+The index is the lookup.
+
+readcon-ops compares two frames and removes rigid motion.
+It does not open a file.
+\(\texttt{identical}\) matches atoms by index, so a second atom cannot claim a site already taken, which is Eq.~\eqref{eq:rmsd} with the stored order.
+\(\texttt{internal\_motion}\) removes a rigid rotation by the Kabsch fit, with the masses as optional weights, and on a periodic frame removes only the mean minimum-image translation.
+\(\texttt{spacegroup}\) calls spglib.
+\(\texttt{rotational\_match}\) calls the iterative rotations and assignments alignment when that binding is present
+\cite{goswamiReproducibleOrchestrationBest2026}.
+The three programs split the work as parse, store and compare.
+The index \(a\) is the same integer in all three.

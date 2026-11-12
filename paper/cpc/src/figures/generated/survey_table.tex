@@ -10,10 +10,7 @@ Declared means that the reader took the velocity unit from the file and that the
 Label means that the identifier came back inside the CIF site label, which CIF defines as a unique site name.
 The H5MD file with a private mask dataset has the H5MD root group and version and keeps the mask in a dataset that H5MD does not define.
 Shift is the largest coordinate change when a coordinate differs in any bit, with the magnitude of that coordinate and the change in units in the last place (ulp).
-Periodicity is the flags of the slab, periodic in \(x\) and \(y\) and open in \(z\), after the read, and version is the version the written file carries.
-``Error'' rows failed before any field was compared.
-\textsuperscript{a}readcon to ase: \texttt{RuntimeError: boom} at \texttt{demo.py:3}.
-\textsuperscript{b}ase to readcon: stopped.}
+Periodicity is the flags of the slab, periodic in \(x\) and \(y\) and open in \(z\), after the read, and version is the version the written file carries.}
 \label{tab:survey}
 \setlength{\tabcolsep}{2.5pt}
 \resizebox{\textwidth}{!}{%
@@ -21,8 +18,21 @@ Periodicity is the flags of the slab, periodic in \(x\) and \(y\) and open in \(
 \toprule
 Format & Writer & Reader & Mask & Identifier & Time unit & Shift (\AA) & at (\AA), ulp & Periodicity & Version \\
 \midrule
-CON & readcon & ase\textsuperscript{a} & error & kept & kept & exact & -- & kept & none \\
-XYZ & ase\textsuperscript{b} & readcon & error & kept & kept & exact & -- & kept & none \\
+CON 3.1 & readcon-core & readcon-core & kept & kept & declared & exact & -- & kept & 3.1 \\
+extended XYZ & ASE & ASE & convention & convention & no unit & \num{4.7e-9} & 7.96, \num{5.3e6} & kept & none \\
+extended XYZ & ASE & chemfiles & convention & convention & no unit & \num{4.7e-9} & 7.96, \num{5.3e6} & kept & none \\
+extended XYZ & ASE & OVITO & convention & convention & no unit & \num{4.7e-9} & 7.96, \num{5.3e6} & kept & none \\
+extended XYZ & ASE & MDAnalysis & lost & lost & lost & \num{2.2e-7} & 7.96, \num{2.4e8} & not returned & none \\
+extended XYZ & chemfiles & chemfiles & convention & convention & lost & \num{4.9e-6} & 7.96, \num{5.5e9} & kept & none \\
+extended XYZ & chemfiles & ASE & convention & convention & lost & \num{4.9e-6} & 7.96, \num{5.5e9} & kept & none \\
+extended XYZ & OVITO & OVITO & convention & convention & no unit & \num{8.9e-16} & 6.00, 1 & all periodic & none \\
+extended XYZ & OVITO & ASE & convention & convention & no unit & exact & -- & all periodic & none \\
+ASE trajectory & ASE & ASE & convention & convention & no unit & exact & -- & convention & ULM 3, v1 \\
+POSCAR & ASE, FixScaled & ASE & kept & lost & no unit & \num{4.5e-17} & \num{6.1e-4}, 411 & all periodic & none \\
+H5MD & MDAnalysis & MDAnalysis & lost & lost & declared & \num{2.2e-7} & 7.96, \num{2.4e8} & not returned & 1.1 \\
+H5MD, private mask dataset & h5py & h5py & convention & kept & declared & exact & -- & kept & 1.1 \\
+XYZ & Open Babel & Open Babel & lost & lost & lost & \num{4.9e-6} & 7.96, \num{5.5e9} & not returned & none \\
+CIF & Open Babel & Open Babel & lost & label & lost & \num{6.7e-5} & 7.96, \num{7.6e10} & all periodic & none \\
 \bottomrule
 \end{tabular}}
 \end{table}

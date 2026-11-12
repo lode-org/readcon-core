@@ -377,11 +377,11 @@ XYZ_READ = {
 
 # CON read of 100000 frames of 32 atoms: median, q25, q75, seconds.
 CON_READ = [
-    ("Rust", 0.301, 0.301 - 0.0350 / 2, 0.301 + 0.0350 / 2, READCON),
-    ("Python", 0.484, 0.484 - 0.0130 / 2, 0.484 + 0.0130 / 2, GREEN),
-    ("C", 0.326, 0.326 - 0.0223 / 2, 0.326 + 0.0223 / 2, TEAL),
-    ("ASE eon", 10.669, 10.669 - 0.0591 / 2, 10.669 + 0.0591 / 2, PINK),
-    ("loadcons", 10.128, 10.128 - 0.2189 / 2, 10.128 + 0.2189 / 2, ORANGE),
+    ("Rust", 0.179, 0.179 - 0.0024 / 2, 0.179 + 0.0024 / 2, READCON),
+    ("Python", 0.179, 0.179 - 0.0017 / 2, 0.179 + 0.0017 / 2, GREEN),
+    ("rkr_read_all_frames", 0.345, 0.345 - 0.074 / 2, 0.345 + 0.074 / 2, TEAL),
+    ("ASE eon", 10.8, 10.8 - 0.026 / 2, 10.8 + 0.026 / 2, PINK),
+    ("loadcons", 10.3, 10.3 - 0.20 / 2, 10.3 + 0.20 / 2, ORANGE),
 ]
 
 
@@ -449,13 +449,14 @@ def conread() -> None:
         x, med, yerr=err, fmt="none", ecolor=BLACK,
         elinewidth=0.6, capsize=2.5, capthick=0.6, zorder=4,
     )
-    ax.set_xticks(x, [row[0] for row in CON_READ])
+    ax.set_xticks(x, [row[0] for row in CON_READ], fontsize=6.5, rotation=18, ha="right")
     ax.set_ylabel("median read time (s)")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.set_axisbelow(True)
     ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
-    ax.set_ylim(0, max(med) * 1.25)
+    ax.set_yscale("log")
+    ax.set_ylim(0.1, 20)
     fig.tight_layout(pad=0.4)
     _save(fig, "conread", SINGLE_CM)
 
