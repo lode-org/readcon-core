@@ -61,19 +61,30 @@ They will be inserted in this section when that run is in the record.
 No value is stated here.
 
 \section{The same atom in the next frame}\label{sec:connectivity}
-A trajectory is a sequence of graphs on one vertex set.
-With a stable index the bond set at frame \(t\) is a set of pairs \((a,b)\) drawn from that vertex set, and the rings, the cages and the hydrogen-bond network are subgraphs of the same vertices
-\cite{goswamiDseamsDeferredStructural2020}.
-Frame \(t+1\) adds or removes edges.
-The identity of a ring is the identity of its vertices.
-A reader that reorders atoms replaces that comparison with a graph-isomorphism problem on every frame.
-d-SEAMS evaluates the ring and cage census on a coordinate set
-\cite{goswamiDseamsDeferredStructural2020}.
-readcon-db stores the topology key that census returns, so two frames that share a bonded graph share a key after a relaxation or a permutation of the file order (Section~\ref{sec:ecosystem}).
+The published d-SEAMS analyses read LAMMPS dump text.
+seams-core also reads a \texttt{.con} file through readcon-core.
+\texttt{sinp::readCon} takes one frame, and \texttt{cloudFromHandle} copies each atom into the point cloud.
+\texttt{Point::type} is the atomic number from the file.
+\texttt{Point::atomID} is the file's \texttt{atom\_id}.
+\texttt{mapAtomIdToIndex} records that id against the cloud index, so a later lookup uses the id and not the row the file happened to write.
+A sheared CON cell, lengths and angles, is stored as the same triclinic box a LAMMPS tilt dump carries: the three lengths and the \(xy\), \(xz\) and \(yz\) tilts.
 
-\noindent\textbf{Placeholder for the d-SEAMS record.}
-The frame-to-frame ring and cage counts, and the topology keys of that trajectory, are not in this draft.
-They will be inserted in this section when that record arrives.
+XYZ, as d-SEAMS reads it, has no atom id, so the id is the file order.
+Every XYZ atom is stored as type 1, and the comment line is not read as a cell.
+A LAMMPS dump carries an id column and a box only when the dump was written with them.
+A \texttt{.con} frame carries the id, the element and the triclinic cell on every frame.
+A per-atom result then joins the next frame, and a frame in a corpus, by that id.
+
+d-SEAMS uses that id for quasi-one-dimensional nanotube water.
+\texttt{ring::rmAxialTranslations} finds the same atom in a later frame through the id-to-index map and shifts the tube along its axis.
+The per-atom record is one line of frame, atom id, \(c_{ij}\) and ice type.
+
+readcon-db ingests a \texttt{.con} trajectory into an LMDB corpus.
+seams-core selects that corpus by element or by formula, across the shard roots of a campaign, and decodes the \(N\)th hit with the same reader.
+
+\noindent\textbf{Placeholder for the mW water demo.}
+The demo reads ring and hydrogen-bond persistence by id from a \texttt{.con} trajectory, the same trajectory written as XYZ and shuffled in frame order, and the round trip through readcon-db.
+The figure and the numbers are not in this draft.
 No value is stated here.
 
 \section{The fields the rate actually reads}\label{sec:fields}
@@ -112,11 +123,9 @@ The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\
 
 readcon-db stores a campaign as CON text in an embedded key-value store, with secondary indexes on atom count, composition, energy, maximum force and the presence of forces or velocities.
 A query intersects those indexes and then decodes the selected frames with readcon-core.
+seams-core ingests a \texttt{.con} trajectory into that corpus and selects by element or formula over the shard roots, then decodes the \(N\)th hit (Section~\ref{sec:connectivity}).
 The stored bytes are the CON text.
 An xxHash3-128 of that text is the exact identity of a frame.
-A coarser identity is the topology key: d-SEAMS fingerprints the bonded graph, and readcon-db indexes that key so a later saddle with the same rings is found without decoding the corpus.
-This is the role of a kinetic database that stores a process by the local environment of the atoms that move
-\cite{terrellDatabaseAtomisticReaction2012,xuAdaptiveKineticMonte2008}.
 The corpus is the CON file.
 The index is the lookup.
 
