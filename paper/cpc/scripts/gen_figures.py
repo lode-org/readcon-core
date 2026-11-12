@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The architecture figure of the CPC manuscript.
 
-One accent, Okabe-Ito blue, on a white ground. The face is Latin Modern
-Roman, the face of the text. Arrows run from the caller to the code it calls.
+One accent, Ruhi sky, on a white ground. The face is Atkinson Hyperlegible.
+Arrows run from the caller to the code it calls.
 The canvas is the double-column width, 17.8 cm.
 """
 
@@ -13,7 +13,6 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
@@ -27,28 +26,11 @@ BLUE = "#1E88E5"  # Ruhi sky
 BLACK = "#000000"
 WASH = "#F1DB4B"
 
-FONT_CANDIDATES = (
-    Path(__file__).resolve().parents[1]
-    / "fonts"
-    / "latin-modern"
-    / "lmroman10-regular.otf",
-)
-
-
 def latin_modern() -> str:
-    """Register Latin Modern Roman and return the family name."""
-    path = next((p for p in FONT_CANDIDATES if p.is_file()), None)
-    if path is None:
-        raise SystemExit(
-            "Latin Modern Roman is not installed. The figure uses the text face, "
-            "from the lmodern package."
-        )
-    fm.fontManager.addfont(str(path))
-    name = fm.FontProperties(fname=str(path)).get_name()
-    matplotlib.rcParams["pdf.fonttype"] = 42
-    matplotlib.rcParams["ps.fonttype"] = 42
-    matplotlib.rcParams["font.family"] = name
-    matplotlib.rcParams["font.size"] = 8
+    """Register Atkinson Hyperlegible and return the family name."""
+    import publication_style
+
+    name = publication_style.apply()
     return name
 
 

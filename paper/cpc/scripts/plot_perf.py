@@ -6,7 +6,7 @@ timing.pdf has three panels, each from a deposited record:
 * top and middle, one-thread Python medians and quartiles of ``reads.json``
 * bottom, one-thread all-frames medians and quartiles of the native-reader campaign
 
-The face is Latin Modern Roman. Bars are Okabe-Ito blue. A time axis that
+The face is Atkinson Hyperlegible. Bars are Ruhi sky. A time axis that
 spans more than a factor of ten is logarithmic. The canvas width is the
 double-column measure, 17.8 cm.
 """
@@ -37,8 +37,8 @@ GRID = "#B0B0B0"
 FONT_CANDIDATES = (
     Path(__file__).resolve().parents[1]
     / "fonts"
-    / "latin-modern"
-    / "lmroman10-regular.otf",
+    / "atkinson-hyperlegible"
+    / "AtkinsonHyperlegible-Regular.ttf",
 )
 
 # Reader key, axis label. The key is the name in the record.
@@ -72,10 +72,7 @@ NATIVE = (
 def latin_modern() -> None:
     path = next((p for p in FONT_CANDIDATES if p.is_file()), None)
     if path is None:
-        raise SystemExit(
-            "Latin Modern Roman is not installed. The figures use the text face, "
-            "from the lmodern package."
-        )
+        raise SystemExit("Atkinson Hyperlegible is missing from the paper fonts")
     fm.fontManager.addfont(str(path))
     name = fm.FontProperties(fname=str(path)).get_name()
     plt.rcParams.update(

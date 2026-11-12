@@ -138,6 +138,9 @@ def main() -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    import publication_style
+
+    publication_style.apply()
     fig, ax = plt.subplots(figsize=(6.4, 3.2))
     for mode, color, marker in (
         ("shared", "#004D40", "o"),

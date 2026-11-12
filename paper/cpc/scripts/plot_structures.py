@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Render the paper's benchmark structures with xyzrender 0.3.8.
 
-The face is Latin Modern Roman. Axis colours are Okabe-Ito
-(blue, orange, bluish green), not the red-green-blue triad.
+The face is Atkinson Hyperlegible. Axis colours are the Ruhi palette.
 The PDF is the SVG cairosvg writes, so the drawing stays vector.
 xyzrender 0.3.8 is the PyPI wheel named in ``pixi.lock``.
 ase 3.29.0 is conda-forge. cairosvg 2.9.1 is PyPI.
@@ -35,7 +34,7 @@ WORK = OUT / "work"
 import xyzrender as xr  # noqa: E402
 
 DOUBLE_CM = 17.8
-LATIN = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
+ATKINSON = ROOT / "fonts" / "atkinson-hyperlegible" / "AtkinsonHyperlegible-Regular.ttf"
 
 
 def render_svg(source: Path | Atoms, dest: Path, *, canvas: int = 480) -> Path:
@@ -56,7 +55,7 @@ def render_svg(source: Path | Atoms, dest: Path, *, canvas: int = 480) -> Path:
     cfg = xr.build_config("default")
     cfg.canvas_size = canvas
     cfg.background = "white"
-    # Okabe-Ito x, y, z. The default triad is firebrick and forestgreen.
+    # Ruhi sky, sunshine, teal. The default triad is firebrick and forestgreen.
     cfg.axis_colors = ("#1E88E5", "#F1DB4B", "#004D40")
     cfg.cell_color = "#333333"
     xr.render(molecule, config=cfg, output=str(dest))
@@ -107,7 +106,7 @@ def _isolate(svg: str, prefix: str) -> tuple[str, str]:
 
 def compose_svg(panels: list[tuple[str, Path]]) -> str:
     """One SVG page, 17.8 cm wide, with a Latin Modern title on each panel."""
-    font = LATIN.resolve().as_uri()
+    font = ATKINSON.resolve().as_uri()
     width, height = 1780, 700
     slot = 540
     gap = (width - 3 * slot) / 4
@@ -117,7 +116,7 @@ def compose_svg(panels: list[tuple[str, Path]]) -> str:
         f'height="{DOUBLE_CM * height / width:.2f}cm" viewBox="0 0 {width} {height}">',
         "<defs><style>",
         "@font-face {",
-        '  font-family: "Latin Modern Roman";',
+        '  font-family: "Atkinson Hyperlegible";',
         f'  src: url("{font}");',
         "}",
         "</style></defs>",
@@ -128,7 +127,7 @@ def compose_svg(panels: list[tuple[str, Path]]) -> str:
         x = gap + index * (slot + gap)
         parts.append(
             f'<text x="{x + slot / 2:.1f}" y="48" text-anchor="middle" '
-            f'font-family="Latin Modern Roman" font-size="28" fill="#000000">{label}</text>'
+            f'font-family="Atkinson Hyperlegible" font-size="28" fill="#000000">{label}</text>',
         )
         inset = 6
         parts.append(

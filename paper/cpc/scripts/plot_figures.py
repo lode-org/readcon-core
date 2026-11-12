@@ -7,8 +7,8 @@ the same flags ``plt-neb`` resolves, and draw the filled ``E(s, d)``
 contour from ``plot_landscape_surface``. A slim energy-against-``s``
 panel sits beside each map.
 
-Series colours are Okabe-Ito. The sequential map is cividis.
-The face is Latin Modern Roman, the face of the text.
+Series colours are the Ruhi palette. The sequential map is ruhi_seq.
+The face is Atkinson Hyperlegible.
 A missing face is a failed figure.
 
 The pins are in ``pixi.lock``. chemparseplot 1.11.0, ira 2.2.0,
@@ -52,50 +52,34 @@ OUT = ROOT / "src" / "figures" / "generated"
 DB = ROOT / "data" / "db"
 E1 = ROOT / "evidence" / "work" / "e1" / "neb"
 
-# Okabe-Ito. Names kept so the other figure scripts share one palette.
-OKABE_BLUE = "#0072B2"
-OKABE_ORANGE = "#E69F00"
-OKABE_SKY = "#56B4E9"
-OKABE_GREEN = "#009E73"
-OKABE_VERMILLION = "#D55E00"
-TEAL = OKABE_BLUE
-SKY = OKABE_SKY
-CORAL = OKABE_VERMILLION
+# Ruhi. The OKABE_* names stay so the other figure scripts share one palette.
+from chemparseplot.plot.palette import (  # noqa: E402
+    RUHI_COLORS,
+    RUHI_SEQUENTIAL,
+    register_ruhi_colormaps,
+)
+
+register_ruhi_colormaps()
+TEAL = RUHI_COLORS["teal"]
+SKY = RUHI_COLORS["sky"]
+CORAL = RUHI_COLORS["coral"]
+OKABE_BLUE = TEAL
+OKABE_ORANGE = RUHI_COLORS["sunshine"]
+OKABE_SKY = SKY
+OKABE_GREEN = TEAL
+OKABE_VERMILLION = CORAL
 BLACK = "#000000"
 # Guide for Authors widths used for every figure in this manuscript.
 DOUBLE_CM = 17.8
 SINGLE_CM = 8.5
-SEQUENTIAL = matplotlib.colormaps["cividis"]
-
-_LM_CANDIDATES = (
-    Path("/usr/share/texmf/fonts/opentype/public/lm/lmroman10-regular.otf"),
-    Path(
-        "/usr/share/texlive/texmf-dist/fonts/opentype/public/lm/lmroman10-regular.otf"
-    ),
-    Path(__file__).resolve().parents[1]
-    / "fonts"
-    / "latin-modern"
-    / "lmroman10-regular.otf",
-)
-
-
-def latin_modern_path() -> Path:
-    path = next((item for item in _LM_CANDIDATES if item.is_file()), None)
-    if path is None:
-        raise SystemExit(
-            "Latin Modern Roman is not installed. The figures use the text face, "
-            "from the lmodern package."
-        )
-    return path
+SEQUENTIAL = matplotlib.colormaps[RUHI_SEQUENTIAL]
 
 
 def use_latin_modern() -> str:
-    """Register Latin Modern Roman and make it the current face."""
-    import matplotlib.font_manager as fm
+    """Register Atkinson Hyperlegible and make it the current face."""
+    import publication_style
 
-    path = latin_modern_path()
-    fm.fontManager.addfont(str(path))
-    name = fm.FontProperties(fname=str(path)).get_name()
+    name = publication_style.register()
     plt.rcParams.update(
         {
             "pdf.fonttype": 42,
@@ -163,10 +147,11 @@ def house_style():
         )
     if not settings["show_pts"]:
         raise SystemExit("plt-neb --show-pts did not resolve on.")
+    family = use_latin_modern()
     theme = get_theme(settings["theme"], font_size=8)
     setup_publication_theme(theme)
-    # The landscape settings stay. The drawn face is the text face, not the theme face.
-    use_latin_modern()
+    family = use_latin_modern()
+    require_theme_font(family)
     return theme, settings
 
 

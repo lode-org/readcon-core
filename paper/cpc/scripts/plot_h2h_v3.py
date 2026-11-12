@@ -18,7 +18,7 @@ import numpy as np
 from matplotlib import font_manager as fm
 
 ROOT = Path(__file__).resolve().parents[1]
-FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
+FONT = ROOT / "fonts" / "atkinson-hyperlegible" / "AtkinsonHyperlegible-Regular.ttf"
 DATA = ROOT / "bench" / "results" / "h2h" / "summary.json"
 OUT = ROOT / "src" / "figures" / "generated"
 ORDER = [

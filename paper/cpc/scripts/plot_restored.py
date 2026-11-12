@@ -17,13 +17,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import font_manager as fm
 from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
 DATA = ROOT / "data"
-FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
 
 CORAL = "#FF655D"
 SUNSHINE = "#F1DB4B"
@@ -36,21 +34,9 @@ SEQ = LinearSegmentedColormap.from_list("ruhi_seq", [TEAL, SKY, SUNSHINE])
 
 
 def face() -> None:
-    fm.fontManager.addfont(str(FONT))
-    name = fm.FontProperties(fname=str(FONT)).get_name()
-    plt.rcParams.update(
-        {
-            "font.family": name,
-            "font.size": 8,
-            "pdf.fonttype": 42,
-            "ps.fonttype": 42,
-            "axes.edgecolor": BLACK,
-            "axes.labelcolor": BLACK,
-            "xtick.color": BLACK,
-            "ytick.color": BLACK,
-            "text.color": BLACK,
-        }
-    )
+    import publication_style
+
+    publication_style.apply()
 
 
 def save(fig, name: str) -> None:
@@ -71,6 +57,7 @@ def bars(name: str, labels, values, ylabel: str, colors=None) -> None:
 
 
 def dlpack() -> None:
+    face()
     view, copy = [], []
     for line in (DATA / "dlpack_cost.txt").read_text().splitlines():
         if line.startswith("repeat "):
@@ -106,6 +93,7 @@ def dlpack() -> None:
 
 
 def toc() -> None:
+    face()
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.set_xlim(0, 4)
     ax.set_ylim(0, 4)
@@ -129,6 +117,7 @@ def toc() -> None:
 
 
 def timing_and_fairness() -> None:
+    face()
     cells = json.loads(
         (ROOT / "bench" / "results" / "r0174" / "reads.json").read_text()
     )["cells"]
@@ -187,6 +176,7 @@ def timing_and_fairness() -> None:
 
 
 def mpi_plots() -> None:
+    face()
     rows = list(csv.DictReader((DATA / "mpi" / "strong.csv").open()))
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
     series = {}
@@ -243,6 +233,7 @@ def mpi_plots() -> None:
 
 
 def db_plots() -> None:
+    face()
     summary = list(csv.DictReader((DATA / "db" / "summary.csv").open()))
     ingest = [
         row
@@ -298,6 +289,7 @@ def db_plots() -> None:
 
 
 def anatomy_and_errors() -> None:
+    face()
     anatomy = json.loads((DATA / "novel" / "anatomy.json").read_text())["bytes"]
     bars("frame_anatomy", list(anatomy), [anatomy[key] for key in anatomy], "bytes")
     errors = json.loads((DATA / "novel" / "errors.json").read_text())["cases"]
@@ -347,6 +339,7 @@ def band_energy(path: Path) -> np.ndarray:
 
 
 def landscapes() -> None:
+    face()
     bands = DATA / "failure" / "bands"
     pairs = [
         ("uninterrupted", bands / "uninterrupted.npz"),

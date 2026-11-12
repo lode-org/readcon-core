@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
 
 ROOT = Path(__file__).resolve().parents[1]
-FONT = ROOT / "fonts" / "latin-modern" / "lmroman10-regular.otf"
+FONT = ROOT / "fonts" / "atkinson-hyperlegible" / "AtkinsonHyperlegible-Regular.ttf"
 RECORD = ROOT / "evidence" / "results" / "e1_restart.json"
 OUT = ROOT / "src" / "figures" / "generated" / "restart.pdf"
 

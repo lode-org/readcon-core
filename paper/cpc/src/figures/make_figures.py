@@ -1,40 +1,45 @@
 #!/usr/bin/env python3
 """Publication figures for the CPC manuscript.
 
-The face is Latin Modern Roman, the face of the text.
-Series colours are Okabe–Ito. A missing face is a failed figure.
+The face is Atkinson Hyperlegible. Series colours are the Ruhi palette.
+A missing face is a failed figure.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import numpy as np
+from chemparseplot.plot.palette import RUHI_COLORS
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "generated"
-FONT = HERE.parents[1] / "fonts" / "latin-modern" / "lmroman10-regular.otf"
+sys.path.insert(0, str(HERE.parents[1] / "scripts"))
+import publication_style  # noqa: E402
 
 DOUBLE_CM = 17.8
 SINGLE_CM = 8.5
 BLACK = "#000000"
-BLUE = "#56B4E9"
-ORANGE = "#E69F00"
-GREEN = "#009E73"
-TEAL = "#0072B2"
-VERMILLION = "#D55E00"
-SKY = "#0072B2"
-PINK = "#CC79A7"
-WASH = "#F1DB4B"
+TEAL = RUHI_COLORS["teal"]
+SKY = RUHI_COLORS["sky"]
+MAGENTA = RUHI_COLORS["magenta"]
+CORAL = RUHI_COLORS["coral"]
+SUN = RUHI_COLORS["sunshine"]
+BLUE = SKY
+ORANGE = SUN
+GREEN = TEAL
+VERMILLION = CORAL
+PINK = MAGENTA
+WASH = SUN
 GREY = "#F4F4F4"
-READCON = "#004D40"
+READCON = TEAL
 
 # Same-session medians and type-7 quartiles, seven repeats, one core.
 # Times are seconds. q1 and q3 are the quartiles, not an error half-width.
@@ -81,23 +86,11 @@ FAST = {
 
 
 def use_latin_modern() -> None:
-    if not FONT.is_file():
-        raise SystemExit(f"Latin Modern Roman is missing at {FONT}")
-    fm.fontManager.addfont(str(FONT))
-    name = fm.FontProperties(fname=str(FONT)).get_name()
-    plt.rcParams.update(
-        {
-            "pdf.fonttype": 42,
-            "ps.fonttype": 42,
-            "font.family": name,
-            "font.size": 8,
-            "axes.labelsize": 8,
-            "xtick.labelsize": 8,
-            "ytick.labelsize": 8,
-            "legend.fontsize": 7.5,
-            "axes.linewidth": 0.6,
-        }
-    )
+    """Ruhi colours and Atkinson Hyperlegible.
+
+    The name is kept because the existing figure functions call it.
+    """
+    publication_style.apply()
 
 
 def _save(fig, name: str, width_cm: float) -> None:
@@ -377,11 +370,11 @@ XYZ_READ = {
 
 # CON read of 100000 frames of 32 atoms: median, q25, q75, seconds.
 CON_READ = [
-    ("Rust", 0.179, 0.179 - 0.0024 / 2, 0.179 + 0.0024 / 2, READCON),
-    ("Python", 0.179, 0.179 - 0.0017 / 2, 0.179 + 0.0017 / 2, GREEN),
-    ("rkr_read_all_frames", 0.345, 0.345 - 0.074 / 2, 0.345 + 0.074 / 2, TEAL),
-    ("ASE eon", 10.8, 10.8 - 0.026 / 2, 10.8 + 0.026 / 2, PINK),
-    ("loadcons", 10.3, 10.3 - 0.20 / 2, 10.3 + 0.20 / 2, ORANGE),
+    ("Rust", 0.179, 0.179 - 0.0024 / 2, 0.179 + 0.0024 / 2, TEAL),
+    ("Python", 0.179, 0.179 - 0.0017 / 2, 0.179 + 0.0017 / 2, SKY),
+    ("rkr_read_all_frames", 0.345, 0.345 - 0.074 / 2, 0.345 + 0.074 / 2, MAGENTA),
+    ("ASE eon", 10.8, 10.8 - 0.026 / 2, 10.8 + 0.026 / 2, CORAL),
+    ("loadcons", 10.3, 10.3 - 0.20 / 2, 10.3 + 0.20 / 2, SUN),
 ]
 
 
@@ -390,7 +383,7 @@ def timings() -> None:
     use_latin_modern()
     keys = ["rust", "python", "ase", "cextxyz", "extxyz"]
     labels = ["readcon Rust", "readcon Python", "ASE extxyz", "cextxyz", "extxyz 0.4.6"]
-    colors = [READCON, GREEN, PINK, SKY, VERMILLION]
+    colors = [TEAL, SKY, MAGENTA, CORAL, SUN]
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.8 / 2.54))
     for ax, size, title in (
         (axes[0], "million", r"$10^{6}$ atoms, one frame"),
@@ -466,7 +459,7 @@ def fastpath() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.2 / 2.54), sharey=False)
     keys = ["eisel", "clinger", "eon"]
     labels = ["Eisel–Lemire only", "short decimal", "eOn C"]
-    colors = ["#8D8D8D", READCON, TEAL]
+    colors = [SUN, TEAL, SKY]
     for ax, size, title in (
         (axes[0], "medium", "160 frames, 180 atoms"),
         (axes[1], "large", "600 frames, 280 atoms"),
@@ -516,13 +509,13 @@ def fastpath() -> None:
 # Trajectory XYZ medians, seconds. Columns are one frame of 10^6 atoms,
 # 10000 frames of 100 atoms, and 100000 frames of 32 atoms.
 TRAJ_XYZ = [
-    ("readcon Rust", [0.259, 0.276, 0.920], READCON),
-    ("readcon Python", [0.293, 0.282, 1.108], GREEN),
-    ("ASE iread", [1.74, 3.60, 25.6], PINK),
-    ("chemfiles 0.10.4", [0.364, 0.490, 2.60], ORANGE),
-    ("chemfiles 0.11.0-rc1", [0.359, 0.412, 2.24], SKY),
-    ("MDAnalysis", [2.09, 0.520, 1.869], BLUE),
-    ("MDTraj", [0.790, 0.781, 2.64], VERMILLION),
+    ("readcon Rust", [0.259, 0.276, 0.920], TEAL),
+    ("readcon Python", [0.293, 0.282, 1.108], SKY),
+    ("ASE iread", [1.74, 3.60, 25.6], MAGENTA),
+    ("chemfiles 0.10.4", [0.364, 0.490, 2.60], CORAL),
+    ("chemfiles 0.11.0-rc1", [0.359, 0.412, 2.24], SUN),
+    ("MDAnalysis", [2.09, 0.520, 1.869], TEAL),
+    ("MDTraj", [0.790, 0.781, 2.64], SKY),
 ]
 
 
@@ -570,13 +563,13 @@ def pywrite() -> None:
         (r"$10^{6}$-atom" "\nzstd", 0.198),
     ]
     reads = [
-        ("readcon-db", 0.0242, READCON),
-        ("ASE trajectory", 0.047, GREEN),
-        ("ASE db", 0.297, PINK),
+        ("readcon-db", 0.0242, TEAL),
+        ("ASE trajectory", 0.047, SKY),
+        ("ASE db", 0.297, MAGENTA),
     ]
     ax = axes[0]
     x = np.arange(len(writes))
-    ax.bar(x, [v for _, v in writes], color=GREEN, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
+    ax.bar(x, [v for _, v in writes], color=TEAL, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
     ax.set_xticks(x, [name for name, _ in writes], fontsize=7)
     ax.set_ylabel("median write time (s)")
     ax.set_ylim(0, 0.9)
@@ -656,6 +649,8 @@ def water_persistence() -> None:
     neigh_xyz = np.full(4, 0.001)
     ice_con = np.array([0.800, 0.790, 0.785, 0.771])
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.6 / 2.54), sharey=True)
+    from chemparseplot.plot.palette import RUHI_CYCLE
+
     series = (
         (axes[0], neigh_con, neigh_xyz, False, "(a)"),
         (axes[1], ice_con, None, True, "(b)"),
@@ -664,7 +659,7 @@ def water_persistence() -> None:
         ax.plot(
             lag,
             con,
-            color=TEAL,
+            color=RUHI_CYCLE[0],
             marker="o",
             markersize=4.2,
             markerfacecolor="white",
@@ -677,7 +672,7 @@ def water_persistence() -> None:
             ax.plot(
                 lag,
                 xyz,
-                color=VERMILLION,
+                color=RUHI_CYCLE[1],
                 marker="s",
                 markersize=3.6,
                 markerfacecolor="white",
@@ -687,8 +682,8 @@ def water_persistence() -> None:
                 zorder=2,
             )
         if chance:
-            ax.axhline(0.6305, color="#666666", linestyle=(0, (2.2, 1.4)), linewidth=0.8, zorder=1)
-            ax.plot([], [], color="#666666", linestyle=(0, (2.2, 1.4)), linewidth=0.8, label="Chance")
+            ax.axhline(0.6305, color=RUHI_CYCLE[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, zorder=1)
+            ax.plot([], [], color=RUHI_CYCLE[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, label="Chance")
         ax.set_xlabel(r"Lag $\tau$ (frames)")
         ax.set_xlim(0, 27)
         ax.set_ylim(-0.02, 1.05)

@@ -11,6 +11,32 @@ uninterrupted climbing-image band of the EMT Pt(100) adatom hop of
 Section~\ref{sec:cases}.}
 \label{fig:structures} \end{figure}
 
+\subsection{The Claisen drawings with atom ids}
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_structures.pdf}
+\caption{Highest image of each band, drawn from the CON coordinates.
+(a)~The connected six-membered chair of the chemical map.
+The dashed segment is the forming C5--C0 contact.
+(b)~The highest image of the Hausdorff reassignment, with C0--C1--C2\({=}\)O separated from C4--C5.
+Labels are the atom ids stored on the rows.
+Carbon is grey, oxygen red and hydrogen white.}
+\label{fig:claisen-struct-ids}
+\end{figure}
+
+\begin{figure}[tbp] \centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_band.pdf}
+\caption{Final bands for allyl vinyl ether to pent-4-enal.
+Energy of each image above the reactant, on one reaction coordinate.
+Circles follow the chemical correspondence carried by the atom ids.
+Squares follow the minimum-Hausdorff reassignment of the product.}
+\label{fig:claisen-band-markers}
+\end{figure}
+
+The Wiberg drawings and the two bands in the main text are rebuilt from the stored CON frames and the stored image energies by
+{\small\begin{verbatim}
+python3 -c "import make_chem_figures as m; m.main()"
+\end{verbatim}}
+
 \subsection{Zero-copy tensor exchange}
 A caller that already has a frame should read its coordinates as a tensor.
 readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
