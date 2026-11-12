@@ -99,15 +99,16 @@ aboveskip=0.6em,
 belowskip=0.4em
 }
 \date{\today}
-\title{readcon-core: a versioned geometry checkpoint for resumed saddle
-searches}
+\title{readcon-core: a versioned CON reader and writer that keeps atom
+identity}
 \hypersetup{
  colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black,
  pdfauthor={Rohit Goswami},
- pdftitle={readcon-core: a versioned geometry checkpoint for resumed
-saddle searches},
+ pdftitle={readcon-core: a versioned CON reader and writer that keeps atom
+identity},
  pdfkeywords={geometry checkpoint, file format specification, saddle
-search, conformance corpus, nudged elastic band},
+search, conformance corpus, nudged elastic band, atom correspondence,
+adaptive kinetic Monte Carlo},
  pdfsubject={},
  pdflang={English}}
 \begin{document}
@@ -116,35 +117,47 @@ search, conformance corpus, nudged elastic band},
 
 \input{authors.tex}
 
-\begin{abstract} Reordering the atoms of a product changes the barrier a
-band reports, because the tangent, the dimer axis and the harmonic
-prefactor all pair slot \(i\) with slot \(i\).
-On the Claisen rearrangement of allyl vinyl ether, the identity map
-carried by the CON atom ids converges to 0.607~eV through a
-six-membered chair with one imaginary mode, at \(-542.5\,\mathrm{cm}^{-1}\).
-A geometric best-match renumbering of the same product gives a
-3.988~eV structure of two separated fragments, a higher-order stationary
-point, and the band does not meet a force criterion of
-\(0.05\,\mathrm{eV/\text{\AA}}\).
-CON 3.1 stores the atom id, the per-axis mask, the masses and the time
-unit on the frame, and readcon-core is the reader and writer of that
-grammar.
+\begin{abstract} Rare-event methods compare geometries atom by atom.
+The nudged elastic band tangent, the dimer axis, the process match of
+adaptive kinetic Monte Carlo (AKMC) and the Vineyard prefactor all pair
+atom \(i\) of one frame with atom \(i\) of the next, and a surface
+search also reads which Cartesian components are held.
+CON, the checkpoint format of eOn, had no specification, and the
+trajectory formats in common use drop the atom id, the per-axis mask or
+the velocity unit.
+Here, we introduce readcon-core, the reference reader and writer of
+CON 3.1, a versioned grammar that stores the atom id, a three-bit mask,
+the masses and a declared time unit on every frame.
+One Rust core serves C, C++, Fortran, Julia and Python, prints the
+shortest decimal that reads back as the same double, parses frames in
+parallel and replaces a file only after its last frame is accepted.
+Two conformance corpora of 165 files define which files a reader
+accepts.
+readcon-db stores CON corpora in LMDB, and readcon-ops compares frames
+by atom identity.
+On the Claisen rearrangement, the stored atom ids give a converged
+0.607~eV barrier with one imaginary mode, and a geometric renumbering of
+the same product does not converge.
+On a 4096-molecule water trajectory, d-SEAMS follows each molecule into
+the ice nucleus by its id.
+A Rust read of \num{100000} CON frames takes 0.179~s, against 10.8~s
+for ASE eon and 10.3~s for eOn \texttt{loadcons}.
+readcon-core is available under the MIT licence at
+\url{https://github.com/lode-org/readcon-core}.
 \end{abstract}
 
 
 \begin{keyword} geometry checkpoint \sep file format specification \sep
-saddle search \sep conformance corpus \sep nudged elastic band
+saddle search \sep conformance corpus \sep nudged elastic band \sep
+atom correspondence \sep adaptive kinetic Monte Carlo
 \end{keyword}
 
-\begin{highlights} \item On Claisen, the identity map converges to 0.607~eV
-at a chair with one imaginary mode; a geometric renumbering gives
-3.988~eV and does not converge.
-\item CON stores the atom id, the per-axis mask, the masses and the time
-unit, and readcon keeps the id through read and write.
-\item The tangent, the dimer axis and the Vineyard prefactor pair slot
-\(i\) with slot \(i\).
-\item Dropping one hold on Pt(100) changes the prefactor by a factor of 37.
-\item One grammar serves C, C++, Fortran, Julia and Python.
+\begin{highlights}
+\item readcon-core reads and writes CON 3.1, a versioned grammar for atomistic checkpoints.
+\item Every frame keeps atom ids, per-axis masks, masses and a declared velocity time unit.
+\item One Rust core serves C, C++, Fortran, Julia and Python; eOn reads CON through it.
+\item Stored atom ids keep NEB, dimer and AKMC images paired across restarts and codes.
+\item readcon-db stores CON corpora in LMDB; readcon-ops matches frames by atom identity.
 \end{highlights}
 
 \begin{graphicalabstract}
@@ -178,7 +191,10 @@ and figure
 
 % proseguard on structure.subject-verb-distance.
 % proseguard on rgoswami.Acronyms.
-\textit{Nature of problem:} Rare-event campaigns stop and resume saddle
+\textit{Nature of problem:} NEB images, dimer pairs, AKMC process
+tables and trajectory analyses match atoms across frames by an
+identifier on each row.
+Rare-event campaigns stop and resume saddle
 searches from a stored geometry.
 A resumed surface search reads which Cartesian components of each atom
 are fixed, because a held component removes a mode from the harmonic
@@ -224,6 +240,10 @@ accepted.
 The library is readcon-core 0.20.0.
 The stored campaigns use readcon-core 0.18.0 and the one-core timings use readcon-core 0.18.1 (Data
 availability).
+The companion programs are readcon-db 0.2.1, under the MIT licence, at
+\url{https://github.com/lode-org/readcon-db}, and readcon-ops 0.1.1,
+under the BSD 3-clause licence, at
+\url{https://github.com/lode-org/readcon-ops}.
 Every build reads gzip input; zstd input and parallel parsing are build
 features, and the Python wheel enables both.
 A frame stores Cartesian coordinates, the cell, the periodic flags, the
@@ -238,7 +258,7 @@ unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file
 (Listing~\ref{lst:py}).
 
-\textit{References:} \begin{thebibliography}{9} \bibitem{ps-eon} S.~T.
+\begin{thebibliography}{9} \bibitem{ps-eon} S.~T.
 Chill, M. Welborn, R. Terrell, L. Zhang, J.-C.
 Berthet, A. Pedersen, H. J\'onsson, G. Henkelman, EON: software for long
 time simulations of atomic scale systems, Modell. Simul. Mater. Sci.
@@ -250,7 +270,7 @@ Jung, S.~A.
 Ghasemi, T. Dijkhuis, et al., TheochemUI/eOn: v3.6.0, Zenodo, software,
 version 3.6.0 (2026).
 \url{https://doi.org/10.5281/zenodo.23166734}.
-\bibitem{ps-readcon} R. Goswami, readcon-core 0.18.0 for the stored campaigns and readcon-core 0.18.1 for the one-core timings, Zenodo (2026),
+\bibitem{ps-readcon} R. Goswami, readcon-core, Zenodo (2026),
 doi:10.5281/zenodo.18753567.
 \end{thebibliography} \end{small}
 
@@ -305,6 +325,9 @@ the reader rounds each decimal to the nearest double
 \cite{clingerHowReadFloating1990}.
 Two readers given the same bytes must then return the same fields, and
 that takes a versioned grammar rather than the convention of one reader.
+On the Claisen rearrangement the stored ids select a converged 0.607~eV
+chair, and a geometric renumbering of the same product does not converge
+(Section~\ref{sec:claisen}).
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain
@@ -347,15 +370,8 @@ the Open Visualization Tool (OVITO)
 \cite{oboyleOpenBabelOpen2011}.
 IMD version 3 streams positions, velocities, forces and the box from a running GROMACS, NAMD or LAMMPS simulation into MDAnalysis \cite{thirumalaiswamyStreamingMolecularDynamics2026}.
 ReaxKit prepares, parses and analyses ReaxFF trajectories \cite{dinaniReaxkitModularPython2026}.
-Of chemfiles, MDAnalysis, OVITO and Open Babel, none of the versions that were run opens a version-1 CON
-file or a CON 3.1 file.
-Those versions are chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and
-Open Babel 3.2.1.
-The survey and the drift files ran OVITO 3.16.1.
-The timed sessions ran OVITO 3.17.2, which also fails to open the CON file.
-The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles
-0.11.0-rc1 still have no CON reader
-\cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfiles0110rc12025,frauxChemfilesConIssue2025}.
+None of chemfiles, MDAnalysis, OVITO or Open Babel opens a CON file
+(versions in Section~\ref{sec:performance}).
 The eon module of ASE opens both but stops at the velocity section of the
 frame of Section~\ref{sec:worked}.
 
@@ -376,19 +392,141 @@ returns the same fields from it.
 A versioned specification and a corpus of files with known verdicts turn
 that condition into a test of any reader.
 
-Here, we describe CON 3.1, a versioned grammar for that checkpoint, and
-readcon-core, its reference reader and writer.
-Sections~\ref{sec:identity}--\ref{sec:ecosystem} derive the tangent, the
-RMSD and the prefactor from one atom index, and name the three programs
-that parse, store and compare a frame.
+Here, we introduce readcon-core, the reference reader and writer of
+CON 3.1, a versioned grammar for that checkpoint.
+Section~\ref{sec:identity} is the atom correspondence a rare-event method
+assumes.
+Section~\ref{sec:fields} states the stored fields, Section~\ref{sec:worked}
+reads one frame and Section~\ref{sec:format} is the grammar.
+Section~\ref{sec:implementation} describes the program, its bindings and
+the companion tools.
+Section~\ref{sec:conformance} is the corpora.
+Section~\ref{sec:claisen} is the Claisen rearrangement,
+Section~\ref{sec:connectivity} follows molecules through a nucleation
+trajectory, and Section~\ref{sec:cases} resumes saddle searches.
+Section~\ref{sec:performance} is the performance.
 The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
 CON 3.1 is the first written specification of CON, and readcon-core is the only reader tested that returns the mask, the id, the masses and the time unit together.
 
-\input{argument}
+\section{Atom correspondence in rare-event methods}\label{sec:identity}
+A rare-event method compares two geometries atom by atom.
+The path, the tangent, the displacement, the Hessian and the rate are defined only when atom \(i\) in image A is atom \(i\) in image B.
+Write the \(3N\) Cartesian coordinates of an image, in one fixed order, as the vector \(R\).
+The improved NEB tangent at image \(i\) is built from the forward and backward differences
+\begin{equation}
+\label{eq:tangent}
+\tau_i^{+}=R_{i+1}-R_i,\qquad \tau_i^{-}=R_i-R_{i-1},
+\end{equation}
+and the spring force lies along that tangent
+\cite{jonssonNudgedElasticBand1998,henkelmanImprovedTangentEstimate2000},
+\begin{equation}
+\label{eq:spring}
+F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
+\end{equation}
+A permutation matrix \(\Pi\) applied to one image replaces \(R\) by \(\Pi R\).
+The differences in Eq.~\eqref{eq:tangent} then connect different atoms, and the spring in Eq.~\eqref{eq:spring} pulls along that wrong chord.
+The dimer axis has the same pairing.
+With the two images \(R_0\) and \(R_1\),
+\begin{equation}
+\label{eq:dimer}
+\hat N=(R_1-R_0)/|R_1-R_0|,
+\end{equation}
+and the rotational force is built from the parts of \(-\nabla V(R_1)\) and \(-\nabla V(R_0)\) perpendicular to \(\hat N\)
+\cite{henkelmanDimerMethodFinding1999}.
+Both \(\hat N\) and that force pair slot \(i\) of \(R_1\) with slot \(i\) of \(R_0\).
+The Cartesian RMSD between reactant and product has the same dependence,
+\begin{equation}
+\label{eq:rmsd}
+\mathrm{RMSD}^{2}(R^{\mathrm{R}},R^{\mathrm{P}})=\frac{1}{N}\sum_{a=1}^{N}\big|r_a^{\mathrm{R}}-r_a^{\mathrm{P}}\big|^{2}.
+\end{equation}
+The sum is a distance between matched atoms.
+The permutation-invariant distance minimises Eq.~\eqref{eq:rmsd} over rotations and over the \(M_1!M_2!\cdots\) maps of identical elements
+\cite{sadeghiMetricsConfigurationSpace2013,deFindingReactionPathways2019,goswamiTwodimensionalRmsdProjections2026,goswamiChemparseplot2026}.
+Two-sided searches need that map before the first image is placed
+\cite{deFindingReactionPathways2019,goswamiReproducibleOrchestrationBest2026}.
+The image-dependent pair potential builds its target from the distances \(d_{ab}\) of a chosen map and then runs NEB on that objective
+\cite{smidstrupImprovedInitialGuess2014}.
+A wrong map asks the band to turn the wrong pairs of atoms into neighbours.
+Adaptive kinetic Monte Carlo records a process by its saddle.
+Two saddles \(R\) and \(R'\) are the same process only when \(|\Pi R-R'|<\epsilon\) for the stored permutation \(\Pi\), and the catalog stores the identity map.
+Harmonic transition state theory has the same index: the rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor
+\cite{vineyardFrequencyFactorsIsotope1957}
+\begin{equation}
+\label{eq:vineyard}
+\nu=\frac{\prod_{i=1}^{n}\nu_i^{\mathrm{min}}}{\prod_{i=1}^{n-1}\nu_i^{\ddagger}},
+\end{equation}
+where the products run over the \(n\) free modes of the minimum and the \(n-1\) real modes of the saddle.
+Those modes are eigenvectors of the mass-weighted Hessian in the order of \(R\).
+A permutation reorders the Hessian, and a mask that frees one more component changes which eigenvalues enter the products.
 
-\section{One frame, line by line}\label{sec:worked}
+A file that stores coordinates and element symbols, and no atom index, leaves the map to the next program.
+An XYZ written and read through a SMILES canonicalisation, an Open Babel conversion or an RDKit molecule rebuild can return the atoms in a new order.
+A POSCAR groups atoms by the element block.
+A LAMMPS dump written with atoms sorted by type does the same.
+In each case Eq.~\eqref{eq:tangent} is evaluated on a vector whose slots no longer name the atoms of the previous image.
+The band still returns a number.
+That number is the barrier of a different path.
+
+\section{The CON 3.1 format}
+\subsection{Stored fields}\label{sec:fields}
+CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id, and a velocity section with its own time unit.
+Each field enters one of the equations above.
+
+Column 5 is the atom id, and it holds the original index.
+A rewrite that groups the rows by element recovers that order from the column.
+ASE's eon reader ignores the column
+\cite{larsenAtomicSimulationEnvironmenta2017}.
+Plain XYZ has no id column.
+Extended XYZ carries one only under ASE's column name, which no grammar reserves
+\cite{kermodeLibatomsExtxyzV0462026} (Table~\ref{tab:spec-compare}).
+A LAMMPS dump and an H5MD file can carry one
+\cite{thompsonLammpsFlexibleSimulation2022,buylH5mdStructuredEfficient2014}.
+readcon keeps \texttt{atom\_id} through the read and the write, so the identity survives the reordering.
+A NEB band, a dimer and an AKMC comparison of images need that identity.
+
+Column 4 is a per-axis mask, an integer from 0 to 7, Eq.~\eqref{eq:mask}.
+The mask removes Cartesian components from the free set \(n\) in Eq.~\eqref{eq:vineyard}.
+A constrained dimer or a constrained band holds those components fixed.
+On the Pt(100) adatom the held height selects one saddle.
+Dropping the hold selects another, \(0.68\,\mathrm{eV}\) with a prefactor 37 times larger (Section~\ref{sec:prefactor}).
+ASE's eon reader passes the column through \texttt{bool}, and its writer emits only 0 or 1, so a mask on one axis is stored as a hold on all three.
+Extended XYZ and H5MD have no element for the mask.
+POSCAR stores it as selective dynamics
+\cite{vaspwikiPoscar2026}.
+The ASE bridge in readcon writes a partial mask back as the same integer.
+
+The mass \(m_a\) is stored on the atom.
+The Lagrangian of the nuclei is
+\begin{equation}
+\label{eq:lagrangian}
+L=\sum_{a=1}^{N}\tfrac12 m_a|\dot r_a|^{2}-V(R).
+\end{equation}
+A ring-polymer instanton discretises a periodic path in imaginary time, and the action weights each bead by the same masses
+\cite{richardsonRingpolymerInstanton2018}.
+XTC, TRR and DCD keep those masses in a separate topology file
+\cite{abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}.
+The cell of the frame is the \(3\times 3\) matrix used for the minimum image inside \(|R_{i+1}-R_i|\).
+
+A velocity \(v_a\) is the momentum in Eq.~\eqref{eq:lagrangian} divided by \(m_a\).
+The velocities occupy a declared section, and the reader uses the time unit that section names.
+Archived eOn documents its natural unit as the constant \(\velEonFs\,\mathrm{fs}\).
+The same digits read as \(\text{\AA}/\mathrm{fs}\) scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
+ASE's eon writer writes no velocities.
+
+From version 3.5, eOn reads CON through readcon
+\cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}.
+The ase-readcon plugin registers the formats \texttt{readcon-con} and \texttt{readcon-convel}.
+The readcon-chemfiles bridge reads XYZ, PDB, GRO and LAMMPS dump text into a \texttt{ConFrame}
+\cite{frauxChemfileschemfilesVersion01042023}.
+Residue records and per-atom properties that are not CON columns are left out of that frame.
+
+Section~\ref{sec:cases} measures these fields on one restarted band.
+A CON 3.1 round trip returns the uninterrupted barrier.
+A file that moves a coordinate or drops the mask returns a different one.
+
+\subsection{One frame}\label{sec:worked}
 Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of
 a Pt(100) slab of two layers of four atoms with one adatom, written by
 readcon-core with velocities.
@@ -540,7 +678,7 @@ Listing~\ref*{lst:testrun} of the supplementary material runs the
 example program of the release on this file and on the two variants of
 the angle line.
 
-\section{The grammar of CON 3.1}\label{sec:format}
+\subsection{Grammar}\label{sec:format}
 Section~\ref*{sec:spec-normative} of the supplementary material is the
 normative specification, \clauseTotal{} numbered clauses, and this
 section states the rules that Section~\ref{sec:worked} used, with the
@@ -689,7 +827,7 @@ earlier minor requires it to accept.
 We take changes through issues and pull requests on the repository, and
 each change adds the corpus files that test it.
 
-\section{Reference implementation}\label{sec:implementation}
+\section{Program description}\label{sec:implementation}
 readcon-core implements the grammar once, in Rust
 (Figure~\ref{fig:architecture}).
 C++, Julia \cite{bezansonJuliaFreshApproach2017} and Fortran 2008 call
@@ -724,7 +862,7 @@ Table~\ref*{tab:anchors} of the supplementary material gives the source
 lines of each step.
 
 \begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a
-path, as readcon-core 0.18.1 does.}
+path.}
 \label{alg:parser} \begin{algorithmic}[1] \Require path; thread count
 \(P\), where absent or 0 selects the default \Ensure frames in file
 order, or an error that names its line \State Read the first four bytes;
@@ -786,8 +924,77 @@ frames = readcon.read_con("band.con")
 readcon.write_con("band.con", frames)
 \end{lstlisting}
 
-\section{Zero-copy tensor exchange}\label{sec:dlpack}
+\paragraph{Zero-copy exchange.}\label{sec:dlpack}
 A DLPack view of the positions costs 0.12 times an explicit copy (Figure~\ref{fig:dlpack}).
+
+
+\subsection{Companion programs}\label{sec:ecosystem}
+readcon-core parses CON and convel and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
+C, C++, Fortran, Julia and Python call that parser.
+The Fortran binding is there because scientific codes still call Fortran
+\cite{kedwardStateFortran2022}.
+A quantum-chemistry input parser is held to the same standard, that the text it reads is the calculation it runs
+\cite{goswamiWailordParsers2022}.
+Algorithm~\ref{alg:parser} is the path reader.
+The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\_positions}\) both return that column, and the coordinates match.
+The same read and write keep \texttt{atom\_id}.
+
+readcon-db, under the MIT licence, from \url{https://github.com/lode-org/readcon-db}, stores the corpus in LMDB.
+A frame key is 12 bytes, the trajectory id and the frame index, and the record is the CON text (Section~\ref{sec:supp-tools}).
+The commands are \texttt{ingest}, \texttt{select}, \texttt{dedup-export}, \texttt{annotate-topology}, \texttt{find-by-topology}, \texttt{shard}, \texttt{compact} and \texttt{h5md-velocities}.
+seams-core selects from the corpus by element or by formula (Section~\ref{sec:connectivity}).
+In the AKMC catalog amsel, each process stores its barrier, its prefactor and its mode, and points at three frames: the reactant, the saddle and the product.
+The saddle carries a displacements section with the same fixed-flag column and the same \texttt{atom\_id} column as the coordinates.
+
+readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is a Python API.
+It has no command line and no file input or output.
+The argument is a \texttt{ConFrame} or a pyeonclient object, and the distances come from lode-org/minimage.
+\(\texttt{identical}(a, b, \epsilon_r)\) matches atoms of one element under the minimum image, and each index is claimed once.
+The tolerance argument is \(\epsilon_r\).
+\texttt{internal\_motion} removes a rotation by the Kabsch fit, with the masses as optional weights.
+On a periodic frame it removes only the mean minimum-image translation, and the correspondence is the index.
+\texttt{rotational\_match} calls the iterative rotations and assignments alignment through pyeonclient
+\cite{gundeIRAShapeMatching2021}.
+\texttt{spacegroup} calls spglib.
+The API also provides \texttt{wulff\_vertices}.
+The three programs split the work as parse, store and compare.
+
+\begin{table}[tbp]
+\centering
+\caption{Commands of readcon-db and calls of readcon-ops.
+readcon-ops has no command line.
+The versions and the repositories are in the program summary.}
+\label{tab:commands}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
+\toprule
+Program & Call & Purpose \\
+\midrule
+readcon-db & \texttt{ingest} & store a CON trajectory \\
+readcon-db & \texttt{select} & return frames by element, formula or topology \\
+readcon-db & \texttt{dedup-export} & export unique frames \\
+readcon-db & \texttt{annotate-topology} & store the d-SEAMS fingerprint \\
+readcon-db & \texttt{find-by-topology} & select by that fingerprint \\
+readcon-db & \texttt{shard} & split the corpus \\
+readcon-db & \texttt{compact} & reclaim space \\
+readcon-db & \texttt{h5md-velocities} & write velocities as H5MD \\
+readcon-ops & \texttt{identical} & match atoms of one element under the minimum image \\
+readcon-ops & \texttt{internal\_motion} & remove a rigid motion \\
+readcon-ops & \texttt{rotational\_match} & align by iterative rotations and assignments \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Installation and usage}
+Rust is \texttt{cargo add readcon-core}.
+Python is \texttt{pip install readcon}, and the chemfiles bridge is \texttt{pip install readcon-chemfiles}.
+Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}.
+C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
+readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}.
+readcon-ops is not on PyPI.
+From a checkout of \url{https://github.com/lode-org/readcon-ops}, \texttt{pip install .} installs it.
+
 
 \section{Conformance}\label{sec:conformance} A specification settles a
 dispute between readers only when each reader can be tested against it.
@@ -840,8 +1047,159 @@ other \(\clauseUncovered\) state no duty of a reader.
 Section~\ref{sec:supp-moved} records the mutant construction and the extended XYZ drift.
 The published wheels are compared in Section~\ref{sec:supp-versions}.
 
-\section{Resumed saddle searches}\label{sec:cases}
-\subsection{Requirements on a restart file}
+\section{Applications}
+\subsection{Claisen}\label{sec:claisen}
+Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
+\cite{bakerLocationTransitionStates1996}.
+The reactant and the product are the same fourteen atoms.
+The path breaks one C--O bond and forms one C--C bond through a six-membered chair.
+The endpoints are the benchmark CON frames, used as written.
+Energies and forces are PET-MAD-S, version 1.1.0, through metatomic
+\cite{mazitovPETMADLightweight2025,bigiMetatensorMetatomicFoundational2026}.
+The band is an OCI-NEB with a climbing image
+\cite{henkelmanClimbingImageNudged2000}, run in eOn 3.6.0 on one CPU
+\cite{rohitgoswamiTheochemuieonV3602026}.
+A climbing image aligned to a Hessian eigenmode has the same pairing of the atoms
+\cite{goswamiEnhancedClimbingImage2026}.
+
+Label the atoms once, in the reactant.
+The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
+\begin{equation}
+\label{eq:lerp}
+R(s)=(1-s)\,R^{\mathrm{R}}+s\,R^{\mathrm{P}},\qquad s\in[0,1].
+\end{equation}
+The path length of Eq.~\eqref{eq:lerp} is \(|R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\mathrm{P}}-R^{\mathrm{R}}|\).
+The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
+
+The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
+That band converges.
+It has ten images, eight of them between the endpoints, and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
+The barrier is 0.607~eV (14.0~kcal/mol).
+The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
+The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
+One internal mode is imaginary, at \(-542.5\,\mathrm{cm}^{-1}\).
+
+IRA reassigns the same product by the rotation and the permutation that minimise the Hausdorff distance, with \(k_{\max}\) factor 3
+\cite{gundeIRAShapeMatching2021}.
+The permutation is \([0,4,3,1,2,5,6,7,11,12,13,9,8,10]\), and it moves 10 of the 14 atoms.
+The Hausdorff distance is \(2.109\,\text{\AA}\).
+Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on this map and \(1.519\,\text{\AA}\) on the identity map.
+The shorter distance pairs the wrong nuclei for the [3,3] shift.
+A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(-81.439\,\mathrm{eV}\) on the identity product: the same molecule, rigidly moved, so the endpoints are equivalent and only the labelling differs.
+
+That labelling was first run with the setup of the identity band: eight images between the endpoints, ten images in the band, an S-IDPP start
+\cite{smidstrupImprovedInitialGuess2014}, and the published climbing-image settings.
+The climbing image oscillated, and the band did not converge.
+The same labelling was then given sixteen images between the endpoints, eighteen in the band, a maximum step of \(0.05\,\text{\AA}\) against \(0.1\,\text{\AA}\), and a cap of 2000 iterations against 1000, with the climber held on (Figure~\ref{fig:claisen-band}).
+The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
+A further climbing-image-only continuation oscillated between about \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
+Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
+The highest image of the eighteen-image band lies at 3.988~eV (92.0~kcal/mol).
+The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
+Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
+The image is a higher-order stationary point.
+The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
+
+The minimum-Hausdorff assignment minimises a distance.
+The chemical map is the atom id, and that id has to travel with the coordinates.
+A CON row stores the id beside the position, and readcon returns the id with the position.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_wbo.pdf}
+\caption{Allyl vinyl ether, the identity-path chair, pent-4-enal, and the highest image of the renumbered band.
+Bond colour and width follow the Wiberg bond order.
+A bond of order below one half is dotted.
+On the chair the forming C5--C0 contact and the breaking C2--O bond are the partial bonds.
+The renumbered image has separated into C0--C1--C2\({=}\)O and C4--C5.}
+\label{fig:claisen-struct}
+\end{figure}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/claisen_neb.pdf}
+\caption{Final bands for allyl vinyl ether to pent-4-enal.
+Energy of each image above the reactant, joined in path order.
+The chemical map follows the atom ids.
+The Hausdorff reassignment follows the minimum-Hausdorff permutation of the product.
+Each label is the barrier of that band, the highest image above the reactant.
+The profiles are the journal figures of chemparseplot
+\cite{goswamiChemparseplot2026}.}
+\label{fig:claisen-band}
+\end{figure}
+
+
+\subsection{Connectivity tracking in d-SEAMS}\label{sec:connectivity}
+One trajectory suffices because the comparison is between two encodings of the same frames.
+The system is mW water, 4096 molecules
+\cite{molineroWaterModeledIntermediate2009}, equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K, with a 10~fs step and a 200~fs damping time, in the LAMMPS build of 22~July~2025
+\cite{thompsonLammpsFlexibleSimulation2022}.
+An 81-frame window, from 659~ps to 739~ps after the quench, brackets the frame at 705~ps in which a 50-molecule CHILL+ ice core is present
+\cite{nguyenIdentificationClathrateHydrates2015}.
+The neighbour cutoff is \(3.5\,\text{\AA}\), primitive rings are counted up to seven members, and the ice label is the CHILL+ class, the published d-SEAMS settings
+\cite{goswamiDseamsDeferredStructural2020}.
+The same frames were written as CON and as XYZ.
+A LAMMPS dump written without \texttt{dump\_modify sort} lists atoms in per-processor order, and that order changes as atoms migrate between subdomains.
+The XYZ order, permuted independently in every frame, stands for that listing and for any writer that reorders atoms.
+Both analyses use the same orthorhombic cell: the three lengths of the dump box and right angles, stored on the CON frame and repeated on the XYZ comment line.
+The protocol and the command that rebuilds Figure~\ref{fig:water} are in Section~\ref{sec:supp-water}.
+
+Persistence is the mean, over frames \(t\), of the fraction of a per-atom relation that is still true one lag later,
+\begin{equation}
+\label{eq:persist}
+P(\tau)=\left\langle\frac{|A(t)\cap A(t+\tau)|}{|A(t)|}\right\rangle_{t},
+\end{equation}
+with \(A(t)\) the set of neighbour pairs, or of molecule labels, at frame \(t\) (Figure~\ref{fig:water}).
+A neighbour drawn uniformly among the other molecules has chance \(z/(N-1)\), about 0.001, with \(z\) the number of neighbours of a molecule and \(N=4096\).
+Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}\), about 0.63, where \(p_k\) is the fraction of molecules of class \(k\).
+Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at about 0.001 on the permuted XYZ at every lag.
+The CHILL+ type of a molecule persists at 0.800, 0.790, 0.785 and 0.771 on CON, and at 0.630--0.631 on the permuted XYZ.
+Six-ring membership is 0.996--0.997 on CON and 0.995 on the permuted XYZ, because almost every molecule already sits in a six-ring, so it does not separate them.
+Ring counts and ice counts match on every frame of the two files.
+A whole-frame total survives the new order.
+Following one molecule as it joins the ice nucleus uses the atom id.
+
+The 81 frames, 4096 atoms each, were ingested into a readcon-db corpus and selected back by the formula \texttt{O:4096}.
+All 81 frames returned, bitwise identical in the positions and in the cell.
+The median wall time of that ingest and select is 0.578~s on the machine of Section~\ref{sec:compute}, and the eight repeats span 0.571--0.596~s.
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/water_persistence.pdf}
+\caption{Persistence of per-atom relations on one mW nucleation trajectory, against the lag in frames.
+(a)~Neighbour pairs.
+(b)~CHILL+ ice type.
+Circles are the CON frames.
+Squares are the same frames written as XYZ with the atom order permuted independently in every frame.
+The dashed line is the chance agreement of the ice type, 0.630--0.631.}
+\label{fig:water}
+\end{figure}
+
+
+The published d-SEAMS analyses read LAMMPS dump text.
+seams-core also reads a \texttt{.con} file through readcon-core.
+\texttt{sinp::readCon} takes one frame, and \texttt{cloudFromHandle} copies each atom into the point cloud.
+\texttt{Point::type} is the atomic number from the file.
+\texttt{Point::atomID} is the file's \texttt{atom\_id}.
+\texttt{mapAtomIdToIndex} records that id against the cloud index, so a later lookup uses the id and not the row the file happened to write.
+A sheared CON cell, lengths and angles, is stored as the same triclinic box a LAMMPS tilt dump carries: the three lengths and the \(xy\), \(xz\) and \(yz\) tilts.
+
+XYZ, as d-SEAMS reads it, has no atom id, so the id is the file order.
+Every XYZ atom is stored as type 1, and the comment line is not read as a cell.
+A LAMMPS dump carries an id column and a box only when the dump was written with them.
+A \texttt{.con} frame carries the id, the element and the triclinic cell on every frame.
+A per-atom result then joins the next frame, and a frame in a corpus, by that id.
+
+d-SEAMS uses the LAMMPS dump id for quasi-one-dimensional nanotube water; the same id-to-index map takes the CON \texttt{atom\_id}.
+\texttt{ring::rmAxialTranslations} finds the same atom in a later frame through the id-to-index map and shifts the tube along its axis.
+The per-atom record is one line of frame, atom id, \(c_{ij}\) and ice type.
+
+readcon-db ingests a \texttt{.con} trajectory into an LMDB corpus.
+seams-core selects that corpus by element or by formula, across the shard roots of a campaign, and decodes the \(N\)th hit with the same reader.
+
+\subsection{Resumed saddle searches}\label{sec:cases}
+\subsubsection{Requirements on a restart file}
 \label{sec:requirements}
 Table~\ref{tab:requirements} states five requirements.
 Each is a field a later step reads.
@@ -881,7 +1239,7 @@ Only the CON 3.1 route returns every field from places that its own specificatio
 Extended XYZ returns the mask and the identifiers through ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
 The other routes are in Section~\ref{sec:supp-rounds}.
 
-\subsection{A climbing-image band through every route} The restart study
+\subsubsection{A climbing-image band through every route} The restart study
 uses a larger slab, Pt(100) under the effective-medium theory (EMT)
 potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three
 layers of \(3\times3\) atoms with the bottom layer held in every
@@ -961,7 +1319,7 @@ other. Extended XYZ, six decimals and the ASE trajectory are drawn
 together.}
 \label{fig:restartfmt} \end{figure}
 
-\subsection{The mask and the prefactor}\label{sec:prefactor} A barrier
+\subsubsection{The mask and the prefactor}\label{sec:prefactor} A barrier
 is one number, and the harmonic prefactor needs the free modes at the
 saddle.
 The rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor of Eq.~\eqref{eq:vineyard}.
@@ -985,7 +1343,7 @@ saddle at \(0.68\,\mathrm{eV}\), with a prefactor 37 times larger.
 
 \input{figures/generated/e5_routes}
 
-\subsection{eOn resuming a Morse band}\label{sec:eon-band} The public
+\subsubsection{eOn resuming a Morse band}\label{sec:eon-band} The public
 eOn client resumes from its own output files.
 The default band optimiser of eOn is the limited-memory form, L-BFGS, of
 the Broyden, Fletcher, Goldfarb and Shanno update
@@ -996,7 +1354,7 @@ The uninterrupted Morse band, on eOn's Morse potential, takes 946 optimiser step
 The round trip reaches the same barrier, with a shift of 0, in 922 optimiser steps and 4617 force calls on the resumed leg.
 Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
 
-\subsection{The velocity unit}
+\subsubsection{The velocity unit}
 A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\) (Section~\ref{sec:supp-velunit}).
 
 \section{Performance}\label{sec:performance}
@@ -1007,6 +1365,10 @@ The machine, unless a caption says otherwise, is the Xeon of Section~\ref{sec:co
 The per-file matrices, the quartile triples and the rank-by-rank tables stay in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
 
 Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one copper extended XYZ file.
+On the \num{100000}-frame CON file the Rust reader takes 0.179~s, against 10.8~s for ASE's eon reader and 10.3~s for eOn \texttt{loadcons}.
+On the copper extended XYZ file readcon takes 0.301~s, against 1.52~s for chemfiles, 3.32~s for OVITO, 9.97~s for ASE and 23.6~s for pymatgen.
+On the million-atom extended XYZ frame, extxyz 0.4.6 takes 0.261~s and ASE \texttt{cextxyz} takes 0.275~s, and the Rust reader takes 0.287~s.
+OVITO reads that frame in 0.150~s.
 Rust, Python and the C reader are the readcon-core bindings.
 ASE is the eon reader on CON and the extended XYZ reader on the copper file.
 chemfiles, OVITO and pymatgen are on that extended XYZ file.
@@ -1018,7 +1380,7 @@ The writes of the million-atom frame and of the 10000-frame file are Table~\ref{
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Serial reads on one core, readcon-core 0.18.1, on the hardware of Section~\ref{sec:compute}.
+\caption{Serial reads on one core, on the hardware of Section~\ref{sec:compute}.
 Each CON entry is the type-7 median in seconds, with the interquartile range in parentheses.
 ASE's eon reader does not read convel.
 The extended XYZ row is the copper trajectory.}
@@ -1146,7 +1508,7 @@ The bandwidth and the disk footprint of the same copies are Figures~\ref{fig:db-
 \label{fig:db-query}
 \end{figure}
 
-\section{Computational details}\label{sec:compute}
+\subsection{Computational details}\label{sec:compute}
 The timings use one core of an Intel Xeon Processor (family 6, model 207) with 8 cores and \SI{47}{\gibi\byte} of memory, kernel 6.12.113+.
 The column-walker timings use readcon-core 0.18.1, compiled with rustc 1.91.0 and Python 3.12.3.
 The short-decimal session uses rustc 1.88.0.
@@ -1157,6 +1519,8 @@ The loadcons timings use a development build of eOn 3.6.0.
 Each median is the type-7 median of six repeats after one warmup.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
+readcon-core reads and writes CON 3.1.
+It keeps the atom id, the per-axis mask, the masses and the declared velocity time unit on every frame, and one Rust core serves C, C++, Fortran, Julia and Python.
 The barrier a band reports is the barrier of the atom map in the file.
 On allyl vinyl ether the identity map converges to 0.607~eV at a chair transition state with one imaginary mode, at \(-542.5\,\mathrm{cm}^{-1}\).
 The minimum-Hausdorff renumbering of the same atoms reaches 3.988~eV at two separated fragments, a higher-order point, and does not converge to \(0.05\,\mathrm{eV/\text{\AA}}\).
