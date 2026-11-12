@@ -15,6 +15,15 @@ F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
 \end{equation}
 A permutation matrix \(\Pi\) applied to one image replaces \(R\) by \(\Pi R\).
 The differences in Eq.~\eqref{eq:tangent} then connect different atoms, and the spring in Eq.~\eqref{eq:spring} pulls along that wrong chord.
+The dimer axis has the same pairing.
+With the two images \(R_0\) and \(R_1\),
+\begin{equation}
+\label{eq:dimer}
+\hat N=(R_1-R_0)/|R_1-R_0|,
+\end{equation}
+and the rotational force is built from the parts of \(-\nabla V(R_1)\) and \(-\nabla V(R_0)\) perpendicular to \(\hat N\)
+\cite{henkelmanDimerMethodFinding1999}.
+Both \(\hat N\) and that force pair slot \(i\) of \(R_1\) with slot \(i\) of \(R_0\).
 The Cartesian RMSD between reactant and product has the same dependence,
 \begin{equation}
 \label{eq:rmsd}
@@ -28,8 +37,16 @@ Two-sided searches need that map before the first image is placed
 The image-dependent pair potential builds its target from the distances \(d_{ab}\) of a chosen map and then runs NEB on that objective
 \cite{smidstrupImprovedInitialGuess2014}.
 A wrong map asks the band to turn the wrong pairs of atoms into neighbours.
+Adaptive kinetic Monte Carlo records a process by its saddle.
+Two saddles \(R\) and \(R'\) are the same process only when \(|\Pi R-R'|<\epsilon\) for the stored permutation \(\Pi\), and the catalog stores the identity map.
 Harmonic transition-state theory has the same index.
-The Vineyard prefactor, Eq.~\eqref{eq:vineyard}, is a ratio of frequencies of the free Cartesian modes.
+In harmonic transition state theory the rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor
+\cite{vineyardFrequencyFactorsIsotope1957}
+\begin{equation}
+\label{eq:vineyard}
+\nu=\frac{\prod_{i=1}^{n}\nu_i^{\mathrm{min}}}{\prod_{i=1}^{n-1}\nu_i^{\ddagger}},
+\end{equation}
+where the products run over the \(n\) free modes of the minimum and the \(n-1\) real modes of the saddle.
 Those modes are eigenvectors of the mass-weighted Hessian in the order of \(R\).
 A permutation reorders the Hessian, and a mask that frees one more component changes which eigenvalues enter the products.
 
@@ -65,7 +82,7 @@ The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, t
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
 That band converges.
-It has ten images and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
+It has ten images, eight of them between the endpoints, and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
 The barrier is 0.607~eV (14.0~kcal/mol).
 The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
 The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
@@ -77,17 +94,21 @@ The permutation is \([0,4,3,1,2,5,6,7,11,12,13,9,8,10]\), and it moves 10 of the
 The Hausdorff distance is \(2.109\,\text{\AA}\).
 Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on this map and \(1.519\,\text{\AA}\) on the identity map.
 The shorter distance pairs the wrong nuclei for the [3,3] shift.
+A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(-81.439\,\mathrm{eV}\) on the identity product: the same molecule, rigidly moved, so the endpoints are equivalent and only the labelling differs.
 
-The band on that product has eighteen images (Figure~\ref{fig:claisen-band}).
-Its force remains above \(0.05\,\mathrm{eV/\text{\AA}}\).
-The lowest value is \(0.189\,\mathrm{eV/\text{\AA}}\), at iteration 362.
-The highest image lies at 3.988~eV (92.0~kcal/mol).
+That labelling was first run with the setup of the identity band: eight images between the endpoints, ten images in the band, an S-IDPP start
+\cite{smidstrupImprovedInitialGuess2014}, and the published climbing-image settings.
+The climber chattered, and the band did not converge.
+The same labelling was then given sixteen images between the endpoints, eighteen in the band, a maximum step of \(0.05\,\text{\AA}\) against \(0.1\,\text{\AA}\), and a cap of 2000 iterations against 1000, with the climber held on (Figure~\ref{fig:claisen-band}).
+The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
+A further climbing-image-only continuation oscillated between about \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
+Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
+The highest image of the eighteen-image band lies at 3.988~eV (92.0~kcal/mol).
 The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
 Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
 The image is a higher-order stationary point.
 The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
 
-A swap of H11 with H13, and no other change of label, produces a band different from the [3,3] map.
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon returns the id with the position.
@@ -129,17 +150,23 @@ A LAMMPS dump carries an id column and a box only when the dump was written with
 A \texttt{.con} frame carries the id, the element and the triclinic cell on every frame.
 A per-atom result then joins the next frame, and a frame in a corpus, by that id.
 
-d-SEAMS uses that id for quasi-one-dimensional nanotube water.
+d-SEAMS uses the LAMMPS dump id for quasi-one-dimensional nanotube water; the same id-to-index map takes the CON \texttt{atom\_id}.
 \texttt{ring::rmAxialTranslations} finds the same atom in a later frame through the id-to-index map and shifts the tube along its axis.
 The per-atom record is one line of frame, atom id, \(c_{ij}\) and ice type.
 
 readcon-db ingests a \texttt{.con} trajectory into an LMDB corpus.
 seams-core selects that corpus by element or by formula, across the shard roots of a campaign, and decodes the \(N\)th hit with the same reader.
 
-\noindent\textbf{Placeholder for the mW water demo.}
+\begin{center}
+\fcolorbox{red}{red!6}{%
+\begin{minipage}{0.92\textwidth}
+\raggedright
+\textcolor{red}{\textbf{PLACEHOLDER: mW water demo}}\\[0.4em]
 The demo reads ring and hydrogen-bond persistence by id from a \texttt{.con} trajectory, the same trajectory written as XYZ and shuffled in frame order, and the round trip through readcon-db.
 The figure and the numbers are not in this draft.
 No value is stated here.
+\end{minipage}}
+\end{center}
 
 \section{The fields the rate actually reads}\label{sec:fields}
 CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id, and a velocity section with its own time unit.
@@ -149,14 +176,15 @@ Column 5 is the atom id, and it holds the original index.
 A rewrite that groups the rows by element recovers that order from the column.
 ASE's eon reader ignores the column
 \cite{larsenAtomicSimulationEnvironmenta2017}.
-XYZ and extended XYZ carry no atom id
-\cite{kermodeLibatomsExtxyzV0462026}.
+Plain XYZ has no id column.
+Extended XYZ carries one only under ASE's column name, which no grammar reserves
+\cite{kermodeLibatomsExtxyzV0462026} (Table~\ref{tab:spec-compare}).
 A LAMMPS dump and an H5MD file can carry one
 \cite{thompsonLammpsFlexibleSimulation2022,buylH5mdStructuredEfficient2014}.
 readcon keeps \texttt{atom\_id} through the read and the write, so the identity survives the reordering.
 A NEB band, a dimer and an AKMC comparison of images need that identity.
 It holds when the writer leaves \texttt{atom\_id} stable.
-XYZ cannot store that id.
+Plain XYZ has no column for that id.
 
 Column 4 is a per-axis mask, an integer from 0 to 7, Eq.~\eqref{eq:mask}.
 The mask removes Cartesian components from the free set \(n\) in Eq.~\eqref{eq:vineyard}.
@@ -199,35 +227,24 @@ A CON 3.1 round trip returns the uninterrupted barrier.
 A file that moves a coordinate or drops the mask returns a different one.
 
 \section{The readcon tools}\label{sec:ecosystem}
-readcon-core 0.20.0 is the reader and writer of one frame.
-It parses CON and convel, checks the grammar, and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
+readcon-core parses CON and convel and returns the coordinates as the column \(R\) of Eq.~\eqref{eq:tangent} or as one frame object per image.
 C, C++, Fortran, Julia and Python call that parser.
-Algorithm~\ref{alg:parser} is the path reader.
+Algorithm~\ref{alg:parser} is the path reader of the timed release, readcon-core 0.18.1.
 The C entry \(\texttt{rkr\_read\_positions}\) and the Rust entry \(\texttt{read\_positions}\) both return that column, and the coordinates match.
 The same read and write keep \texttt{atom\_id}.
 
 readcon-db 0.2.1, under the MIT licence, from lode-org/readcon-db, stores the corpus in LMDB.
-A frame key is 12 bytes: the trajectory id as a big-endian 64-bit integer, then the frame index as a big-endian 32-bit integer.
-The record is the CON text, optionally compressed with zstd
-\cite{colletZstandardCompressionApplicationzstd2021}.
-The exact identity of a frame is the xxHash3-128 of that text.
-The indexes are the atom count, the symbol, the element counts, the formula, as in \texttt{Cu:2|H:2}, the energy, the maximum force, the mass, the volume, the periodic flags, the metadata, the flags and the topology.
-The metadata holds the time, the NEB bead and the band, the charge and the magnetic moment.
-\texttt{annotate-topology} runs the d-SEAMS fingerprint, a cutoff graph to two hops, with nauty or a Weisfeiler--Lehman colouring.
-The resulting key names the bonded graph up to relabelling: a rooted-neighbourhood certificate on each atom, and a ring census
-\cite{trochetDiffusionPointDefects2015}.
-That key is separate from the byte hash.
+A frame key is 12 bytes, the trajectory id and the frame index, and the record is the CON text (Section~\ref{sec:supp-tools}).
 The commands are \texttt{ingest}, \texttt{select}, \texttt{dedup-export}, \texttt{annotate-topology}, \texttt{find-by-topology}, \texttt{shard}, \texttt{compact} and \texttt{h5md-velocities}.
-\texttt{select} takes \texttt{-{}-formula}, \texttt{-{}-require-*}, \texttt{-{}-topo-key} and \texttt{-{}-neb-bead-*}.
-The corpus is also a Python module and a C and Fortran interface.
-seams-core selects from it by element or by formula (Section~\ref{sec:connectivity}).
-In the AKMC catalog amsel, each process stores its barrier, its prefactor and its mode, and points at three frames of the corpus: the reactant, the saddle and the product.
+seams-core selects from the corpus by element or by formula (Section~\ref{sec:connectivity}).
+In the AKMC catalog amsel, each process stores its barrier, its prefactor and its mode, and points at three frames: the reactant, the saddle and the product.
 The saddle carries a displacements section with the same fixed-flag column and the same \texttt{atom\_id} column as the coordinates.
 
 readcon-ops 0.1.1, under the BSD 3-clause licence, from lode-org/readcon-ops, is a Python API.
 It has no command line and no file input or output.
 The argument is a \texttt{ConFrame} or a pyeonclient object, and the distances come from lode-org/minimage.
-\texttt{identical(a, b, eps)} matches atoms of one element under the minimum image, and each index is claimed once.
+\(\texttt{identical}(a, b, \epsilon_r)\) matches atoms of one element under the minimum image, and each index is claimed once.
+The tolerance argument is \(\epsilon_r\).
 \texttt{internal\_motion} removes a rotation by the Kabsch fit, with the masses as optional weights.
 On a periodic frame it removes only the mean minimum-image translation, and the correspondence is the index.
 \texttt{rotational\_match} calls the iterative rotations and assignments alignment through pyeonclient
