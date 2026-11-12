@@ -1,9 +1,9 @@
 use crate::helpers::symbol_to_atomic_number;
 use crate::iterators::{self, ConFrameIterator};
-use crate::types::{meta, ConFrame, ConFrameBuilder};
-use crate::writer::{binding_rewrite_frame, ConFrameWriter};
+use crate::types::{ConFrame, ConFrameBuilder, meta};
+use crate::writer::{ConFrameWriter, binding_rewrite_frame};
 use std::cell::RefCell;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::fs::File;
 use std::path::Path;
 use std::ptr;
@@ -568,6 +568,7 @@ fn note_located(err: &crate::error::LocatedParseError) -> RKRStatus {
 ///
 /// A located parse keeps its file line and frame index. Any other failure
 /// is I/O, including a peer rank's parse and a path that could not be read.
+#[cfg(any(test, feature = "mpi"))]
 pub(crate) fn record_mpi_failure(err: &(dyn std::error::Error + 'static)) {
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
         note_located(located);
@@ -582,6 +583,7 @@ pub(crate) fn record_mpi_failure(err: &(dyn std::error::Error + 'static)) {
 }
 
 /// Store a status whose message is not the fixed `rkr_status_message` text.
+#[cfg(feature = "mpi")]
 pub(crate) fn record_status_message(status: RKRStatus, message: &str) {
     set_last_error(status as i32, message, 0, 0);
 }
@@ -1589,7 +1591,12 @@ pub unsafe extern "C" fn create_writer_from_path_append_c(
     match crate::writer::open_uncompressed_append(Path::new(filename)) {
         Ok(file) => into_rkr_writer(Box::new(file), None),
         Err(err) => {
-            set_last_error(&err.to_string());
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                &err.to_string(),
+                0,
+                0,
+            );
             ptr::null_mut()
         }
     }
@@ -1612,7 +1619,12 @@ pub unsafe extern "C" fn create_writer_from_path_append_with_precision_c(
     match crate::writer::open_uncompressed_append(Path::new(filename)) {
         Ok(file) => into_rkr_writer(Box::new(file), Some(precision)),
         Err(err) => {
-            set_last_error(&err.to_string());
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                &err.to_string(),
+                0,
+                0,
+            );
             ptr::null_mut()
         }
     }
@@ -1812,7 +1824,12 @@ pub unsafe extern "C" fn rkr_write_frames_to_string(
                 return RKRStatus::RKR_STATUS_NULL_POINTER;
             };
             if let Err(err) = writer.write_frame(frame) {
-                set_last_error(&err.to_string());
+                set_last_error(
+                    RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                    &err.to_string(),
+                    0,
+                    0,
+                );
                 return RKRStatus::RKR_STATUS_IO_ERROR;
             }
         }
@@ -1828,7 +1845,12 @@ pub unsafe extern "C" fn rkr_write_frames_to_string(
             RKRStatus::RKR_STATUS_SUCCESS
         }
         Err(_) => {
-            set_last_error("serialized CON contains an interior NUL");
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                "serialized CON contains an interior NUL",
+                0,
+                0,
+            );
             RKRStatus::RKR_STATUS_IO_ERROR
         }
     }
@@ -6111,7 +6133,10 @@ Coordinates of Component 1
             unsafe { rkr_frame_copy_positions(*arr, buf.as_mut_ptr(), buf.len()) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        assert_eq!(buf[0].to_bits(), serial[0].positions.as_f64_row(0)[0].to_bits());
+        assert_eq!(
+            buf[0].to_bits(),
+            serial[0].positions.as_f64_row(0)[0].to_bits()
+        );
         unsafe { free_rkr_frame_array(arr, n) };
         let bad = dir.path().join("bad.con");
         std::fs::write(&bad, text.replace("angstrom", "not-a-unit")).unwrap();
@@ -7088,8 +7113,8 @@ Coordinates of Component 1
 
     #[test]
     fn file_iterator_reads_gzip_when_present() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
         let plain = std::fs::read("resources/test/tiny_cuh2.con").expect("fixture");
         let dir = tempfile::tempdir().expect("tempdir");

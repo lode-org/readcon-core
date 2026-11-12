@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{parse_declared_sections, LineStream};
+use crate::parser::{LineStream, parse_declared_sections};
 use crate::{error, types};
 use std::path::Path;
 
@@ -193,11 +193,7 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad {
-            invalid_utf8()
-        } else {
-            err
-        }
+        if self.utf8_bad { invalid_utf8() } else { err }
     }
 }
 
@@ -537,6 +533,12 @@ impl<'a> ConFrameIterator<'a> {
         let (found, end) = unsafe { skip_newlines_avx2(rest, n) };
         if found == n {
             self.lines.pos += end;
+            // The per-line walk counts each skipped line. The vectorized
+            // jump has to keep the same 1-based file line.
+            self.lines.line_no = self
+                .lines
+                .line_no
+                .saturating_add(u32::try_from(n).unwrap_or(u32::MAX));
             return Ok(());
         }
         if rest.is_empty() {
@@ -544,7 +546,12 @@ impl<'a> ConFrameIterator<'a> {
         }
         let has_tail = rest.last().copied() != Some(b'\n');
         self.lines.pos = self.lines.bytes.len();
-        if found + usize::from(has_tail) >= n {
+        let counted = found + usize::from(has_tail);
+        self.lines.line_no = self
+            .lines
+            .line_no
+            .saturating_add(u32::try_from(counted).unwrap_or(u32::MAX));
+        if counted >= n {
             Ok(())
         } else {
             Err(error::ParseError::IncompleteFrame)
@@ -1910,8 +1917,8 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache(
-) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache()
+-> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -2505,11 +2512,7 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 {
-        1
-    } else {
-        requested
-    }
+    if len < 2 { 1 } else { requested }
 }
 
 /// I/O, UTF-8, or a located parse failure while loading a path.
@@ -4048,12 +4051,13 @@ mod phased_read_tests {
     }
 
     #[test]
-    fn a_whitespace_tail_skips_the_equal_span_walk() {
+    fn a_whitespace_tail_uses_the_equal_span_walk() {
         let mut text = fixture("cuh2.con").repeat(3);
         text.push('\n');
-        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
+        assert!(equal_span_boundaries(text.as_bytes(), 4).is_some());
         let serial = frames_from_text(&text, Some(1)).expect("serial");
         let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(parallel.scan_kind, SCAN_EQUAL_SPAN);
         assert_eq!(parallel.frames, serial);
     }
 
@@ -4396,9 +4400,11 @@ mod frame_equality_tests {
             .map(|frame| frame.expect("convel"))
             .collect();
         assert_eq!(frames.len(), 3);
-        assert!(frames
-            .iter()
-            .all(|frame| frame.atom_data[0].velocity().is_some()));
+        assert!(
+            frames
+                .iter()
+                .all(|frame| frame.atom_data[0].velocity().is_some())
+        );
         assert_eq!(frames[0].positions.nrows(), 5);
         // Every stored coordinate and velocity bit matches the general parser.
         let mut frame_i = 0usize;
