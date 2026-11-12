@@ -78,7 +78,17 @@ if [[ ! -f "$ROOT_DIR/Cargo.toml" ]]; then
     exit 1
 fi
 
-VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
+# Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
+# drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The
+# path is an argument so those backslashes are not Python string escapes.
+version_file="$ROOT_DIR/VERSION"
+if command -v cygpath >/dev/null 2>&1; then
+    version_file="$(cygpath -w "$version_file")"
+fi
+VERSION="$(
+    python3 -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).read_text().strip(), end="")' \
+        "$version_file"
+)"
 if [[ -z "$VERSION" ]]; then
     echo "package-clib: could not read $ROOT_DIR/VERSION" >&2
     exit 1

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -163,6 +164,7 @@ class ReleaseArtifactGuard(unittest.TestCase):
         yml = (ROOT / ".github/workflows/dist_backfill.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", yml)
         self.assertIn("gh release upload", yml)
+        self.assertIn('--repo "$GITHUB_REPOSITORY"', yml)
         self.assertIn("--clobber", yml)
         self.assertIn("ref: ${{ needs.plan.outputs.tag }}", yml)
         self.assertIn("packager/scripts/check_release_artifacts.py", yml)
@@ -278,14 +280,91 @@ class ReleaseArtifactGuard(unittest.TestCase):
             self.assertIn(f"source_hash = sha256:{vendor_sha}", vendor_wrap)
             self.assertNotEqual(slim_sha, vendor_sha)
 
+    def test_package_scripts_hand_cygpath_output_to_python(self) -> None:
+        for name in ("package-clib.sh", "package-cxx.sh"):
+            text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+            self.assertIn("cygpath -w", text)
+            self.assertIn("sys.argv[1]", text)
+            self.assertNotIn("Path(\"'\"$ROOT_DIR\"'", text)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            log = root / "cygpath.log"
+            argv_log = root / "python-argv.txt"
+            cygpath = bin_dir / "cygpath"
+            cygpath.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$*" >> "$CYGPATH_LOG"\n'
+                "shift\n"
+                'printf "%s\\n" "$1"\n',
+                encoding="utf-8",
+            )
+            cygpath.chmod(cygpath.stat().st_mode | stat.S_IEXEC)
+            wrapper = bin_dir / "python3"
+            wrapper.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$3" >> "$PYTHON_ARGV"\n'
+                'exec /usr/bin/python3 "$@"\n',
+                encoding="utf-8",
+            )
+            wrapper.chmod(wrapper.stat().st_mode | stat.S_IEXEC)
+            prefix = root / "prefix"
+            (prefix / "include").mkdir(parents=True)
+            (prefix / "lib" / "pkgconfig").mkdir(parents=True)
+            for header in (
+                "readcon-core.h",
+                "readcon-core.hpp",
+                "readcon-metatensor.h",
+            ):
+                (prefix / "include" / header).write_bytes(
+                    (ROOT / "include" / header).read_bytes()
+                )
+            (prefix / "lib" / "libreadcon_core.so").write_text(
+                "stub\n", encoding="utf-8"
+            )
+            out = root / "out"
+            out.mkdir()
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+            env["CYGPATH_LOG"] = str(log)
+            env["PYTHON_ARGV"] = str(argv_log)
+            done = subprocess.run(
+                [
+                    "bash",
+                    "scripts/package-clib.sh",
+                    str(out),
+                    "--from-prefix",
+                    str(prefix),
+                    "--target",
+                    "fixture",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            recorded = log.read_text(encoding="utf-8").splitlines()
+            self.assertTrue(recorded, "cygpath was not called")
+            self.assertTrue(recorded[0].startswith("-w "))
+            version_path = recorded[0].split(" ", 1)[1]
+            self.assertTrue(version_path.endswith("/VERSION"), version_path)
+            self.assertEqual(
+                argv_log.read_text(encoding="utf-8").splitlines()[0],
+                version_path,
+            )
+
     def test_clib_nested_checkout_accepts_the_julia_manifest(self) -> None:
         yml = (ROOT / ".github/workflows/c_lib_tarball.yml").read_text(encoding="utf-8")
+        self.assertIn("cygpath -w", yml)
         self.assertIn(
-            'python3 "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py"',
+            'native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py"',
             yml,
         )
-        self.assertIn('--version-file "$GITHUB_WORKSPACE/src/VERSION"', yml)
-        self.assertIn('--dist "$GITHUB_WORKSPACE/dist-clib"', yml)
+        self.assertIn('native "$GITHUB_WORKSPACE/src/VERSION"', yml)
+        self.assertIn('native "$GITHUB_WORKSPACE/dist-clib"', yml)
         self.assertNotIn(
             'python3 scripts/check_release_artifacts.py --tag "$RELEASE_TAG" --dist dist-clib',
             yml,
@@ -411,10 +490,12 @@ lazy = true
         [
             "bash",
             "-lc",
-            'python3 "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py" '
+            'native() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; '
+            'else printf "%s\\n" "$1"; fi; }; '
+            'python3 "$(native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py")" '
             '--tag "$RELEASE_TAG" '
-            '--version-file "$GITHUB_WORKSPACE/src/VERSION" '
-            '--dist "$GITHUB_WORKSPACE/dist-clib"',
+            '--version-file "$(native "$GITHUB_WORKSPACE/src/VERSION")" '
+            '--dist "$(native "$GITHUB_WORKSPACE/dist-clib")"',
         ],
         cwd=ws,
         env=env,

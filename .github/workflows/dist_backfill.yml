@@ -65,7 +65,7 @@ jobs:
           fi
           # Refuse before the matrix builds if the release is missing.
           # `gh release upload` does not create a release or a tag.
-          gh release view "$RELEASE_TAG" --json tagName --jq .tagName >/dev/null
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName >/dev/null
           dist plan --tag="$RELEASE_TAG" --output-format=json > plan-dist-manifest.json
           echo "dist ran successfully"
           {
@@ -271,4 +271,4 @@ jobs:
             exit 1
           fi
           printf 'upload %s\n' "${files[@]}"
-          gh release upload "$RELEASE_TAG" --clobber "${files[@]}"
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"

@@ -32,7 +32,17 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
+# Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
+# drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The
+# path is an argument so those backslashes are not Python string escapes.
+version_file="$ROOT_DIR/VERSION"
+if command -v cygpath >/dev/null 2>&1; then
+    version_file="$(cygpath -w "$version_file")"
+fi
+VERSION="$(
+    python3 -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).read_text().strip(), end="")' \
+        "$version_file"
+)"
 if [[ "$VENDOR" -eq 1 ]]; then
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}-vendor"
 else

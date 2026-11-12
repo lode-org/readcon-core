@@ -174,10 +174,20 @@ jobs:
           # VERSION has to be the packed tree, and the script has to be the
           # packager copy. Both paths are absolute so the workspace root,
           # which has neither scripts/ nor VERSION, is not the lookup root.
-          python3 "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py" \
+          # A Git Bash /d/a path loses its drive letter in Windows pathlib.
+          # cygpath -w yields D:\a\... . ${GITHUB_WORKSPACE} is already that
+          # native path when the runner set it; cygpath covers a POSIX copy.
+          native() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -w "$1"
+            else
+              printf '%s\n' "$1"
+            fi
+          }
+          python3 "$(native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py")" \
             --tag "$RELEASE_TAG" \
-            --version-file "$GITHUB_WORKSPACE/src/VERSION" \
-            --dist "$GITHUB_WORKSPACE/dist-clib"
+            --version-file "$(native "$GITHUB_WORKSPACE/src/VERSION")" \
+            --dist "$(native "$GITHUB_WORKSPACE/dist-clib")"
 
       - name: Upload tarball to GitHub Release
         shell: bash

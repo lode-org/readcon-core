@@ -73,8 +73,18 @@ for asset in "$@"; do
   fi
 done
 
+# The clib job checks out into packager/ and src/, so the workspace root is
+# not a git repository. Without --repo, gh reports a missing release and the
+# real error is the only way to tell that apart from a tag that was never
+# published.
+repo="${GITHUB_REPOSITORY:-}"
+if [ -z "$repo" ]; then
+  echo "GITHUB_REPOSITORY is empty; refusing to upload" >&2
+  exit 1
+fi
+
 if [ "$dry_run" -eq 1 ]; then
-  printf 'would run: gh release upload %q --clobber' "$tag"
+  printf 'would run: gh release upload %q --repo %q --clobber' "$tag" "$repo"
   for asset in "$@"; do
     printf ' %q' "$asset"
   done
@@ -92,18 +102,14 @@ if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
   exit 1
 fi
 
-repo="${GITHUB_REPOSITORY:-}"
-if [ -z "$repo" ]; then
-  echo "GITHUB_REPOSITORY is empty; refusing to upload" >&2
-  exit 1
-fi
-
 poll="${UPLOAD_POLL_SECONDS:-15}"
 limit="${UPLOAD_WAIT_TIMEOUT:-2700}"
 deadline=$((SECONDS + limit))
 
+# Leave stderr on the terminal. Redirecting it made a missing git remote
+# look like "release does not exist".
 have_release() {
-  gh release view "$tag" --json tagName --jq .tagName >/dev/null 2>&1
+  gh release view "$tag" --repo "$repo" --json tagName --jq .tagName >/dev/null
 }
 
 if [ "$wait_for" -eq 1 ]; then
@@ -124,7 +130,7 @@ tag_sha() {
 }
 
 before="$(tag_sha)"
-gh release upload "$tag" --clobber "$@"
+gh release upload "$tag" --repo "$repo" --clobber "$@"
 after="$(tag_sha)"
 if [ "$before" != "$after" ]; then
   echo "tag $tag moved during upload (${before} -> ${after})" >&2
