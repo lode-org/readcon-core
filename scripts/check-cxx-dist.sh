@@ -47,6 +47,7 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 [[ -x scripts/reproducible-tar.sh ]] || die "scripts/reproducible-tar.sh must be executable"
 [[ -x scripts/source-date-epoch.sh ]] || die "scripts/source-date-epoch.sh must be executable"
 [[ -x scripts/record-cxx-wrap.sh ]] || die "scripts/record-cxx-wrap.sh must be executable"
+[[ -x scripts/accept-cxx-wrap-pin.sh ]] || die "scripts/accept-cxx-wrap-pin.sh must be executable"
 if ! grep -q 'reproducible-tar.sh' scripts/package-cxx.sh \
     || ! grep -q 'reproducible-tar.sh' scripts/package-clib.sh \
     || ! grep -q 'SOURCE_DATE_EPOCH' scripts/package-cxx.sh \
@@ -72,7 +73,10 @@ fi
 if ! grep -q 'record-cxx-wrap.sh' scripts/release-prep.sh; then
     die "release-prep.sh must pin the wrap from the slim cxx archive"
 fi
-if ! grep -q 'refusing upload' .github/workflows/cxx_tarball.yml \
+if ! grep -q 'uploader/scripts/accept-cxx-wrap-pin.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'GITHUB_WORKSPACE/scripts/accept-cxx-wrap-pin.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'refusing upload' scripts/accept-cxx-wrap-pin.sh \
+    || ! grep -q 'readcon-core.sha256' scripts/accept-cxx-wrap-pin.sh \
     || ! grep -q 'readcon-core.sha256' .github/workflows/cxx_tarball.yml; then
     die "cxx_tarball.yml must refuse an upload whose digest differs from the wrap pin"
 fi

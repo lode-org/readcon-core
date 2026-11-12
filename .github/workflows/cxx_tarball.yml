@@ -88,16 +88,21 @@ jobs:
           cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz.sha256" dist-cxx/
           ls -lh dist-cxx build-cxx/slim build-cxx/vendor
 
+      # Tag push: the packed checkout's readcon-core.sha256 is the only pin.
+      # workflow_dispatch packs that tag from a newer workflow ref. The
+      # script next to the uploader may accept that ref's pin when both
+      # trees name the same VERSION and the pin is the archive just built.
       - name: Refuse a wrap pin that is not this build
         run: |
           set -euo pipefail
           ver="$(tr -d '[:space:]' < VERSION)"
           built="$(tr -d '[:space:]' < "dist-cxx/readcon-core-cxx-${ver}.tar.gz.sha256")"
-          pinned="$(tr -d '[:space:]' < packaging/wrapdb/readcon-core.sha256)"
-          if [ "$built" != "$pinned" ]; then
-            echo "refusing upload: built ${built} != wrap pin ${pinned}" >&2
-            echo "Run scripts/record-cxx-wrap.sh and commit that pin before tagging." >&2
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            bash "$GITHUB_WORKSPACE/uploader/scripts/accept-cxx-wrap-pin.sh" \
+              "$built" "$GITHUB_WORKSPACE"
+          else
+            bash "$GITHUB_WORKSPACE/scripts/accept-cxx-wrap-pin.sh" \
+              "$built" "$GITHUB_WORKSPACE"
           fi
 
       - name: Require tarball names to match the tag

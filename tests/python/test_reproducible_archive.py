@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EPOCH_SCRIPT = ROOT / "scripts" / "source-date-epoch.sh"
+PIN_SCRIPT = ROOT / "scripts" / "accept-cxx-wrap-pin.sh"
 TAR_SCRIPT = ROOT / "scripts" / "reproducible-tar.sh"
 PIN = (
     (ROOT / "packaging" / "wrapdb" / "source-date-epoch")
@@ -198,6 +199,74 @@ class SourceDateEpochTest(unittest.TestCase):
                     ],
                     check=False,
                 )
+
+
+class AcceptCxxWrapPinTest(unittest.TestCase):
+    def test_tag_pin_match_does_not_consult_the_workflow_ref(self) -> None:
+        built = "3" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tag"
+            _write_pin(root, "9.9.9", built)
+            done = _run(PIN_SCRIPT, [built, str(root)], {})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, "")
+
+    def test_same_tree_mismatch_is_a_refusal(self) -> None:
+        built = "0" * 64
+        done = _run(PIN_SCRIPT, [built, str(ROOT)], {})
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(f"refusing upload: built {built} != wrap pin", done.stderr)
+        self.assertNotIn("workflow-ref", done.stderr)
+        self.assertNotIn("workflow-ref pin matches", done.stdout)
+
+    def test_workflow_ref_pin_when_the_versions_match(self) -> None:
+        pin = (
+            (ROOT / "packaging" / "wrapdb" / "readcon-core.sha256")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tag"
+            _write_pin(root, VERSION, "1" * 64)
+            done = _run(PIN_SCRIPT, [pin, str(root)], {})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("workflow-ref pin matches this build", done.stdout)
+
+    def test_workflow_ref_pin_is_not_used_for_another_version(self) -> None:
+        pin = (
+            (ROOT / "packaging" / "wrapdb" / "readcon-core.sha256")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "old"
+            _write_pin(root, "9.9.9", "1" * 64)
+            done = _run(PIN_SCRIPT, [pin, str(root)], {})
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("refusing upload", done.stderr)
+        self.assertNotIn("workflow-ref pin matches", done.stdout)
+
+    def test_workflow_ref_pin_must_be_this_build(self) -> None:
+        built = "2" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "tag"
+            _write_pin(root, VERSION, "1" * 64)
+            done = _run(PIN_SCRIPT, [built, str(root)], {})
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(
+            f"refusing upload: built {built} != wrap pin {'1' * 64}",
+            done.stderr,
+        )
+        self.assertIn("workflow-ref pin", done.stderr)
+        self.assertIn("does not match this build either", done.stderr)
+
+
+def _write_pin(root: Path, version: str, digest: str) -> None:
+    root.mkdir(parents=True)
+    (root / "VERSION").write_text(version + "\n", encoding="utf-8")
+    pin = root / "packaging" / "wrapdb"
+    pin.mkdir(parents=True)
+    (pin / "readcon-core.sha256").write_text(digest + "\n", encoding="utf-8")
 
 
 def _fill(root: Path, order: str) -> None:
