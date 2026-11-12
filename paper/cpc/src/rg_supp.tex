@@ -576,10 +576,10 @@ medians are 0.567~s and 0.657~s.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The readers timed on the Xeon are named in Section~\ref{sec:host} of the main text.
 
-\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process, and the four do not return the same outcome on every file.
-On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
-Only the second refuses a file with a legacy velocity label in capitals or separated by tabs, which the other three read.
-On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.
+\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process.
+On a file of two frames whose first line is empty, 0.17.0 returns no frames and 0.17.1, 0.17.2 and 0.17.3 return two frames.
+On a legacy velocity label in capitals or separated by tabs, 0.17.1 returns no frame and the other three return the frame.
+On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2 and 0.17.3 return no frame and 0.17.0 and 0.17.1 return the frame, and 0.17.3 returns the outcome of 0.17.2 on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 The stored campaigns use readcon-core~\readconversion{}.

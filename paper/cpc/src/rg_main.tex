@@ -385,6 +385,7 @@ The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
 Of the readers tested, only readcon-core returns all four restart fields.
+CON 3.1 is the first written specification of CON, and readcon-core is the only reader tested that returns the mask, the id, the masses and the time unit together.
 
 \input{argument}
 
@@ -468,7 +469,7 @@ The volume is \(V=a\,b\sin\gamma\,c\sqrt{\rho}\), and \(V^2\) is the determinant
 \end{aligned}
 \end{equation}
 \(D<0\) is not a cell and \(D=0\) is flat.
-Section~\ref{sec:supp-moved} records the right-angle value and the two angle-line variants.
+Section~\ref{sec:supp-cell} records the right-angle value and the two angle-line variants.
 ASE's eon reader stops at the velocity section (line 23).
 
 After two free lines come the counts, one atom type, nine atoms of that
@@ -533,7 +534,7 @@ returns \(\wkKineticMisread\,\mathrm{eV}\), larger by
 The coordinates are printed in the shortest form that reads back as the
 same binary64 value
 \cite{steeleHowPrintFloatingpoint1990,adamsRyFastFloattostring2018,clingerHowReadFloating1990}.
-Six decimals move the resumed barrier (Section~\ref{sec:supp-moved}).
+Six decimals move the resumed barrier (Section~\ref{sec:supp-cell}).
 The frame ends after line~\wkLineLastVelocity, and the next line, if
 any, opens the next frame.
 Listing~\ref*{lst:testrun} of the supplementary material runs the
@@ -753,7 +754,7 @@ on a velocity section without \texttt{units.time} when \(M=3\) and
 
 Figure~\ref{fig:parser} is that read.
 A coordinate row is three decimals, a mask and an optional identifier.
-The short decimal and the Eisel--Lemire path are in Section~\ref{sec:supp-moved}.
+The short decimal and the Eisel--Lemire path are in Section~\ref{sec:supp-cell}.
 
 
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
@@ -837,10 +838,8 @@ The release runs 140 differential cases.
 Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\)
 are named by a corpus file, a probe or a test of the library, and the
 other \(\clauseUncovered\) state no duty of a reader.
-The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and 0.17.3
-do not return the same outcome on every probe file.
-Section~\ref{sec:supp-moved} records the mutant construction, the wheel
-cases and the extended XYZ drift.
+Section~\ref{sec:supp-moved} records the mutant construction and the extended XYZ drift.
+The published wheels are compared in Section~\ref{sec:supp-versions}.
 
 \section{Resumed saddle searches}\label{sec:cases}
 \subsection{Requirements on a restart file}
@@ -881,7 +880,7 @@ The subsections below measure that on one band.
 Table~\ref{tab:survey} records \(\surveyRoutes\) round trips.
 Only the CON 3.1 route returns every field from places that its own specification defines.
 Extended XYZ returns the mask and the identifiers through ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
-The other routes are in Section~\ref{sec:supp-moved}.
+The other routes are in Section~\ref{sec:supp-rounds}.
 
 \subsection{A climbing-image band through every route} The restart study
 uses a larger slab, Pt(100) under the effective-medium theory (EMT)
@@ -999,7 +998,7 @@ The round trip reaches the same barrier, with a shift of 0, in 922 optimiser ste
 Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
 
 \subsection{The velocity unit}
-A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\) (Section~\ref{sec:supp-moved}).
+A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\) (Section~\ref{sec:supp-velunit}).
 
 \section{One measured read time}\label{sec:performance}
 Timings are readcon-core 0.18.1.
@@ -1007,7 +1006,7 @@ Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on the c
 The hardware is Section~\ref{sec:compute}.
 \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files.
 Every other median, the memory and the distributed reads are in Section~\ref{sec:si-timings} of the supplementary material.
-The supplement states the commands that rebuild the tables from that checkout.
+The supplement states the commands that rebuild the tables.
 
 \begin{table}[tbp]
 \centering
@@ -1021,7 +1020,7 @@ The extended XYZ row is the copper trajectory.}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
-File & Rust & Python & \texttt{rkr\_read\_all\_frames} & ASE eon & \texttt{loadcons} \\
+File & Rust & Python & C (\texttt{rkr\_read\_all\_frames}) & ASE eon & \texttt{loadcons} \\
 \midrule
 \(10^{5}\) frames & 0.179 (0.0024) & 0.179 (0.0017) & 0.345 (0.074) & 10.8 (0.026) & 10.3 (0.20) \\
 convel & 0.241 (0.0017) & 0.216 (0.00087) & 0.430 (0.00055) & --- & 11.0 (0.14) \\
@@ -1034,7 +1033,7 @@ convel & 0.241 (0.0017) & 0.216 (0.00087) & 0.430 (0.00055) & --- & 11.0 (0.14) 
 \toprule
 File & readcon & chemfiles & OVITO & ASE & pymatgen \\
 \midrule
-extended XYZ & 0.301 & 1.52 & 3.32 & 9.97 & 23.6 \\
+extended XYZ (s) & 0.301 & 1.52 & 3.32 & 9.97 & 23.6 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1046,7 +1045,7 @@ The short-decimal session uses rustc 1.88.0.
 The mapped-binary notes use NumPy 1.26.4.
 Python 3.12.16 appears in the stored-campaign records.
 NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, chemfiles 0.11.0-rc1, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2 each ran with one thread where that library was timed.
-The eOn client is the current source and the released 3.6.0.
+The eOn client is release 3.6.0.
 Each median is the type-7 median of six repeats after one warmup.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}

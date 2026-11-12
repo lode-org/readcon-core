@@ -1,4 +1,4 @@
-\section{Material moved from the main text}\label{sec:supp-moved}
+\section{Geometries, tensor exchange and conformance mutants}\label{sec:supp-moved}
 
 \subsection{The three geometries}
 \begin{figure}[tbp] \centering
@@ -31,7 +31,7 @@ Figure~\ref{fig:dlpack} shows the eight repeats.
 The view median is 4.0 microseconds and the copy median is 32 microseconds.}
 \label{fig:dlpack} \end{figure}
 
-\subsection{Mutants, wheels and the extended XYZ drift}
+\subsection{Mutants and the extended XYZ drift}
 The two readers read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds, each made by inserting, deleting or replacing characters and tokens at one to three random places.
 They agree on \(\mutantSame\) of them, with the same frame count or error class.
 The count-line rule accounts for all 15 differences.
@@ -40,8 +40,8 @@ The record leaves no differing case outside that group.
 The release runs 140 differential cases mutated from its test files and its conformance corpus.
 Every case is read from a string, from bytes, from a plain and a gzip file at one to sixteen threads, through the column readers and through the stream reader, and each read returns the frame count, coordinates and section presence of the one-thread string read or stops with its error at the same line.
 
-On files of two frames whose first line is empty, the 0.17.0 wheel refuses the file and the later three read two frames, and on a blank symbol line the newest two refuse a file that the earlier two read (Section~\ref{sec:supp-versions}).
-Each of those changes decided a case that the text of its release left open, and Table~\ref{tab:versions} lists the clauses involved.
+The outcomes of the published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and 0.17.3 on the probe files are in Section~\ref{sec:supp-versions}.
+Table~\ref{tab:versions} lists the clauses those readings concern.
 
 Extended XYZ is the text format set beside CON, because it publishes a grammar.
 Table~\ref{tab:drift} gives seven three-atom files to \(\driftAllPaths\) reader paths from \(\driftAllLibraries\) libraries.
@@ -72,7 +72,7 @@ That key is separate from the byte hash.
 \texttt{select} takes \texttt{-{}-formula}, \texttt{-{}-require-*}, \texttt{-{}-topo-key} and \texttt{-{}-neb-bead-*}.
 The corpus is also a Python module and a C and Fortran interface.
 
-\subsection{Cell angles, six decimals and the decimal paths}
+\section{Cell angles and decimal paths}\label{sec:supp-cell}
 In binary64 the cosine of the double nearest \(\pi/2\) is \(\num{\wkCosRight}\), so Eq.~\eqref{eq:cell} gives this cell \(b_x=\num{\wkBx}\,\text{\AA}\) and \(c_x=c_y=\num{\wkCxy}\,\text{\AA}\).
 ASE~\wkAseVersion{} returns \(b_x=\wkAseRightBx\), because it sets the cosine of an angle within two units in the last place of a right angle to zero \cite{larsenAtomicSimulationEnvironmenta2017}.
 The exact \(\rho\) is zero for angles of \(\wkFlatAlpha\), \(\wkFlatBeta\) and \(\wkFlatGamma\) degrees, since \(\mathbf{c}\) then lies in the plane of \(\mathbf{a}\) and \(\mathbf{b}\), and binary64 gives \(\hat\rho=\num{\wkFlatRadicand}\).
@@ -112,7 +112,7 @@ The two paths agree bit for bit on the spellings the short path accepts.
 The mask is then an integer, 0 or 1 in version 1 and 0 through 7 from version 2, and the identifier is a decimal integer that does not pass through binary64.
 Section~\ref{sec:fast} compares the two builds.
 
-\subsection{Cross-library round trips}
+\section{Cross-library round trips}\label{sec:supp-rounds}
 The reads in Section~\ref{sec:host} use the library built for that host.
 We first wrote the survey frame of Listing~\ref{lst:frame} with one library and read it back with the same library or another, \(\surveyRoutes\) routes in all, \(\surveySameRows\) within one library and \(\surveyCrossRows\) across two (Table~\ref{tab:survey}).
 The libraries are ASE \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMdanalysismdanalysisRelease21002025}, h5py, OVITO \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}, at the versions of Section~\ref{sec:supp-versions}, and each stores each field through the mechanism its documentation gives.
@@ -129,8 +129,19 @@ That float32 shift stays with the H5MD reader of release 2.10.0.
 Release 2.11.0, of 2026-10-21, reads one PDBx/mmCIF frame through gemmi and converts the positions and velocities of a GROMACS TPR file into its base units, which release 2.10.0 left in the native units of GROMACS \cite{gowersMdanalysis21102026}.
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
-\subsection{The velocity unit}
+\section{The velocity unit of a misread}\label{sec:supp-velunit}
 A \(\velFixtureAtoms\)-atom fixture stores velocities in the declared natural unit.
 Its kinetic energy is \(\velFixtureKe\,\mathrm{eV}\) in that unit and \(\velFixtureKeFs\,\mathrm{eV}\) with the same numbers read as \(\text{\AA}/\mathrm{fs}\), the factor \(\velFactorSq\) of Eq.~\eqref{eq:tau}.
 After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982}, the misread positions differ from the declared ones by \(\velVerletRmsd\,\text{\AA}\) root mean square and by at most \(\velVerletMax\,\text{\AA}\) (Section~\ref{sec:supp-velocity}).
 A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
+
+\section{The mW nucleation window}\label{sec:supp-water}
+The trajectory is mW water, 4096 molecules, with a 10~fs step.
+It is equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K with a 200~fs damping time, in the LAMMPS build of 22~July~2025.
+The analysed window is 81 frames, from 659~ps to 739~ps after the quench.
+The neighbour cutoff is \(3.5\,\text{\AA}\), primitive rings run up to seven members, and the ice label is CHILL+.
+The CON frames store the orthorhombic cell, three dump-box lengths and right angles, and the XYZ comment line repeats that cell.
+Figure~\ref{fig:water} is rebuilt from the four lags by
+{\small\begin{verbatim}
+python3 -c "import make_figures as m; m.water_persistence()"
+\end{verbatim}}
