@@ -18,6 +18,8 @@ OLD="$(python3 -c 'import sys; sys.path.insert(0, "scripts"); from version_sot i
 printf '%s\n' "$VER" > VERSION
 python3 -c 'import sys; sys.path.insert(0, "scripts"); from version_sot import refresh_rendered_pins; refresh_rendered_pins(sys.argv[1], sys.argv[2])' "$OLD" "$VER"
 python3 -m towncrier build --yes --version "$VER"
+# stamp-version does not retarget packaging/wrapdb/readcon-core.wrap.
+# That URL stays on the previous archive until record-cxx-wrap.sh has a digest.
 bash "$ROOT/scripts/stamp-version.sh"
 
 python3 - "$VER" <<'PY'
