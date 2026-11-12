@@ -2005,6 +2005,60 @@ struct RKRConFrame **rkr_read_all_frames_n_threads(const char *filename_c,
                                                    uintptr_t n_threads);
 
 /**
+ * Opaque owner of one row-major coordinate column.
+ */
+typedef struct RKRPositionBlock RKRPositionBlock;
+
+/**
+ * Coordinates of every frame from the column walker.
+ * On success `*n_frames` and `*n_atoms` are set and the handle owns
+ * `n_frames * n_atoms * 3` doubles, read with
+ * `rkr_position_block_values`. The caller frees the handle with
+ * `rkr_free_position_block`. A file whose frames do not share one atom
+ * count returns NULL. `n_threads == 0` and `n_threads == 1` parse on the
+ * calling thread. `n_threads >= 2` uses that many workers when the library
+ * is built with `parallel`.
+ *
+ * Returns NULL on error. `rkr_last_error` matches `rkr_read_all_frames`
+ * for a file that reader rejects.
+ *
+ * # Safety
+ * filename_c, n_frames, and n_atoms must be valid. The caller takes
+ * ownership of the returned handle.
+ */
+struct RKRPositionBlock *rkr_read_positions_n_threads(const char *filename_c,
+                                                      uintptr_t *n_frames,
+                                                      uintptr_t *n_atoms,
+                                                      uintptr_t n_threads);
+
+/**
+ * Like `rkr_read_positions_n_threads` with one worker.
+ *
+ * # Safety
+ * Same contract as `rkr_read_positions_n_threads`.
+ */
+struct RKRPositionBlock *rkr_read_positions(const char *filename_c,
+                                            uintptr_t *n_frames,
+                                            uintptr_t *n_atoms);
+
+/**
+ * Row-major `x y z` pointer for a block from `rkr_read_positions`.
+ * Valid until `rkr_free_position_block`. NULL when `block` is NULL.
+ *
+ * # Safety
+ * block is NULL or a live handle from `rkr_read_positions`.
+ */
+const double *rkr_position_block_values(const struct RKRPositionBlock *block);
+
+/**
+ * Frees a handle from `rkr_read_positions`. NULL is a no-op.
+ *
+ * # Safety
+ * block is NULL or the pointer from `rkr_read_positions`.
+ */
+void rkr_free_position_block(struct RKRPositionBlock *block);
+
+/**
  * Frees an array of frame handles returned by `rkr_read_all_frames`.
  * Each frame is freed individually, then the array itself.
  *

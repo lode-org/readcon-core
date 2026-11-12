@@ -33,8 +33,6 @@ int main(int argc, char **argv) {
     const char *out;
     int repeats;
     int i;
-    uintptr_t nframes = 0;
-    struct RKRConFrame **frames;
     if (argc != 5) {
         return 2;
     }
@@ -42,21 +40,35 @@ int main(int argc, char **argv) {
     path = argv[2];
     out = argv[3];
     repeats = atoi(argv[4]);
-    frames = rkr_read_all_frames(path, &nframes);
-    if (frames == NULL) {
-        fprintf(stderr, "read failed\n");
-        return 1;
-    }
     if (strcmp(op, "read") == 0) {
-        free_rkr_frame_array(frames, nframes);
-        for (i = 0; i < repeats; i++) {
+        for (i = 0; i < repeats + 1; i++) {
+            uintptr_t got_frames = 0;
+            uintptr_t got_atoms = 0;
+            struct RKRPositionBlock *block;
+            const double *values;
             double t0 = now_s();
-            frames = rkr_read_all_frames(path, &nframes);
-            double t1 = now_s();
-            free_rkr_frame_array(frames, nframes);
-            printf("read %.9f\n", t1 - t0);
+            block = rkr_read_positions(path, &got_frames, &got_atoms);
+            values = rkr_position_block_values(block);
+            if (block == NULL || (got_frames > 0 && got_atoms > 0 && values == NULL)) {
+                fprintf(stderr, "read failed\n");
+                return 1;
+            }
+            if (got_frames > 0 && got_atoms > 0 && values[0] != values[0]) {
+                fprintf(stderr, "nan\n");
+                return 1;
+            }
+            rkr_free_position_block(block);
+            if (i > 0) {
+                printf("read %.9f\n", now_s() - t0);
+            }
         }
     } else {
+        uintptr_t nframes = 0;
+        struct RKRConFrame **frames = rkr_read_all_frames(path, &nframes);
+        if (frames == NULL) {
+            fprintf(stderr, "read failed\n");
+            return 1;
+        }
         for (i = 0; i < repeats; i++) {
             struct RKRConFrameWriter *writer;
             double t0 = now_s();

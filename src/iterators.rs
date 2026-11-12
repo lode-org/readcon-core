@@ -1111,6 +1111,7 @@ pub fn read_all_frames_with_threads(
 }
 
 /// Positions of every frame, one row-major `f64` buffer.
+#[derive(Debug)]
 ///
 /// A parse failure is the [`error::LocatedParseError`] from the boundary
 /// scan or the span parse that failed. The path is not opened again.
@@ -1138,6 +1139,190 @@ pub fn read_positions_with_threads(
         crate::compression::FileContents::Mapped(map) => fill_position_block(map, num_threads),
     }?;
     Ok(block)
+}
+
+/// Masses and cell that belong with [`read_positions_with_threads`].
+///
+/// The column walker fills these when it certifies the file. Otherwise they
+/// come from the frame parser, which is the same source as before.
+pub struct CoordColumns {
+    pub block: PositionBlock,
+    pub masses: Vec<f64>,
+    pub cells: Vec<f64>,
+}
+
+pub fn read_coord_columns(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<CoordColumns, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let bytes = contents.as_bytes();
+    if let Ok(Some(columns)) = certified_columns(bytes, num_threads) {
+        return Ok(columns);
+    }
+    let frames = frames_from_bytes_located(bytes, num_threads)?;
+    Ok(columns_from_frames(&frames))
+}
+
+fn certified_columns(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Option<CoordColumns>, error::LocatedParseError> {
+    let parsed = match crate::columns::positions_from_con_bytes(bytes) {
+        Ok(parsed) if parsed.stock => parsed,
+        _ => return Ok(None),
+    };
+    if parsed.n_frames == 0 {
+        return Ok(Some(CoordColumns {
+            block: PositionBlock {
+                n_frames: 0,
+                n_atoms: 0,
+                values: Vec::new(),
+            },
+            masses: Vec::new(),
+            cells: Vec::new(),
+        }));
+    }
+    let Some(n_atoms) = parsed.rectangular_atoms() else {
+        let first = parsed.counts[0];
+        let index = parsed
+            .counts
+            .iter()
+            .position(|count| *count != first)
+            .unwrap_or(0);
+        let line = file_line_at_bytes(
+            bytes,
+            parsed.spans.get(index).map(|span| span.start).unwrap_or(0),
+        );
+        return Err(error::LocatedParseError::new(
+            error::ParseError::InvalidCount(
+                "frame atom count does not match the first frame".into(),
+            ),
+            line,
+            index as u64,
+        ));
+    };
+    let values = if parallel_column_threads(num_threads) {
+        parallel_column_values(bytes, &parsed, n_atoms, num_threads)
+            .map_err(|err| error::LocatedParseError::new(err, 0, 0))?
+    } else {
+        parsed.positions
+    };
+    Ok(Some(CoordColumns {
+        block: PositionBlock {
+            n_frames: parsed.n_frames,
+            n_atoms,
+            values,
+        },
+        masses: parsed.masses,
+        cells: parsed.cells,
+    }))
+}
+
+fn parallel_column_threads(num_threads: Option<usize>) -> bool {
+    // `None`, `Some(0)`, and `Some(1)` stay on the calling thread. A pool
+    // runs only for an explicit count of two or more.
+    #[cfg(feature = "parallel")]
+    {
+        matches!(num_threads, Some(n) if n >= 2)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+        false
+    }
+}
+
+fn parallel_column_values(
+    bytes: &[u8],
+    parsed: &crate::columns::ConPositions,
+    n_atoms: usize,
+    num_threads: Option<usize>,
+) -> Result<Vec<f64>, error::ParseError> {
+    let stride = n_atoms * 3;
+    if stride == 0 {
+        return Ok(Vec::new());
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = (bytes, num_threads);
+        Ok(parsed.positions.clone())
+    }
+    #[cfg(feature = "parallel")]
+    {
+        let mut values = vec![0.0_f64; parsed.n_frames * stride];
+        let fill_one = |index: usize, dest: &mut [f64]| {
+            let span = &parsed.spans[index];
+            let slice = crate::columns::positions_from_con_bytes(&bytes[span.start..span.end])?;
+            if slice.counts.first().copied() != Some(n_atoms) || slice.positions.len() != stride {
+                return Err(error::ParseError::InvalidCount(
+                    "frame atom count does not match the first frame".into(),
+                ));
+            }
+            dest.copy_from_slice(&slice.positions);
+            Ok(())
+        };
+        use rayon::prelude::*;
+        let mut run = || match values
+            .par_chunks_mut(stride)
+            .enumerate()
+            .find_map_first(|(index, dest)| fill_one(index, dest).err())
+        {
+            Some(err) => Err(err),
+            None => Ok(()),
+        };
+        match num_threads {
+            Some(n) if n >= 2 => {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(n)
+                    .build()
+                    .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
+                pool.install(run)?;
+            }
+            _ => run()?,
+        }
+        Ok(values)
+    }
+}
+
+fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
+    let n_frames = frames.len();
+    let n_atoms = frames
+        .first()
+        .map(|frame| frame.positions.nrows())
+        .unwrap_or(0);
+    let mut values = Vec::with_capacity(n_frames * n_atoms * 3);
+    let mut masses = Vec::with_capacity(n_frames * n_atoms);
+    let mut cells = Vec::with_capacity(n_frames * 6);
+    for frame in frames {
+        cells.extend_from_slice(&frame.header.boxl);
+        cells.extend_from_slice(&frame.header.angles);
+        if let Some(src) = frame.positions.f64_slice() {
+            values.extend_from_slice(src);
+        } else {
+            for row in 0..frame.positions.nrows() {
+                values.extend_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+        for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
+            let mass = frame
+                .header
+                .masses_per_type
+                .get(type_index)
+                .copied()
+                .unwrap_or(0.0);
+            masses.extend(std::iter::repeat_n(mass, count));
+        }
+    }
+    CoordColumns {
+        block: PositionBlock {
+            n_frames,
+            n_atoms,
+            values,
+        },
+        masses,
+        cells,
+    }
 }
 
 /// 1-based file line of the line that contains `byte`.
@@ -1227,6 +1412,11 @@ fn fill_position_block(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, error::LocatedParseError> {
+    match certified_columns(bytes, num_threads) {
+        Ok(Some(columns)) => return Ok(columns.block),
+        Ok(None) => {}
+        Err(err) => return Err(err),
+    }
     let boundaries = frame_starts(bytes)?;
     if boundaries.is_empty() {
         return Ok(PositionBlock {
