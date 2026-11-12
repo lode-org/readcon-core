@@ -833,20 +833,32 @@ it calls.}
 \label{fig:architecture} \end{figure*}
 
 On the development branch the core pairs atoms by the column-5 id.
-\texttt{atom\_id\_permutation} returns, for each atom of the reference frame, the index of the same id in the other frame.
+\texttt{atom\_id\_permutation} returns the permutation \(\Pi\) of Section~\ref{sec:identity}: for each atom of the reference frame, the index of the same id in the other frame.
 \texttt{reorder\_like} rewrites that frame into the reference order, and positions, velocities, forces and bond endpoints move with the atom.
 \texttt{check\_atom\_id\_consistency} names the first frame of a band or a trajectory that disagrees with the first frame, by frame index and atom id.
 \texttt{minimum\_image\_displacements} returns the wrapped displacement of each matched pair.
-Python exposes the same four names.
-C exposes \texttt{rkr\_frame\_atom\_id\_permutation},\\
-\texttt{rkr\_frame\_reorder\_like},\\
-\texttt{rkr\_frames\_check\_atom\_ids}, and\\
-\texttt{rkr\_frame\_minimum\_image\_displacements}.\\
-C++ exposes \texttt{ConFrame::atom\_id\_permutation},\\
-\texttt{ConFrame::reorder\_like},\\
-\texttt{ConFrame::minimum\_image\_displacements}, and\\
-\texttt{check\_atom\_id\_consistency}.
-Strict mode is the default, and it also requires the mass and the fixed mask to agree.
+Python, C and C++ expose the four calls (Table~\ref{tab:correspondence}).
+\texttt{check\_atom\_id\_consistency} in strict mode, the default, also requires the mass and the fixed mask to agree.
+
+\begin{table}[tbp]
+\centering
+\caption{The four atom-id calls on the development branch.
+In C++ the consistency check is the free function.
+The other three C++ calls are members of \texttt{ConFrame}.}
+\label{tab:correspondence}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
+\toprule
+Python & C & C++ \\
+\midrule
+\texttt{atom\_id\_permutation} & \texttt{rkr\_frame\_atom\_id\_permutation} & \texttt{ConFrame::atom\_id\_permutation} \\
+\texttt{reorder\_like} & \texttt{rkr\_frame\_reorder\_like} & \texttt{ConFrame::reorder\_like} \\
+\texttt{check\_atom\_id\_consistency} & \texttt{rkr\_frames\_check\_atom\_ids} & \texttt{check\_atom\_id\_consistency} \\
+\texttt{minimum\_image\_displacements} & \texttt{rkr\_frame\_minimum\_image\_displacements} & \texttt{ConFrame::minimum\_image\_displacements} \\
+\bottomrule
+\end{tabular}}
+\end{table}
 
 In the core, Algorithm~\ref{alg:parser} is the path reader of the
 release.
@@ -1100,12 +1112,14 @@ The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one ano
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon returns the id with the position.
-On the development branch a Claisen-like allyl vinyl ether stores the product with oxygen first and with C5 one cell along \(+x\).
-Pairing rows by file position puts the reactant oxygen against that carbon, a step of 15.761~\text{\AA}.
-Pairing by id follows the oxygen from the 1.360~\text{\AA} ether bond to the 1.210~\text{\AA} carbonyl, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
+On the development branch the correspondence is checked on a constructed test frame, the Claisen endpoints rewritten oxygen-first, with C5 shifted one cell of \(18\,\text{\AA}\) along \(+x\).
+It is not a third Claisen result.
+Pairing rows by file position puts the reactant oxygen against the shifted C5, a step of 15.761~\text{\AA}.
+Pairing by id follows the vinyl-ether O--C4 bond, 1.360~\text{\AA}, to the C4\({=}\)O carbonyl of pent-4-enal, 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
 A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
 The first file slot of that image then differs by 3.615~\text{\AA}, and the id-matched atom of id 0 moves 0.018~\text{\AA}.
 Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
+Frame indices count from zero, so frame 2 is the third image.
 
 \begin{figure}[tbp]
 \centering
