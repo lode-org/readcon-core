@@ -22,12 +22,12 @@ previous public argument order:
 
 .. code:: fortran
 
-   ! previous public order
-   st = bd%add_atom(symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
-   ! current public order
-   st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass)
-   st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, &
-        velocity=vel, force=frc)
+    ! previous public order
+    st = bd%add_atom(symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
+    ! current public order
+    st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass)
+    st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, &
+         velocity=vel, force=frc)
 
 ``velocity`` and ``force`` are optional rank-1 arrays of length 3 and still
 follow the mass. ``add_atom`` takes ``velocity`` only.

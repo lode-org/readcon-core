@@ -132,7 +132,7 @@ Per-frame metadata accessors:
   not share one atom count return NULL. Free the handle with
   =rkr_free_position_block=.
 - =rkr_read_positions_n_threads= :: Same column. =0= and =1= stay on the
-  calling thread. =n_threads >= 2= uses that many workers when the
+  calling thread. A count of 2 or more uses that many workers when the
   library is built with =parallel=.
 - =rkr_free_position_block(block)= :: Frees a block from
   =rkr_read_positions= or =rkr_read_positions_n_threads=, including the

@@ -526,7 +526,7 @@ Free with ~free_con_frame_iterator~; frames from ~con_frame_iterator_next~ with
 *** Coordinate column
 
 ~rkr_read_positions~ reads every frame's coordinates in one pass and does
-not build frame objects. On success ~*n_frames~ and ~*n_atoms~ are set and
+not build frame objects. On success the ~n_frames~ and ~n_atoms~ counts are set and
 the caller owns the handle. ~rkr_position_block_values~ is row-major ~x y z~,
 index ~frame * n_atoms * 3 + atom * 3~. ~rkr_free_position_block~ frees the
 handle and that buffer. NULL is a no-op, and the values pointer is invalid

@@ -187,19 +187,21 @@ Per-frame metadata accessors:
     ``0`` auto, ``1`` sequential, ``n_threads >`` 2= a Rayon pool.
 
 ``rkr_read_positions(filename, n_frames, n_atoms)``
-    Column walker. One row-major coordinate buffer and no frame objects.
-    Frames that do not share one atom count return NULL. Free the handle
-    with ``rkr_free_position_block``.
+    Column walker.
+    One row-major coordinate buffer and no frame objects. Frames that do
+    not share one atom count return NULL. Free the handle with
+    ``rkr_free_position_block``.
 
 ``rkr_read_positions_n_threads``
-    Same column. ``0`` and ``1`` stay on the calling thread.
-    ``n_threads >= 2`` uses that many workers when the library is built
-    with ``parallel``.
+    Same column. ``0`` and ``1`` stay on the
+    calling thread. A count of 2 or more uses that many workers when the
+    library is built with ``parallel``.
 
 ``rkr_free_position_block(block)``
-    Frees a block from ``rkr_read_positions`` or
-    ``rkr_read_positions_n_threads``, including the coordinate buffer.
-    NULL is a no-op. The values pointer is invalid afterwards.
+    Frees a block from
+    ``rkr_read_positions`` or ``rkr_read_positions_n_threads``, including the
+    coordinate buffer. NULL is a no-op. The values pointer is invalid
+    afterwards.
 
 ``rkr_has_parallel_support()``
     ``1`` when Rayon is linked.

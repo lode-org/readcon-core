@@ -229,10 +229,10 @@ Usage
 
     import readcon
 
-         # Read frames. read_positions / read_coords are the coordinate fast path.
-         frames = readcon.read_con("path/to/file.con")
-         positions = readcon.read_positions("path/to/file.con")  # (frames, atoms, 3)
-         coords = readcon.read_coords("path/to/file.con")        # positions, masses, cell
+    # Read frames. read_positions / read_coords are the coordinate fast path.
+    frames = readcon.read_con("path/to/file.con")
+    positions = readcon.read_positions("path/to/file.con")  # (frames, atoms, 3)
+    coords = readcon.read_coords("path/to/file.con")        # positions, masses, cell
     first = readcon.read_first_frame("path/to/file.con")
     for frame in readcon.iter_con("path/to/file.con"):
         pass
@@ -600,7 +600,7 @@ Coordinate column
 ^^^^^^^^^^^^^^^^^
 
 ``rkr_read_positions`` reads every frame's coordinates in one pass and does
-not build frame objects. On success ``*n_frames`` and ``*n_atoms`` are set and
+not build frame objects. On success the ``n_frames`` and ``n_atoms`` counts are set and
 the caller owns the handle. ``rkr_position_block_values`` is row-major ``x y z``,
 index ``frame * n_atoms * 3 + atom * 3``. ``rkr_free_position_block`` frees the
 handle and that buffer. NULL is a no-op, and the values pointer is invalid
@@ -611,15 +611,15 @@ text. The C++ header includes this C API.
 
 .. code:: c
 
-   uintptr_t n_frames = 0, n_atoms = 0;
-   struct RKRPositionBlock *block =
-       rkr_read_positions("trajectory.con", &n_frames, &n_atoms);
-   if (block != NULL) {
-       const double *xyz = rkr_position_block_values(block);
-       printf("frames=%zu atoms=%zu x0=%.6f\n",
-              (size_t)n_frames, (size_t)n_atoms, xyz[0]);
-       rkr_free_position_block(block);
-   }
+    uintptr_t n_frames = 0, n_atoms = 0;
+    struct RKRPositionBlock *block =
+        rkr_read_positions("trajectory.con", &n_frames, &n_atoms);
+    if (block != NULL) {
+        const double *xyz = rkr_position_block_values(block);
+        printf("frames=%zu atoms=%zu x0=%.6f\n",
+               (size_t)n_frames, (size_t)n_atoms, xyz[0]);
+        rkr_free_position_block(block);
+    }
 
 Frame section buffers (no AoS required)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -976,10 +976,10 @@ id and the mass before the fixed flags is on the previous public order.
 
 .. code:: fortran
 
-   st = bd%add_atom("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
-        1_int64, 1.0d0)
-   st = bd%add_atom_full("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
-        1_int64, 1.0d0, velocity=vel, force=frc)
+    st = bd%add_atom("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
+         1_int64, 1.0d0)
+    st = bd%add_atom_full("H", 0.0d0, 0.0d0, 0.0d0, .false., .false., .false., &
+         1_int64, 1.0d0, velocity=vel, force=frc)
 
 Per-axis ``fixed_x`` / ``fixed_y`` / ``fixed_z`` are on ``catom_t`` (issue #19).
 Full API: ``frame_t``, ``iterator_t``, ``builder_t``, ``writer_t``, all six DLPack
