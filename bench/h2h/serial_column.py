@@ -21,7 +21,11 @@ BENCH = Path(__file__).resolve().parent
 OUT = BENCH / "results"
 CON = BENCH / "work" / "parallel-frames" / "frames-32x100000.con"
 CONVEL = BENCH / "work" / "parallel-frames" / "frames-32x100000.convel"
-MILLION = BENCH / "inputs" / "con-1000000x1.con" if False else BENCH / "work" / "inputs" / "con-1000000x1.con"
+MILLION = (
+    BENCH / "inputs" / "con-1000000x1.con"
+    if False
+    else BENCH / "work" / "inputs" / "con-1000000x1.con"
+)
 XYZ = BENCH / "work" / "parallel-frames" / "copper-32x100000.extxyz"
 PROBE = ROOT / "target" / "release" / "examples" / "serial_probe"
 TIME_C = BENCH / "work" / "time_c"
@@ -119,7 +123,9 @@ def fresh_rss(cmd: list[str]) -> int:
         + "\n".join(cmd)
         + "\nprint(next(int(l.split()[1]) for l in Path('/proc/self/status').read_text().splitlines() if l.startswith('VmHWM:')))\n"
     )
-    proc = subprocess.run([sys.executable, "-c", script], check=True, capture_output=True, text=True)
+    proc = subprocess.run(
+        [sys.executable, "-c", script], check=True, capture_output=True, text=True
+    )
     return int(proc.stdout.strip().splitlines()[-1])
 
 
@@ -144,7 +150,9 @@ def main() -> None:
         f"cpu {os.cpu_count()} pinned Cpus_allowed_list checked",
     ]
 
-    def record(file_id: str, reader: str, path: Path, samples: list[float], note: str = "") -> None:
+    def record(
+        file_id: str, reader: str, path: Path, samples: list[float], note: str = ""
+    ) -> None:
         med, iqr, q25, q75 = stats(samples)
         rows.append((file_id, reader, med, iqr, q25, q75, samples))
         log.append(
@@ -179,7 +187,9 @@ def main() -> None:
             samples = time_eon(path)
             record(file_id, "eon-loadcons", path, samples)
         else:
-            log.append(f"skip file={file_id} reader=eon-loadcons reason=module eon.fileio.loadcons is not installed")
+            log.append(
+                f"skip file={file_id} reader=eon-loadcons reason=module eon.fileio.loadcons is not installed"
+            )
 
     if readcon_only:
         text = "\n".join(log) + "\n"
@@ -355,7 +365,9 @@ def check_ase_eon(path: Path, ref, file_id: str, log: list[str]) -> bool:
         images = read(os.fspath(path), index=":", format="eon")
         pos = np.stack([image.positions for image in images])
     except Exception as exc:
-        log.append(f"skip file={file_id} reader=ase-eon reason={type(exc).__name__}: {exc}")
+        log.append(
+            f"skip file={file_id} reader=ase-eon reason={type(exc).__name__}: {exc}"
+        )
         print(log[-1], flush=True)
         return False
     delta = max_abs(pos, ref)
@@ -391,11 +403,15 @@ def check_ext(path: Path, ref, log: list[str]) -> None:
     data = import_file(os.fspath(path))
     frames = []
     for index in range(data.source.num_frames):
-        frames.append(np.asarray(data.compute(index).particles.positions, dtype=np.float64))
+        frames.append(
+            np.asarray(data.compute(index).particles.positions, dtype=np.float64)
+        )
     pos = np.stack(frames)
     log.append(f"check file=extxyz reader=ovito max_abs={max_abs(pos, ref):.3e}")
     mols = XYZ.from_file(os.fspath(path)).all_molecules
-    pos = np.stack([np.asarray([site.coords for site in mol], dtype=np.float64) for mol in mols])
+    pos = np.stack(
+        [np.asarray([site.coords for site in mol], dtype=np.float64) for mol in mols]
+    )
     log.append(f"check file=extxyz reader=pymatgen max_abs={max_abs(pos, ref):.3e}")
 
 
@@ -439,11 +455,31 @@ def measure_rss() -> list[str]:
     print("\n".join(lines), flush=True)
     eon_root = os.environ.get("EON_ROOT", "/tmp/eOn")
     jobs = [
-        ("con-100k", "readcon-python", f"import readcon; readcon.read_coords({str(CON)!r})"),
-        ("convel", "readcon-python", f"import readcon; readcon.read_coords({str(CONVEL)!r})"),
-        ("con-1e6", "readcon-python", f"import readcon; readcon.read_coords({str(MILLION)!r})"),
-        ("con-100k", "ase-eon", f"from ase.io import read; read({str(CON)!r}, index=':', format='eon')"),
-        ("con-1e6", "ase-eon", f"from ase.io import read; read({str(MILLION)!r}, index=':', format='eon')"),
+        (
+            "con-100k",
+            "readcon-python",
+            f"import readcon; readcon.read_coords({str(CON)!r})",
+        ),
+        (
+            "convel",
+            "readcon-python",
+            f"import readcon; readcon.read_coords({str(CONVEL)!r})",
+        ),
+        (
+            "con-1e6",
+            "readcon-python",
+            f"import readcon; readcon.read_coords({str(MILLION)!r})",
+        ),
+        (
+            "con-100k",
+            "ase-eon",
+            f"from ase.io import read; read({str(CON)!r}, index=':', format='eon')",
+        ),
+        (
+            "con-1e6",
+            "ase-eon",
+            f"from ase.io import read; read({str(MILLION)!r}, index=':', format='eon')",
+        ),
         (
             "con-100k",
             "eon-loadcons",
@@ -476,13 +512,33 @@ def measure_rss() -> list[str]:
             "for frame in range(data.source.num_frames):\n"
             "    data.compute(frame)",
         ),
-        ("extxyz", "ase", f"from ase.io import read; read({str(XYZ)!r}, index=':', format='extxyz')"),
-        ("extxyz", "pymatgen", f"from pymatgen.io.xyz import XYZ; XYZ.from_file({str(XYZ)!r})"),
+        (
+            "extxyz",
+            "ase",
+            f"from ase.io import read; read({str(XYZ)!r}, index=':', format='extxyz')",
+        ),
+        (
+            "extxyz",
+            "pymatgen",
+            f"from pymatgen.io.xyz import XYZ; XYZ.from_file({str(XYZ)!r})",
+        ),
     ]
     for file_id, reader, code in jobs:
-        proc = subprocess.run([sys.executable, "-c", code + "\nimport pathlib; print(next(int(l.split()[1]) for l in pathlib.Path('/proc/self/status').read_text().splitlines() if l.startswith('VmHWM:')))"], check=True, capture_output=True, text=True)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                code
+                + "\nimport pathlib; print(next(int(l.split()[1]) for l in pathlib.Path('/proc/self/status').read_text().splitlines() if l.startswith('VmHWM:')))",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         hwm = int(proc.stdout.strip().splitlines()[-1])
-        path = {"con-100k": CON, "convel": CONVEL, "con-1e6": MILLION, "extxyz": XYZ}[file_id]
+        path = {"con-100k": CON, "convel": CONVEL, "con-1e6": MILLION, "extxyz": XYZ}[
+            file_id
+        ]
         nbytes = path.stat().st_size
         lines.append(
             f"rss file={file_id} reader={reader} hwm_kib={hwm} file_bytes={nbytes} over_input_kib={hwm - nbytes // 1024}"
