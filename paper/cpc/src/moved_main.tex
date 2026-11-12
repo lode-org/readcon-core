@@ -1,6 +1,5 @@
 \section{One CON frame, line by line}\label{sec:supp-frame}
-This section is the line-by-line reading of Section~\ref{sec:worked}.
-Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of
+Listing~\ref{lst:frame}, the line-by-line reading of the frame in Section~\ref{sec:worked}, is a complete CON 3.1 file, the survey frame of
 a Pt(100) slab of two layers of four atoms with one adatom, written by
 readcon-core with velocities.
 Table~\ref{tab:frame} gives the content of each line and the rule that
@@ -154,8 +153,7 @@ the angle line.
 
 
 \section{Frame grammar}\label{sec:supp-grammar}
-This section is the frame production and the clause list of Section~\ref{sec:format}.
-Section~\ref*{sec:spec-normative} of the supplementary material is the
+Section~\ref*{sec:spec-normative} of the supplementary material, which holds the frame production and the clause list of Section~\ref{sec:format}, is the
 normative specification, \clauseTotal{} numbered clauses, and this
 section states the rules that Section~\ref{sec:worked} used, with the
 clauses behind them in Table~\ref{tab:clauses}.
@@ -306,7 +304,7 @@ each change adds the corpus files that test it.
 
 
 \section{Path reader and the Python round trip}\label{sec:supp-parser}
-This section is the path reader and the Python round trip of Section~\ref{sec:implementation}.
+Algorithm~\ref{alg:parser} is the path reader of Section~\ref{sec:implementation}, and the listing that follows is the Python round trip of the same read.
 \begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a
 path.}
 \label{alg:parser} \begin{algorithmic}[1] \Require path; thread count
@@ -491,8 +489,7 @@ seams-core selects that corpus by element or by formula, across the shard roots 
 
 
 \section{Pairing in the dimer, the RMSD and the prefactor}\label{sec:supp-pairing}
-This section is the pairing cited from Section~\ref{sec:identity}.
-The dimer axis has the same pairing.
+The dimer axis uses the same atom pairing as the band in Section~\ref{sec:identity}.
 With the two images \(R_0\) and \(R_1\),
 \begin{equation}
 \label{eq:dimer}
@@ -526,8 +523,7 @@ where the products run over the \(n\) free modes of the minimum and the \(n-1\) 
 Those modes are eigenvectors of the mass-weighted Hessian in the order of \(R\).
 
 \section{Trajectory formats without a per-component mask}\label{sec:supp-formats}
-This section is the format comparison cited from Section~\ref{sec:introduction}.
-The GROMACS compressed trajectory (XTC) and full-precision trajectory
+The GROMACS compressed trajectory (XTC) and full-precision trajectory, the formats named from Section~\ref{sec:introduction},
 (TRR) formats \cite{abrahamGromacsHighPerformance2015}, the binary
 trajectory (DCD) format of CHARMM
 \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next
@@ -543,7 +539,7 @@ The H5MD specification it follows still defines no element for a
 per-component constraint.
 
 \section{Commands of the companion programs}\label{sec:supp-commands}
-This section is the command list of Section~\ref{sec:ecosystem}.
+Table~\ref{tab:commands} lists the commands of Section~\ref{sec:ecosystem}.
 \begin{table}[tbp]
 \centering
 \caption{Commands of readcon-db and calls of readcon-ops.
@@ -574,8 +570,7 @@ readcon-ops & \texttt{rotational\_match} & align by iterative rotations and assi
 \end{table}
 
 \section{Climbing-image restart protocol}\label{sec:supp-protocol}
-This section is the protocol of Section~\ref{sec:cases}.
-The restart study
+The restart study of Section~\ref{sec:cases}
 uses a larger slab, Pt(100) under the effective-medium theory (EMT)
 potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three
 layers of \(3\times3\) atoms with the bottom layer held in every
@@ -605,8 +600,7 @@ We interrupt it after \(K\) steps, write it, read it back and resume it
 to \(f_{\mathrm{band}}\), once per route of Table~\ref{tab:restartfmt}.
 
 \section{Second corpus, independent reader and per-path checks}\label{sec:supp-corpora}
-This section is the conformance detail of Section~\ref{sec:conformance}.
-That corpus has few files for the header, the sections and the units, so
+The conformance corpus of Section~\ref{sec:conformance} has few files for the header, the sections and the units, so
 we wrote a second corpus of \(\cthreeoneFiles\) CON 3.1 files,
 \(\cthreeoneAccepted\) legal and \(\cthreeoneRejected\) illegal.
 Its manifest names for each file the clauses that decide it and the
@@ -644,7 +638,7 @@ are named by a corpus file, a probe or a test of the library, and the
 other \(\clauseUncovered\) state no duty of a reader.
 
 \section{Atom-id calls}\label{sec:supp-api}
-This section is the call table of Section~\ref{sec:implementation}.
+Table~\ref{tab:correspondence} names the four atom-id calls of Section~\ref{sec:implementation}.
 \begin{table}[tbp]
 \centering
 \caption{The four atom-id calls of the released API in readcon-core 0.22.0.
@@ -666,8 +660,7 @@ Python & C & C++ \\
 \end{table}
 
 \section{Hausdorff renumbering of the Claisen product}\label{sec:supp-claisen-protocol}
-This section is the renumbered-band protocol of Section~\ref{sec:claisen}.
-IRA reassigns the same product by the rotation and the permutation that minimise the Hausdorff distance, with \(k_{\max}\) factor 3
+IRA reassigns the product of Section~\ref{sec:claisen} by the rotation and the permutation that minimise the Hausdorff distance, with \(k_{\max}\) factor 3
 \cite{gundeIRAShapeMatching2021}.
 The permutation is \([0,4,3,1,2,5,6,7,11,12,13,9,8,10]\), and it moves 10 of the 14 atoms.
 The Hausdorff distance is \(2.109\,\text{\AA}\).
@@ -691,8 +684,7 @@ The image is a higher-order stationary point.
 The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
 
 \section{Water quench}\label{sec:supp-water-protocol}
-This section is the trajectory protocol of Section~\ref{sec:connectivity}.
-The system is mW water, 4096 molecules
+The trajectory of Section~\ref{sec:connectivity} is mW water, 4096 molecules
 \cite{molineroWaterModeledIntermediate2009}, equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K, with a 10~fs step and a 200~fs damping time, in the LAMMPS build of 22~July~2025
 \cite{thompsonLammpsFlexibleSimulation2022}.
 An 81-frame window, from 659~ps to 739~ps after the quench, brackets the frame at 705~ps in which a 50-molecule CHILL+ ice core is present
@@ -718,8 +710,7 @@ FIRE carries velocities of the images between steps \cite{bitzekStructuralRelaxa
 A resume can match the coordinates and still take a different next step.
 
 \section{What each format keeps}\label{sec:supp-fields}
-This section is the field-by-field comparison of Section~\ref{sec:fields}.
-Column 5 is the atom id, and it holds the original index.
+Column 5, the comparison promised in Section~\ref{sec:fields}, is the atom id, and it holds the original index.
 A rewrite that groups the rows by element recovers that order from the column.
 ASE's eon reader ignores the column
 \cite{larsenAtomicSimulationEnvironmenta2017}.
@@ -768,8 +759,7 @@ The readcon-chemfiles bridge reads XYZ, PDB, GRO and LAMMPS dump text into a \te
 Residue records and per-atom properties that are not CON columns are left out of that frame.
 
 \section{eOn resuming a Morse band}\label{sec:supp-morse}
-This section is the Morse restart of Section~\ref{sec:eon-band}.
-The public eOn client resumes from its own output files.
+The public eOn client, in the restart of Section~\ref{sec:eon-band}, resumes from its own output files.
 The default band optimiser of eOn is the limited-memory form, L-BFGS, of
 the Broyden, Fletcher, Goldfarb and Shanno update
 \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008},
@@ -780,8 +770,7 @@ The round trip reaches the same barrier, with a shift of 0, in 922 optimiser ste
 Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
 
 \section{The three applications in full}\label{sec:supp-applications}
-This section is the full text of Section~\ref{sec:validation}.
-The Claisen landscape is Figure~\ref{fig:claisen-land} and the restart drift is Figure~\ref{fig:restartfmt}.
+The Claisen landscape of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and the restart drift is Figure~\ref{fig:restartfmt}.
 \subsection{The three studies}
 \subsection{Claisen}
 Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
@@ -985,8 +974,7 @@ The uninterrupted Morse barrier is 1.37~eV, the round trip shifts it by 0, and s
 
 
 \section{Atom correspondence}\label{sec:identity}
-This section is the correspondence argument removed from the main text.
-A rare-event method compares two geometries atom by atom.
+A rare-event method compares two geometries atom by atom, and the argument below is the one used for the bands in Section~\ref{sec:claisen}.
 The path, the tangent, the displacement, the Hessian and the rate are defined only when atom \(i\) in image A is atom \(i\) in image B.
 Write the \(3N\) Cartesian coordinates of an image, in one fixed order, as the vector \(R\).
 The tangent and the spring are Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring} in Section~\ref{sec:claisen}.
