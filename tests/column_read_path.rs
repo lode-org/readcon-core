@@ -7,8 +7,10 @@ use readcon_core::ffi::{
     rkr_read_all_frames, rkr_read_positions_n_threads,
 };
 use readcon_core::iterators::{
-    ConFrameIterator, read_all_frames_with_threads, read_positions_with_threads,
+    ConFrameIterator, read_all_frames_with_threads, read_coord_columns, read_positions_with_threads,
 };
+use readcon_core::types::ConFrameBuilder;
+use readcon_core::writer::ConFrameWriter;
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -248,4 +250,47 @@ fn differing_atom_counts_use_the_frame_parser_message() {
     );
     let c_err = c_positions(&path, 1).expect_err("C accepted differing counts");
     assert!(c_err.contains("frame atom count does not match"), "{c_err}");
+}
+
+#[test]
+fn a_custom_header_fills_columns_from_the_frames() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("custom.con");
+    let mut first = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    let mut meta = std::collections::BTreeMap::new();
+    meta.insert(
+        "generator".to_string(),
+        serde_json::Value::String("column-test".to_string()),
+    );
+    first.metadata(meta);
+    first.add_atom("Cu", 0.0, 0.0, 0.0, [true, false, false], 1, 63.546);
+    first.add_atom("H", 1.0, 0.0, 0.0, [false, false, false], 2, 1.008);
+    let mut second = ConFrameBuilder::new([11.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    second.add_atom("O", 0.2, 0.0, 0.0, [false, false, true], 4, 16.0);
+    second.add_atom("H", 1.2, 0.0, 0.0, [false, false, false], 3, 1.008);
+    let frames = [first.build().unwrap(), second.build().unwrap()];
+    {
+        let mut writer = ConFrameWriter::from_path(&path).unwrap();
+        writer.extend(frames.iter()).unwrap();
+    }
+    let columns = read_coord_columns(&path, Some(2)).unwrap();
+    assert_eq!(columns.block.n_frames, 2);
+    assert_eq!(columns.block.n_atoms, 2);
+    assert_eq!(columns.block.values.len(), 12);
+    assert!(columns.partial_fixed);
+    assert_eq!(columns.species.len(), 2);
+    assert_eq!(columns.atom_ids, vec![1, 2, 4, 3]);
+    assert!((columns.cells[0] - 10.0).abs() < 1e-12);
+    assert!((columns.masses[0] - 63.546).abs() < 1e-9);
+}
+
+#[test]
+fn an_empty_file_has_no_coordinate_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("empty.con");
+    fs::write(&path, b" \n\t\n").unwrap();
+    let columns = read_coord_columns(&path, None).unwrap();
+    assert_eq!(columns.block.n_frames, 0);
+    assert!(columns.block.values.is_empty());
+    assert!(columns.species.is_empty());
 }
