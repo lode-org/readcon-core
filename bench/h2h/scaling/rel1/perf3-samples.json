@@ -1,0 +1,300 @@
+{
+  "open": "unlink the destination before every sample, then File::create. Serial and parallel use that. sync=1 calls fdatasync inside the sample. No no-truncate path.",
+  "host": "Intel Xeon model 173, 8 cores. /tmp and the repo are ext4 on /dev/vdc. /dev/shm is tmpfs.",
+  "stream_triad": {
+    "threads_8_GBps": 161.51,
+    "threads_1_GBps": 26.82,
+    "note": "20 passes of a[i]=b[i]+1.25*c[i], 4M doubles. A 40MB file at the 8-thread triad rate is 0.25ms."
+  },
+  "output_sha256_12": "361546ecf130",
+  "output_bytes": 23589082,
+  "write_shm_after": {
+    "1": {
+      "median_s": 0.048025,
+      "iqr_s": 0.00273375,
+      "samples": [
+        0.046386,
+        0.046551,
+        0.046924,
+        0.049126,
+        0.049462,
+        0.05862
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "2": {
+      "median_s": 0.035977,
+      "iqr_s": 0.0002309999999999951,
+      "samples": [
+        0.035163,
+        0.035858,
+        0.035872,
+        0.036082,
+        0.036096,
+        0.039912
+      ],
+      "workers": 2,
+      "efficiency": 0.6674403090863607
+    },
+    "4": {
+      "median_s": 0.015559,
+      "iqr_s": 0.0004849999999999993,
+      "samples": [
+        0.014924,
+        0.015439,
+        0.015516,
+        0.015602,
+        0.016057,
+        0.016201
+      ],
+      "workers": 4,
+      "efficiency": 0.771659489684427
+    },
+    "8": {
+      "median_s": 0.008772499999999999,
+      "iqr_s": 0.0004572499999999993,
+      "samples": [
+        0.008673,
+        0.008723,
+        0.008734,
+        0.008811,
+        0.009307,
+        0.009759
+      ],
+      "workers": 8,
+      "efficiency": 0.6843117697349673
+    }
+  },
+  "write_disk_after": {
+    "1": {
+      "median_s": 0.0466275,
+      "iqr_s": 0.0021154999999999993,
+      "samples": [
+        0.045545,
+        0.045739,
+        0.046133,
+        0.047122,
+        0.04823,
+        0.048721
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "2": {
+      "median_s": 0.037382,
+      "iqr_s": 0.001008000000000002,
+      "samples": [
+        0.036868,
+        0.037011,
+        0.037292,
+        0.037472,
+        0.038295,
+        0.038405
+      ],
+      "workers": 2,
+      "efficiency": 0.6236624578674229
+    },
+    "4": {
+      "median_s": 0.0157455,
+      "iqr_s": 0.0008772499999999978,
+      "samples": [
+        0.015147,
+        0.015327,
+        0.015638,
+        0.015853,
+        0.016425,
+        0.01668
+      ],
+      "workers": 4,
+      "efficiency": 0.7403305706392304
+    },
+    "8": {
+      "median_s": 0.0099125,
+      "iqr_s": 0.00075975,
+      "samples": [
+        0.009177,
+        0.009588,
+        0.00977,
+        0.010055,
+        0.010506,
+        0.011363
+      ],
+      "workers": 8,
+      "efficiency": 0.5879886506935688
+    }
+  },
+  "write_disk_fdatasync_after": {
+    "1": {
+      "median_s": 0.0705845,
+      "iqr_s": 0.007454749999999996,
+      "samples": [
+        0.064569,
+        0.064998,
+        0.06823,
+        0.072939,
+        0.073368,
+        0.08147
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "8": {
+      "median_s": 0.026286,
+      "iqr_s": 0.0025889999999999976,
+      "samples": [
+        0.024107,
+        0.025589,
+        0.025758,
+        0.026814,
+        0.028689,
+        0.029351
+      ],
+      "workers": 8,
+      "efficiency": 0.3356563379745872
+    }
+  },
+  "write_shm_r8": {
+    "1": {
+      "median_s": 0.055396,
+      "iqr_s": 0.0015377500000000044,
+      "samples": [
+        0.054723,
+        0.054935,
+        0.055103,
+        0.055689,
+        0.05679,
+        0.06136
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "8": {
+      "median_s": 0.008943,
+      "iqr_s": 0.0007154999999999991,
+      "samples": [
+        0.008059,
+        0.008269,
+        0.008805,
+        0.009081,
+        0.009131,
+        0.009818
+      ],
+      "workers": 8,
+      "efficiency": 0.7742927429274293
+    }
+  },
+  "write_shm_a3347edd": {
+    "1": {
+      "median_s": 0.0478495,
+      "iqr_s": 0.0008497500000000033,
+      "samples": [
+        0.04735,
+        0.047447,
+        0.047512,
+        0.048187,
+        0.048355,
+        0.048518
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "8": {
+      "median_s": 0.010002,
+      "iqr_s": 0.0008257500000000001,
+      "samples": [
+        0.009194,
+        0.009486,
+        0.009858,
+        0.010146,
+        0.010491,
+        0.011433
+      ],
+      "workers": 8,
+      "efficiency": 0.597999150169966
+    }
+  },
+  "con_read_phases_8": {
+    "scan_s": 0.0022,
+    "fill_s": 0.0047,
+    "total_median_s": 0.007837,
+    "serial_median_s": 0.038594,
+    "note": "scan is the parallel newline index. fill is the float parse and already scales near 8x. A fused parse that dropped the index was slower (median 0.014s) and was not kept."
+  },
+  "extxyz_phases_8": {
+    "lines_s": 0.0017,
+    "fill_s": 0.0051,
+    "total_median_s": 0.007159,
+    "serial_median_s": 0.033179,
+    "note": "one million-atom alloy frame. The line index is parallel. The fill dominates and scales. STREAM does not bind either read."
+  },
+  "mpi_pwrite_library": {
+    "1": {
+      "median_s": 0.056494,
+      "iqr_s": 0.0010227499999999959,
+      "samples": [
+        0.076672,
+        0.057252,
+        0.054808,
+        0.05649,
+        0.056498,
+        0.055891
+      ],
+      "workers": 1,
+      "efficiency": 1.0
+    },
+    "2": {
+      "median_s": 0.030613500000000002,
+      "iqr_s": 0.0006117500000000012,
+      "samples": [
+        0.032095,
+        0.030867,
+        0.030115,
+        0.030518,
+        0.030709,
+        0.030076
+      ],
+      "workers": 2,
+      "efficiency": 0.9226975027357212
+    },
+    "4": {
+      "median_s": 0.022865499999999997,
+      "iqr_s": 0.0018692499999999994,
+      "samples": [
+        0.025222,
+        0.024157,
+        0.02319,
+        0.022541,
+        0.021425,
+        0.021881
+      ],
+      "workers": 4,
+      "efficiency": 0.617677286742035
+    },
+    "8": {
+      "median_s": 0.0177355,
+      "iqr_s": 0.0012710000000000013,
+      "samples": [
+        0.019447,
+        0.018835,
+        0.018026,
+        0.017334,
+        0.017332,
+        0.017445
+      ],
+      "workers": 8,
+      "efficiency": 0.39817033633108734
+    }
+  },
+  "raw_write_23589082": {
+    "one_write_median_s": 0.006069,
+    "eight_sequential_pwrites_median_s": 0.005173,
+    "eight_concurrent_pwrites_s": 0.010,
+    "note": "tmpfs, 23589082 bytes. Eight threads pwriting at once are slower than one write, so the filesystem's own 8-way efficiency is about 0.006/(8*0.010) = 0.08. The library's 8-rank pwrite is 0.0177s, 1.8 times that concurrent raw write; formatting is the rest. Library efficiency 0.40 is above the raw pwrite's own scaling."
+  },
+  "mpi_trials": {
+    "gather_rank0_n8_median_s": 0.0326,
+    "mpi_file_write_at_all_n8_samples": [0.023577, 0.022109],
+    "note": "Gathering to rank 0 (0.033s) and MPI_File_write_at_all (0.023s) were both slower than per-rank pwrite (0.0177s) and were not kept."
+  }
+}
