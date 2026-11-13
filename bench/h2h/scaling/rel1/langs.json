@@ -2,51 +2,51 @@
   {
     "lang": "rust",
     "op": "read",
-    "line": "kind=pos workers=1 median=0.038566 samples=0.038122,0.038113,0.038525,0.038606,0.038773,0.038736"
+    "line": "kind=pos workers=1 median=0.038404 samples=0.038615,0.038253,0.038554,0.037811,0.037960,0.038561"
   },
   {
     "lang": "rust",
     "op": "write",
-    "line": "kind=write workers=1 median=0.041253 samples=0.045061,0.041712,0.041379,0.041128,0.040987,0.041031"
+    "line": "kind=write workers=1 median=0.041164 samples=0.044260,0.041657,0.041103,0.041074,0.041066,0.041226"
   },
   {
     "lang": "c",
     "op": "read",
-    "line": "read 0.038197096\nread 0.040396346\nread 0.038472249\nread 0.037984420\nread 0.038186255\nread 0.038011090\nhwm_kib 77556\n"
+    "line": "read 0.038089067\nread 0.037583483\nread 0.037811157\nread 0.038089532\nread 0.037689933\nread 0.037523985\nhwm_kib 77584\n"
   },
   {
     "lang": "c",
     "op": "write",
-    "line": "write 0.091372341\nwrite 0.064573011\nwrite 0.060310512\nwrite 0.061123662\nwrite 0.062074556\nwrite 0.058582841\nhwm_kib 154172\n"
+    "line": "write 0.061180686\nwrite 0.045163717\nwrite 0.042957465\nwrite 0.042448696\nwrite 0.042310367\nwrite 0.042293824\nhwm_kib 154044\n"
   },
   {
     "lang": "c++",
     "op": "read",
-    "line": "read 0.043996719\nread 0.042615705\nread 0.041710687\nread 0.041545734\nread 0.042508655\nread 0.041665449\nn_frames 1\n"
+    "line": "read 0.044209949\nread 0.043598379\nread 0.043815644\nread 0.043254149\nread 0.043173203\nread 0.042432328\nn_frames 1\n"
   },
   {
     "lang": "c++",
     "op": "write",
-    "line": "write 0.057580177\nwrite 0.043486922\nwrite 0.042189258\nwrite 0.042014227\nwrite 0.042158124\nwrite 0.042006465\n"
+    "line": "write 0.048568855\nwrite 0.043895682\nwrite 0.042713235\nwrite 0.042432234\nwrite 0.043365573\nwrite 0.042487460\n"
   },
   {
     "lang": "fortran",
     "op": "read",
-    "line": "read      0.054002169\nread      0.051943204\nread      0.053461757\nread      0.054142832\nread      0.080933596\nread      0.079945297\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 670948\n"
+    "line": "read      0.051821294\nread      0.079264452\nread      0.083027208\nread      0.082699979\nread      0.082185992\nread      0.083370047\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 671124\n"
   },
   {
     "lang": "fortran",
     "op": "write",
-    "line": "write      0.072378539\nwrite      0.065656878\nwrite      0.061373842\nwrite      0.060464366\nwrite      0.058358904\nwrite      0.060835940\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 331356\n"
+    "line": "write      0.052401529\nwrite      0.048145181\nwrite      0.047438178\nwrite      0.046705122\nwrite      0.045567670\nwrite      0.044930301\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 331408\n"
   },
   {
     "lang": "python",
     "op": "read",
-    "line": "median=0.039064 iqr=0.000213 samples=0.040245,0.039278,0.039045,0.039006,0.039083,0.038960"
+    "line": "median=0.037007 iqr=0.000484 samples=0.038038,0.037583,0.036942,0.037001,0.036869,0.037014"
   },
   {
     "lang": "python",
     "op": "write",
-    "line": "median=0.057562 iqr=0.002130 samples=0.058475,0.056894,0.056080,0.054864,0.058231,0.061884"
+    "line": "median=0.042080 iqr=0.000097 samples=0.042764,0.042130,0.041926,0.042098,0.042061,0.042014"
   }
 ]
