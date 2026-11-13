@@ -3715,12 +3715,19 @@ fn piped_stock_frames(
     if threads < 2 {
         return Ok(None);
     }
-    let natoms: u32 = index.rows.iter().map(|(_, count)| *count).sum();
-    if natoms == 0 {
+    // A flipped length or row count must not overflow the sum or reserve
+    // a buffer the compressed file cannot hold. The full parser reads it.
+    let Some(plain_total) = crate::compression::trusted_plain_total(file.len(), &index.plain)
+    else {
+        return Ok(None);
+    };
+    let Some(n) = crate::compression::trusted_row_total(plain_total, &index.rows) else {
+        return Ok(None);
+    };
+    if n == 0 {
         return Ok(None);
     }
     let t_alloc = std::time::Instant::now();
-    let n = natoms as usize;
     let mut offset = Vec::with_capacity(index.plain.len());
     let mut cursor = 0usize;
     for len in &index.plain {
@@ -3843,6 +3850,9 @@ fn piped_stock_frames(
                             };
                             let row = base as usize;
                             let nrows = count as usize;
+                            if row.checked_add(nrows).map(|end| end <= n) != Some(true) {
+                                return Err("indexed row is outside the frame".into());
+                            }
                             if let Err(err) = crate::parser::parse_coord_run(
                                 &buf[..plain_len],
                                 local,

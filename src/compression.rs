@@ -1044,6 +1044,55 @@ fn inflate_gzip(bytes: &[u8], out: &mut Vec<u8>) -> io::Result<()> {
     Ok(())
 }
 
+/// Largest plain length an index may claim for a file of `file_len` bytes.
+///
+/// The index is attacker-controlled. A flipped high bit must fail the
+/// decode instead of reserving that many bytes.
+fn plain_length_budget(file_len: usize) -> usize {
+    file_len.saturating_mul(8192).saturating_add(1024 * 1024)
+}
+
+pub(crate) fn trusted_plain_total(file_len: usize, plain: &[usize]) -> Option<usize> {
+    let cap = plain_length_budget(file_len);
+    let mut total = 0usize;
+    for len in plain {
+        if *len > cap {
+            return None;
+        }
+        total = total.checked_add(*len).filter(|sum| *sum <= cap)?;
+    }
+    Some(total)
+}
+
+/// Atom count implied by a row table, when every span fits in `plain_total`.
+#[cfg(feature = "parallel")]
+pub(crate) fn trusted_row_total(plain_total: usize, rows: &[(u32, u32)]) -> Option<usize> {
+    let cap = plain_total / 8 + 16;
+    let mut total = 0usize;
+    let mut spans = Vec::with_capacity(rows.len());
+    for (base, count) in rows {
+        let base = *base as usize;
+        let count = *count as usize;
+        total = total.checked_add(count).filter(|sum| *sum <= cap)?;
+        let end = base.checked_add(count)?;
+        spans.push((base, end));
+    }
+    // The spans must cover every atom once. A gap leaves an uninitialized
+    // atom, and dropping that atom reads a dangling pointer.
+    spans.sort_unstable();
+    let mut cursor = 0usize;
+    for (base, end) in spans {
+        if base != cursor || end > total {
+            return None;
+        }
+        cursor = end;
+    }
+    if cursor != total {
+        return None;
+    }
+    Some(total)
+}
+
 fn inflate_sized(
     bytes: &[u8],
     starts: &[usize],
@@ -1052,7 +1101,12 @@ fn inflate_sized(
     decode: impl Fn(&[u8], &mut [u8]) -> io::Result<()> + Sync + Send,
     out: &mut Vec<u8>,
 ) -> io::Result<()> {
-    let total: usize = plain.iter().sum();
+    let Some(total) = trusted_plain_total(bytes.len(), plain) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "member plain length exceeds the compressed file",
+        ));
+    };
     if out.capacity() < total {
         out.reserve(total - out.capacity());
     }
