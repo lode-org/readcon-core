@@ -684,8 +684,35 @@ def weak(paths: dict[str, Path]) -> None:
         )
 
 
+def _codec_ceiling(
+    op: str, path: Path, threads: int, repeats: int, codec: str, members: int
+) -> list[float]:
+    """Raw inflate or deflate of `members` slices. No CON parse."""
+    binary = ROOT / "target" / "release" / "examples" / "codec_ceiling"
+    if not binary.is_file():
+        run(
+            [
+                "cargo",
+                "build",
+                "--release",
+                "--example",
+                "codec_ceiling",
+                "--features",
+                "parallel,zstd",
+            ]
+        )
+    cmd = [str(binary), op, str(path), str(threads), str(repeats)]
+    if op == "deflate":
+        cmd.extend([codec, str(members)])
+    text = run(cmd).strip()
+    return [float(piece) for piece in text.strip("[]").split(",") if piece]
+
+
 def compressed(paths: dict[str, Path]) -> None:
     import readcon
+
+    sys.path.insert(0, str(BENCH))
+    from campaign_protocol import strong_efficiency
 
     dest_dir = OUT / "compressed"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -693,66 +720,91 @@ def compressed(paths: dict[str, Path]) -> None:
     if log.exists():
         return
     frames = readcon.read_con(os.fspath(paths["con-1e6"]), n_threads=1)
+    plain = paths["con-1e6"]
     rows = []
     plain_bytes = 0
+    serial: dict[tuple[str, str, int], float] = {}
     for codec, suffix, level in (("gzip", ".con.gz", 6), ("zstd", ".con.zst", 3)):
         for members in (1, 8):
+            widths = (1,) if members == 1 else THREADS
             dest = dest_dir / f"con-1e6-m{members}{suffix}"
+            for threads in widths:
 
-            def write(dest=dest, codec=codec, members=members):
-                drop_file(dest)
-                readcon.write_con(
-                    os.fspath(dest),
-                    frames,
-                    compression=codec,
-                    n_threads=1,
-                    compression_members=members,
-                )
+                def write(dest=dest, codec=codec, members=members, threads=threads):
+                    drop_file(dest)
+                    readcon.write_con(
+                        os.fspath(dest),
+                        frames,
+                        compression=codec,
+                        n_threads=threads,
+                        compression_members=members,
+                    )
 
-            def time_call(go):
-                go()
-                samples = []
-                for _ in range(REPEATS):
-                    started = time.perf_counter()
+                def time_call(go):
                     go()
-                    samples.append(time.perf_counter() - started)
-                return type7(samples), samples
+                    samples = []
+                    for _ in range(REPEATS):
+                        started = time.perf_counter()
+                        go()
+                        samples.append(time.perf_counter() - started)
+                    return type7(samples), samples
 
-            (median, iqr), samples = time_call(write)
-            row = {
-                "op": "write",
-                "codec": codec,
-                "file": "con-1e6",
-                "level": level,
-                "members": members,
-                "threads": members,
-                "median_s": median,
-                "iqr_s": iqr,
-                "samples_s": samples,
-                "bytes": dest.stat().st_size,
-            }
-            if codec == "gzip":
-                import gzip
+                (median, iqr), samples = time_call(write)
+                if codec == "gzip" and threads == 1:
+                    import gzip
 
-                with gzip.GzipFile(filename=str(dest)) as handle:
-                    plain_bytes = len(handle.read())
-            if plain_bytes and dest.stat().st_size:
-                row["plain_bytes"] = plain_bytes
-                row["ratio"] = plain_bytes / dest.stat().st_size
-            rows.append(row)
-            print(
-                f"compressed {codec} write members={members} {median:.4f}",
-                flush=True,
-            )
-            decode_threads = (1,) if members == 1 else (1, 8)
-            for threads in decode_threads:
+                    with gzip.GzipFile(filename=str(dest)) as handle:
+                        plain_bytes = len(handle.read())
+                write_ceiling = _codec_ceiling(
+                    "deflate", plain, threads, REPEATS, codec, members
+                )
+                ceiling_median, ceiling_iqr = type7(write_ceiling)
+                key = ("write", codec, members)
+                if threads == 1:
+                    serial[key] = median
+                row = {
+                    "op": "write",
+                    "codec": codec,
+                    "file": "con-1e6",
+                    "level": level,
+                    "members": members,
+                    "threads": threads,
+                    "median_s": median,
+                    "iqr_s": iqr,
+                    "samples_s": samples,
+                    "bytes": dest.stat().st_size,
+                    "efficiency": strong_efficiency(serial[key], median, threads),
+                    "ceiling_median_s": ceiling_median,
+                    "ceiling_iqr_s": ceiling_iqr,
+                    "ceiling_samples_s": write_ceiling,
+                    "ceiling": "deflate",
+                }
+                if plain_bytes and dest.stat().st_size:
+                    row["plain_bytes"] = plain_bytes
+                    row["ratio"] = plain_bytes / dest.stat().st_size
+                rows.append(row)
+                print(
+                    f"compressed {codec} write members={members} threads={threads} "
+                    f"{median:.4f} ceiling {ceiling_median:.4f} "
+                    f"eff {row['efficiency']:.3f}",
+                    flush=True,
+                )
 
                 def read(dest=dest, threads=threads):
                     readcon.read_con(
-                        os.fspath(dest), n_threads=1, decode_threads=threads
+                        os.fspath(dest),
+                        n_threads=threads,
+                        decode_threads=threads,
                     )
 
                 (median, iqr), samples = time_call(read)
+                read_ceiling = _codec_ceiling(
+                    "inflate", dest, threads, REPEATS, codec, members
+                )
+                ceiling_median, ceiling_iqr = type7(read_ceiling)
+                key = ("read", codec, members)
+                if threads == 1:
+                    serial[key] = median
                 rows.append(
                     {
                         "op": "read",
@@ -769,10 +821,17 @@ def compressed(paths: dict[str, Path]) -> None:
                         "ratio": (plain_bytes / dest.stat().st_size)
                         if plain_bytes
                         else None,
+                        "efficiency": strong_efficiency(serial[key], median, threads),
+                        "ceiling_median_s": ceiling_median,
+                        "ceiling_iqr_s": ceiling_iqr,
+                        "ceiling_samples_s": read_ceiling,
+                        "ceiling": "inflate",
                     }
                 )
                 print(
-                    f"compressed {codec} read members={members} threads={threads} {median:.4f}",
+                    f"compressed {codec} read members={members} threads={threads} "
+                    f"{median:.4f} ceiling {ceiling_median:.4f} "
+                    f"eff {rows[-1]['efficiency']:.3f}",
                     flush=True,
                 )
     log.write_text(json.dumps(rows, indent=2) + "\n")

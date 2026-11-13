@@ -43,6 +43,19 @@ def protocol(repeats: int) -> dict:
     }
 
 
+def strong_efficiency(serial_s: float, parallel_s: float, workers: int) -> float:
+    """Strong-scaling efficiency, ``(t(1) / t(n)) / n``.
+
+    One worker is 1. A value below 1 means the extra workers did not
+    each carry a full share of the single-worker time.
+    """
+    if workers < 1 or parallel_s <= 0 or serial_s < 0:
+        raise SystemExit("efficiency needs a positive parallel time")
+    if workers == 1:
+        return 1.0
+    return (serial_s / parallel_s) / workers
+
+
 def type7(values: list[float]) -> tuple[float, float]:
     import numpy as np
 

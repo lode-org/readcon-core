@@ -76,6 +76,9 @@ rule campaign:
 # Each rule: one warmup, serial samples, type-7 median and IQR, raw
 # samples in the JSON, unlink+create on writes, STREAM / fdatasync /
 # raw pwrite ceilings, and the HEAD sha stamped into every output.
+# final_compressed also records 1/2/4/8 thread ladders for 8-member
+# gzip and zstd, with a per-count codec ceiling (inflate for reads,
+# deflate for writes) and strong-scaling efficiency.
 # final_check fails if any file under the output directory was produced
 # on a commit other than HEAD. On the default path that directory is
 # bench/h2h/scaling/rel1.
@@ -161,6 +164,7 @@ rule final_langs:
         "python3 bench/h2h/final_campaign.py langs --out {params.out} --repeats {params.repeats}"
 
 
+# 8-member gzip and zstd, threads 1/2/4/8, plus the codec ceiling.
 rule final_compressed:
     input:
         f"{FINAL_OUT}/bindings.json",

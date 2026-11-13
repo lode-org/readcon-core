@@ -29,6 +29,12 @@ def test_check_fails_when_an_output_has_no_commit(tmp_path: Path):
         protocol.check_directory(tmp_path, HEAD)
 
 
+def test_strong_efficiency_uses_the_single_worker_time():
+    assert protocol.strong_efficiency(2.0, 2.0, 1) == 1.0
+    assert protocol.strong_efficiency(4.0, 1.0, 4) == 1.0
+    assert protocol.strong_efficiency(4.0, 2.0, 4) == 0.5
+
+
 def test_check_passes_when_every_output_matches_head(tmp_path: Path):
     (tmp_path / "rows.json").write_text(
         json.dumps({"commit": HEAD, "rows": [1]}) + "\n"

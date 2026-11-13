@@ -168,6 +168,10 @@ required-features = ["mpi"]
 name = "serial_probe"
 
 [[example]]
+name = "codec_ceiling"
+required-features = ["parallel", "zstd"]
+
+[[example]]
 name = "leaf_io_harness"
 required-features = ["rpc"]
 
