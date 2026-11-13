@@ -1,0 +1,24 @@
+{
+  "protocol": "serial warmup=1 samples=6 percentile=type7",
+  "gzip": {
+    "median_s": 0.4658931825,
+    "iqr_s": 0.03463227925000001,
+    "samples_s": [
+      0.478880846,
+      0.574537615,
+      0.437115012,
+      0.459277375,
+      0.418354211,
+      0.47250899
+    ],
+    "frames": 100000,
+    "peak_rss_kib": 548192
+  },
+  "path_peak_rss_kib": {
+    "rust": 429472,
+    "c": 428544,
+    "c++": 486760,
+    "fortran": 431508,
+    "python": 492028
+  }
+}

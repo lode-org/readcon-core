@@ -1,41 +1,41 @@
 tool,op,fixture,status,median_s,iqr_s,q25_s,q75_s,warmup_s,n,detail
-readcon,read,claisen.con,ok,2.1568999727605842e-05,2.9679995350306854e-06,2.116725045198109e-05,2.4135249987011775e-05,6.250500155147165e-05,6,
-readcon,write,claisen.con,ok,0.00019150749903928954,0.0001991359995372477,0.00010417124849482207,0.00030330724803206977,0.0001478909980505705,6,
+readcon,read,claisen.con,ok,0.0010775765003927518,3.108200053247856e-05,0.001054719999046938,0.0010858019995794166,0.0010932069999398664,6,
+readcon,write,claisen.con,ok,0.00032840149833646137,0.00011320275189063977,0.000284725999335933,0.0003979287512265728,0.00017776000095182098,6,
 ase-readcon-con,read,claisen.con,unavailable,,,,,,,ase format readcon-con is not installed
 ase-readcon-con,write,claisen.con,unavailable,,,,,,,ase format readcon-con is not installed
-ase-eon,read,claisen.con,ok,0.00032177849971049,2.111074991262285e-05,0.00030980374958744505,0.0003309144995000679,0.0004650029986805748,6,
-ase-eon,write,claisen.con,ok,0.0006122435006545857,0.00010182949881709646,0.0005834312514707563,0.0006852607502878527,0.0007631389999005478,6,
+ase-eon,read,claisen.con,ok,0.000291501000901917,5.893750312679913e-06,0.0002888589997382951,0.000294752750050975,0.00045065000085742213,6,
+ase-eon,write,claisen.con,ok,0.0009349755000584992,0.00018928400095319375,0.0008599054999649525,0.0010491895009181462,0.0006375579978339374,6,
 eon-python,read,claisen.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
 eon-python,write,claisen.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
-readcon,read,neb_band_3.con,ok,2.77204999292735e-05,3.2492480386281386e-06,2.686125117179472e-05,3.011049921042286e-05,9.81719967967365e-05,6,
-readcon,write,neb_band_3.con,ok,6.131400004960597e-05,1.755625089572277e-05,5.732650060963351e-05,7.488275150535628e-05,0.0001004939986160025,6,
+readcon,read,neb_band_3.con,ok,0.0010933494977507507,3.443875084485626e-05,0.0010785942504298873,0.0011130330012747436,0.00113280100049451,6,
+readcon,write,neb_band_3.con,ok,0.0003488080019451445,0.00013569175189331872,0.00026887399872066453,0.00040456575061398325,0.00016721399879315868,6,
 ase-readcon-con,read,neb_band_3.con,unavailable,,,,,,,ase format readcon-con is not installed
 ase-readcon-con,write,neb_band_3.con,unavailable,,,,,,,ase format readcon-con is not installed
 ase-eon,read,neb_band_3.con,read_error,,,,,,,ValueError: could not convert string to float: 'Forces'
 ase-eon,write,neb_band_3.con,write_error,,,,,,,ValueError: could not convert string to float: 'Forces'
 eon-python,read,neb_band_3.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
 eon-python,write,neb_band_3.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
-readcon,read,pt100_slab.con,ok,1.9810999219771475e-05,2.8600006771739572e-06,1.9307248294353485e-05,2.2167248971527442e-05,7.783499677316286e-05,6,
-readcon,write,pt100_slab.con,ok,5.6061000577756204e-05,2.316149948455859e-05,5.057325051893713e-05,7.373475000349572e-05,9.616699753678404e-05,6,
+readcon,read,pt100_slab.con,ok,0.001090587000362575,3.308675059088273e-05,0.0010856795006475295,0.0011187662512384122,0.0010825140016095247,6,
+readcon,write,pt100_slab.con,ok,5.119799970998429e-05,0.00010363450019212905,4.86939989059465e-05,0.00015232849909807555,0.00014904300041962415,6,
 ase-readcon-con,read,pt100_slab.con,unavailable,,,,,,,ase format readcon-con is not installed
 ase-readcon-con,write,pt100_slab.con,unavailable,,,,,,,ase format readcon-con is not installed
-ase-eon,read,pt100_slab.con,ok,0.00021042949992988724,1.584300207468914e-05,0.00020014774963783566,0.0002159907517125248,0.0003034149995073676,6,
-ase-eon,write,pt100_slab.con,ok,0.0003690210014610784,5.994174989609746e-05,0.00033453099968028255,0.00039447274957638,0.00032103900230140425,6,
+ase-eon,read,pt100_slab.con,ok,0.00018368450037087314,3.2189502235269174e-05,0.0001683704995230073,0.00020056000175827648,0.0003239389989175834,6,
+ase-eon,write,pt100_slab.con,ok,0.000634994499705499,0.0003543547491062782,0.0004977212502126349,0.0008520759993189131,0.00034542599678388797,6,
 eon-python,read,pt100_slab.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
 eon-python,write,pt100_slab.con,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
-readcon,read,tiny_multi_cuh2.convel,ok,1.9231001715525053e-05,3.860998731397558e-06,1.8545500097388867e-05,2.2406498828786425e-05,7.070699939504266e-05,6,
-readcon,write,tiny_multi_cuh2.convel,ok,5.359550050343387e-05,1.4334753359435126e-05,5.143699854670558e-05,6.577175190614071e-05,9.211499855155125e-05,6,
+readcon,read,tiny_multi_cuh2.convel,ok,0.001068230500095524,1.0235752597509418e-05,0.0010636942479322897,0.0010739300005297991,0.0010538839997025207,6,
+readcon,write,tiny_multi_cuh2.convel,ok,0.0003687355019792449,0.0002899722485381062,0.0002677200000107405,0.0005576922485488467,0.00015767900185892358,6,
 ase-readcon-convel,read,tiny_multi_cuh2.convel,unavailable,,,,,,,ase format readcon-convel is not installed
 ase-readcon-convel,write,tiny_multi_cuh2.convel,unavailable,,,,,,,ase format readcon-convel is not installed
 ase-eon,read,tiny_multi_cuh2.convel,read_error,,,,,,,ValueError: could not convert string to float: 'Velocities'
 ase-eon,write,tiny_multi_cuh2.convel,write_error,,,,,,,ValueError: could not convert string to float: 'Velocities'
 eon-python,read,tiny_multi_cuh2.convel,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
 eon-python,write,tiny_multi_cuh2.convel,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
-readcon,read,v30_fs_label.convel,ok,1.77570000232663e-05,1.8097516658599488e-06,1.7469000340497587e-05,1.9278752006357536e-05,5.8448000345379114e-05,6,
-readcon,write,v30_fs_label.convel,ok,4.9865500841406174e-05,1.5901500773907173e-05,4.837300002691336e-05,6.427450080082053e-05,8.062499910010956e-05,6,
+readcon,read,v30_fs_label.convel,ok,0.001100862500607036,1.481975141359726e-05,0.001095242498195148,0.0011100622496087453,0.0010807440012285952,6,
+readcon,write,v30_fs_label.convel,ok,0.0002928174999397015,5.884949950996088e-05,0.00026833450010599336,0.00032718399961595424,0.0001513130009698216,6,
 ase-readcon-convel,read,v30_fs_label.convel,unavailable,,,,,,,ase format readcon-convel is not installed
 ase-readcon-convel,write,v30_fs_label.convel,unavailable,,,,,,,ase format readcon-convel is not installed
-ase-eon,read,v30_fs_label.convel,ok,0.00016284350022033323,1.1807749615400098e-05,0.00015631150108674774,0.00016811925070214784,0.0002512200007913634,6,
-ase-eon,write,v30_fs_label.convel,ok,0.00026481799977773335,8.016350057005184e-05,0.00021789699985674815,0.0002980605004268,0.0002643019979586825,6,
+ase-eon,read,v30_fs_label.convel,ok,0.00014583649863197934,1.5160003385972232e-05,0.00014242424822441535,0.00015758425161038758,0.0002891099975386169,6,
+ase-eon,write,v30_fs_label.convel,ok,0.00034583549859235063,0.00011348675070621539,0.000304803498693218,0.0004182902493994334,0.00031204100014292635,6,
 eon-python,read,v30_fs_label.convel,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn
 eon-python,write,v30_fs_label.convel,unavailable,,,,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn

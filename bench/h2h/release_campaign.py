@@ -58,16 +58,35 @@ def write_table2(h2h: list[dict]) -> None:
     (OUT / "table2-h2h.tsv").write_text("\n".join(lines) + "\n")
 
 
-def write_table3(langs: list[dict]) -> None:
-    lines = ["binding\top\tmedian_s\tiqr_s"]
+def write_table3(langs: list[dict], memory: dict) -> None:
+    peaks = memory["path_peak_rss_kib"]
+    lines = ["binding\top\tmedian_s\tiqr_s\tpath_peak_rss_mib"]
     for row in langs:
         samples = samples_from_text(row.get("line", ""))
+        rss = ""
+        if row["op"] == "read":
+            kib = peaks.get(row["lang"])
+            if kib is not None:
+                rss = sig3(kib / 1024)
         if len(samples) < 2:
-            lines.append(f"{row['lang']}\t{row['op']}\t\t")
+            lines.append(f"{row['lang']}\t{row['op']}\t\t\t{rss}")
             continue
         median, iqr = type7(samples)
-        lines.append(f"{row['lang']}\t{row['op']}\t{sig3(median)}\t{sig3(iqr)}")
+        lines.append(f"{row['lang']}\t{row['op']}\t{sig3(median)}\t{sig3(iqr)}\t{rss}")
     (OUT / "table3-bindings.tsv").write_text("\n".join(lines) + "\n")
+
+
+def write_s_memory(memory: dict) -> None:
+    lines = ["row\tbinding\tpeak_rss_kib\tpeak_rss_mib\tmedian_s\tiqr_s"]
+    for lang, kib in memory["path_peak_rss_kib"].items():
+        lines.append(f"path\t{lang}\t{kib}\t{sig3(kib / 1024)}\t\t")
+    gzip = memory["gzip"]
+    lines.append(
+        "gzip\trust\t"
+        f"{gzip['peak_rss_kib']}\t{sig3(gzip['peak_rss_kib'] / 1024)}\t"
+        f"{sig3(gzip['median_s'])}\t{sig3(gzip['iqr_s'])}"
+    )
+    (OUT / "s-memory.tsv").write_text("\n".join(lines) + "\n")
 
 
 def write_s61(rows: list[dict]) -> None:
@@ -102,6 +121,101 @@ def run_logged(cmd: list[str], log_name: str) -> None:
         raise SystemExit(f"{cmd} failed")
 
 
+def peak_kib(cmd: list[str], log_name: str) -> int:
+    completed = subprocess.run(
+        ["/usr/bin/time", "-v", "taskset", "-c", "0", *cmd],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    (OUT / log_name).write_text(completed.stderr + "\n" + completed.stdout)
+    if completed.returncode != 0:
+        print(completed.stderr[-1500:], file=sys.stderr)
+        raise SystemExit(f"{cmd} failed")
+    for line in completed.stderr.splitlines():
+        if "Maximum resident set size" in line:
+            return int(line.rsplit(maxsplit=1)[-1])
+    raise SystemExit(f"{log_name} has no resident-set line")
+
+
+def gzip_file() -> Path:
+    plain = ROOT / "bench/h2h/work/parallel-frames/frames-32x100000.con"
+    packed = plain.with_suffix(".con.gz")
+    if packed.exists() and packed.stat().st_mtime >= plain.stat().st_mtime:
+        return packed
+    import gzip
+    import shutil
+
+    with plain.open("rb") as src, gzip.open(packed, "wb", compresslevel=1) as dst:
+        shutil.copyfileobj(src, dst)
+    return packed
+
+
+def measure_memory() -> dict:
+    """100k-frame path peaks and the gzip read, same protocol as mem-r2."""
+    plain = ROOT / "bench/h2h/work/parallel-frames/frames-32x100000.con"
+    packed = gzip_file()
+    probe = ROOT / "target/release/examples/serial_probe"
+    work = ROOT / "bench/h2h/work"
+    unused = work / "mem-rel1-unused.con"
+    gzip_json = OUT / "rust-gzip-samples.json"
+    subprocess.run(
+        ["taskset", "-c", "0", str(probe), str(packed), str(gzip_json), "6", "default"],
+        cwd=ROOT,
+        check=True,
+    )
+    samples = json.loads(gzip_json.read_text())["samples_s"]
+    median, iqr = type7(samples)
+    gzip_kib = peak_kib(
+        [str(probe), str(packed), str(OUT / "rust-gzip-once.json"), "1", "default"],
+        "rust-gzip.time",
+    )
+    peaks = {
+        "rust": peak_kib(
+            [str(probe), str(plain), str(OUT / "rust-path-once.json"), "1", "default"],
+            "rust-path.time",
+        ),
+        "c": peak_kib(
+            [str(work / "time_c"), "frames", str(plain), str(unused), "0"],
+            "c.time",
+        ),
+        "c++": peak_kib(
+            [str(work / "time_cpp"), "read", str(plain), str(unused), "0"],
+            "cpp.time",
+        ),
+        "fortran": peak_kib(
+            [str(work / "time_f"), "read", str(plain), str(unused), "1"],
+            "fortran.time",
+        ),
+        "python": peak_kib(
+            [
+                sys.executable,
+                "-c",
+                "import readcon; frames=readcon.read_con("
+                f"{str(plain)!r}, n_threads=1); assert len(frames)==100000",
+            ],
+            "python.time",
+        ),
+    }
+    memory = {
+        "protocol": "serial warmup=1 samples=6 percentile=type7",
+        "gzip": {
+            "median_s": median,
+            "iqr_s": iqr,
+            "samples_s": samples,
+            "frames": 100000,
+            "peak_rss_kib": gzip_kib,
+        },
+        "path_peak_rss_kib": peaks,
+    }
+    (OUT / "memory.json").write_text(json.dumps(memory, indent=2) + "\n")
+    print(
+        f"gzip median {median:.3f}s rss {gzip_kib} KiB",
+        flush=True,
+    )
+    return memory
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     LOG.mkdir(parents=True, exist_ok=True)
@@ -125,9 +239,11 @@ def main() -> None:
     rows = json.loads((OUT / "rows.json").read_text())
     h2h = json.loads((OUT / "h2h.json").read_text())
     langs = json.loads((OUT / "langs.json").read_text())
+    memory = measure_memory()
     write_table2(h2h)
-    write_table3(langs)
+    write_table3(langs, memory)
     write_s61(rows)
+    write_s_memory(memory)
     run_logged(
         [sys.executable, str(ROOT / "bench" / "fidelity" / "campaign.py")],
         "fidelity.log",
@@ -149,7 +265,9 @@ def main() -> None:
     head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    (OUT / "DONE").write_text(f"{head}\nprovisional: before mem-r2 and h2h6\n")
+    (OUT / "DONE").write_text(
+        f"{head}\nprovisional: mem-r2 is in, h2h6 is still outstanding\n"
+    )
     print("release logs", OUT)
 
 

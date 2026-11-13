@@ -1,0 +1,7 @@
+row	binding	peak_rss_kib	peak_rss_mib	median_s	iqr_s
+path	rust	429472	419		
+path	c	428544	418		
+path	c++	486760	475		
+path	fortran	431508	421		
+path	python	492028	480		
+gzip	rust	548192	535	0.466	0.0346

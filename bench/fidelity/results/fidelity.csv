@@ -3,11 +3,11 @@ readcon,claisen.con,atom_ids,exact,exact,,0,,reader: column 5 sequence matches; 
 readcon,claisen.con,fixed_mask,exact,exact,,0,,reader: atoms whose per-axis mask differs: 0; round_trip: atoms whose per-axis mask differs: 0,
 readcon,claisen.con,masses,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 readcon,claisen.con,cell,exact,exact,0.0,,0.0,"reader: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True",
-readcon,claisen.con,positions,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+readcon,claisen.con,positions,mismatch,mismatch,1.0931921307736e-311,,0.0,reader: paired by atom_id; sorted max abs 1.093192130584e-311; round_trip: paired by atom_id; sorted max abs 1.0931921307736e-311,
 readcon,claisen.con,velocities,absent,absent,,,,reader: this file has no velocity section; round_trip: this file has no velocity section,
 readcon,claisen.con,velocity_unit,absent,absent,,,,reader: no velocity section; round_trip: no velocity section,
 readcon,claisen.con,frame_order,exact,exact,,,,"reader: 2 frames, positions matched in file order; round_trip: 2 frames, positions matched in file order",
-readcon,claisen.con,positional_zip_error,exact,exact,15.839123179185188,,1e-08,"max 15.8391 A, C5 1.504 A, oxygen index 15.8391 A, oxygen slot norm 15.7607 A, id_sequence_kept True",
+readcon,claisen.con,positional_zip_error,exact,exact,20.77832994964168,,1e-08,"max 20.7783 A, C5 1.504 A, oxygen index 20.7783 A, oxygen slot norm 15.7607 A, id_sequence_kept True",
 ase-readcon-con,claisen.con,atom_ids,unavailable,unavailable,,,,ase format readcon-con is not installed,
 ase-readcon-con,claisen.con,fixed_mask,unavailable,unavailable,,,,ase format readcon-con is not installed,
 ase-readcon-con,claisen.con,masses,unavailable,unavailable,,,,ase format readcon-con is not installed,
@@ -16,16 +16,16 @@ ase-readcon-con,claisen.con,positions,unavailable,unavailable,,,,ase format read
 ase-readcon-con,claisen.con,velocities,unavailable,unavailable,,,,ase format readcon-con is not installed,
 ase-readcon-con,claisen.con,velocity_unit,unavailable,unavailable,,,,ase format readcon-con is not installed,
 ase-readcon-con,claisen.con,frame_order,unavailable,unavailable,,,,ase format readcon-con is not installed,
-ase-readcon-con,claisen.con,positional_zip_error,unavailable,unavailable,15.839123179185188,,,ase format readcon-con is not installed,
+ase-readcon-con,claisen.con,positional_zip_error,unavailable,unavailable,20.77832994964168,,,ase format readcon-con is not installed,
 ase-eon,claisen.con,atom_ids,not_representable,mismatch,,,,reader: this reader does not keep CON column 5; round_trip: column 5 does not match the input ids,"ase/io/eon.py:138 reads xyz and tokens[3], not column 5; ase/io/eon.py:281 atom_id starts at 0 and increments"
 ase-eon,claisen.con,fixed_mask,exact,exact,,0,,"reader: column 4 is one boolean, stored as the same flag on x, y and z; round_trip: atoms whose per-axis mask differs: 0",ase/io/eon.py:139 bool(int(tokens[3])); FixAtoms at :146; ase/io/eon.py:288 only FixAtoms is written
 ase-eon,claisen.con,masses,exact,exact,0.0,,1e-06,reader: paired by index; sorted max abs 0.0; round_trip: paired by index; sorted max abs 0.0,
 ase-eon,claisen.con,cell,exact,exact,0.0,,5e-07,"reader: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True",ase/io/eon.py:257 lengths and angles use %-10.6f
-ase-eon,claisen.con,positions,exact,exact,0.0,,1e-12,reader: paired by index; sorted max abs 0.0; round_trip: paired by index; sorted max abs 0.0,
+ase-eon,claisen.con,positions,mismatch,within_tolerance,1.093192129825e-311,,1e-12,reader: paired by index; sorted max abs 2.582043417086022; round_trip: paired by index; sorted max abs 1.093192129825e-311,
 ase-eon,claisen.con,velocities,absent,absent,,,,reader: this file has no velocity section; round_trip: this file has no velocity section,
 ase-eon,claisen.con,velocity_unit,absent,absent,,,,reader: no velocity section; round_trip: no velocity section,
-ase-eon,claisen.con,frame_order,exact,exact,,,,"reader: 2 frames, positions matched in file order; round_trip: 2 frames, positions matched in file order",
-ase-eon,claisen.con,positional_zip_error,not_representable,mismatch,15.839123179185188,,,"input max 15.8391 A, C5 1.504 A, oxygen index 15.8391 A; round-trip atom_id_permutation failed: ValidationError: frame 1 atom_id 0 at index 0 has symbol O; reference symbol is C","ase/io/eon.py:138 reads xyz and tokens[3], not column 5"
+ase-eon,claisen.con,frame_order,mismatch,exact,,1,,"reader: got 2 frames, expected 2; round_trip: 2 frames, positions matched in file order",
+ase-eon,claisen.con,positional_zip_error,not_representable,mismatch,20.77832994964168,,,"input max 20.7783 A, C5 1.504 A, oxygen index 20.7783 A; round-trip atom_id_permutation failed: ValidationError: frame 1 atom_id 0 at index 0 has symbol O; reference symbol is C","ase/io/eon.py:138 reads xyz and tokens[3], not column 5"
 eon-python,claisen.con,atom_ids,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 eon-python,claisen.con,fixed_mask,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 eon-python,claisen.con,masses,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
@@ -34,7 +34,7 @@ eon-python,claisen.con,positions,unavailable,unavailable,,,,eon.fileio is not in
 eon-python,claisen.con,velocities,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 eon-python,claisen.con,velocity_unit,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 eon-python,claisen.con,frame_order,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
-eon-python,claisen.con,positional_zip_error,unavailable,unavailable,15.839123179185188,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
+eon-python,claisen.con,positional_zip_error,unavailable,unavailable,20.77832994964168,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 chemfiles,claisen.con,atom_ids,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
 chemfiles,claisen.con,fixed_mask,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
 chemfiles,claisen.con,masses,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
@@ -43,12 +43,12 @@ chemfiles,claisen.con,positions,not_representable,not_representable,,,,"Chemfile
 chemfiles,claisen.con,velocities,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
 chemfiles,claisen.con,velocity_unit,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
 chemfiles,claisen.con,frame_order,not_representable,not_representable,,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
-chemfiles,claisen.con,positional_zip_error,not_representable,not_representable,15.839123179185188,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
+chemfiles,claisen.con,positional_zip_error,not_representable,not_representable,20.77832994964168,,,"ChemfilesError: can not find a format named 'CON', did you mean 'CIF' or 'CML' or 'CSSR' or 'DCD' or 'GRO' or 'MOL2' or 'PDB' or 'PSF' or 'SDF' or 'SMI' or 'TNG' or 'TRJ' or 'TPR' or 'TRR' or 'XTC' or 'XYZ'?",chemfiles 0.10.4 src/FormatFactory.cpp:139 by_name throws; :208 formats the message 'can not find a format named'
 readcon,neb_band_3.con,atom_ids,exact,exact,,0,,reader: column 5 sequence matches; round_trip: column 5 sequence matches,
 readcon,neb_band_3.con,fixed_mask,exact,exact,,0,,reader: atoms whose per-axis mask differs: 0; round_trip: atoms whose per-axis mask differs: 0,
 readcon,neb_band_3.con,masses,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 readcon,neb_band_3.con,cell,exact,exact,0.0,,0.0,"reader: per-frame cell+angles, n_frames 3 of 3, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 3 of 3, input cells equal across frames: True",
-readcon,neb_band_3.con,positions,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+readcon,neb_band_3.con,positions,mismatch,mismatch,1.731e-320,,0.0,reader: paired by atom_id; sorted max abs 1.093192033162e-311; round_trip: paired by atom_id; sorted max abs 1.731e-320,
 readcon,neb_band_3.con,velocities,absent,absent,,,,reader: this file has no velocity section; round_trip: this file has no velocity section,
 readcon,neb_band_3.con,velocity_unit,absent,absent,,,,reader: no velocity section; round_trip: no velocity section,
 readcon,neb_band_3.con,frame_order,exact,exact,,,,"reader: 3 frames, positions matched in file order; round_trip: 3 frames, positions matched in file order",
@@ -93,7 +93,7 @@ readcon,pt100_slab.con,atom_ids,exact,exact,,0,,reader: column 5 sequence matche
 readcon,pt100_slab.con,fixed_mask,exact,exact,,0,,reader: atoms whose per-axis mask differs: 0; round_trip: atoms whose per-axis mask differs: 0,
 readcon,pt100_slab.con,masses,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 readcon,pt100_slab.con,cell,exact,exact,0.0,,0.0,"reader: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True",
-readcon,pt100_slab.con,positions,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+readcon,pt100_slab.con,positions,mismatch,mismatch,1.093191709956e-311,,0.0,reader: paired by atom_id; sorted max abs 1.0931917098455e-311; round_trip: paired by atom_id; sorted max abs 1.093191709956e-311,
 readcon,pt100_slab.con,velocities,absent,absent,,,,reader: this file has no velocity section; round_trip: this file has no velocity section,
 readcon,pt100_slab.con,velocity_unit,absent,absent,,,,reader: no velocity section; round_trip: no velocity section,
 readcon,pt100_slab.con,frame_order,exact,exact,,,,"reader: 1 frames, positions matched in file order; round_trip: 1 frames, positions matched in file order",
@@ -111,10 +111,10 @@ ase-eon,pt100_slab.con,atom_ids,not_representable,mismatch,,,,reader: this reade
 ase-eon,pt100_slab.con,fixed_mask,mismatch,mismatch,,1,,"reader: column 4 is one boolean, stored as the same flag on x, y and z; round_trip: atoms whose per-axis mask differs: 1",ase/io/eon.py:139 bool(int(tokens[3])); FixAtoms at :146; ase/io/eon.py:288 only FixAtoms is written
 ase-eon,pt100_slab.con,masses,exact,exact,0.0,,1e-06,reader: paired by index; sorted max abs 0.0; round_trip: paired by index; sorted max abs 0.0,
 ase-eon,pt100_slab.con,cell,exact,within_tolerance,1.645025324847893e-07,,5e-07,"reader: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True",ase/io/eon.py:257 lengths and angles use %-10.6f
-ase-eon,pt100_slab.con,positions,exact,within_tolerance,4.553649124439119e-18,,1e-12,reader: paired by index; sorted max abs 0.0; round_trip: paired by index; sorted max abs 4.553649124439119e-18,
+ase-eon,pt100_slab.con,positions,mismatch,within_tolerance,4.553649124439119e-18,,1e-12,reader: paired by index; sorted max abs 2.772365689095344; round_trip: paired by index; sorted max abs 4.553649124439119e-18,
 ase-eon,pt100_slab.con,velocities,absent,absent,,,,reader: this file has no velocity section; round_trip: this file has no velocity section,
 ase-eon,pt100_slab.con,velocity_unit,absent,absent,,,,reader: no velocity section; round_trip: no velocity section,
-ase-eon,pt100_slab.con,frame_order,exact,exact,,,,"reader: 1 frames, positions matched in file order; round_trip: 1 frames, positions matched in file order",
+ase-eon,pt100_slab.con,frame_order,mismatch,exact,,1,,"reader: got 1 frames, expected 1; round_trip: 1 frames, positions matched in file order",
 ase-eon,pt100_slab.con,positional_zip_error,absent,absent,,,,the Claisen correspondence case is claisen.con,
 eon-python,pt100_slab.con,atom_ids,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
 eon-python,pt100_slab.con,fixed_mask,unavailable,unavailable,,,,eon.fileio is not installed; set EON_ROOT to a checkout of eOn,eon/fileio.py:170 loadcons calls readcon.read_con
@@ -138,7 +138,7 @@ readcon,tiny_multi_cuh2.convel,atom_ids,exact,exact,,0,,reader: column 5 sequenc
 readcon,tiny_multi_cuh2.convel,fixed_mask,exact,exact,,0,,reader: atoms whose per-axis mask differs: 0; round_trip: atoms whose per-axis mask differs: 0,
 readcon,tiny_multi_cuh2.convel,masses,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 readcon,tiny_multi_cuh2.convel,cell,exact,exact,0.0,,0.0,"reader: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 2 of 2, input cells equal across frames: True",
-readcon,tiny_multi_cuh2.convel,positions,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+readcon,tiny_multi_cuh2.convel,positions,mismatch,mismatch,6.56277e-319,,0.0,reader: paired by atom_id; sorted max abs 8.3e-321; round_trip: paired by atom_id; sorted max abs 6.56277e-319,
 readcon,tiny_multi_cuh2.convel,velocities,exact,exact,0.0,,0.0,"reader: file numbers, not a converted unit; round_trip: file numbers, not a converted unit",src/parser.rs:1984 set_velocity stores the parsed numbers
 readcon,tiny_multi_cuh2.convel,velocity_unit,exact,label_changed,,,,"reader: label [None, None]; authoritative ['(amu*angstrom^2/eV)^0.5', '(amu*angstrom^2/eV)^0.5']; round_trip: label [None, None] -> ['(amu*angstrom^2/eV)^0.5', '(amu*angstrom^2/eV)^0.5']; authoritative ['(amu*angstrom^2/eV)^0.5', '(amu*angstrom^2/eV)^0.5'] -> ['(amu*angstrom^2/eV)^0.5', '(amu*angstrom^2/eV)^0.5']","src/units.rs:406 versions below 3 and minor 0 use the natural unit, ignoring a units.time label"
 readcon,tiny_multi_cuh2.convel,frame_order,exact,exact,,,,"reader: 2 frames, positions matched in file order; round_trip: 2 frames, positions matched in file order",
@@ -183,7 +183,7 @@ readcon,v30_fs_label.convel,atom_ids,exact,exact,,0,,reader: column 5 sequence m
 readcon,v30_fs_label.convel,fixed_mask,exact,exact,,0,,reader: atoms whose per-axis mask differs: 0; round_trip: atoms whose per-axis mask differs: 0,
 readcon,v30_fs_label.convel,masses,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 readcon,v30_fs_label.convel,cell,exact,exact,0.0,,0.0,"reader: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True",
-readcon,v30_fs_label.convel,positions,exact,exact,0.0,,0.0,reader: paired by atom_id; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+readcon,v30_fs_label.convel,positions,mismatch,mismatch,1.6e-322,,0.0,reader: paired by atom_id; sorted max abs 7.747e-321; round_trip: paired by atom_id; sorted max abs 1.6e-322,
 readcon,v30_fs_label.convel,velocities,exact,exact,0.0,,0.0,"reader: file numbers, not a converted unit; round_trip: file numbers, not a converted unit",src/parser.rs:1984 set_velocity stores the parsed numbers
 readcon,v30_fs_label.convel,velocity_unit,exact,label_changed,,,,reader: label ['fs']; authoritative ['(amu*angstrom^2/eV)^0.5']; round_trip: label ['fs'] -> ['(amu*angstrom^2/eV)^0.5']; authoritative ['(amu*angstrom^2/eV)^0.5'] -> ['(amu*angstrom^2/eV)^0.5'],"src/units.rs:406 versions below 3 and minor 0 use the natural unit, ignoring a units.time label"
 readcon,v30_fs_label.convel,frame_order,exact,exact,,,,"reader: 1 frames, positions matched in file order; round_trip: 1 frames, positions matched in file order",
@@ -201,7 +201,7 @@ ase-eon,v30_fs_label.convel,atom_ids,not_representable,exact,,,,reader: this rea
 ase-eon,v30_fs_label.convel,fixed_mask,exact,exact,,0,,"reader: column 4 is one boolean, stored as the same flag on x, y and z; round_trip: atoms whose per-axis mask differs: 0",ase/io/eon.py:139 bool(int(tokens[3])); FixAtoms at :146; ase/io/eon.py:288 only FixAtoms is written
 ase-eon,v30_fs_label.convel,masses,exact,exact,0.0,,1e-06,reader: paired by index; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
 ase-eon,v30_fs_label.convel,cell,exact,exact,0.0,,5e-07,"reader: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True; round_trip: per-frame cell+angles, n_frames 1 of 1, input cells equal across frames: True",ase/io/eon.py:257 lengths and angles use %-10.6f
-ase-eon,v30_fs_label.convel,positions,exact,exact,0.0,,1e-12,reader: paired by index; sorted max abs 0.0; round_trip: paired by atom_id; sorted max abs 0.0,
+ase-eon,v30_fs_label.convel,positions,within_tolerance,within_tolerance,1.6e-322,,1e-12,reader: paired by index; sorted max abs 1.0931917419084e-311; round_trip: paired by atom_id; sorted max abs 1.6e-322,
 ase-eon,v30_fs_label.convel,velocities,not_representable,not_representable,,,,reader: the reader has no velocity block; round_trip: the reader has no velocity block,ase/io/eon.py:302 writes the coordinate line; no velocity block
 ase-eon,v30_fs_label.convel,velocity_unit,not_representable,not_representable,,,,"reader: no velocity block, so no time unit; round_trip: no velocity block, so no time unit",ase/io/eon.py:302 writes the coordinate line; no velocity block
 ase-eon,v30_fs_label.convel,frame_order,exact,exact,,,,"reader: 1 frames, positions matched in file order; round_trip: 1 frames, positions matched in file order",

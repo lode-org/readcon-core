@@ -1,20 +1,20 @@
-rev_parse 6d58416c472833aa02cd479ec8881b25b0c5237f
-tree 97d22a6b9dfda3d99c3fb95bc7017996ca1837ee
+rev_parse d94dd2fb4f1dee51eb3719356c45d6f782ebd977
+tree e3757ac37eedcb6104c8811c7dbf9ed760d165bf
 command python3 paper/cpc/bench/db_v2.py
-date_utc 2026-11-13T05:15:53Z
+date_utc 2026-11-13T05:34:56Z
 uname_m x86_64
 nproc 8
 cpu_model Intel Xeon Processor
 pwd .
 tmpdir paper/cpc/bench/work/v2
 repeats 6
-baseline_rss_bytes=29044736
+baseline_rss_bytes=29270016
 repeat 0 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 0 kind ase.db seconds 0.08652807399994344 rss_bytes 89239552 rss_above_baseline 60194816 frames 40 error 
-repeat 1 kind ase.db seconds 0.08537556800001767 rss_bytes 91639808 rss_above_baseline 62595072 frames 40 error 
+repeat 0 kind ase.db seconds 0.0662161729997024 rss_bytes 91820032 rss_above_baseline 62550016 frames 40 error 
+repeat 1 kind ase.db seconds 0.08001528000022518 rss_bytes 91746304 rss_above_baseline 62476288 frames 40 error 
 repeat 1 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
@@ -23,8 +23,8 @@ repeat 2 kind readcon-db seconds None rss_bytes None rss_above_baseline None fra
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 2 kind ase.db seconds 0.0844102630035195 rss_bytes 91627520 rss_above_baseline 62582784 frames 40 error 
-repeat 3 kind ase.db seconds 0.05812653900284204 rss_bytes 91672576 rss_above_baseline 62627840 frames 40 error 
+repeat 2 kind ase.db seconds 0.062386165001953486 rss_bytes 91545600 rss_above_baseline 62275584 frames 40 error 
+repeat 3 kind ase.db seconds 0.05803996399845346 rss_bytes 91648000 rss_above_baseline 62377984 frames 40 error 
 repeat 3 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
@@ -33,8 +33,8 @@ repeat 4 kind readcon-db seconds None rss_bytes None rss_above_baseline None fra
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 4 kind ase.db seconds 0.058382326998980716 rss_bytes 91762688 rss_above_baseline 62717952 frames 40 error 
-repeat 5 kind ase.db seconds 0.06271396499869297 rss_bytes 91660288 rss_above_baseline 62615552 frames 40 error 
+repeat 4 kind ase.db seconds 0.10883305999959703 rss_bytes 89235456 rss_above_baseline 59965440 frames 40 error 
+repeat 5 kind ase.db seconds 0.06946091500140028 rss_bytes 91631616 rss_above_baseline 62361600 frames 40 error 
 repeat 5 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
