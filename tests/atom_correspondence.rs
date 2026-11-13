@@ -790,3 +790,70 @@ fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
     assert!((ordered.atom_data[0].x - other.atom_data[0].x).abs() < 1e-12);
     assert_eq!(ordered.atom_data[0].atom_id, 10);
 }
+
+fn hop_frames(name: &str) -> Vec<ConFrame> {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data/hop")
+        .join(name);
+    readcon_core::iterators::read_all_frames(&path).expect("hop con")
+}
+
+fn step(frame: &ConFrame, slot: usize, other: &ConFrame) -> [f64; 3] {
+    sub(pos(frame, slot), pos(other, slot))
+}
+
+/// The copper swap is the wrong path until the reader follows column 5.
+///
+/// Index pairing of the exchanged rows fails the hop (the copper moves by a
+/// lattice diagonal). Matching the identifier, then reordering, passes: that
+/// copper stays put and the hydrogen moves by the hollow-to-hollow step.
+#[test]
+fn hop_positional_zip_is_the_wrong_displacement() {
+    let reactant = hop_frames("reactant.con").pop().unwrap();
+    let product = hop_frames("product.con").pop().unwrap();
+    let swapped = hop_frames("product_swapped.con").pop().unwrap();
+    let file_ids: Vec<u64> = swapped.atom_data.iter().map(|atom| atom.atom_id).collect();
+    assert_eq!(file_ids[8], 11);
+    assert_eq!(file_ids[11], 8);
+
+    let slot = step(&swapped, 8, &reactant);
+    assert!(
+        norm(slot) > 2.0,
+        "index pairing of the exchanged copper is {slot:?}"
+    );
+
+    let disp = minimum_image_displacements(&reactant, &swapped, IdentityCheck::Strict).unwrap();
+    let copper = by_id(&reactant, 8);
+    let hydrogen = by_id(&reactant, 12);
+    assert!(
+        norm(disp[copper]) < 0.01,
+        "id-matched copper moved {}",
+        norm(disp[copper])
+    );
+    let hop = norm(disp[hydrogen]);
+    assert!(
+        (hop - 2.5525).abs() < 1e-3,
+        "id-matched hydrogen step is {hop}"
+    );
+    // The index step is not the hydrogen hop.
+    assert!((norm(slot) - hop).abs() > 0.5);
+
+    let ordered = reorder_like(&reactant, &swapped, IdentityCheck::Strict).unwrap();
+    assert_eq!(
+        ordered
+            .atom_data
+            .iter()
+            .map(|atom| atom.atom_id)
+            .collect::<Vec<_>>(),
+        reactant
+            .atom_data
+            .iter()
+            .map(|atom| atom.atom_id)
+            .collect::<Vec<_>>()
+    );
+    for (got, expect) in ordered.atom_data.iter().zip(product.atom_data.iter()) {
+        assert!((got.x - expect.x).abs() < 1e-8);
+        assert!((got.y - expect.y).abs() < 1e-8);
+        assert!((got.z - expect.z).abs() < 1e-8);
+    }
+}

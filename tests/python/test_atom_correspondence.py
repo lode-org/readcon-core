@@ -7,6 +7,8 @@ of the atom that actually moved.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -305,3 +307,30 @@ def test_strict_mass_and_fixed_mask_are_optional():
         readcon.atom_id_permutation(reference, renamed, strict=False)
     assert caught.value.frame_index == 1
     assert caught.value.atom_id == 1
+
+
+def test_hop_positional_zip_is_the_wrong_displacement():
+    """Index pairing of the exchanged copper fails; the identifier passes."""
+    root = Path(__file__).resolve().parents[1] / "data" / "hop"
+    reactant = readcon.read_con(str(root / "reactant.con"))[0]
+    product = readcon.read_con(str(root / "product.con"))[0]
+    swapped = readcon.read_con(str(root / "product_swapped.con"))[0]
+    assert [atom.atom_id for atom in swapped.atoms][8] == 11
+    slot = _norm(
+        _sub(
+            [swapped.atoms[8].x, swapped.atoms[8].y, swapped.atoms[8].z],
+            [reactant.atoms[8].x, reactant.atoms[8].y, reactant.atoms[8].z],
+        )
+    )
+    assert slot > 2.0
+    disp = np.asarray(readcon.minimum_image_displacements(reactant, swapped))
+    assert _norm(disp[8]) < 0.01
+    hop = _norm(disp[12])
+    assert hop == pytest.approx(2.5525, abs=1e-3)
+    assert abs(slot - hop) > 0.5
+    ordered = readcon.reorder_like(reactant, swapped)
+    assert [atom.atom_id for atom in ordered.atoms] == list(range(13))
+    for got, expect in zip(ordered.atoms, product.atoms):
+        assert got.x == pytest.approx(expect.x)
+        assert got.y == pytest.approx(expect.y)
+        assert got.z == pytest.approx(expect.z)
