@@ -1,0 +1,38 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{CON head-to-head. Median in seconds, interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:conread}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llllc@{}}
+\toprule
+File & Reader & Op & Cache & Median (IQR, $n$) \\
+\midrule
+con-1e6 & readcon & read & warm & 0.07444 (0.0186, $n{=}6$) \\
+con-1e6 & ase & read & warm & 1.876 (0.2095, $n{=}6$) \\
+con-1e6 & eon & read & warm & 0.3323 (0.01143, $n{=}6$) \\
+con-1e6 & readcon & read & cold & 0.07838 (0.002262, $n{=}6$) \\
+con-1e6 & ase & read & cold & 1.793 (0.1094, $n{=}6$) \\
+con-1e6 & eon & read & cold & 0.3453 (0.003675, $n{=}6$) \\
+con-1e6 & readcon & write & unlink-create & 0.08329 (0.00312, $n{=}6$) \\
+con-1e6 & ase & write & unlink-create & 2.414 (0.04373, $n{=}6$) \\
+con-1e6 & eon & write & unlink-create & 0.5932 (0.01376, $n{=}6$) \\
+con-h2h-mask & readcon & read & warm & 0.06635 (0.003004, $n{=}6$) \\
+con-h2h-mask & ase & read & warm & 1.848 (0.07066, $n{=}6$) \\
+con-h2h-mask & eon & read & warm & 0.3484 (0.004937, $n{=}6$) \\
+con-h2h-mask & readcon & read & cold & 0.08068 (0.003066, $n{=}6$) \\
+con-h2h-mask & ase & read & cold & 1.882 (0.1261, $n{=}6$) \\
+con-h2h-mask & eon & read & cold & 0.3509 (0.009435, $n{=}6$) \\
+con-h2h-mask & readcon & write & unlink-create & 0.08451 (0.002383, $n{=}6$) \\
+con-h2h-mask & ase & write & unlink-create & 2.394 (0.02303, $n{=}6$) \\
+con-h2h-mask & eon & write & unlink-create & 0.5976 (0.008621, $n{=}6$) \\
+con-h2h & readcon & read & warm & 0.1236 (0.00703, $n{=}6$) \\
+con-h2h & eon & read & warm & 0.6291 (0.03001, $n{=}6$) \\
+con-h2h & readcon & read & cold & 0.1615 (0.01865, $n{=}6$) \\
+con-h2h & eon & read & cold & 0.6461 (0.01961, $n{=}6$) \\
+con-h2h & readcon & write & unlink-create & 0.1952 (0.007338, $n{=}6$) \\
+con-h2h & eon & write & unlink-create & 0.895 (0.02521, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

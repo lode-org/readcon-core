@@ -1,0 +1,37 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Million-atom reads and writes. Median in seconds, interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:million}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llllc@{}}
+\toprule
+File & Reader & Op & Cache & Median (IQR, $n$) \\
+\midrule
+CON & readcon & read & warm & 0.07444 (0.0186, $n{=}6$) \\
+CON & ase & read & warm & 1.876 (0.2095, $n{=}6$) \\
+CON & eon & read & warm & 0.3323 (0.01143, $n{=}6$) \\
+CON & readcon & read & cold & 0.07838 (0.002262, $n{=}6$) \\
+CON & ase & read & cold & 1.793 (0.1094, $n{=}6$) \\
+CON & eon & read & cold & 0.3453 (0.003675, $n{=}6$) \\
+CON & readcon & write & unlink-create & 0.08329 (0.00312, $n{=}6$) \\
+CON & ase & write & unlink-create & 2.414 (0.04373, $n{=}6$) \\
+CON & eon & write & unlink-create & 0.5932 (0.01376, $n{=}6$) \\
+extxyz-same & readcon & read & warm & 0.1103 (0.01115, $n{=}6$) \\
+extxyz-same & ovito & read & warm & 0.2439 (0.01104, $n{=}6$) \\
+extxyz-same & ase-extxyz & read & warm & 2.011 (0.1697, $n{=}6$) \\
+extxyz-same & cextxyz & read & warm & 0.1578 (0.0009091, $n{=}6$) \\
+extxyz-same & extxyz & read & warm & 2.813 (0.1225, $n{=}6$) \\
+extxyz-same & readcon & read & cold & 0.1304 (0.008346, $n{=}6$) \\
+extxyz-same & ovito & read & cold & 0.2606 (0.004242, $n{=}6$) \\
+extxyz-same & ase-extxyz & read & cold & 1.95 (0.01052, $n{=}6$) \\
+extxyz-same & cextxyz & read & cold & 0.1818 (0.001031, $n{=}6$) \\
+extxyz-same & extxyz & read & cold & 2.72 (0.02754, $n{=}6$) \\
+extxyz-same & chemfiles & read & warm & 0.6672 (0.005559, $n{=}6$) \\
+extxyz-same & chemfiles & read & cold & 0.6919 (0.01323, $n{=}6$) \\
+extxyz-same & mdanalysis & read & warm & 6.577 (0.2772, $n{=}6$) \\
+extxyz-same & mdanalysis & read & cold & 6.799 (0.1204, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

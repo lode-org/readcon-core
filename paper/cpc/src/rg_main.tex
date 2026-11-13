@@ -134,7 +134,7 @@ The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a 
 \mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
 Losing the identifier changes the hop from 0.04~eV to 15.6~eV on an EMT model (Section~\ref{sec:claisen}).
-readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader.
+readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
 readcon-core is available under the MIT licence at
 \url{https://github.com/lode-org/readcon-core}.
 \end{abstract}
@@ -515,7 +515,7 @@ The written cell stays inside the tolerance of six printed decimals.
 The eOn loader keeps the identifiers, and a three-image band stays in file order.
 Velocities come back as the numbers in the file, under the natural time unit even when an older header names femtoseconds.
 
-\input{campaign/\campaignid/fidelity}
+\input{campaign/final/fidelity}
 
 \subsection{Connectivity in d-SEAMS}\label{sec:connectivity}
 A LAMMPS dump sorted by id already carries an atom id and a box, and H5MD carries an id and a velocity unit.
@@ -562,21 +562,24 @@ Each median is the type-7 median of six repeats after one warmup, on a warm page
 The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
 
 \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}, Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}).
-On one extended XYZ frame of \(10^{6}\) copper atoms that also stores the mass, the velocity, the identifier and the fixed flag, readcon at commit \texttt{2e4f37cb} takes 0.1695~s, ASE \texttt{extxyz} 1.942~s, chemfiles 0.5706~s and OVITO 0.2077~s (Table~\ref{tab:h2h-main}).
-On the \num{100000}-frame CON file, readcon takes 0.403147~s, the eOn C++ client takes 1.561890~s and ASE's eon reader takes 10.819129~s (Table~\ref{tab:conread}).
-Those client reads add the resident set of Figure~\ref{fig:memory}.
+On one extended XYZ frame of \(10^{6}\) atoms, readcon takes 0.1103~s, ASE \texttt{extxyz} 2.011~s, chemfiles 0.6672~s and OVITO 0.2439~s (Table~\ref{tab:h2h-main}).
+On the million-atom CON frame, readcon takes 0.07444~s, ASE takes 1.876~s and eOn takes 0.3323~s (Table~\ref{tab:conread}).
+Figure~\ref{fig:memory} is the weak-write ideal efficiency.
 
-\input{campaign/\campaignid/table2}
-\input{campaign/\campaignid/table3}
-\input{campaign/\campaignid/fig7}
+\input{campaign/final/h2h_extxyz}
+\input{campaign/final/h2h_con}
+\input{campaign/final/million}
+\input{campaign/final/fig7}
 
-On one thread the \num{100000}-frame CON read takes 0.369497~s, and at eight threads it takes 0.054797~s (Table~\ref{tab:r6-read}).
-The mixed-alloy extended XYZ read takes 0.093402~s and 0.015369~s at those two thread counts, and the extxyz-md trajectory takes 0.090881~s and 0.013174~s.
-At two threads that trajectory reaches an efficiency of 1.27: one thread parses its many short, equal-length frames one span at a time, and the second thread overlaps that memory latency.
-The convel whisker at one thread is the interquartile range of six samples that alternate between 0.432~s and 0.564~s (Section~\ref{sec:r6}).
+On one thread the \num{100000}-frame CON read takes 0.3703~s, and at eight threads it takes 0.07303~s (Table~\ref{tab:strong-threads-read-memory}).
+The mixed-alloy extended XYZ read takes 0.02990~s and 0.004702~s at those two thread counts, and the extxyz-md trajectory takes 0.05597~s and 0.008521~s.
+At two threads that trajectory has efficiency 1.003.
+The convel read at one thread has median 0.5949~s and interquartile range 0.09703~s ($n{=}6$).
 On a thousand frames, readcon-db ingests and answers a composition query faster than the ASE database and faster than a directory of the same files (Figures~\ref{fig:db-throughput} and~\ref{fig:db-query}).
 
-\input{campaign/\campaignid/fig8}
+\input{campaign/final/strong}
+\input{campaign/final/weak}
+\input{campaign/final/fig8}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
@@ -593,7 +596,7 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
-readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader.
+readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
 On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The next steps are a declared section for that optimiser state and a patch to ASE's eon reader that carries the per-axis mask and the column-5 identifier.
 
@@ -603,7 +606,7 @@ readcon-core 0.22.0 is the release this paper describes, under the MIT licence, 
 The Zenodo record for readcon-core 0.22.0 is \readconZenodoDOI.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.22.0.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
-The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:r6-read} are the Snakemake target \texttt{publication} in that same file.
+The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 Its inputs are \texttt{frames-32x100000.con}, \texttt{frames-32x100000.convel} and \texttt{copper-32x100000.extxyz} in \texttt{bench/h2h/work/parallel-frames}, \texttt{con-1000000x1.con} in \texttt{bench/h2h/work/inputs}, and \texttt{alloy-1e6.extxyz} and \texttt{md-10k.extxyz} in \texttt{bench/h2h/work/thread-reads}.
 The configuration file is \texttt{bench/h2h/Snakefile}.
 

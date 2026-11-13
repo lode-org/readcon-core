@@ -1506,23 +1506,16 @@ readcon-core 0.22.0 reads the same two files as gzip and as zstd, from Rust, C, 
 One warmup is discarded and the median is type 7 over six samples, on one core of the Xeon in Section~\ref{sec:compute}.
 The \num{100000}-frame file is 32 atoms per frame.
 The other file is one frame of $10^{6}$ copper atoms.
-A gzip read of the \num{100000}-frame file takes 0.398~s in Rust, 0.426~s in C, 0.427~s in C++, 0.480~s in Fortran and 0.706~s in Python.
-The same file as zstd takes 0.386~s, 0.416~s, 0.415~s, 0.445~s and 0.701~s.
-On the million-atom frame the gzip reads take 0.0878~s, 0.0902~s, 0.0959~s, 0.0873~s and 0.0651~s, and the zstd reads take 0.0846~s, 0.0869~s, 0.0926~s, 0.0755~s and 0.0607~s, in that language order.
-The write of the \num{100000}-frame file as gzip takes 3.85~s, 3.91~s, 3.91~s and 3.94~s in Rust, C, C++ and Fortran.
-The zstd write takes 0.638~s, 0.638~s, 0.637~s and 0.663~s.
-The Python write takes 4.05~s as gzip and 0.878~s as zstd.
-ASE's eon reader takes 11.3~s on the \num{100000}-frame gzip file and 1.62~s on the million-atom gzip file.
-Inflating that \num{100000}-frame gzip member and then reading the plain text from Python takes 1.07~s.
+The compressed CON and extended XYZ medians against readcon, ASE and eOn are Tables~\ref{tab:gzip} and~\ref{tab:zstd}.
 
-\input{campaign/\campaignid/compressed}
+\input{campaign/final/compressed}
 
 Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes.
 Each row is a type-7 median of six repeats after one warmup, on one core.
 The resident set and the massif heap are the increase above the loaded input.
 The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
 The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
-The gzip write of one frame of $10^{6}$ atoms takes \SI{0.704}{\second}, \SI{39.0}{\mebi\byte} and \SI{32.3}{\mebi\byte}.
+The readcon gzip write of the million-atom CON frame takes 0.09085~s, and ASE takes 2.861~s (Table~\ref{tab:gzip}).
 The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
 The heap of that zstd write matches the Rust writer.
 
@@ -1551,7 +1544,7 @@ One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set o
 The coordinates match.
 ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
 
-\input{campaign/\campaignid/rcdb}
+\input{campaign/final/db}
 
 \begin{figure*}[tbp]
 \centering
@@ -1574,8 +1567,8 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 \section{In-memory scaling}\label{sec:r6}
 The medians are the type-7 median of six samples after one warmup, on the Xeon of Section~\ref{sec:compute}.
 Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
-\input{campaign/\campaignid/s61}
-\input{campaign/\campaignid/scaling}
+\input{campaign/final/strong}
+\input{campaign/final/weak}
 
 \begin{figure}[tbp]
 \centering

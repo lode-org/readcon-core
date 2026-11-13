@@ -131,6 +131,26 @@ rule regen_figures_log:
     shell:
         "python3 scripts/regen_figures.py"
 
+# Refresh every results table from bench/h2h/scaling on the release tip.
+FINAL_COMMIT = "ee7662a955e173ea7faffcae614b4d0a78dd7682"
+
+rule final_campaign:
+    output:
+        "src/campaign/final/strong.tex",
+        "src/campaign/final/weak.tex",
+        "src/campaign/final/h2h_extxyz.tex",
+        "src/campaign/final/h2h_con.tex",
+        "src/campaign/final/million.tex",
+        "src/campaign/final/compressed.tex",
+        "src/campaign/final/db.tex",
+        "src/campaign/final/fidelity.tex",
+        "src/campaign/final/fig7.tex",
+        "src/campaign/final/fig8.tex",
+        "src/campaign/final/strong.pdf",
+        "src/campaign/final/weak.pdf",
+    shell:
+        "python3 scripts/make_tables.py --commit " + FINAL_COMMIT + " --out src/campaign/final"
+
 rule reader_figures:
     input:
         "logs/reader-exchange.log",

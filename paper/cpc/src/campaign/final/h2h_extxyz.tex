@@ -1,0 +1,17 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Extended XYZ head-to-head, warm cache, read. Median in seconds, interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:h2h-main}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+File & readcon & ovito & ase-extxyz & cextxyz & extxyz & chemfiles & mdanalysis \\
+\midrule
+extxyz-alloy & 0.0643 (0.01323, $n{=}6$) & 0.1524 (0.02726, $n{=}6$) & 1.466 (0.07502, $n{=}6$) & 0.1178 (0.007548, $n{=}6$) & 1.591 (0.05454, $n{=}6$) & 0.3473 (0.002145, $n{=}6$) & 9.307 (0.5341, $n{=}6$) \\
+extxyz-md & 0.06036 (0.002856, $n{=}6$) & 1.465 (0.03252, $n{=}6$) & 2.644 (0.08913, $n{=}6$) & 0.6361 (0.009022, $n{=}6$) & 4.705 (0.06723, $n{=}6$) & 0.7195 (0.01017, $n{=}6$) & 0.5418 (0.003414, $n{=}6$) \\
+extxyz-same & 0.1103 (0.01115, $n{=}6$) & 0.2439 (0.01104, $n{=}6$) & 2.011 (0.1697, $n{=}6$) & 0.1578 (0.0009091, $n{=}6$) & 2.813 (0.1225, $n{=}6$) & 0.6672 (0.005559, $n{=}6$) & 6.577 (0.2772, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

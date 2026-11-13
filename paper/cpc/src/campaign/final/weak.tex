@@ -1,0 +1,44 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Weak write scaling. Ideal efficiency is $T(1)/T(N)$. The ceiling fraction is $\max$(format alone, the concurrent sink from sink-ceiling.json) divided by $T(N)$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:weak-write}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Medium & Workers & Median (IQR, $n$) & Ideal efficiency & Ceiling fraction \\
+\midrule
+pagecache & 1 & 0.04605 (0.0009452, $n{=}6$) & 1 & 0.8353 \\
+pagecache & 2 & 0.06001 (0.001232, $n{=}6$) & 0.7673 & 0.6662 \\
+pagecache & 4 & 0.0814 (0.003739, $n{=}6$) & 0.5657 & 0.518 \\
+pagecache & 8 & 0.1262 (0.00611, $n{=}6$) & 0.3648 & 0.6578 \\
+tmpfs & 1 & 0.04488 (0.001454, $n{=}6$) & 1 & 0.8527 \\
+tmpfs & 2 & 0.0576 (0.001391, $n{=}6$) & 0.7792 & 0.7492 \\
+tmpfs & 4 & 0.07443 (0.001581, $n{=}6$) & 0.603 & 0.5328 \\
+tmpfs & 8 & 0.114 (0.01142, $n{=}6$) & 0.3938 & 0.6154 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Weak read scaling. Ideal efficiency is $T(1)/T(N)$. The ceiling fraction is the page-cache concurrent sink from sink-ceiling.json divided by the median. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:weak-read}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Kind & Workers & Median (IQR, $n$) & Ideal efficiency & Ceiling fraction \\
+\midrule
+threads & 1 & 0.103 (0.001459, $n{=}6$) & 1 & 0.07819 \\
+threads & 2 & 0.1114 (0.003373, $n{=}6$) & 0.9247 & 0.1906 \\
+threads & 4 & 0.1159 (0.02529, $n{=}6$) & 0.8887 & 0.346 \\
+threads & 8 & 0.1174 (0.003706, $n{=}6$) & 0.8776 & 0.7074 \\
+ranks & 1 & 0.02692 (0.000287, $n{=}6$) & 1 & 0.2992 \\
+ranks & 2 & 0.02887 (0.0006693, $n{=}6$) & 0.9327 & 0.7356 \\
+ranks & 4 & 0.02783 (0.0003754, $n{=}6$) & 0.9673 & 1.441 \\
+ranks & 8 & 0.02917 (0.0002376, $n{=}6$) & 0.9229 & 2.847 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

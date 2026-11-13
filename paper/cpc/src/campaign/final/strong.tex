@@ -1,0 +1,159 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across cores, read into memory. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-threads-read-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.3703 (0.02622, $n{=}6$) & 0.1846 (0.01001, $n{=}6$) & 0.1121 (0.01815, $n{=}6$) & 0.07303 (0.007664, $n{=}6$) \\
+convel & 0.5949 (0.09703, $n{=}6$) & 0.2654 (0.02657, $n{=}6$) & 0.1606 (0.009392, $n{=}6$) & 0.09493 (0.003087, $n{=}6$) \\
+con-1e6 & 0.03934 (0.0002079, $n{=}6$) & 0.02083 (0.0004464, $n{=}6$) & 0.01103 (0.0004076, $n{=}6$) & 0.005877 (0.0004258, $n{=}6$) \\
+extxyz-cu & 0.1839 (0.006442, $n{=}6$) & 0.09423 (0.001285, $n{=}6$) & 0.04927 (0.0012, $n{=}6$) & 0.02791 (0.0007828, $n{=}6$) \\
+extxyz-alloy & 0.0299 (0.0002239, $n{=}6$) & 0.01437 (0.0007923, $n{=}6$) & 0.00801 (7.612e-05, $n{=}6$) & 0.004702 (0.0004004, $n{=}6$) \\
+extxyz-md & 0.05597 (0.002393, $n{=}6$) & 0.0279 (0.00031, $n{=}6$) & 0.01598 (0.000113, $n{=}6$) & 0.008521 (0.0004096, $n{=}6$) \\
+extxyz-same & 0.1031 (0.001696, $n{=}6$) & 0.0429 (0.0008458, $n{=}6$) & 0.02315 (0.0002929, $n{=}6$) & 0.01226 (0.000207, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across cores, write into disk. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-threads-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.4688 (0.03277, $n{=}6$) & 0.4165 (0.008357, $n{=}6$) & 0.1625 (0.002062, $n{=}6$) & 0.07657 (0.001514, $n{=}6$) \\
+convel & 0.7467 (0.02428, $n{=}6$) & 0.6485 (0.01867, $n{=}6$) & 0.2498 (0.003643, $n{=}6$) & 0.1214 (0.001982, $n{=}6$) \\
+con-1e6 & 0.04132 (0.0002745, $n{=}6$) & 0.02155 (0.0003855, $n{=}6$) & 0.01374 (0.002039, $n{=}6$) & 0.01203 (0.0006832, $n{=}6$) \\
+extxyz-cu & 0.4248 (0.01648, $n{=}6$) & 0.4001 (0.006221, $n{=}6$) & 0.1588 (0.002187, $n{=}6$) & 0.0748 (0.0008697, $n{=}6$) \\
+extxyz-alloy & 0.1199 (0.001937, $n{=}6$) & 0.1155 (0.001183, $n{=}6$) & 0.04427 (8.424e-05, $n{=}6$) & 0.02361 (0.000204, $n{=}6$) \\
+extxyz-md & 0.1799 (0.0009376, $n{=}6$) & 0.1752 (0.001644, $n{=}6$) & 0.06786 (0.0004227, $n{=}6$) & 0.03114 (0.0006147, $n{=}6$) \\
+extxyz-same & 0.4282 (0.01579, $n{=}6$) & 0.4139 (0.003979, $n{=}6$) & 0.1573 (0.000521, $n{=}6$) & 0.07016 (0.004301, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across cores, write into memory. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-threads-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.4603 (0.01116, $n{=}6$) & 0.4207 (0.01035, $n{=}6$) & 0.1637 (0.003681, $n{=}6$) & 0.07394 (0.001547, $n{=}6$) \\
+convel & 0.753 (0.04959, $n{=}6$) & 0.6244 (0.007273, $n{=}6$) & 0.2416 (0.001788, $n{=}6$) & 0.1169 (0.005926, $n{=}6$) \\
+con-1e6 & 0.0409 (0.0005706, $n{=}6$) & 0.02012 (0.0003304, $n{=}6$) & 0.01143 (0.0003215, $n{=}6$) & 0.01275 (0.002206, $n{=}6$) \\
+extxyz-cu & 0.4317 (0.01363, $n{=}6$) & 0.3966 (0.0018, $n{=}6$) & 0.1549 (0.001315, $n{=}6$) & 0.07089 (9.043e-05, $n{=}6$) \\
+extxyz-alloy & 0.1183 (0.0008669, $n{=}6$) & 0.1147 (0.0004513, $n{=}6$) & 0.04372 (4.573e-05, $n{=}6$) & 0.01971 (0.0004469, $n{=}6$) \\
+extxyz-md & 0.181 (0.00299, $n{=}6$) & 0.1739 (0.0009915, $n{=}6$) & 0.06717 (0.0004294, $n{=}6$) & 0.03088 (0.0009468, $n{=}6$) \\
+extxyz-same & 0.4307 (0.01074, $n{=}6$) & 0.4147 (0.001395, $n{=}6$) & 0.1563 (0.0007064, $n{=}6$) & 0.06887 (0.0005243, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across cores, write into disk\_sync. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-threads-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.5177 (0.0178, $n{=}6$) & 0.4847 (0.01553, $n{=}6$) & 0.2324 (0.01553, $n{=}6$) & 0.1542 (0.01668, $n{=}6$) \\
+convel & 0.8492 (0.03175, $n{=}6$) & 0.763 (0.007487, $n{=}6$) & 0.3634 (0.01933, $n{=}6$) & 0.2449 (0.0235, $n{=}6$) \\
+con-1e6 & 0.0632 (0.005221, $n{=}6$) & 0.03955 (0.005809, $n{=}6$) & 0.0269 (0.002422, $n{=}6$) & 0.02246 (0.001905, $n{=}6$) \\
+extxyz-cu & 0.4914 (0.01417, $n{=}6$) & 0.4754 (0.00803, $n{=}6$) & 0.2278 (0.01033, $n{=}6$) & 0.1461 (0.0217, $n{=}6$) \\
+extxyz-alloy & 0.1416 (0.004824, $n{=}6$) & 0.1365 (0.001619, $n{=}6$) & 0.06038 (0.000775, $n{=}6$) & 0.03329 (0.001791, $n{=}6$) \\
+extxyz-md & 0.2091 (0.005091, $n{=}6$) & 0.2037 (0.00701, $n{=}6$) & 0.08887 (0.003049, $n{=}6$) & 0.05115 (0.005247, $n{=}6$) \\
+extxyz-same & 0.49 (0.01752, $n{=}6$) & 0.4728 (0.009478, $n{=}6$) & 0.2037 (0.004572, $n{=}6$) & 0.111 (0.001872, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across MPI ranks, read into memory. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-mpi-read-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.3373 (0.03373, $n{=}6$) & 0.1602 (0.005952, $n{=}6$) & 0.08266 (0.002074, $n{=}6$) & 0.0509 (0.006316, $n{=}6$) \\
+convel & 0.5151 (0.04145, $n{=}6$) & 0.2543 (0.01383, $n{=}6$) & 0.1292 (0.00214, $n{=}6$) & 0.06976 (0.0008435, $n{=}6$) \\
+con-1e6 & 0.06128 (0.001738, $n{=}6$) & 0.02373 (0.001394, $n{=}6$) & 0.01177 (0.0007977, $n{=}6$) & 0.006041 (0.000182, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across MPI ranks, write into disk. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-mpi-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.6924 (0.06052, $n{=}6$) & 0.3537 (0.02364, $n{=}6$) & 0.2053 (0.001589, $n{=}6$) & 0.1406 (0.01199, $n{=}6$) \\
+convel & 1.139 (0.172, $n{=}6$) & 0.619 (0.03052, $n{=}6$) & 0.383 (0.02234, $n{=}6$) & 0.2611 (0.01651, $n{=}6$) \\
+con-1e6 & 0.05324 (0.001302, $n{=}6$) & 0.02864 (0.0006168, $n{=}6$) & 0.0213 (0.0004998, $n{=}6$) & 0.01632 (0.0006095, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across MPI ranks, write into memory. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-mpi-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.6224 (0.004923, $n{=}6$) & 0.3506 (0.01039, $n{=}6$) & 0.1996 (0.002251, $n{=}6$) & 0.1319 (0.001433, $n{=}6$) \\
+convel & 1.109 (0.01474, $n{=}6$) & 0.6235 (0.01054, $n{=}6$) & 0.4267 (0.07887, $n{=}6$) & 0.252 (0.007495, $n{=}6$) \\
+con-1e6 & 0.05097 (0.0003655, $n{=}6$) & 0.02541 (0.00028, $n{=}6$) & 0.01513 (0.000617, $n{=}6$) & 0.01069 (0.0002727, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Strong scaling across MPI ranks, write into disk\_sync. Each entry is the median in seconds, then the interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:strong-mpi-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.716 (0.004901, $n{=}6$) & 0.4421 (0.01902, $n{=}6$) & 0.2664 (0.006826, $n{=}6$) & 0.1877 (0.001952, $n{=}6$) \\
+convel & 1.314 (0.02957, $n{=}6$) & 0.7602 (0.02841, $n{=}6$) & 0.5067 (0.009077, $n{=}6$) & 0.4269 (0.02399, $n{=}6$) \\
+con-1e6 & 0.06668 (0.002332, $n{=}6$) & 0.04725 (0.002023, $n{=}6$) & 0.03505 (0.001299, $n{=}6$) & 0.02874 (0.003959, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
