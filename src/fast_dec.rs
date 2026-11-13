@@ -185,15 +185,11 @@ pub(crate) fn parse_fixed_decimal(bytes: &[u8], mut i: usize) -> Option<(f64, us
     if i < bytes.len() && bytes[i] != b' ' {
         return None;
     }
-    let low = decimal_f64(neg, mant, exp)?;
     let val = if sticky {
-        let high = decimal_f64(neg, mant.checked_add(1)?, exp)?;
-        if low.to_bits() != high.to_bits() {
-            return None;
-        }
-        low
+        // The 20th digit sits strictly between `mant` and `mant + 1`.
+        finish_unit_interval(neg, mant, exp)?
     } else {
-        low
+        decimal_f64(neg, mant, exp)?
     };
     Some((val, i))
 }
@@ -368,11 +364,7 @@ pub(crate) fn parse_f64_long(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
         // The unread tail sits strictly between `mant` and `mant + 1` at this
         // scale. When both round to the same `f64`, that is the only result
         // the general parser can return.
-        let low = finish(neg, mant, exp)?;
-        let high = finish(neg, mant.checked_add(1)?, exp)?;
-        if low.to_bits() != high.to_bits() {
-            return None;
-        }
+        let low = finish_unit_interval(neg, mant, exp)?;
         return Some((low, p));
     }
     finish(neg, mant, exp).map(|val| (val, p))
@@ -415,11 +407,93 @@ fn finish(neg: bool, mant: u64, exp: i32) -> Option<f64> {
     value.is_finite().then_some(value)
 }
 
-#[inline]
+#[inline(always)]
 fn compute_float(q: i64, mut w: u64) -> Adjusted {
     let lz = w.leading_zeros();
     w <<= lz;
     let (lo, hi) = product(q, w);
+    adjusted_from_product(q, lo, hi, lz)
+}
+
+/// `mant * 10^exp` when `(mant + 1) * 10^exp` rounds to the same `f64`.
+///
+/// One product covers a gap that stays on one side of a midpoint, including
+/// a single step off a round bit that is already set. A pair of products
+/// covers a midpoint, and `None` there means the two sides disagree.
+#[inline(always)]
+fn finish_unit_interval(neg: bool, mant: u64, exp: i32) -> Option<f64> {
+    if let Some(value) = proved_same_neighbor(neg, mant, exp) {
+        return Some(value);
+    }
+    let low = finish(neg, mant, exp)?;
+    let high = finish(neg, mant.checked_add(1)?, exp)?;
+    (low.to_bits() == high.to_bits()).then_some(low)
+}
+
+/// Rounded value of `mant` when adding one cannot change it.
+///
+/// `None` means the proof did not apply. The caller then rounds both sides.
+#[inline(always)]
+fn proved_same_neighbor(neg: bool, mant: u64, exp: i32) -> Option<f64> {
+    if mant == 0 || mant == u64::MAX || mant <= MAX_FAST_MANTISSA {
+        return None;
+    }
+    let q = i64::from(exp);
+    let index = q - i64::from(POW5_LO);
+    if index < 0 || index as usize >= POW5.len() {
+        return None;
+    }
+    let lz = mant.leading_zeros();
+    if (mant + 1).leading_zeros() != lz {
+        return None;
+    }
+    // Low 9 bits, the same mask `product` uses for its second limb.
+    const MASK: u64 = 0xFFFF_FFFF_FFFF_FFFF >> 55;
+    let (lo5, _) = POW5[index as usize];
+    let wn = mant << lz;
+    let first = (wn as u128).wrapping_mul(lo5 as u128);
+    let lo = first as u64;
+    let hi = (first >> 64) as u64;
+    if hi & MASK == MASK {
+        return None;
+    }
+    // `(mant + 1) << lz` stays in `u64` when the leading-zero count matches,
+    // so this sum is the full 128-bit product and does not wrap.
+    let delta = (lo5 as u128) << lz;
+    let sum = first.checked_add(delta)?;
+    let hi2 = (sum >> 64) as u64;
+    if hi2 & MASK == MASK {
+        return None;
+    }
+    let upperbit = (hi >> 63) as i32;
+    let shift = upperbit + 64 - 52 - 3;
+    let mantissa = hi >> shift;
+    let neighbor = hi2 >> shift;
+    // No carry into the rounding bits, or a one-step carry off an already
+    // set round bit. Both of those round to the same word. A pure tie does
+    // not: the extra unit leaves the midpoint.
+    let same = mantissa == neighbor || (neighbor == mantissa + 1 && mantissa & 1 == 1);
+    if !same {
+        return None;
+    }
+    if lo <= 1 && (-4..=23).contains(&q) && mantissa & 3 == 1 && (mantissa << shift) == hi {
+        return None;
+    }
+    let adjusted = adjusted_from_product(q, lo, hi, lz);
+    if adjusted.power2 < 0 {
+        return None;
+    }
+    let mut word = adjusted.mantissa;
+    word |= (adjusted.power2 as u64) << 52;
+    if neg {
+        word |= 1_u64 << 63;
+    }
+    let value = f64::from_bits(word);
+    value.is_finite().then_some(value)
+}
+
+#[inline(always)]
+fn adjusted_from_product(q: i64, lo: u64, hi: u64, lz: u32) -> Adjusted {
     let upperbit = (hi >> 63) as i32;
     let mut mantissa = hi >> (upperbit + 64 - 52 - 3);
     let mut power2 = power(q as i32) + upperbit - lz as i32 - (-1023);
@@ -486,6 +560,89 @@ fn product(q: i64, w: u64) -> (u64, u64) {
 #[cfg(test)]
 mod tests {
     use super::{finish, parse_f64_hot, parse_f64_long};
+
+    /// One extra unit on the mantissa must not change the bits the single
+    /// product returns, including at ties and at powers of two.
+    #[test]
+    fn unit_interval_matches_both_sides() {
+        fn spec(neg: bool, mant: u64, exp: i32) -> Option<u64> {
+            let low = super::finish(neg, mant, exp)?;
+            let high = super::finish(neg, mant.checked_add(1)?, exp)?;
+            (low.to_bits() == high.to_bits()).then_some(low.to_bits())
+        }
+        let mut state = 0xC0FFEE_u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(0x5851_f42d_4c95_7f2d)
+                .wrapping_add(0x1405_7b7e_f767_814f);
+            state
+        };
+        let mut proved = 0u32;
+        let mut differed = 0u32;
+        let mut samples = 0u32;
+        for exp in -22..=22 {
+            for _ in 0..4_000 {
+                let mant = next();
+                for neg in [false, true] {
+                    let got = super::finish_unit_interval(neg, mant, exp).map(f64::to_bits);
+                    let want = spec(neg, mant, exp);
+                    assert_eq!(got, want, "mant {mant} exp {exp} neg {neg}");
+                    samples += 1;
+                    if want.is_none() {
+                        differed += 1;
+                    }
+                    if super::proved_same_neighbor(neg, mant, exp).is_some() {
+                        proved += 1;
+                    }
+                }
+            }
+            // 19-digit window used by a 20-digit coordinate, plus the powers of two.
+            for mant in [
+                10u64.pow(18),
+                10u64.pow(18) + 1,
+                10u64.pow(19) - 2,
+                (1u64 << 53) + 1,
+                (1u64 << 62) - 1,
+                (1u64 << 62),
+                (1u64 << 63) - 1,
+                1u64 << 63,
+                u64::MAX - 1,
+                u64::MAX,
+                0,
+                1,
+            ] {
+                for neg in [false, true] {
+                    assert_eq!(
+                        super::finish_unit_interval(neg, mant, exp).map(f64::to_bits),
+                        spec(neg, mant, exp),
+                        "edge mant {mant} exp {exp}"
+                    );
+                }
+            }
+        }
+        // The coordinate case: 19 digits at 10^-16. Almost every mantissa is
+        // more than one unit from a rounding boundary.
+        let mut wide_proved = 0u32;
+        for _ in 0..20_000 {
+            let mant = 10u64.pow(18) + (next() % (10u64.pow(19) - 10u64.pow(18) - 1));
+            if super::proved_same_neighbor(false, mant, -16).is_some() {
+                wide_proved += 1;
+            }
+            assert_eq!(
+                super::finish_unit_interval(false, mant, -16).map(f64::to_bits),
+                spec(false, mant, -16)
+            );
+        }
+        assert!(
+            differed > 0,
+            "expected some mantissas to straddle a boundary"
+        );
+        assert!(proved > samples / 4, "proved {proved} of {samples}");
+        assert!(
+            wide_proved > 19_000,
+            "19-digit window proved {wide_proved} of 20000"
+        );
+    }
 
     fn bits_of(text: &str) -> Option<u64> {
         let (val, n) = parse_f64_hot(text.as_bytes(), 0)?;
