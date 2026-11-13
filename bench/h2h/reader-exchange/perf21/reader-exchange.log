@@ -27,15 +27,15 @@ warmup arm=readcon_v0173 cache=warm seconds=1.8898196059963084 mib=2531.3046875 
 warmup arm=readcon_first cache=warm seconds=0.037491666997084394 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 warmup arm=readcon_db cache=warm seconds=17.820619252997858 mib=396.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ase_eon cache=warm seconds=10.674979691000772 mib=383.765625 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+warmup arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 warmup arm=eon_py cache=warm seconds=20.8625735109963 mib=2356.1953125 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+warmup arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 warmup arm=conbin cache=warm seconds=0.010170214001846034 mib=146.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=numpy cache=warm seconds=1.2249885150013142 mib=390.8828125 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=chemfiles cache=warm seconds=1.5085114730027271 mib=203.26953125 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ovito cache=warm seconds=4.750959839002462 mib=171.74609375 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ase_extxyz cache=warm seconds=7.682167761995515 mib=345.8046875 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+warmup arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 warmup arm=h5py cache=warm seconds=0.6388861470040865 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=mdanalysis cache=warm seconds=50.570111854998686 mib=139.171875 matched=100000 got=100000 requested=100000 exit=0 error=
 order cache=warm readcon_tip readcon_base readcon_v0173 readcon_first readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis
@@ -45,15 +45,15 @@ sample rep=0 arm=readcon_v0173 cache=warm seconds=2.2248216689986293 mib=2531.26
 sample rep=0 arm=readcon_first cache=warm seconds=0.02704197399725672 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=0 arm=readcon_db cache=warm seconds=17.51157761899958 mib=396.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ase_eon cache=warm seconds=11.566574923002918 mib=383.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=0 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=0 arm=eon_py cache=warm seconds=20.889754839001398 mib=2406.41796875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=0 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=0 arm=conbin cache=warm seconds=0.005984185998386238 mib=146.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=numpy cache=warm seconds=1.1752331900061108 mib=390.81640625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=chemfiles cache=warm seconds=1.4935679269983666 mib=203.33203125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ovito cache=warm seconds=5.070816724997712 mib=171.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ase_extxyz cache=warm seconds=8.264865459997964 mib=345.6875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=0 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=0 arm=h5py cache=warm seconds=0.7644091900001513 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=mdanalysis cache=warm seconds=50.33604676899995 mib=139.328125 matched=100000 got=100000 requested=100000 exit=0 error=
 order cache=warm readcon_base readcon_v0173 readcon_first readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip
@@ -62,15 +62,15 @@ sample rep=1 arm=readcon_v0173 cache=warm seconds=2.27495824899961 mib=2531.3007
 sample rep=1 arm=readcon_first cache=warm seconds=0.02859193399490323 mib=131.0234375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=1 arm=readcon_db cache=warm seconds=17.996165779004514 mib=396.79296875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ase_eon cache=warm seconds=11.136464123002952 mib=383.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=1 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=1 arm=eon_py cache=warm seconds=20.430636696000875 mib=2406.77734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=1 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=1 arm=conbin cache=warm seconds=0.0077360990035231225 mib=146.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=numpy cache=warm seconds=1.1661461690018768 mib=390.8203125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=chemfiles cache=warm seconds=1.4788416570008849 mib=203.390625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ovito cache=warm seconds=4.878964413001086 mib=171.71875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ase_extxyz cache=warm seconds=7.9477858989994274 mib=345.87109375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=1 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=1 arm=h5py cache=warm seconds=0.8034217390013509 mib=758.69921875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=mdanalysis cache=warm seconds=49.81318860799365 mib=139.13671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=readcon_tip cache=warm seconds=0.18713613099680515 mib=322.8125 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -79,15 +79,15 @@ sample rep=2 arm=readcon_v0173 cache=warm seconds=2.5666605030055507 mib=2531.32
 sample rep=2 arm=readcon_first cache=warm seconds=0.028182752001157496 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=2 arm=readcon_db cache=warm seconds=17.949569326003257 mib=396.79296875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ase_eon cache=warm seconds=11.10256305099756 mib=383.8828125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=2 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=2 arm=eon_py cache=warm seconds=20.66335066299507 mib=2330.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=2 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=2 arm=conbin cache=warm seconds=0.00699901299958583 mib=146.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=numpy cache=warm seconds=1.1855293970002094 mib=390.8828125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=chemfiles cache=warm seconds=1.5307187229991541 mib=203.328125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ovito cache=warm seconds=4.8833610660003615 mib=171.7109375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ase_extxyz cache=warm seconds=8.21969521400024 mib=345.6875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=2 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=2 arm=h5py cache=warm seconds=0.7343121980011347 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=mdanalysis cache=warm seconds=50.205748013999255 mib=139.14453125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=readcon_tip cache=warm seconds=0.19448265899700345 mib=322.8125 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -96,15 +96,15 @@ order cache=warm readcon_first readcon_db ase_eon eon eon_py readcon_eon_api con
 sample rep=3 arm=readcon_first cache=warm seconds=0.029482600999472197 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=3 arm=readcon_db cache=warm seconds=18.307945287997427 mib=396.734375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ase_eon cache=warm seconds=11.350172559003113 mib=383.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=3 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=3 arm=eon_py cache=warm seconds=21.205606192997948 mib=2406.60546875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=3 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=3 arm=conbin cache=warm seconds=0.006950613998924382 mib=146.671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=numpy cache=warm seconds=1.1885343940011808 mib=390.8203125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=chemfiles cache=warm seconds=1.4843644630018389 mib=203.33984375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ovito cache=warm seconds=4.782877069999813 mib=171.6953125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ase_extxyz cache=warm seconds=7.999574048000795 mib=345.73046875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=3 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=3 arm=h5py cache=warm seconds=0.8433621670046705 mib=758.609375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=mdanalysis cache=warm seconds=49.72493641299661 mib=139.09765625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=readcon_tip cache=warm seconds=0.18735673400078667 mib=322.8125 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -113,15 +113,15 @@ sample rep=3 arm=readcon_v0173 cache=warm seconds=2.445956057999865 mib=2531.351
 order cache=warm readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip readcon_base readcon_v0173 readcon_first
 sample rep=4 arm=readcon_db cache=warm seconds=17.97144544799812 mib=396.921875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ase_eon cache=warm seconds=10.791452536999714 mib=383.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=4 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=4 arm=eon_py cache=warm seconds=20.462763095005357 mib=2333.50390625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=4 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=4 arm=conbin cache=warm seconds=0.0062278780023916624 mib=146.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=numpy cache=warm seconds=1.2108546600065893 mib=390.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=chemfiles cache=warm seconds=1.5073356219945708 mib=203.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ovito cache=warm seconds=4.829289306006103 mib=171.7109375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ase_extxyz cache=warm seconds=7.7647175490055815 mib=345.80859375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=4 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=4 arm=h5py cache=warm seconds=0.7009788089999347 mib=758.62890625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=mdanalysis cache=warm seconds=50.61851838000439 mib=139.21875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=readcon_tip cache=warm seconds=0.19906580699898768 mib=322.8125 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -130,15 +130,15 @@ sample rep=4 arm=readcon_v0173 cache=warm seconds=2.156500593999226 mib=2531.703
 sample rep=4 arm=readcon_first cache=warm seconds=0.02895458199782297 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 order cache=warm ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip readcon_base readcon_v0173 readcon_first readcon_db
 sample rep=5 arm=ase_eon cache=warm seconds=10.936690151997027 mib=383.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=5 arm=eon cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=5 arm=eon_py cache=warm seconds=21.4841083479987 mib=2330.640625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=5 arm=readcon_eon_api cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=5 arm=conbin cache=warm seconds=0.0059101849983562715 mib=146.671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=numpy cache=warm seconds=1.1998291769996285 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=chemfiles cache=warm seconds=1.4855823239995516 mib=203.25390625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=ovito cache=warm seconds=4.7985665340020205 mib=171.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=ase_extxyz cache=warm seconds=7.8287434020021465 mib=345.734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=5 arm=pymatgen cache=warm seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=5 arm=h5py cache=warm seconds=0.6201471329986816 mib=758.63671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=mdanalysis cache=warm seconds=49.98699129399756 mib=139.31640625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=readcon_tip cache=warm seconds=0.19285151399526512 mib=322.875 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -154,15 +154,15 @@ warmup arm=readcon_v0173 cache=cold seconds=2.275204573998053 mib=2531.37109375 
 warmup arm=readcon_first cache=cold seconds=0.11023426999599906 mib=131.0234375 matched=1 got=1 requested=1 exit=0 error=
 warmup arm=readcon_db cache=cold seconds=17.893563543999335 mib=397.0 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ase_eon cache=cold seconds=10.874251720997563 mib=383.828125 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+warmup arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 warmup arm=eon_py cache=cold seconds=19.931803849998687 mib=2406.46875 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+warmup arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 warmup arm=conbin cache=cold seconds=0.11294862900103908 mib=146.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=numpy cache=cold seconds=1.3012598809946212 mib=390.60546875 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=chemfiles cache=cold seconds=1.6517129600033513 mib=203.16015625 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ovito cache=cold seconds=5.4377794899992296 mib=171.74609375 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=ase_extxyz cache=cold seconds=7.893812517999322 mib=345.74609375 matched=100000 got=100000 requested=100000 exit=0 error=
-warmup arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+warmup arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 warmup arm=h5py cache=cold seconds=0.6404083620000165 mib=758.65234375 matched=100000 got=100000 requested=100000 exit=0 error=
 warmup arm=mdanalysis cache=cold seconds=50.46162520300277 mib=139.02734375 matched=100000 got=100000 requested=100000 exit=0 error=
 order cache=cold readcon_tip readcon_base readcon_v0173 readcon_first readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis
@@ -172,15 +172,15 @@ sample rep=0 arm=readcon_v0173 cache=cold seconds=2.26362979899568 mib=2531.4023
 sample rep=0 arm=readcon_first cache=cold seconds=0.11711580500559648 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=0 arm=readcon_db cache=cold seconds=17.8290946729976 mib=396.7578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ase_eon cache=cold seconds=10.969974114996148 mib=383.73046875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=0 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=0 arm=eon_py cache=cold seconds=19.9420313360024 mib=2406.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=0 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=0 arm=conbin cache=cold seconds=0.1058632070053136 mib=146.67578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=numpy cache=cold seconds=1.236321014999703 mib=390.90625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=chemfiles cache=cold seconds=1.5713544200043543 mib=203.2265625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ovito cache=cold seconds=5.399857010001142 mib=171.28125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=ase_extxyz cache=cold seconds=7.808065042998351 mib=345.59765625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=0 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=0 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=0 arm=h5py cache=cold seconds=0.7526316110015614 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=0 arm=mdanalysis cache=cold seconds=51.047336028001155 mib=139.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
 order cache=cold readcon_base readcon_v0173 readcon_first readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip
@@ -189,15 +189,15 @@ sample rep=1 arm=readcon_v0173 cache=cold seconds=2.2907194519939367 mib=2531.34
 sample rep=1 arm=readcon_first cache=cold seconds=0.10639929500030121 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=1 arm=readcon_db cache=cold seconds=17.99748245000228 mib=396.7265625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ase_eon cache=cold seconds=11.070948663997115 mib=383.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=1 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=1 arm=eon_py cache=cold seconds=19.61836614999629 mib=2331.19140625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=1 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=1 arm=conbin cache=cold seconds=0.1217423299967777 mib=146.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=numpy cache=cold seconds=1.2575001959994552 mib=390.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=chemfiles cache=cold seconds=1.5750081829974079 mib=203.390625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ovito cache=cold seconds=5.02169435700489 mib=171.7734375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=ase_extxyz cache=cold seconds=7.687507515001926 mib=345.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=1 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=1 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=1 arm=h5py cache=cold seconds=0.6366766659994028 mib=758.69921875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=mdanalysis cache=cold seconds=50.09793175999948 mib=139.03125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=1 arm=readcon_tip cache=cold seconds=0.272201325999049 mib=322.95703125 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -206,15 +206,15 @@ sample rep=2 arm=readcon_v0173 cache=cold seconds=2.167016623003292 mib=2531.105
 sample rep=2 arm=readcon_first cache=cold seconds=0.1239549470046768 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=2 arm=readcon_db cache=cold seconds=17.803642302998924 mib=397.01171875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ase_eon cache=cold seconds=10.791816513003141 mib=383.76171875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=2 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=2 arm=eon_py cache=cold seconds=19.737933272997907 mib=2406.703125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=2 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=2 arm=conbin cache=cold seconds=0.09620132499549072 mib=146.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=numpy cache=cold seconds=1.2260611770034302 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=chemfiles cache=cold seconds=1.550490373003413 mib=203.21875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ovito cache=cold seconds=4.878368231002241 mib=171.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=ase_extxyz cache=cold seconds=7.669792645996495 mib=345.75 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=2 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=2 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=2 arm=h5py cache=cold seconds=0.6082162319944473 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=mdanalysis cache=cold seconds=51.06204781699489 mib=138.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=2 arm=readcon_tip cache=cold seconds=0.2564462709997315 mib=323.015625 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -223,15 +223,15 @@ order cache=cold readcon_first readcon_db ase_eon eon eon_py readcon_eon_api con
 sample rep=3 arm=readcon_first cache=cold seconds=0.1173890739955823 mib=131.02734375 matched=1 got=1 requested=1 exit=0 error=
 sample rep=3 arm=readcon_db cache=cold seconds=17.531740976999572 mib=396.8203125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ase_eon cache=cold seconds=10.785233774993685 mib=383.73046875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=3 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=3 arm=eon_py cache=cold seconds=19.539373126004648 mib=2406.59765625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=3 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=3 arm=conbin cache=cold seconds=0.09502198499831138 mib=146.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=numpy cache=cold seconds=1.2247782049962552 mib=390.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=chemfiles cache=cold seconds=1.5472954569995636 mib=203.203125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ovito cache=cold seconds=5.1698883149947505 mib=171.671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=ase_extxyz cache=cold seconds=7.902410276001319 mib=345.640625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=3 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=3 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=3 arm=h5py cache=cold seconds=0.7251914059961564 mib=758.63671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=mdanalysis cache=cold seconds=50.55322703200363 mib=139.171875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=3 arm=readcon_tip cache=cold seconds=0.2747952729987446 mib=323.00390625 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -240,15 +240,15 @@ sample rep=3 arm=readcon_v0173 cache=cold seconds=2.296266884994111 mib=2531.460
 order cache=cold readcon_db ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip readcon_base readcon_v0173 readcon_first
 sample rep=4 arm=readcon_db cache=cold seconds=17.66403884600004 mib=396.859375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ase_eon cache=cold seconds=10.752220692003903 mib=383.8828125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=4 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=4 arm=eon_py cache=cold seconds=19.926490975994966 mib=2406.44921875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=4 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=4 arm=conbin cache=cold seconds=0.09721534900018014 mib=146.67578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=numpy cache=cold seconds=1.253341087998706 mib=390.91015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=chemfiles cache=cold seconds=1.5825673100043787 mib=203.32421875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ovito cache=cold seconds=5.086863323005673 mib=171.6953125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=ase_extxyz cache=cold seconds=7.793038552001235 mib=345.6875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=4 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=4 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=4 arm=h5py cache=cold seconds=0.6537365450058132 mib=758.65234375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=mdanalysis cache=cold seconds=50.937193472003855 mib=139.0078125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=4 arm=readcon_tip cache=cold seconds=0.2625932119990466 mib=323.015625 matched=100000 got=100000 requested=100000 exit=0 error=
@@ -257,15 +257,15 @@ sample rep=4 arm=readcon_v0173 cache=cold seconds=2.522292469999229 mib=2531.113
 sample rep=4 arm=readcon_first cache=cold seconds=0.12970214700180804 mib=131.0234375 matched=1 got=1 requested=1 exit=0 error=
 order cache=cold ase_eon eon eon_py readcon_eon_api conbin numpy chemfiles ovito ase_extxyz pymatgen h5py mdanalysis readcon_tip readcon_base readcon_v0173 readcon_first readcon_db
 sample rep=5 arm=ase_eon cache=cold seconds=11.133235695000621 mib=383.59375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample rep=5 arm=eon cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'
 sample rep=5 arm=eon_py cache=cold seconds=20.83725764799601 mib=2406.45703125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes' 
+sample rep=5 arm=readcon_eon_api cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=cute_child(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/tmp/perf20-tree/paper/cpc/bench/work/eon_allframes'
 sample rep=5 arm=conbin cache=cold seconds=0.10053725099714939 mib=146.67578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=numpy cache=cold seconds=1.2472726040068665 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=chemfiles cache=cold seconds=1.5914503149979282 mib=203.22265625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=ovito cache=cold seconds=4.994576999997662 mib=171.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=ase_extxyz cache=cold seconds=8.254677201002778 mib=345.80859375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample rep=5 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen' 
+sample rep=5 arm=pymatgen cache=cold seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 71, in <module> ModuleNotFoundError: No module named 'pymatgen'
 sample rep=5 arm=h5py cache=cold seconds=0.8114836669992656 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=mdanalysis cache=cold seconds=51.81699523200223 mib=139.08984375 matched=100000 got=100000 requested=100000 exit=0 error=
 sample rep=5 arm=readcon_tip cache=cold seconds=0.2750310189949232 mib=323.015625 matched=100000 got=100000 requested=100000 exit=0 error=

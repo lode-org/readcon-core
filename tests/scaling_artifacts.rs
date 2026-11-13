@@ -31,3 +31,19 @@ fn scaling_json_files_end_with_a_newline() {
     }
     assert!(seen >= 1, "expected scaling json logs");
 }
+
+#[test]
+fn reader_exchange_log_has_no_trailing_whitespace() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bench/h2h/reader-exchange/perf21/reader-exchange.log");
+    let text =
+        fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
+    for (number, line) in text.lines().enumerate() {
+        assert!(
+            !line.ends_with(' ') && !line.ends_with('\t'),
+            "{}:{} has trailing whitespace",
+            path.display(),
+            number + 1
+        );
+    }
+}
