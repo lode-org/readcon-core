@@ -215,7 +215,7 @@ if [[ "$VENDOR" -eq 1 ]]; then
 directory = readcon-core-cxx-${VERSION}-vendor
 source_url = https://github.com/lode-org/readcon-core/releases/download/v${VERSION}/readcon-core-cxx-${VERSION}-vendor.tar.gz
 source_filename = readcon-core-cxx-${VERSION}-vendor.tar.gz
-source_hash = sha256:${SHA}
+source_hash = ${SHA}
 
 [provide]
 dependency_names = readcon-core

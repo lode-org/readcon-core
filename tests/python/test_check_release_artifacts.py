@@ -209,6 +209,22 @@ class ReleaseArtifactGuard(unittest.TestCase):
             0,
         )
 
+    def test_wrap_source_hash_is_the_bare_digest_meson_compares(self) -> None:
+        digest = "ab" * 32
+        template = (ROOT / "packaging/wrapdb/readcon-core.wrap.in").read_text(
+            encoding="utf-8"
+        )
+        rendered = template.replace("@VERSION@", "9.9.9").replace("@SHA256@", digest)
+        value = next(
+            line.split("=", 1)[1].strip().lower()
+            for line in rendered.splitlines()
+            if line.startswith("source_hash")
+        )
+        self.assertEqual(value, digest)
+        script = (ROOT / "scripts" / "package-cxx.sh").read_text(encoding="utf-8")
+        self.assertIn("source_hash = ${SHA}\n", script)
+        self.assertNotIn("source_hash = sha256:${SHA}", script)
+
     def test_cxx_workflow_uploads_only_the_two_archives(self) -> None:
         yml = (ROOT / ".github/workflows/cxx_tarball.yml").read_text(encoding="utf-8")
         self.assertIn("build-cxx/slim", yml)
@@ -270,14 +286,16 @@ class ReleaseArtifactGuard(unittest.TestCase):
             self.assertIn(
                 f"source_filename = readcon-core-cxx-{version}.tar.gz", slim_wrap
             )
-            self.assertIn(f"source_hash = sha256:{slim_sha}", slim_wrap)
+            self.assertIn(f"source_hash = {slim_sha}", slim_wrap)
+            self.assertNotIn("source_hash = sha256:", slim_wrap)
             vendor_filename = vendor_wrap.split("source_filename = ", 1)[1].split(
                 "\n", 1
             )[0]
             self.assertEqual(
                 vendor_filename, f"readcon-core-cxx-{version}-vendor.tar.gz"
             )
-            self.assertIn(f"source_hash = sha256:{vendor_sha}", vendor_wrap)
+            self.assertIn(f"source_hash = {vendor_sha}", vendor_wrap)
+            self.assertNotIn("source_hash = sha256:", vendor_wrap)
             self.assertNotEqual(slim_sha, vendor_sha)
 
     def test_package_scripts_hand_cygpath_output_to_python(self) -> None:

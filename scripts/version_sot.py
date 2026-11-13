@@ -207,7 +207,9 @@ def render_wrap() -> str:
         old_version = re.search(
             r"(?m)^directory = readcon-core-cxx-(\S+)\s*$", existing
         )
-        old_hash = re.search(r"(?m)^source_hash = sha256:([0-9a-f]{64})\s*$", existing)
+        old_hash = re.search(
+            r"(?m)^source_hash = (?:sha256:)?([0-9a-f]{64})\s*$", existing
+        )
         if (
             old_version is not None
             and old_hash is not None
