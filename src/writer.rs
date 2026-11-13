@@ -109,7 +109,7 @@ struct FmtSlot {
     bits: u64,
     text: [u8; 24],
     len: u8,
-    /// 0 empty, 1 seen once, 2 `text` holds the spelling.
+    /// 0 empty, 2 when `text` holds the spelling.
     state: u8,
 }
 
@@ -126,40 +126,49 @@ impl FmtSlot {
 
 /// Direct-mapped cache of shortest round-trip spellings.
 ///
-/// A repeated `f64` bit pattern is formatted twice, then copied. A value
-/// seen once does not store its text, so a stream of unique numbers only
-/// pays for a compare.
+/// The first time a bit pattern is seen it is formatted into the slot and
+/// copied out. Every later sight is a copy of that spelling.
 struct SpellCache {
-    slots: [FmtSlot; 128],
+    slots: [FmtSlot; 512],
 }
 
 impl SpellCache {
     const fn new() -> Self {
         Self {
-            slots: [FmtSlot::new(); 128],
+            slots: [FmtSlot::new(); 512],
         }
     }
 
     fn push(&mut self, buf: &mut Vec<u8>, value: f64) {
+        self.push_column(buf, value, None);
+    }
+
+    fn push_column(&mut self, buf: &mut Vec<u8>, value: f64, column: Option<&mut FmtSlot>) {
         let bits = value.to_bits();
-        let idx = (bits.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 57) as usize;
-        let slot = &mut self.slots[idx];
-        if slot.state != 0 && slot.bits == bits {
-            if slot.state == 2 {
-                buf.extend_from_slice(&slot.text[..slot.len as usize]);
-                return;
+        // Low bits of nearby coordinates are not independent. Mix before
+        // taking the slot so a lattice of similar values does not collide.
+        let mut mixed = bits ^ (bits >> 30);
+        mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        mixed ^= mixed >> 27;
+        let idx = (mixed >> 55) as usize;
+        let (text, len) = {
+            let slot = &mut self.slots[idx];
+            if slot.state != 2 || slot.bits != bits {
+                let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
+                debug_assert!(n <= 24);
+                slot.bits = bits;
+                slot.len = n as u8;
+                slot.state = 2;
             }
-            let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
-            debug_assert!(n <= 24);
-            slot.len = n as u8;
-            slot.state = 2;
-            buf.extend_from_slice(&slot.text[..n]);
-            return;
+            (slot.text, slot.len)
+        };
+        buf.extend_from_slice(&text[..len as usize]);
+        if let Some(column) = column {
+            column.text = text;
+            column.len = len;
+            column.bits = bits;
+            column.state = 2;
         }
-        write_finite(buf, value);
-        slot.bits = bits;
-        slot.len = 0;
-        slot.state = 1;
     }
 }
 
@@ -983,35 +992,14 @@ fn push_round_trip(
         return;
     }
     if let Some(slot) = slot {
-        let bits = value.to_bits();
-        if slot.bits == bits {
-            if slot.state == 2 {
-                buf.extend_from_slice(&slot.text[..slot.len as usize]);
-                return;
-            }
-            if slot.state == 1 {
-                let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
-                debug_assert!(n <= 24);
-                slot.len = n as u8;
-                slot.state = 2;
-                buf.extend_from_slice(&slot.text[..n]);
-                return;
-            }
+        if slot.state == 2 && slot.bits == value.to_bits() {
+            buf.extend_from_slice(&slot.text[..slot.len as usize]);
+            return;
         }
-        spell.push(buf, value);
-        slot.bits = bits;
-        slot.state = 1;
+        spell.push_column(buf, value, Some(slot));
         return;
     }
     spell.push(buf, value);
-}
-
-fn write_finite(buf: &mut Vec<u8>, value: f64) {
-    buf.reserve(24);
-    // `format64` writes at most 24 bytes and does not handle non-finite values.
-    let n = unsafe { ryu::raw::format64(value, buf.as_mut_ptr().add(buf.len())) };
-    debug_assert!(n <= 24);
-    unsafe { buf.set_len(buf.len() + n) };
 }
 
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
