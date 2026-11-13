@@ -1020,8 +1020,7 @@ On the copper extended XYZ file readcon takes \SI{0.301}{\second}, chemfiles \SI
 The read returns coordinate arrays.
 The C column is \texttt{rkr\_read\_all\_frames}, which builds a frame object for each frame.
 One warmup and six repeats.
-Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
-A blank cell was not measured.}
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
 \label{tab:serial}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrrr@{}}
@@ -1647,7 +1646,7 @@ The Xeon is Section~\ref{sec:compute}.}
 \input{si_from_main}
 
 \FloatBarrier \section{The atom-id test}\label{sec:supp-atomid}
-The hop distances of Section~\ref{sec:claisen} come from \texttt{hop\_positional\_zip\_is\_the\_wrong\_displacement} in readcon-core 0.22.0.
+The hop test \texttt{hop\_positional\_zip\_is\_the\_wrong\_displacement} was added after readcon-core 0.22.0.
 Index pairing of the exchanged copper row moves that copper by 3.610~\text{\AA}.
 Matching column 5 leaves the copper in place and moves the hydrogen by 2.553~\text{\AA}, and \texttt{reorder\_like} restores the identifier order.
 Listing~\ref{lst:atomid} is the command.

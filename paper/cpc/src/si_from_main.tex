@@ -5,7 +5,7 @@ Figure~\ref{fig:structures} of the main text draws the survey slab, CuH\(_2\) an
 
 \subsection{The hop drawings}
 Figure~\ref{fig:claisen-struct-ids} of the main text is the \(4\times 4\) top view.
-The hydrogen is blue, the exchanged copper rows are red, and the inset is the side view.
+The hydrogen is blue, the CON rows of two copper atoms are red, and the inset is the side view.
 
 \subsection{Zero-copy tensor exchange}
 A caller that already has a frame should read its coordinates as a tensor.
@@ -15,7 +15,7 @@ The lifetime of each borrowed tensor is the builder, and the default build place
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
 Python materialises a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
 The measured exchange is a NumPy DLPack view against an explicit copy of the same positions, for \dlpackAtoms{} copper atoms.
-The log records eight repeats of each arm.
+Each arm is eight repeats.
 The view takes a median of \SI{4.0}{\micro\second} and the copy a median of \SI{32}{\micro\second}, so the view costs 0.12 times the copy.
 A 95 percent interval for that ratio is 0.11 to 0.15.
 The type 7 interquartile ranges are \SI{0.77}{\micro\second} and \SI{1.2}{\micro\second}.

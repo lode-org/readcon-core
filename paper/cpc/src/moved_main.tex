@@ -342,7 +342,7 @@ readcon.write_con("band.con", frames)
 
 \section{Hop drawings}\label{sec:supp-claisen-draw}
 Figure~\ref{fig:claisen-land} and Figure~\ref{fig:claisen-struct-ids} of the main text are the EMT model of Section~\ref{sec:claisen}.
-The left panel is the bridge, and the right panel is the two exchanged copper rows.
+The left panel is the bridge, and the right panel exchanges the CON rows of two copper atoms.
 
 
 \section{Restart tables}\label{sec:supp-restart-tables}
@@ -725,7 +725,7 @@ The hop of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and th
 \subsection{Hydrogen hop}
 EMT is the cheap model surface of Section~\ref{sec:claisen}.
 The reactant and the product are the same thirteen atoms, and the bottom layer is held.
-ASE 3.29.0 runs the nudged elastic band with spring constant \(0.8\,\mathrm{eV}/\text{\AA}^{2}\), the improved tangent and FIRE.
+ASE 3.29.0 runs the nudged elastic band with spring constant \SI{0.8}{\electronvolt\per\angstrom\squared}, the improved tangent and FIRE.
 The seven images are written as CON and read back through readcon.
 
 Label the atoms once, in the reactant.
@@ -739,7 +739,7 @@ A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\math
 The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
-Figure~\ref{fig:claisen-land} is that identifier order beside the exchanged copper rows.
+Figure~\ref{fig:claisen-land} is the band paired by atom id beside the band paired by file row, after the CON rows of two copper atoms are exchanged.
 Figure~\ref{fig:claisen-struct-ids} draws both from above.
 Losing the identifier is the difference between 0.04~eV and 15.6~eV on this model.
 

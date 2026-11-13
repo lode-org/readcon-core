@@ -270,8 +270,8 @@ component, and a lost hold changes the saddle that the search converges
 to (Section~\ref{sec:prefactor}).
 Mode following and AKMC bookkeeping match atoms across frames and events
 by an identifier on each row.
-A reader has to return that identifier as written rather than as the row
-order.
+A reader has to return that identifier as written rather than as the row order.
+
 Dynamical steps read velocities, and the natural time unit of eOn is
 \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}=\wkTimeFs\,\mathrm{fs}\).
 A restart that repeats the interrupted run to roundoff reads the
@@ -287,6 +287,7 @@ and a mask or an identifier survives there only under a column name chosen by th
 with neither a version nor a velocity unit.
 H5MD stores an identifier, velocities with a unit and the box \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011}
 but defines no element for a per-component constraint, and MDAnalysis, pyh5md, ZnH5MD and zarrtraj write that kind of trajectory \cite{mdanalysisH5mdWriter211,debuylPyh5md,znh5md2025,woodsZarrtrajPythonPackage2026}.
+
 XTC, TRR, DCD and TNG store molecular-dynamics output with neither a mask nor a velocity unit, and the GROMACS trajectory that replaces TNG is still an H5MD file with no per-component constraint (Section~\ref{sec:supp-formats}).
 The ASE trajectory keeps the fields in the layout of its own Python code, while POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}.
 
@@ -309,6 +310,7 @@ Electronic structure has done the same for densities and wavefunctions
 with the European Theoretical Spectroscopy Facility (ETSF) file format
 \cite{Gonze2008ETSF} and TREXIO \cite{posenitskiyTrexioFileFormat2023},
 and for pseudopotentials with the pseudopotential markup language (PSML) \cite{Garcia2018PSML}.
+
 A computed barrier is reproducible from a file only when every reader
 returns the same fields from it.
 A versioned specification and a corpus of files with known verdicts turn
@@ -327,14 +329,16 @@ Section~\ref{sec:discussion} sets CON 3.1 beside H5MD, extended XYZ and POSCAR.
 
 \section{The CON 3.1 format}
 \subsection{Stored fields}\label{sec:fields}
-CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit. The nudged elastic band, the dimer and AKMC pair images by that identifier, so a reader must return it even after a file reorders the rows.
+CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit.
+The nudged elastic band, the dimer and AKMC pair images by that identifier, so a reader must return it even after a file reorders the rows.
 The mask is an integer from 0 to 7, Eq.~\eqref{eq:mask}, and the mass enters the Lagrangian, Eq.~\eqref{eq:lagrangian}.
 The velocity section names its time unit, Eq.~\eqref{eq:tau}.
-On one restarted band a round trip through this grammar returns the uninterrupted barrier, while a file that moves a coordinate or drops the mask returns a different barrier (Section~\ref{sec:cases}), and Section~\ref{sec:supp-fields} compares what each other format keeps of these fields.
+On one restarted band a round trip through this grammar returns the uninterrupted barrier, while a file that moves a coordinate or drops the mask returns a different barrier (Section~\ref{sec:cases}, Section~\ref{sec:supp-fields}).
 
 \subsection{One frame}\label{sec:worked}
-Listing~\ref{lst:frame}, Table~\ref{tab:frame} and Figure~\ref{fig:layout} are one frame of a platinum slab, two layers of four atoms with one adatom, and the rule that reads each line (Section~\ref{sec:supp-frame}).
-Figure~\ref{fig:structures} draws that slab beside the EMT hop.
+One frame is a platinum slab of two layers of four atoms with one adatom (Figure~\ref{fig:structures}, Listing~\ref{lst:frame}, Table~\ref{tab:frame}).
+The reader rebuilds the cell from the lengths and angles, Eqs.~\eqref{eq:cell} and~\eqref{eq:gram}, the mask is Eq.~\eqref{eq:mask}, and the velocity section uses the unit the header names, Eq.~\eqref{eq:tau}.
+A version-1 header, anything other than one JSON object, is the text that earlier eOn releases write (Section~\ref{sec:supp-frame}).
 
 \begin{figure}[tbp]
 \centering
@@ -345,11 +349,9 @@ Middle, CuH\(_2\).
 Right, the EMT Pt(100) hop, three layers of \(3\times 3\) with one adatom.}
 \label{fig:structures}
 \end{figure}
-The reader rebuilds the cell from the lengths and angles, Eqs.~\eqref{eq:cell} and~\eqref{eq:gram}, the mask is Eq.~\eqref{eq:mask}, and the velocity section uses the unit the header names, Eq.~\eqref{eq:tau}.
-A version-1 header, anything other than one JSON object, is the text that earlier eOn releases write.
 
 \subsection{Grammar}\label{sec:format}
-Section~\ref{sec:spec-normative} states the normative specification in \clauseTotal{} numbered clauses, and Section~\ref{sec:supp-grammar} gives the production of one frame, the clauses this argument uses and the rule for a later minor.
+The specification is \clauseTotal{} numbered clauses (Section~\ref{sec:spec-normative}, Section~\ref{sec:supp-grammar}).
 Each number is a finite decimal that the reader rounds to the nearest double, ties to even.
 The default writer prints the shortest decimal that rounds back to the same value, so writing a frame and reading it back returns every coordinate unchanged, and a setting prints six fixed decimals instead.
 A gzip or zstd envelope wraps the same text, and a reader recognises it by content.
@@ -384,27 +386,20 @@ The wrapped displacement of each matched pair uses the reference cell.
 Python, C and C++ expose the four calls (Table~\ref{tab:correspondence}, Section~\ref{sec:supp-api}).
 In strict mode, which is the default, the mass and the fixed mask must agree as well.
 
-In the core, Algorithm~\ref{alg:parser} of Section~\ref{sec:supp-parser} is the path reader of the
-release.
-A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is
-read whole into memory, a larger one stays mapped, and a gzip or
-zstd file is decompressed into memory whatever its size.
-The read stays on the calling thread until the caller asks for two or more workers, with no minimum file length for the pool: equal-length frames, including a whitespace tail, split into equal spans, and on any other file one thread walks the frame boundaries from the counts in each header before the pool parses the frames and returns them in file order (Figure~\ref{fig:scaling-r6}).
-Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step, Figure~\ref{fig:parser} is that read, and a coordinate row is three decimals, a mask and an optional identifier, with the short decimal and the Eisel--Lemire path in Section~\ref{sec:supp-cell}.
+The path reader keeps a plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes in memory and leaves a larger one mapped, and it decompresses a gzip or zstd file into memory whatever its size (Algorithm~\ref{alg:parser}, Section~\ref{sec:supp-parser}).
+The read stays on the calling thread until the caller asks for two or more workers, with no minimum file length for the pool.
+Equal-length frames, including a whitespace tail, split into equal spans.
+On any other file one thread walks the frame boundaries from the counts in each header before the pool parses the frames and returns them in file order (Figure~\ref{fig:scaling-r6}, Figure~\ref{fig:parser}, Table~\ref{tab:anchors}).
+A coordinate row is three decimals, a mask and an optional identifier (Section~\ref{sec:supp-cell}).
 
 
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
-For a text of \(B\) bytes, after inflation for a gzip or zstd file, the
-read costs one serial \(\Theta(B)\) boundary walk and a \(\Theta(B)\)
-parse, and the frames it returns occupy
-\(\Theta(B)\) memory.
-A compressed file of \(C\) bytes is first inflated by one serial decoder
-in \(\Theta(C+B)\) time.
-The peak resident set of each reader on the Xeon is in
-Section~\ref{sec:host}.
+For a text of \(B\) bytes, after inflation for a gzip or zstd file, the read costs one serial \(\Theta(B)\) boundary walk and a \(\Theta(B)\) parse, and the frames it returns occupy \(\Theta(B)\) memory.
+A compressed file of \(C\) bytes is first inflated by one serial decoder in \(\Theta(C+B)\) time.
+The peak resident set of each reader on the Xeon is reported with those reads (Section~\ref{sec:host}).
 
 A path writer opens the destination and truncates it before writing the frames, so a failure during the write leaves a partial file, while a writer to a string or to a stream the caller opened writes into that stream.
-Listing~\ref{lst:py} of Section~\ref{sec:supp-parser} reads a band from Python and writes it back to the same path, which the writer truncates when the write opens.
+The Python round trip reads a band and writes it back to the same path, which the writer truncates when the write opens (Listing~\ref{lst:py}, Section~\ref{sec:supp-parser}).
 A DLPack view of the positions costs 0.12 times an explicit copy (Figure~\ref{fig:dlpack}).
 \label{sec:dlpack}
 
@@ -421,6 +416,7 @@ A frame key is 12 bytes, the trajectory id and the frame index, and the record i
 The commands include \texttt{ingest}, \texttt{select}, \texttt{dedup-export}, \texttt{annotate-topology}, \texttt{find-by-topology}, \texttt{index-canonical}, \texttt{find-by-atom-order}, \texttt{shard}, \texttt{compact} and \texttt{h5md-velocities}.
 \texttt{dedup-export} keeps one copy of a frame whose serialized text hashes to a frame already stored.
 That hash is the xxHash3-128 of the CON text, an identity of bytes rather than of chemical graphs \cite{muraokaGraphIdentifiers2026}.
+
 \texttt{index-canonical} reorders each frame into increasing \texttt{atom\_id}, under the strict check of symbol, mass and fixed mask, and stores the xxHash3-128 of that round-trip text.
 \texttt{find-by-atom-order} returns each stored frame with that hash and the permutation back to the query.
 A NEB image or an AKMC product whose rows were grouped by element is then the same geometry.
@@ -431,8 +427,6 @@ The saddle carries a displacements section with the same fixed-flag column and t
 readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
 readcon-ops takes a \texttt{ConFrame}: \texttt{identical} matches atoms of one element under the minimum image, \texttt{internal\_motion} removes a rigid motion, \texttt{rotational\_match} aligns by iterative rotations and assignments, and \texttt{wulff\_vertices} returns a Wulff construction.
 The three programs split the work as parse, store and compare (Table~\ref{tab:commands}, Section~\ref{sec:supp-commands}).
-
-\subsection{Installation and usage}
 Rust installs with \texttt{cargo add readcon-core@0.22.0}, Python with \texttt{pip install readcon==0.22.0}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==0.22.0}.
 Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}, and C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
 readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}, and readcon-ops installs with \texttt{pip install .} from a checkout of \url{https://github.com/lode-org/readcon-ops}.
@@ -455,7 +449,7 @@ A second corpus and an independent reader agree with readcon on every file both 
 \section{Validation}\label{sec:validation}
 \subsection{Hydrogen hop}\label{sec:claisen}
 A lost field changes the calculation that reads the file, and Section~\ref{sec:supp-applications} gives the three studies in full.
-A hydrogen adatom hops from one fourfold hollow of Cu(100) to the next under the effective-medium theory, and the improved NEB tangent at image \(i\) is built from the forward and backward differences
+A hydrogen adatom hops from one fourfold hollow of Cu(100) to the next, and the improved NEB tangent at image \(i\) is built from the forward and backward differences
 \begin{equation}
 \label{eq:tangent}
 \tau_i^{+}=R_{i+1}-R_i,\qquad \tau_i^{-}=R_i-R_{i-1},
@@ -469,23 +463,23 @@ F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
 A permutation of one image makes those differences connect different atoms, so the band needs the stored ids.
 That pairing is the chemical map.
 EMT is a cheap model surface for that pairing, not a copper barrier.
-ASE 3.29.0 builds the band with its nudged elastic band, spring constant \(0.8\,\mathrm{eV}/\text{\AA}^{2}\), the improved tangent and the FIRE optimiser.
-The seven images are the CON file of Section~\ref{sec:data}, read through readcon.
+
+ASE 3.29.0 builds the band with its nudged elastic band, spring constant \SI{0.8}{\electronvolt\per\angstrom\squared}, the improved tangent and the FIRE optimiser.
+The seven images are the CON file named in the data availability statement, read through readcon.
 The slab is three layers of a \(2\times 2\) cell with the bottom layer held.
 In each hollow the hydrogen is 1.399~\text{\AA} above the top layer and the four Cu--H contacts are 2.318~\text{\AA}.
 
-With the identifiers in file order the highest image is the bridge.
+Paired by atom id, the highest image is the bridge.
 It lies 0.0399~eV above the hollow, the force is \(0.048\,\mathrm{eV}/\text{\AA}\), and the hydrogen is 1.608~\text{\AA} above the top layer with two Cu--H contacts of 2.113~\text{\AA} (Figure~\ref{fig:claisen-land}).
 The mode is \(147\mathrm{i}\,\mathrm{cm}^{-1}\), along the hop.
-Exchanging two copper rows and pairing by that file order, with no identifier sort, moves the highest image to 15.6~eV.
-Figure~\ref{fig:claisen-struct-ids} is the bridge beside that swap.
+Exchanging the CON rows of two copper atoms and pairing by file row moves the highest image to 15.6~eV (Figure~\ref{fig:claisen-struct-ids}).
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
 \caption{Losing the identifier on the EMT model.
-Left, file order, 0.0399~eV at the bridge.
-Right, two copper rows exchanged and paired by file order, 15.6~eV.}
+Left, paired by atom id, 0.0399~eV at the bridge.
+Right, the CON rows of two copper atoms exchanged and paired by file row, 15.6~eV.}
 \label{fig:claisen-land}
 \end{figure}
 
@@ -493,27 +487,24 @@ Right, two copper rows exchanged and paired by file order, 15.6~eV.}
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_structures.pdf}
 \caption{Periodic \(4\times 4\) top view of the same EMT model, with a side inset.
-Left, the bridge: the hydrogen, in blue, sits between two copper atoms.
-Right, the two exchanged copper rows, in red, and the paths those rows take.
-Nearest-neighbour bonds only.}
+Left, paired by atom id: the hydrogen, in blue, sits on the bridge.
+Right, paired by file row: the CON rows of two copper atoms are exchanged, drawn in red with the paths those atoms take.
+Nearest-neighbour bonds, clipped to the cell.}
 \label{fig:claisen-struct-ids}
 \end{figure}
 
 \subsection{What a second reader keeps}\label{sec:fidelity}
+We read the same five files with readcon, with ASE's eon reader and with eOn's Python loader, on one core of the Xeon in Section~\ref{sec:compute}, and we report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
 A band, an AKMC catalog and a dynamical step pair atoms rather than file slots.
 Column 5 is the atom id, column 4 is the per-axis mask, the mass enters Eq.~\eqref{eq:lagrangian}, the cell is the minimum image, and a velocity is the momentum divided by that mass.
 
-Of readcon, ASE's eon reader and eOn's Python loader, readcon returns the identifier in file order together with the per-axis mask, the masses, the cell on every frame and the velocities.
-Each of those fields matches the input.
+Of those three readers, readcon returns the identifier in file order together with the per-axis mask, the masses, the cell on every frame and the velocities, and each of those fields matches the input.
 The eon reader in ASE builds the atom from the coordinates and from the mask column as one Boolean on every axis.
 On the platinum slab, where the adatom is held in height only, one atom therefore leaves the written file with every axis held, and the same reader stops when the next block is a force or a velocity section.
 
 The written cell stays inside the tolerance of six printed decimals.
-The eOn loader keeps the identifiers.
-A three-image band stays in file order.
+The eOn loader keeps the identifiers, and a three-image band stays in file order.
 Velocities come back as the numbers in the file, under the natural time unit even when an older header names femtoseconds.
-
-We read the same five files with readcon, with ASE's eon reader and with eOn's Python loader, on one core of the Xeon in Section~\ref{sec:compute}, and we report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
 
 \begin{table}[tbp]
 \centering
@@ -560,6 +551,7 @@ The failures that change the physics are the lost \(z\) hold and a misread veloc
 Dropping the hold moves the barrier from 0.6446~eV to 0.6815~eV, 36.9~meV, and multiplies the prefactor by 37.
 Reading the natural unit as \(\text{\AA}/\mathrm{fs}\) multiplies the kinetic energy by 103.64.
 Six decimals, extended XYZ and POSCAR shift the barrier by \(\num{\rfDeSixNum}\), \(\num{\rfDeXyzNum}\) and at most \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\), and Table~\ref{tab:restartfmt} gives the coordinate shift beside each of those barriers.
+The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
@@ -570,24 +562,20 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \label{fig:restartfmt} \end{figure}
 
 \label{sec:prefactor}
-The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
 \label{sec:eon-band}
 
 \section{Performance}\label{sec:performance}
 
 \subsection{Computational details}\label{sec:compute}
-We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 49342816~KiB of memory.
+We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 47~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
 The reads use readcon-core 0.22.0 and Python 3.12.3.
 The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2, each run with one thread where that library was timed.
 Each median is the type-7 median of six repeats after one warmup, on a warm page cache.
-Tables~\ref{tab:h2h-main} and~\ref{tab:conread} are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
-Figure~\ref{fig:scaling-r6} and Table~\ref{tab:r6-read} are the in-memory thread reads on this machine.
+The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
 
-\texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}).
-The per-file matrices, the quartile triples and the rank-by-rank tables are in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
-
-On one extended XYZ frame of \(10^{6}\) copper atoms that also stores the mass, the velocity, the identifier and the fixed flag (Table~\ref{tab:h2h-main}), readcon at commit \texttt{2e4f37cb} takes 0.1695~s, ASE \texttt{extxyz} 1.942~s, chemfiles 0.5706~s and OVITO 0.2077~s.
+\texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}, Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}).
+On one extended XYZ frame of \(10^{6}\) copper atoms that also stores the mass, the velocity, the identifier and the fixed flag, readcon at commit \texttt{2e4f37cb} takes 0.1695~s, ASE \texttt{extxyz} 1.942~s, chemfiles 0.5706~s and OVITO 0.2077~s (Table~\ref{tab:h2h-main}).
 On the \num{100000}-frame CON file, readcon takes 0.403147~s, the eOn C++ client takes 1.561890~s and ASE's eon reader takes 10.819129~s (Table~\ref{tab:conread}).
 Those client reads add the resident set of Figure~\ref{fig:memory}.
 
@@ -640,10 +628,9 @@ The medians are Table~\ref{tab:r6-read}, on the Xeon of Section~\ref{sec:compute
 
 On one thread the \num{100000}-frame CON read takes 0.369497~s, and at eight threads it takes 0.054797~s (Table~\ref{tab:r6-read}).
 The mixed-alloy extended XYZ read takes 0.093402~s and 0.015369~s at those two thread counts, and the extxyz-md trajectory takes 0.090881~s and 0.013174~s.
-
 At two threads that trajectory reaches an efficiency of 1.27: one thread parses its many short, equal-length frames one span at a time, and the second thread overlaps that memory latency.
-The convel whisker at one thread is the interquartile range of six samples that alternate between 0.432~s and 0.564~s.
-Section~\ref{sec:r6} gives the rank reads and the writes.
+The convel whisker at one thread is the interquartile range of six samples that alternate between 0.432~s and 0.564~s (Section~\ref{sec:r6}).
+On a thousand frames, readcon-db ingests and answers a composition query faster than the ASE database and faster than a directory of the same files (Figures~\ref{fig:db-throughput} and~\ref{fig:db-query}).
 
 \begin{figure}[tbp]
 \centering
@@ -655,8 +642,6 @@ The per-file resident set and massif heap are Tables~\ref{tab:extxyz-h2h} and~\r
 \label{fig:memory}
 \end{figure}
 
-On a thousand frames, readcon-db ingests and answers a composition query faster than the ASE database and faster than a directory of the same files (Figures~\ref{fig:db-throughput} and~\ref{fig:db-query}).
-
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
 H5MD stores an identifier and a velocity unit and defines no per-component constraint.
@@ -664,17 +649,16 @@ Extended XYZ can carry a mask or an identifier only under a column name the writ
 POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier.
 The identifier is what a band pairs, and the mask is what a search holds: the hydrogen images follow the stored ids, and dropping the Pt(100) height hold selects the other saddle of Section~\ref{sec:cases}.
 
-On the million-atom extended XYZ of Table~\ref{tab:h2h-main}, ASE \texttt{extxyz} takes 1.942~s, chemfiles 0.5706~s and OVITO 0.2077~s, against 0.1695~s for readcon.
-
-The file stores the coordinates, the mask and the identifier.
-Optimiser state is outside the frame.
+readcon finishes the million-atom extended XYZ ahead of ASE, chemfiles and OVITO because one pass over the text returns the stored columns, while ASE builds an \texttt{Atoms} object and the other two build a scene or a topology (Table~\ref{tab:h2h-main}).
+That same pass keeps the identifier and the mask, so the faster read is the restart rather than a coordinate-only extract.
+The file stores the coordinates, the mask and the identifier, and optimiser state stays outside the frame.
 A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different path after a restart even when every coordinate matches.
 The next step is a declared section for that optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
 readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
-The next step is a declared section for the optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
+The bridge mode on that model is \(147\mathrm{i}\,\mathrm{cm}^{-1}\) along the hop.
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
