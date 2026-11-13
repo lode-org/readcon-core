@@ -541,8 +541,11 @@ impl<W: Write> ConFrameWriter<W> {
         if frame.has_spreads() {
             blocks += 1;
         }
+        // One reserve for the whole frame. A round-trip float is at most 24
+        // bytes; the line also holds separators, a flag, and a u64.
+        const LINE_MAX: usize = 24 * 3 + 4 + 1 + 20 + 1;
         self.scratch
-            .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
+            .reserve(512 + atoms.saturating_mul(LINE_MAX).saturating_mul(blocks));
         self.scratch.clear();
         push_str_line(&mut self.scratch, &frame.header.prebox_header.user);
         if frame.header.spec_version < 2 {
@@ -918,7 +921,36 @@ fn written_fixed_flag(fixed: [bool; 3], spec_version: u32) -> u8 {
 fn push_u64(buf: &mut Vec<u8>, n: u64) {
     // Two digits per division. u64 stays in a hardware remainder; the old
     // path widened every atom id to u128 and called the software divider.
+    // One to four digits are stored directly. A memcpy of that many bytes
+    // was most of the write profile.
     const DIGITS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+    if n < 10 {
+        buf.push(b'0' + n as u8);
+        return;
+    }
+    if n < 100 {
+        let r = n as usize;
+        buf.push(DIGITS[r * 2]);
+        buf.push(DIGITS[r * 2 + 1]);
+        return;
+    }
+    if n < 1000 {
+        let hi = (n / 100) as usize;
+        let r = (n % 100) as usize;
+        buf.push(b'0' + hi as u8);
+        buf.push(DIGITS[r * 2]);
+        buf.push(DIGITS[r * 2 + 1]);
+        return;
+    }
+    if n < 10_000 {
+        let hi = (n / 100) as usize;
+        let r = (n % 100) as usize;
+        buf.push(DIGITS[hi * 2]);
+        buf.push(DIGITS[hi * 2 + 1]);
+        buf.push(DIGITS[r * 2]);
+        buf.push(DIGITS[r * 2 + 1]);
+        return;
+    }
     let mut tmp = [0u8; 20];
     let mut i = 20;
     let mut n = n;
