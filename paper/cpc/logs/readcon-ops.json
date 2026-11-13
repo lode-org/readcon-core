@@ -1,0 +1,15 @@
+{
+  "url": "https://github.com/lode-org/readcon-ops",
+  "pyproject": "https://raw.githubusercontent.com/lode-org/readcon-ops/master/pyproject.toml",
+  "version": "0.1.1",
+  "license": "BSD 3-clause",
+  "license_identifier": "BSD-3-Clause",
+  "requires_python": "3.11",
+  "exports": [
+    "identical",
+    "internal_motion",
+    "rotational_match",
+    "wulff_vertices"
+  ],
+  "command_line": false
+}

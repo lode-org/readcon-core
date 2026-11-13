@@ -73,6 +73,8 @@ Elsevier%
 \input{figures/generated/e5_macros}
 \input{figures/generated/velocity_case}
 \input{figures/generated/hop_macros}
+\input{figures/generated/lang_macros}
+\input{figures/generated/ops_macros}
 \input{figures/generated/mw_macros}
 \input{figures/generated/worked_macros}
 \input{figures/generated/test_run_macros}
@@ -177,13 +179,11 @@ Technical Editor)
 
 \noindent\textit{Licensing provisions:} MIT
 
-\noindent\textit{Programming language:} Rust 1.88, with C99, C++17, Python
-3.10, Julia and Fortran 2008 interfaces.
-The core links dlpk, half, ndarray, fast-float2, ryu, flate2,
-serde\_json, memchr, memmap2, libc, rustc-hash and mimalloc.
-Rayon, zstd, MPI, chemfiles, metatensor, CUDA, Cap'n Proto and Pest are
-optional and stay off unless the build asks for them.
-The Python package requires Python 3.10 or later.
+\noindent\textit{Programming language:} Rust \langRust, with \langC, \langCxx, Python
+\langPy, Julia \langJulia\ and \langFortran\ interfaces.
+The core links \langRequired.
+\langOptional\ are optional and stay off unless the build asks for them.
+The Python package requires Python \langPy\ or later.
 
 \noindent\textit{Supplementary material:} the normative specification,
 the two conformance corpora and the programs and data behind every table
@@ -223,9 +223,11 @@ frames into that file.
 \textit{Additional comments including restrictions and unusual features:}
 The library is readcon-core \benchReadcon.
 The companion programs are readcon-db \benchReadconDb, under the MIT licence, at
-\url{https://github.com/lode-org/readcon-db}, and readcon-ops 0.1.1,
-under the BSD 3-clause licence, at
+\url{https://github.com/lode-org/readcon-db}, and readcon-ops \opsVersion,
+under the \opsLicense\ licence, at
 \url{https://github.com/lode-org/readcon-ops}.
+It requires Python \opsPy\ or later and has no command line.
+The calls \texttt{identical}, \texttt{internal\_motion}, \texttt{rotational\_match} and \texttt{wulff\_vertices} are in that version.
 Every build reads gzip input, and the Python wheel also reads zstd.
 A frame stores Cartesian coordinates, the cell, the periodic flags, the
 mask, one identifier per atom, and optional per-atom velocities, forces,
