@@ -1,0 +1,1300 @@
+"""Same-format head-to-head on one shared geometry.
+
+Every arm reads or writes one of the files written by ``prepare``: one frame,
+one million copper atoms, the same lattice the con campaign uses. A warmup
+call pages the file in, then six serial samples are timed. The clock does not
+include the fidelity check.
+
+A row is correct only when file order, atom ids, the cell, masses, the fixed
+mask and velocities match the values written into that file. A field the
+format does not store is ``not_in_format`` and is not a failure. A tool that
+keeps the atoms but permutes them is recorded as reordered and is not correct.
+
+Arms that are absent cannot read or write the format. The reasons are in the
+commit that added this module.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import support
+
+N_ATOMS = 1_000_000
+N_FRAMES = 1
+REPEATS = 6
+MASS = 63.546
+# Integer lattice and binary-exact velocities, so a decimal writer that keeps
+# the digits still matches. Masses are a short decimal; 1e-9 covers parser ulps
+# and still rejects a substituted atomic mass.
+TOL_POSITION = 1e-12
+TOL_CELL = 1e-9
+TOL_MASS = 1e-9
+TOL_VELOCITY = 1e-12
+
+BENCH = Path(__file__).resolve().parent
+WORK = BENCH / "work" / "samefmt"
+RESULTS = BENCH / "results" / "samefmt"
+
+FORMATS = ("con", "convel", "extxyz", "pdb")
+# Fields stored by each format. PDB serial numbers are five columns, so a
+# million atoms cannot carry unique ids, and the record has no mass, fixed
+# mask or velocity.
+STORED = {
+    "con": ("positions", "ids", "cell", "masses", "fixed"),
+    "convel": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
+    "extxyz": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
+    "pdb": ("positions", "cell"),
+}
+
+ARMS = (
+    "readcon-con-read",
+    "readcon-con-write",
+    "readcon-con-roundtrip",
+    "ase-con-read",
+    "ase-con-write",
+    "ase-con-roundtrip",
+    "eon-con-read",
+    "eon-con-write",
+    "eon-con-roundtrip",
+    "readcon-convel-read",
+    "readcon-convel-write",
+    "readcon-convel-roundtrip",
+    "eon-convel-read",
+    "eon-convel-write",
+    "eon-convel-roundtrip",
+    "readcon-extxyz-read",
+    "readcon-extxyz-write",
+    "readcon-extxyz-roundtrip",
+    "ase-extxyz-read",
+    "ase-extxyz-write",
+    "ase-extxyz-roundtrip",
+    "chemfiles-extxyz-read",
+    "chemfiles-extxyz-write",
+    "chemfiles-extxyz-roundtrip",
+    "ovito-extxyz-read",
+    "ovito-extxyz-write",
+    "ovito-extxyz-roundtrip",
+    "readcon-pdb-read",
+    "ase-pdb-read",
+    "ase-pdb-write",
+    "ase-pdb-roundtrip",
+    "chemfiles-pdb-read",
+    "chemfiles-pdb-write",
+    "chemfiles-pdb-roundtrip",
+    "mdanalysis-pdb-read",
+    "mdanalysis-pdb-write",
+    "mdanalysis-pdb-roundtrip",
+    "ovito-pdb-read",
+)
+
+
+def split_arm(arm: str) -> tuple[str, str, str]:
+    tool, fmt, op = arm.rsplit("-", 2)
+    return tool, fmt, op
+
+
+def _paths(fmt: str) -> Path:
+    suffix = {"con": ".con", "convel": ".convel", "extxyz": ".extxyz", "pdb": ".pdb"}[fmt]
+    return WORK / "inputs" / f"atoms-{N_ATOMS}x{N_FRAMES}{suffix}"
+
+
+def _geometry(n_atoms: int) -> dict[str, np.ndarray]:
+    side = 1
+    while side * side * side < n_atoms:
+        side += 1
+    positions = np.empty((n_atoms, 3), dtype=np.float64)
+    written = 0
+    for z in range(side):
+        for y in range(side):
+            for x in range(side):
+                if written >= n_atoms:
+                    break
+                positions[written] = (x, y, z)
+                written += 1
+            else:
+                continue
+            break
+        else:
+            continue
+        break
+    span = float(side)
+    index = np.arange(n_atoms, dtype=np.int64)
+    flags = np.array([0, 1, 2, 4, 7], dtype=np.int64)[index % 5]
+    # Unique and not sorted, so a reader that reorders by id cannot pass on order.
+    ids = (index ^ 1) + 1
+    velocities = np.column_stack(
+        (
+            ((index % 5) - 2) * 0.125,
+            ((index % 3) - 1) * 0.25,
+            ((index % 4) - 1) * 0.5,
+        )
+    )
+    return {
+        "positions": positions,
+        "ids": ids,
+        "cell": np.array([span, span, span, 90.0, 90.0, 90.0], dtype=np.float64),
+        "masses": np.full(n_atoms, MASS, dtype=np.float64),
+        "fixed": flags,
+        "velocities": velocities,
+    }
+
+
+_GEOM: dict | None = None
+
+
+def geometry() -> dict[str, np.ndarray]:
+    global _GEOM
+    if _GEOM is None or int(_GEOM["positions"].shape[0]) != N_ATOMS:
+        _GEOM = _geometry(N_ATOMS)
+    return _GEOM
+
+
+def _write_con_text(path: Path, geom: dict, velocities: bool) -> None:
+    span = float(geom["cell"][0])
+    n_atoms = int(geom["positions"].shape[0])
+    if velocities:
+        meta = (
+            '{"con_spec_version":3,"con_spec_minor":1,"sections":["velocities"],'
+            '"units":{"energy":"eV","length":"angstrom","time":"fs"}}'
+        )
+    else:
+        meta = (
+            '{"con_spec_version":3,"con_spec_minor":1,'
+            '"units":{"length":"angstrom","energy":"eV"}}'
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    positions = geom["positions"]
+    ids = geom["ids"]
+    flags = geom["fixed"]
+    vels = geom["velocities"]
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("samefmt\n")
+        handle.write(meta + "\n")
+        handle.write(f"{span:.1f} {span:.1f} {span:.1f}\n")
+        handle.write("90.0 90.0 90.0\n\n\n")
+        handle.write(f"1\n{n_atoms}\n63.546\nCu\nCoordinates of Component 1\n")
+        chunk: list[str] = []
+        for i in range(n_atoms):
+            x, y, z = positions[i]
+            chunk.append(f"{x:.1f} {y:.1f} {z:.1f} {int(flags[i])} {int(ids[i])}\n")
+            if len(chunk) == 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if velocities:
+            # A blank line opens the velocity block. Without it the reader
+            # treats the next symbol as a truncated section.
+            chunk.append("\nCu\nVelocities of Component 1\n")
+            for i in range(n_atoms):
+                vx, vy, vz = vels[i]
+                chunk.append(
+                    f"{vx:.6f} {vy:.6f} {vz:.6f} {int(flags[i])} {int(ids[i])}\n"
+                )
+                if len(chunk) >= 100_000:
+                    handle.write("".join(chunk))
+                    chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
+def _write_extxyz(path: Path, geom: dict) -> None:
+    span = float(geom["cell"][0])
+    n_atoms = int(geom["positions"].shape[0])
+    positions = geom["positions"]
+    ids = geom["ids"]
+    flags = geom["fixed"]
+    vels = geom["velocities"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"{n_atoms}\n")
+        handle.write(
+            f'Lattice="{span:.1f} 0 0 0 {span:.1f} 0 0 0 {span:.1f}" '
+            "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
+            'pbc="T T T"\n'
+        )
+        chunk: list[str] = []
+        for i in range(n_atoms):
+            x, y, z = positions[i]
+            vx, vy, vz = vels[i]
+            chunk.append(
+                f"Cu {x:.1f} {y:.1f} {z:.1f} 63.546 "
+                f"{vx:.6f} {vy:.6f} {vz:.6f} {int(ids[i])} {int(flags[i])}\n"
+            )
+            if len(chunk) == 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
+def _pdb_line(serial: int, x: float, y: float, z: float) -> str:
+    # Columns match the PDB ATOM layout readcon's scanner slices.
+    line = [" "] * 80
+    head = f"ATOM  {serial % 100000:5d}   Cu MOL     1"
+    for index, char in enumerate(head):
+        line[index] = char
+    coords = f"{x:8.3f}{y:8.3f}{z:8.3f}"
+    for offset, char in enumerate(coords):
+        line[30 + offset] = char
+    tail = "  1.00  0.00          CU"
+    for offset, char in enumerate(tail):
+        line[54 + offset] = char
+    return "".join(line)
+
+
+def _write_pdb(path: Path, geom: dict) -> None:
+    span = float(geom["cell"][0])
+    positions = geom["positions"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(
+            f"CRYST1{span:9.3f}{span:9.3f}{span:9.3f}"
+            f"{90.0:7.2f}{90.0:7.2f}{90.0:7.2f} P 1           1\n"
+        )
+        chunk: list[str] = []
+        for i, (x, y, z) in enumerate(positions, start=1):
+            chunk.append(_pdb_line(i, float(x), float(y), float(z)) + "\n")
+            if len(chunk) == 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        chunk.append("END\n")
+        handle.write("".join(chunk))
+
+
+def prepare() -> None:
+    stamp = WORK / "stamp"
+    needed = [_paths(fmt) for fmt in FORMATS]
+    if (
+        stamp.is_file()
+        and stamp.read_text(encoding="utf-8").strip() == str(N_ATOMS)
+        and all(path.is_file() and path.stat().st_size > 0 for path in needed)
+    ):
+        return
+    geom = geometry()
+    print(f"prepare atoms {N_ATOMS}", flush=True)
+    _write_con_text(_paths("con"), geom, velocities=False)
+    _write_con_text(_paths("convel"), geom, velocities=True)
+    _write_extxyz(_paths("extxyz"), geom)
+    _write_pdb(_paths("pdb"), geom)
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(str(N_ATOMS) + "\n", encoding="utf-8")
+
+
+def _max_abs(got: np.ndarray, ref: np.ndarray) -> float:
+    if got.shape != ref.shape:
+        return float("inf")
+    return float(np.max(np.abs(got.astype(np.float64) - ref.astype(np.float64))))
+
+
+def _as_int(values: np.ndarray) -> np.ndarray:
+    return np.rint(np.asarray(values, dtype=np.float64)).astype(np.int64)
+
+
+def _empty_got() -> dict:
+    return {
+        "n_atoms": 0,
+        "n_frames": 0,
+        "positions": None,
+        "ids": None,
+        "cell": None,
+        "masses": None,
+        "fixed": None,
+        "velocities": None,
+    }
+
+
+def _pack(
+    positions,
+    cell,
+    masses=None,
+    ids=None,
+    fixed=None,
+    velocities=None,
+    n_frames: int = 1,
+) -> dict:
+    pos = None if positions is None else np.asarray(positions, dtype=np.float64)
+    if pos is not None and pos.ndim == 3:
+        n_frames = int(pos.shape[0])
+        pos = pos[0]
+    n_atoms = 0 if pos is None else int(pos.shape[0])
+    got = _empty_got()
+    got.update(
+        {
+            "n_atoms": n_atoms,
+            "n_frames": n_frames,
+            "positions": pos,
+            "cell": None if cell is None else np.asarray(cell, dtype=np.float64).reshape(-1)[:6],
+            "masses": None if masses is None else np.asarray(masses, dtype=np.float64).reshape(-1),
+            "ids": None if ids is None else _as_int(np.asarray(ids).reshape(-1)),
+            "fixed": None if fixed is None else _as_int(np.asarray(fixed).reshape(-1)),
+            "velocities": None
+            if velocities is None
+            else np.asarray(velocities, dtype=np.float64).reshape(n_atoms, 3),
+        }
+    )
+    return got
+
+
+def judge(fmt: str, got: dict) -> dict:
+    geom = geometry()
+    stored = STORED[fmt]
+    fields = {}
+    reasons = []
+    n_ok = got["n_atoms"] == N_ATOMS and got["n_frames"] == N_FRAMES
+    if not n_ok:
+        reasons.append(f"atoms {got['n_atoms']} frames {got['n_frames']}")
+    for name in ("positions", "ids", "cell", "masses", "fixed", "velocities"):
+        if name not in stored:
+            fields[name] = "not_in_format"
+            continue
+        ref = geom[name]
+        values = got.get(name)
+        if values is None:
+            fields[name] = "missing"
+            reasons.append(f"{name} missing")
+            continue
+        if name in ("ids", "fixed"):
+            if values.shape != ref.shape or not np.array_equal(values, ref):
+                fields[name] = "mismatch"
+                reasons.append(f"{name} mismatch")
+            else:
+                fields[name] = "ok"
+            continue
+        tol = {"positions": TOL_POSITION, "cell": TOL_CELL, "masses": TOL_MASS, "velocities": TOL_VELOCITY}[
+            name
+        ]
+        if values.shape != ref.shape:
+            fields[name] = "mismatch"
+            reasons.append(f"{name} shape {tuple(values.shape)}")
+            continue
+        err = _max_abs(values, ref)
+        if err <= tol:
+            fields[name] = "ok"
+        else:
+            fields[name] = f"max_abs {err:.3e}"
+            reasons.append(f"{name} max abs {err:.3e}")
+    id_map = _id_map_ok(geom, got)
+    reordered = (not n_ok or fields.get("positions") != "ok") and id_map
+    correct = n_ok and all(fields[name] == "ok" for name in stored) and not reasons
+    return {
+        "n_atoms": got["n_atoms"],
+        "n_frames": got["n_frames"],
+        "fields": fields,
+        "id_map_ok": id_map,
+        "reordered": bool(reordered),
+        "correct": bool(correct),
+        "reason": "ok" if correct else "; ".join(reasons),
+    }
+
+
+def _id_map_ok(geom: dict, got: dict) -> bool:
+    if got.get("ids") is None or got.get("positions") is None:
+        return False
+    if got["ids"].shape != geom["ids"].shape or got["positions"].shape != geom["positions"].shape:
+        return False
+    if not np.array_equal(np.sort(got["ids"]), np.sort(geom["ids"])):
+        return False
+    order = np.argsort(got["ids"], kind="mergesort")
+    ref_order = np.argsort(geom["ids"], kind="mergesort")
+    if _max_abs(got["positions"][order], geom["positions"][ref_order]) > TOL_POSITION:
+        return False
+    if "fixed" in STORED.get("convel", ()) and got.get("fixed") is not None:
+        if not np.array_equal(got["fixed"][order], geom["fixed"][ref_order]):
+            return False
+    if got.get("velocities") is not None:
+        if _max_abs(got["velocities"][order], geom["velocities"][ref_order]) > TOL_VELOCITY:
+            return False
+    return True
+
+
+def _bitmask_from_bools(mask: np.ndarray) -> np.ndarray:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim == 1:
+        return np.where(mask, 7, 0).astype(np.int64)
+    out = np.zeros(mask.shape[0], dtype=np.int64)
+    out += mask[:, 0].astype(np.int64)
+    out += mask[:, 1].astype(np.int64) * 2
+    out += mask[:, 2].astype(np.int64) * 4
+    return out
+
+
+def _frames_from_readcon(path: Path) -> dict:
+    import readcon
+
+    frames = readcon.read_con(os.fspath(path))
+    frame = frames[0]
+    n = len(frame.atoms)
+    positions = np.empty((n, 3), dtype=np.float64)
+    masses = np.empty(n, dtype=np.float64)
+    ids = np.empty(n, dtype=np.int64)
+    fixed = np.empty(n, dtype=np.int64)
+    velocities = None
+    if frame.has_velocities:
+        velocities = np.empty((n, 3), dtype=np.float64)
+    for i, atom in enumerate(frame.atoms):
+        positions[i] = (atom.x, atom.y, atom.z)
+        masses[i] = float(atom.mass)
+        ids[i] = int(atom.atom_id)
+        fx, fy, fz = atom.fixed
+        fixed[i] = int(fx) + 2 * int(fy) + 4 * int(fz)
+        if velocities is not None:
+            velocities[i] = (atom.vx, atom.vy, atom.vz)
+    cell = np.concatenate(
+        [
+            np.asarray(frame.cell, dtype=np.float64),
+            np.asarray(frame.angles, dtype=np.float64),
+        ]
+    )
+    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+
+
+def _column0(arrays, names: tuple[str, ...]):
+    for key in names:
+        if key not in arrays:
+            continue
+        value = np.asarray(arrays[key], dtype=np.float64)
+        return value if value.ndim == 1 else value[0]
+    return None
+
+
+def _extxyz_dict_to_got(data) -> dict:
+    arrays = data["arrays"]
+    masses = np.asarray(data["masses"])[0]
+    velocities = _column0(arrays, ("vel", "velocities"))
+    if velocities is None:
+        # ASE writes mass * velocity under the extended XYZ name momenta.
+        momenta = _column0(arrays, ("momenta",))
+        if momenta is not None:
+            velocities = momenta / masses.reshape(-1, 1)
+    return _pack(
+        np.asarray(data["positions"])[0],
+        np.asarray(data["cell"])[0],
+        masses,
+        _column0(arrays, ("id", "ids", "atom_id")),
+        _column0(arrays, ("fixed", "fix")),
+        velocities,
+        n_frames=int(np.asarray(data["positions"]).shape[0]),
+    )
+
+
+def _extxyz_from_readcon(path: Path) -> dict:
+    import readcon
+
+    return _extxyz_dict_to_got(readcon.read_extxyz(os.fspath(path)))
+
+
+def _pdb_from_readcon(path: Path) -> dict:
+    import readcon
+
+    positions, _masses, cell = readcon.read_pdb(os.fspath(path))
+    pos = np.asarray(positions, dtype=np.float64)
+    return _pack(pos[0], np.asarray(cell)[0], n_frames=int(pos.shape[0]))
+
+
+def read_file_with_readcon(fmt: str, path: Path) -> dict:
+    if fmt in ("con", "convel"):
+        return _frames_from_readcon(path)
+    if fmt == "extxyz":
+        return _extxyz_from_readcon(path)
+    if fmt == "pdb":
+        return _pdb_from_readcon(path)
+    raise ValueError(fmt)
+
+
+def _eon_root() -> Path | None:
+    candidates = [
+        os.environ.get("EON_ROOT", ""),
+        str(BENCH / "work" / "eon-src"),
+        "/tmp/eOn",
+    ]
+    for candidate in candidates:
+        if candidate and (Path(candidate) / "eon" / "fileio.py").is_file():
+            return Path(candidate)
+    return None
+
+
+def _ensure_eon():
+    root = _eon_root()
+    if root is None:
+        raise RuntimeError("eOn checkout with eon/fileio.py is not available")
+    text = str(root)
+    if text not in sys.path:
+        sys.path.insert(0, text)
+    from eon.fileio import loadcons, savecon
+    from eon.structure import Structure
+
+    return loadcons, savecon, Structure
+
+
+def _structure_from_geometry():
+    _loadcons, _savecon, Structure = _ensure_eon()
+    geom = geometry()
+    n = N_ATOMS
+    structure = Structure(n)
+    span = float(geom["cell"][0])
+    structure.box = np.diag([span, span, span])
+    structure.r = np.array(geom["positions"], copy=True)
+    free = np.ones((n, 3), dtype=np.float64)
+    flags = geom["fixed"]
+    free[:, 0] = np.where(flags & 1, 0.0, 1.0)
+    free[:, 1] = np.where(flags & 2, 0.0, 1.0)
+    free[:, 2] = np.where(flags & 4, 0.0, 1.0)
+    structure.free = free
+    structure.names = ["Cu"] * n
+    structure.mass = np.array(geom["masses"], copy=True)
+    structure.atom_ids = geom["ids"].astype(np.uint64)
+    structure.velocities = np.array(geom["velocities"], copy=True)
+    return structure
+
+
+def _got_from_structure(structure) -> dict:
+    n = len(structure)
+    positions = np.asarray(structure.r, dtype=np.float64).reshape(n, 3)
+    masses = np.asarray(structure.mass, dtype=np.float64).reshape(n)
+    ids = np.asarray(structure.atom_ids).reshape(n)
+    free = np.asarray(structure.free, dtype=np.float64).reshape(n, 3)
+    fixed = _bitmask_from_bools(free < 0.5)
+    velocities = None
+    if structure.velocities is not None:
+        velocities = np.asarray(structure.velocities, dtype=np.float64).reshape(n, 3)
+    lengths, angles = None, None
+    from eon.geometry.cell import box_to_length_angle
+
+    lengths, angles = box_to_length_angle(structure.box)
+    cell = np.concatenate(
+        [np.asarray(lengths, dtype=np.float64), np.asarray(angles, dtype=np.float64)]
+    )
+    return _pack(positions, cell, masses, ids, fixed, velocities)
+
+
+def _ase_images(fmt: str):
+    from ase import Atoms
+    from ase.constraints import FixAtoms
+
+    geom = geometry()
+    span = float(geom["cell"][0])
+    atoms = Atoms(
+        symbols=["Cu"] * N_ATOMS,
+        positions=np.array(geom["positions"], copy=True),
+        cell=[span, span, span],
+        pbc=True,
+    )
+    atoms.set_masses(np.array(geom["masses"], copy=True))
+    if fmt == "extxyz":
+        atoms.set_array("id", np.array(geom["ids"], dtype=np.float64))
+        atoms.set_array("fixed", np.array(geom["fixed"], dtype=np.float64))
+        atoms.set_velocities(np.array(geom["velocities"], copy=True))
+    elif fmt == "con":
+        # write_eon stores only FixAtoms, one boolean per atom.
+        mask = geom["fixed"] != 0
+        if np.any(mask):
+            atoms.set_constraint(FixAtoms(mask=mask))
+    return [atoms]
+
+
+def _got_from_ase(images, fmt: str) -> dict:
+    if not isinstance(images, list):
+        images = [images]
+    image = images[0]
+    positions = np.asarray(image.positions, dtype=np.float64)
+    masses = np.asarray(image.get_masses(), dtype=np.float64)
+    cell = np.concatenate(
+        [
+            np.asarray(image.cell.lengths(), dtype=np.float64),
+            np.asarray(image.cell.angles(), dtype=np.float64),
+        ]
+    )
+    ids = image.arrays["id"] if "id" in image.arrays else None
+    fixed = None
+    if "fixed" in image.arrays:
+        fixed = image.arrays["fixed"]
+    elif image.constraints:
+        from ase.constraints import FixAtoms
+
+        mask = np.zeros(len(image), dtype=bool)
+        for constraint in image.constraints:
+            if isinstance(constraint, FixAtoms):
+                index = np.asarray(constraint.index)
+                if index.dtype == bool:
+                    mask |= index
+                else:
+                    mask[index] = True
+        fixed = _bitmask_from_bools(mask)
+    velocities = None
+    if "vel" in image.arrays:
+        velocities = np.asarray(image.arrays["vel"], dtype=np.float64)
+    elif "momenta" in image.arrays:
+        momenta = np.asarray(image.arrays["momenta"], dtype=np.float64)
+        velocities = momenta / masses.reshape(-1, 1)
+    else:
+        got_vel = image.get_velocities()
+        if got_vel is not None:
+            velocities = np.asarray(got_vel, dtype=np.float64)
+    got = _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(images))
+    if fmt == "pdb":
+        got["ids"] = None
+        got["masses"] = None
+        got["fixed"] = None
+        got["velocities"] = None
+    if fmt == "con":
+        got["velocities"] = None
+    return got
+
+
+def _chemfiles_read(path: Path, chem_format: str) -> dict:
+    import chemfiles
+
+    traj = chemfiles.Trajectory(os.fspath(path), "r", chem_format)
+    try:
+        frames = [traj.read() for _step in range(traj.nsteps)]
+    finally:
+        traj.close()
+    frame = frames[0]
+    positions = np.array(frame.positions, dtype=np.float64)
+    n = int(positions.shape[0])
+    lengths = np.asarray(list(frame.cell.lengths), dtype=np.float64)
+    angles = np.asarray(list(frame.cell.angles), dtype=np.float64)
+    cell = np.concatenate([lengths.reshape(-1)[:3], angles.reshape(-1)[:3]])
+    masses = np.empty(n, dtype=np.float64)
+    ids = np.empty(n, dtype=np.float64)
+    fixed = np.empty(n, dtype=np.float64)
+    velocities = np.empty((n, 3), dtype=np.float64)
+    have_id = have_fixed = have_vel = have_mass = False
+    for i in range(n):
+        atom = frame.atoms[i]
+        names = set(atom.list_properties())
+        if "masses" in names:
+            masses[i] = float(atom["masses"])
+            have_mass = True
+        else:
+            masses[i] = float(atom.mass)
+            have_mass = True
+        if "id" in names:
+            ids[i] = float(atom["id"])
+            have_id = True
+        if "fixed" in names:
+            fixed[i] = float(atom["fixed"])
+            have_fixed = True
+        if "vel" in names:
+            velocities[i] = np.asarray(atom["vel"], dtype=np.float64)
+            have_vel = True
+    if frame.has_velocities():
+        velocities = np.array(frame.velocities, dtype=np.float64)
+        have_vel = True
+    return _pack(
+        positions,
+        cell,
+        masses if have_mass else None,
+        ids if have_id else None,
+        fixed if have_fixed else None,
+        velocities if have_vel else None,
+        n_frames=len(frames),
+    )
+
+
+def _chemfiles_write(frame, path: Path, chem_format: str) -> None:
+    import chemfiles
+
+    if path.exists():
+        path.unlink()
+    traj = chemfiles.Trajectory(os.fspath(path), "w", chem_format)
+    try:
+        traj.write(frame)
+    finally:
+        traj.close()
+
+
+def _ovito_read(path: Path) -> dict:
+    from ovito.io import import_file
+
+    pipe = import_file(os.fspath(path))
+    frames = [pipe.compute(index) for index in range(pipe.num_frames)]
+    data = frames[0]
+    positions = np.array(data.particles.positions, dtype=np.float64)
+    matrix = np.array(data.cell[:, :3], dtype=np.float64)
+    lengths = np.linalg.norm(matrix, axis=1)
+    # The shared cells are orthogonal. A non-orthogonal cell would need angles.
+    cell = np.concatenate([lengths, np.array([90.0, 90.0, 90.0])])
+    keys = set(data.particles.keys())
+    masses = np.array(data.particles["masses"], dtype=np.float64) if "masses" in keys else None
+    velocities = None
+    for key in ("vel", "Velocity", "velocities"):
+        if key in keys:
+            velocities = np.array(data.particles[key], dtype=np.float64)
+            break
+    ids = None
+    for key in ("id", "Particle Identifier"):
+        if key in keys:
+            ids = np.array(data.particles[key])
+            break
+    fixed = np.array(data.particles["fixed"], dtype=np.float64) if "fixed" in keys else None
+    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+
+
+def _out_path(arm: str, fmt: str) -> Path:
+    suffix = {"con": ".con", "convel": ".convel", "extxyz": ".extxyz", "pdb": ".pdb"}[fmt]
+    path = WORK / "outs" / f"{arm}{suffix}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+_CACHE: dict = {}
+
+
+def _source(tool: str, fmt: str):
+    """In-memory structure for a write. Built once per process, outside the clock."""
+    key = (tool, fmt)
+    if key in _CACHE:
+        return _CACHE[key]
+    if tool == "readcon" and fmt in ("con", "convel"):
+        import readcon
+
+        value = readcon.read_con(os.fspath(_paths(fmt)))
+    elif tool == "readcon" and fmt == "extxyz":
+        import readcon
+
+        value = readcon.read_extxyz(os.fspath(_paths(fmt)))
+    elif tool == "ase":
+        value = _ase_images(fmt)
+    elif tool == "eon":
+        value = _structure_from_geometry()
+    elif tool == "chemfiles":
+        import chemfiles
+
+        chem_format = "XYZ" if fmt == "extxyz" else "PDB"
+        traj = chemfiles.Trajectory(os.fspath(_paths(fmt)), "r", chem_format)
+        try:
+            value = traj.read()
+        finally:
+            traj.close()
+    elif tool == "ovito":
+        from ovito.io import import_file
+
+        value = import_file(os.fspath(_paths(fmt)))
+    elif tool == "mdanalysis":
+        import MDAnalysis as mda
+
+        value = mda.Universe(os.fspath(_paths(fmt)))
+    else:
+        raise RuntimeError(f"no source for {tool} {fmt}")
+    _CACHE[key] = value
+    return value
+
+
+def _read_tool(tool: str, fmt: str, path: Path) -> dict:
+    if tool == "readcon":
+        return read_file_with_readcon(fmt, path)
+    if tool == "ase":
+        from ase.io import read as ase_read
+
+        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        images = ase_read(os.fspath(path), index=":", format=format_name)
+        return _got_from_ase(images, fmt)
+    if tool == "eon":
+        loadcons, _savecon, _Structure = _ensure_eon()
+        frames = loadcons(os.fspath(path))
+        return _got_from_structure(frames[0])
+    if tool == "chemfiles":
+        chem_format = "XYZ" if fmt == "extxyz" else "PDB"
+        got = _chemfiles_read(path, chem_format)
+        if fmt == "pdb":
+            got["ids"] = None
+            got["masses"] = None
+            got["fixed"] = None
+            got["velocities"] = None
+        return got
+    if tool == "ovito":
+        got = _ovito_read(path)
+        if fmt == "pdb":
+            got["ids"] = None
+            got["masses"] = None
+            got["fixed"] = None
+            got["velocities"] = None
+        return got
+    if tool == "mdanalysis":
+        import MDAnalysis as mda
+
+        universe = mda.Universe(os.fspath(path))
+        blocks = []
+        for _ts in universe.trajectory:
+            blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
+        positions = np.stack(blocks)
+        dims = universe.dimensions
+        cell = None if dims is None else np.asarray(dims, dtype=np.float64)
+        return _pack(positions[0], cell, n_frames=positions.shape[0])
+    raise RuntimeError(f"no reader for {tool} {fmt}")
+
+
+def _write_tool(tool: str, fmt: str, path: Path) -> None:
+    source = _source(tool, fmt)
+    if tool == "readcon" and fmt in ("con", "convel"):
+        import readcon
+
+        readcon.write_con(os.fspath(path), source)
+        return
+    if tool == "readcon" and fmt == "extxyz":
+        import readcon
+
+        readcon.write_extxyz(os.fspath(path), source)
+        return
+    if tool == "ase":
+        from ase.io import write as ase_write
+
+        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        ase_write(os.fspath(path), source, format=format_name)
+        return
+    if tool == "eon":
+        _loadcons, savecon, _Structure = _ensure_eon()
+        savecon(os.fspath(path), source)
+        return
+    if tool == "chemfiles":
+        chem_format = "XYZ" if fmt == "extxyz" else "PDB"
+        _chemfiles_write(source, path, chem_format)
+        return
+    if tool == "ovito":
+        from ovito.io import export_file
+
+        columns = list(source.compute().particles.keys())
+        export_file(source, os.fspath(path), "xyz", columns=columns)
+        return
+    if tool == "mdanalysis":
+        import MDAnalysis as mda
+
+        with mda.Writer(os.fspath(path), source.atoms.n_atoms) as writer:
+            writer.write(source.atoms)
+        return
+    raise RuntimeError(f"no writer for {tool} {fmt}")
+
+
+def _raw_read(tool: str, fmt: str, path: Path):
+    """Library read only. Unpacking the result is not part of the clock."""
+    if tool == "readcon":
+        import readcon
+
+        if fmt in ("con", "convel"):
+            return readcon.read_con(os.fspath(path))
+        if fmt == "extxyz":
+            return readcon.read_extxyz(os.fspath(path))
+        return readcon.read_pdb(os.fspath(path))
+    if tool == "ase":
+        from ase.io import read as ase_read
+
+        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        return ase_read(os.fspath(path), index=":", format=format_name)
+    if tool == "eon":
+        loadcons, _savecon, _Structure = _ensure_eon()
+        return loadcons(os.fspath(path))
+    if tool == "chemfiles":
+        import chemfiles
+
+        chem_format = "XYZ" if fmt == "extxyz" else "PDB"
+        traj = chemfiles.Trajectory(os.fspath(path), "r", chem_format)
+        try:
+            frames = []
+            for _step in range(traj.nsteps):
+                frame = traj.read()
+                frame.positions
+                frames.append(frame)
+        finally:
+            traj.close()
+        return frames
+    if tool == "ovito":
+        from ovito.io import import_file
+
+        pipe = import_file(os.fspath(path))
+        return [pipe.compute(index) for index in range(pipe.num_frames)]
+    if tool == "mdanalysis":
+        import MDAnalysis as mda
+
+        universe = mda.Universe(os.fspath(path))
+        blocks = []
+        for _ts in universe.trajectory:
+            blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
+        return universe, blocks
+    raise RuntimeError(f"no reader for {tool} {fmt}")
+
+
+def _materialize(tool: str, fmt: str, raw) -> dict:
+    if tool == "readcon":
+        if fmt in ("con", "convel"):
+            return _frames_list_to_got(raw)
+        if fmt == "extxyz":
+            return _extxyz_dict_to_got(raw)
+        positions, _masses, cell = raw
+        pos = np.asarray(positions, dtype=np.float64)
+        return _pack(pos[0], np.asarray(cell)[0], n_frames=int(pos.shape[0]))
+    if tool == "ase":
+        return _got_from_ase(raw, fmt)
+    if tool == "eon":
+        return _got_from_structure(raw[0])
+    if tool == "chemfiles":
+        got = _chemfiles_frames_to_got(raw)
+        if fmt == "pdb":
+            got["ids"] = None
+            got["masses"] = None
+            got["fixed"] = None
+            got["velocities"] = None
+        return got
+    if tool == "ovito":
+        got = _ovito_frames_to_got(raw)
+        if fmt == "pdb":
+            got["ids"] = None
+            got["masses"] = None
+            got["fixed"] = None
+            got["velocities"] = None
+        return got
+    if tool == "mdanalysis":
+        _universe, blocks = raw
+        positions = np.stack(blocks)
+        dims = _universe.dimensions
+        cell = None if dims is None else np.asarray(dims, dtype=np.float64)
+        return _pack(positions[0], cell, n_frames=int(positions.shape[0]))
+    raise RuntimeError(f"no unpack for {tool} {fmt}")
+
+
+def _frames_list_to_got(frames) -> dict:
+    frame = frames[0]
+    n = len(frame.atoms)
+    positions = np.empty((n, 3), dtype=np.float64)
+    masses = np.empty(n, dtype=np.float64)
+    ids = np.empty(n, dtype=np.int64)
+    fixed = np.empty(n, dtype=np.int64)
+    velocities = None
+    if frame.has_velocities:
+        velocities = np.empty((n, 3), dtype=np.float64)
+    for i, atom in enumerate(frame.atoms):
+        positions[i] = (atom.x, atom.y, atom.z)
+        masses[i] = float(atom.mass)
+        ids[i] = int(atom.atom_id)
+        fx, fy, fz = atom.fixed
+        fixed[i] = int(fx) + 2 * int(fy) + 4 * int(fz)
+        if velocities is not None:
+            velocities[i] = (atom.vx, atom.vy, atom.vz)
+    cell = np.concatenate(
+        [
+            np.asarray(frame.cell, dtype=np.float64),
+            np.asarray(frame.angles, dtype=np.float64),
+        ]
+    )
+    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+
+
+def _chemfiles_frames_to_got(frames) -> dict:
+    frame = frames[0]
+    positions = np.array(frame.positions, dtype=np.float64)
+    n = int(positions.shape[0])
+    lengths = np.asarray(list(frame.cell.lengths), dtype=np.float64)
+    angles = np.asarray(list(frame.cell.angles), dtype=np.float64)
+    cell = np.concatenate([lengths.reshape(-1)[:3], angles.reshape(-1)[:3]])
+    masses = np.empty(n, dtype=np.float64)
+    ids = np.empty(n, dtype=np.float64)
+    fixed = np.empty(n, dtype=np.float64)
+    velocities = np.empty((n, 3), dtype=np.float64)
+    have_id = have_fixed = have_vel = have_mass = False
+    for i in range(n):
+        atom = frame.atoms[i]
+        names = set(atom.list_properties())
+        if "masses" in names:
+            masses[i] = float(atom["masses"])
+            have_mass = True
+        else:
+            masses[i] = float(atom.mass)
+            have_mass = True
+        if "id" in names:
+            ids[i] = float(atom["id"])
+            have_id = True
+        if "fixed" in names:
+            fixed[i] = float(atom["fixed"])
+            have_fixed = True
+        if "vel" in names:
+            velocities[i] = np.asarray(atom["vel"], dtype=np.float64)
+            have_vel = True
+    if frame.has_velocities():
+        velocities = np.array(frame.velocities, dtype=np.float64)
+        have_vel = True
+    return _pack(
+        positions,
+        cell,
+        masses if have_mass else None,
+        ids if have_id else None,
+        fixed if have_fixed else None,
+        velocities if have_vel else None,
+        n_frames=len(frames),
+    )
+
+
+def _ovito_frames_to_got(frames) -> dict:
+    data = frames[0]
+    positions = np.array(data.particles.positions, dtype=np.float64)
+    matrix = np.array(data.cell[:, :3], dtype=np.float64)
+    lengths = np.linalg.norm(matrix, axis=1)
+    cell = np.concatenate([lengths, np.array([90.0, 90.0, 90.0])])
+    keys = set(data.particles.keys())
+    masses = np.array(data.particles["masses"], dtype=np.float64) if "masses" in keys else None
+    velocities = None
+    for key in ("vel", "Velocity", "velocities"):
+        if key in keys:
+            velocities = np.array(data.particles[key], dtype=np.float64)
+            break
+    ids = None
+    for key in ("id", "Particle Identifier"):
+        if key in keys:
+            ids = np.array(data.particles[key])
+            break
+    fixed = np.array(data.particles["fixed"], dtype=np.float64) if "fixed" in keys else None
+    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+
+
+def once(arm: str):
+    """One call, for the asv ``time_`` method. Fidelity stays outside the clock."""
+    tool, fmt, op = split_arm(arm)
+    path = _paths(fmt)
+    if op == "read":
+        return _raw_read(tool, fmt, path)
+    out = _out_path(arm, fmt)
+    if op == "write":
+        _write_tool(tool, fmt, out)
+        return out
+    if op == "roundtrip":
+        _write_tool(tool, fmt, out)
+        return _raw_read(tool, fmt, out)
+    raise RuntimeError(op)
+
+
+def _check(arm: str, result) -> dict:
+    tool, fmt, op = split_arm(arm)
+    if op == "read":
+        return judge(fmt, _materialize(tool, fmt, result))
+    out = result if op == "write" else _out_path(arm, fmt)
+    file_got = read_file_with_readcon(fmt, Path(out))
+    file_judge = judge(fmt, file_got)
+    if op == "write":
+        file_judge["source"] = "file"
+        return file_judge
+    tool_judge = judge(fmt, _materialize(tool, fmt, result))
+    correct = bool(file_judge["correct"] and tool_judge["correct"])
+    reason = tool_judge["reason"]
+    if file_judge["reason"] != "ok":
+        reason = f"tool {tool_judge['reason']}; file {file_judge['reason']}"
+    return {
+        "n_atoms": tool_judge["n_atoms"],
+        "n_frames": tool_judge["n_frames"],
+        "fields": tool_judge["fields"],
+        "file_fields": file_judge["fields"],
+        "id_map_ok": bool(tool_judge["id_map_ok"] and file_judge["id_map_ok"]),
+        "reordered": bool(tool_judge["reordered"] or file_judge["reordered"]),
+        "correct": correct,
+        "reason": "ok" if correct else reason,
+    }
+
+
+def _versions() -> str:
+    parts = []
+    try:
+        import readcon
+
+        parts.append(f"readcon {getattr(readcon, '__version__', '0.22.0')}")
+    except Exception:
+        parts.append("readcon missing")
+    for name in ("ase", "chemfiles", "MDAnalysis", "ovito"):
+        try:
+            mod = __import__(name)
+            version = getattr(mod, "__version__", None) or getattr(mod, "version", "")
+            parts.append(f"{name} {version}")
+        except Exception:
+            parts.append(f"{name} missing")
+    root = _eon_root()
+    if root is not None:
+        import subprocess
+
+        commit = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ).strip()
+        parts.append(f"eon {commit}")
+    return " ".join(parts)
+
+
+def run(arm: str) -> dict:
+    if arm not in ARMS:
+        raise SystemExit(f"unknown arm {arm}")
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    prepare()
+    tool, fmt, _op = split_arm(arm)
+    if tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "readcon") and fmt in (
+        "con",
+        "convel",
+        "extxyz",
+        "pdb",
+    ):
+        if split_arm(arm)[2] != "read":
+            _source(tool, fmt)
+    print(f"warmup {arm}", flush=True)
+    once(arm)
+    samples = []
+    last = None
+    for index in range(REPEATS):
+        started = time.perf_counter()
+        last = once(arm)
+        samples.append(time.perf_counter() - started)
+        print(f"sample {arm} {index} {samples[-1]:.6f}", flush=True)
+    check = _check(arm, last)
+    row = support.stats_block(samples)
+    row.update(check)
+    row["arm"] = arm
+    row["tool"], row["format"], row["operation"] = split_arm(arm)
+    row["file"] = support.rel(_paths(fmt))
+    command = [
+        "taskset",
+        "-c",
+        "0",
+        "python",
+        "bench/h2h/asv/drive.py",
+        "samefmt",
+        arm,
+    ]
+    lines = [
+        f"repeat {row['n']}",
+        "serial 1",
+        "quantile type-7",
+        "warmup 1",
+        "cache warm",
+        f"versions {_versions()}",
+    ]
+    for sample in samples:
+        lines.append(f"sample {sample:.9f}")
+    lines.append(f"median_s {row['median_s']:.9f}")
+    lines.append(f"q25_s {row['q25_s']:.9f}")
+    lines.append(f"q75_s {row['q75_s']:.9f}")
+    lines.append(f"iqr_s {row['iqr_s']:.9f}")
+    lines.append(f"n_atoms {row['n_atoms']}")
+    lines.append(f"n_frames {row['n_frames']}")
+    for name, value in row["fields"].items():
+        lines.append(f"field {name} {value}")
+    lines.append(f"id_map_ok {int(bool(row['id_map_ok']))}")
+    lines.append(f"reordered {int(bool(row['reordered']))}")
+    lines.append(f"correct {int(bool(row['correct']))}")
+    lines.append(f"reason {row['reason']}")
+    lines.append(json.dumps(row, default=str))
+    body = "\n".join(lines) + "\n"
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    destination = RESULTS / f"{arm}.stdout"
+    destination.write_text(support.log_text(command, body, 0), encoding="utf-8")
+    print(
+        f"done {arm} median {row['median_s']:.6f} iqr {row['iqr_s']:.6f} correct {int(row['correct'])}",
+        flush=True,
+    )
+    return row
+
+
+def write_report() -> None:
+    rows = []
+    for arm in ARMS:
+        path = RESULTS / f"{arm}.stdout"
+        payload = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("{") and line.endswith("}"):
+                payload = json.loads(line)
+        if payload is None:
+            raise RuntimeError(f"missing result in {path}")
+        rows.append(payload)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    destination = RESULTS / "summary.csv"
+    header = (
+        "tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
+        "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities\n"
+    )
+    lines = [header]
+    for row in rows:
+        fields = row["fields"]
+        lines.append(
+            ",".join(
+                [
+                    row["tool"],
+                    row["format"],
+                    row["operation"],
+                    str(row["n_atoms"]),
+                    str(row["n_frames"]),
+                    str(row["n"]),
+                    f"{row['median_s']:.9e}",
+                    f"{row['iqr_s']:.9e}",
+                    f"{row['q25_s']:.9e}",
+                    f"{row['q75_s']:.9e}",
+                    str(int(bool(row["correct"]))),
+                    str(int(bool(row["reordered"]))),
+                    str(int(bool(row["id_map_ok"]))),
+                    str(fields.get("positions", "")).replace(",", ";"),
+                    str(fields.get("ids", "")).replace(",", ";"),
+                    str(fields.get("cell", "")).replace(",", ";"),
+                    str(fields.get("masses", "")).replace(",", ";"),
+                    str(fields.get("fixed", "")).replace(",", ";"),
+                    str(fields.get("velocities", "")).replace(",", ";"),
+                ]
+            )
+            + "\n"
+        )
+    destination.write_text("".join(lines), encoding="utf-8")
+    print(f"wrote {destination}", flush=True)
+
+
+def self_check() -> None:
+    """Run every arm on four atoms. readcon's own rows must be correct."""
+    global N_ATOMS, WORK, RESULTS, _GEOM, _CACHE
+    import tempfile
+
+    saved = (N_ATOMS, WORK, RESULTS, _GEOM)
+    tmp = Path(tempfile.mkdtemp(prefix="samefmt-"))
+    N_ATOMS = 4
+    WORK = tmp / "work"
+    RESULTS = tmp / "results"
+    _GEOM = None
+    _CACHE = {}
+    try:
+        prepare()
+        failed = []
+        for arm in ARMS:
+            row = run(arm)
+            if arm.startswith("readcon-") and not row["correct"]:
+                failed.append((arm, row["reason"]))
+        if failed:
+            raise SystemExit(f"readcon fidelity failed: {failed}")
+        print("self-check ok", flush=True)
+    finally:
+        N_ATOMS, WORK, RESULTS, _GEOM = saved
+        _CACHE = {}
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: samefmt.py prepare|report|self-check|ARM")
+    command = sys.argv[1]
+    if command == "prepare":
+        prepare()
+        return
+    if command == "report":
+        write_report()
+        return
+    if command == "self-check":
+        self_check()
+        return
+    if command == "all":
+        prepare()
+        for arm in ARMS:
+            run(arm)
+        write_report()
+        return
+    run(command)
+
+
+if __name__ == "__main__":
+    main()

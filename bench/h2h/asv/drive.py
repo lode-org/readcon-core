@@ -42,6 +42,19 @@ def main() -> None:
     if arm == "report":
         measure.write_report()
         return
+    if arm == "samefmt":
+        import samefmt
+
+        if len(sys.argv) < 3:
+            raise SystemExit("missing samefmt arm")
+        command = sys.argv[2]
+        if command == "prepare":
+            samefmt.prepare()
+        elif command == "report":
+            samefmt.write_report()
+        else:
+            samefmt.run(command)
+        return
     runners = {
         "readcon_c": measure.run_readcon_c,
         "readcon_fortran": measure.run_readcon_fortran,

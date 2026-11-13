@@ -1,0 +1,40 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt eon-convel-roundtrip
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 8.819595958
+sample 9.099262105
+sample 9.120401603
+sample 9.060875890
+sample 9.044260761
+sample 9.186786323
+median_s 9.080068997
+q25_s 9.048414543
+q75_s 9.115116728
+iqr_s 0.066702185
+n_atoms 1000000
+n_frames 1
+field positions max_abs 1.000e+00
+field ids mismatch
+field cell ok
+field masses ok
+field fixed mismatch
+field velocities max_abs 5.000e-01
+id_map_ok 1
+reordered 1
+correct 0
+reason positions max abs 1.000e+00; ids mismatch; fixed mismatch; velocities max abs 5.000e-01
+{"samples": [8.819595957999809, 9.09926210499998, 9.120401602999664, 9.060875889999807, 9.04426076099935, 9.186786322999978], "n": 6, "median_s": 9.080068997499893, "q25_s": 9.048414543249464, "q75_s": 9.115116728499743, "iqr_s": 0.06670218525027849, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 1.000e+00", "ids": "mismatch", "cell": "ok", "masses": "ok", "fixed": "mismatch", "velocities": "max_abs 5.000e-01"}, "file_fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": true, "correct": false, "reason": "positions max abs 1.000e+00; ids mismatch; fixed mismatch; velocities max abs 5.000e-01", "arm": "eon-convel-roundtrip", "tool": "eon", "format": "convel", "operation": "roundtrip", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.convel"}
+exit 0

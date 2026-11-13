@@ -1,0 +1,39 @@
+tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities
+readcon,con,read,1000000,1,6,7.477347450e-02,3.140386500e-03,7.449240300e-02,7.763278950e-02,1,0,1,ok,ok,ok,ok,ok,not_in_format
+readcon,con,write,1000000,1,6,1.787659530e-01,1.256988300e-02,1.714322265e-01,1.840021095e-01,1,0,1,ok,ok,ok,ok,ok,not_in_format
+readcon,con,roundtrip,1000000,1,6,2.475854905e-01,8.298283499e-03,2.457039063e-01,2.540021897e-01,1,0,1,ok,ok,ok,ok,ok,not_in_format
+ase,con,read,1000000,1,6,1.440979222e+00,1.122900675e-02,1.432135028e+00,1.443364035e+00,0,0,0,ok,missing,ok,ok,mismatch,not_in_format
+ase,con,write,1000000,1,6,2.669192792e+00,5.474950650e-02,2.648974744e+00,2.703724250e+00,0,0,0,ok,mismatch,ok,ok,mismatch,not_in_format
+ase,con,roundtrip,1000000,1,6,4.382866295e+00,8.293957175e-02,4.318717697e+00,4.401657269e+00,0,0,0,ok,missing,ok,ok,mismatch,not_in_format
+eon,con,read,1000000,1,6,3.454768421e+00,6.894531675e-02,3.442778475e+00,3.511723792e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,not_in_format
+eon,con,write,1000000,1,6,5.012217919e+00,2.434609525e-02,5.000666237e+00,5.025012332e+00,1,0,1,ok,ok,ok,ok,ok,not_in_format
+eon,con,roundtrip,1000000,1,6,8.521313343e+00,1.459752443e-01,8.470614566e+00,8.616589811e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,not_in_format
+readcon,convel,read,1000000,1,6,1.404686140e-01,1.307568000e-02,1.314112240e-01,1.444869040e-01,1,0,1,ok,ok,ok,ok,ok,ok
+readcon,convel,write,1000000,1,6,3.123239525e-01,1.649545775e-02,2.994508952e-01,3.159463530e-01,1,0,1,ok,ok,ok,ok,ok,ok
+readcon,convel,roundtrip,1000000,1,6,4.363650240e-01,1.269211350e-02,4.275448575e-01,4.402369710e-01,1,0,1,ok,ok,ok,ok,ok,ok
+eon,convel,read,1000000,1,6,3.573558194e+00,5.188840475e-02,3.552164454e+00,3.604052859e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,max_abs 5.000e-01
+eon,convel,write,1000000,1,6,4.934210163e+00,2.454161175e-02,4.929449845e+00,4.953991457e+00,1,0,1,ok,ok,ok,ok,ok,ok
+eon,convel,roundtrip,1000000,1,6,9.080068997e+00,6.670218525e-02,9.048414543e+00,9.115116728e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,max_abs 5.000e-01
+readcon,extxyz,read,1000000,1,6,3.559905005e-01,3.067731000e-02,3.446581745e-01,3.753354845e-01,1,0,1,ok,ok,ok,ok,ok,ok
+readcon,extxyz,write,1000000,1,6,6.292483275e-01,4.229865000e-03,6.261960487e-01,6.304259137e-01,1,0,1,ok,ok,ok,ok,ok,ok
+readcon,extxyz,roundtrip,1000000,1,6,9.475375045e-01,2.548932125e-02,9.373754130e-01,9.628647342e-01,1,0,1,ok,ok,ok,ok,ok,ok
+ase,extxyz,read,1000000,1,6,1.942319957e+00,4.946593050e-02,1.921164668e+00,1.970630598e+00,1,0,1,ok,ok,ok,ok,ok,ok
+ase,extxyz,write,1000000,1,6,4.962183033e+00,1.334345857e-01,4.912002269e+00,5.045436855e+00,1,0,1,ok,ok,ok,ok,ok,ok
+ase,extxyz,roundtrip,1000000,1,6,7.048511250e+00,9.572371850e-02,7.038227275e+00,7.133950994e+00,1,0,1,ok,ok,ok,ok,ok,ok
+chemfiles,extxyz,read,1000000,1,6,5.706137535e-01,2.924674525e-02,5.625648445e-01,5.918115898e-01,1,0,1,ok,ok,ok,ok,ok,ok
+chemfiles,extxyz,write,1000000,1,6,1.004923098e+00,1.026183750e-03,1.004296340e+00,1.005322524e+00,1,0,1,ok,ok,ok,ok,ok,ok
+chemfiles,extxyz,roundtrip,1000000,1,6,1.555356944e+00,2.819854425e-02,1.551628428e+00,1.579826972e+00,1,0,1,ok,ok,ok,ok,ok,ok
+ovito,extxyz,read,1000000,1,6,1.873805590e-01,1.591541400e-02,1.863913540e-01,2.023067680e-01,1,0,1,ok,ok,ok,ok,ok,ok
+ovito,extxyz,write,1000000,1,6,7.530067520e-01,2.213237925e-02,7.428714627e-01,7.650038420e-01,1,0,1,ok,ok,ok,ok,ok,ok
+ovito,extxyz,roundtrip,1000000,1,6,9.678689835e-01,3.017685975e-02,9.534165540e-01,9.835934137e-01,1,0,1,ok,ok,ok,ok,ok,ok
+readcon,pdb,read,1000000,1,6,9.561445350e-02,1.007888825e-02,9.452689025e-02,1.046057785e-01,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+ase,pdb,read,1000000,1,6,3.919922671e+00,4.323428450e-02,3.897293721e+00,3.940528006e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+ase,pdb,write,1000000,1,6,1.875199931e+00,6.265917000e-01,1.844809075e+00,2.471400775e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+ase,pdb,roundtrip,1000000,1,6,5.836760127e+00,1.530792803e-01,5.750388974e+00,5.903468254e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+chemfiles,pdb,read,1000000,1,6,4.406611240e-01,1.099462250e-02,4.376062237e-01,4.486008463e-01,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+chemfiles,pdb,write,1000000,1,6,4.722316200e+02,4.783949668e+00,4.705084584e+02,4.752924081e+02,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+chemfiles,pdb,roundtrip,1000000,1,6,4.643514733e+02,1.002737996e+01,4.595542578e+02,4.695816377e+02,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+mdanalysis,pdb,read,1000000,1,6,7.216137589e+00,1.432255935e-01,7.107754187e+00,7.250979781e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+mdanalysis,pdb,write,1000000,1,6,5.103919264e+00,4.416505175e-02,5.073957340e+00,5.118122391e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+mdanalysis,pdb,roundtrip,1000000,1,6,1.311507044e+01,4.727861792e-01,1.284468574e+01,1.331747192e+01,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format
+ovito,pdb,read,1000000,1,6,1.144962712e+00,2.003659500e-02,1.136051887e+00,1.156088482e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format

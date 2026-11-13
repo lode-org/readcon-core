@@ -1,0 +1,40 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt chemfiles-extxyz-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.533779986
+sample 0.847549296
+sample 0.572999912
+sample 0.598082149
+sample 0.560677261
+sample 0.568227595
+median_s 0.570613754
+q25_s 0.562564845
+q75_s 0.591811590
+iqr_s 0.029246745
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids ok
+field cell ok
+field masses ok
+field fixed ok
+field velocities ok
+id_map_ok 1
+reordered 0
+correct 1
+reason ok
+{"samples": [0.5337799859998995, 0.84754929599967, 0.5729999120003413, 0.5980821490002199, 0.5606772609999098, 0.5682275950002804], "n": 6, "median_s": 0.5706137535003108, "q25_s": 0.5625648445000024, "q75_s": 0.5918115897502503, "iqr_s": 0.02924674525024784, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "chemfiles-extxyz-read", "tool": "chemfiles", "format": "extxyz", "operation": "read", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz"}
+exit 0

@@ -553,9 +553,71 @@ rule h2h_report:
         """
 
 
+# Same-format pairs. One rule per reader or writer that handles a format
+# readcon itself reads or writes. The arm list lives in bench/h2h/samefmt.py.
+
+_samefmt_spec = importlib.util.spec_from_file_location(
+    "samefmt_arms",
+    str(Path("bench/h2h/samefmt.py").resolve()),
+)
+samefmt_arms = importlib.util.module_from_spec(_samefmt_spec)
+_samefmt_spec.loader.exec_module(samefmt_arms)
+SAMEFMT_ARMS = list(samefmt_arms.ARMS)
+
+
+rule h2h_samefmt_prepare:
+    output:
+        touch("bench/h2h/work/samefmt/prepare.ok"),
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+        taskset -c 0 python bench/h2h/asv/drive.py samefmt prepare
+        touch bench/h2h/work/samefmt/prepare.ok
+        """
+
+
+def _samefmt_rule(arm):
+    # The arm is a parameter of this function. A loop variable would still
+    # be the last value when Snakemake runs the shell.
+    command = (
+        "set -euo pipefail\n"
+        "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1\n"
+        "mkdir -p bench/h2h/results/samefmt\n"
+        f"taskset -c 0 python bench/h2h/asv/drive.py samefmt {arm}\n"
+    )
+
+    rule:
+        name:
+            f"h2h_same_{arm.replace('-', '_')}"
+        input:
+            "bench/h2h/work/samefmt/prepare.ok",
+        output:
+            f"bench/h2h/results/samefmt/{arm}.stdout",
+        shell:
+            command
+
+
+for _arm in SAMEFMT_ARMS:
+    _samefmt_rule(_arm)
+
+
+rule h2h_samefmt:
+    input:
+        expand("bench/h2h/results/samefmt/{arm}.stdout", arm=SAMEFMT_ARMS),
+    output:
+        "bench/h2h/results/samefmt/summary.csv",
+    shell:
+        """
+        set -euo pipefail
+        taskset -c 0 python bench/h2h/asv/drive.py samefmt report
+        """
+
+
 rule h2h:
     input:
         "bench/h2h/results.json",
+        "bench/h2h/results/samefmt/summary.csv",
 
 
 # Fidelity round-trip and the serial timing of those same reads and writes.

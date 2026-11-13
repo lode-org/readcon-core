@@ -1,0 +1,40 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt ase-pdb-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 3.941564184
+sample 3.937419472
+sample 3.902425871
+sample 3.895583005
+sample 3.881983653
+sample 4.107004606
+median_s 3.919922671
+q25_s 3.897293721
+q75_s 3.940528006
+iqr_s 0.043234284
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids not_in_format
+field cell ok
+field masses not_in_format
+field fixed not_in_format
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 1
+reason ok
+{"samples": [3.941564183999617, 3.937419472000329, 3.90242587099965, 3.895583004999935, 3.881983653000134, 4.107004606000373], "n": 6, "median_s": 3.9199226714999895, "q25_s": 3.8972937214998638, "q75_s": 3.940528005999795, "iqr_s": 0.043234284499931164, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "arm": "ase-pdb-read", "tool": "ase", "format": "pdb", "operation": "read", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb"}
+exit 0

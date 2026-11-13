@@ -1,0 +1,40 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt readcon-convel-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.137901094
+sample 0.147216028
+sample 0.129247934
+sample 0.144970494
+sample 0.127052158
+sample 0.143036134
+median_s 0.140468614
+q25_s 0.131411224
+q75_s 0.144486904
+iqr_s 0.013075680
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids ok
+field cell ok
+field masses ok
+field fixed ok
+field velocities ok
+id_map_ok 1
+reordered 0
+correct 1
+reason ok
+{"samples": [0.13790109399997164, 0.14721602800000255, 0.12924793399997725, 0.14497049399960815, 0.1270521579999695, 0.14303613399988535], "n": 6, "median_s": 0.1404686139999285, "q25_s": 0.13141122399997585, "q75_s": 0.14448690399967745, "iqr_s": 0.013075679999701606, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "readcon-convel-read", "tool": "readcon", "format": "convel", "operation": "read", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.convel"}
+exit 0

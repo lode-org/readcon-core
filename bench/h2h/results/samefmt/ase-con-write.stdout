@@ -1,0 +1,40 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt ase-con-write
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 2.654393595
+sample 2.637965805
+sample 2.683991988
+sample 2.710301671
+sample 2.712423924
+sample 2.647168460
+median_s 2.669192792
+q25_s 2.648974744
+q75_s 2.703724250
+iqr_s 0.054749506
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids mismatch
+field cell ok
+field masses ok
+field fixed mismatch
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 0
+reason ids mismatch; fixed mismatch
+{"samples": [2.654393595000329, 2.6379658050000216, 2.6839919880003436, 2.7103016709997974, 2.712423924000177, 2.6471684600001026], "n": 6, "median_s": 2.669192791500336, "q25_s": 2.648974743750159, "q75_s": 2.703724250249934, "iqr_s": 0.054749506499774725, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "mismatch", "cell": "ok", "masses": "ok", "fixed": "mismatch", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "ids mismatch; fixed mismatch", "source": "file", "arm": "ase-con-write", "tool": "ase", "format": "con", "operation": "write", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.con"}
+exit 0
