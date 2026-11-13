@@ -1009,7 +1009,7 @@ On one CON frame of $10^{6}$ atoms Python takes \SI{0.0453}{\second}, Rust \SI{0
 ASE's eon reader takes \SI{1.59}{\second} and eOn \texttt{loadcons} takes \SI{3.15}{\second}.
 The Rust resident set on that frame is \SI{41.7}{\mebi\byte} above the file size.
 \texttt{rkr\_read\_positions} reads coordinates and returns arrays.
-C \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on all three files (Table~\ref{tab:c-positions}).
+C \texttt{rkr\_read\_positions} is outside 1\% of Rust \texttt{read\_positions} on the \num{100000}-frame file and inside 1\% on the convel file and the million-atom frame (Table~\ref{tab:c-positions}).
 On the copper extended XYZ file readcon takes \SI{0.301}{\second}, chemfiles \SI{1.52}{\second}, OVITO \SI{3.32}{\second}, ASE \SI{9.97}{\second} and pymatgen \SI{23.6}{\second}.
 
 \begin{table}[tbp]
@@ -1400,7 +1400,7 @@ On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\s
 The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
 
 chemfiles 0.10.4 and OVITO 3.17.2 read the million-atom frame in Table~\ref{tab:h2h-main}.
-On that frame OVITO is the fastest of these readers.
+On that frame readcon is faster than OVITO, chemfiles and ASE.
 
 \subsection{Trajectory XYZ}
 \label{sec:trajxyz}
@@ -1579,6 +1579,13 @@ The medians are the type-7 median of six samples after one warmup, on the Xeon o
 Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
 \input{campaign/final/strong}
 \input{campaign/final/weak}
+
+A gzip or zstd member index is rejected when its plain length overflows the member sum, when a row span skips an atom, or when the plain length is shorter than the inflated member.
+Lengths that do not fit the file fall back to the full parser or return an error.
+Truncation, a bad count, a non-finite coordinate, a CRLF line and a missing newline are checked at one thread and at eight.
+Miri does not model file-backed mmap, \texttt{mincore}, \texttt{readahead} or \texttt{MADV\_POPULATE\_READ}, so those calls are not what the Miri run executes.
+The pread that fills a binary coordinate file runs under Miri with \texttt{-Zmiri-disable-isolation}.
+The address-sanitizer build sets \texttt{asan\_run} and links the system allocator, because mimalloc's \texttt{mi\_free} ignores the size Rust passes.
 
 \begin{figure}[tbp]
 \centering
