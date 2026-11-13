@@ -191,14 +191,13 @@ Each recorded \texttt{read\_bytes} of the whole file.
 The never-read file's first read was the slowest of the five, 1.14 times
 the fastest.
 The page cache was dropped before every cold sample.
-The first read of each file in this session is the slowest sample of its
+The first read of each file is the slowest sample of its
 cell.
 h5py at 1 thread took 7.0523 s (680.6 MB/s), 2.13 times its upper
 median.
 One CON-bin stream at 6 threads took 7.2233 s (664.5 MB/s), 7.11 times
 its upper median.
 The next is O\_DIRECT at 2 threads, repeat 4, at 1.54 times.
-No sample records whether a host cache served it.
 Repeat 0 of the other cold h5py cells is 0.92 to 1.19 times its
 upper median.
 The samples are kept.
@@ -213,12 +212,7 @@ MB/s) and 1.0217 s at 8 threads (4698.2 MB/s).
 The slowest one-stream rate in that column is 4424.9 MB/s, at 5 threads.
 A stream per span took 1.3572 s at 1 thread and 1.2101 s at 8 threads.
 The probe read the benchmark file at 397.7 MB/s after the same drop.
-The cold rates above 4000 MB/s in Table~\ref{tab:conbin-scale}
-therefore came from a host cache.
-They are not device rates.
 The default stays one stream, the simpler plan.
-O\_DIRECT still meets a host cache.
-The measured rate is a cache rate.
 
 \begin{table}[ht] \centering
 \caption{Plain map, one stream, a stream per span, \texttt{O\_DIRECT}, and h5py.

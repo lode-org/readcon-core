@@ -274,7 +274,7 @@ def timing(theme) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels(
         [CON_LABELS.get(name, name) for name in order],
-        fontsize=7,
+        fontsize=8,
         rotation=30,
         ha="right",
     )
@@ -354,7 +354,7 @@ def matrix(theme) -> None:
         linewidth=0.3,
     )
     ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=6)
+    ax.set_yticklabels(labels, fontsize=8)
     ax.set_xlabel("displacement present (bar) or absent (short bar)")
     ax.set_xlim(0, 1.15)
     pf._theme_axes([ax], theme)

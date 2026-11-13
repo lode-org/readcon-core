@@ -1,0 +1,25 @@
+readcon-core 0.22.0
+one core, one warmup discarded, six samples, type-7 median
+
+gzip and zstd reads, seconds
+Rust    100k gzip 0.397536  zstd 0.385585  1e6 gzip 0.087820  zstd 0.084584
+C       100k gzip 0.426072  zstd 0.416162  1e6 gzip 0.090188  zstd 0.086944
+C++     100k gzip 0.426860  zstd 0.415414  1e6 gzip 0.095926  zstd 0.092604
+Fortran 100k gzip 0.480329  zstd 0.445286  1e6 gzip 0.087266  zstd 0.075453
+Python  100k gzip 0.705604  zstd 0.701145  1e6 gzip 0.065087  zstd 0.060658
+
+writes of the 100000-frame file, seconds, warmup discarded
+Rust    gzip 3.853858  zstd 0.638460
+C       gzip 3.914018  zstd 0.638433
+C++     gzip 3.911208  zstd 0.636787
+Fortran gzip 3.939575  zstd 0.663401
+Python  gzip 4.045974  zstd 0.878454
+
+inflate then plain Python read of the 100000-frame gzip file: 1.066414
+ASE eon gzip 100k: 11.302724
+ASE eon gzip 1e6: 1.623403
+
+CON, 100000 frames of 32 atoms, quartile triple and fresh-process RSS MiB
+Python read_positions  0.180809 0.182983 0.184733  249.3
+Python read_con        0.534093 0.543994 0.553123  790.5
+ASE eon                10.837755 10.849183 10.864002  378.0

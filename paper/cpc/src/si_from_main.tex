@@ -4,21 +4,7 @@
 Figure~\ref{fig:structures} of the main text draws the survey slab, CuH\(_2\) and the EMT hop.
 
 \subsection{The Claisen drawings with atom ids}
-Figure~\ref{fig:claisen-struct-ids} of the main text draws the chair and the separated image.
-
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/claisen_band.pdf}
-\caption{Final bands for allyl vinyl ether to pent-4-enal.
-Energy of each image above the reactant, on one reaction coordinate.
-Circles follow the chemical correspondence carried by the atom ids.
-Squares follow the minimum-Hausdorff reassignment of the product.}
-\label{fig:claisen-band-markers}
-\end{figure}
-
-The Wiberg drawings and the two bands in the main text are rebuilt from the stored CON frames and the stored image energies by
-{\small\begin{verbatim}
-python3 -c "import make_chem_figures as m; m.main()"
-\end{verbatim}}
+Figure~\ref{fig:claisen-struct-ids} of the main text draws the chair.
 
 \subsection{Zero-copy tensor exchange}
 A caller that already has a frame should read its coordinates as a tensor.

@@ -101,7 +101,7 @@ def _save(fig, name: str, width_cm: float) -> None:
     plt.close(fig)
 
 
-def _box(ax, x, y, w, h, text, *, face, edge=BLACK, size=7.5, weight="regular"):
+def _box(ax, x, y, w, h, text, *, face, edge=BLACK, size=8, weight="regular"):
     ax.add_patch(
         FancyBboxPatch(
             (x, y),
@@ -172,7 +172,7 @@ def layout() -> None:
     h = 0.58
     gap = 0.08
     for face, text in rows:
-        _box(ax, 0.3, y - h, 8.5, h, text, face=face, size=7.5)
+        _box(ax, 0.3, y - h, 8.5, h, text, face=face, size=8)
         y -= h + gap
 
     notes = [
@@ -185,7 +185,7 @@ def layout() -> None:
     ]
     y = 8.45
     for text in notes:
-        _box(ax, 9.3, y - h, 8.1, h, text, face=GREY, size=7.5)
+        _box(ax, 9.3, y - h, 8.1, h, text, face=GREY, size=8)
         y -= h + gap
 
     _save(fig, "layout", width)
@@ -228,11 +228,11 @@ def architecture() -> None:
     centers = []
     for i, name in enumerate(names):
         x = c_x + i * (box_w + gap)
-        _box(ax, x, box_y, box_w, box_h, name, face="white", size=7)
+        _box(ax, x, box_y, box_w, box_h, name, face="white", size=8)
         centers.append(x + box_w / 2)
     py_box_w = 2.6
     py_box_x = py_x + (py_w - py_box_w) / 2
-    _box(ax, py_box_x, box_y, py_box_w, box_h, "Python", face="white", size=7)
+    _box(ax, py_box_x, box_y, py_box_w, box_h, "Python", face="white", size=8)
     for x in centers:
         _arrow(ax, x, box_y + box_h, x, c_y)
     py_center = py_box_x + py_box_w / 2
@@ -262,7 +262,7 @@ def parser() -> None:
     y = 6.55
     h = 1.25
     for i, (face, text) in enumerate(steps):
-        _box(ax, 0.3, y - h, 8.4, h, text, face=face, size=7.5)
+        _box(ax, 0.3, y - h, 8.4, h, text, face=face, size=8)
         if i < len(steps) - 1:
             _arrow(ax, 4.5, y - h, 4.5, y - h - 0.38)
         y -= h + 0.38
@@ -276,10 +276,10 @@ def parser() -> None:
         "No exponent, at most 19 digits,\nmantissa at most 2^53, power of ten in -22..22",
         face=WASH,
         edge="#1E88E5",
-        size=7.5,
+        size=8,
     )
-    _box(ax, 9.3, 3.45, 3.85, 1.15, "yes\nClinger\ninteger / 10^|e|", face=GREEN, size=7)
-    _box(ax, 13.55, 3.45, 3.9, 1.15, "no\nfast_float2\nEisel-Lemire", face="white", size=7)
+    _box(ax, 9.3, 3.45, 3.85, 1.15, "yes\nClinger\ninteger / 10^|e|", face=GREEN, size=8)
+    _box(ax, 13.55, 3.45, 3.9, 1.15, "no\nfast_float2\nEisel-Lemire", face="white", size=8)
     _box(
         ax,
         9.3,
@@ -288,7 +288,7 @@ def parser() -> None:
         1.15,
         "Nearest binary64, ties to even.\nReject a non-finite value.",
         face=ORANGE,
-        size=7.5,
+        size=8,
     )
     _arrow(ax, 11.22, 5.35, 11.22, 4.6)
     _arrow(ax, 15.5, 5.35, 15.5, 4.6)
@@ -354,10 +354,10 @@ def _panel(ax, keys, labels, colors, hatches, ylabel):
 XYZ_READ = {
     "million": {
         "rust": (0.2868497115, 0.2766002985, 0.29475368925),
-        "python": (0.4190754730, 0.3941091440, 0.4323542325),
-        "ase": (1.9093637970, 1.8171037457, 2.0362047050),
-        "cextxyz": (0.2746891725, 0.2577884180, 0.2871632380),
-        "extxyz": (0.2605849290, 0.2414517785, 0.2671215115),
+        "python": (0.2306057530, 0.2143968758, 0.2671770980),
+        "ase": (1.5618656810, 1.5322638923, 1.8698784060),
+        "cextxyz": (0.2076011080, 0.1776593205, 0.2286950023),
+        "extxyz": (1.8433891200, 1.7894871130, 2.3427704982),
     },
     "frames": {
         "rust": (0.2942440815, 0.2922807927, 0.2963004235),
@@ -379,30 +379,32 @@ CON_READ = [
 
 
 def timings() -> None:
-    """Extended XYZ reads. cextxyz and extxyz 0.4.6 undercut readcon on one large frame."""
+    """Extended XYZ reads. The million-atom panel is read_extxyz and the peers."""
     use_latin_modern()
     keys = ["rust", "python", "ase", "cextxyz", "extxyz"]
     labels = ["readcon Rust", "readcon Python", "ASE extxyz", "cextxyz", "extxyz 0.4.6"]
     colors = [TEAL, SKY, MAGENTA, CORAL, SUN]
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.8 / 2.54))
-    for ax, size, title in (
-        (axes[0], "million", r"$10^{6}$ atoms, one frame"),
-        (axes[1], "frames", "100 atoms, 10 000 frames"),
-    ):
-        med = [XYZ_READ[size][k][0] for k in keys]
+    panels = (
+        (axes[0], "million", r"$10^{6}$ atoms, one frame", ["python", "ase", "cextxyz", "extxyz"]),
+        (axes[1], "frames", "100 atoms, 10 000 frames", keys),
+    )
+    for ax, size, title, use in panels:
+        med = [XYZ_READ[size][k][0] for k in use]
         err = np.array(
             [
-                [XYZ_READ[size][k][0] - XYZ_READ[size][k][1] for k in keys],
-                [XYZ_READ[size][k][2] - XYZ_READ[size][k][0] for k in keys],
+                [XYZ_READ[size][k][0] - XYZ_READ[size][k][1] for k in use],
+                [XYZ_READ[size][k][2] - XYZ_READ[size][k][0] for k in use],
             ]
         )
-        x = np.arange(len(keys))
-        ax.bar(x, med, color=colors, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
+        x = np.arange(len(use))
+        used_colors = [colors[keys.index(k)] for k in use]
+        ax.bar(x, med, color=used_colors, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
         ax.errorbar(
             x, med, yerr=err, fmt="none", ecolor=BLACK,
             elinewidth=0.6, capsize=2, capthick=0.6, zorder=4,
         )
-        ax.set_xticks(x, labels, rotation=18, ha="right")
+        ax.set_xticks(x, [labels[keys.index(k)] for k in use], rotation=18, ha="right", fontsize=8)
         ax.set_ylabel("median read time (s)")
         ax.set_title(title, fontsize=8, loc="left")
         ax.spines["top"].set_visible(False)
@@ -410,13 +412,13 @@ def timings() -> None:
         ax.set_axisbelow(True)
         ax.yaxis.grid(True, which="major", linewidth=0.3, color="#DDDDDD")
         if size == "million":
-            for i, key in enumerate(keys):
+            for i, key in enumerate(use):
                 if key == "ase":
                     continue
                 top = XYZ_READ[size][key][2]
                 ax.text(
                     i, top + 0.05, f"{XYZ_READ[size][key][0]:.3f}",
-                    ha="center", va="bottom", fontsize=6.5,
+                    ha="center", va="bottom", fontsize=8,
                 )
     fig.tight_layout(pad=0.45)
     _save(fig, "timings", DOUBLE_CM)
@@ -442,7 +444,7 @@ def conread() -> None:
         x, med, yerr=err, fmt="none", ecolor=BLACK,
         elinewidth=0.6, capsize=2.5, capthick=0.6, zorder=4,
     )
-    ax.set_xticks(x, [row[0] for row in CON_READ], fontsize=6.5, rotation=18, ha="right")
+    ax.set_xticks(x, [row[0] for row in CON_READ], fontsize=8, rotation=18, ha="right")
     ax.set_ylabel("median read time (s)")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -500,7 +502,7 @@ def fastpath() -> None:
             f"{ratio_eisel:.2f}×  /  {ratio_eon:.2f}×",
             ha="center",
             va="bottom",
-            fontsize=7,
+            fontsize=8,
         )
     fig.tight_layout(pad=0.45)
     _save(fig, "fastpath", DOUBLE_CM)
@@ -570,7 +572,7 @@ def pywrite() -> None:
     ax = axes[0]
     x = np.arange(len(writes))
     ax.bar(x, [v for _, v in writes], color=TEAL, edgecolor=BLACK, linewidth=0.4, width=0.72, zorder=3)
-    ax.set_xticks(x, [name for name, _ in writes], fontsize=7)
+    ax.set_xticks(x, [name for name, _ in writes], fontsize=8)
     ax.set_ylabel("median write time (s)")
     ax.set_ylim(0, 0.9)
     ax.set_title("Python compressed write", fontsize=8, loc="left")
@@ -834,7 +836,7 @@ def claisen() -> None:
                 f"{symbols[k]}{int(ids[k])}",
                 ha="center",
                 va="center",
-                fontsize=7,
+                fontsize=8,
                 color=BLACK,
                 zorder=5,
             )

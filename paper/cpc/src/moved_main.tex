@@ -341,34 +341,8 @@ readcon.write_con("band.con", frames)
 
 
 \section{Claisen drawings}\label{sec:supp-claisen-draw}
-These are the drawings cited from Section~\ref{sec:claisen}. Figure~\ref{fig:claisen-land} stays in the main text.
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/claisen_wbo.pdf}
-\caption{Allyl vinyl ether, the identity-path chair, pent-4-enal, and the highest image of the renumbered band.
-Atom colours are the Ruhi palette.
-Bond colour and width follow the GFN2-xTB Wiberg bond order, on the scale in the key, and a bond of order below one half is dotted
-\cite{wibergApplicationPople1968,bannwarthExtendedTightbindingQuantum2021}.
-The drawings are xyzrender
-\cite{goodfellowGraphbasedInternalCoordinate2026}.
-On the chair the forming C5--C0 contact is the dotted bond, and the breaking C2--O is weakened.
-The labelled atoms are C0, C1, C2, C5 and O.
-The renumbered image has separated into C0--C1--C2\({=}\)O and C4--C5.}
-\label{fig:claisen-struct}
-\end{figure}
-
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/claisen_neb.pdf}
-\caption{Final bands for allyl vinyl ether to pent-4-enal.
-Energy of each image above the reactant, joined in path order.
-The chemical map follows the atom ids.
-The Hausdorff reassignment follows the minimum-Hausdorff permutation of the product.
-Each label is the barrier of that band, the highest image above the reactant.
-The profiles are drawn with chemparseplot
-\cite{goswamiChemparseplot2026}.}
-\label{fig:claisen-band}
-\end{figure}
+Figure~\ref{fig:claisen-land} and Figure~\ref{fig:claisen-struct-ids} of the main text are the stationary points.
+Section~\ref{sec:claisen} gives the distances and the band that does not stay on the chair.
 
 
 \section{Restart tables}\label{sec:supp-restart-tables}
@@ -659,9 +633,9 @@ Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on t
 The shorter distance pairs the wrong nuclei for the [3,3] shift.
 A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(-81.439\,\mathrm{eV}\) on the identity product: the same molecule, rigidly moved, so the endpoints are equivalent and only the labelling differs.
 
-This session runs that labelling in eOn 3.6.0 built against readcon-core 0.22.0, with sixteen images between the endpoints, a maximum step of \(0.05\,\text{\AA}\) and a cap of 2000 iterations
-\cite{smidstrupImprovedInitialGuess2014}.
-After 2000 iterations the highest image is 0.376~eV above the reactant and the largest projected force is \(2.29\,\mathrm{eV}/\text{\AA}\), so the band does not meet \(0.05\,\mathrm{eV}/\text{\AA}\).
+The product file with a different nucleus in each slot is not the map of the ether.
+The carbonyl in that file is O3--C2.
+The same permutation on the ether and on the aldehyde restores the chair of Section~\ref{sec:claisen}.
 The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
 
 \section{Water quench}\label{sec:supp-water-protocol}
@@ -778,13 +752,10 @@ A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\math
 The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
-This session's id-matched band, eOn 3.6.0 built against readcon-core 0.22.0 and PET-MAD 1.1.0, has ten images.
-It converges after 498 iterations and 1170 force calls, at 0.163~eV, with a climbing-image force of \(0.0256\,\mathrm{eV}/\text{\AA}\).
-
-IRA reassigns the same product by the minimum-Hausdorff permutation (Section~\ref{sec:supp-claisen-protocol}).
-The shorter distance pairs the wrong nuclei, and that band does not meet the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
-Its highest image in this session lies at 0.376~eV, and the band force is \(2.29\,\mathrm{eV}/\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
-Figure~\ref{fig:claisen-land} shows the image energies of both bands.
+The chair geometry is a first-order saddle on PET-MAD 1.1.0, 0.627~eV above the relaxed ether, with one imaginary mode at \(542.5\,\mathrm{cm}^{-1}\).
+Figure~\ref{fig:claisen-land} is those three stationary points.
+A shared permutation leaves them unchanged (Figure~\ref{fig:claisen-struct-ids}).
+The eOn band seeded through the chair does not remain there (Section~\ref{sec:claisen}).
 
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
@@ -798,8 +769,7 @@ The same test requires the file-slot step of that image to exceed 1.5~\text{\AA}
 Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
 Frame indices count from zero, so frame 2 is the third image.
 
-The chair, the separated renumbered image and the two final bands are Figures~\ref{fig:claisen-struct} and~\ref{fig:claisen-band} (Section~\ref{sec:supp-claisen-draw}).
-The plane of reaction progress and orthogonal deviation is Figure~\ref{fig:claisen-land}.
+The chair is Figure~\ref{fig:claisen-struct-ids}.
 
 
 

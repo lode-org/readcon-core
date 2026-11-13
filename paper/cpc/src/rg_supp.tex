@@ -438,7 +438,9 @@ Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 20.0" Pro
 \end{lstlisting}
 and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0 T T T 3} and \texttt{Pt 1.3859292911256331 1.3859292911256331 7.8 F F T 41}.
 The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, print the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
-The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.16.1, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.10.0 and Open Babel 3.2.1.
+The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.17.2, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.11.0 and Open Babel 3.2.1.
+The timed reads use that set.
+A drift cell that names OVITO 3.16.1 or MDAnalysis 2.10.0 was not repeated on it.
 On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals.
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
@@ -790,7 +792,9 @@ The heap in Table~\ref{tab:heap} is the massif increase, in mebibytes, for the w
 \begin{table}[htbp]
 \centering
 \footnotesize
-\caption{Median extended XYZ read time, in seconds.}
+\caption{Median extended XYZ read time, in seconds.
+The $10^{6}$-atom row is Table~\ref{tab:h2h-main}.
+readcon in that table is \texttt{read\_extxyz}, so the Rust cell of that row was not repeated.}
 \label{tab:xyz}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
@@ -800,7 +804,7 @@ Atoms $\times$ frames & Rust & Python & ASE & cextxyz & extxyz 0.4.6 \\
 10 $\times$ 8 & 3.816e-5 & 5.872e-5 & 1.879e-3 & 7.391e-4 & 4.170e-4 \\
 1000 $\times$ 1 & 2.389e-4 & 3.392e-4 & 1.986e-3 & 4.023e-4 & 3.066e-4 \\
 100 $\times$ 100 & 2.597e-3 & 3.245e-3 & 0.03347 & 8.829e-3 & 6.856e-3 \\
-$10^{6}$ $\times$ 1 & 0.2868 & 0.4191 & 1.909 & 0.2747 & 0.2606 \\
+$10^{6}$ $\times$ 1 & -- & 0.231 & 1.56 & 0.208 & 1.84 \\
 100 $\times$ 10000 & 0.2942 & 0.4543 & 3.411 & 0.9368 & 0.7399 \\
 \bottomrule
 \end{tabular}
@@ -809,21 +813,23 @@ $10^{6}$ $\times$ 1 & 0.2868 & 0.4191 & 1.909 & 0.2747 & 0.2606 \\
 \begin{table}[htbp]
 \centering
 \footnotesize
-\caption{Quartiles of the two large extended XYZ reads, in seconds.}
+\caption{Quartiles of the two large extended XYZ reads, in seconds.
+The $10^{6}$-atom triples are the run of Table~\ref{tab:h2h-main}, and the Rust cell of that file was not repeated.
+The 10000-frame triples were not part of that run.}
 \label{tab:xyzq}
 \begin{tabular}{@{}llrr@{}}
 \toprule
 Reader & File & First, median, third \\
 \midrule
-Rust & $10^{6}$ & 0.2766, 0.2868, 0.2948 \\
+Rust & $10^{6}$ & -- \\
 Rust & 10000 frames & 0.2923, 0.2942, 0.2963 \\
-Python & $10^{6}$ & 0.3941, 0.4191, 0.4324 \\
+Python & $10^{6}$ & 0.214, 0.231, 0.267 \\
 Python & 10000 frames & 0.4453, 0.4543, 0.4599 \\
-ASE extxyz & $10^{6}$ & 1.817, 1.909, 2.036 \\
+ASE extxyz & $10^{6}$ & 1.53, 1.56, 1.87 \\
 ASE extxyz & 10000 frames & 3.384, 3.411, 3.446 \\
-cextxyz & $10^{6}$ & 0.2578, 0.2747, 0.2872 \\
+cextxyz & $10^{6}$ & 0.178, 0.208, 0.229 \\
 cextxyz & 10000 frames & 0.9068, 0.9368, 0.9753 \\
-extxyz 0.4.6 & $10^{6}$ & 0.2415, 0.2606, 0.2671 \\
+extxyz 0.4.6 & $10^{6}$ & 1.79, 1.84, 2.34 \\
 extxyz 0.4.6 & 10000 frames & 0.7251, 0.7399, 0.7491 \\
 \bottomrule
 \end{tabular}
@@ -892,7 +898,7 @@ eOn, streaming & \multicolumn{2}{p{0.70\linewidth}}{9.71~s. Final RSS $+1.9$~MiB
 \section{chemfiles and OVITO}
 \label{sec:copper}
 Both readers, chemfiles 0.10.4 and OVITO 3.17.2, open the copper extended XYZ files and do not open CON.
-The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.11.0-rc1 still have no CON reader.
+The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.10.4 have no CON reader.
 Table~\ref{tab:copper} is the median read time in seconds.
 
 \begin{table}[htbp]
@@ -1152,8 +1158,7 @@ OVITO 3.17.2 returns the same periodicities and does not expose those
 momenta as velocities.
 On the copper-grid extended XYZ files, chemfiles 0.10.4 opened as XYZ
 and OVITO 3.17.2 both match the positions.
-On the million-atom copper-grid frame OVITO reads in 0.150~s and readcon in 0.287~s.
-That file is the copper grid of the extended XYZ timings, not the extended XYZ file of the one-core reads.
+On the million-atom frame of Table~\ref{tab:h2h-main}, OVITO reads in 0.0881~s and readcon in 0.231~s.
 On the 10000-frame file OVITO takes 0.657~s and readcon 0.294~s.
 The massif peaks on that file are 54.0~MiB for chemfiles 0.10.4 and 60.9~MiB for OVITO 3.17.2.
 
@@ -1210,12 +1215,8 @@ Their heap increases on the million-atom file are 115.4, 171.6 and
 extxyz-ng 0.0.2 agrees on the 10-atom files.
 It reads a 230-atom frame of 8168 bytes and rejects a 231-atom frame
 of 8203 bytes, so it does not read the medium or large files.
-On the million-atom file ASE \texttt{extxyz} takes 1.91~s, ASE
-\texttt{cextxyz} takes 0.275~s, extxyz 0.4.6 takes 0.261~s, the
-readcon Python reader takes 0.419~s, and the readcon Rust reader
-takes 0.287~s.
-The massif heap peaks on that file are 211.5, 189.1, 153.7, 224.3 and
-210.9~MiB.
+On the million-atom file the read times are Table~\ref{tab:h2h-main}.
+The massif heap was not repeated with that table.
 On the 10000-frame file the same five medians are 3.41, 0.937,
 0.740, 0.454 and 0.294~s.
 extxyz-ng 0.0.2 writes the 10-atom frame in \(1.03\times 10^{-4}\)~s.
@@ -1224,28 +1225,28 @@ that reader rejects.
 \texttt{write\_frames} rejects a Python iterator of frames, so the
 timed write calls \texttt{write\_frame} once per frame.
 \begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
+\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. The \(10^{6}\)-atom medians and interquartile ranges are Table~\ref{tab:h2h-main}; readcon there is \texttt{read\_extxyz}, so the Rust cell is blank, and the resident set was not repeated. The 10000-frame rows were not part of that run. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
 \label{tab:extxyz-h2h}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
 Reader & File & Median (s) & IQR (s) & RSS (MiB) & Massif (MiB) \\
 \midrule
-readcon Rust & \(10^{6}\) atoms & 0.287 & 0.0182 & 244.3 & 210.9 \\
+readcon Rust & \(10^{6}\) atoms & -- & -- & -- & -- \\
 readcon Rust & 10000 frames & 0.294 & 0.00402 & 243.6 & 210.2 \\
-readcon Python & \(10^{6}\) atoms & 0.419 & 0.0382 & 385.6 & 224.3 \\
+readcon Python & \(10^{6}\) atoms & 0.231 & 0.0528 & -- & -- \\
 readcon Python & 10000 frames & 0.454 & 0.0145 & 403.4 & 218.3 \\
-ASE \texttt{extxyz} & \(10^{6}\) atoms & 1.91 & 0.219 & 654.3 & 211.5 \\
+ASE \texttt{extxyz} & \(10^{6}\) atoms & 1.56 & 0.338 & -- & -- \\
 ASE \texttt{extxyz} & 10000 frames & 3.41 & 0.0622 & 320.8 & 219.0 \\
-ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.275 & 0.0294 & 249.8 & 189.1 \\
+ASE \texttt{cextxyz} & \(10^{6}\) atoms & 0.208 & 0.0510 & -- & -- \\
 ASE \texttt{cextxyz} & 10000 frames & 0.937 & 0.0685 & 237.9 & 155.1 \\
-\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 0.261 & 0.0257 & 226.7 & 153.7 \\
+\texttt{extxyz} 0.4.6 & \(10^{6}\) atoms & 1.84 & 0.553 & -- & -- \\
 \texttt{extxyz} 0.4.6 & 10000 frames & 0.740 & 0.0240 & 251.0 & 157.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range, from the same session as Table~\ref{tab:extxyz-h2h}. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
+\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range. These write rows were not repeated with the reads of Table~\ref{tab:h2h-main}. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
 \label{tab:extxyz-h2h-write}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
@@ -1289,7 +1290,6 @@ Of the four fidelity fields, CON 3.1 keeps the mask, the identifier and the bina
 \caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.22.0, returning every stored field.}
 \label{fig:fairness} \end{figure}
 
-Figure~\ref{fig:asemask} of the main text is that barrier.
 
 The ingest rate is Figure~\ref{fig:db-throughput}.
 
@@ -1378,26 +1378,24 @@ The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper
 \label{sec:xyz}
 The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 atoms.
 Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
-On the single large frame, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}.
-The Rust reader takes \SI{0.287}{\second} and the Python binding \SI{0.419}{\second}.
-On that frame ASE cextxyz takes 0.208~s, readcon 0.231~s and extxyz 0.4.6 1.84~s.
-ASE's own extxyz reader takes \SI{1.91}{\second}.
-On the \num{10000}-frame file the order changes.
-The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
+On that frame the times are Table~\ref{tab:h2h-main}: readcon 0.231~s, ASE \texttt{extxyz} 1.56~s, ASE \texttt{cextxyz} 0.208~s, extxyz 0.4.6 1.84~s, chemfiles through its XYZ format 0.205~s, OVITO 0.0881~s and MDAnalysis 4.50~s.
+On the \num{10000}-frame file, which was not part of that run, the Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
 
 \begin{table}[tbp]
 \centering
-\caption{Median extended XYZ read time in seconds.}
+\caption{Median extended XYZ read time in seconds.
+The \(10^{6}\)-atom column is Table~\ref{tab:h2h-main}.
+The 10000-frame column was not part of that run.}
 \label{tab:xyzread}
 \begin{tabular}{@{}lrr@{}}
 \toprule
 Reader & $10^{6}$ atoms & \num{10000} frames \\
 \midrule
-readcon, Rust & 0.287 & 0.294 \\
-readcon, Python & 0.419 & 0.454 \\
-ASE extxyz & 1.91 & 3.41 \\
-ASE cextxyz & 0.275 & 0.937 \\
-extxyz 0.4.6 & 0.261 & 0.740 \\
+readcon, Rust & -- & 0.294 \\
+readcon, Python & 0.231 & 0.454 \\
+ASE extxyz & 1.56 & 3.41 \\
+ASE cextxyz & 0.208 & 0.937 \\
+extxyz 0.4.6 & 1.84 & 0.740 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1408,9 +1406,9 @@ extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's ex
 On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
 The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
 
-chemfiles 0.10.4 reads the same two copper files in \SI{0.455}{\second} and \SI{0.567}{\second}.
-OVITO 3.17.2 reads them in \SI{0.150}{\second} and \SI{0.657}{\second}.
-On the million-atom frame OVITO is the fastest of these readers.
+chemfiles 0.10.4 reads the million-atom frame through its XYZ format in 0.205~s, and OVITO 3.17.2 reads it in 0.0881~s (Table~\ref{tab:h2h-main}).
+On that frame OVITO is the fastest of these readers.
+The 10000-frame times for those two readers were not repeated.
 
 \subsection{Trajectory XYZ}
 \label{sec:trajxyz}
@@ -1421,7 +1419,7 @@ The Python binding is second on each file.
 On the \num{100000}-frame file the Rust reader takes \SI{0.920}{\second} and the Python binding \SI{1.108}{\second}.
 A profile of that Python read shows no NumPy copies: \texttt{from\_owned\_array} and \texttt{memcpy} are 0.00\% of the samples.
 The remaining time is the newline and token scan the Rust reader also pays.
-MDAnalysis takes \SI{1.869}{\second} there \cite{michaudAgrawalMDAnalysisToolkit2011}, chemfiles 0.10.4 takes \SI{2.60}{\second}, chemfiles 0.11.0-rc1 takes \SI{2.24}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
+MDAnalysis takes \SI{1.869}{\second} there \cite{michaudAgrawalMDAnalysisToolkit2011}, chemfiles 0.10.4 takes \SI{2.60}{\second}, MDTraj takes \SI{2.64}{\second} and ASE \texttt{iread} takes \SI{25.6}{\second} \cite{mcgibbonMDTrajModernOpen2015}.
 Every interquartile range is under 5 percent of its median, except chemfiles 0.10.4 on the \num{100000}-frame file, where the range is \SI{0.28}{\second}.
 
 \begin{table}[tbp]
@@ -1438,7 +1436,6 @@ readcon, Rust & 0.259 & 0.276 & 0.920 \\
 readcon, Python & 0.293 (0.0055) & 0.282 (0.0062) & 1.108 (0.0030) \\
 ASE \texttt{iread} & 1.74 & 3.60 & 25.6 \\
 chemfiles 0.10.4 & 0.364 & 0.490 & 2.60 \\
-chemfiles 0.11.0-rc1 & 0.359 & 0.412 & 2.24 \\
 MDAnalysis & 2.09 & 0.520 & 1.869 \\
 MDTraj & 0.790 & 0.781 & 2.64 \\
 \bottomrule
@@ -1516,39 +1513,53 @@ readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
 \end{tabular}
 \end{table}
 
-A thermal copper trajectory, 2048 atoms and 1200 frames at \SI{306}{\kelvin} with the Heinz 12-6 potential, is the compression check.
-Shuffle followed by zstd is 2.33 times smaller than the text, and the size of gzip or zstd of that text.
-It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
-A gzip read of 10000 frames of 218 atoms takes 0.668~s, and the streaming read of that file takes 0.594~s.
-The same file as zstd takes 0.420~s, and the streaming zstd read takes 0.344~s.
-Each of those medians is type 7 over six samples after one warmup.
-The Python binding opens the \num{100000}-frame gzip file in 0.718~s.
-The Rust reader of that file, 0.412~s, is the earlier comparison.
-ASE's eon reader takes \SI{10.6}{\second}.
-Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
-On a gzip file of one frame of $10^{6}$ atoms the Rust reader takes \SI{0.100}{\second} and ASE's eon reader takes \SI{1.47}{\second}.
-ASE's xyz reader takes \SI{127}{\second} on that file and returns cell lengths of zero.
-The Rust writer emits the \num{100000}-frame file as gzip in \SI{0.561}{\second}.
-ASE's eon writer takes \SI{14.2}{\second}.
+readcon-core 0.22.0 reads the same two files as gzip and as zstd, from Rust, C, C++, Fortran and Python (Tables~\ref{tab:gzip} and~\ref{tab:zstd}).
+One warmup is discarded and the median is type 7 over six samples, on one core of the Xeon in Section~\ref{sec:compute}.
+The \num{100000}-frame file is 32 atoms per frame.
+The other file is one frame of $10^{6}$ copper atoms.
+A gzip read of the \num{100000}-frame file takes 0.398~s in Rust, 0.426~s in C, 0.427~s in C++, 0.480~s in Fortran and 0.706~s in Python.
+The same file as zstd takes 0.386~s, 0.416~s, 0.415~s, 0.445~s and 0.701~s.
+On the million-atom frame the gzip reads take 0.0878~s, 0.0902~s, 0.0959~s, 0.0873~s and 0.0651~s, and the zstd reads take 0.0846~s, 0.0869~s, 0.0926~s, 0.0755~s and 0.0607~s, in that language order.
+The write of the \num{100000}-frame file as gzip takes 3.85~s, 3.91~s, 3.91~s and 3.94~s in Rust, C, C++ and Fortran.
+The zstd write takes 0.638~s, 0.638~s, 0.637~s and 0.663~s.
+The Python write takes 4.05~s as gzip and 0.878~s as zstd.
+ASE's eon reader takes 11.3~s on the \num{100000}-frame gzip file and 1.62~s on the million-atom gzip file.
+Inflating that \num{100000}-frame gzip member and then reading the plain text from Python takes 1.07~s.
 
 \begin{table}[tbp]
 \centering
-\caption{Median time in seconds for gzip CON.
-The Python read of the \num{100000}-frame file is 0.718~s in this session.
-The other cells are an earlier comparison.
-The first two columns are reads.
-The last column is the write of the \num{100000}-frame file.
-A blank cell was not part of this comparison.}
+\caption{Median read and write time in seconds for gzip CON, readcon-core 0.22.0.
+The write is the \num{100000}-frame file.
+Six samples follow one warmup, on one core.}
 \label{tab:gzip}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
 Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
 \midrule
-readcon, Rust & 0.412 & 0.100 & 0.561 \\
-readcon, Python & 0.718 & & \\
-ASE eon & 10.6 & 1.47 & 14.2 \\
-gzip, then plain read & 0.643 & & \\
-ASE xyz & & 127 & \\
+readcon, Rust & 0.398 & 0.0878 & 3.85 \\
+readcon, C & 0.426 & 0.0902 & 3.91 \\
+readcon, C++ & 0.427 & 0.0959 & 3.91 \\
+readcon, Fortran & 0.480 & 0.0873 & 3.94 \\
+readcon, Python & 0.706 & 0.0651 & 4.05 \\
+ASE eon & 11.3 & 1.62 & \\
+gzip, then plain read & 1.07 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\caption{Median read and write time in seconds for zstd CON, on the same files and with the same protocol as Table~\ref{tab:gzip}.}
+\label{tab:zstd}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
+\midrule
+readcon, Rust & 0.386 & 0.0846 & 0.638 \\
+readcon, C & 0.416 & 0.0869 & 0.638 \\
+readcon, C++ & 0.415 & 0.0926 & 0.637 \\
+readcon, Fortran & 0.445 & 0.0755 & 0.663 \\
+readcon, Python & 0.701 & 0.0607 & 0.878 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1566,6 +1577,7 @@ The heap of that zstd write matches the Rust writer.
 \centering
 \footnotesize
 \caption{Python compressed writes.
+These rows were not repeated with Tables~\ref{tab:gzip} and~\ref{tab:zstd}.
 Time is the type-7 median in seconds.
 RSS and massif are the increase above the loaded input, in mebibytes.}
 \label{tab:pywrite}
