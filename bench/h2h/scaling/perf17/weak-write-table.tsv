@@ -1,0 +1,15 @@
+# ideal = T(1)/T(N)
+# ceiling_s = max(format_alone_s, sink_concurrent_s)
+# ceiling_fraction = ceiling_s / median_s
+# format_alone_s = weak write minus one pwrite of the bytes that write produced
+# sink_concurrent_s = N threads pwriting N frame-sized payloads at disjoint offsets
+# sink_serial_s = one thread pwriting those same bytes
+medium	workers	median_s	iqr_s	ideal	ceiling_fraction	format_alone_s	sink_concurrent_s	sink_serial_s	ceiling_s	perf14_tmpfs_median_s	perf14_ideal
+pagecache	1	0.046049	0.000945	1.000000	0.835257	0.038463	0.008055	0.008140	0.038463	0.045650	1.000000
+pagecache	2	0.060014	0.001232	0.767311	0.666165	0.039979	0.021234	0.017499	0.039979	0.059850	0.762740
+pagecache	4	0.081405	0.003739	0.565681	0.518043	0.042171	0.040107	0.038867	0.042171	0.081100	0.562885
+pagecache	8	0.126235	0.006110	0.364791	0.657825	0.043285	0.083040	0.079864	0.083040	0.123600	0.369337
+tmpfs	1	0.044881	0.001454	1.000000	0.852728	0.038272	0.006321	0.006480	0.038272	0.045650	1.000000
+tmpfs	2	0.057602	0.001391	0.779162	0.749188	0.043155	0.018582	0.015394	0.043155	0.059850	0.762740
+tmpfs	4	0.074428	0.001581	0.603019	0.532845	0.039659	0.036629	0.032684	0.039659	0.081100	0.562885
+tmpfs	8	0.113960	0.011416	0.393834	0.615426	0.044767	0.070134	0.068837	0.070134	0.123600	0.369337

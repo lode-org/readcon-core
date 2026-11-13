@@ -1,0 +1,28 @@
+perf17 on 8716ec6d196b5b42c26711b81a600e97ea6b1ac3. Same host as lscpu.txt. One warmup, six serial samples,
+numpy linear (type-7) median and IQR. The writer is unchanged.
+Page cache is ext4 (/tmp). The second ceiling is tmpfs (/dev/shm).
+Ideal efficiency is T(1)/T(N). The ceiling is max(format alone, sink(N)).
+ceiling_fraction is that ceiling divided by the weak-write median.
+Format alone is the weak write minus one pwrite of the bytes that write produced.
+sink(N) is N threads pwriting N copies of one written frame at disjoint offsets.
+sink_serial is one thread pwriting those same bytes.
+
+pagecache weak median / iqr / ideal / ceiling_fraction / format / sink
+1 0.046049 0.000945 1.000000 0.835257 0.038463 0.008055
+2 0.060014 0.001232 0.767311 0.666165 0.039979 0.021234
+4 0.081405 0.003739 0.565681 0.518043 0.042171 0.040107
+8 0.126235 0.006110 0.364791 0.657825 0.043285 0.083040
+
+tmpfs weak median / iqr / ideal / ceiling_fraction / format / sink / perf14
+1 0.044881 0.001454 1.000000 0.852728 0.038272 0.006321 0.045650
+2 0.057602 0.001391 0.779162 0.749188 0.043155 0.018582 0.059850
+4 0.074428 0.001581 0.603019 0.532845 0.039659 0.036629 0.081100
+8 0.113960 0.011416 0.393834 0.615426 0.044767 0.070134 0.123600
+
+strong tmpfs one-frame median / iqr / strong_efficiency / perf14 / within_iqr
+1 0.046697 0.002633 1.000000 0.043590 False
+2 0.021701 0.000350 1.075917 0.022890 True
+4 0.011718 0.000166 0.996270 0.013260 True
+8 0.006999 0.000604 0.833950 0.006710 True
+
+A later quiet pass of the one-thread strong write, after the campaign, was 0.048984 s (IQR 0.002215). Both campaign passes and that pass sit above the perf14 one-thread band (0.04359 + 0.00136). Threads 2, 4 and 8 are inside that band. The one-frame writer was not changed.

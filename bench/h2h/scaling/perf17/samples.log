@@ -1,0 +1,267 @@
+frame_bytes 23589082 commit 8716ec6d196b5b42c26711b81a600e97ea6b1ac3
+sink perf17-page workers=1 concurrent warmup
+sink perf17-page workers=1 concurrent sample=0 seconds=0.008166440
+sink perf17-page workers=1 concurrent sample=1 seconds=0.008130351
+sink perf17-page workers=1 concurrent sample=2 seconds=0.008129838
+sink perf17-page workers=1 concurrent sample=3 seconds=0.007843177
+sink perf17-page workers=1 concurrent sample=4 seconds=0.007980955
+sink perf17-page workers=1 concurrent sample=5 seconds=0.007948066
+sink perf17-page workers=1 serial warmup
+sink perf17-page workers=1 serial sample=0 seconds=0.009916408
+sink perf17-page workers=1 serial sample=1 seconds=0.008359944
+sink perf17-page workers=1 serial sample=2 seconds=0.008223236
+sink perf17-page workers=1 serial sample=3 seconds=0.008056964
+sink perf17-page workers=1 serial sample=4 seconds=0.007894674
+sink perf17-page workers=1 serial sample=5 seconds=0.007818811
+sink perf17 workers=1 concurrent warmup
+sink perf17 workers=1 concurrent sample=0 seconds=0.006382772
+sink perf17 workers=1 concurrent sample=1 seconds=0.006314987
+sink perf17 workers=1 concurrent sample=2 seconds=0.006321568
+sink perf17 workers=1 concurrent sample=3 seconds=0.006319710
+sink perf17 workers=1 concurrent sample=4 seconds=0.006327498
+sink perf17 workers=1 concurrent sample=5 seconds=0.006305468
+sink perf17 workers=1 serial warmup
+sink perf17 workers=1 serial sample=0 seconds=0.008658477
+sink perf17 workers=1 serial sample=1 seconds=0.006975054
+sink perf17 workers=1 serial sample=2 seconds=0.006652221
+sink perf17 workers=1 serial sample=3 seconds=0.006295446
+sink perf17 workers=1 serial sample=4 seconds=0.006307843
+sink perf17 workers=1 serial sample=5 seconds=0.006293158
+sink perf17-page workers=2 concurrent warmup
+sink perf17-page workers=2 concurrent sample=0 seconds=0.021762671
+sink perf17-page workers=2 concurrent sample=1 seconds=0.021963084
+sink perf17-page workers=2 concurrent sample=2 seconds=0.020952277
+sink perf17-page workers=2 concurrent sample=3 seconds=0.019660656
+sink perf17-page workers=2 concurrent sample=4 seconds=0.020568908
+sink perf17-page workers=2 concurrent sample=5 seconds=0.021516042
+sink perf17-page workers=2 serial warmup
+sink perf17-page workers=2 serial sample=0 seconds=0.019803291
+sink perf17-page workers=2 serial sample=1 seconds=0.018644055
+sink perf17-page workers=2 serial sample=2 seconds=0.018020958
+sink perf17-page workers=2 serial sample=3 seconds=0.016657510
+sink perf17-page workers=2 serial sample=4 seconds=0.016788113
+sink perf17-page workers=2 serial sample=5 seconds=0.016976925
+sink perf17 workers=2 concurrent warmup
+sink perf17 workers=2 concurrent sample=0 seconds=0.018971299
+sink perf17 workers=2 concurrent sample=1 seconds=0.018642818
+sink perf17 workers=2 concurrent sample=2 seconds=0.019264797
+sink perf17 workers=2 concurrent sample=3 seconds=0.018520275
+sink perf17 workers=2 concurrent sample=4 seconds=0.018455699
+sink perf17 workers=2 concurrent sample=5 seconds=0.018186985
+sink perf17 workers=2 serial warmup
+sink perf17 workers=2 serial sample=0 seconds=0.017221388
+sink perf17 workers=2 serial sample=1 seconds=0.016592588
+sink perf17 workers=2 serial sample=2 seconds=0.015187181
+sink perf17 workers=2 serial sample=3 seconds=0.014453445
+sink perf17 workers=2 serial sample=4 seconds=0.015571476
+sink perf17 workers=2 serial sample=5 seconds=0.015216630
+sink perf17-page workers=4 concurrent warmup
+sink perf17-page workers=4 concurrent sample=0 seconds=0.039976898
+sink perf17-page workers=4 concurrent sample=1 seconds=0.042999385
+sink perf17-page workers=4 concurrent sample=2 seconds=0.040176913
+sink perf17-page workers=4 concurrent sample=3 seconds=0.043527374
+sink perf17-page workers=4 concurrent sample=4 seconds=0.039929358
+sink perf17-page workers=4 concurrent sample=5 seconds=0.040038066
+sink perf17-page workers=4 serial warmup
+sink perf17-page workers=4 serial sample=0 seconds=0.041476834
+sink perf17-page workers=4 serial sample=1 seconds=0.039738539
+sink perf17-page workers=4 serial sample=2 seconds=0.039375153
+sink perf17-page workers=4 serial sample=3 seconds=0.038359465
+sink perf17-page workers=4 serial sample=4 seconds=0.037188129
+sink perf17-page workers=4 serial sample=5 seconds=0.036520897
+sink perf17 workers=4 concurrent warmup
+sink perf17 workers=4 concurrent sample=0 seconds=0.036717158
+sink perf17 workers=4 concurrent sample=1 seconds=0.036541548
+sink perf17 workers=4 concurrent sample=2 seconds=0.035942302
+sink perf17 workers=4 concurrent sample=3 seconds=0.038237637
+sink perf17 workers=4 concurrent sample=4 seconds=0.035461917
+sink perf17 workers=4 concurrent sample=5 seconds=0.038198809
+sink perf17 workers=4 serial warmup
+sink perf17 workers=4 serial sample=0 seconds=0.034873197
+sink perf17 workers=4 serial sample=1 seconds=0.033693204
+sink perf17 workers=4 serial sample=2 seconds=0.032712534
+sink perf17 workers=4 serial sample=3 seconds=0.032154869
+sink perf17 workers=4 serial sample=4 seconds=0.032059491
+sink perf17 workers=4 serial sample=5 seconds=0.032654817
+sink perf17-page workers=8 concurrent warmup
+sink perf17-page workers=8 concurrent sample=0 seconds=0.076843807
+sink perf17-page workers=8 concurrent sample=1 seconds=0.074496140
+sink perf17-page workers=8 concurrent sample=2 seconds=0.081004008
+sink perf17-page workers=8 concurrent sample=3 seconds=0.087053606
+sink perf17-page workers=8 concurrent sample=4 seconds=0.085076400
+sink perf17-page workers=8 concurrent sample=5 seconds=0.107012377
+sink perf17-page workers=8 serial warmup
+sink perf17-page workers=8 serial sample=0 seconds=0.079671025
+sink perf17-page workers=8 serial sample=1 seconds=0.078538534
+sink perf17-page workers=8 serial sample=2 seconds=0.078191927
+sink perf17-page workers=8 serial sample=3 seconds=0.080057452
+sink perf17-page workers=8 serial sample=4 seconds=0.081741451
+sink perf17-page workers=8 serial sample=5 seconds=0.080362620
+sink perf17 workers=8 concurrent warmup
+sink perf17 workers=8 concurrent sample=0 seconds=0.069257451
+sink perf17 workers=8 concurrent sample=1 seconds=0.069392297
+sink perf17 workers=8 concurrent sample=2 seconds=0.071196195
+sink perf17 workers=8 concurrent sample=3 seconds=0.070876292
+sink perf17 workers=8 concurrent sample=4 seconds=0.080660681
+sink perf17 workers=8 concurrent sample=5 seconds=0.066827686
+sink perf17 workers=8 serial warmup
+sink perf17 workers=8 serial sample=0 seconds=0.071770304
+sink perf17 workers=8 serial sample=1 seconds=0.070007310
+sink perf17 workers=8 serial sample=2 seconds=0.069287810
+sink perf17 workers=8 serial sample=3 seconds=0.067936665
+sink perf17 workers=8 serial sample=4 seconds=0.068386795
+sink perf17 workers=8 serial sample=5 seconds=0.067672787
+strong tmpfs workers=1 warmup
+strong tmpfs workers=1 sample=0 seconds=0.048073430
+strong tmpfs workers=1 sample=1 seconds=0.050710605
+strong tmpfs workers=1 sample=2 seconds=0.049833387
+strong tmpfs workers=1 sample=3 seconds=0.047990530
+strong tmpfs workers=1 sample=4 seconds=0.045786652
+strong tmpfs workers=1 sample=5 seconds=0.045015742
+strong tmpfs workers=1 remeasure warmup
+strong tmpfs workers=1 remeasure sample=0 seconds=0.045545401
+strong tmpfs workers=1 remeasure sample=1 seconds=0.050709877
+strong tmpfs workers=1 remeasure sample=2 seconds=0.046934554
+strong tmpfs workers=1 remeasure sample=3 seconds=0.048897084
+strong tmpfs workers=1 remeasure sample=4 seconds=0.044816313
+strong tmpfs workers=1 remeasure sample=5 seconds=0.046458612
+strong tmpfs workers=2 warmup
+strong tmpfs workers=2 sample=0 seconds=0.021674376
+strong tmpfs workers=2 sample=1 seconds=0.022363895
+strong tmpfs workers=2 sample=2 seconds=0.022100801
+strong tmpfs workers=2 sample=3 seconds=0.021727297
+strong tmpfs workers=2 sample=4 seconds=0.021466679
+strong tmpfs workers=2 sample=5 seconds=0.021651543
+strong tmpfs workers=4 warmup
+strong tmpfs workers=4 sample=0 seconds=0.011731534
+strong tmpfs workers=4 sample=1 seconds=0.011589769
+strong tmpfs workers=4 sample=2 seconds=0.011857595
+strong tmpfs workers=4 sample=3 seconds=0.011704170
+strong tmpfs workers=4 sample=4 seconds=0.012306886
+strong tmpfs workers=4 sample=5 seconds=0.011645803
+strong tmpfs workers=8 warmup
+strong tmpfs workers=8 sample=0 seconds=0.009839419
+strong tmpfs workers=8 sample=1 seconds=0.008413689
+strong tmpfs workers=8 sample=2 seconds=0.008683091
+strong tmpfs workers=8 sample=3 seconds=0.008262287
+strong tmpfs workers=8 sample=4 seconds=0.007911278
+strong tmpfs workers=8 sample=5 seconds=0.007788234
+strong tmpfs workers=8 remeasure warmup
+strong tmpfs workers=8 remeasure sample=0 seconds=0.007422634
+strong tmpfs workers=8 remeasure sample=1 seconds=0.008064394
+strong tmpfs workers=8 remeasure sample=2 seconds=0.007187056
+strong tmpfs workers=8 remeasure sample=3 seconds=0.006811557
+strong tmpfs workers=8 remeasure sample=4 seconds=0.006729234
+strong tmpfs workers=8 remeasure sample=5 seconds=0.006742590
+weak pagecache workers=1 warmup
+weak pagecache workers=1 sample=0 seconds=0.045723734
+weak pagecache workers=1 sample=1 seconds=0.045065166
+weak pagecache workers=1 sample=2 seconds=0.046099089
+weak pagecache workers=1 sample=3 seconds=0.046950677
+weak pagecache workers=1 sample=4 seconds=0.048502327
+weak pagecache workers=1 sample=5 seconds=0.045999282
+format-probe pagecache workers=1 warmup
+format-probe pagecache workers=1 sample=0 seconds=0.009813163
+format-probe pagecache workers=1 sample=1 seconds=0.008296100
+format-probe pagecache workers=1 sample=2 seconds=0.007623300
+format-probe pagecache workers=1 sample=3 seconds=0.007487912
+format-probe pagecache workers=1 sample=4 seconds=0.007549217
+format-probe pagecache workers=1 sample=5 seconds=0.007340778
+weak tmpfs workers=1 warmup
+weak tmpfs workers=1 sample=0 seconds=0.044789807
+weak tmpfs workers=1 sample=1 seconds=0.044973184
+weak tmpfs workers=1 sample=2 seconds=0.044405605
+weak tmpfs workers=1 sample=3 seconds=0.044552276
+weak tmpfs workers=1 sample=4 seconds=0.046754921
+weak tmpfs workers=1 sample=5 seconds=0.046429270
+format-probe tmpfs workers=1 warmup
+format-probe tmpfs workers=1 sample=0 seconds=0.008337849
+format-probe tmpfs workers=1 sample=1 seconds=0.007249405
+format-probe tmpfs workers=1 sample=2 seconds=0.006795548
+format-probe tmpfs workers=1 sample=3 seconds=0.006398326
+format-probe tmpfs workers=1 sample=4 seconds=0.006424026
+format-probe tmpfs workers=1 sample=5 seconds=0.006329552
+weak pagecache workers=2 warmup
+weak pagecache workers=2 sample=0 seconds=0.075210276
+weak pagecache workers=2 sample=1 seconds=0.060247875
+weak pagecache workers=2 sample=2 seconds=0.060863883
+weak pagecache workers=2 sample=3 seconds=0.059377761
+weak pagecache workers=2 sample=4 seconds=0.059779577
+weak pagecache workers=2 sample=5 seconds=0.059181791
+format-probe pagecache workers=2 warmup
+format-probe pagecache workers=2 sample=0 seconds=0.021798536
+format-probe pagecache workers=2 sample=1 seconds=0.021102065
+format-probe pagecache workers=2 sample=2 seconds=0.020338174
+format-probe pagecache workers=2 sample=3 seconds=0.019731166
+format-probe pagecache workers=2 sample=4 seconds=0.019329911
+format-probe pagecache workers=2 sample=5 seconds=0.019233184
+weak tmpfs workers=2 warmup
+weak tmpfs workers=2 sample=0 seconds=0.057606846
+weak tmpfs workers=2 sample=1 seconds=0.057597709
+weak tmpfs workers=2 sample=2 seconds=0.058881225
+weak tmpfs workers=2 sample=3 seconds=0.057029484
+weak tmpfs workers=2 sample=4 seconds=0.056725173
+weak tmpfs workers=2 sample=5 seconds=0.061426694
+format-probe tmpfs workers=2 warmup
+format-probe tmpfs workers=2 sample=0 seconds=0.018383146
+format-probe tmpfs workers=2 sample=1 seconds=0.016280650
+format-probe tmpfs workers=2 sample=2 seconds=0.014969971
+format-probe tmpfs workers=2 sample=3 seconds=0.013924755
+format-probe tmpfs workers=2 sample=4 seconds=0.013824511
+format-probe tmpfs workers=2 sample=5 seconds=0.013213661
+weak pagecache workers=4 warmup
+weak pagecache workers=4 sample=0 seconds=0.080192774
+weak pagecache workers=4 sample=1 seconds=0.081367829
+weak pagecache workers=4 sample=2 seconds=0.081442008
+weak pagecache workers=4 sample=3 seconds=0.081235725
+weak pagecache workers=4 sample=4 seconds=0.086196503
+weak pagecache workers=4 sample=5 seconds=0.087872350
+format-probe pagecache workers=4 warmup
+format-probe pagecache workers=4 sample=0 seconds=0.041414132
+format-probe pagecache workers=4 sample=1 seconds=0.040308354
+format-probe pagecache workers=4 sample=2 seconds=0.039498109
+format-probe pagecache workers=4 sample=3 seconds=0.038969253
+format-probe pagecache workers=4 sample=4 seconds=0.038730164
+format-probe pagecache workers=4 sample=5 seconds=0.038316929
+weak tmpfs workers=4 warmup
+weak tmpfs workers=4 sample=0 seconds=0.077619563
+weak tmpfs workers=4 sample=1 seconds=0.076011748
+weak tmpfs workers=4 sample=2 seconds=0.074366008
+weak tmpfs workers=4 sample=3 seconds=0.073945154
+weak tmpfs workers=4 sample=4 seconds=0.073884701
+weak tmpfs workers=4 sample=5 seconds=0.074490002
+format-probe tmpfs workers=4 warmup
+format-probe tmpfs workers=4 sample=0 seconds=0.035938217
+format-probe tmpfs workers=4 sample=1 seconds=0.034965959
+format-probe tmpfs workers=4 sample=2 seconds=0.034740881
+format-probe tmpfs workers=4 sample=3 seconds=0.034786276
+format-probe tmpfs workers=4 sample=4 seconds=0.034752486
+format-probe tmpfs workers=4 sample=5 seconds=0.033962289
+weak pagecache workers=8 warmup
+weak pagecache workers=8 sample=0 seconds=0.133252181
+weak pagecache workers=8 sample=1 seconds=0.124508550
+weak pagecache workers=8 sample=2 seconds=0.126743032
+weak pagecache workers=8 sample=3 seconds=0.125726088
+weak pagecache workers=8 sample=4 seconds=0.125390333
+weak pagecache workers=8 sample=5 seconds=0.133198276
+format-probe pagecache workers=8 warmup
+format-probe pagecache workers=8 sample=0 seconds=0.082729279
+format-probe pagecache workers=8 sample=1 seconds=0.083335802
+format-probe pagecache workers=8 sample=2 seconds=0.083308039
+format-probe pagecache workers=8 sample=3 seconds=0.083169200
+format-probe pagecache workers=8 sample=4 seconds=0.082337802
+format-probe pagecache workers=8 sample=5 seconds=0.081866198
+weak tmpfs workers=8 warmup
+weak tmpfs workers=8 sample=0 seconds=0.115867339
+weak tmpfs workers=8 sample=1 seconds=0.125032759
+weak tmpfs workers=8 sample=2 seconds=0.145082692
+weak tmpfs workers=8 sample=3 seconds=0.112053609
+weak tmpfs workers=8 sample=4 seconds=0.111083121
+weak tmpfs workers=8 sample=5 seconds=0.109843992
+format-probe tmpfs workers=8 warmup
+format-probe tmpfs workers=8 sample=0 seconds=0.070415388
+format-probe tmpfs workers=8 sample=1 seconds=0.069441069
+format-probe tmpfs workers=8 sample=2 seconds=0.069205606
+format-probe tmpfs workers=8 sample=3 seconds=0.069180503
+format-probe tmpfs workers=8 sample=4 seconds=0.069041197
+format-probe tmpfs workers=8 sample=5 seconds=0.068885779

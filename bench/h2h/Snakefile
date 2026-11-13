@@ -151,6 +151,39 @@ rule final_weak:
         "python3 bench/h2h/final_campaign.py weak --out {params.out} --repeats {params.repeats}"
 
 
+# Concurrent pwrite of N frame-sized payloads at disjoint offsets, plus
+# one thread pwriting those same bytes. Samples stay inside one process.
+# The asv class WeakWrite times one call of the same helpers.
+rule sink_ceiling:
+    output:
+        "bench/h2h/scaling/perf17/sink-ceiling.json",
+        "bench/h2h/scaling/perf17/lscpu.txt",
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p bench/h2h/scaling/perf17
+        python3 bench/h2h/weak_write.py sink --out bench/h2h/scaling/perf17
+        """
+
+
+# Weak writes beside that ceiling. The table has two efficiency columns:
+# ideal T(1)/T(N), and max(format alone, sink(N)) / T(N).
+rule weak_write:
+    input:
+        "bench/h2h/scaling/perf17/sink-ceiling.json",
+    output:
+        "bench/h2h/scaling/perf17/rows.json",
+        "bench/h2h/scaling/perf17/weak-write.json",
+        "bench/h2h/scaling/perf17/weak-write-table.tsv",
+        "bench/h2h/scaling/perf17/samples.log",
+        "bench/h2h/scaling/perf17/NOTES.txt",
+    shell:
+        """
+        set -euo pipefail
+        python3 bench/h2h/weak_write.py weak --out bench/h2h/scaling/perf17
+        """
+
+
 rule final_langs:
     input:
         f"{FINAL_OUT}/bindings.json",
