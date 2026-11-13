@@ -97,8 +97,13 @@ fn parse_8digits(mut v: u64) -> u64 {
 
 #[inline(always)]
 fn read_u64(bytes: &[u8], i: usize) -> u64 {
-    // The caller has checked `i + 8 <= bytes.len()`. One unaligned load
-    // is the 8-digit word; a stack copy is the same bytes.
+    // Every caller proves `i + 8 <= bytes.len()` before this load, so the
+    // eight bytes are inside the slice. That includes the last word of a
+    // mapped file with no trailing newline: the slice length is the map
+    // length, and a word that ends on that length is still in range.
+    // `parse_fixed_decimal` checks `dot + 16 < len` and then steps onto
+    // the first fraction digit, so both words end at or before `len`.
+    // `parse_f64_hot` and `parse_f64_long` check `p + 8 <= len`.
     debug_assert!(i + 8 <= bytes.len());
     let ptr = bytes.as_ptr().wrapping_add(i);
     u64::from_le(unsafe { (ptr as *const u64).read_unaligned() })
@@ -142,6 +147,9 @@ pub(crate) fn parse_fixed_decimal(bytes: &[u8], mut i: usize) -> Option<(f64, us
         nd += 1;
         i += 1;
     }
+    // `i` is the dot. Sixteen fraction bytes must sit in the slice, so
+    // after stepping onto the first of them the two 8-byte words end at
+    // or before `len`, even when the file ends on that digit.
     if i >= bytes.len() || bytes[i] != b'.' || i + 16 >= bytes.len() {
         return None;
     }
@@ -976,5 +984,68 @@ mod tests {
         }
         assert_eq!(finish(true, 0, 0).unwrap().to_bits(), (-0.0f64).to_bits());
         assert_eq!(finish(false, 0, -17).unwrap().to_bits(), 0.0f64.to_bits());
+    }
+
+    /// The last 8-byte word may end on the slice length. The next page is
+    /// inaccessible, so a load past that word faults.
+    #[test]
+    fn fixed_word_stops_at_the_end_of_a_mapping() {
+        unsafe extern "C" {
+            fn mmap(
+                addr: *mut u8,
+                len: usize,
+                prot: i32,
+                flags: i32,
+                fd: i32,
+                offset: i64,
+            ) -> *mut u8;
+            fn mprotect(addr: *mut u8, len: usize, prot: i32) -> i32;
+            fn munmap(addr: *mut u8, len: usize) -> i32;
+        }
+        const PROT_NONE: i32 = 0;
+        const PROT_READ: i32 = 1;
+        const PROT_WRITE: i32 = 2;
+        const MAP_PRIVATE: i32 = 2;
+        const MAP_ANONYMOUS: i32 = 0x20;
+        let page = 4096usize;
+        let ptr = unsafe {
+            mmap(
+                std::ptr::null_mut(),
+                page * 2,
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+        };
+        assert!(!ptr.is_null() && ptr != (-1isize as usize as *mut u8));
+        assert_eq!(unsafe { mprotect(ptr.add(page), page, PROT_NONE) }, 0);
+        // Sixteen fraction digits, file ends on the last one. No newline.
+        let text = b"1.1234567890123456";
+        assert_eq!(text.len(), 18);
+        let start = page - text.len();
+        unsafe {
+            std::ptr::copy_nonoverlapping(text.as_ptr(), ptr.add(start), text.len());
+        }
+        let slice = unsafe { std::slice::from_raw_parts(ptr, page) };
+        let (val, n) = super::parse_fixed_decimal(slice, start).expect("in-bounds word");
+        assert_eq!(n, page);
+        let (expect, used) = fast_float2::parse_partial::<f64, _>(text).unwrap();
+        assert_eq!(used, text.len());
+        assert_eq!(val.to_bits(), expect.to_bits());
+        // Eight fraction digits filling the final word of the hot scanner.
+        let hot = b"2.12345678";
+        let hot_at = page - hot.len();
+        unsafe {
+            std::ptr::copy_nonoverlapping(hot.as_ptr(), ptr.add(hot_at), hot.len());
+        }
+        let (hot_val, hot_n) = parse_f64_hot(slice, hot_at).expect("hot final word");
+        assert_eq!(hot_n, page);
+        let (hot_expect, _) = fast_float2::parse_partial::<f64, _>(hot).unwrap();
+        assert_eq!(hot_val.to_bits(), hot_expect.to_bits());
+        unsafe {
+            mprotect(ptr.add(page), page, PROT_READ | PROT_WRITE);
+            munmap(ptr, page * 2);
+        }
     }
 }
