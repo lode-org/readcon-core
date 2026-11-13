@@ -1,0 +1,52 @@
+#+title: Fidelity head-to-head
+#+options: toc:nil num:nil ^:nil
+
+The fidelity run reads one set of CON and convel files with every reader and, where the tool has a writer, writes them back. =reader= is what that tool kept in memory. =round_trip= is what =readcon.read_con= finds in the file the tool wrote. Both columns use the same words: =exact=, =within_tolerance=, =reordered=, =mismatch=, =label_changed=, =absent=, =not_representable=, =read_error=, =write_error=, =unavailable=. =unavailable= means the tool could not be imported. chemfiles, ASE, and eOn are optional.
+
+Fixtures, under =bench/fidelity/fixtures/=:
+
+- =claisen.con= is the two-frame Claisen case from =tests/python/test_atom_correspondence.py=. The product is stored oxygen-first, and C5 is one cell along +x.
+- =neb_band_3.con= is the first three images of =resources/examples/neb_band.con=, copied up to the line =example NEB image 3=.
+- =pt100_slab.con= is the Pt(100) 2x2x2 slab with one hollow adatom from =paper/cpc/scripts/failure_matrix.py=. The bottom four atoms are fixed on every axis. The adatom is fixed in z only. Velocities are not in this file.
+- =tiny_multi_cuh2.convel= and =v30_fs_label.convel= are byte copies of the files of the same name under =resources/test/=.
+
+=PROVENANCE.txt= in that directory names the sources. Regenerate with =python bench/fidelity/make_fixtures.py=.
+
+Tools, each on the same path, with the entry point or format it documents:
+
+- readcon's Python reader and writer.
+- ASE formats =readcon-con= and =readcon-convel=, resolved through =ase.ioformats= to =ase_readcon.io=. Geometry files use =readcon-con=. convel files use =readcon-convel=.
+- ASE's built-in =eon= reader and writer, =format="eon"=.
+- chemfiles, asked for format =CON=.
+- eOn's Python reader, =eon.fileio.loadcons= and =savecon=, when =EON_ROOT= points at a checkout. The commit used for the numbers in =bench/fidelity/results/= is recorded in =fidelity.json=. The C++ client is not built here: =client/ConFileIO.cpp:612= calls =readcon::read_all_frames=, and meson is not required by this rule.
+
+Fields:
+
+- =atom_ids= is CON column 5. =reordered= means the same ids in a different storage order. A fresh =0..n-1= that reuses those integers on different elements is =mismatch=.
+- =fixed_mask= is the three-axis column 4 mask.
+- =masses= and =positions= are paired by atom id when the ids still name the same elements, and by file order otherwise. =reordered= means the sorted values match and the pairing does not.
+- =cell= is the three lengths and three angles on every frame. =fidelity.json= records whether the input uses one cell for every frame.
+- =velocities= are the numbers in the file. =velocity_unit= is the =units.time= label. For spec 1, spec 2, and spec 3.0 the authoritative unit is the natural unit even when the file says =fs= (=src/units.rs:406=). =label_changed= means the numbers survived and the label did not.
+- =frame_order= compares frames by their sorted coordinates.
+- =positional_zip_error= is only meaningful for =claisen.con=. It is the norm of the index-wise displacement minus =readcon.minimum_image_displacements=, after =readcon.atom_id_permutation= and =readcon.reorder_like=. The input values are also stored under =claisen_positional_zip= in the JSON.
+
+A float is =exact= at a difference of zero. Anything larger is =within_tolerance= only inside the tolerance on that row. readcon's text tolerance is 0. ASE's eon writer prints the cell with =%-10.6f= (=ase/io/eon.py:257=), so that cell tolerance is =5e-7=. A path through a 3x3 cell matrix uses =1e-8=. The tolerance is the writer's format, not a fit to one run.
+
+=not_representable= is used when the tool has no slot for the field. The =citation= column is the file and line. chemfiles 0.10.4 has no CON format: =src/FormatFactory.cpp:139= throws, and line 208 builds the message =can not find a format named=. ASE's eon reader turns column 4 into one boolean (=ase/io/eon.py:139=) and does not read column 5 (=ase/io/eon.py:138=). A following forces or velocities block is read as the next header (=ase/io/eon.py:174=), which is the =read_error= on the NEB file and on =tiny_multi_cuh2.convel=.
+
+Timing uses the same reads and writes. One core (=taskset -c 0=), one warmup call that is not a sample, then six samples. The median and the interquartile range are the type-7 percentile, NumPy's =linear= method. The raw lines are =bench/fidelity/logs/timing.log=. Paths that raise are rows with a status and no median.
+
+Run it:
+
+#+begin_src shell
+  snakemake -s benchmarks/workflow/Snakefile --cores 1 fidelity
+
+  # one-call asv timings, quick mode
+  export EON_ROOT=/path/to/eOn   # optional; omit to skip that class's setup
+  asv machine --yes --config asv.fidelity.conf.json \
+    --machine fidelity --os linux --arch x86_64 \
+    --cpu unspecified --num_cpu 1 --ram unspecified
+  asv run --quick --config asv.fidelity.conf.json HEAD^!
+#+end_src
+
+The tables are =bench/fidelity/results/fidelity.csv= and =timing.csv=. The JSON files next to them carry the per-run samples, the versions, and the Claisen numbers.

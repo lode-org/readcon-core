@@ -44,6 +44,42 @@ grep -q 'filename = "readcon-core"' Cargo.toml || die "cargo-c pkg-config filena
 # Tarball assembler exists
 [[ -x scripts/package-cxx.sh ]] || die "scripts/package-cxx.sh must be executable"
 [[ -x scripts/package-clib.sh ]] || die "scripts/package-clib.sh must be executable"
+[[ -x scripts/reproducible-tar.sh ]] || die "scripts/reproducible-tar.sh must be executable"
+[[ -x scripts/source-date-epoch.sh ]] || die "scripts/source-date-epoch.sh must be executable"
+[[ -x scripts/record-cxx-wrap.sh ]] || die "scripts/record-cxx-wrap.sh must be executable"
+[[ -x scripts/accept-cxx-wrap-pin.sh ]] || die "scripts/accept-cxx-wrap-pin.sh must be executable"
+if ! grep -q 'reproducible-tar.sh' scripts/package-cxx.sh \
+    || ! grep -q 'reproducible-tar.sh' scripts/package-clib.sh \
+    || ! grep -q 'SOURCE_DATE_EPOCH' scripts/package-cxx.sh \
+    || ! grep -q 'SOURCE_DATE_EPOCH' scripts/package-clib.sh \
+    || ! grep -q -- '--sort=name' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--owner=0' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--group=0' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--numeric-owner' scripts/reproducible-tar.sh \
+    || ! grep -q 'gzip -n' scripts/reproducible-tar.sh \
+    || ! grep -q 'gtar' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--files-from' scripts/reproducible-tar.sh \
+    || ! grep -q -- '--uid 0' scripts/reproducible-tar.sh \
+    || ! grep -q 'safe.directory' scripts/source-date-epoch.sh; then
+    die "cxx and clib archives must use SOURCE_DATE_EPOCH, sorted names, uid 0, and gzip -n"
+fi
+if ! grep -q 'safe.directory /io/src' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'safe.directory' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'gnu-tar' .github/workflows/ci_cxx.yml; then
+    die "tarball workflows must mark mounted checkouts safe and install GNU tar on macOS"
+fi
+if ! grep -q 'record-cxx-wrap.sh' scripts/release-prep.sh; then
+    die "release-prep.sh must pin the wrap from the slim cxx archive"
+fi
+if ! grep -q 'uploader/scripts/accept-cxx-wrap-pin.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'GITHUB_WORKSPACE/scripts/accept-cxx-wrap-pin.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'refusing upload' scripts/accept-cxx-wrap-pin.sh \
+    || ! grep -q 'readcon-core.sha256' scripts/accept-cxx-wrap-pin.sh \
+    || ! grep -q 'readcon-core.sha256' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must refuse an upload whose digest differs from the wrap pin"
+fi
 [[ -x scripts/check-clib-dist.sh ]] || die "scripts/check-clib-dist.sh must be executable"
 [[ -x scripts/check_wrap_hash.sh ]] || die "scripts/check_wrap_hash.sh must be executable"
 if ! bash scripts/check_wrap_hash.sh; then
@@ -62,6 +98,17 @@ fi
 if ! grep -q 'windows-chemfiles-skip' .github/workflows/c_lib_tarball.yml \
     || ! grep -q 'Windows + chemfiles is not a clib' .github/workflows/c_lib_tarball.yml; then
     die "c_lib_tarball.yml must skip Windows chemfiles explicitly"
+fi
+if ! grep -Fq "'v*'" .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'workflow_dispatch:' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'upload-release-assets.sh' .github/workflows/cxx_tarball.yml \
+    || ! grep -q 'persist-credentials: false' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must run on v* tags, accept workflow_dispatch, and upload without git credentials"
+fi
+if grep -q 'types: \[published\]' .github/workflows/cxx_tarball.yml \
+    || grep -q 'action-gh-release' .github/workflows/cxx_tarball.yml \
+    || grep -q 'cargo publish' .github/workflows/cxx_tarball.yml; then
+    die "cxx_tarball.yml must not use the release event, create the release, or publish crates"
 fi
 if ! grep -q 'READCON_CORE_LIB' julia/ReadCon/src/wrapper.jl \
     || ! grep -q 'READCON_LIB_PATH' julia/ReadCon/src/wrapper.jl; then

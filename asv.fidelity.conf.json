@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "project": "readcon-fidelity",
+  "project_url": "https://github.com/lode-org/readcon-core",
+  "repo": ".",
+  "environment_type": "existing",
+  "pythons": ["same"],
+  "benchmark_dir": "bench/fidelity/asv",
+  "env_dir": "bench/fidelity/work/asv-env",
+  "results_dir": "bench/fidelity/work/asv-results",
+  "html_dir": "bench/fidelity/work/asv-html",
+  "branches": ["HEAD"]
+}

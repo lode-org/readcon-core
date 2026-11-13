@@ -1,7 +1,7 @@
 [package]
 name = "readcon-core"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
-version = "0.18.1"
+version = "0.22.0"
 # [[[end]]]
 edition = "2024"
 rust-version = "1.88"
@@ -46,7 +46,9 @@ zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.
 mpi = ["dep:mpi", "parallel"]
-metatensor = ["dep:metatensor"]
+# metatensor-sys is also a build-dependency so build.rs runs after the
+# C library is installed and can record its path.
+metatensor = ["dep:metatensor", "dep:metatensor-sys"]
 # Multi-format trajectory import + selection via chemfiles (C++ library).
 # Off by default so lean builds / conda C-only consumers do not pull
 # libchemfiles. Public Rust modules `chemfiles_import` / `chemfiles_selection`
@@ -89,6 +91,7 @@ memmap2 = "0.9"
 libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
+mimalloc = "0.1.43"
 mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
@@ -181,6 +184,7 @@ inherits = "release"
 
 [build-dependencies]
 capnpc = { version = "0.20", optional = true }
+metatensor-sys = { version = "0.2.0-rc4", optional = true }
 
 [package.metadata.capi]
 min_version = "0.10.17"

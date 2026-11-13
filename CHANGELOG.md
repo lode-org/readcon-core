@@ -5,6 +5,121 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.22.0 - 2026-11-12
+
+### Bugfixes
+
+- The ASE `readcon-con` reader keeps each frame's element order and column 5.
+  `arrays["atom_id"]` is that column. A write puts the array back, and numbers
+  the atoms `0 .. n-1` only when the array is absent. A later frame stored
+  oxygen-first no longer gives a carbon the oxygen mass.
+- The cachegrind harness test skips when `clang++` cannot see the libstdc++
+  headers for rustc's host triple. CI images have those headers, and the
+  harness still builds there.
+- `ConFrame.has_velocities` is true when any atom carries a velocity, so an
+  oxygen-first frame keeps a later atom's velocity on the way into ASE.
+
+### Improved Documentation
+
+- Examples that query the library spec version use 3. The fidelity page names
+  `unavailable`, the status the campaign writes when a tool could not be
+  imported.
+- Python code blocks in the docs are executed as tests. Rust doctests cover
+  atom-id correspondence, parallel frame reads, and the append writer. The C,
+  C++, and Fortran examples are compiled and run.
+- The ASE how-to names `arrays["atom_id"]`, per-frame element order, and the
+  per-axis `FixCartesian` mask. The Python reference shows the install,
+  `ase.io.read` and `ase.io.write` with `format="readcon-con"` or
+  `format="readcon-convel"`, and what a round trip keeps: column 5, per-axis
+  masks, masses, velocities, and every frame.
+- Versions 1, 2, and 3.0 store velocities in the natural time unit. A header
+  that says `fs` is not that unit. A rewrite labels the same numbers
+  `(amu*angstrom^2/eV)^0.5`, because minor 1 treats `units.time` as
+  authoritative.
+
+
+## v0.21.0 - 2026-11-12
+
+### Features
+
+- Match atoms across frames by `atom_id`. `atom_id_permutation` maps frame B
+  onto frame A. `reorder_like` returns B in A's order and carries positions,
+  velocities, forces, and the other per-atom sections.
+  `check_atom_id_consistency` names the first frame and atom that break a
+  trajectory or NEB band. `minimum_image_displacements` is the periodic
+  displacement of those pairs, using the reference cell. Strict mode, the
+  default, also requires the masses and the fixed masks to agree. Rust, Python,
+  C, and C++.
+
+### Documentation
+
+- How-to for atom correspondence across frames. The Python and C reference
+  lists the four calls and the strict mode.
+
+
+## v0.20.0 - 2026-11-12
+
+### Features
+
+- Stock CON and convel files fill Rust `read_positions_with_threads`, Python
+  `read_positions` and `read_coords`, and C `rkr_read_positions` from one
+  coordinate pass. `rkr_free_position_block` frees that block.
+  `rkr_read_positions` returns NULL when the frames do not share one atom
+  count. Python `read_positions` is the `(frames, atoms, 3)` array.
+  `read_coords` adds the masses and the cell.
+
+### Bugfixes
+
+- Fortran `builder%add_atom` and `builder%add_atom_full` take the per-axis
+  fixed flags, the atom id, and the mass in the `rkr_frame_add_atom_full`
+  order. Optional velocity and force follow the mass.
+
+
+## v0.19.0 - 2026-11-12
+
+### Features
+
+- A multi-frame read stays on the calling thread until the caller asks for two
+  or more workers. Equal-length frames, including a whitespace tail, use
+  equal-span boundaries, so the caller does not walk every header. A plain file
+  of 64 KiB or more stays mapped. The unit name table is a static sorted
+  list shared by the serial reader, the C reader, and the pool.
+- Rust, C, C++, and Python can append an uncompressed CON file, flush the
+  writer buffer, and keep one frame of text in a scratch buffer in front of an
+  8 KiB `BufWriter`. `OpenMode::Append` and `write_con(..., append=True)`
+  refuse gzip and zstd. Python `write_con` and `write_con_string` emit one
+  frame at a time. `write_con_string` takes a half-open `start` and `stop`.
+  `.gz` and `.zst` select the write codec from the extension.
+- The `ase-readcon` package registers `readcon-con` and `readcon-convel` on the
+  `ase.ioformats` entry point so `ase.io.read` and `ase.io.write` load CON and
+  convel through readcon.
+- `read_extxyz` returns a dict of positions, masses, cell, species tuples, and
+  per-atom columns. A repeated symbol is one string, and a frame that matches
+  the previous frame reuses that tuple. `write_extxyz` writes the dict back
+  without copying the numeric columns.
+
+### Bugfixes
+
+- Unit names are a static sorted list looked up by binary search. Parsing a
+  unit no longer allocates a hash table, and the names and SI factors are
+  unchanged.
+- Python `write_con` of a `read_con` result stamps the same header as the C,
+  Fortran, Julia, and MPI writers. The current spec, `con_spec_minor` when the
+  file omitted it, default units when the file omitted them, and the spec 2
+  constraint mask are written. A collective write and a serial write of that
+  result hash the same.
+- A vectorized newline skip now adds those lines to the file line. A parse
+  error in a later frame reports that frame's line and index, including when
+  several spans fail and the earliest slot is the one the serial walk would
+  report.
+
+### Documentation
+
+- The how-to covers the parallel reader, append and flush, compression chosen
+  by extension, reading CON from stdin, the unit table, and the ASE plugin.
+  `read_extxyz` callers index the returned dict.
+
+
 ## v0.18.1 - 2026-11-07
 
 ### Bugfixes
@@ -195,6 +310,9 @@ All notable changes to this project will be documented in this file. See [conven
 - set_lattice_vectors keeps lines 3 and 4 consistent with the lattice matrix.
 - ConFrameBuilder stamps con_spec_minor 1 on a v3 frame when the caller does not set it. set_con_spec_minor and rkr_frame_builder_set_con_spec_minor override that value. The writer does not invent or replace the minor.
 - ConFrameBuilder::set_units and rkr_frame_builder_set_units set the units object from C and C++.
+- The C ABI stores the last NULL or negative status in thread-local rkr_last_error, with a class message, a 1-based line and a frame index.
+- Python parse failures raise readcon.ConError, a ValueError, with one subclass per error class. OSError is reserved for I/O.
+- to_ase prefers lattice_vectors, honours pbc, and converts velocities into the natural time unit. from_ase stamps that unit.
 
 ## v0.16.2 - 2026-10-09
 
@@ -1273,6 +1391,10 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.22.0]: https://github.com/lode-org/readcon-core/compare/v0.21.0...v0.22.0
+[v0.21.0]: https://github.com/lode-org/readcon-core/compare/v0.20.0...v0.21.0
+[v0.20.0]: https://github.com/lode-org/readcon-core/compare/v0.19.0...v0.20.0
+[v0.19.0]: https://github.com/lode-org/readcon-core/compare/v0.18.1...v0.19.0
 [v0.18.1]: https://github.com/lode-org/readcon-core/compare/v0.18.0...v0.18.1
 [v0.18.0]: https://github.com/lode-org/readcon-core/compare/v0.17.3...v0.18.0
 [v0.17.3]: https://github.com/lode-org/readcon-core/compare/v0.17.2...v0.17.3

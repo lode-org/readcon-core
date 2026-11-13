@@ -10,7 +10,9 @@ members = ["cargo:."]
 cargo-dist-version = "0.28.0"
 ci = "github"
 # release.yml is hand-patched after generate (action SHA pins, the checksummed
-# dist installer, and the rustup-init pin). dist plan must not reject that.
+# dist installer, the rustup-init pin, and actions/setup-python 3.12 before
+# the host artifact check). allow-dirty skips ci on `dist generate` and on
+# the integrity check `dist plan` runs, so those edits stay.
 allow-dirty = ["ci"]
 # Run plan (and optional artifact upload) on every PR so release PRs are checked
 # before the tag is cut.

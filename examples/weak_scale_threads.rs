@@ -153,11 +153,30 @@ fn repeat_text(one: &str, n: usize) -> String {
     buf
 }
 
+fn frame_fingerprint(frames: &[readcon_core::types::ConFrame]) -> u64 {
+    let mut acc = frames.len() as u64;
+    for frame in frames {
+        acc = acc
+            .wrapping_mul(0x100000001b3)
+            .wrapping_add(frame.atom_data.len() as u64);
+        for atom in &frame.atom_data {
+            acc = acc
+                .wrapping_mul(0x100000001b3)
+                .wrapping_add(atom.x.to_bits())
+                .wrapping_add(atom.y.to_bits())
+                .wrapping_add(atom.z.to_bits())
+                .wrapping_add(atom.atom_id);
+        }
+    }
+    acc
+}
+
 fn time_one(text: &str, workers: usize, n_frames: usize) -> f64 {
     let started = Instant::now();
     let frames = frames_from_text(text, Some(workers)).expect("parse");
     assert_eq!(frames.len(), n_frames);
-    std::hint::black_box(frames);
+    std::hint::black_box(frames.len());
+    readcon_core::iterators::release_parsed_frames(frames, workers);
     started.elapsed().as_secs_f64()
 }
 
@@ -202,8 +221,12 @@ fn main() {
         let n_frames = frames_per_worker * workers;
         let text = repeat_text(&one, n_frames);
         let serial = frames_from_text(&text, Some(1)).expect("serial parse");
+        let serial_fp = frame_fingerprint(&serial);
+        drop(serial);
         let parallel = frames_from_text(&text, Some(workers)).expect("parallel parse");
-        if serial != parallel {
+        let parallel_fp = frame_fingerprint(&parallel);
+        drop(parallel);
+        if serial_fp != parallel_fp {
             write_refusal(&out_path, "serial-match output failed");
             std::process::exit(2);
         }

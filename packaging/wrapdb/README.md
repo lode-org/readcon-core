@@ -9,13 +9,17 @@ shipped headers, so wrapdb does **not** need a `packagefiles/` meson patch.
 
 ## Produce the wrap
 
-From the repository root, after `scripts/package-cxx.sh /tmp/cxx --vendor`:
+From the repository root, after the version bump:
 
 ```bash
-# Record the tarball digest, then restamp. VERSION supplies the release.
-printf '%s\n' "$SHA" > packaging/wrapdb/readcon-core.sha256
-scripts/stamp-version.sh
+# Slim archive only. The vendor tarball is a different file and must
+# not be copied into this pin. The script builds once, then writes
+# packaging/wrapdb/readcon-core.sha256, the wrap, and the doc snippets.
+scripts/record-cxx-wrap.sh
 ```
+
+`scripts/release-prep.sh` runs that step. The cxx release job builds the
+same way and refuses to upload a digest that is not the pin.
 
 Attach the tarball to the GitHub Release for `v$VERSION` so `source_url` resolves.
 

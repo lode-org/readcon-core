@@ -15,6 +15,20 @@ pub const DEFAULT_READ_SIZE: usize = 1 << 20;
 
 /// Parses frames from any [`Read`], such as a gzip or Zstandard decoder.
 ///
+/// A plain CON stream on standard input is the same kind of reader.
+/// Lock stdin and pass it here. The example uses a cursor so the
+/// doctest does not wait on a terminal.
+///
+/// ```
+/// use readcon_core::stream::ConFrameReader;
+/// use std::io::Cursor;
+/// let text = include_str!("../resources/test/tiny_cuh2.con");
+/// let count = ConFrameReader::new(Cursor::new(text.as_bytes()))
+///     .map(|frame| frame.expect("frame"))
+///     .count();
+/// assert!(count >= 1);
+/// ```
+///
 /// The buffer keeps the bytes not yet returned and room for one read.
 /// Before each read it moves those bytes to its front, and it grows only
 /// to fit them plus that read.

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ase-readcon"
+version = "0.1.0"
+description = "ASE I/O plugin that reads and writes CON and convel through readcon"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["ase", "readcon"]
+
+[project.entry-points."ase.ioformats"]
+readcon-con = "ase_readcon.io:readcon_con_format"
+readcon-convel = "ase_readcon.io:readcon_convel_format"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ase_readcon*"]

@@ -11,7 +11,7 @@
        </div>
      </div>
      <p class="rc-hero-tagline">Reference reader and writer for versioned CON checkpoints: cell, per-direction constraints, atom identity, optional forces.</p>
-     <pre class="rc-hero-conline" aria-hidden="true">{"con_spec_version":2}&#10;15.345600  21.702000  100.000000</pre>
+     <pre class="rc-hero-conline" aria-hidden="true">{"con_spec_version":3,"con_spec_minor":1}&#10;10.0 10.0 20.0</pre>
    </div>
 
 ================
@@ -30,9 +30,9 @@ CON corpora.
 
 .. code-block:: shell
 
-   pip install 'readcon==0.18.1'          # Python CON I/O
-   # pip install 'readcon-chemfiles==0.18.1'  # + foreign -> CON
-   cargo add readcon-core@0.18.1          # Rust
+   pip install 'readcon==0.22.0'          # Python CON I/O
+   # pip install 'readcon-chemfiles==0.22.0'  # + foreign -> CON
+   cargo add readcon-core@0.22.0          # Rust
    # cargo add readcon-db / pip install readcon-db
 
 Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
@@ -99,6 +99,7 @@ Site map
 
    getting-started
    howto
+   atom-correspondence
    migrate
    chemfiles-howto
 
@@ -110,6 +111,7 @@ Site map
    evolution
    architecture
    benchmarks
+   fidelity
    chemfiles-explain
 
 .. toctree::
@@ -117,9 +119,12 @@ Site map
    :caption: Reference
 
    spec
+   implementation-notes
    bindings
+   python-api
    chemfiles-reference
    rpc
+   mpi
 
 .. toctree::
    :maxdepth: 1

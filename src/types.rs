@@ -593,6 +593,18 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
     None
 }
 
+/// Where a parsed section lives.
+///
+/// A velocity-only atom, the `.convel` case, keeps the three components
+/// inline. Any other section still uses one boxed tail. Coordinate-only
+/// atoms stay empty.
+#[derive(Debug, Clone, PartialEq)]
+enum AtomSections {
+    Empty,
+    Velocity([f64; 3]),
+    Full(Box<AtomTail>),
+}
+
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
 /// does not pay a fat tail on every atom.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -653,7 +665,7 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    tail: Option<Box<AtomTail>>,
+    tail: AtomSections,
 }
 
 impl PartialEq for AtomDatum {
@@ -692,7 +704,7 @@ impl AtomDatum {
             z,
             fixed,
             atom_id,
-            tail: None,
+            tail: AtomSections::Empty,
         }
     }
 
@@ -724,125 +736,194 @@ impl AtomDatum {
             || displacement.is_some()
             || spread.is_some()
         {
-            atom.tail = Some(Box::new(AtomTail {
-                velocity,
-                force,
-                energy,
-                charge,
-                spin,
-                magmom,
-                displacement,
-                spread,
-            }));
+            let only_velocity = velocity.is_some()
+                && force.is_none()
+                && energy.is_none()
+                && charge.is_none()
+                && spin.is_none()
+                && magmom.is_none()
+                && displacement.is_none()
+                && spread.is_none();
+            atom.tail = if only_velocity {
+                AtomSections::Velocity(velocity.unwrap())
+            } else {
+                AtomSections::Full(Box::new(AtomTail {
+                    velocity,
+                    force,
+                    energy,
+                    charge,
+                    spin,
+                    magmom,
+                    displacement,
+                    spread,
+                }))
+            };
         }
         atom
     }
 
     fn ensure_tail(&mut self) -> &mut AtomTail {
-        if self.tail.is_none() {
-            self.tail = Some(Box::new(AtomTail::default()));
+        if !matches!(self.tail, AtomSections::Full(_)) {
+            let velocity = match self.tail {
+                AtomSections::Velocity(v) => Some(v),
+                AtomSections::Empty | AtomSections::Full(_) => None,
+            };
+            self.tail = AtomSections::Full(Box::new(AtomTail {
+                velocity,
+                ..AtomTail::default()
+            }));
         }
-        self.tail.as_mut().unwrap()
+        match &mut self.tail {
+            AtomSections::Full(tail) => tail,
+            AtomSections::Empty | AtomSections::Velocity(_) => unreachable!(),
+        }
     }
 
     fn shrink_tail(&mut self) {
-        if self.tail.as_ref().is_some_and(|tail| tail.is_empty()) {
-            self.tail = None;
+        let next = match &self.tail {
+            AtomSections::Full(tail) if tail.is_empty() => Some(AtomSections::Empty),
+            AtomSections::Full(tail)
+                if tail.force.is_none()
+                    && tail.energy.is_none()
+                    && tail.charge.is_none()
+                    && tail.spin.is_none()
+                    && tail.magmom.is_none()
+                    && tail.displacement.is_none()
+                    && tail.spread.is_none()
+                    && tail.velocity.is_some() =>
+            {
+                Some(AtomSections::Velocity(tail.velocity.unwrap()))
+            }
+            _ => None,
+        };
+        if let Some(next) = next {
+            self.tail = next;
         }
     }
 
     /// Velocity vector `[vx, vy, vz]` (present only in `.convel` files).
     #[inline]
     pub fn velocity(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.velocity)
+        match &self.tail {
+            AtomSections::Velocity(v) => Some(*v),
+            AtomSections::Full(tail) => tail.velocity,
+            AtomSections::Empty => None,
+        }
     }
     /// Force vector `[fx, fy, fz]`.
     #[inline]
     pub fn force(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.force)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.force,
+            _ => None,
+        }
     }
     /// Per-atom energy contribution.
     #[inline]
     pub fn energy(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.energy)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.energy,
+            _ => None,
+        }
     }
     /// Partial charge.
     #[inline]
     pub fn charge(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.charge)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.charge,
+            _ => None,
+        }
     }
     /// Spin scalar.
     #[inline]
     pub fn spin(&self) -> Option<f64> {
-        self.tail.as_ref().and_then(|tail| tail.spin)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.spin,
+            _ => None,
+        }
     }
     /// Magnetic moment `[mx, my, mz]`.
     #[inline]
     pub fn magmom(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.magmom)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.magmom,
+            _ => None,
+        }
     }
     /// Displacement `[dx, dy, dz]`.
     #[inline]
     pub fn displacement(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.displacement)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.displacement,
+            _ => None,
+        }
     }
     /// RMS spread `[sx, sy, sz]`.
     #[inline]
     pub fn spread(&self) -> Option<[f64; 3]> {
-        self.tail.as_ref().and_then(|tail| tail.spread)
+        match &self.tail {
+            AtomSections::Full(tail) => tail.spread,
+            _ => None,
+        }
     }
 
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
-            return;
+        match (&self.tail, value) {
+            (AtomSections::Empty, None) => {}
+            (AtomSections::Empty, Some(v)) | (AtomSections::Velocity(_), Some(v)) => {
+                self.tail = AtomSections::Velocity(v);
+            }
+            (AtomSections::Velocity(_), None) => self.tail = AtomSections::Empty,
+            (AtomSections::Full(_), value) => {
+                self.ensure_tail().velocity = value;
+                self.shrink_tail();
+            }
         }
-        self.ensure_tail().velocity = value;
-        self.shrink_tail();
     }
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().force = value;
         self.shrink_tail();
     }
     pub fn set_energy(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().energy = value;
         self.shrink_tail();
     }
     pub fn set_charge(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().charge = value;
         self.shrink_tail();
     }
     pub fn set_spin(&mut self, value: Option<f64>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().spin = value;
         self.shrink_tail();
     }
     pub fn set_magmom(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().magmom = value;
         self.shrink_tail();
     }
     pub fn set_displacement(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().displacement = value;
         self.shrink_tail();
     }
     pub fn set_spread(&mut self, value: Option<[f64; 3]>) {
-        if value.is_none() && self.tail.is_none() {
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
         }
         self.ensure_tail().spread = value;
@@ -917,11 +998,10 @@ pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
     let a = vecs[0];
     let b = vecs[1];
     let c = vecs[2];
-    ([len(a), len(b), len(c)], [
-        angle_deg(b, c),
-        angle_deg(a, c),
-        angle_deg(a, b),
-    ])
+    (
+        [len(a), len(b), len(c)],
+        [angle_deg(b, c), angle_deg(a, c), angle_deg(a, b)],
+    )
 }
 
 /// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
@@ -1116,11 +1196,64 @@ impl ConFrame {
         }
     }
 
+    /// Fill SoA blocks for sections named on the header.
+    ///
+    /// The iterator calls this after a section parse. Each present section is
+    /// copied once into a plain buffer and wrapped, instead of scanning atoms
+    /// for sections that are absent and storing each row through `ArcArray`.
+    pub(crate) fn install_declared_section_soa(&mut self) {
+        let n = self.atom_data.len();
+        if n == 0 || self.header.sections.is_empty() {
+            return;
+        }
+        use crate::storage_dtype::StorageDtypes;
+        let dt = StorageDtypes::from_metadata(&self.header.metadata).unwrap_or_default();
+        let sections = self.header.sections.clone();
+        for name in &sections {
+            match name.as_str() {
+                SECTION_VELOCITIES => {
+                    let data = pack_rows(n, |i| self.atom_data[i].velocity().unwrap_or([0.0; 3]));
+                    self.velocities = store_rows(dt.velocities, n, data);
+                }
+                SECTION_FORCES => {
+                    let data = pack_rows(n, |i| self.atom_data[i].force().unwrap_or([0.0; 3]));
+                    self.forces = store_rows(dt.forces, n, data);
+                }
+                SECTION_ENERGIES => {
+                    let data = pack_col(n, |i| self.atom_data[i].energy().unwrap_or(0.0));
+                    self.atom_energies = store_col(dt.energies, n, data);
+                }
+                SECTION_CHARGES => {
+                    let data = pack_col(n, |i| self.atom_data[i].charge().unwrap_or(0.0));
+                    self.charges = store_col(dt.energies, n, data);
+                }
+                SECTION_SPINS => {
+                    let data = pack_col(n, |i| self.atom_data[i].spin().unwrap_or(0.0));
+                    self.spins = store_col(dt.energies, n, data);
+                }
+                SECTION_MAGMOMS => {
+                    let data = pack_rows(n, |i| self.atom_data[i].magmom().unwrap_or([0.0; 3]));
+                    self.magmoms = store_rows(dt.forces, n, data);
+                }
+                SECTION_DISPLACEMENTS => {
+                    let data =
+                        pack_rows(n, |i| self.atom_data[i].displacement().unwrap_or([0.0; 3]));
+                    self.displacements = store_rows(dt.forces, n, data);
+                }
+                SECTION_SPREADS => {
+                    let data = pack_rows(n, |i| self.atom_data[i].spread().unwrap_or([0.0; 3]));
+                    self.spreads = store_rows(dt.forces, n, data);
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// After section parsers mutate AoS only, allocate/fill SoA **sections**
     /// (velocities/forces/energies) and atom_ids. Positions are **not** rewritten
     /// when `positions.nrows() == n` already (SoA-primary coordinate parse).
-    /// Used on the shipped iterator path so section SoA nrows match AoS optionals
-    /// without restoring a second O(N) position materialization.
+    /// Call this after editing atoms in place. The frame iterator fills parsed
+    /// sections from one flat buffer per present section instead.
     pub fn sync_arrays_from_atom_data(&mut self) {
         let n = self.atom_data.len();
         if n == 0 {
@@ -1205,15 +1338,11 @@ impl ConFrame {
                 self.positions.set_f64_row(i, [a.x, a.y, a.z]);
             }
             self.atom_ids[i] = a.atom_id;
-            if has_vel {
-                if let Some(v) = a.velocity() {
-                    self.velocities.set_f64_row(i, v);
-                }
+            if has_vel && let Some(v) = a.velocity() {
+                self.velocities.set_f64_row(i, v);
             }
-            if has_frc {
-                if let Some(f) = a.force() {
-                    self.forces.set_f64_row(i, f);
-                }
+            if has_frc && let Some(f) = a.force() {
+                self.forces.set_f64_row(i, f);
             }
             if has_eng {
                 self.atom_energies.set_f64(i, a.energy().unwrap_or(0.0));
@@ -1224,10 +1353,8 @@ impl ConFrame {
             if has_spn {
                 self.spins.set_f64(i, a.spin().unwrap_or(0.0));
             }
-            if has_mm {
-                if let Some(m) = a.magmom() {
-                    self.magmoms.set_f64_row(i, m);
-                }
+            if has_mm && let Some(m) = a.magmom() {
+                self.magmoms.set_f64_row(i, m);
             }
             if has_dsp && let Some(d) = a.displacement() {
                 self.displacements.set_f64_row(i, d);
@@ -2314,7 +2441,7 @@ impl ConFrameBuilder {
                 found: spreads.len(),
             });
         }
-        for (i, chunk) in spreads.chunks_exact(3).enumerate() {
+        for (i, chunk) in spreads.as_chunks::<3>().0.iter().enumerate() {
             let row = [chunk[0], chunk[1], chunk[2]];
             if !spread_row_ok(row) {
                 return Err(invalid_spread(i));
@@ -3037,15 +3164,11 @@ impl ConFrameBuilder {
         for (i, a) in atom_data.iter().enumerate() {
             pos.set_f64_row(i, [a.x, a.y, a.z]);
             ids_arr[i] = a.atom_id;
-            if has_vel {
-                if let Some(v) = a.velocity() {
-                    vel.set_f64_row(i, v);
-                }
+            if has_vel && let Some(v) = a.velocity() {
+                vel.set_f64_row(i, v);
             }
-            if has_frc {
-                if let Some(f) = a.force() {
-                    frc.set_f64_row(i, f);
-                }
+            if has_frc && let Some(f) = a.force() {
+                frc.set_f64_row(i, f);
             }
             if has_eng {
                 eng.set_f64(i, a.energy().unwrap_or(0.0));
@@ -3056,10 +3179,8 @@ impl ConFrameBuilder {
             if has_spn {
                 spn.set_f64(i, a.spin().unwrap_or(0.0));
             }
-            if has_mag {
-                if let Some(m) = a.magmom() {
-                    mag.set_f64_row(i, m);
-                }
+            if has_mag && let Some(m) = a.magmom() {
+                mag.set_f64_row(i, m);
             }
             if has_dsp && let Some(d) = a.displacement() {
                 dsp.set_f64_row(i, d);
@@ -3115,6 +3236,56 @@ impl ConFrameBuilder {
     }
 }
 
+fn pack_rows(n: usize, mut one: impl FnMut(usize) -> [f64; 3]) -> Vec<f64> {
+    let mut data = Vec::with_capacity(n.saturating_mul(3));
+    for i in 0..n {
+        let row = one(i);
+        data.extend_from_slice(&row);
+    }
+    data
+}
+
+fn pack_col(n: usize, mut one: impl FnMut(usize) -> f64) -> Vec<f64> {
+    let mut data = Vec::with_capacity(n);
+    for i in 0..n {
+        data.push(one(i));
+    }
+    data
+}
+
+fn store_rows(
+    kind: crate::storage_dtype::ElementKind,
+    n: usize,
+    data: Vec<f64>,
+) -> crate::storage_dtype::FloatArray2 {
+    use crate::storage_dtype::{ElementKind, FloatArray2};
+    if kind == ElementKind::Float64 {
+        return FloatArray2::from_f64_row_major(n, 3, data);
+    }
+    let mut arr = FloatArray2::zeros(kind, n, 3);
+    for i in 0..n {
+        let o = i * 3;
+        arr.set_f64_row(i, [data[o], data[o + 1], data[o + 2]]);
+    }
+    arr
+}
+
+fn store_col(
+    kind: crate::storage_dtype::ElementKind,
+    n: usize,
+    data: Vec<f64>,
+) -> crate::storage_dtype::FloatArray1 {
+    use crate::storage_dtype::{ElementKind, FloatArray1};
+    if kind == ElementKind::Float64 {
+        return FloatArray1::from_f64_vec(data);
+    }
+    let mut arr = FloatArray1::zeros(kind, n);
+    for (i, value) in data.iter().copied().enumerate() {
+        arr.set_f64(i, value);
+    }
+    arr
+}
+
 /// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
 /// Prefer [`con_frame_from_atom_data_with_positions`] on the CON parse hot path
 /// when positions were already written into SoA during coordinate parsing.
@@ -3163,13 +3334,14 @@ pub(crate) fn con_frame_coords_only_with_ids(
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
 
-    let mut mass_flat = vec![0.0f64; n];
-    let mut off = 0usize;
+    let mut mass_flat = Vec::with_capacity(n);
     for (ti, &count) in header.natms_per_type.iter().enumerate() {
         let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
-        let end = (off + count).min(n);
-        mass_flat[off..end].fill(m);
-        off = end;
+        let take = count.min(n.saturating_sub(mass_flat.len()));
+        mass_flat.extend(std::iter::repeat_n(m, take));
+    }
+    if mass_flat.len() < n {
+        mass_flat.resize(n, 0.0);
     }
     let masses_arr = if dt.masses == crate::storage_dtype::ElementKind::Float64 {
         FloatArray1::from_f64_vec(mass_flat)
@@ -3250,15 +3422,11 @@ pub fn con_frame_from_atom_data_with_positions(
     }
     for (i, a) in atom_data.iter().enumerate() {
         ids_arr[i] = a.atom_id;
-        if has_vel {
-            if let Some(v) = a.velocity() {
-                vel.set_f64_row(i, v);
-            }
+        if has_vel && let Some(v) = a.velocity() {
+            vel.set_f64_row(i, v);
         }
-        if has_frc {
-            if let Some(f) = a.force() {
-                frc.set_f64_row(i, f);
-            }
+        if has_frc && let Some(f) = a.force() {
+            frc.set_f64_row(i, f);
         }
         if has_eng {
             eng.set_f64(i, a.energy().unwrap_or(0.0));
@@ -3269,10 +3437,8 @@ pub fn con_frame_from_atom_data_with_positions(
         if has_spn {
             spn.set_f64(i, a.spin().unwrap_or(0.0));
         }
-        if has_mm {
-            if let Some(m) = a.magmom() {
-                mm.set_f64_row(i, m);
-            }
+        if has_mm && let Some(m) = a.magmom() {
+            mm.set_f64_row(i, m);
         }
         if has_dsp && let Some(d) = a.displacement() {
             dsp.set_f64_row(i, d);
@@ -3911,10 +4077,10 @@ mod tests {
     fn builder_set_atom_id_out_of_bounds_is_loud() {
         let mut b = three_atom_builder();
         let err = b.set_atom_id(99, 0).unwrap_err();
-        assert!(matches!(err, crate::error::ParseError::IndexOutOfBounds {
-            index: 99,
-            len: 3
-        }));
+        assert!(matches!(
+            err,
+            crate::error::ParseError::IndexOutOfBounds { index: 99, len: 3 }
+        ));
     }
 
     #[test]

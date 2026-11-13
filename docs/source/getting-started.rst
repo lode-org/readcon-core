@@ -11,43 +11,43 @@ Getting started
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.18.1``).
+Pick **one** language. Version pins match this tree (``0.22.0``).
 
 .. table::
 
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Package            | Install                                                                             | Destination                                                                                                                                 |
-    +====================+=====================================================================================+=============================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.18.1'``                                                   | `PyPI <https://pypi.org/project/readcon/>`_                                                                                                 |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.18.1'``                                         | `PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)                                   |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Rust CON I/O       | ``cargo add readcon-core@0.18.1``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                                   |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Rust + chemfiles   | ``cargo add readcon-core@0.18.1 --features chemfiles``                              | same crate                                                                                                                                  |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | readcon-db         | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `docs <https://lode-org.github.io/readcon-db/docs/>`_ · `PyPI <https://pypi.org/project/readcon-db/>`_                                      |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                  |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                  |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-    | Prebuilt C ABI     | ``readcon-core-clib-$VER-$target.tar.gz`` on the GitHub Release                     | :doc:`bindings` (Julia / Fortran / ``pkg-config``)                                                                               |
-    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Package            | Install                                                                             | Destination                                                                                                                     |
+    +====================+=====================================================================================+=================================================================================================================================+
+    | Python CON I/O     | ``pip install 'readcon==0.22.0'``                                                   | `readcon on PyPI <https://pypi.org/project/readcon/>`_                                                                          |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.22.0'``                                         | `readcon-chemfiles on PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)  |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Rust CON I/O       | ``cargo add readcon-core@0.22.0``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                       |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Rust + chemfiles   | ``cargo add readcon-core@0.22.0 --features chemfiles``                              | same crate                                                                                                                      |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | readcon-db         | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `readcon-db docs <https://lode-org.github.io/readcon-db/docs/>`_ · `readcon-db on PyPI <https://pypi.org/project/readcon-db/>`_ |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Julia              | from this repo: ``julia --project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'`` | :doc:`bindings`                                                                                                                 |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | C / C++ / Fortran  | CMake FetchContent, Meson wrap, or ``pkg-config readcon-core``                      | :doc:`bindings`                                                                                                                 |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
+    | Prebuilt C ABI     | ``readcon-core-clib-$VER-$target.tar.gz`` on the GitHub Release                     | :doc:`bindings` (Julia / Fortran / ``pkg-config``)                                                                              |
+    +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
 
 Python: CON I/O
 ~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon==0.18.1'
+    pip install 'readcon==0.22.0'
 
 Python: CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.18.1'
+    pip install 'readcon-chemfiles==0.22.0'
     # do not also install lean readcon in the same venv
 
 Rust: CON I/O
@@ -55,14 +55,14 @@ Rust: CON I/O
 
 .. code:: shell
 
-    cargo add readcon-core@0.18.1
+    cargo add readcon-core@0.22.0
 
 Rust: with conversion
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    cargo add readcon-core@0.18.1 --features chemfiles
+    cargo add readcon-core@0.22.0 --features chemfiles
 
 readcon-db
 ~~~~~~~~~~
@@ -100,14 +100,14 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.18.1/readcon-core-cxx-0.18.1.tar.gz
-      URL_HASH SHA256=2472eb5782a12dd61f847e26629587a57b3c1b5aa52de66e93c4caaa383e164a
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.22.0/readcon-core-cxx-0.22.0.tar.gz
+      URL_HASH SHA256=7bf0abe8fb7b21549f47a61c75025782cc116f8acefd7eb755a587c96caa7186
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
 
-The slim cxx tarball on the ``v0.18.1`` GitHub Release is the FetchContent
-URL. A vendor tarball (``readcon-core-cxx-0.18.1-vendor.tar.gz``) ships
+The slim cxx tarball on the ``v0.22.0`` GitHub Release is the FetchContent
+URL. A vendor tarball (``readcon-core-cxx-0.22.0-vendor.tar.gz``) ships
 crates for offline builds. The Meson wrap file is
 ``packaging/wrapdb/readcon-core.wrap`` on that same release.
 
@@ -164,25 +164,25 @@ Documentation follows `Diátaxis <https://diataxis.fr/>`_. Use one quadrant at a
     +-------------------------------------------------+------------------------------------------------+-------------+
     | Goal                                            | Page                                           | Kind        |
     +=================================================+================================================+=============+
-    | Learn CON I/O end-to-end                        | :doc:`tutorial`                     | Tutorial    |
+    | Learn CON I/O end-to-end                        | :doc:`tutorial`                                | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Migrate foreign formats → CON (+ db, selection) | :doc:`migrate`                       | How-to      |
+    | Migrate foreign formats → CON (+ db, selection) | :doc:`migrate`                                 | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Task recipes by language                        | :doc:`howto`                           | How-to      |
+    | Task recipes by language                        | :doc:`howto`                                   | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | XYZ / PDB / GRO → CON                           | :doc:`chemfiles-tutorial` | Tutorial    |
+    | XYZ / PDB / GRO → CON                           | :doc:`chemfiles-tutorial`                      | Tutorial    |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Batch convert / C conversion API                | :doc:`chemfiles-howto`       | How-to      |
+    | Batch convert / C conversion API                | :doc:`chemfiles-howto`                         | How-to      |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why conversion is optional; bonds               | :doc:`chemfiles-explain`   | Explanation |
+    | Why conversion is optional; bonds               | :doc:`chemfiles-explain`                       | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Why CON / sections / stack                      | :doc:`faq`, :doc:`evolution` | Explanation |
+    | Why CON / sections / stack                      | :doc:`faq`, :doc:`evolution`                   | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | On-disk format                                  | :doc:`spec`                             | Reference   |
+    | On-disk format                                  | :doc:`spec`                                    | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | API tables                                      | :doc:`bindings`                     | Reference   |
+    | API tables                                      | :doc:`bindings`                                | Reference   |
     +-------------------------------------------------+------------------------------------------------+-------------+
-    | Measurements (ASV / Cachegrind / peers)         | :doc:`benchmarks`                 | Explanation |
+    | Measurements (ASV / Cachegrind / peers)         | :doc:`benchmarks`                              | Explanation |
     +-------------------------------------------------+------------------------------------------------+-------------+
 
 See :doc:`the frequently asked questions <faq>` for the package or optional feature that each task needs and for the library layout.

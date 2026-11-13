@@ -9,26 +9,27 @@ What we measure
 
 .. table::
 
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |   Rank | Command / artifact                                                         | Answers                                                                  |
-    +========+============================================================================+==========================================================================+
-    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh`` | Instruction-count deltas on fixed CON parse / skip / write / float paths |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    | 2 (PR) | ``benchmarks/workflow/Snakefile`` drives ``asv continuous``; memory via    | Python wall time and memray peak, base vs head, one runner               |
-    |        | ``asv_bench_memray``                                                       |                                                                          |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      3 | ``benches/compare_readers.py``                                             | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf               |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      4 | ``benches/multiformat_traj.py``                                            | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON             |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      5 | ``benches/ase_traj_vs_con.py``                                             | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |      6 | ``benches/h5md_vs_con.py``                                                 | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                  |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |  local | ``benchmarks/workflow/weak/Snakefile`` launches asv and mpirun locally     | Frames per worker stay fixed. Efficiency is t(1)/t(w).                   |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
-    |  local | ``cargo bench`` (Criterion)                                                | Rust microbench latency; optional PR job saves baselines                 |
-    +--------+----------------------------------------------------------------------------+--------------------------------------------------------------------------+
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | Rank   | Command / artifact                                                                           | Answers                                                                           |
+    +========+==============================================================================================+===================================================================================+
+    | 1 (CI) | ``examples/cachegrind_harness.rs`` via ``scripts/run_cachegrind_bench.sh``                   | Instruction-count deltas on fixed CON parse / skip / write / float paths          |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 2 (PR) | ``benchmarks/workflow/Snakefile`` drives ``asv continuous``; memory via ``asv_bench_memray`` | Python wall time and memray peak, base vs head, one runner                        |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 3      | ``benches/compare_readers.py``                                                               | Same CON text vs ASE ``ase.io.eon`` and eOn-style C sscanf                        |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 4      | ``benches/multiformat_traj.py``                                                              | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON                      |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 5      | ``benches/ase_traj_vs_con.py``                                                               | ASE ``.traj`` / NetCDF / XYZ vs ``readcon.read_chemfiles`` vs native CON          |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | 6      | ``benches/h5md_vs_con.py``                                                                   | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ                           |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | local  | ``benchmarks/workflow/weak/Snakefile`` launches asv and mpirun                               | Frames per worker stay fixed. Efficiency is t(1)/t(w).                            |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | local  | ``cargo bench`` (Criterion)                                                                  | Rust microbench latency; optional PR job saves baselines                          |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
+    | local  | ``benches/stream_compressed.py``                                                             | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
+    +--------+----------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
 
 Regression gates in CI:
 
@@ -79,35 +80,37 @@ benchmarks.
 
 2. Fifteen main-vs-main repetitions of the base commit, on that runner, set a
    per-benchmark noise band. Each within-run ratio is median(later)/median(earlier).
-   That upper bound is the larger of the linear 99th percentile and median + 3*median
+   That upper bound is the larger of the linear 99th percentile and median + 3\*median
    absolute deviation (MAD); that lower bound is the smaller of the 1st percentile and
-   median - 3*MAD when that bound is positive. Time uses ``asv run --interleave-rounds`` (twelve
+   median - 3\*MAD when that bound is positive. Time uses ``asv run --interleave-rounds`` (twelve
    rounds of six repeats, 72 samples). Odd rounds are one side and even rounds
    the other, 36 samples a side, the same alternation as the comparison.
    Each round is its own process of one installed build. A speed shift that
    covers an odd round and the following even round cancels in their ratio,
    so that bound sits closer to 1 than a ratio of two builds. Each repetition
-   also keeps the two side medians. A second timing upper bound is a Student t
+   also keeps the two side medians.    A second timing upper bound is a Student t
    prediction limit for a ratio of two of those medians, and the second lower
    bound is the reciprocal. The false-slowdown budget is 0.01, the complement
-   of the within-run 99th percentile, split across the timing rows in this
-   one comparison. The timing noise band uses the wider upper bound
+   of the within-run 99th percentile. That budget is split across the timing
+   rows in this one comparison. The timing noise band uses the wider upper bound
    and the smaller lower bound. The limit describes a new ratio from the same
-   build. A rebuilt extension can move a short benchmark by more than that
-   limit even when that benchmark's source did not change. The log also records
-   the widest side-median ratio, the pairwise 99th percentile of the side-median
-   ratios, and the median + 3*MAD fence of those ratios. Three raw MADs are
-   about 2.02 standard deviations for a normal ratio. Those three recorded
-   numbers do not set the bound.
+   build. An identical commit stays inside it. A rebuilt extension can move a
+   short benchmark by more than that limit even when that benchmark's source
+   did not change. The log also records the widest side-median ratio, the
+   pairwise 99th percentile of the side-median ratios, and the
+   median + 3\*MAD fence of those ratios. Three raw MADs are about 2.02
+   standard deviations when the ratios are normal, because a normal MAD is
+   sigma times the 75th percentile of the standard normal. Those three
+   recorded numbers do not set the bound.
    The timing comparison runs after the timing repetitions and before the
    memory repetitions.
    Timing classes do not set
-   ``number``. asv_runner's default sample time is 0.01 s.
+   ``number``. asv\_runner's default sample time is 0.01 s.
    Each sample targets that default.
    Memory classes are separate and set ``number = 1``. Memory uses successive
-   one-round ``asv run`` calls, because a memray ``ray_*`` result is one peak
-   and asv does not keep that scalar in ``samples`` across rounds. Odd rounds
-   vs even rounds, six peaks a side. The memory upper bound is the within-run
+   one-round ``asv run`` calls, because a memray ``ray_*`` result is one peak and
+   asv does not keep that scalar in ``samples`` across rounds. Odd rounds vs
+   even rounds, six peaks a side. The memory upper bound is the within-run
    bound widened by one allocator granule over the median base peak. The
    granule is the usable size of a one-byte malloc. A one-byte peak change
    is one granule or less, so it stays inside the band. One extra frame,
@@ -122,8 +125,7 @@ benchmarks.
 4. ``results/comparison.txt`` calls a change significant only when the head/base
    median ratio is outside that benchmark's noise band. The table's Upper
    column is that row's bound. The same row carries N, the base median, the
-   head median, and the base and head interquartile ranges.
-   ``results/row-bounds.txt`` records the benchmark,
+   head median, and the base and head interquartile ranges. ``results/row-bounds.txt`` records the benchmark,
    the within-run upper, the between-run upper, and the upper used.
    A blank mark is not significant. ``ci_bench_commenter.yml`` posts the file via
    `asv-perch <https://github.com/HaoZeke/asv-perch>`_. Timing uses the timing
@@ -217,22 +219,21 @@ the code, not a promise about every host):
 
 - Atom vectors: sized from the CON header before filling
 
-- File load for ``read_con`` / ``read_all_frames``: one owned buffer.
-  ``read_file_contents`` still maps an uncompressed file at or above 64 KiB
-  (``MMAP_THRESHOLD`` in ``src/compression.rs``) for the streaming iterator
-  when ``mmap=True``.
+- File load: ``read_to_string`` below 64 KiB, mmap at/above (``MMAP_THRESHOLD`` in
+  ``src/compression.rs``)
 
-- Multi-frame parse on the default path stays on the calling thread.
-  ``n_threads >= 2`` selects a Rayon pool. Sequential versus pinned workers:
-  ``examples/wall_scale_harness.rs`` writes ``benches/results/wall_scale.json``
-  (host, date, commit). That JSON is Table io in ``paper/cpc/main.tex``.
-  Do not mix it with the Python ``readcon.read_con`` wall table.
+- Multi-frame parallel parse: Rayon when buffer ≥ 48 KiB and ``parallel`` is on
+  (``PARALLEL_BYTES_THRESHOLD`` in ``src/iterators.rs``). Sequential vs
+  pinned workers: ``examples/wall_scale_harness.rs`` writes
+  ``benches/results/wall_scale.json`` (host, date, commit). That JSON is
+  Table io in ``paper/cpc/main.tex``. Do not mix it with the Python
+  ``readcon.read_con`` wall table.
 
 - Weak scaling grows the frame count with the worker count:
   ``n_frames = frames_per_worker * workers``. Threads and MPI ranks are
   separate curves. The ladder is every power of two from 1 through the
   physical core count, plus that count when it is not a power of two.
-  Physical cores are ``lscpu`` cores per socket times sockets. Six is the
+  Physical cores are lscpu cores per socket times sockets. Six is the
   number of serial repeats at each point. Efficiency is ``t(1)/t(w)``
   with a dashed ideal at 1.
   ``benchmarks/workflow/weak/Snakefile`` launches asv for threads and
@@ -276,7 +277,7 @@ Public API model and hot path
 
 ****Python****
 
-Multi-frame parse paths release the GIL via ``py.detach`` (``src/python.rs``) around
+Multi-frame parse paths release the global interpreter lock (GIL) via ``py.detach`` (``src/python.rs``) around
 the Rust work; ``iter_con`` yields full frames.
 
 Criterion (local Rust latency)
@@ -303,6 +304,16 @@ Per frame the library keeps type symbols as shared ``Arc<str>`` (per type, not
 per atom), pre-sized atom storage from headers, and parses floats from borrowed
 line slices (no intermediate atom-line ``String``).
 
+In Python, ``iter_con(path)`` keeps the whole decompressed file in memory while it iterates.
+``iter_con(path, stream=True)`` keeps about one frame plus 1 MiB (mebibyte), and ``mmap=True`` keeps about 32 MiB of an uncompressed file resident on Linux.
+``benches/stream_compressed.py`` runs each mode in a fresh process over a plain and a gzip file and records its wall time and peak resident set size.
+The peak is read from ``VmHWM``, so the script needs Linux.
+
+.. code:: shell
+
+    maturin develop --release --features python
+    python benches/stream_compressed.py --frames 10000 --repeats 5 --out stream.json
+
 .. figure:: img/memory_usage.svg
 
     Peak RSS plot (from historical peer JSON; re-run ``make_plots.py`` to refresh)
@@ -324,6 +335,32 @@ Statistical analysis (optional)
 `bayescomp <https://github.com/HaoZeke/bayescomp>`_ can fit Gamma-family models
 to Criterion JSON and ``compare_readers.py`` timings when you want credible
 intervals; it is not part of the PR gate.
+
+Head to head
+------------
+
+``benchmarks/workflow/Snakefile`` target ``h2h`` runs one rule per reader.
+Each rule calls an asv class under ``bench/h2h/asv/``.
+The class sets ``timeout = 600`` and defines ``time_*`` and ``track_*`` methods.
+Paper numbers come from those rules.
+The same-file table reads one con file: readcon from C, Fortran, and Python, the upstream eon client, eon Python, and the Atomic Simulation Environment (ASE) with the eon format.
+The nearest-native table reads different files that carry the same atoms and the same cell.
+NumPy reads an npy coordinate array, which has no cell.
+ASE and chemfiles read extended xyz.
+``OVITO`` reads extended xyz.
+pymatgen reads a POSCAR.
+MDAnalysis reads a PDB file with a CRYST1 record.
+``scripts/check_version_sot.sh`` scans the tree for the package version string.
+It allows that string only in a fixed list of packaging files and in ``docs/source`` rst pages.
+A file outside that list fails the scan.
+The paper directory is outside the list, so a full ``cargo test`` reports those paths.
+The 207 library tests do not run that scan.
+A row passes only when the atom count, the cell, and the coordinates match.
+NumPy has no cell, so that row fails the cell check.
+The host line is Intel Xeon Processor, the ``uname -m`` value, ``nproc``, and the memory total.
+Every arm is pinned with ``taskset -c 0``.
+The in-process Python read and the fresh-process Python read are separate rows.
+The measured medians are in ``bench/h2h/SUMMARY.md``.
 
 Reproduce (one place)
 ---------------------

@@ -136,10 +136,7 @@ pub fn property_to_json(prop: &Property) -> Value {
 }
 
 fn normalize_meta_key(name: &str) -> String {
-    name.trim()
-        .to_ascii_lowercase()
-        .replace('-', "_")
-        .replace(' ', "_")
+    name.trim().to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
 /// Map a chemfiles frame property name into a reserved `meta::*` key when possible.
@@ -440,10 +437,10 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         // chemfiles has no fix/constraint flags; default all mobile.
         let fixed = [false, false, false];
         builder.add_atom(symbol, pos[0], pos[1], pos[2], fixed, i as u64, mass);
-        if let Some(vels) = velocities {
-            if let Some(v) = vels.get(i) {
-                builder.with_velocity(*v);
-            }
+        if let Some(vels) = velocities
+            && let Some(v) = vels.get(i)
+        {
+            builder.with_velocity(*v);
         }
 
         let mut atom_props = BTreeMap::new();
@@ -669,7 +666,7 @@ pub fn con_frames_from_memory_with(
     let mut chfl_frame = Frame::new();
     for i in 0..nsteps {
         reader.read(&mut chfl_frame)?;
-        if i < start || i >= end || (i - start) % stride != 0 {
+        if i < start || i >= end || !(i - start).is_multiple_of(stride) {
             continue;
         }
         apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;

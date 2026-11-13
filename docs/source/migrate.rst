@@ -12,6 +12,56 @@ How-to — migrate a stack onto CON
 
 :doc:`The frequently asked questions <faq>` explain what a code gains by moving onto .con, and what ``readcon-db``, the frame application programming interface (API) and the plotting tools add.
 
+Moving to 0.20
+--------------
+
+``builder%add_atom`` and ``builder%add_atom_full`` take the per-axis fixed
+flags before the atom id and the mass. That is the ``rkr_frame_add_atom_full``
+order. A caller that still passes the id and the mass first is on the
+previous public argument order:
+
+.. code:: fortran
+
+    ! previous public order
+    st = bd%add_atom(symbol, x, y, z, atom_id, mass, fixed_x, fixed_y, fixed_z)
+    ! current public order
+    st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass)
+    st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, &
+         velocity=vel, force=frc)
+
+``velocity`` and ``force`` are optional rank-1 arrays of length 3 and still
+follow the mass. ``add_atom`` takes ``velocity`` only.
+
+Stock CON and convel files read coordinates through the column walker.
+Python ``read_positions`` returns one ``(frames, atoms, 3)`` array and
+``read_coords`` adds masses and the cell. C ``rkr_read_positions`` returns
+that column without building frame objects. Free the handle with
+``rkr_free_position_block``. Frames that do not share one atom count are
+an error.
+
+Moving to 0.19
+--------------
+
+``read_all_frames`` and ``read_con`` without ``n_threads`` stay on the calling
+thread. Pass ``n_threads`` of 2 or more for a Rayon pool. The older docs
+that described a 48 KiB automatic pool do not match this reader.
+
+``read_extxyz`` returns a dict with ``positions``, ``masses``, ``cell``, ``species``,
+and ``arrays``. It used to return a tuple of the three numeric arrays.
+Index the dict. ``species`` rows are tuples, and a repeated symbol is one
+string object.
+
+``write_con`` streams one frame at a time and flushes before it returns.
+``append=True`` extends an uncompressed file. ``.gz`` and ``.zst`` select the
+codec from the extension. ``write_con_string`` takes ``start`` and ``stop``.
+A ``read_con`` result is written with the same header as the C, Fortran, and
+Julia rewrites: the current spec, ``con_spec_minor`` when the file omitted it,
+default units when the file omitted them, and the spec 2 constraint mask.
+A collective write of that result matches the serial write.
+
+The ASE formats are the ``ase-readcon`` package, entry point group
+``ase.ioformats``, names ``readcon-con`` and ``readcon-convel``.
+
 One-command convert (CLI)
 -------------------------
 
@@ -43,7 +93,7 @@ Chemfiles-linked install for foreign formats:
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.18.1'   # or: maturin develop --features python,chemfiles
+    pip install 'readcon-chemfiles==0.22.0'   # or: maturin develop --features python,chemfiles
 
 .. code:: python
 
@@ -117,18 +167,18 @@ After conversion
 
 .. table::
 
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Goal                         | Page                                                                                                                                                |
-    +==============================+=====================================================================================================================================================+
-    | Learn native CON I/O         | :doc:`tutorial`                                                                                                                          |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Selection / bonds on CON     | :doc:`chemfiles-howto`, :doc:`faq`                                                                                          |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Declared sections / validate | :doc:`faq`, :doc:`spec`                                                                                                                |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Link C / Fortran / Julia     | :doc:`bindings`, :doc:`howto`                                                                                                    |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | readcon-db                   | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/docs/>`_                                     |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-    | Plotting                     | `chemparseplot <https://chemparseplot.rgoswami.me>`_ · `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_                                               |
-    +------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | Goal                         | Page                                                                                                           |
+    +==============================+================================================================================================================+
+    | Learn native CON I/O         | :doc:`tutorial`                                                                                                |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | Selection / bonds on CON     | :doc:`chemfiles-howto`, :doc:`faq`                                                                             |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | Declared sections / validate | :doc:`faq`, :doc:`spec`                                                                                        |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | Link C / Fortran / Julia     | :doc:`bindings`, :doc:`howto`                                                                                  |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | readcon-db                   | `readcon-db <https://github.com/lode-org/readcon-db>`_ · `docs <https://lode-org.github.io/readcon-db/docs/>`_ |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+
+    | Plotting                     | `chemparseplot <https://chemparseplot.rgoswami.me>`_ · `rgpycrumbs <https://rgpycrumbs.rgoswami.me>`_          |
+    +------------------------------+----------------------------------------------------------------------------------------------------------------+

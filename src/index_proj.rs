@@ -495,10 +495,10 @@ mod tests {
             .header
             .energy()
             .or_else(|| fr2.header.metadata.get("energy").and_then(|v| v.as_f64()));
-        if let Some(x) = e {
-            if !x.is_finite() {
-                assert!(finite_energy(&fr2).is_none());
-            }
+        if let Some(x) = e
+            && !x.is_finite()
+        {
+            assert!(finite_energy(&fr2).is_none());
         }
     }
 

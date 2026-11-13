@@ -8,7 +8,10 @@ version in the filename; their version is `announcement_tag` and
 `app_version` in dist-manifest.json. This check requires VERSION, the
 git tag, those manifest fields, and every versioned filename to be one
 version. An unversioned dist archive is accepted only when the manifest
-lists it and that version matches.
+lists it and that version matches. Per-target and global
+``*-dist-manifest.json`` files are the copies build jobs hand to the
+host job. Their JSON version has to match, and the host job deletes
+them before it uploads the release.
 """
 
 from __future__ import annotations
@@ -17,8 +20,12 @@ import argparse
 import hashlib
 import json
 import re
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
 # A version prefix is not enough. A wrap whose name contains the version is
@@ -68,8 +75,21 @@ def versioned_name(name: str) -> str | None:
     return None
 
 
+def is_scratch_manifest(name: str) -> bool:
+    """True for ``global-`` and ``<triple>-dist-manifest.json``.
+
+    ``plan-dist-manifest.json`` matches too. ``dist-manifest.json`` does
+    not, and stays in ``UNVERSIONED``.
+    """
+    return name.endswith("-dist-manifest.json")
+
+
 def is_unversioned_dist(name: str) -> bool:
-    return name in UNVERSIONED or DIST_BINARY.match(name) is not None
+    return (
+        name in UNVERSIONED
+        or is_scratch_manifest(name)
+        or DIST_BINARY.match(name) is not None
+    )
 
 
 def manifest_names(path: Path, want: str) -> set[str]:
@@ -181,7 +201,11 @@ def main() -> int:
                 raise SystemExit(
                     f"{path.name} has no version in its name and no dist manifest"
                 )
-            if path.name not in listed and path.name not in UNVERSIONED:
+            if (
+                path.name not in listed
+                and path.name not in UNVERSIONED
+                and not is_scratch_manifest(path.name)
+            ):
                 raise SystemExit(f"{path.name} is not listed in the dist manifest")
             print(f"OK {path.name} via dist manifest v{want}")
             continue

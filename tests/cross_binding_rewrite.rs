@@ -35,10 +35,8 @@ fn accepted_cases() -> Vec<Accepted> {
             continue;
         }
         if line == "[[valid]]" || line == "[[invalid]]" {
-            if valid {
-                if let Some(case) = current.take() {
-                    cases.push(case);
-                }
+            if valid && let Some(case) = current.take() {
+                cases.push(case);
             }
             valid = line == "[[valid]]";
             current = valid.then(|| Accepted {
@@ -60,10 +58,8 @@ fn accepted_cases() -> Vec<Accepted> {
             _ => {}
         }
     }
-    if valid {
-        if let Some(case) = current {
-            cases.push(case);
-        }
+    if valid && let Some(case) = current {
+        cases.push(case);
     }
     cases
 }

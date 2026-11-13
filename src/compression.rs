@@ -96,6 +96,50 @@ pub fn read_file_text(path: &Path) -> Result<String, Box<dyn std::error::Error>>
     }
 }
 
+/// Bytes of one file, mapped when a plain file is large enough.
+///
+/// Compressed input is decoded into a buffer. A plain file under 64 KiB,
+/// or anything that is not a regular file, is read into a buffer. A larger
+/// plain file stays mapped for the parse and is not copied. The bytes are
+/// not checked as UTF-8; the parser reports a bad byte when it reaches it.
+pub enum ByteSource {
+    Buf(Vec<u8>),
+    Map(memmap2::Mmap),
+}
+
+impl ByteSource {
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            ByteSource::Buf(bytes) => bytes,
+            ByteSource::Map(map) => map,
+        }
+    }
+}
+
+/// Load `path` for a parse. See [`ByteSource`].
+pub fn read_bytes_owned(path: &Path) -> Result<ByteSource, Box<dyn std::error::Error>> {
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    let mut magic = [0u8; 4];
+    let n = (&mut file).take(4).read(&mut magic)?;
+    match detect_compression(&magic[..n]) {
+        Compression::None if metadata.is_file() && metadata.len() >= MMAP_THRESHOLD => {
+            let map = unsafe { memmap2::Mmap::map(&file)? };
+            Ok(ByteSource::Map(map))
+        }
+        Compression::None => {
+            let mut bytes = Vec::with_capacity(metadata.len().saturating_add(4) as usize);
+            bytes.extend_from_slice(&magic[..n]);
+            file.read_to_end(&mut bytes)?;
+            Ok(ByteSource::Buf(bytes))
+        }
+        Compression::Gzip | Compression::Zstd => {
+            drop(file);
+            Ok(ByteSource::Buf(read_file_bytes(path)?))
+        }
+    }
+}
+
 /// File bytes in one read when the file is not compressed.
 ///
 /// Gzip and zstd still go through the decoder. Plain text skips the

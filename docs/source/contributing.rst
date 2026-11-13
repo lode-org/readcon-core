@@ -4,6 +4,11 @@ Developer workflow and release guidelines
 
 
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 Development setup
 -----------------
 
@@ -70,7 +75,10 @@ Commit conventions
 
 The project uses `conventional commits <https://www.conventionalcommits.org/>`_ enforced by cocogitto.
 The CI lint check rejects non-conforming commit messages on the PR
-range. Some historical commits use ``docs+bench:`` or untyped merges;
+range. A push whose previous tip is not in the clone, including a
+rewritten branch, is checked from the merge-base with origin/main,
+the same as a new branch. Some historical commits use ``docs+bench:``
+or untyped merges;
 ``cog check --from-latest-tag`` is the local equivalent of the PR gate.
 ``scripts/release-prep.sh`` calls ``scripts/bump-version.sh``, so towncrier
 writes the ``## vX.Y.Z`` heading from the fragments in ``changelog.d/``.
@@ -125,8 +133,8 @@ Branching and workflow
 
 - Bugfix branches: ``fix/<description>``
 
-- Keep commits logical and atomic. Soft-reset and rebase as needed
-  (never on ``main``).
+- Keep commits logical and atomic. Soft-reset and rebase as needed.
+  Contributors MUST NOT soft-reset or rebase ``main``.
 
 - The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
   Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean
@@ -219,9 +227,9 @@ Workflows
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
     | crates.io                 | ``crates_publish.yml``     | ``v*`` tag                                 | ``cargo publish --locked``                                 |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | cxx tarball               | ``cxx_tarball.yml``        | GitHub Release                             | Attach slim + vendor C/C++ source tarballs                 |
+    | cxx tarball               | ``cxx_tarball.yml``        | ``v*`` tag + ``workflow_dispatch``         | Attach slim + vendor C/C++ source tarballs                 |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | clib tarball              | ``c_lib_tarball.yml``      | GitHub Release + ``workflow_dispatch`` tag | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
+    | clib tarball              | ``c_lib_tarball.yml``      | ``v*`` tag + ``workflow_dispatch``         | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
     +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
 
 Benchmark regression detection
@@ -233,7 +241,7 @@ Two-workflow pattern for safe PR comments:
    ``snakemake -s benchmarks/workflow/Snakefile``. asv builds and installs both
    commits. Main-vs-main repetitions on that runner set a per-benchmark
    noise band. For timing, one bound is the wider of the linear 99th
-   percentile and median + 3*median absolute deviation (MAD) of the
+   percentile and median + 3\*median absolute deviation (MAD) of the
    odd-round versus even-round ratios. A second bound is a Student t
    prediction limit for a ratio of two side medians from those repetitions.
    The timing upper bound is the wider of the two. The timing lower bound
@@ -264,7 +272,7 @@ Two-workflow pattern for safe PR comments:
 
 The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
-`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``,
+:doc:`benchmarks` (``benchmarks/``, ``asv.conf.json``,
 ``benchmarks/workflow/Snakefile``).
 
 Executable chemfiles pages
@@ -274,17 +282,16 @@ Executable chemfiles pages
 Continuous integration (CI) runs ``scripts/run-chemfiles-notebook.sh`` from ``ci_python.yml``.
 The script tangles the notebook into ``docs/notebooks/chemfiles_ingress.py``, fails if the committed file differs from the new tangle, and runs it with ``python3``.
 The Rust blocks and the blocks in other languages on :doc:`the chemfiles tutorial page <chemfiles-tutorial>` are prose only, and CI does not run them.
-Do not edit the tangled ``.py`` file by hand.
+Contributors MUST NOT edit the tangled ``.py`` file by hand.
 Change the notebook Org source instead, and tangle it again with ``READCON_TANGLE_UPDATE=1 scripts/run-chemfiles-notebook.sh``.
-
 
 Release process
 ---------------
 
 This section is the only guide a new contributor needs to **cut a release**
-without reading CI YAML. Three layers work together; use all of them and do
-**not** short-circuit with a local-only ``cargo publish`` unless CI secrets are
-broken (fallback is documented below).
+without reading CI YAML. Three layers work together. Use all of them.
+Maintainers MUST NOT short-circuit with a local-only ``cargo publish`` unless
+CI secrets are broken (fallback is documented below).
 
 Mental model (new contributor)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -306,8 +313,8 @@ Mental model (new contributor)
           ├─► workflow "Publish to crates.io": cargo publish --locked
           │         needs repo secret CARGO_REGISTRY_TOKEN
           ├─► workflow "Python wheels": maturin matrix → PyPI (OIDC env `pypi`)
-          ├─► workflow "cxx source tarball": after the GitHub Release exists
-          └─► workflow "C ABI library tarball": prebuilt clib (or dispatch tag later)
+          ├─► workflow "cxx source tarball": v* tag, upload after the Release exists
+          └─► workflow "C ABI library tarball": v* tag (or dispatch tag later)
 
 .. table::
 
@@ -324,18 +331,27 @@ Mental model (new contributor)
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
     | Tag publish | GitHub Release + CLI tarballs          | same cargo-dist ``Release`` workflow on the tag                                                     |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
-    | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (after the Release exists)                                    |
+    | Tag publish | C/C++ source tarballs                  | ``.github/workflows/cxx_tarball.yml`` (``v*`` tag; upload after the Release exists)                 |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
-    | Tag publish | Prebuilt C ABI tarballs                | ``.github/workflows/c_lib_tarball.yml`` (``release`` or ``workflow_dispatch`` ``tag``)              |
+    | Tag publish | Prebuilt C ABI tarballs                | ``.github/workflows/c_lib_tarball.yml`` (``v*`` tag or ``workflow_dispatch`` ``tag``)               |
     +-------------+----------------------------------------+-----------------------------------------------------------------------------------------------------+
 
 Attach prebuilt C ABI to an existing tag
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``: ``release``
-published, or ``workflow_dispatch`` with required ``inputs.tag``. Use this
-to put ``readcon-core-clib-$VER-$target.tar.gz`` on a tag that predates the
-workflow (for example ``v0.14.7``).
+``.github/workflows/c_lib_tarball.yml`` matches ``cxx_tarball.yml``. Both
+start on a ``v*`` tag push, with crates.io, cargo-dist, and wheels. They
+wait until the GitHub Release exists, then upload archives that are not
+already on the release with ``gh release upload --clobber``. They do not
+create the release and do not move the tag. ``workflow_dispatch`` input
+``tag`` backfills an existing release the same way and does not publish
+crates or wheels. Use that to put ``readcon-core-clib-$VER-$target.tar.gz``
+on a tag that predates the workflow (for example ``v0.14.7``):
+
+.. code:: shell
+
+    gh workflow run cxx_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v0.14.7
+    gh workflow run c_lib_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v0.14.7
 
 1. Open Actions → **C ABI library tarball**.
 
@@ -348,11 +364,25 @@ The packager comes from the selected workflow ref. Sources and the
 GitHub Release come from ``inputs.tag``. Windows + chemfiles is an
 **explicit skip** (Python wheel path only).
 
+The uploader skips an asset whose sha256 already matches. It does not
+replace an asset whose bytes differ. On a ``v*`` tag push that mismatch is
+an error and the published file stays. On a ``workflow_dispatch`` backfill
+the same mismatch is a ``::warning::`` and the published file stays, so the
+job can still attach an asset that is missing.
+
+Windows clib builds pass ``/Brepro`` to the MSVC linker and remap the crate
+root and the cargo home out of the binary. The Windows job builds the
+tarball twice from a clean target directory and fails when the sha256
+differs. Linux and macOS pack those same libraries a second time and fail
+the same check. ``scripts/reproducible-tar.sh`` dates members with
+``SOURCE_DATE_EPOCH``, owns them as uid 0, sorts the names, and runs
+``gzip -n``. PDB files are not shipped.
+
 cargo-dist release-PR path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. Do **not** push a version tag from a laptop until the version-bump commit is
-   on ``main`` (via PR). That PR is the **release PR**: it should contain only the
+   on ``main`` (via PR). That PR is the **release PR**: it SHOULD contain only the
    ``maint: bump to vX.Y.Z`` (and any intentional release-note / header sync)
    produced by ``scripts/release-prep.sh`` or the manual checklist below.
 
@@ -362,7 +392,7 @@ cargo-dist release-PR path
    does **not** publish crates or create a GitHub Release on the PR.
 
 3. If the plan job is red, fix ``dist-workspace.toml`` / version alignment and
-   push; do not tag yet.
+   push. Maintainers MUST NOT tag yet.
 
 4. After the PR is merged, on a clean ``main``:
 
@@ -377,8 +407,8 @@ cargo-dist release-PR path
    updates) the GitHub Release with those artifacts and notes derived from
    the changelog.
 
-Regenerate the workflow after editing ``dist-workspace.toml`` (never hand-edit
-``release.yml`` long-term):
+Regenerate the workflow after editing ``dist-workspace.toml``.
+Maintainers MUST NOT hand-edit ``release.yml`` as the long-term copy:
 
 .. code:: shell
 
@@ -395,7 +425,7 @@ crates.io publish workflow and ``CARGO_REGISTRY_TOKEN``
 Workflow file: ``.github/workflows/crates_publish.yml`` (name: **Publish to crates.io**).
 
 - **Trigger**: push of tags matching ``v*``, or ``workflow_dispatch`` on a branch
-  (uses ``Cargo.toml`` package version; on a ``v*`` tag the tag must match that
+  (uses ``Cargo.toml`` package version; on a ``v*`` tag the tag MUST match that
   version or the job fails fast).
 
 - **Action**: ``cargo publish --locked`` for the ``readcon-core`` crate.
@@ -424,7 +454,7 @@ Set or rotate the secret (example using ``pass`` and ``gh``; run as a repo admin
     # Confirm the secret exists (value is never shown)
     gh secret list --repo lode-org/readcon-core
 
-Local fallback only if CI is red and you must unblock users:
+Local fallback only if CI is red and users are blocked:
 
 .. code:: shell
 
@@ -475,7 +505,7 @@ files, citation metadata, and the changelog compare links are cogapp
 output. The Fortran parameter does not repeat ``public``, because the
 module already lists ``readcon_version``. Python ``__version__`` follows
 the Cargo package version, which cogapp stamps from ``VERSION``. A
-Windows checkout may store a carriage return before the newline in
+Windows checkout can store a carriage return before the newline in
 ``VERSION``. ``build.rs`` strips that carriage return. Python reads
 ``VERSION`` in text mode, which already drops it.
 Tool versions are pinned in ``requirements-version.txt``.
@@ -483,13 +513,13 @@ Tool versions are pinned in ``requirements-version.txt``.
 Published pages stay on the org-to-rst export (``emacs --batch -l docs/export.el``
 or ``pixi r -e docs orgbld``). Org sources mark each install pin with an
 at-sign placeholder named READCON\_VERSION. The exporter reads ``VERSION``
-and does not take a version argument. Do not type the version into
+and does not take a version argument. Authors MUST NOT type the version into
 ``docs/source/*.rst``.
 
 News for a release is a fragment under ``changelog.d/``, collected by
 `towncrier <https://towncrier.readthedocs.io/en/stable/>`_. The towncrier
 config imports ``readcon_meta.__version__``, which reads ``VERSION``.
-Do not hand-edit the generated release section of ``CHANGELOG.md``.
+Authors MUST NOT hand-edit the generated release section of ``CHANGELOG.md``.
 Cocogitto still checks commit subjects and can render the git changelog;
 it is a separate program from cogapp, so version stamps call
 ``python -m cogapp``.
@@ -552,9 +582,9 @@ Manual equivalent of the script:
        ./scripts/export-readme.sh
 
 5. The release heading comes from towncrier, which ``bump-version.sh`` already
-   ran. Do not rebuild ``CHANGELOG.md`` with ``cog changelog``; that drops the
+   ran. Authors MUST NOT rebuild ``CHANGELOG.md`` with ``cog changelog``. That drops the
    towncrier marker. Add a fragment under ``changelog.d/`` before the bump.
-   Do not hand-edit the generated release section.
+   Authors MUST NOT hand-edit the generated release section.
 
 6. If the FFI surface changed, run ``scripts/regen-capi-headers.sh`` and commit
    ``include/readcon-core.h`` (CI ``build_test.yml`` runs ``--check``).
@@ -567,7 +597,7 @@ Manual equivalent of the script:
        git tag -s vX.Y.Z -m "vX.Y.Z"
        git push origin vX.Y.Z
 
-8. Do **not** rely on a local ``cargo publish`` unless CI is red; prefer
+8. Maintainers MUST NOT rely on a local ``cargo publish`` unless CI is red. Prefer
    ``crates_publish.yml`` with ``CARGO_REGISTRY_TOKEN`` set. Local fallback:
 
    .. code:: shell
@@ -618,9 +648,9 @@ Python ships **two** distributions from ``python_wheels.yml``:
     +-----------------------+--------------------------------------------+-------------------------------------------------------+
 
 Configure a trusted publisher on **each** PyPI project (same workflow
-``python_wheels.yml``, environment ``pypi``). Do not install both wheels in one
-venv (both export the ``readcon`` module). Prefer ``pip install readcon-chemfiles``
-when selection/import are required; lean ``readcon`` for CON I/O only.
+``python_wheels.yml``, environment ``pypi``). Users MUST NOT install both wheels in one
+venv (both export the ``readcon`` module). Users SHOULD run ``pip install readcon-chemfiles``
+when selection or import are required. Use lean ``readcon`` for CON I/O only.
 ``pip install 'readcon[chemfiles]'`` depends on ``readcon-chemfiles==X.Y.Z`` (pin
 updated by ``scripts/release-prep.sh``).
 
@@ -681,13 +711,13 @@ Updating the C header
 
 The C header ``include/readcon-core.h`` is the shipped ABI, the same
 model as metatensor/metatomic. CMake, Meson, cargo-c, CI, and the
-cxx tarball **never** run cbindgen. Edit the header (or optionally
+cxx tarball MUST NOT run cbindgen. Edit the header (or optionally
 draft with ``scripts/regen-capi-headers.sh``) and commit it with the
 FFI change. CI compiles C/C++ against that file and checks symbols
 in the built library.
 
-``ci_cxx.yml`` installs no cbindgen and must stay green.
+``ci_cxx.yml`` installs no cbindgen and MUST stay green.
 
-The C++ header ``include/readcon-core.hpp`` is hand-maintained and must
+The C++ header ``include/readcon-core.hpp`` is hand-maintained and MUST
 be updated manually to match any changes to ``CAtom``, ``CFrame``, or
 the FFI function signatures.

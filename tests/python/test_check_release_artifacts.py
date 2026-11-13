@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -49,13 +50,13 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_matching_wheel_and_cxx_pass(self) -> None:
         self.assertEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.22.0",
+                "0.22.0",
                 {
-                    "readcon-0.18.1-cp312-cp312-manylinux_2_17_x86_64.whl": "w",
-                    "readcon_chemfiles-0.18.1.tar.gz": "s",
-                    "readcon-core-cxx-0.18.1.tar.gz": "c",
-                    "readcon-core-clib-0.18.1-x86_64-unknown-linux-gnu.tar.gz": "l",
+                    "readcon-0.22.0-cp312-cp312-manylinux_2_17_x86_64.whl": "w",
+                    "readcon_chemfiles-0.22.0.tar.gz": "s",
+                    "readcon-core-cxx-0.22.0.tar.gz": "c",
+                    "readcon-core-clib-0.22.0-x86_64-unknown-linux-gnu.tar.gz": "l",
                 },
             ),
             0,
@@ -64,8 +65,8 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_old_wheel_name_is_refused(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.22.0",
+                "0.22.0",
                 {"readcon-0.17.3-cp312-cp312-manylinux_2_17_x86_64.whl": "w"},
             ),
             0,
@@ -73,15 +74,15 @@ class ReleaseArtifactGuard(unittest.TestCase):
 
     def test_version_file_must_match_the_tag(self) -> None:
         self.assertNotEqual(
-            run("v0.18.1", "0.17.3", {"readcon-0.17.3.tar.gz": "s"}),
+            run("v0.22.0", "0.17.3", {"readcon-0.17.3.tar.gz": "s"}),
             0,
         )
 
     def test_dist_binary_without_manifest_is_refused(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.22.0",
+                "0.22.0",
                 {"readcon-core-x86_64-unknown-linux-gnu.tar.xz": "b"},
             ),
             0,
@@ -100,35 +101,100 @@ class ReleaseArtifactGuard(unittest.TestCase):
         }
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.22.0",
+                "0.22.0",
                 {"readcon-core-x86_64-unknown-linux-gnu.tar.xz": "b"},
                 manifest,
             ),
             0,
         )
 
+    def test_scratch_dist_manifests_are_accepted_when_the_version_matches(self) -> None:
+        name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
+        body = {
+            "announcement_tag": "v0.19.0",
+            "releases": [{"app_version": "0.19.0", "artifacts": [name]}],
+            "artifacts": {name: {"name": name}},
+        }
+        encoded = json.dumps(body)
+        self.assertEqual(
+            run(
+                "v0.19.0",
+                "0.19.0",
+                {
+                    name: "b",
+                    "x86_64-unknown-linux-gnu-dist-manifest.json": encoded,
+                    "global-dist-manifest.json": encoded,
+                    "plan-dist-manifest.json": encoded,
+                },
+            ),
+            0,
+        )
+
+    def test_scratch_dist_manifest_version_must_match_the_tag(self) -> None:
+        name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
+        bad = {
+            "announcement_tag": "v0.17.3",
+            "releases": [{"app_version": "0.17.3", "artifacts": [name]}],
+            "artifacts": {},
+        }
+        self.assertNotEqual(
+            run(
+                "v0.19.0",
+                "0.19.0",
+                {name: "b", "global-dist-manifest.json": json.dumps(bad)},
+            ),
+            0,
+        )
+
+    def test_release_host_installs_python_312_before_the_check(self) -> None:
+        yml = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        setup = yml.find(
+            "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
+        )
+        check = yml.find("Require dist metadata to match the tag")
+        self.assertGreater(setup, 0)
+        self.assertLess(setup, check)
+        self.assertIn('python-version: "3.12"', yml)
+        self.assertIn(
+            'allow-dirty = ["ci"]', (ROOT / "dist-workspace.toml").read_text()
+        )
+
+    def test_dist_backfill_uploads_without_publishing_or_tagging(self) -> None:
+        yml = (ROOT / ".github/workflows/dist_backfill.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", yml)
+        self.assertIn("gh release upload", yml)
+        self.assertIn('--repo "$GITHUB_REPOSITORY"', yml)
+        self.assertIn("--clobber", yml)
+        self.assertIn("ref: ${{ needs.plan.outputs.tag }}", yml)
+        self.assertIn("packager/scripts/check_release_artifacts.py", yml)
+        self.assertNotIn("gh release create", yml)
+        self.assertNotIn("cargo publish", yml)
+        self.assertNotIn("twine", yml)
+        self.assertNotIn("git tag", yml)
+        self.assertNotIn("softprops/action-gh-release", yml)
+
     def test_dist_binary_passes_when_manifest_version_matches(self) -> None:
         name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
         manifest = {
-            "announcement_tag": "v0.18.1",
+            "announcement_tag": "v0.22.0",
             "releases": [
-                {"app_version": "0.18.1", "artifacts": [name, "source.tar.gz"]}
+                {"app_version": "0.22.0", "artifacts": [name, "source.tar.gz"]}
             ],
             "artifacts": {name: {"name": name}},
         }
         self.assertEqual(
-            run("v0.18.1", "0.18.1", {name: "b", "source.tar.gz": "s"}, manifest),
+            run("v0.22.0", "0.22.0", {name: "b", "source.tar.gz": "s"}, manifest),
             0,
         )
 
     def test_wrap_names_are_not_release_assets(self) -> None:
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
+                "v0.22.0",
+                "0.22.0",
                 {
-                    "readcon-core-cxx-0.18.1.tar.gz": "c",
+                    "readcon-core-cxx-0.22.0.tar.gz": "c",
                     "readcon-core.wrap": "slim hash overwritten by vendor",
                 },
             ),
@@ -136,9 +202,9 @@ class ReleaseArtifactGuard(unittest.TestCase):
         )
         self.assertNotEqual(
             run(
-                "v0.18.1",
-                "0.18.1",
-                {"readcon-core-cxx-0.18.1.wrap": "versioned sidecar"},
+                "v0.22.0",
+                "0.22.0",
+                {"readcon-core-cxx-0.22.0.wrap": "versioned sidecar"},
             ),
             0,
         )
@@ -214,28 +280,105 @@ class ReleaseArtifactGuard(unittest.TestCase):
             self.assertIn(f"source_hash = sha256:{vendor_sha}", vendor_wrap)
             self.assertNotEqual(slim_sha, vendor_sha)
 
+    def test_package_scripts_hand_cygpath_output_to_python(self) -> None:
+        for name in ("package-clib.sh", "package-cxx.sh"):
+            text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+            self.assertIn("cygpath -w", text)
+            self.assertIn("sys.argv[1]", text)
+            self.assertNotIn('Path("\'"$ROOT_DIR"\'', text)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            log = root / "cygpath.log"
+            argv_log = root / "python-argv.txt"
+            cygpath = bin_dir / "cygpath"
+            cygpath.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$*" >> "$CYGPATH_LOG"\n'
+                "shift\n"
+                'printf "%s\\n" "$1"\n',
+                encoding="utf-8",
+            )
+            cygpath.chmod(cygpath.stat().st_mode | stat.S_IEXEC)
+            wrapper = bin_dir / "python3"
+            wrapper.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n" "$3" >> "$PYTHON_ARGV"\n'
+                'exec /usr/bin/python3 "$@"\n',
+                encoding="utf-8",
+            )
+            wrapper.chmod(wrapper.stat().st_mode | stat.S_IEXEC)
+            prefix = root / "prefix"
+            (prefix / "include").mkdir(parents=True)
+            (prefix / "lib" / "pkgconfig").mkdir(parents=True)
+            for header in (
+                "readcon-core.h",
+                "readcon-core.hpp",
+                "readcon-metatensor.h",
+            ):
+                (prefix / "include" / header).write_bytes(
+                    (ROOT / "include" / header).read_bytes()
+                )
+            (prefix / "lib" / "libreadcon_core.so").write_text(
+                "stub\n", encoding="utf-8"
+            )
+            out = root / "out"
+            out.mkdir()
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+            env["CYGPATH_LOG"] = str(log)
+            env["PYTHON_ARGV"] = str(argv_log)
+            done = subprocess.run(
+                [
+                    "bash",
+                    "scripts/package-clib.sh",
+                    str(out),
+                    "--from-prefix",
+                    str(prefix),
+                    "--target",
+                    "fixture",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            recorded = log.read_text(encoding="utf-8").splitlines()
+            self.assertTrue(recorded, "cygpath was not called")
+            self.assertTrue(recorded[0].startswith("-w "))
+            version_path = recorded[0].split(" ", 1)[1]
+            self.assertTrue(version_path.endswith("/VERSION"), version_path)
+            self.assertEqual(
+                argv_log.read_text(encoding="utf-8").splitlines()[0],
+                version_path,
+            )
+
     def test_clib_nested_checkout_accepts_the_julia_manifest(self) -> None:
         yml = (ROOT / ".github/workflows/c_lib_tarball.yml").read_text(encoding="utf-8")
+        self.assertIn("cygpath -w", yml)
         self.assertIn(
-            'python3 "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py"',
+            'native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py"',
             yml,
         )
-        self.assertIn('--version-file "$GITHUB_WORKSPACE/src/VERSION"', yml)
-        self.assertIn('--dist "$GITHUB_WORKSPACE/dist-clib"', yml)
+        self.assertIn('native "$GITHUB_WORKSPACE/src/VERSION"', yml)
+        self.assertIn('native "$GITHUB_WORKSPACE/dist-clib"', yml)
         self.assertNotIn(
             'python3 scripts/check_release_artifacts.py --tag "$RELEASE_TAG" --dist dist-clib',
             yml,
         )
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            code = clib_workspace(ws, "0.18.1", "0.18.1", "abc")
+            code = clib_workspace(ws, "0.22.0", "0.22.0", "abc")
             self.assertEqual(code, 0)
             missing = subprocess.call(
                 [
                     sys.executable,
                     "scripts/check_release_artifacts.py",
                     "--tag",
-                    "v0.18.1",
+                    "v0.22.0",
                 ],
                 cwd=ws,
                 stdout=subprocess.DEVNULL,
@@ -246,13 +389,13 @@ class ReleaseArtifactGuard(unittest.TestCase):
     def test_clib_manifest_rejects_a_wrong_version_and_a_wrong_hash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.17.3", "old"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.22.0", "0.17.3", "old"), 0)
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.18.1", "old-url"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.22.0", "0.22.0", "old-url"), 0)
         with tempfile.TemporaryDirectory() as tmp:
             ws = Path(tmp)
-            self.assertNotEqual(clib_workspace(ws, "0.18.1", "0.18.1", "bad-hash"), 0)
+            self.assertNotEqual(clib_workspace(ws, "0.22.0", "0.22.0", "bad-hash"), 0)
 
     def test_cachegrind_harness_builds_with_and_without_chemfiles(self) -> None:
         env = os.environ.copy()
@@ -274,6 +417,9 @@ class ReleaseArtifactGuard(unittest.TestCase):
             check=False,
         )
         self.assertEqual(plain.returncode, 0)
+        missing = _libstdcxx_missing_for_rust_target(env)
+        if missing:
+            self.skipTest(missing)
         featured = subprocess.run(
             [
                 "cargo",
@@ -292,6 +438,50 @@ class ReleaseArtifactGuard(unittest.TestCase):
             check=False,
         )
         self.assertEqual(featured.returncode, 0)
+
+
+def _libstdcxx_missing_for_rust_target(env: dict[str, str]) -> str | None:
+    """Skip reason when clang cannot see libstdc++ for rustc's host triple.
+
+    The chemfiles build compiles C++ with ``clang++ --target=<rustc host>``.
+    A local image can have GCC headers that this triple does not search
+    (``/usr/include/c++/<version>`` rather than the unversioned path clang
+    tries). CI images have matching headers, so a successful probe still
+    builds the harness with and without chemfiles.
+    """
+    host = subprocess.run(
+        ["rustc", "-vV"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    triple = ""
+    for line in host.stdout.splitlines():
+        if line.startswith("host:"):
+            triple = line.split(":", 1)[1].strip()
+            break
+    if not triple:
+        return None
+    probe = subprocess.run(
+        ["clang++", f"--target={triple}", "-fsyntax-only", "-x", "c++", "-"],
+        input="#include <vector>\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    if probe.returncode == 0:
+        return None
+    detail = probe.stderr.strip().splitlines()
+    last = detail[-1] if detail else "libstdc++ headers were not found"
+    if "file not found" not in probe.stderr and "vector" not in probe.stderr:
+        return None
+    return (
+        f"clang++ --target={triple} cannot find the libstdc++ headers ({last}). "
+        "This is the local compiler layout. CI images have the headers, and "
+        "this test still builds the harness there."
+    )
 
 
 def run_dir(tag: str, version: str, dist: Path) -> int:
@@ -342,15 +532,17 @@ lazy = true
     (dist / f"Artifacts-{target}.toml").write_text(toml, encoding="utf-8")
     env = os.environ.copy()
     env["GITHUB_WORKSPACE"] = str(ws)
-    env["RELEASE_TAG"] = "v0.18.1"
+    env["RELEASE_TAG"] = "v0.22.0"
     return subprocess.call(
         [
             "bash",
             "-lc",
-            'python3 "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py" '
+            'native() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; '
+            'else printf "%s\\n" "$1"; fi; }; '
+            'python3 "$(native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py")" '
             '--tag "$RELEASE_TAG" '
-            '--version-file "$GITHUB_WORKSPACE/src/VERSION" '
-            '--dist "$GITHUB_WORKSPACE/dist-clib"',
+            '--version-file "$(native "$GITHUB_WORKSPACE/src/VERSION")" '
+            '--dist "$(native "$GITHUB_WORKSPACE/dist-clib")"',
         ],
         cwd=ws,
         env=env,

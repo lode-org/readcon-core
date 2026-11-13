@@ -48,6 +48,11 @@ echo "==> docs (orgbld + sphinx) and lychee"
 pixi r -e docs docbld
 pixi r -e docs linkcheck
 
+echo "==> pin the cxx wrap from the reproducible slim tarball"
+# One build writes the digest, the wrap, and the docs. The vendor
+# archive is not this pin. cxx_tarball.yml refuses a different upload.
+bash scripts/record-cxx-wrap.sh
+
 echo "==> C/C++ distribution gate (no cbindgen required)"
 scripts/check-cxx-dist.sh
 
@@ -64,7 +69,8 @@ git add VERSION Cargo.toml Cargo.lock meson.build pyproject.toml pyproject.chemf
   include/readcon-core.h include/readcon-core-version.h include/readcon-core.hpp \
   cmake/ fortran/ReadCon/fpm.toml fortran/ReadCon/src/readcon.f90 fortran/README.md \
   julia/ReadCon/Project.toml julia/ReadCon/README.md CITATION.cff codemeta.json .zenodo.json \
-  packaging/wrapdb/readcon-core.wrap towncrier.toml readcon_meta.py docs/source docs/orgmode \
+  packaging/wrapdb/readcon-core.wrap packaging/wrapdb/readcon-core.sha256 \
+  packaging/wrapdb/source-date-epoch towncrier.toml readcon_meta.py docs/source docs/orgmode \
   2>/dev/null || true
 
 echo "Ready. Review, then:"
@@ -73,9 +79,9 @@ echo "  # open PR so .github/workflows/release.yml runs dist plan"
 echo "  # after merge:"
 echo "  git tag -s v${VER} -m \"v${VER}\""
 echo "  git push origin v${VER}"
-echo "  # crates_publish.yml + python_wheels.yml + cargo-dist Release + cxx_tarball.yml"
-echo "  # + c_lib_tarball.yml (or dispatch later with tag=v${VER})"
-echo "  # After the tag: scripts/package-cxx.sh dist/ --vendor"
-echo "  # Attach readcon-core-cxx-${VER}.tar.gz to the GitHub Release (cxx_tarball.yml)"
-echo "  # Attach readcon-core-clib-${VER}-\$target.tar.gz (c_lib_tarball.yml;"
-echo "  #   Actions → C ABI library tarball → tag=v${VER} on a branch that has the workflow)"
+echo "  # On the v* tag: crates_publish.yml, python_wheels.yml, cargo-dist Release,"
+echo "  # cxx_tarball.yml, and c_lib_tarball.yml."
+echo "  # cxx/clib wait for the Release, then gh release upload --clobber."
+echo "  # Backfill an existing release (does not republish crates or wheels, does not move the tag):"
+echo "  #   gh workflow run cxx_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v${VER}"
+echo "  #   gh workflow run c_lib_tarball.yml --repo lode-org/readcon-core --ref main -f tag=v${VER}"

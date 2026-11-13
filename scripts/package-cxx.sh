@@ -30,14 +30,31 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
+# Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
+# drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The
+# path is an argument so those backslashes are not Python string escapes.
+version_file="$ROOT_DIR/VERSION"
+if command -v cygpath >/dev/null 2>&1; then
+    version_file="$(cygpath -w "$version_file")"
+fi
+VERSION="$(
+    python3 -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).read_text().strip(), end="")' \
+        "$version_file"
+)"
 if [[ "$VENDOR" -eq 1 ]]; then
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}-vendor"
 else
     ARCHIVE_NAME="readcon-core-cxx-${VERSION}"
 fi
+
+# Committed source-date-epoch pin when one is present, else the v$VERSION
+# tag or HEAD. Exported before cargo package so the crate and the outer
+# archive share it. A container bind-mount is marked safe.directory.
+SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
+export SOURCE_DATE_EPOCH
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -156,20 +173,29 @@ rm -rf "$DEST/packaging/wrapdb" || true
 # cargo package records the git commit. That would change the digest of the
 # commit that records the digest.
 rm -f "$DEST/.cargo_vcs_info.json" || true
+# A bytecode cache records the absolute path of the tree that imported it.
+find "$DEST" -depth -type d -name '__pycache__' -exec rm -rf {} +
+find "$DEST" -type f -name '*.pyc' -delete
 mkdir -p "$DEST/tests"
 cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
 cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
 
-# Fixed mtime, owner, and gzip header so two builds of one tree share a digest.
-tar -C "$TMP_DIR" \
-    --sort=name \
-    --mtime='UTC 2026-11-07 00:00:00' \
-    --owner=0 --group=0 --numeric-owner \
-    -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
-gzip -n -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
+# Sorted names, uid 0, SOURCE_DATE_EPOCH, and gzip -n. Two builds of one
+# tree share a digest. The wrap pin is not a member of this archive.
+bash "$SCRIPT_DIR/reproducible-tar.sh" \
+    "$ROOT_DIR" \
+    "$TMP_DIR" \
+    "$ARCHIVE_NAME" \
+    "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
-SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+if command -v sha256sum >/dev/null 2>&1; then
+    SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+    SHA="$(shasum -a 256 "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+else
+    SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz")"
+fi
 echo "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 echo "sha256:${SHA}"
 echo "${SHA}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz.sha256"

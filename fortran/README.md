@@ -10,10 +10,21 @@ Production **ISO_C_BINDING** bindings over `include/readcon-core.h`, managed wit
 | `dl_managed_tensor_versioned_t` / `dl_tensor_t` | DLPack C header layout (`dlpack.h`) for field inspect |
 | `frame_t` | Owns `RKRConFrame*`; atoms, cell, **metadata_json**, energy, potential, time, NEB, bonds, **select** |
 | `iterator_t` | Lazy multi-frame via `read_con_file_iterator` |
-| `builder_t` | `rkr_frame_new` (`new_builder` takes an optional line 1 `header`) + `add_atom` (per-axis fixed mask, optional `velocity(3)`) + `add_atom_full` (optional velocity and force) + set_energy / metadata_json / build / **DLPack** |
+| `builder_t` | `rkr_frame_new` (`new_builder` takes an optional line 1 `header`) + `add_atom` / `add_atom_full` + set_energy / metadata_json / build / **DLPack** |
 | `writer_t` | `create_writer_from_path_c` + extend |
 
 Always `call obj%free()` when done (no FINAL — avoids double-free).
+
+`builder%add_atom` and `builder%add_atom_full` follow `rkr_frame_add_atom_full`:
+
+```fortran
+st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass)
+st = bd%add_atom(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity=vel)
+st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, &
+     velocity=vel, force=frc)
+```
+
+`velocity` and `force` are optional `real(real64)` arrays of length 3. Omit `velocity` on `add_atom` when the atom has none.
 
 `last_error_message()` is the underlying text from the most recent failing `extend_one` or writer flush on this thread. `status_message(-4)` stays the generic `I/O error`.
 
@@ -34,7 +45,7 @@ CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via th
 Release tarball instead of `target/release`:
 
 ```bash
-VER=0.18.1
+VER=0.22.0
 TARGET=x86_64-unknown-linux-gnu
 curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
 tar -xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"
@@ -47,7 +58,10 @@ fpm test --flag "$(pkg-config --cflags readcon-core) -cpp" \
 ```
 
 Dispatch `.github/workflows/c_lib_tarball.yml` with `tag=vX.Y.Z` to attach
-those assets to an existing GitHub Release (same hook as `cxx_tarball.yml`).
+those assets to an existing GitHub Release (same `v*` tag push and
+`workflow_dispatch` input as `cxx_tarball.yml`).
+A backfill leaves a published asset untouched when the rebuilt bytes differ
+and records a warning. A tag push treats that mismatch as an error.
 Windows + chemfiles is not a clib asset; use Linux/macOS tarballs.
 
 ## DLPack (builder, full C ABI parity)

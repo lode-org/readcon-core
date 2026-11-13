@@ -8,6 +8,11 @@ Reference — Chemfiles conversion and selection
    Diátaxis *reference*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 :doc:`chemfiles-tutorial`; for tasks see :doc:`chemfiles-howto`; for rationale see
 :doc:`chemfiles-explain`. Binding-wide matrices live in :doc:`bindings`; on-disk ``bonds``
 key in :doc:`spec`.
@@ -47,21 +52,33 @@ Rust modules
 
 .. table::
 
-    +-------------------------------------------+-------------------------------------+
-    | Function                                  | Purpose                             |
-    +===========================================+=====================================+
-    | ``con_frame_from_chemfiles(&Frame)``      | Single chemfiles frame              |
-    +-------------------------------------------+-------------------------------------+
-    | ``con_frame_from_trajectory_path(path)``  | First step of a file                |
-    +-------------------------------------------+-------------------------------------+
-    | ``con_frames_from_trajectory_path(path)`` | All steps                           |
-    +-------------------------------------------+-------------------------------------+
-    | ``con_frames_from_memory(data, format)``  | Buffer + format name (``"XYZ"``, …) |
-    +-------------------------------------------+-------------------------------------+
-    | ``bonds_from_chemfiles_frame``            | Topology → ``Vec<Bond>``            |
-    +-------------------------------------------+-------------------------------------+
-    | ``chemfiles_enabled()``                   | ``const fn`` probe                  |
-    +-------------------------------------------+-------------------------------------+
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | Function                                             | Purpose                                                                       |
+    +======================================================+===============================================================================+
+    | ``con_frame_from_chemfiles(&Frame)``                 | Single chemfiles frame                                                        |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frame_from_trajectory_path(path)``             | First step of a file                                                          |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frame_from_trajectory_path_nth(path, i)``      | Step ``i`` via ``read_step``                                                  |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``nsteps_from_trajectory_path(path)``                | ``Trajectory::nsteps``                                                        |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frames_from_trajectory_path(path)``            | All steps                                                                     |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frames_from_trajectory_path_with(path, opts)`` | Skip / stride / topology / ``guess_bonds``                                    |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frames_from_memory(data, format)``             | Buffer + format name (``"XYZ"``, …)                                           |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``con_frames_from_memory_with``                      | Memory + skip / stride / ``guess_bonds``                                      |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``ChemfilesReadOpts``                                | ``start`` / ``step`` / ``stop`` / ``format`` / ``topology`` / ``guess_bonds`` |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``chemfiles_internal_units_json()``                  | Line-2 units chemfiles actually emits (Å, ps, amu)                            |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``bonds_from_chemfiles_frame``                       | Topology → ``Vec<Bond>``                                                      |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
+    | ``chemfiles_enabled()``                              | ``const fn`` probe                                                            |
+    +------------------------------------------------------+-------------------------------------------------------------------------------+
 
 **Import (stubs without feature):** path/memory helpers return
 ``ChemfilesImportError::FeatureDisabled``. ``con_frame_from_chemfiles`` is only
@@ -84,7 +101,14 @@ available with the feature (needs ``chemfiles::Frame`` in the signature).
     +-------------------------------------------------+--------------------------------------+
 
 Constants: ``CHEMFILES_EXTRA_PREFIX``, ``CHEMFILES_ATOM_PROPS_KEY``,
-``CHEMFILES_ATOM_NAMES_KEY``, ``CHEMFILES_ATOM_TYPES_KEY``.
+``CHEMFILES_ATOM_NAMES_KEY``, ``CHEMFILES_ATOM_TYPES_KEY``,
+``CHEMFILES_RESIDUES_KEY``, ``CHEMFILES_UNIT_SYSTEM_KEY``.
+
+Imported frames stamp chemfiles **internal** units on CON line 2
+(``length`` ``angstrom``, ``time`` ``ps``, ``mass`` ``amu``). Chemfiles converts
+GRO nm → Å (and other format units) on read; the CON numbers are
+already in that system. Energy stays the CON default ``eV`` because
+chemfiles does not convert energies.
 
 Error: ``ChemfilesImportError`` (``Chemfiles`` / ``InvalidFrame`` / ``Io`` /
 ``FeatureDisabled``; ``Chemfiles`` variant only in full builds).
@@ -94,25 +118,29 @@ Python (``import readcon``)
 
 .. table::
 
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | API                                                               | Lean wheel       | ``readcon-chemfiles``          |
-    +===================================================================+==================+================================+
-    | ``has_chemfiles_support()``                                       | ``False``        | ``True``                       |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``read_chemfiles(path)``                                          | ``RuntimeError`` | ``list[ConFrame]`` (all steps) |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``read_chemfiles_first(path)``                                    | ``RuntimeError`` | ``ConFrame``                   |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``read_chemfiles_memory(data, format)``                           | ``RuntimeError`` | ``list[ConFrame]``             |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``select_on_frame(frame, sel)`` / ``frame.select(sel)``           | error            | dict                           |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``select_atom_indices(frame, sel)`` / ``frame.select_atoms(sel)`` | error            | ``list[int]``                  |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``frame.write_con(path)``                                         | yes              | yes                            |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
-    | ``PyConFrame.bonds`` / ``has_bonds``                              | yes              | yes                            |
-    +-------------------------------------------------------------------+------------------+--------------------------------+
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | API                                                                                                   | Lean wheel       | ``readcon-chemfiles``        |
+    +=======================================================================================================+==================+==============================+
+    | ``has_chemfiles_support()``                                                                           | ``False``        | ``True``                     |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``read_chemfiles(path, *, skip=0, step=1, stop=None, topology=None, format=None, guess_bonds=False)`` | ``RuntimeError`` | ``list[ConFrame]``           |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``read_chemfiles_first(path)``                                                                        | ``RuntimeError`` | ``ConFrame``                 |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``read_chemfiles_nth(path, index)``                                                                   | ``RuntimeError`` | ``ConFrame`` (``read_step``) |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``read_chemfiles_nsteps(path)``                                                                       | ``RuntimeError`` | ``int``                      |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``read_chemfiles_memory(data, format, *, skip=0, step=1, stop=None, guess_bonds=False)``              | ``RuntimeError`` | ``list[ConFrame]``           |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``select_on_frame(frame, sel)`` / ``frame.select(sel)``                                               | error            | dict                         |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``select_atom_indices(frame, sel)`` / ``frame.select_atoms(sel)``                                     | error            | ``list[int]``                |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``frame.write_con(path)``                                                                             | yes              | yes                          |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
+    | ``PyConFrame.bonds`` / ``has_bonds``                                                                  | yes              | yes                          |
+    +-------------------------------------------------------------------------------------------------------+------------------+------------------------------+
 
 ``select`` / ``select_on_frame`` dict keys: ``selection``, ``context_size``, ``matches``
 (``list[list[int]]``), ``primary_indices``. ``format`` for memory import is a
@@ -181,7 +209,7 @@ These patterns are what CON selection implements (tests under
 ``chemfiles_selection_cpp_regression`` for topology cases). Format limits
 (``resname``, properties, impropers, geometry thresholds) are CON limits—see
 ``chemfiles-explain.org`` (**What selection cannot see on CON**). The optional
-conversion stack may reuse a third-party grammar engine; that is an
+conversion stack MAY reuse a third-party grammar engine; that is an
 implementation detail, not a second public API surface.
 
 CI / release artifacts
@@ -201,5 +229,5 @@ CI / release artifacts
     | ``crates_publish.yml``                     | crates.io ``readcon-core`` (chemfiles still optional feature)                                                           |
     +--------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
-Pending/active trusted publishers must use **exact** PyPI names ``readcon`` and
+Pending and active trusted publishers MUST use **exact** PyPI names ``readcon`` and
 ``readcon-chemfiles``.

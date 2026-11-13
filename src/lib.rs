@@ -1,6 +1,33 @@
+// glibc's allocator serialises the per-frame shells of a parallel parse
+// on one arena lock. mimalloc keeps a serial read at the same speed and
+// lets those shells allocate on the thread that parses them.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(test)]
+mod allocator_link_tests {
+    unsafe extern "C" {
+        fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
+    }
+
+    /// Rust, C, and Python builds all link this crate, so they all use
+    /// this allocator. `mi_usable_size` is only meaningful for mimalloc.
+    #[test]
+    fn the_shipped_allocator_is_mimalloc() {
+        let boxed = Box::new([0u8; 32]);
+        let usable = unsafe { mi_usable_size(boxed.as_ptr() as *const std::ffi::c_void) };
+        assert!(
+            usable >= 32,
+            "global allocator is not mimalloc (usable size {usable})"
+        );
+    }
+}
+
 pub mod array;
+mod columns;
 pub mod compression;
 pub mod conbin;
+pub mod correspondence;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
 pub mod distrib;
@@ -10,6 +37,7 @@ pub mod distrib_read;
 pub mod distrib_write;
 pub mod error;
 pub mod extxyz_scan;
+mod fast_dec;
 pub mod ffi;
 pub mod frame_index;
 #[cfg(feature = "grammar")]
@@ -75,6 +103,11 @@ pub const CON_SPEC_MINOR: u32 = 1;
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub use correspondence::{
+    CorrespondenceError, IdentityCheck, atom_id_permutation, check_atom_id_consistency,
+    minimum_image_delta, minimum_image_displacements, reorder_like,
+};
 
 #[cfg(test)]
 mod tests {

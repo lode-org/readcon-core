@@ -18,12 +18,16 @@ VERSION_RE = re.compile(VERSION_PATTERN)
 def generated_targets() -> list[tuple[str, str]]:
     """Outputs written with ``python -m cogapp -d -o``, in stamp order.
 
+    The Meson wrap is not in this list. ``stamp-version.sh`` runs before
+    ``record-cxx-wrap.sh`` has built the new archive, and rendering the
+    wrap from the existing sidecar would publish the previous digest at
+    the new URL. ``record-cxx-wrap.sh`` writes the wrap after that digest.
+
     https://cog.readthedocs.io/en/latest/
     """
     return [
         (".zenodo.json", "scripts/cog/zenodo.cog"),
         ("codemeta.json", "scripts/cog/codemeta.cog"),
-        ("packaging/wrapdb/readcon-core.wrap", "scripts/cog/wrap.cog"),
     ]
 
 
@@ -184,7 +188,12 @@ def render_zenodo() -> str:
 
 
 def render_wrap() -> str:
-    """Return the wrap file from wrap.in, VERSION, and the sha256 sidecar."""
+    """Return the wrap file from wrap.in, VERSION, and the sha256 sidecar.
+
+    A sidecar that still names the previous archive must not be paired
+    with this VERSION. ``record-cxx-wrap.sh`` replaces the sidecar before
+    it calls this function.
+    """
     version = read_version()
     sha_path = ROOT / "packaging/wrapdb/readcon-core.sha256"
     sha = sha_path.read_text(encoding="utf-8").strip()
@@ -192,6 +201,24 @@ def render_wrap() -> str:
         raise SystemExit(
             "packaging/wrapdb/readcon-core.sha256 is not a sha256 hex digest"
         )
+    wrap_path = ROOT / "packaging/wrapdb/readcon-core.wrap"
+    if wrap_path.is_file():
+        existing = wrap_path.read_text(encoding="utf-8")
+        old_version = re.search(
+            r"(?m)^directory = readcon-core-cxx-(\S+)\s*$", existing
+        )
+        old_hash = re.search(r"(?m)^source_hash = sha256:([0-9a-f]{64})\s*$", existing)
+        if (
+            old_version is not None
+            and old_hash is not None
+            and old_version.group(1) != version
+            and old_hash.group(1) == sha
+        ):
+            raise SystemExit(
+                "wrap source_hash is still the "
+                f"{old_version.group(1)} archive; "
+                "run scripts/record-cxx-wrap.sh before retargeting the URL"
+            )
     template = (ROOT / "packaging/wrapdb/readcon-core.wrap.in").read_text(
         encoding="utf-8"
     )

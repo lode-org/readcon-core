@@ -238,7 +238,13 @@ for raw in listed.split(b"\0"):
         data = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         continue
-    if version in data:
+    # A comparison pin such as ``trio>=0.22.0`` is not this package.
+    # A conda upper bound can contain these digits followed by a letter.
+    # Require a version token boundary so that pin is not this package.
+    if re.search(
+        rf"(?<![0-9A-Za-z.>=<~^]){re.escape(version)}(?![0-9A-Za-z.])",
+        data,
+    ):
         bad.append(rel)
 if bad:
     die("package version embedded outside the allowlist: " + ", ".join(bad))

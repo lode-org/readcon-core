@@ -238,9 +238,32 @@ impl PartialEq for Array2Storage {
     }
 }
 
+fn empty_f64_rows() -> Array2Storage {
+    // A process-wide Arc made every worker's frame assembly increment the
+    // same atomic. That one cache line serialised an otherwise parallel
+    // parse. Each thread keeps its own empty matrix, so the increment
+    // stays on that thread's line. The bytes are still a zero-length
+    // `(0, 3)` f64 array.
+    thread_local! {
+        static EMPTY: ndarray::ArcArray2<f64> =
+            ndarray::Array2::<f64>::zeros((0, 3)).into_shared();
+    }
+    EMPTY.with(|empty| Array2Storage::F64(empty.clone()))
+}
+
+fn empty_f64_col() -> Array1Storage {
+    thread_local! {
+        static EMPTY: ndarray::ArcArray1<f64> = ndarray::Array1::<f64>::zeros(0).into_shared();
+    }
+    EMPTY.with(|empty| Array1Storage::F64(empty.clone()))
+}
+
 impl Array2Storage {
     pub fn zeros(kind: ElementKind, n: usize, c: usize) -> Self {
         use ElementKind::*;
+        if n == 0 && c == 3 && kind == Float64 {
+            return empty_f64_rows();
+        }
         match kind {
             Float64 => Self::F64(ndarray::ArcArray2::zeros((n, c))),
             Float32 => Self::F32(ndarray::ArcArray2::zeros((n, c))),
@@ -625,6 +648,9 @@ impl PartialEq for Array1Storage {
 impl Array1Storage {
     pub fn zeros(kind: ElementKind, n: usize) -> Self {
         use ElementKind::*;
+        if n == 0 && kind == Float64 {
+            return empty_f64_col();
+        }
         match kind {
             Float64 => Self::F64(ndarray::ArcArray1::zeros(n)),
             Float32 => Self::F32(ndarray::ArcArray1::zeros(n)),

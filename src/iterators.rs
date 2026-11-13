@@ -24,7 +24,10 @@ pub struct MemchrLines<'a> {
     /// `None` keeps the per-line `memchr` path used by a full parse.
     newlines: Option<Vec<usize>>,
     /// Index of the line that starts at `pos` when `newlines` is in use.
-    line_no: usize,
+    index_line: usize,
+    /// 1-based index of the last line produced by [`Self::read_one`], including
+    /// a line rejected as UTF-8. 0 before that.
+    line_no: u32,
 }
 
 impl<'a> MemchrLines<'a> {
@@ -49,8 +52,15 @@ impl<'a> MemchrLines<'a> {
             check_utf8,
             utf8_bad: false,
             newlines: None,
+            index_line: 0,
             line_no: 0,
         }
+    }
+
+    /// 1-based index of the last line read, including a line that is only peeked.
+    #[inline]
+    pub fn line_no(&self) -> u32 {
+        self.line_no
     }
 
     #[inline]
@@ -74,21 +84,29 @@ impl<'a> MemchrLines<'a> {
         if self.check_utf8 {
             match std::str::from_utf8(trimmed) {
                 Ok(s) => {
-                    self.pos += advance;
+                    self.accept_line(advance);
                     Some(s)
                 }
                 Err(_) => {
                     // Stay on the rejected line. Moving past it makes a
                     // whitespace tail look like a clean end of file.
+                    // The line number still names this line.
+                    self.line_no = self.line_no.saturating_add(1);
                     self.utf8_bad = true;
                     None
                 }
             }
         } else {
-            self.pos += advance;
+            self.accept_line(advance);
             // SAFETY: source was `&str`; line is a UTF-8 prefix cut on ASCII `\n`/`\r`.
             Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
+    }
+
+    #[inline]
+    fn accept_line(&mut self, advance: usize) {
+        self.pos += advance;
+        self.line_no = self.line_no.saturating_add(1);
     }
 
     #[inline]
@@ -113,8 +131,12 @@ impl<'a> MemchrLines<'a> {
             // Rewind pos to the start of the peeked line.
             let start = p.as_ptr() as usize - self.bytes.as_ptr() as usize;
             self.pos = start;
+            // A peek already counted this line. Rewinding must drop that
+            // count so the next read names it once, and must put the
+            // newline index back on the line `pos` now starts.
+            self.line_no = self.line_no.saturating_sub(1);
             if let Some(nl) = self.newlines.as_deref() {
-                self.line_no = line_no_for_pos(nl, self.bytes.len(), start);
+                self.index_line = line_no_for_pos(nl, self.bytes.len(), start);
             }
         }
     }
@@ -131,8 +153,8 @@ impl<'a> MemchrLines<'a> {
         let len = self.bytes.len();
         let line_no = {
             let nl = self.newlines.as_deref().unwrap();
-            if self.pos == line_start_pos(nl, len, self.line_no) {
-                self.line_no
+            if self.pos == line_start_pos(nl, len, self.index_line) {
+                self.index_line
             } else {
                 line_no_for_pos(nl, len, self.pos)
             }
@@ -143,18 +165,23 @@ impl<'a> MemchrLines<'a> {
             match std::str::from_utf8(trimmed) {
                 Ok(s) => {
                     self.pos = span.next_pos;
-                    self.line_no = line_no + 1;
+                    self.index_line = line_no + 1;
+                    self.line_no = self.index_line as u32;
                     Some(s)
                 }
                 Err(_) => {
                     self.utf8_bad = true;
-                    self.line_no = line_no;
+                    self.index_line = line_no;
+                    // The rejected line is 1-based `line_no + 1`. The index
+                    // stays on that line so a later read does not skip it.
+                    self.line_no = (line_no as u32).saturating_add(1);
                     None
                 }
             }
         } else {
             self.pos = span.next_pos;
-            self.line_no = line_no + 1;
+            self.index_line = line_no + 1;
+            self.line_no = self.index_line as u32;
             // SAFETY: source was `&str`; the span is a UTF-8 line cut on ASCII `\n`/`\r`.
             Some(unsafe { std::str::from_utf8_unchecked(trimmed) })
         }
@@ -200,8 +227,60 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             return crate::parser::parse_coord_row_at(p.as_bytes(), 0, spec_version, default_id)
                 .map(|(row, _)| row);
         }
+        // The failing row is this line even when the numeric scan returns Err
+        // before the cursor moves.
+        self.line_no = self.line_no.saturating_add(1);
         let (row, pos) =
             crate::parser::parse_coord_row_at(self.bytes, self.pos, spec_version, default_id)?;
+        self.pos = pos;
+        Ok(row)
+    }
+    fn try_take_coord_block(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        start_id: u64,
+        symbol: &std::sync::Arc<str>,
+        workers: usize,
+    ) -> Option<crate::parser::CoordRows> {
+        if self.peeked.is_some() || self.utf8_bad {
+            return None;
+        }
+        #[cfg(feature = "parallel")]
+        {
+            let rest = &self.bytes[self.pos..];
+            let block = crate::parser::parallel_coord_rows(
+                rest,
+                n,
+                spec_version,
+                start_id,
+                workers,
+                Some(symbol),
+            )
+            .ok()?;
+            self.pos += block.consumed;
+            self.line_no = self.line_no.saturating_add(n as u32);
+            if self.newlines.is_some() {
+                self.index_line = self.index_line.saturating_add(n);
+            }
+            return Some(block);
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let _ = (n, spec_version, start_id, symbol, workers);
+            None
+        }
+    }
+    #[inline]
+    fn next_vector_row(
+        &mut self,
+        spec_version: u32,
+    ) -> Result<([f64; 3], [bool; 3], u64), crate::error::ParseError> {
+        if let Some(p) = self.peeked.take() {
+            return crate::parser::parse_vector_row_at(p.as_bytes(), 0, spec_version)
+                .map(|(row, _)| row);
+        }
+        let (row, pos) = crate::parser::parse_vector_row_at(self.bytes, self.pos, spec_version)?;
         self.pos = pos;
         Ok(row)
     }
@@ -320,6 +399,62 @@ fn blank_opens_section(after_blank: &[u8]) -> bool {
 /// robust error handling for each frame.
 pub struct ConFrameIterator<'a> {
     pub(crate) lines: MemchrLines<'a>,
+    /// 0-based index of the frame the cursor is about to read.
+    /// Successful `next` and `forward_fast` advance it. A failure leaves
+    /// it on the frame that failed.
+    frame_index: u64,
+}
+
+/// Newlines seen and the byte index just past the `n`-th `\n`.
+///
+/// When fewer than `n` newlines exist, the count is how many were seen
+/// and the index is `hay.len()`.
+///
+/// # Safety
+/// The CPU supports AVX2.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,popcnt")]
+#[inline]
+unsafe fn skip_newlines_avx2(hay: &[u8], n: usize) -> (usize, usize) {
+    use std::arch::x86_64::{
+        __m256i, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8, _mm256_set1_epi8,
+        _popcnt32,
+    };
+    if n == 0 {
+        return (0, 0);
+    }
+    let mut need = n;
+    let mut offset = 0usize;
+    let ptr = hay.as_ptr();
+    let len = hay.len();
+    let nl = _mm256_set1_epi8(b'\n' as i8);
+    while offset + 32 <= len {
+        // SAFETY: `offset + 32 <= len`, so the 32-byte load stays inside `hay`.
+        let chunk = unsafe { _mm256_loadu_si256(ptr.add(offset) as *const __m256i) };
+        let eq = _mm256_cmpeq_epi8(chunk, nl);
+        let mask = _mm256_movemask_epi8(eq) as u32;
+        let count = _popcnt32(mask as i32) as usize;
+        if count >= need {
+            let mut bits = mask;
+            for _ in 1..need {
+                bits &= bits - 1;
+            }
+            let bit = bits.trailing_zeros() as usize;
+            return (n, offset + bit + 1);
+        }
+        need -= count;
+        offset += 32;
+    }
+    while offset < len {
+        if hay[offset] == b'\n' {
+            need -= 1;
+            if need == 0 {
+                return (n, offset + 1);
+            }
+        }
+        offset += 1;
+    }
+    (n - need, len)
 }
 
 impl<'a> ConFrameIterator<'a> {
@@ -331,6 +466,7 @@ impl<'a> ConFrameIterator<'a> {
     pub fn new(file_contents: &'a str) -> Self {
         ConFrameIterator {
             lines: MemchrLines::new(file_contents),
+            frame_index: 0,
         }
     }
 
@@ -353,7 +489,21 @@ impl<'a> ConFrameIterator<'a> {
     pub fn from_bytes(bytes: &'a [u8]) -> Self {
         ConFrameIterator {
             lines: MemchrLines::from_bytes(bytes),
+            frame_index: 0,
         }
+    }
+
+    /// 0-based index of the frame the cursor is on.
+    ///
+    /// This is the frame a following error belongs to. It is not the
+    /// number of frames still ahead.
+    pub(crate) fn frame_index(&self) -> u64 {
+        self.frame_index
+    }
+
+    fn note_skipped_frame(&mut self) -> Option<Result<(), error::ParseError>> {
+        self.frame_index = self.frame_index.saturating_add(1);
+        Some(Ok(()))
     }
 
     /// Bulk-skips `n` lines from the shared memchr cursor.
@@ -361,20 +511,42 @@ impl<'a> ConFrameIterator<'a> {
     /// A final line with no trailing newline still counts when it is the
     /// last line this call needs and its bytes are present. The full
     /// parser accepts that line. Further lines after it are missing.
+    ///
+    /// The header has already named the line count, so the skip counts
+    /// newlines instead of parsing the rows. On AVX2 that count is one
+    /// pass over the span.
+    #[inline(always)]
     fn advance_lines(&mut self, n: usize) -> Result<(), error::ParseError> {
         self.lines.clear_peek();
         if self.lines.newlines.is_some() {
             return self.advance_lines_indexed(n);
         }
+        #[cfg(target_arch = "x86_64")]
+        {
+            if n > 1 && std::is_x86_feature_detected!("avx2") {
+                return self.advance_lines_avx2(n);
+            }
+        }
+        self.advance_lines_memchr(n)
+    }
+
+    fn advance_lines_memchr(&mut self, n: usize) -> Result<(), error::ParseError> {
         for i in 0..n {
             let rest = &self.lines.bytes[self.lines.pos..];
             match memchr::memchr(b'\n', rest) {
-                Some(pos) => self.lines.pos += pos + 1,
+                Some(pos) => {
+                    self.lines.pos += pos + 1;
+                    self.lines.line_no = self.lines.line_no.saturating_add(1);
+                }
                 None => {
                     if rest.is_empty() {
                         return Err(error::ParseError::IncompleteFrame);
                     }
                     self.lines.pos = self.lines.bytes.len();
+                    // Count the unterminated line so a later located error
+                    // names it. It satisfies this skip only when it is the
+                    // last line still required; the full parser accepts it.
+                    self.lines.line_no = self.lines.line_no.saturating_add(1);
                     if i + 1 == n {
                         return Ok(());
                     }
@@ -383,6 +555,43 @@ impl<'a> ConFrameIterator<'a> {
             }
         }
         Ok(())
+    }
+
+    /// [`Self::advance_lines_memchr`] counting newlines in AVX2 chunks.
+    ///
+    /// The landed position and the incomplete-frame condition match the
+    /// per-line search. `n > 1` is the caller's guard: a one-line skip
+    /// is already a single `memchr`.
+    #[cfg(target_arch = "x86_64")]
+    #[inline]
+    fn advance_lines_avx2(&mut self, n: usize) -> Result<(), error::ParseError> {
+        let rest = &self.lines.bytes[self.lines.pos..];
+        let (found, end) = unsafe { skip_newlines_avx2(rest, n) };
+        if found == n {
+            self.lines.pos += end;
+            // The per-line walk counts each skipped line. The vectorized
+            // jump has to keep the same 1-based file line.
+            self.lines.line_no = self
+                .lines
+                .line_no
+                .saturating_add(u32::try_from(n).unwrap_or(u32::MAX));
+            return Ok(());
+        }
+        if rest.is_empty() {
+            return Err(error::ParseError::IncompleteFrame);
+        }
+        let has_tail = rest.last().copied() != Some(b'\n');
+        self.lines.pos = self.lines.bytes.len();
+        let counted = found + usize::from(has_tail);
+        self.lines.line_no = self
+            .lines
+            .line_no
+            .saturating_add(u32::try_from(counted).unwrap_or(u32::MAX));
+        if counted >= n {
+            Ok(())
+        } else {
+            Err(error::ParseError::IncompleteFrame)
+        }
     }
 
     /// [`Self::advance_lines`] for `n` lines expected to end at `end`.
@@ -406,6 +615,12 @@ impl<'a> ConFrameIterator<'a> {
             && memchr::memchr_iter(b'\n', &bytes[pos..end]).count() == n
         {
             self.lines.pos = end;
+            // The per-line walk would count each of these lines. The
+            // vectorized jump has to keep the same 1-based line.
+            self.lines.line_no = self
+                .lines
+                .line_no
+                .saturating_add(u32::try_from(n).unwrap_or(u32::MAX));
             return Ok(());
         }
         self.advance_lines(n)
@@ -420,8 +635,8 @@ impl<'a> ConFrameIterator<'a> {
         let step = {
             let nl = self.lines.newlines.as_deref().unwrap();
             let nlines = line_count(nl, len);
-            let line_no = if self.lines.pos == line_start_pos(nl, len, self.lines.line_no) {
-                self.lines.line_no
+            let line_no = if self.lines.pos == line_start_pos(nl, len, self.lines.index_line) {
+                self.lines.index_line
             } else {
                 line_no_for_pos(nl, len, self.lines.pos)
             };
@@ -445,20 +660,24 @@ impl<'a> ConFrameIterator<'a> {
         };
         match step {
             IndexStep::Stay(line_no) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 Ok(())
             }
             IndexStep::Missing(line_no) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 Err(error::ParseError::IncompleteFrame)
             }
             IndexStep::Landed(line_no, pos) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 self.lines.pos = pos;
                 Ok(())
             }
             IndexStep::Short(line_no, pos) => {
-                self.lines.line_no = line_no;
+                self.lines.index_line = line_no;
+                self.lines.line_no = u32::try_from(line_no).unwrap_or(u32::MAX);
                 self.lines.pos = pos;
                 Err(error::ParseError::IncompleteFrame)
             }
@@ -482,6 +701,7 @@ impl<'a> ConFrameIterator<'a> {
     ///
     /// The result and the new position are the same as without `end`.
     /// Line blocks that end exactly at `end` are counted, not searched.
+    #[inline(always)]
     pub(crate) fn forward_fast_to(
         &mut self,
         end: Option<usize>,
@@ -505,7 +725,10 @@ impl<'a> ConFrameIterator<'a> {
         if natm_types == 0 {
             // Lines 8 and 9 are whitespace, or absent at EOF. Do not scan
             // for coordinates or a legacy velocity block (CON-count.1).
-            return Some(crate::parser::read_zero_atom_tail(|| self.read_line_str()));
+            return match crate::parser::read_zero_atom_tail(|| self.read_line_str()) {
+                Ok(()) => self.note_skipped_frame(),
+                Err(e) => Some(Err(e)),
+            };
         }
         // Line 8: natms_per_type.
         let natms_per_type: Vec<usize> = match self.read_line_str() {
@@ -561,12 +784,17 @@ impl<'a> ConFrameIterator<'a> {
                 break;
             }
             // Consume the blank separator and the section block.
+            // The separator is a file line. Skipping it without counting
+            // shifts every later frame's reported line.
             self.lines.pos += next_eol.map(|p| p + 1).unwrap_or(rest.len());
+            // The separator is a file line. The section block is counted by
+            // the advance, including the vectorized jump.
+            self.lines.line_no = self.lines.line_no.saturating_add(1);
             if let Err(e) = self.advance_lines_to(coord_block_lines, end) {
                 return Some(Err(e));
             }
         }
-        Some(Ok(()))
+        self.note_skipped_frame()
     }
 
     /// Skips the next frame without fully parsing its atomic data.
@@ -593,11 +821,21 @@ impl<'a> ConFrameIterator<'a> {
     /// Skip `n` frames without parsing atom data. Returns how many were skipped.
     /// Named `skip_frames` so it does not collide with [`Iterator::skip`].
     pub fn skip_frames(&mut self, n: usize) -> Result<usize, error::ParseError> {
+        self.skip_frames_counted(n).map_err(|(_, err)| err)
+    }
+
+    /// Like [`Self::skip_frames`]. The error's first field is how many frames
+    /// were skipped before the failure, which is the 0-based index of the
+    /// failing frame when the iterator started at frame 0.
+    pub(crate) fn skip_frames_counted(
+        &mut self,
+        n: usize,
+    ) -> Result<usize, (usize, error::ParseError)> {
         let mut skipped = 0usize;
         for _ in 0..n {
             match self.forward() {
                 None => break,
-                Some(Err(e)) => return Err(e),
+                Some(Err(e)) => return Err((skipped, e)),
                 Some(Ok(())) => skipped += 1,
             }
         }
@@ -702,8 +940,12 @@ impl<'a> Iterator for ConFrameIterator<'a> {
                 Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
             };
         if sections > 0 {
-            frame.sync_arrays_from_atom_data();
+            // One flat fill per section that was actually parsed. The full
+            // sync walks every absent section and writes each row through
+            // ArcArray uniqueness checks.
+            frame.install_declared_section_soa();
         }
+        self.frame_index = self.frame_index.saturating_add(1);
         Some(Ok(frame))
     }
 }
@@ -775,6 +1017,77 @@ mod aos_soa_agreement_tests {
             fr2.atom_data[0].force().expect("force")
         );
     }
+
+    /// Section SoA is filled from one flat buffer. Every value must match the
+    /// per-atom tail, including past a small-vector boundary.
+    #[test]
+    fn declared_sections_soa_matches_every_atom() {
+        let n = 400;
+        let mut text = String::new();
+        text.push_str("soa fill\n");
+        text.push_str(
+            "{\"con_spec_version\":2,\"sections\":[\"velocities\",\"forces\",\"energies\"]}\n",
+        );
+        text.push_str("10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0 0\n1\n");
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            let x = (i as f64) * 0.125 - 3.5;
+            let y = (i as f64) * -0.05 + 1.0;
+            let z = (i % 17) as f64 * 0.333;
+            text.push_str(&format!("{x:.8} {y:.8} {z:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nVelocities of Component 1\n");
+        for i in 0..n {
+            let vx = (i as f64) * 1.0e-4 - 0.02;
+            let vy = ((i * 3) % 11) as f64 * -1.0e-3;
+            let vz = (i as f64).sin() * 0.01;
+            text.push_str(&format!("{vx:.8} {vy:.8} {vz:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nForces of Component 1\n");
+        for i in 0..n {
+            let fx = (i as f64) * 0.01;
+            let fy = -fx / 2.0;
+            let fz = (i % 5) as f64;
+            text.push_str(&format!("{fx:.8} {fy:.8} {fz:.8} 0 {i}\n"));
+        }
+        text.push_str("\nCu\nEnergies of Component 1\n");
+        for i in 0..n {
+            let e = (i as f64) * 0.02 - 4.0;
+            text.push_str(&format!("{e:.8} 0 {i}\n"));
+        }
+        let frame = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        assert_eq!(frame.atom_data.len(), n);
+        assert_eq!(frame.velocities.nrows(), n);
+        assert_eq!(frame.forces.nrows(), n);
+        assert_eq!(frame.atom_energies.len(), n);
+        assert_eq!(frame.positions.nrows(), n);
+        assert!(frame.magmoms.nrows() == 0);
+        for i in 0..n {
+            let atom = &frame.atom_data[i];
+            let pos = frame.positions.as_f64_row(i);
+            assert_eq!(pos[0].to_bits(), atom.x.to_bits());
+            assert_eq!(pos[1].to_bits(), atom.y.to_bits());
+            assert_eq!(pos[2].to_bits(), atom.z.to_bits());
+            let vel = atom.velocity().unwrap();
+            let soa_v = frame.velocities.as_f64_row(i);
+            assert_eq!(soa_v[0].to_bits(), vel[0].to_bits());
+            assert_eq!(soa_v[1].to_bits(), vel[1].to_bits());
+            assert_eq!(soa_v[2].to_bits(), vel[2].to_bits());
+            let frc = atom.force().unwrap();
+            let soa_f = frame.forces.as_f64_row(i);
+            assert_eq!(soa_f[0].to_bits(), frc[0].to_bits());
+            assert_eq!(soa_f[1].to_bits(), frc[1].to_bits());
+            assert_eq!(soa_f[2].to_bits(), frc[2].to_bits());
+            assert_eq!(
+                frame.atom_energies.get_f64(i).to_bits(),
+                atom.energy().unwrap().to_bits()
+            );
+            assert_eq!(frame.atom_ids[i], atom.atom_id);
+        }
+    }
 }
 
 /// Reads all frames from a file.
@@ -792,6 +1105,15 @@ pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std:
 /// `Some(n)` with `n >= 2` uses a Rayon pool of that size when the
 /// `parallel` feature is on. Builds without `parallel` always parse
 /// sequentially.
+///
+/// ```
+/// use readcon_core::iterators::frames_from_text;
+/// let text = include_str!("../resources/test/tiny_multi_cuh2.con");
+/// let one = frames_from_text(text, Some(1)).unwrap();
+/// let pool = frames_from_text(text, Some(2)).unwrap();
+/// assert_eq!(one.len(), pool.len());
+/// assert!(one.len() >= 2);
+/// ```
 pub fn frames_from_text(
     text: &str,
     num_threads: Option<usize>,
@@ -799,12 +1121,10 @@ pub fn frames_from_text(
     #[cfg(feature = "parallel")]
     {
         if let Some(n) = num_threads.filter(|n| *n >= 2) {
-            let parts = parse_frames_parallel_with_threads(text, Some(n));
-            let mut frames = Vec::with_capacity(parts.len());
-            for r in parts {
-                frames.push(r?);
-            }
-            return Ok(frames);
+            // The phased path finishes the slots on the same pool. A
+            // serial move of every frame was a growing tail once a worker
+            // owned tens of thousands of frames.
+            return Ok(frames_from_bytes_phased(text.as_bytes(), Some(n))?.frames);
         }
     }
     #[cfg(not(feature = "parallel"))]
@@ -818,17 +1138,26 @@ pub fn frames_from_text(
 ///
 /// `None`, `Some(0)`, and `Some(1)` parse on the calling thread.
 /// `Some(n)` with `n >= 2` pins a Rayon pool when `parallel` is on.
-/// The file is read into one owned buffer. The caller who wants a map
-/// uses the streaming iterator.
+///
+/// A parse failure is the [`error::LocatedParseError`] from that parse.
+/// Its line is the cursor that failed and its frame is the 0-based index.
+/// The path is not opened again.
+///
+/// A plain file of 64 KiB or more stays mapped. Smaller files and
+/// compressed input are read into one buffer.
 pub fn read_all_frames_with_threads(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let bytes = crate::compression::read_file_bytes(path)?;
-    Ok(frames_from_bytes(&bytes, num_threads)?)
+    let bytes = crate::compression::read_bytes_owned(path)?;
+    Ok(frames_from_bytes_located(bytes.as_slice(), num_threads)?)
 }
 
 /// Positions of every frame, one row-major `f64` buffer.
+#[derive(Debug)]
+///
+/// A parse failure is the [`error::LocatedParseError`] from the boundary
+/// scan or the span parse that failed. The path is not opened again.
 ///
 /// The boundary walk records each frame start. Each worker then parses
 /// only its span and writes that frame's coordinates at
@@ -841,6 +1170,12 @@ pub struct PositionBlock {
     pub values: Vec<f64>,
 }
 
+/// Read every frame's coordinates through the column walker.
+///
+/// `num_threads` of `None`, `Some(0)`, and `Some(1)` stay on the calling
+/// thread. `Some(n)` with `n >= 2` uses that many workers when `parallel`
+/// is enabled. The buffer is rectangular: frames that do not share one
+/// atom count are an error. Python `read_positions` returns this buffer.
 pub fn read_positions_with_threads(
     path: &Path,
     num_threads: Option<usize>,
@@ -855,7 +1190,303 @@ pub fn read_positions_with_threads(
     Ok(block)
 }
 
-fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::ParseError> {
+/// Masses and cell that belong with [`read_positions_with_threads`].
+///
+/// The column walker fills these when it certifies the file. Otherwise they
+/// come from the frame parser, which is the same source as before.
+pub struct CoordColumns {
+    pub block: PositionBlock,
+    pub masses: Vec<f64>,
+    pub cells: Vec<f64>,
+    /// Column 5, file order, length `n_frames * n_atoms` when identity was read.
+    pub atom_ids: Vec<u64>,
+    /// Decoded column-4 bitmask, same length as `atom_ids` when identity was read.
+    pub fixed: Vec<u8>,
+    /// One run-length element list when every frame matches, otherwise one per frame.
+    ///
+    /// Each run is `(symbol, count)` in file order. An empty list means identity
+    /// was not collected.
+    pub species: Vec<Vec<(String, usize)>>,
+    pub has_section: bool,
+    /// True when any atom is held on some axes and free on others.
+    pub partial_fixed: bool,
+}
+
+/// Positions, masses, and cells for a stock CON or convel file.
+///
+/// A certified file is one coordinate pass. Anything else uses the frame
+/// reader. Python `read_coords` returns these columns.
+pub fn read_coord_columns(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<CoordColumns, Box<dyn std::error::Error>> {
+    let contents = crate::compression::read_file_contents(path)?;
+    let bytes = contents.as_bytes();
+    if let Ok(Some(columns)) = certified_columns(bytes, num_threads, true) {
+        return Ok(columns);
+    }
+    let frames = frames_from_bytes_located(bytes, num_threads)?;
+    Ok(columns_from_frames(&frames))
+}
+
+fn certified_columns(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+    identity: bool,
+) -> Result<Option<CoordColumns>, error::LocatedParseError> {
+    let mut parsed = {
+        let parsed = if parallel_column_threads(num_threads) {
+            #[cfg(feature = "parallel")]
+            {
+                crate::columns::positions_parallel(bytes, num_threads.unwrap_or(1), identity)
+            }
+            #[cfg(not(feature = "parallel"))]
+            {
+                let _ = num_threads;
+                if identity {
+                    crate::columns::positions_with_identity(bytes)
+                } else {
+                    crate::columns::positions_from_con_bytes(bytes)
+                }
+            }
+        } else if identity {
+            crate::columns::positions_with_identity(bytes)
+        } else {
+            crate::columns::positions_from_con_bytes(bytes)
+        };
+        match parsed {
+            Ok(parsed) if parsed.stock => parsed,
+            _ => return Ok(None),
+        }
+    };
+    if parsed.n_frames == 0 {
+        return Ok(Some(CoordColumns {
+            block: PositionBlock {
+                n_frames: 0,
+                n_atoms: 0,
+                values: Vec::new(),
+            },
+            masses: Vec::new(),
+            cells: Vec::new(),
+            atom_ids: Vec::new(),
+            fixed: Vec::new(),
+            species: Vec::new(),
+            has_section: false,
+            partial_fixed: false,
+        }));
+    }
+    let Some(n_atoms) = parsed.rectangular_atoms() else {
+        let first = parsed.counts[0];
+        let index = parsed
+            .counts
+            .iter()
+            .position(|count| *count != first)
+            .unwrap_or(0);
+        let line = file_line_at_bytes(
+            bytes,
+            parsed.spans.get(index).map(|span| span.start).unwrap_or(0),
+        );
+        return Err(error::LocatedParseError::new(
+            error::ParseError::InvalidCount(
+                "frame atom count does not match the first frame".into(),
+            ),
+            line,
+            index as u64,
+        ));
+    };
+    let ColumnIdentity {
+        atom_ids,
+        fixed,
+        species,
+        partial_fixed,
+    } = if identity {
+        match frame_identity(&parsed, n_atoms) {
+            Some(identity) => identity,
+            None => return Ok(None),
+        }
+    } else {
+        ColumnIdentity::default()
+    };
+    let has_section = parsed.has_section;
+    let values = std::mem::take(&mut parsed.positions);
+    Ok(Some(CoordColumns {
+        block: PositionBlock {
+            n_frames: parsed.n_frames,
+            n_atoms,
+            values,
+        },
+        masses: parsed.masses,
+        cells: parsed.cells,
+        atom_ids,
+        fixed,
+        species,
+        has_section,
+        partial_fixed,
+    }))
+}
+
+/// Column 5, the fixed mask, and the element runs for one coordinate read.
+#[derive(Default)]
+struct ColumnIdentity {
+    atom_ids: Vec<u64>,
+    fixed: Vec<u8>,
+    species: Vec<Vec<(String, usize)>>,
+    partial_fixed: bool,
+}
+
+/// Column 5, the fixed mask, and element runs. `None` when the rich columns
+/// do not partition the frames, so the caller uses the frame parser.
+fn frame_identity(parsed: &crate::columns::ConPositions, n_atoms: usize) -> Option<ColumnIdentity> {
+    let n = parsed.n_frames.saturating_mul(n_atoms);
+    if parsed.ids.len() != n || parsed.flags.len() != n {
+        return None;
+    }
+    let mut runs = Vec::with_capacity(parsed.n_frames);
+    let mut components = parsed.components.iter();
+    for &count in &parsed.counts {
+        let mut left = count;
+        let mut frame_runs = Vec::new();
+        while left > 0 {
+            let (symbol, width) = components.next()?;
+            if *width == 0 || *width > left {
+                return None;
+            }
+            frame_runs.push((symbol.to_string(), *width));
+            left -= *width;
+        }
+        runs.push(frame_runs);
+    }
+    if components.next().is_some() {
+        return None;
+    }
+    let partial_fixed = parsed.flags.iter().any(|flag| *flag != 0 && *flag != 7);
+    let species = if runs.windows(2).all(|pair| pair[0] == pair[1]) {
+        runs.into_iter().take(1).collect()
+    } else {
+        runs
+    };
+    Some(ColumnIdentity {
+        atom_ids: parsed.ids.clone(),
+        fixed: parsed.flags.clone(),
+        species,
+        partial_fixed,
+    })
+}
+
+fn parallel_column_threads(num_threads: Option<usize>) -> bool {
+    // `None`, `Some(0)`, and `Some(1)` stay on the calling thread. A pool
+    // runs only for an explicit count of two or more.
+    #[cfg(feature = "parallel")]
+    {
+        matches!(num_threads, Some(n) if n >= 2)
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+        false
+    }
+}
+
+fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
+    let n_frames = frames.len();
+    let n_atoms = frames
+        .first()
+        .map(|frame| frame.positions.nrows())
+        .unwrap_or(0);
+    let mut values = Vec::with_capacity(n_frames * n_atoms * 3);
+    let mut masses = Vec::with_capacity(n_frames * n_atoms);
+    let mut cells = Vec::with_capacity(n_frames * 6);
+    let mut atom_ids = Vec::with_capacity(n_frames * n_atoms);
+    let mut fixed = Vec::with_capacity(n_frames * n_atoms);
+    let mut runs = Vec::with_capacity(n_frames);
+    let mut has_section = false;
+    let mut partial_fixed = false;
+    for frame in frames {
+        cells.extend_from_slice(&frame.header.boxl);
+        cells.extend_from_slice(&frame.header.angles);
+        if let Some(src) = frame.positions.f64_slice() {
+            values.extend_from_slice(src);
+        } else {
+            for row in 0..frame.positions.nrows() {
+                values.extend_from_slice(&frame.positions.as_f64_row(row));
+            }
+        }
+        for (type_index, &count) in frame.header.natms_per_type.iter().enumerate() {
+            let mass = frame
+                .header
+                .masses_per_type
+                .get(type_index)
+                .copied()
+                .unwrap_or(0.0);
+            masses.extend(std::iter::repeat_n(mass, count));
+        }
+        has_section |= frame.has_velocities()
+            || frame.has_forces()
+            || frame.has_energies()
+            || frame.has_charges()
+            || frame.has_spins()
+            || frame.has_magmoms()
+            || frame.has_displacements()
+            || frame.has_spreads();
+        let mut frame_runs: Vec<(String, usize)> = Vec::new();
+        for atom in &frame.atom_data {
+            atom_ids.push(atom.atom_id);
+            let mask = crate::types::encode_fixed_bitmask(atom.fixed);
+            if mask != 0 && mask != 7 {
+                partial_fixed = true;
+            }
+            fixed.push(mask);
+            if let Some((symbol, count)) = frame_runs.last_mut()
+                && symbol == atom.symbol.as_ref()
+            {
+                *count += 1;
+                continue;
+            }
+            frame_runs.push((atom.symbol.to_string(), 1));
+        }
+        runs.push(frame_runs);
+    }
+    let species = if runs.windows(2).all(|pair| pair[0] == pair[1]) {
+        runs.into_iter().take(1).collect()
+    } else {
+        runs
+    };
+    CoordColumns {
+        block: PositionBlock {
+            n_frames,
+            n_atoms,
+            values,
+        },
+        masses,
+        cells,
+        atom_ids,
+        fixed,
+        species,
+        has_section,
+        partial_fixed,
+    }
+}
+
+/// 1-based file line of the line that contains `byte`.
+fn file_line_at_bytes(bytes: &[u8], byte: usize) -> u32 {
+    let end = byte.min(bytes.len());
+    1 + memchr::memchr_iter(b'\n', &bytes[..end]).count() as u32
+}
+
+/// File line of a cursor that counted from the start of a share.
+///
+/// `local` is 1-based inside the share. A cursor that never moved still
+/// names the share's first line.
+fn share_cursor(local: u32, bytes: &[u8], share_start: usize) -> u32 {
+    let base = file_line_at_bytes(bytes, share_start);
+    if local == 0 {
+        base
+    } else {
+        base.saturating_add(local.saturating_sub(1))
+    }
+}
+
+fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::LocatedParseError> {
     let mut scanner = ConFrameIterator::from_bytes(bytes);
     let mut boundaries = Vec::new();
     loop {
@@ -867,22 +1498,39 @@ fn frame_starts(bytes: &[u8]) -> Result<Vec<usize>, error::ParseError> {
         boundaries.push(start);
         match scanner.forward_fast() {
             Some(Ok(())) => {}
-            Some(Err(err)) => return Err(err),
+            Some(Err(err)) => {
+                return Err(error::LocatedParseError::new(
+                    err,
+                    scanner.lines.line_no(),
+                    scanner.frame_index(),
+                ));
+            }
             None => break,
         }
     }
     Ok(boundaries)
 }
 
-fn parse_span(
+/// Parse one span. The error keeps this frame's file line.
+fn parse_span_located(
     bytes: &[u8],
     start: usize,
     end: usize,
-) -> Result<types::ConFrame, error::ParseError> {
+    frame_index: u64,
+) -> Result<types::ConFrame, error::LocatedParseError> {
     let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
     match iter.next() {
-        Some(result) => result,
-        None => Err(error::ParseError::IncompleteFrame),
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(err)) => Err(error::LocatedParseError::new(
+            err,
+            share_cursor(iter.lines.line_no(), bytes, start),
+            frame_index,
+        )),
+        None => Err(error::LocatedParseError::new(
+            error::ParseError::IncompleteFrame,
+            file_line_at_bytes(bytes, start),
+            frame_index,
+        )),
     }
 }
 
@@ -896,7 +1544,7 @@ fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error
         dest.copy_from_slice(src);
         return Ok(());
     }
-    for (i, slot) in dest.chunks_exact_mut(3).enumerate() {
+    for (i, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
         slot.copy_from_slice(&frame.positions.as_f64_row(i));
     }
     Ok(())
@@ -905,7 +1553,12 @@ fn copy_positions(frame: &types::ConFrame, dest: &mut [f64]) -> Result<(), error
 fn fill_position_block(
     bytes: &[u8],
     num_threads: Option<usize>,
-) -> Result<PositionBlock, error::ParseError> {
+) -> Result<PositionBlock, error::LocatedParseError> {
+    match certified_columns(bytes, num_threads, false) {
+        Ok(Some(columns)) => return Ok(columns.block),
+        Ok(None) => {}
+        Err(err) => return Err(err),
+    }
     let boundaries = frame_starts(bytes)?;
     if boundaries.is_empty() {
         return Ok(PositionBlock {
@@ -915,7 +1568,7 @@ fn fill_position_block(
         });
     }
     let end0 = boundaries.get(1).copied().unwrap_or(bytes.len());
-    let first = parse_span(bytes, boundaries[0], end0)?;
+    let first = parse_span_located(bytes, boundaries[0], end0, 0)?;
     let n_atoms = first.positions.nrows();
     let n_frames = boundaries.len();
     let stride = n_atoms.saturating_mul(3);
@@ -941,31 +1594,45 @@ fn fill_position_spans(
     n_atoms: usize,
     num_threads: Option<usize>,
     values: &mut [f64],
-) -> Result<(), error::ParseError> {
+) -> Result<(), error::LocatedParseError> {
     let stride = n_atoms * 3;
     let write_one = |i: usize, dest: &mut [f64]| {
         let start = boundaries[i];
         let end = boundaries.get(i + 1).copied().unwrap_or(bytes.len());
-        let frame = parse_span(bytes, start, end)?;
-        copy_positions(&frame, dest)
+        let frame = parse_span_located(bytes, start, end, i as u64)?;
+        copy_positions(&frame, dest).map_err(|error| {
+            error::LocatedParseError::new(error, file_line_at_bytes(bytes, start), i as u64)
+        })
     };
     #[cfg(feature = "parallel")]
     {
         let parallel = !matches!(num_threads, Some(n) if n <= 1);
         if parallel {
             use rayon::prelude::*;
-            let mut run = || {
-                values
-                    .par_chunks_mut(stride)
-                    .enumerate()
-                    .try_for_each(|(i, dest)| write_one(i, dest))
+            // The serial walk reports the earliest failing span. A pool
+            // that stops on the first finished failure can hand back a
+            // later span of the same file. `find_map_first` keeps the
+            // earliest slot and still stops spans to its right.
+            let mut run = || match values
+                .par_chunks_mut(stride)
+                .enumerate()
+                .find_map_first(|(i, dest)| write_one(i, dest).err())
+            {
+                Some(err) => Err(err),
+                None => Ok(()),
             };
             return match num_threads {
                 Some(n) if n >= 2 => {
                     let pool = rayon::ThreadPoolBuilder::new()
                         .num_threads(n)
                         .build()
-                        .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
+                        .map_err(|err| {
+                            error::LocatedParseError::new(
+                                error::ParseError::ValidationError(err.to_string()),
+                                0,
+                                0,
+                            )
+                        })?;
                     pool.install(run)
                 }
                 _ => run(),
@@ -1005,6 +1672,67 @@ pub fn frames_from_bytes(
     let mut frames = Vec::new();
     for r in ConFrameIterator::from_bytes(bytes) {
         frames.push(r?);
+    }
+    Ok(frames)
+}
+
+/// [`frames_from_bytes`] that keeps the line and frame of the first error.
+fn frames_from_bytes_located(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    #[cfg(feature = "parallel")]
+    {
+        if let Some(n) = num_threads.filter(|n| *n >= 2) {
+            let timed = parse_bytes_timed(bytes, Some(n));
+            return collect_located_slots(timed.slots, &timed.fail_lines);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    collect_bytes_located(bytes)
+}
+
+/// Serial byte parse. The cursor is the iterator's file line.
+fn collect_bytes_located(bytes: &[u8]) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    let mut frames = Vec::new();
+    let mut iter = ConFrameIterator::from_bytes(bytes);
+    while let Some(item) = iter.next() {
+        match item {
+            Ok(frame) => frames.push(frame),
+            Err(error) => {
+                return Err(error::LocatedParseError::new(
+                    error,
+                    iter.lines.line_no(),
+                    iter.frame_index(),
+                ));
+            }
+        }
+    }
+    Ok(frames)
+}
+
+/// First failed slot, with the file line its worker stored.
+#[cfg(feature = "parallel")]
+fn collect_located_slots(
+    slots: Vec<Result<types::ConFrame, error::ParseError>>,
+    fail_lines: &[(usize, u32)],
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    let mut frames = Vec::with_capacity(slots.len());
+    for (index, part) in slots.into_iter().enumerate() {
+        match part {
+            Ok(frame) => frames.push(frame),
+            Err(error) => {
+                let line = fail_lines
+                    .iter()
+                    .find(|(slot, _)| *slot == index)
+                    .map(|(_, line)| *line)
+                    .unwrap_or(0);
+                return Err(error::LocatedParseError::new(error, line, index as u64));
+            }
+        }
     }
     Ok(frames)
 }
@@ -1049,12 +1777,22 @@ unsafe impl Send for SlotWritePtr {}
 unsafe impl Sync for SlotWritePtr {}
 
 /// Minor faults of the calling thread.
+///
+/// `RUSAGE_THREAD` is Linux. Other hosts report 0; the counter is
+/// diagnostic and the parse result does not depend on it.
 #[cfg(feature = "parallel")]
 fn thread_minflt() -> i64 {
-    unsafe {
-        let mut usage = std::mem::zeroed::<libc::rusage>();
-        libc::getrusage(libc::RUSAGE_THREAD, &mut usage);
-        usage.ru_minflt
+    #[cfg(target_os = "linux")]
+    {
+        unsafe {
+            let mut usage = std::mem::zeroed::<libc::rusage>();
+            libc::getrusage(libc::RUSAGE_THREAD, &mut usage);
+            usage.ru_minflt
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
     }
 }
 
@@ -1065,40 +1803,48 @@ fn thread_minflt() -> i64 {
 /// per-worker minor faults instead.
 #[cfg(feature = "parallel")]
 fn sample_llc_misses() -> i64 {
-    #[repr(C)]
-    struct PerfEventAttr {
-        typ: u32,
-        size: u32,
-        config: u64,
-        rest: [u64; 14],
-    }
-    let mut attr = PerfEventAttr {
-        typ: 3,
-        size: std::mem::size_of::<PerfEventAttr>() as u32,
-        // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
-        config: 2 | (1 << 16),
-        rest: [0; 14],
-    };
-    let fd = unsafe {
-        libc::syscall(
-            libc::SYS_perf_event_open,
-            &attr as *const PerfEventAttr,
-            0i32,
-            -1i32,
-            -1i32,
-            0u64,
-        )
-    };
-    if fd < 0 {
+    // `perf_event_open` is Linux. `-1` is the existing "counter refused" value.
+    #[cfg(not(target_os = "linux"))]
+    {
         return -1;
     }
-    let fd = fd as libc::c_int;
-    let mut value = 0u64;
-    let n = unsafe { libc::read(fd, &mut value as *mut u64 as *mut libc::c_void, 8) };
-    unsafe {
-        libc::close(fd);
+    #[cfg(target_os = "linux")]
+    {
+        #[repr(C)]
+        struct PerfEventAttr {
+            typ: u32,
+            size: u32,
+            config: u64,
+            rest: [u64; 14],
+        }
+        let attr = PerfEventAttr {
+            typ: 3,
+            size: std::mem::size_of::<PerfEventAttr>() as u32,
+            // PERF_COUNT_HW_CACHE_LL, OP_READ, RESULT_MISS.
+            config: 2 | (1 << 16),
+            rest: [0; 14],
+        };
+        let fd = unsafe {
+            libc::syscall(
+                libc::SYS_perf_event_open,
+                &attr as *const PerfEventAttr,
+                0i32,
+                -1i32,
+                -1i32,
+                0u64,
+            )
+        };
+        if fd < 0 {
+            return -1;
+        }
+        let fd = fd as libc::c_int;
+        let mut value = 0u64;
+        let n = unsafe { libc::read(fd, &mut value as *mut u64 as *mut libc::c_void, 8) };
+        unsafe {
+            libc::close(fd);
+        }
+        if n == 8 { value as i64 } else { -1 }
     }
-    if n == 8 { value as i64 } else { -1 }
 }
 
 /// Pages that do not sit on node 0.
@@ -1124,16 +1870,70 @@ fn numa_remote_pages() -> i64 {
     let mut remote = 0i64;
     for line in text.lines() {
         for token in line.split_whitespace() {
-            if let Some(rest) = token.strip_prefix('N') {
-                if let Some((node, pages)) = rest.split_once('=') {
-                    if node != "0" {
-                        remote += pages.parse::<i64>().unwrap_or(0);
-                    }
-                }
+            if let Some(rest) = token.strip_prefix('N')
+                && let Some((node, pages)) = rest.split_once('=')
+                && node != "0"
+            {
+                remote += pages.parse::<i64>().unwrap_or(0);
             }
         }
     }
     remote
+}
+
+/// Contiguous frame ranges that cover `boundaries` and split the file
+/// into similar byte lengths.
+///
+/// There are up to four ranges per worker, and never more ranges than
+/// frames. Each range holds at least one frame. The cuts stay on frame
+/// starts, so a worker parses a whole frame.
+#[cfg(feature = "parallel")]
+fn byte_balanced_ranges(boundaries: &[usize], len: usize, workers: usize) -> Vec<(usize, usize)> {
+    let n = boundaries.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let workers = workers.max(1).min(n);
+    let chunks = workers.saturating_mul(4).clamp(workers, n);
+    let origin = boundaries[0];
+    let total = len.saturating_sub(origin).max(1) as u128;
+    let mut ranges = Vec::with_capacity(chunks);
+    let mut start = 0usize;
+    for chunk in 0..chunks {
+        if start >= n {
+            break;
+        }
+        let end = if chunk + 1 == chunks {
+            n
+        } else {
+            let target = origin + ((total * (chunk as u128 + 1)) / chunks as u128) as usize;
+            let mut idx = if start + 1 < n {
+                boundaries[start + 1..].partition_point(|&b| b < target) + start + 1
+            } else {
+                n
+            };
+            let min_end = start + 1;
+            let reserved = chunks - chunk - 1;
+            let max_end = n.saturating_sub(reserved);
+            if max_end >= min_end {
+                idx = idx.clamp(min_end, max_end);
+            } else {
+                idx = min_end.min(n);
+            }
+            idx
+        };
+        if end > start {
+            ranges.push((start, end));
+            start = end;
+        }
+    }
+    if start < n {
+        match ranges.last_mut() {
+            Some(last) => last.1 = n,
+            None => ranges.push((start, n)),
+        }
+    }
+    ranges
 }
 
 /// Parse each frame into a slot allocated before any worker runs.
@@ -1172,6 +1972,9 @@ struct SlotParse {
     share_frames: Vec<u64>,
     /// File bytes in each worker's share.
     share_bytes: Vec<u64>,
+    /// `(slot, file line)` for each parse that failed. The line is the
+    /// cursor of that parse, not a later reread.
+    fail_lines: Vec<(usize, u32)>,
 }
 
 /// Slot allocation and the worker parse, timed apart.
@@ -1204,6 +2007,7 @@ where
             worker_minflt: Vec::new(),
             share_frames: Vec::new(),
             share_bytes: Vec::new(),
+            fail_lines: Vec::new(),
         };
     }
     if workers < 2 {
@@ -1227,71 +2031,110 @@ where
             worker_minflt,
             share_frames: vec![n as u64],
             share_bytes: vec![len as u64],
+            fail_lines: Vec::new(),
         };
     }
     let t_alloc = std::time::Instant::now();
     let mut slots = take_slot_buf(n);
     let alloc_s = t_alloc.elapsed().as_secs_f64();
-    // One contiguous range per worker. The width is
-    // `ceil(frames / workers)`, so equal work stays sequential and the
-    // claim count is the worker count. A short tail is the last range.
-    let share = n.div_ceil(workers);
-    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..workers)
+    // Several byte-balanced ranges per worker. A slow range can be
+    // stolen. Each range is still one iterator, not one iterator per
+    // frame: a fresh iterator per frame faulted a private heap.
+    let ranges = byte_balanced_ranges(boundaries, len, workers);
+    let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..ranges.len())
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
-    let chunk_flt: Vec<std::sync::atomic::AtomicI64> = (0..workers)
+    let chunk_flt: Vec<std::sync::atomic::AtomicI64> = (0..ranges.len())
         .map(|_| std::sync::atomic::AtomicI64::new(0))
         .collect();
     let slots_ptr = SlotWritePtr(slots.as_mut_ptr());
+    let fail_lines = std::sync::Mutex::new(Vec::<(usize, u32)>::new());
     let t_work = std::time::Instant::now();
     {
-        let parse_share = |worker: usize| {
-            let start = worker * share;
-            if start >= n {
+        let parse_range = |range_index: usize, start: usize, end: usize| {
+            if start >= end {
                 return;
             }
-            let end = (start + share).min(n);
             let flt0 = thread_minflt();
             let t_chunk = std::time::Instant::now();
-            // One iterator for the share, the same walk a single thread
-            // uses. A fresh iterator per frame faulted a private heap
-            // on eight workers.
             let byte_start = boundaries[start];
             let byte_end = span_end(boundaries, end - 1, len);
+            let wide = end - start == 1 && byte_end.saturating_sub(byte_start) >= (256 << 10);
+            if wide {
+                crate::parser::set_wide_workers(workers);
+            }
             let mut iter = ConFrameIterator::from_bytes(&bytes[byte_start..byte_end]);
+            OWNED_RANGES.with(|ranges| {
+                let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
+                let mut owned = ranges.borrow_mut();
+                if owned.first().map(|(seen, _, _)| *seen) != Some(generation) {
+                    owned.clear();
+                }
+                owned.push((generation, start, end));
+            });
+            let mut known_atoms = 0usize;
             for i in start..end {
                 let frame = match iter.next() {
-                    Some(result) => result,
-                    None => Err(error::ParseError::IncompleteFrame),
+                    Some(Ok(frame)) => {
+                        if known_atoms == 0 {
+                            known_atoms = frame.atom_data.len();
+                            let left = end - i - 1;
+                            if known_atoms > 0 && left > 0 {
+                                crate::parser::prestash_coord_shells(left, known_atoms);
+                            }
+                        }
+                        Ok(frame)
+                    }
+                    Some(Err(error)) => {
+                        let line = share_cursor(iter.lines.line_no(), bytes, byte_start);
+                        fail_lines.lock().expect("fail lines").push((i, line));
+                        Err(error)
+                    }
+                    None => {
+                        let line = share_cursor(iter.lines.line_no(), bytes, byte_start);
+                        fail_lines.lock().expect("fail lines").push((i, line));
+                        Err(error::ParseError::IncompleteFrame)
+                    }
                 };
-                // SAFETY: this worker owns `start..end`, so `i` has one
+                // SAFETY: this range owns `start..end`, so `i` has one
                 // writer. `slots` outlives the join.
                 unsafe {
                     slots_ptr.write_slot(i, frame);
                 }
             }
-            chunk_ns[worker].store(
+            crate::parser::clear_coord_shells();
+            if wide {
+                crate::parser::set_wide_workers(1);
+            }
+            chunk_ns[range_index].store(
                 t_chunk.elapsed().as_nanos() as u64,
                 std::sync::atomic::Ordering::Relaxed,
             );
-            chunk_flt[worker].store(
+            chunk_flt[range_index].store(
                 thread_minflt().saturating_sub(flt0),
                 std::sync::atomic::Ordering::Relaxed,
             );
         };
-        // The thread index is the share index. Teardown drops that same
-        // share on that same thread, so the pages come back without a
-        // fresh fault on the next file.
-        if rayon::current_thread_index().is_some() {
-            rayon::broadcast(|ctx| {
-                let worker = ctx.index();
-                if worker < workers {
-                    parse_share(worker);
-                }
-            });
-        } else {
+        let run_ranges = || {
             use rayon::prelude::*;
-            (0..workers).into_par_iter().for_each(parse_share);
+            ranges
+                .par_iter()
+                .enumerate()
+                .for_each(|(range_index, &(start, end))| {
+                    parse_range(range_index, start, end);
+                });
+        };
+        if rayon::current_thread_index().is_some() {
+            run_ranges();
+        } else {
+            match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+                Ok(pool) => pool.install(run_ranges),
+                Err(_) => {
+                    for (range_index, &(start, end)) in ranges.iter().enumerate() {
+                        parse_range(range_index, start, end);
+                    }
+                }
+            }
         }
     }
     let work_s = t_work.elapsed().as_secs_f64();
@@ -1301,33 +2144,31 @@ where
     let mut worker_minflt = Vec::new();
     let mut share_frames = Vec::new();
     let mut share_bytes = Vec::new();
-    for worker in 0..workers {
-        let start = worker * share;
-        if start >= n {
+    for (range_index, &(start, end)) in ranges.iter().enumerate() {
+        if start >= end {
             continue;
         }
-        let seconds = chunk_ns[worker].load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
+        let seconds =
+            chunk_ns[range_index].load(std::sync::atomic::Ordering::Relaxed) as f64 / 1.0e9;
         chunk_s.push(seconds);
         worker_sum_s += seconds;
         worker_max_s = worker_max_s.max(seconds);
-        worker_minflt.push(chunk_flt[worker].load(std::sync::atomic::Ordering::Relaxed));
-        let end = (start + share).min(n);
+        worker_minflt.push(chunk_flt[range_index].load(std::sync::atomic::Ordering::Relaxed));
         share_frames.push((end - start) as u64);
-        let bytes = span_end(boundaries, end - 1, len).saturating_sub(boundaries[start]);
-        share_bytes.push(bytes as u64);
+        let nbytes = span_end(boundaries, end - 1, len).saturating_sub(boundaries[start]);
+        share_bytes.push(nbytes as u64);
     }
-    // Each index in `0..n` was written once. Move the frames out and
-    // keep the slot pages for the next file of this width, so those
-    // writes do not fault again.
-    let mut owned = Vec::with_capacity(n);
-    for index in 0..n {
-        owned.push(unsafe { slots.as_mut_ptr().add(index).read().assume_init() });
-    }
-    unsafe {
-        slots.set_len(0);
-    }
-    recycle_slot_buf(slots);
-    let slots = owned;
+    // Each index was written once. Reinterpreting the buffer avoids a
+    // second serial walk of the frame shells after the workers join.
+    let slots = unsafe {
+        let mut raw = std::mem::ManuallyDrop::new(slots);
+        Vec::from_raw_parts(
+            raw.as_mut_ptr() as *mut Result<types::ConFrame, error::ParseError>,
+            n,
+            raw.capacity(),
+        )
+    };
+    let fail_lines = fail_lines.into_inner().unwrap_or_default();
     SlotParse {
         slots,
         alloc_s,
@@ -1338,6 +2179,7 @@ where
         worker_minflt,
         share_frames,
         share_bytes,
+        fail_lines,
     }
 }
 
@@ -1386,6 +2228,8 @@ struct TimedParse {
     worker_minflt: Vec<i64>,
     share_frames: Vec<u64>,
     share_bytes: Vec<u64>,
+    /// `(slot, file line)` recorded by the worker that failed.
+    fail_lines: Vec<(usize, u32)>,
     llc_misses: i64,
     numa_remote: i64,
     /// [`SCAN_SERIAL`], [`SCAN_INDEXED`], or [`SCAN_EQUAL_SPAN`].
@@ -1399,8 +2243,11 @@ struct TimedParse {
 /// The same policy on every width leaves the parse fault count flat.
 #[cfg(feature = "parallel")]
 fn keep_parse_pages() {
+    // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`. macOS and Windows have
+    // no `mallopt`; leaving the pages to the system allocator is enough
+    // for the parse to be correct.
+    #[cfg(target_os = "linux")]
     unsafe {
-        // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`.
         libc::mallopt(-4, 0);
         libc::mallopt(-1, i32::MAX);
     }
@@ -1427,18 +2274,6 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn recycle_slot_buf(
-    mut buf: Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
-) {
-    unsafe { buf.set_len(0) };
-    if let Ok(mut slot) = slot_cache().lock() {
-        if buf.capacity() >= slot.capacity() {
-            *slot = buf;
-        }
-    }
-}
-
-#[cfg(feature = "parallel")]
 fn slot_cache()
 -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
@@ -1448,11 +2283,64 @@ fn slot_cache()
     &CACHE
 }
 
+#[cfg(feature = "parallel")]
+thread_local! {
+    static OWNED_RANGES: std::cell::RefCell<Vec<(usize, usize, usize)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Bumped at the start of each parallel parse. Workers record it with
+/// their frame ranges. Releasing frames only frees ranges from this
+/// generation, so a parse does not have to wake every pool thread first.
+#[cfg(feature = "parallel")]
+static PARSE_GEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+
+/// Drop `frames` on the threads that allocated them.
+///
+/// A parallel parse hands each worker a contiguous range. Freeing those
+/// frames on the same workers keeps the pages in that worker's heap for
+/// the next file. `workers < 2` drops on the calling thread.
+pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
+    #[cfg(feature = "parallel")]
+    {
+        if workers >= 2 {
+            if let Some(pool) = shared_pool(workers) {
+                let mut slots: Vec<Option<types::ConFrame>> =
+                    frames.into_iter().map(Some).collect();
+                let ptr = slots.as_mut_ptr() as usize;
+                let len = slots.len();
+                let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
+                pool.broadcast(|_| {
+                    let ranges =
+                        OWNED_RANGES.with(|ranges| std::mem::take(&mut *ranges.borrow_mut()));
+                    for (seen, start, end) in ranges {
+                        if seen != generation {
+                            continue;
+                        }
+                        let end = end.min(len);
+                        let start = start.min(end);
+                        for index in start..end {
+                            unsafe {
+                                drop((*((ptr as *mut Option<types::ConFrame>).add(index))).take());
+                            }
+                        }
+                    }
+                });
+                drop(slots);
+                return;
+            }
+        }
+    }
+    let _ = workers;
+    drop(frames);
+}
+
 /// One pool per worker count, kept for the life of the process.
 ///
 /// A fresh pool on every file made each worker fault its frames again.
 /// Reusing the workers lets the allocator hand back the pages just freed.
 #[cfg(feature = "parallel")]
+#[allow(clippy::type_complexity)]
 fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
     use std::sync::{Arc, Mutex, OnceLock};
     static CACHE: OnceLock<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
@@ -1473,20 +2361,36 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
 }
 
 /// Minor faults of this process.
+///
+/// `getrusage` is Unix. Windows reports 0.
 #[cfg(feature = "parallel")]
 pub fn process_minflt() -> i64 {
-    unsafe {
-        let mut usage = std::mem::zeroed::<libc::rusage>();
-        libc::getrusage(libc::RUSAGE_SELF, &mut usage);
-        usage.ru_minflt
+    #[cfg(unix)]
+    {
+        unsafe {
+            let mut usage = std::mem::zeroed::<libc::rusage>();
+            libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+            usage.ru_minflt
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        0
     }
 }
 
 /// Page size from `sysconf`, with the POSIX page as the fallback.
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
-    let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    if raw > 0 { raw as usize } else { 4096 }
+    #[cfg(unix)]
+    {
+        let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if raw > 0 { raw as usize } else { 4096 }
+    }
+    #[cfg(not(unix))]
+    {
+        4096
+    }
 }
 
 /// Fault one word on each page of `values`.
@@ -1591,6 +2495,7 @@ pub const SCAN_EQUAL_SPAN: u8 = 2;
 /// `None` and the caller keeps the serial walk. The starts are
 /// `0, span, 2*span, ...` and match [`collect_frame_starts`].
 #[cfg(feature = "parallel")]
+#[cfg_attr(not(test), allow(dead_code))]
 fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
     if workers < 2 || bytes.len() < 2 {
         return None;
@@ -1601,20 +2506,26 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
         _ => return None,
     }
     let span = first.lines.pos;
-    if span < 2 || bytes.len() % span != 0 {
+    if span < 2 {
         return None;
     }
     let n = bytes.len() / span;
     if n < 2 {
         return None;
     }
+    // Bytes after the last full span are a tail, not another frame.
+    // The serial walk ignores a whitespace tail.
+    let tiled = n * span;
+    if bytes[tiled..].iter().any(|b| !b.is_ascii_whitespace()) {
+        return None;
+    }
     // Equal byte ranges. A cut that falls inside a frame resyncs to the
     // next frame start, and only that header is checked. The checks stay
     // on this worker: a nested pool wake was larger than the checks.
-    let byte_share = bytes.len().div_ceil(workers);
+    let byte_share = tiled.div_ceil(workers);
     for worker in 0..workers {
-        let byte_cut = worker.saturating_mul(byte_share).min(bytes.len());
-        if byte_cut >= bytes.len() {
+        let byte_cut = worker.saturating_mul(byte_share).min(tiled);
+        if byte_cut >= tiled {
             continue;
         }
         let index = if worker == 0 {
@@ -1623,10 +2534,10 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
             byte_cut.div_ceil(span).min(n - 1)
         };
         let start = index.saturating_mul(span);
-        if start >= bytes.len() {
+        if start >= tiled {
             continue;
         }
-        let end = (start + span).min(bytes.len());
+        let end = (start + span).min(tiled);
         let mut iter = ConFrameIterator::from_bytes(&bytes[start..end]);
         match iter.forward_fast() {
             Some(Ok(())) if iter.lines.pos == end - start => {}
@@ -1644,6 +2555,7 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
 static START_CACHE: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(not(test), allow(dead_code))]
 fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
     let mut starts = START_CACHE
         .lock()
@@ -1660,10 +2572,10 @@ fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
 
 #[cfg(feature = "parallel")]
 fn recycle_starts(starts: Vec<usize>) {
-    if let Ok(mut slot) = START_CACHE.lock() {
-        if starts.capacity() >= slot.capacity() {
-            *slot = starts;
-        }
+    if let Ok(mut slot) = START_CACHE.lock()
+        && starts.capacity() >= slot.capacity()
+    {
+        *slot = starts;
     }
 }
 
@@ -1675,6 +2587,29 @@ fn parse_frames_parallel_bytes(
     parse_bytes_timed(bytes, num_threads).slots
 }
 
+/// Frame starts for a pool of `workers`.
+///
+/// Equal byte spans stay arithmetic. Anything else builds the newline
+/// index on the pool and walks headers by line count, so the walk does
+/// not reread atom rows. One worker keeps the serial byte walk.
+#[cfg(feature = "parallel")]
+fn parallel_boundaries(bytes: &[u8], workers: usize) -> (Vec<usize>, u8) {
+    if workers >= 2 {
+        if let Some(bounds) = equal_span_boundaries(bytes, workers) {
+            return (bounds, SCAN_EQUAL_SPAN);
+        }
+        let newlines = newline_positions(bytes, workers);
+        let mut scanner = ConFrameIterator::from_bytes(bytes);
+        scanner.lines.index_line = 0;
+        scanner.lines.newlines = Some(newlines);
+        return (collect_frame_starts(scanner, true), SCAN_INDEXED);
+    }
+    (
+        collect_frame_starts(ConFrameIterator::from_bytes(bytes), true),
+        SCAN_SERIAL,
+    )
+}
+
 /// Scan, slot allocation, and worker parse of `bytes`.
 ///
 /// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
@@ -1683,36 +2618,17 @@ fn parse_frames_parallel_bytes(
 /// Neither one is inside the scan or the parse.
 #[cfg(feature = "parallel")]
 fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
-    let threads = scan_thread_count(num_threads, bytes.len());
-    // There is no byte-length cutoff. Two or more workers scan a short
-    // file as well as a long one. Equal-length frames walk their spans
-    // on that pool instead of one serial header walk.
     let parse_workers = match num_threads {
         Some(n) if n >= 2 => n,
-        Some(_) => 1,
-        None => threads,
+        _ => 1,
     };
     let run = || {
         let fault0 = process_minflt();
         let t_scan = std::time::Instant::now();
-        let (boundaries, scan_kind) =
-            if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
-                (bounds, SCAN_EQUAL_SPAN)
-            } else {
-                let mut scanner = ConFrameIterator::from_bytes(bytes);
-                let scan_kind = if threads >= 2 {
-                    // Same pool as the parse, so the newline chunks do not start
-                    // a second set of workers. The header walk stays serial:
-                    // unequal frames do not share a span to split on.
-                    scanner.lines.newlines = Some(newline_positions(bytes, threads));
-                    scanner.lines.line_no = 0;
-                    SCAN_INDEXED
-                } else {
-                    SCAN_SERIAL
-                };
-                // Whitespace after the final frame does not open another frame.
-                (collect_frame_starts(scanner, true), scan_kind)
-            };
+        // Equal-length frames skip the serial header walk. Anything else
+        // still walks headers on this thread. Workers then parse the
+        // spans in file order.
+        let (boundaries, scan_kind) = parallel_boundaries(bytes, parse_workers);
         let scan_s = t_scan.elapsed().as_secs_f64();
         let scan_minflt = process_minflt().saturating_sub(fault0);
         let parsed = parse_into_slots_timed(
@@ -1746,6 +2662,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             match shared_pool(n) {
                 Some(pool) => {
                     let built = t_pool.elapsed().as_secs_f64();
+                    PARSE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();
@@ -1775,6 +2692,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         worker_minflt: parsed.worker_minflt,
         share_frames: parsed.share_frames,
         share_bytes: parsed.share_bytes,
+        fail_lines: parsed.fail_lines,
         llc_misses: sample_llc_misses(),
         numa_remote: numa_remote_pages(),
         scan_kind,
@@ -1785,15 +2703,23 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
 /// when possible, else [`ConFrameIterator::forward`]).
 ///
 /// Prefer this over `read_all_frames(...).len()` when only the frame count is needed.
-pub fn count_frames(path: &Path) -> Result<usize, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    let text = contents.as_str()?;
+/// A rejected frame is [`LoadError::Parse`] with that frame's file line and
+/// 0-based index, including when the failure is after the first frame.
+pub fn count_frames(path: &Path) -> Result<usize, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
     let mut n = 0usize;
     let mut iter = ConFrameIterator::new(text);
     loop {
         match iter.forward_fast() {
             Some(Ok(())) => n += 1,
-            Some(Err(e)) => return Err(Box::new(e)),
+            Some(Err(e)) => {
+                return Err(LoadError::Parse(error::LocatedParseError::new(
+                    e,
+                    iter.lines.line_no(),
+                    iter.frame_index(),
+                )));
+            }
             None => break,
         }
     }
@@ -1804,6 +2730,16 @@ pub fn count_frames(path: &Path) -> Result<usize, Box<dyn std::error::Error>> {
 ///
 /// More efficient than `read_all_frames` for single-frame access because it
 /// stops parsing after the first frame rather than collecting all of them.
+///
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use readcon_core::iterators::read_first_frame;
+/// let frame = read_first_frame(std::path::Path::new("resources/test/tiny_cuh2.con"))?;
+/// println!("{:?} {}", frame.header.boxl, frame.atom_data.len());
+/// assert!(!frame.atom_data.is_empty());
+/// # Ok(())
+/// # }
+/// ```
 pub fn read_first_frame(path: &Path) -> Result<types::ConFrame, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
     let text = contents.as_str()?;
@@ -2015,7 +2951,177 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
     if len < 2 { 1 } else { requested }
 }
 
-fn collect_frame_starts(
+/// I/O, UTF-8, or a located parse failure while loading a path.
+#[derive(Debug)]
+pub enum LoadError {
+    Io(std::io::Error),
+    Utf8(std::str::Utf8Error),
+    Parse(error::LocatedParseError),
+    /// The path opened and decoded, and it held no frame.
+    Empty,
+}
+
+impl std::fmt::Display for LoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoadError::Io(e) => write!(f, "{e}"),
+            LoadError::Utf8(e) => write!(f, "{e}"),
+            LoadError::Parse(e) => write!(f, "{e}"),
+            LoadError::Empty => write!(f, "no frames found in file"),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {}
+
+fn load_error_from_box(err: Box<dyn std::error::Error>) -> LoadError {
+    if let Some(io) = err.downcast_ref::<std::io::Error>() {
+        return LoadError::Io(std::io::Error::new(io.kind(), io.to_string()));
+    }
+    LoadError::Io(std::io::Error::other(err.to_string()))
+}
+
+fn load_text(path: &Path) -> Result<crate::compression::FileContents, LoadError> {
+    crate::compression::read_file_contents(path).map_err(load_error_from_box)
+}
+
+/// 1-based line number of the line that contains `byte`.
+#[cfg(feature = "parallel")]
+fn file_line_at(text: &str, byte: usize) -> u32 {
+    let end = byte.min(text.len());
+    1 + text.as_bytes()[..end]
+        .iter()
+        .filter(|&&b| b == b'\n')
+        .count() as u32
+}
+
+/// Collect every frame, keeping the line and frame index of the first error.
+pub fn frames_from_text_located(
+    text: &str,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    #[cfg(feature = "parallel")]
+    {
+        // A caller that does not ask for a pool stays on this thread.
+        // Starting the global pool for a long file made a one-frame read slower.
+        let use_parallel = matches!(num_threads, Some(n) if n >= 2);
+        if use_parallel {
+            let pool = num_threads.filter(|&n| n >= 2);
+            return collect_parallel_located(text, pool);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = num_threads;
+    }
+    let mut frames = Vec::new();
+    let mut iter = ConFrameIterator::new(text);
+    let mut index = 0u64;
+    while let Some(item) = iter.next() {
+        match item {
+            Ok(frame) => {
+                frames.push(frame);
+                index += 1;
+            }
+            Err(e) => {
+                return Err(error::LocatedParseError::new(
+                    e,
+                    iter.lines.line_no(),
+                    index,
+                ));
+            }
+        }
+    }
+    Ok(frames)
+}
+
+/// Read every frame from `path`, with the line and frame index of the first error.
+pub fn read_all_frames_located(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    frames_from_text_located(text, num_threads).map_err(LoadError::Parse)
+}
+
+/// Read the first frame from `path`, with a line number on failure.
+pub fn read_first_frame_located(path: &Path) -> Result<types::ConFrame, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let mut iter = ConFrameIterator::new(text);
+    match iter.next() {
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(e)) => Err(LoadError::Parse(error::LocatedParseError::new(
+            e,
+            iter.lines.line_no(),
+            0,
+        ))),
+        None => Err(LoadError::Empty),
+    }
+}
+
+/// Skip `index` frames, then parse one, with a line number on failure.
+pub fn read_nth_frame_located(path: &Path, index: usize) -> Result<types::ConFrame, LoadError> {
+    let contents = load_text(path)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let mut iter = ConFrameIterator::new(text);
+    match iter.skip_frames_counted(index) {
+        Ok(skipped) if skipped == index => {}
+        Ok(skipped) => {
+            return Err(LoadError::Parse(error::LocatedParseError::new(
+                error::ParseError::IncompleteFrame,
+                iter.lines.line_no(),
+                skipped as u64,
+            )));
+        }
+        Err((failed_at, e)) => {
+            return Err(LoadError::Parse(error::LocatedParseError::new(
+                e,
+                iter.lines.line_no(),
+                failed_at as u64,
+            )));
+        }
+    }
+    match iter.next() {
+        Some(Ok(frame)) => Ok(frame),
+        Some(Err(e)) => Err(LoadError::Parse(error::LocatedParseError::new(
+            e,
+            iter.lines.line_no(),
+            index as u64,
+        ))),
+        None => Err(LoadError::Parse(error::LocatedParseError::new(
+            error::ParseError::IncompleteFrame,
+            iter.lines.line_no(),
+            index as u64,
+        ))),
+    }
+}
+
+fn collect_frame_starts(scanner: ConFrameIterator<'_>, skip_whitespace_tail: bool) -> Vec<usize> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx2") {
+            // One AVX2 entry so the line skip stays in this function.
+            // A separate call per block pays for an AVX/SSE transition.
+            // SAFETY: the runtime check above is the AVX2 and POPCNT contract.
+            return unsafe { collect_frame_starts_avx2(scanner, skip_whitespace_tail) };
+        }
+    }
+    collect_frame_starts_inner(scanner, skip_whitespace_tail)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,popcnt")]
+unsafe fn collect_frame_starts_avx2(
+    scanner: ConFrameIterator<'_>,
+    skip_whitespace_tail: bool,
+) -> Vec<usize> {
+    collect_frame_starts_inner(scanner, skip_whitespace_tail)
+}
+
+#[inline(always)]
+fn collect_frame_starts_inner(
     mut scanner: ConFrameIterator<'_>,
     skip_whitespace_tail: bool,
 ) -> Vec<usize> {
@@ -2033,7 +3139,7 @@ fn collect_frame_starts(
             }
         }
         boundaries.push(start);
-        match scanner.forward_fast() {
+        match scanner.forward_fast_to(None) {
             Some(Ok(())) => {}
             Some(Err(_)) | None => break,
         }
@@ -2049,7 +3155,7 @@ pub fn frame_start_offsets_serial(file_contents: &str) -> Vec<usize> {
 #[cfg(feature = "parallel")]
 fn scanner_with_newlines<'a>(text: &'a str, newlines: Vec<usize>) -> ConFrameIterator<'a> {
     let mut scanner = ConFrameIterator::new(text);
-    scanner.lines.line_no = 0;
+    scanner.lines.index_line = 0;
     scanner.lines.newlines = Some(newlines);
     scanner
 }
@@ -2113,16 +3219,10 @@ pub fn frame_start_offsets_with_threads(
 
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
 ///
-/// Phase 1: frame-start offsets from [`frame_start_offsets_with_threads`].
-/// The newline scan is split into chunks and stitched, including a header
-/// that crosses a chunk edge. The offsets match a serial
-/// [`ConFrameIterator::forward_fast`] walk. An earlier walk built a
-/// `Vec<&str>` of every line and summed lengths up to each frame, which
-/// is O(N^2) in the line count.
-///
-/// Phase 2: each worker parses a contiguous run of those frames into
-/// slots allocated before the parse. The slot order is the boundary
-/// order. See [`parse_frames_parallel_with_threads`].
+/// Phase 1: frame starts from a serial [`ConFrameIterator::forward_fast`]
+/// walk. The header names each block's line count, so the walk does not
+/// parse atom rows. Phase 2 parses those spans on a Rayon pool and
+/// stores the frames in file order. See [`parse_frames_parallel_with_threads`].
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -2132,15 +3232,13 @@ pub fn parse_frames_parallel(
     parse_frames_parallel_with_threads(file_contents, None)
 }
 
-/// Like [`parse_frames_parallel`], but runs both phases on an explicit
-/// Rayon pool with `num_threads` workers when `Some(n)` (`n` is clamped
-/// to at least 1). `None` uses the global pool for a buffer of at least
-/// two bytes, and the calling thread otherwise.
+/// Like [`parse_frames_parallel`], but `Some(n)` with `n >= 2` parses on
+/// a Rayon pool of that size. `None`, `Some(0)`, and `Some(1)` stay on
+/// the calling thread.
 ///
-/// Phase 2 splits the frame offsets into one contiguous range per
-/// worker. Each worker writes its frames into slots allocated before
-/// the parse. The result matches a serial iterator, field for field
-/// and in frame order.
+/// The boundary walk is serial. The parse ranges are byte-balanced and
+/// the frames come back in file order, field for field with a serial
+/// iterator.
 ///
 /// Requires the `parallel` feature.
 #[cfg(feature = "parallel")]
@@ -2148,25 +3246,15 @@ pub fn parse_frames_parallel_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<Result<types::ConFrame, error::ParseError>> {
-    // Phase 1 runs on the same pool as phase 2. Building the pool twice
-    // would put the newline scan on the global pool and the parse on
-    // another.
-    let threads = scan_thread_count(num_threads, file_contents.len());
     let parse_workers = match num_threads {
         Some(n) if n >= 2 => n,
-        Some(_) => 1,
-        None => threads,
+        _ => 1,
     };
     let run = || {
         // A whitespace tail is not a frame. The serial iterator stops
         // there. The offset scan used by callers still records that byte
         // when a skip error includes it.
-        let boundaries = if threads >= 2 {
-            let newlines = newline_positions(file_contents.as_bytes(), threads);
-            collect_frame_starts(scanner_with_newlines(file_contents, newlines), true)
-        } else {
-            collect_frame_starts(ConFrameIterator::new(file_contents), true)
-        };
+        let (boundaries, _kind) = parallel_boundaries(file_contents.as_bytes(), parse_workers);
         parse_into_slots(
             file_contents.as_bytes(),
             file_contents.len(),
@@ -2176,9 +3264,9 @@ pub fn parse_frames_parallel_with_threads(
         )
     };
     match num_threads {
-        Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => run(),
+        Some(n) if n >= 2 => match shared_pool(n) {
+            Some(pool) => pool.install(run),
+            None => run(),
         },
         _ => run(),
     }
@@ -2293,6 +3381,9 @@ pub struct PhasedFrames {
 /// compressed files are owned buffers. `Some(n)` with `n >= 2` parses on
 /// that many workers. Every other count parses on the calling thread.
 /// The frame list matches [`frames_from_bytes`].
+///
+/// A parse failure is the [`error::LocatedParseError`] from the parse
+/// that failed. The path is not opened again.
 pub fn read_all_frames_phased(
     path: &Path,
     num_threads: Option<usize>,
@@ -2310,7 +3401,7 @@ pub fn read_all_frames_phased(
         crate::compression::FileContents::Owned(text) => text.as_bytes(),
         crate::compression::FileContents::Mapped(map) => map,
     };
-    let phased = frames_from_bytes_phased(bytes, num_threads)?;
+    let phased = frames_from_bytes_phased_located(bytes, num_threads)?;
     let workers = match num_threads {
         Some(n) if n >= 2 => n,
         _ => 1,
@@ -2420,6 +3511,13 @@ pub fn frames_from_bytes_phased(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PhasedByteTimes, error::ParseError> {
+    frames_from_bytes_phased_located(bytes, num_threads).map_err(|err| err.error)
+}
+
+fn frames_from_bytes_phased_located(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<PhasedByteTimes, error::LocatedParseError> {
     #[cfg(feature = "parallel")]
     {
         // One thread walks the file once. A scan plus a second parse made
@@ -2427,10 +3525,7 @@ pub fn frames_from_bytes_phased(
         if !matches!(num_threads, Some(n) if n >= 2) {
             let flt0 = thread_minflt();
             let t_work = std::time::Instant::now();
-            let mut frames = Vec::new();
-            for part in ConFrameIterator::from_bytes(bytes) {
-                frames.push(part?);
-            }
+            let frames = collect_bytes_located(bytes)?;
             let worker_parse_s = t_work.elapsed().as_secs_f64();
             let worker_flt = thread_minflt().saturating_sub(flt0);
             let n_frames = frames.len() as u64;
@@ -2458,9 +3553,14 @@ pub fn frames_from_bytes_phased(
         let requested = Some(num_threads.expect("workers"));
         let timed = parse_bytes_timed(bytes, requested);
         let t_finish = std::time::Instant::now();
-        let frames = finish_results(timed.pool.as_deref(), timed.slots)?;
+        let frames = if timed.slots.iter().any(|item| item.is_err()) {
+            collect_located_slots(timed.slots, &timed.fail_lines)?
+        } else {
+            finish_results(timed.pool.as_deref(), timed.slots)
+                .map_err(|error| error::LocatedParseError::new(error, 0, 0))?
+        };
         let finish_s = t_finish.elapsed().as_secs_f64();
-        return Ok(PhasedByteTimes {
+        Ok(PhasedByteTimes {
             frames,
             pool_s: timed.pool_s,
             pool_join_s: timed.pool_join_s,
@@ -2479,16 +3579,13 @@ pub fn frames_from_bytes_phased(
             llc_misses: timed.llc_misses,
             numa_remote: timed.numa_remote,
             pool: timed.pool,
-        });
+        })
     }
     #[cfg(not(feature = "parallel"))]
     {
         let _ = num_threads;
         let t_work = std::time::Instant::now();
-        let mut frames = Vec::new();
-        for part in ConFrameIterator::from_bytes(bytes) {
-            frames.push(part?);
-        }
+        let frames = collect_bytes_located(bytes)?;
         let worker_parse_s = t_work.elapsed().as_secs_f64();
         Ok(PhasedByteTimes {
             frames,
@@ -2546,7 +3643,7 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
         if let Some(src) = frame.positions.f64_slice() {
             dest.copy_from_slice(src);
         } else {
-            for (row, slot) in dest.chunks_exact_mut(3).enumerate() {
+            for (row, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                 slot.copy_from_slice(&frame.positions.as_f64_row(row));
             }
         }
@@ -2788,6 +3885,63 @@ pub fn measure_newline_scan(text: &str, threads: usize, chunked: bool) -> (Vec<u
     (offsets, t_scan.elapsed().as_secs_f64())
 }
 
+/// Parallel parse that keeps the file line of the first error.
+/// Workers return the error. They do not write thread-local error state.
+#[cfg(feature = "parallel")]
+fn collect_parallel_located(
+    file_contents: &str,
+    num_threads: Option<usize>,
+) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+    use rayon::prelude::*;
+
+    let boundaries = frame_start_offsets(file_contents);
+    let parse_chunks = || -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
+        let num_frames = boundaries.len();
+        let parts: Vec<Result<types::ConFrame, error::LocatedParseError>> = (0..num_frames)
+            .into_par_iter()
+            .map(|i| {
+                let start = boundaries[i];
+                let end = if i + 1 < num_frames {
+                    boundaries[i + 1]
+                } else {
+                    file_contents.len()
+                };
+                let chunk = &file_contents[start..end];
+                let mut iter = ConFrameIterator::new(chunk);
+                match iter.next() {
+                    Some(Ok(frame)) => Ok(frame),
+                    Some(Err(e)) => {
+                        let local = iter.lines.line_no();
+                        let base = file_line_at(file_contents, start);
+                        let cursor = if local == 0 { base } else { base + local - 1 };
+                        Err(error::LocatedParseError::new(e, cursor, i as u64))
+                    }
+                    None => Err(error::LocatedParseError::new(
+                        error::ParseError::IncompleteFrame,
+                        file_line_at(file_contents, start),
+                        i as u64,
+                    )),
+                }
+            })
+            .collect();
+        let mut frames = Vec::with_capacity(parts.len());
+        for part in parts {
+            frames.push(part?);
+        }
+        Ok(frames)
+    };
+    match num_threads {
+        None => parse_chunks(),
+        Some(n) => {
+            let n = n.max(1);
+            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
+                Ok(pool) => pool.install(parse_chunks),
+                Err(_) => parse_chunks(),
+            }
+        }
+    }
+}
+
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_strong_scale_tests {
     use super::*;
@@ -2970,8 +4124,8 @@ mod parallel_header_scan_tests {
 
     fn assert_slab(text: &str) {
         assert!(!text.is_empty());
-        for cuts in header_straddle_cuts(&text) {
-            assert_cuts_match(&text, &cuts);
+        for cuts in header_straddle_cuts(text) {
+            assert_cuts_match(text, &cuts);
         }
         let bare = text.trim_end_matches(['\n', '\r']);
         if !bare.is_empty() {
@@ -2988,13 +4142,10 @@ mod parallel_header_scan_tests {
             }
         }
         let tailed = format!("{text}\n   \n\t\n");
-        assert_cuts_match(&tailed, &[
-            0,
-            3,
-            tailed.len() / 2,
-            tailed.len() - 1,
-            tailed.len(),
-        ]);
+        assert_cuts_match(
+            &tailed,
+            &[0, 3, tailed.len() / 2, tailed.len() - 1, tailed.len()],
+        );
         let crlf = text.replace('\n', "\r\n");
         assert_cuts_match(&crlf, &equal_cuts(crlf.len(), 5));
         assert_crlf_gap_cut(&crlf);
@@ -3320,15 +4471,58 @@ mod phased_read_tests {
         let expect = collect_frame_starts(ConFrameIterator::from_bytes(bytes), true);
         assert_eq!(got, expect);
         assert_eq!(got.len(), 8);
+        let phased = frames_from_bytes_phased(bytes, Some(4)).expect("phased");
+        assert_eq!(phased.scan_kind, SCAN_EQUAL_SPAN);
+        assert_eq!(
+            phased.frames,
+            frames_from_text(&text, Some(1)).expect("serial")
+        );
+        let tailed = format!("{text}\n\n  \n");
+        let tail_phased = frames_from_bytes_phased(tailed.as_bytes(), Some(4)).expect("tail");
+        assert_eq!(tail_phased.scan_kind, SCAN_EQUAL_SPAN);
+        assert_eq!(
+            tail_phased.frames,
+            frames_from_text(&tailed, Some(1)).expect("tail serial")
+        );
     }
 
     #[test]
-    fn a_whitespace_tail_skips_the_equal_span_walk() {
+    fn a_wide_frame_matches_the_serial_parse() {
+        let n = 5000usize;
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125000 0.250000 0.500000 0 {i}\n"));
+        }
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("parallel");
+        assert_eq!(parallel.frames, serial);
+    }
+
+    #[test]
+    fn unequal_byte_spans_use_the_indexed_header_walk() {
+        let one = fixture("cuh2.con");
+        let mut longer = one.clone();
+        longer.insert_str(0, "pad ");
+        let text = format!("{one}{longer}{one}");
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let phased = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(phased.scan_kind, SCAN_INDEXED);
+        assert_eq!(phased.frames, serial);
+        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
+    }
+
+    #[test]
+    fn a_whitespace_tail_uses_the_equal_span_walk() {
         let mut text = fixture("cuh2.con").repeat(3);
         text.push('\n');
-        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
+        assert!(equal_span_boundaries(text.as_bytes(), 4).is_some());
         let serial = frames_from_text(&text, Some(1)).expect("serial");
         let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(parallel.scan_kind, SCAN_EQUAL_SPAN);
         assert_eq!(parallel.frames, serial);
     }
 
@@ -3343,5 +4537,490 @@ mod phased_read_tests {
         let right = touch_frame_checksum(&parallel.frames, &slab_p, 4).expect("touch");
         assert_eq!(left, right);
         assert_ne!(left, 0);
+    }
+}
+
+#[cfg(test)]
+mod later_frame_location_tests {
+    use super::*;
+    use std::fs;
+
+    fn one_atom(coord: &str) -> String {
+        format!(
+            "seed\n{{\"con_spec_version\":2}}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n{coord}\n"
+        )
+    }
+
+    fn bad_count_frame() -> String {
+        "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n".into()
+    }
+
+    fn two_frames() -> String {
+        format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame())
+    }
+
+    fn assert_later_count(
+        err: &error::ParseError,
+        line: u32,
+        frame: u64,
+        iter: &ConFrameIterator<'_>,
+    ) {
+        assert_eq!(err.class_name(), "InvalidCount", "{err}");
+        assert_eq!(iter.lines.line_no(), line, "{err}");
+        assert_eq!(iter.frame_index(), frame, "{err}");
+    }
+
+    fn assert_first_pass(err: Box<dyn std::error::Error>) {
+        let located = err
+            .downcast_ref::<error::LocatedParseError>()
+            .unwrap_or_else(|| panic!("first pass lost the location: {err}"));
+        assert_eq!(located.error.class_name(), "InvalidCount", "{located:?}");
+        assert_eq!(located.line, 20, "{located:?}");
+        assert_eq!(located.frame_index, 1, "{located:?}");
+    }
+
+    fn take_err<T>(result: Result<T, Box<dyn std::error::Error>>) -> Box<dyn std::error::Error> {
+        match result {
+            Err(err) => err,
+            Ok(_) => panic!("expected a parse error"),
+        }
+    }
+
+    /// The batch readers report the later frame from the parse that failed.
+    /// A second open of the path is not required.
+    #[test]
+    fn batch_readers_keep_the_later_frame_on_the_first_pass() {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-later-frame-first-{}.con",
+            std::process::id()
+        ));
+        fs::write(&path, two_frames()).unwrap();
+        for threads in [None, Some(1), Some(2)] {
+            assert_first_pass(take_err(read_all_frames_with_threads(&path, threads)));
+            assert_first_pass(take_err(read_all_frames_phased(&path, threads)));
+            assert_first_pass(take_err(read_positions_with_threads(&path, threads)));
+        }
+        let _ = fs::remove_file(&path);
+    }
+
+    /// An error in the second frame keeps that frame's index and file line.
+    #[test]
+    fn next_forward_and_skip_locate_the_later_frame() {
+        let text = two_frames();
+
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.next().unwrap().is_ok());
+        let err = iter.next().unwrap().unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.forward().unwrap().is_ok());
+        let err = iter.forward().unwrap().unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+
+        let mut iter = ConFrameIterator::new(&text);
+        let err = iter.skip_frames(3).unwrap_err();
+        assert_later_count(&err, 20, 1, &iter);
+    }
+
+    /// The blank line that opens a velocity block is a file line. A later
+    /// frame's error must include it. 12 coordinate lines, the separator,
+    /// and 3 velocity lines put the next frame's line 8 at file line 24.
+    #[test]
+    fn skip_after_a_velocity_frame_keeps_the_separator_line() {
+        let text = format!(
+            "{}\nH\nVelocities of Component 1\n0 0 0 0 0\n{}",
+            one_atom("0 0 0 0 0"),
+            bad_count_frame()
+        );
+        let mut iter = ConFrameIterator::new(&text);
+        assert!(iter.forward().unwrap().is_ok());
+        let err = iter.forward().unwrap().unwrap_err();
+        assert_later_count(&err, 24, 1, &iter);
+    }
+
+    #[test]
+    fn count_frames_locates_the_later_frame() {
+        let path = std::env::temp_dir().join(format!(
+            "readcon-later-frame-count-{}.con",
+            std::process::id()
+        ));
+        fs::write(&path, two_frames()).unwrap();
+        let err = count_frames(&path).unwrap_err();
+        let _ = fs::remove_file(&path);
+        match err {
+            LoadError::Parse(located) => {
+                assert_eq!(located.error.class_name(), "InvalidCount");
+                assert_eq!(located.line, 20, "{located}");
+                assert_eq!(located.frame_index, 1, "{located}");
+            }
+            other => panic!("expected a located parse error, got {other}"),
+        }
+    }
+
+    /// Metadata on line 2 of the second frame is file line 14, not line 2.
+    /// This is the serial contract the collective reader matches.
+    #[test]
+    fn metadata_in_a_later_frame_reports_that_frames_line() {
+        let bad = "seed\n{not-json\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let text = format!("{}{}", one_atom("0 0 0 0 0"), bad);
+        for threads in [Some(1usize), Some(2)] {
+            let err = frames_from_text_located(&text, threads).unwrap_err();
+            assert_eq!(
+                err.error.class_name(),
+                "InvalidMetadataJson",
+                "{threads:?}: {err}"
+            );
+            assert_eq!(err.frame_index, 1, "{threads:?}");
+            assert_eq!(err.line, 14, "{threads:?}: {err}");
+        }
+    }
+
+    /// Several spans after the first frame fail. Serial collection keeps
+    /// the earliest slot. The parallel position reader must report that
+    /// same line and frame index.
+    ///
+    /// The first frame is large. A later worker can fail before the
+    /// calling thread reaches the earliest bad span, which is the case
+    /// that used to return the later slot.
+    #[test]
+    fn parallel_positions_report_the_earliest_failing_slot() {
+        const SLOW_ATOMS: usize = 20_000;
+        let slow = counted_frame(SLOW_ATOMS);
+        let bad = counted_frame(1);
+        let text = format!("{slow}{bad}{bad}{bad}");
+        let earliest_line = 1 + slow.bytes().filter(|byte| *byte == b'\n').count() as u32;
+        let path =
+            std::env::temp_dir().join(format!("readcon-earliest-slot-{}.con", std::process::id()));
+        fs::write(&path, &text).unwrap();
+        assert_earliest_slot(
+            take_err(read_positions_with_threads(&path, Some(1))),
+            earliest_line,
+        );
+        assert_earliest_slot(
+            take_err(read_positions_with_threads(&path, Some(2))),
+            earliest_line,
+        );
+        let _ = fs::remove_file(&path);
+    }
+
+    fn counted_frame(natoms: usize) -> String {
+        let mut body = String::with_capacity(natoms * 10 + 96);
+        body.push_str("seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n");
+        body.push_str(&natoms.to_string());
+        body.push_str("\n1.0\nH\nCoordinates of Component 1\n");
+        for _ in 0..natoms {
+            body.push_str("0 0 0 0 0\n");
+        }
+        body
+    }
+
+    fn assert_earliest_slot(err: Box<dyn std::error::Error>, line: u32) {
+        let located = err
+            .downcast_ref::<error::LocatedParseError>()
+            .unwrap_or_else(|| panic!("position read lost the location: {err}"));
+        assert_eq!(located.error.class_name(), "InvalidCount", "{located:?}");
+        assert_eq!(located.frame_index, 1, "{located:?}");
+        assert_eq!(located.line, line, "{located:?}");
+    }
+}
+
+#[cfg(test)]
+mod frame_equality_tests {
+    use super::ConFrameIterator;
+
+    fn sample_con(frames: usize, long: bool) -> String {
+        let mut out = String::new();
+        for f in 0..frames {
+            let shift = (f as f64) * 1.0e-4;
+            out.push_str("Generated by benchmark\n");
+            out.push_str("{\"con_spec_version\":2}\n");
+            out.push_str("15.3456 21.702 100.0\n");
+            out.push_str("90.0 90.0 90.0\n");
+            out.push_str("0 0\n");
+            out.push_str(&format!("{f} 0 1\n"));
+            out.push_str("2\n6 2\n63.546 1.00793\n");
+            out.push_str("Cu\nCoordinates of Component 1\n");
+            for i in 0..6 {
+                let x = (i as f64) * 2.557 + 0.6394 + shift;
+                let y = 0.9045 + shift * 0.5;
+                let z = (f as f64) * 1.0e-6 + if i == 3 { -1.25 } else { 0.0 };
+                if long {
+                    out.push_str(&format!("   {x:.17}    {y:.17}    {z:.17} 0    {i}\n"));
+                } else {
+                    out.push_str(&format!("   {x:.6}    {y:.6}    {z:.6} 0    {i}\n"));
+                }
+            }
+            out.push_str("H\nCoordinates of Component 2\n");
+            out.push_str("   8.6823    9.947   11.733 0  6\n");
+            out.push_str(&format!("  -7.9421    9.947   {shift:.6} 0  7\n"));
+        }
+        out
+    }
+
+    fn sample_convel() -> String {
+        let mut out = String::new();
+        for f in 0..3 {
+            let shift = (f as f64) * 1.0e-4;
+            out.push_str("Generated by benchmark\n");
+            out.push_str("{\"con_spec_version\":2}\n");
+            out.push_str("15.3456 21.702 100.0\n");
+            out.push_str("90.0 90.0 90.0\n");
+            out.push_str("0 0\n");
+            out.push_str(&format!("{f} 0 1\n"));
+            out.push_str("2\n4 1\n63.546 1.00793\n");
+            out.push_str("Cu\nCoordinates of Component 1\n");
+            for i in 0..4 {
+                let x = (i as f64) * 2.557 + shift;
+                out.push_str(&format!("   {x:.17}    0.9045    1.0 0    {i}\n"));
+            }
+            out.push_str("H\nCoordinates of Component 2\n");
+            out.push_str("   1.5    2.5    3.5 0  4\n");
+            out.push_str("\nCu\nVelocities of Component 1\n");
+            for i in 0..4 {
+                let vx = (i as f64) * 1.0e-4 - shift;
+                out.push_str(&format!("   {vx:.17}    -0.5    0.25 0    {i}\n"));
+            }
+            out.push_str("H\nVelocities of Component 2\n");
+            out.push_str("   0.1    -0.2    0.3 0  4\n");
+        }
+        out
+    }
+
+    fn reference_f64(token: &str) -> f64 {
+        let (val, n) = fast_float2::parse_partial::<f64, _>(token).expect(token);
+        assert_eq!(n, token.len(), "{token}");
+        val
+    }
+
+    fn assert_rows_match(text: &str, positions: bool) {
+        let frames: Vec<_> = ConFrameIterator::new(text)
+            .map(|frame| frame.expect("parse"))
+            .collect();
+        assert!(frames.len() >= 2);
+        let mut frame_i = 0usize;
+        let mut row = 0usize;
+        let mut in_section = false;
+        for line in text.lines() {
+            let token = line.trim();
+            if token.is_empty() {
+                in_section = true;
+                row = 0;
+                continue;
+            }
+            if token.starts_with("Generated") {
+                if row > 0 || in_section {
+                    frame_i += 1;
+                }
+                row = 0;
+                in_section = false;
+                continue;
+            }
+            let cols: Vec<&str> = token.split_whitespace().collect();
+            if cols.len() < 4 || reference_ok(cols[0]).is_none() {
+                continue;
+            }
+            if cols[3].parse::<u64>().is_err() {
+                continue;
+            }
+            let got = if in_section {
+                frames[frame_i].atom_data[row].velocity().expect("velocity")
+            } else if positions {
+                let p = frames[frame_i].positions.as_f64_row(row);
+                [p[0], p[1], p[2]]
+            } else {
+                continue;
+            };
+            for (k, token) in cols.iter().take(3).enumerate() {
+                assert_eq!(
+                    got[k].to_bits(),
+                    reference_f64(token).to_bits(),
+                    "frame {frame_i} row {row} col {k} token {token} section {in_section}"
+                );
+            }
+            let aos = if in_section {
+                frames[frame_i].atom_data[row].velocity().unwrap()
+            } else {
+                let atom = &frames[frame_i].atom_data[row];
+                [atom.x, atom.y, atom.z]
+            };
+            for k in 0..3 {
+                assert_eq!(aos[k].to_bits(), got[k].to_bits());
+            }
+            row += 1;
+        }
+    }
+
+    fn reference_ok(token: &str) -> Option<f64> {
+        let (val, n) = fast_float2::parse_partial::<f64, _>(token).ok()?;
+        (n == token.len()).then_some(val)
+    }
+
+    #[test]
+    fn frames_match_general_decimal_parser() {
+        assert_rows_match(&sample_con(4, true), true);
+        assert_rows_match(&sample_con(4, false), true);
+        let text = sample_convel();
+        let frames: Vec<_> = ConFrameIterator::new(&text)
+            .map(|frame| frame.expect("convel"))
+            .collect();
+        assert_eq!(frames.len(), 3);
+        assert!(
+            frames
+                .iter()
+                .all(|frame| frame.atom_data[0].velocity().is_some())
+        );
+        assert_eq!(frames[0].positions.nrows(), 5);
+        // Every stored coordinate and velocity bit matches the general parser.
+        let mut frame_i = 0usize;
+        let mut coord_row = 0usize;
+        let mut vel_row = 0usize;
+        let mut velocities = false;
+        for line in text.lines() {
+            let token = line.trim();
+            if token.starts_with("Generated") && (coord_row > 0 || velocities) {
+                frame_i += 1;
+                coord_row = 0;
+                vel_row = 0;
+                velocities = false;
+            }
+            if token.starts_with("Velocities") {
+                velocities = true;
+                continue;
+            }
+            let cols: Vec<&str> = token.split_whitespace().collect();
+            if cols.len() < 5 {
+                continue;
+            }
+            if reference_ok(cols[0]).is_none() || cols[3].parse::<u64>().is_err() {
+                continue;
+            }
+            let row = if velocities { vel_row } else { coord_row };
+            let got = if velocities {
+                frames[frame_i].atom_data[row].velocity().unwrap()
+            } else {
+                let p = frames[frame_i].positions.as_f64_row(row);
+                [p[0], p[1], p[2]]
+            };
+            for (k, col) in cols.iter().take(3).enumerate() {
+                assert_eq!(got[k].to_bits(), reference_f64(col).to_bits(), "{token}");
+            }
+            if velocities {
+                let soa = frames[frame_i].velocities.as_f64_row(row);
+                for k in 0..3 {
+                    assert_eq!(soa[k].to_bits(), got[k].to_bits());
+                }
+                vel_row += 1;
+            } else {
+                coord_row += 1;
+            }
+        }
+        assert_eq!(frame_i, 2);
+        assert_eq!(vel_row, 5);
+    }
+}
+
+#[cfg(test)]
+mod newline_skip_tests {
+    use super::ConFrameIterator;
+
+    /// The per-line search [`ConFrameIterator::advance_lines`] used before
+    /// the counted skip. Positions and errors are the oracle.
+    fn naive(bytes: &[u8], n: usize) -> Result<usize, ()> {
+        let mut pos = 0usize;
+        for i in 0..n {
+            let rest = &bytes[pos..];
+            match memchr::memchr(b'\n', rest) {
+                Some(at) => pos += at + 1,
+                None => {
+                    if rest.is_empty() {
+                        return Err(());
+                    }
+                    pos = bytes.len();
+                    if i + 1 == n {
+                        return Ok(pos);
+                    }
+                    return Err(());
+                }
+            }
+        }
+        Ok(pos)
+    }
+
+    #[test]
+    fn counted_skip_matches_per_line_memchr() {
+        let mut samples = vec![
+            String::new(),
+            "a".into(),
+            "a\n".into(),
+            "a\nb".into(),
+            "\n".into(),
+            "\n\n".into(),
+            "abc\ndef\nghi".into(),
+            "a\r\nb\r\n".into(),
+            "x".repeat(100) + "\n" + &"y".repeat(40),
+        ];
+        let path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/cuh2.con");
+        let one = std::fs::read_to_string(&path).unwrap();
+        samples.push(one.repeat(2));
+        let bare = one.trim_end_matches(['\n', '\r']).to_string();
+        samples.push(bare);
+        for text in samples {
+            let bytes = text.as_bytes();
+            for n in [0usize, 1, 2, 3, 6, 7, 9, 40, 200, 450, 1000, 5000] {
+                let expect = naive(bytes, n);
+                let mut it = ConFrameIterator::from_bytes(bytes);
+                let got = it.advance_lines(n).map(|_| it.byte_pos()).map_err(|_| ());
+                assert_eq!(got, expect, "n={n} len={}", bytes.len());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod cached_unit_table_read_paths {
+    use super::*;
+
+    const FRAME: &str = "\
+v3
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10 10 10
+90 90 90
+
+
+1
+1
+1.0
+H
+Coordinates of Component 1
+0.5 0.25 0.125 0 7
+";
+
+    fn coords(frame: &types::ConFrame) -> [f64; 3] {
+        frame.positions.as_f64_row(0)
+    }
+
+    /// The serial iterator, the byte reader behind the C API, and the phased
+    /// reader behind `read_con` all validate units through the one table.
+    #[test]
+    fn read_paths_share_the_cached_unit_table() {
+        let addr = crate::units::cached_unit_table_addr();
+        let serial = ConFrameIterator::new(FRAME)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let from_bytes = frames_from_bytes(FRAME.as_bytes(), Some(1)).expect("bytes");
+        let phased = frames_from_bytes_phased(FRAME.as_bytes(), Some(1)).expect("phased");
+        assert_eq!(from_bytes.len(), 1);
+        assert_eq!(phased.frames.len(), 1);
+        assert_eq!(coords(&from_bytes[0]), coords(&serial));
+        assert_eq!(coords(&phased.frames[0]), coords(&serial));
+        assert_eq!(crate::units::cached_unit_table_addr(), addr);
+        let bad = FRAME.replace("angstrom", "not-a-unit");
+        assert!(ConFrameIterator::new(&bad).next().unwrap().is_err());
+        assert!(frames_from_bytes(bad.as_bytes(), Some(1)).is_err());
+        assert!(frames_from_bytes_phased(bad.as_bytes(), Some(1)).is_err());
+        assert_eq!(crate::units::cached_unit_table_addr(), addr);
     }
 }

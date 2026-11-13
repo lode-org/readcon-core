@@ -202,6 +202,20 @@ if get_option('with_tests')
         env: {'LD_LIBRARY_PATH': meson.project_build_root()},
         timeout: 120,
     )
+    c_positions = executable(
+        'test_positions',
+        files('tests/c/test_positions.c'),
+        dependencies: readcon_dep,
+        include_directories: _incdir,
+        build_rpath: meson.project_build_root(),
+    )
+    test(
+        'c-positions',
+        c_positions,
+        args: [_msproot],
+        env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+        timeout: 180,
+    )
 endif
 
 if get_option('with_examples')

@@ -2,17 +2,22 @@
 The CON File Format Specification
 =================================
 
-    :Date: 2026-06-27
+    :Date: 2026-10-11
 
+
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
 
 Specification
 -------------
 
 Version
-    3
+    3.1 (major 3, minor 1)
 
 Date
-    2026-06-27
+    2026-10-11
 
 Status
     Stable
@@ -20,1204 +25,1065 @@ Status
 Reference implementation
     `readcon-core <https://github.com/lode-org/readcon-core>`_
 
-Surface grammar (PEG)
-    ``grammar/readcon.pest`` (Pest); validate with ``cargo test --features grammar``
+Surface grammar
+    ``grammar/readcon.pest`` (included in the appendix; not the hot path)
 
-This document is the formal CON specification. Version 3 is current
-and adds required ``units`` metadata on top of the version 2 layout.
-It supersedes informal eOn write-ups. New implementations SHOULD
-target version 3 and MUST accept version 2.
+Clause index
+    ``docs/orgmode/clauses.tsv``, emitted by ``scripts/emit_clauses.py``
 
-The keywords MUST, MUST NOT, REQUIRED, SHALL, SHOULD, SHOULD NOT,
-MAY, and OPTIONAL follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_ semantics.
+In-memory API
+    :doc:`implementation-notes` (informative for this format)
 
-Overview
---------
+This document is the normative CON format. CON checkpoints come from
+rare-event work on eOn
+:cite:t:`goswamiNEBOrchestration2026` :cite:t:`goswamiRMSDProjections2026` :cite:t:`goswamiGaussianProcessSaddle2025` :cite:t:`chillEONSoftwareLong2014`.
+Each normative requirement has an id ``CON-<section>.<n>``.
+Where this prose and the included PEG disagree, these clauses win.
 
-CON is a text checkpoint for rare-event and transition-state work: one
-frame holds the cell, type-grouped coordinates, a per-direction
-constraint mask, a pre-group ``atom_id``, optional per-atom sections, and
-versioned JSON on line 2. The layout comes from the `eOn <https://eondocs.org>`_
-rare-event stack :cite:t:`chillEONSoftwareLong2014`.
-``readcon-core`` is the reference implementation (hourglass ``rkr_*`` ABI).
+CON-status.1 \:\: MUST
+    A reader MUST accept the version number of every minor of major 3, including minor 0 and unknown minors.
 
-A file is a concatenation of *frames*. Each frame is a nine-line header,
-one coordinate block per atom type, then zero or more declared sections
-(velocities, forces, energies, charges, spins, magmoms, displacements, spreads).
-There is no
-inter-frame separator.
+CON-status.2 \:\: MUST
+    A new implementation MUST accept version 2 and implicit version 1.
 
-File extensions
----------------
+.. _file:
 
-``.con``
-    Coordinate-only configuration files.
+File
+----
 
-``.convel``
-    Configuration files with velocity data per frame.
+A file is a concatenation of frames. Extensions: ``.con``, ``.convel``,
+and the compression envelopes ``.con.gz``, ``.convel.gz``, ``.con.zst``,
+``.convel.zst``.
 
-``.con.gz``
-    Gzip-compressed CON files (see `compression`_).
+CON-file.1 \:\: MUST
+    A CON file MUST be UTF-8.
 
-Encoding
---------
+CON-file.2 \:\: MUST NOT
+    A CON file MUST NOT begin with a byte-order mark.
 
-CON files MUST use UTF-8. Line endings MAY be LF (``\n``) or CRLF
-(``\r\n``); parsers MUST accept both. All numeric values use ASCII
-decimal representation (no locale-dependent formatting).
+CON-file.3 \:\: MUST
+    Parsers MUST accept LF (``\n``) and CRLF (``\r\n``) line endings.
 
-.. _surface-grammar:
+CON-file.4 \:\: MUST
+    Parsers MUST ignore trailing spaces and tabs on every line.
 
-Surface grammar (PEG)
+CON-file.5 \:\: MUST
+    Labels MUST be compared case-insensitively after collapsing each run of spaces to one space.
+
+CON-file.6 \:\: MUST NOT
+    Writers MUST NOT insert an extra blank line between frames.
+
+.. _frame:
+
+Frame and end of file
 ---------------------
 
-The machine-readable surface syntax for CON/convel lives in the repository at
-``grammar/readcon.pest`` (a `Pest <https://pest.rs>`_ PEG). It is the formal companion to this
-prose specification for **syntactic** structure (header layout, type blocks,
-optional section blocks, multi-frame concatenation).
+Each frame is a 9-line header, one coordinate block per atom type, then
+the declared sections. There is no inter-frame marker.
+After a complete frame the next line is line 1 of the next frame, even when that line is empty.
+A stray blank therefore shifts that header and fails at its line 3.
 
-The reference implementation in ``readcon-core`` does ****not**** use the PEG on the
-I/O hot path; it implements the same surface rules plus semantic checks (atom
-counts, metadata JSON, validation flags). Enable the ``grammar`` Cargo feature to
-parse buffers with the PEG for tooling or tests:
+CON-frame.1 \:\: MUST
+    After the last complete frame, lines that contain only whitespace MUST be ignored.
 
-::
+CON-frame.2 \:\: MUST NOT
+    Readers MUST NOT silently drop a partial last frame.
 
-    cargo test --features grammar
+CON-frame.3 \:\: MUST
+    One to eight header lines of a further frame MUST be reported as ``IncompleteHeader``, except a type count of 0 at end of file whose lines 8 and 9 are absent.
 
-Frame structure
----------------
+CON-frame.4 \:\: MUST
+    Fewer coordinate rows than the header declares MUST be reported as ``IncompleteFrame``.
 
-Each frame consists of:
+CON-frame.5 \:\: MUST NOT
+    A blank line followed only by whitespace to end of file MUST NOT be read as a legacy velocity block.
 
-1. A 9-line header.
+CON-frame.6 \:\: MUST
+    A partial declared section MUST be reported as ``IncompleteSection(name)``.
 
-2. One coordinate block per atom type.
+CON-frame.7 \:\: MUST
+    After a complete frame, including its declared sections or the legacy velocity block where that applies, the next line MUST be line 1 of the next frame, even when it is empty.
 
-3. Zero or more additional per-atom sections (velocities, forces),
-   each preceded by a blank separator line.
-
-Multiple frames are concatenated directly with no inter-frame
-separator.
-
-Header (9 lines)
-----------------
+Header
+------
 
 .. table::
 
-    +------+-------------------+--------------------------------+------------------------------------------+
-    | Line | Name              | Content                        | Example                                  |
-    +======+===================+================================+==========================================+
-    |    1 | Generator comment | Free-form text                 | ``Generated by eOn``                     |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    2 | Metadata          | JSON object or free-form text  | ``{"con_spec_version":3,"units":{...}}`` |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    3 | Cell dimensions   | 3 floats: Lx Ly Lz             | ``15.3456 21.702 100.0``                 |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    4 | Cell angles       | 3 floats: alpha beta gamma     | ``90.0 90.0 90.0``                       |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    5 | Reserved          | Free-form text (round-tripped) | ``0 0``                                  |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    6 | Reserved          | Free-form text (round-tripped) | ``218 0 1``                              |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    7 | Atom type count   | 1 integer: N                   | ``2``                                    |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    8 | Atoms per type    | N integers                     | ``216 2``                                |
-    +------+-------------------+--------------------------------+------------------------------------------+
-    |    9 | Mass per type     | N floats (atomic mass units)   | ``63.546 1.00793``                       |
-    +------+-------------------+--------------------------------+------------------------------------------+
+    +------+--------------------------------------------------+
+    | Line | Content                                          |
+    +======+==================================================+
+    |    1 | Free-form generator text, preserved              |
+    +------+--------------------------------------------------+
+    |    2 | One JSON object, or free text for version 1      |
+    +------+--------------------------------------------------+
+    |    3 | Three lengths a, b, and c, in ``units.length``   |
+    +------+--------------------------------------------------+
+    |    4 | ``alpha beta gamma`` in degrees                  |
+    +------+--------------------------------------------------+
+    |    5 | Free-form text, preserved                        |
+    +------+--------------------------------------------------+
+    |    6 | Free-form text, preserved                        |
+    +------+--------------------------------------------------+
+    |    7 | Type count, integer >= 0                         |
+    +------+--------------------------------------------------+
+    |    8 | Per-type counts, empty when line 7 is 0          |
+    +------+--------------------------------------------------+
+    |    9 | Masses in ``units.mass``, empty when line 7 is 0 |
+    +------+--------------------------------------------------+
 
-Line 1: Generator comment
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Line 1 and lines 5-6 have no semantics.
+Line 1 MAY be empty, and parsers MUST keep that empty line.
+Line 2 MAY be empty. An empty line 2 does not start with ``{``, so the frame is implicit version 1.
+Angstrom and amu apply when ``units`` or that key is absent.
 
-Free-form text. Writers SHOULD set this to a human-readable
-identifier. The line may be empty. Parsers MUST preserve it, including
-an empty line, through round-trips but MUST NOT assign it semantic meaning.
+CON-header.1 \:\: MAY
+    Writers MAY leave lines 5 and 6 empty.
+
+CON-header.2 \:\: MUST
+    Parsers MUST preserve line 1 and lines 5 and 6.
+
+CON-header.3 \:\: MUST
+    Line 3 and the coordinate columns MUST be read in ``units.length``, and line 9 in ``units.mass``. Absent ``units`` or an absent key means angstrom and amu.
+
+CON-header.4 \:\: MUST
+    Parsers MUST accept an empty line 1 and an empty line 2. An empty line 1 is preserved. An empty line 2 is implicit version 1.
 
 .. _metadata:
 
 Line 2: Metadata
 ~~~~~~~~~~~~~~~~
 
-Line 2 carries machine-readable metadata as a single-line `JSON <https://www.json.org>`_
-object.
+Line 2 is one JSON object when the file is version 2 or newer.
+A line that does not start with ``{`` after trimming is implicit version 1.
+Metadata is line 2. Line numbers count from 1.
 
-Version 2+ files
-^^^^^^^^^^^^^^^^
+CON-line2.1 \:\: MUST
+    A line 2 that starts with ``{`` MUST be one UTF-8 JSON object and nothing else.
 
-Writers MUST emit a JSON object containing at least ``con_spec_version``
-with an integer value:
+CON-line2.2 \:\: MUST
+    Malformed JSON on that line MUST be rejected.
 
-::
+CON-line2.3 \:\: MUST
+    A JSON object that omits ``con_spec_version`` MUST be rejected.
 
-    {"con_spec_version":2}
+CON-line2.4 \:\: MUST
+    ``con_spec_version`` MUST be a JSON number, the major version, not a string.
 
-Additional keys MAY appear. Parsers MUST preserve unrecognized keys
-through round-trips. Reserved metadata keys listed in `metadata-keys`_
-MUST use the declared JSON type. The ``sections`` key, when present,
-MUST be an array of strings. The ``validate`` key, when present, MUST
-be a boolean.
+CON-line2.5 \:\: MUST
+    JSON ``con_spec_version`` 0 or 1 MUST be rejected as ``UnsupportedVersion``.
 
-Legacy (pre-v2) files
-^^^^^^^^^^^^^^^^^^^^^
+CON-line2.6 \:\: MUST
+    An unknown major MUST be rejected as ``UnsupportedVersion``.
 
-Files produced before this specification may contain free-form text
-on line 2. A conforming parser detects the format by checking whether
-line 2, after trimming whitespace, starts with ``{``:
+CON-line2.7 \:\: MUST
+    A reader of a known major MUST accept the version number of every minor of that major, including minors it does not implement.
 
-- Starts with ``{``: parse as JSON, extract ``con_spec_version``.
+CON-line2.8 \:\: MUST
+    Unknown keys MUST be preserved on rewrite.
 
-- Does not start with ``{``: treat as legacy (implicit version 1).
-  An empty line 2 does not start with ``{`` and is implicit version 1.
+CON-line2.9 \:\: MUST
+    ``con_spec_minor``, when present, MUST be a JSON integer >= 0.
 
-If line 2 starts with ``{`` but contains malformed JSON, the parser
-MUST report an error. If the JSON object lacks ``con_spec_version``,
-the parser MUST report an error. If ``con_spec_version`` exceeds the
-highest version the parser supports, the parser MUST report an error.
+CON-line2.10 \:\: MUST
+    A missing ``con_spec_minor``, or an explicit 0, MUST mean minor 0.
 
-Lines 3-4: Cell geometry
-~~~~~~~~~~~~~~~~~~~~~~~~
+CON-line2.11 \:\: MUST
+    ``sections``, when present, MUST be an array of strings.
 
-Line 3: three whitespace-separated floats (cell edge lengths in
-angstroms). Line 4: three whitespace-separated floats (cell angles in
-degrees). Tabs and spaces are both valid separators.
+CON-line2.12 \:\: MUST
+    ``validate``, when present, MUST be a boolean.
 
-For non-orthogonal cells, the angle-based representation introduces
-floating-point drift through trigonometric round-trips. Writers
-SHOULD include the exact 3x3 lattice vector matrix in the JSON
-metadata via the ``lattice_vectors`` key (see `lattice-vectors`_).
-When ``lattice_vectors`` is present, readers SHOULD prefer it over the
-length/angle values on lines 3-4.
+CON-line2.13 \:\: MUST
+    Reserved keys MUST use the types in this document.
 
-When ``validate`` is ``true``, readers MUST reject zero or negative cell
-lengths and MUST reject angles outside the open interval ``(0, 180)``
-degrees.
+.. _cell:
 
-Lines 5-6: Reserved
-~~~~~~~~~~~~~~~~~~~
+Cell
+~~~~
 
-Free-form text with no defined semantics. Writers MAY emit empty
-lines. Parsers MUST preserve these for round-trip fidelity.
+Line 3 is ``|a| |b| |c|``. Line 4 is ``alpha`` ``angle(b,c)``, ``beta`` ``angle(a,c)``,
+``gamma`` ``angle(a,b)``, in degrees. ``a`` lies along x and ``b`` lies in the xy plane.
+eOn 3.6.0 reads that placement at ``client/ConFileIO.cpp:659-681`` and writes it at ``:531-549``.
+ASE ``cellpar_to_cell`` uses the same orientation by default (``ase/geometry/cell.py:50``, ``ab_normal=(0,0,1)``).
+``lattice_vectors`` is three row vectors in ``units.length``, ``[a, b, c]``.
 
-Lines 7-9: Type metadata
-~~~~~~~~~~~~~~~~~~~~~~~~
+CON-cell.1 \:\: MUST
+    When ``lattice_vectors`` is present, readers MUST prefer it over lines 3-4.
 
-Line 7: single positive integer N (number of atom types). Line 8:
-exactly N positive integers (atom count per type). Line 9: exactly N
-floats (atomic mass per type, in amu).
+CON-cell.2 \:\: MUST
+    A writer that emits ``lattice_vectors`` MUST write lines 3-4 consistent with that matrix at the precision the writer is using.
 
-Coordinate blocks
------------------
+CON-cell.3 \:\: MUST
+    A missing ``pbc`` key MUST be read as periodic in all three directions.
 
-For each atom type *i* (1 to N), in the order declared in lines 8-9:
+CON-cell.4 \:\: MUST
+    ``pbc``, when present, MUST be a length-3 array of booleans.
 
-1. **Symbol line**: chemical symbol (e.g., ``Cu``, ``H``).
+CON-cell.5 \:\: MUST
+    ``lattice_vectors``, when present, MUST be three length-3 arrays of finite numbers.
 
-2. **Label line**: ``Coordinates of Component /i/``
+CON-cell.6 \:\: MUST
+    When ``lattice_vectors`` is absent, a reader MUST build ``a=(|a|, 0, 0)``, ``b=(|b| cos gamma, |b| sin gamma, 0)``, and ``c=(|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma, |c| sqrt(1 - cos^2 beta - ((cos alpha - cos beta cos gamma) / sin gamma)^2))``, with the angles converted from degrees.
 
-3. **Atom lines**: one per atom, containing:
+Counts
+~~~~~~
+
+A type count of 0 is a frame with no atoms.
+Lines 8 and 9 are whitespace only, no coordinate block and no section follow, ``sections`` is absent or empty, and the legacy velocity fallback does not apply.
+That frame is legal with ``validate`` true.
+A per-type count of 0 is InvalidCount when the type count is 1 or more.
+ASE 3.29.0 ``write_eon(Atoms())`` writes type count 0, an empty line 8, and an unterminated empty line 9 (``ase/io/eon.py:277-307``).
+``ase.io.eon.read_eon`` then raises ``IndexError`` at ``images[0]`` (``ase/io/eon.py:188``). The ``StopIteration`` from the ninth ``next()`` is caught inside that function (``:177-179``).
+``ase.io.read(path, format``"eon")= raises ``StopIteration`` from ``ase/io/formats.py:821`` (``next(_iread(...))`` on a read that yields no image).
+
+CON-count.1 \:\: MUST
+    A type count of 0 MUST be a frame with zero atoms: lines 8 and 9 contain only whitespace, no coordinate block and no section block follow, ``sections`` is absent or empty, and the legacy velocity fallback does not apply. Any other token on line 8 or 9 MUST be ``InvalidCount``.
+
+CON-count.2 \:\: MUST
+    A zero-atom frame of that form MUST be accepted in every mode, including ``validate`` true. ``CON-validate.3`` still requires the ``sections`` key when ``validate`` is true.
+
+CON-count.3 \:\: MUST
+    When the type count is 1 or more, each per-type count MUST be an integer >= 1, and any other count token MUST be ``InvalidCount``.
+
+CON-count.4 \:\: MUST
+    At end of file, when line 7 is 0, missing lines 8 and 9 MUST be read as empty, and ``CON-frame.3`` MUST NOT report that frame as ``IncompleteHeader``.
+
+CON-count.5 \:\: SHOULD NOT
+    Writers SHOULD NOT write a zero-atom frame for a consumer that predates v3.1.
+
+CON-count.6 \:\: MUST
+    The coordinate blocks MUST follow header order.
+
+CON-count.7 \:\: MUST
+    The total atom count MUST equal the sum of line 8.
+
+CON-count.8 \:\: MUST
+    Component numbers in labels MUST start at 1.
+
+Coordinates
+-----------
+
+One block per type: a symbol line, a ``Coordinates of Component N`` label,
+then one atom line per atom of that type. Columns are whitespace-separated.
 
 .. table::
 
-    +--------+-------+-----------------------------------------+
-    | Column | Type  | Description                             |
-    +========+=======+=========================================+
-    |      1 | float | x coordinate (angstroms)                |
-    +--------+-------+-----------------------------------------+
-    |      2 | float | y coordinate (angstroms)                |
-    +--------+-------+-----------------------------------------+
-    |      3 | float | z coordinate (angstroms)                |
-    +--------+-------+-----------------------------------------+
-    |      4 | int   | Constraint bitmask (see `constraints`_) |
-    +--------+-------+-----------------------------------------+
-    |      5 | int   | Atom index (see `atom-index`_)          |
-    +--------+-------+-----------------------------------------+
-
-Columns are whitespace-separated.
+    +--------+---------+------------------------+
+    | Column | Token   | Meaning                |
+    +========+=========+========================+
+    |      1 | float   | x, in ``units.length`` |
+    +--------+---------+------------------------+
+    |      2 | float   | y, in ``units.length`` |
+    +--------+---------+------------------------+
+    |      3 | float   | z, in ``units.length`` |
+    +--------+---------+------------------------+
+    |      4 | integer | Constraint flag        |
+    +--------+---------+------------------------+
+    |      5 | integer | Atom id, optional      |
+    +--------+---------+------------------------+
 
 .. _constraints:
 
 Per-direction constraints (column 4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Column 4 encodes per-direction constraint flags as a bitmask.
-Bit 0 = x, bit 1 = y, bit 2 = z.
+Column 4 is an integer token. Bit 0 is x, bit 1 is y, bit 2 is z.
+Spec 1 (no JSON on line 2): 0 is free, 1 is fixed in all three directions.
+Spec 2 and later: 0 through 7 are the bitmask, and 1 is x only.
+Writers of spec 2 and later emit 7 for all-fixed.
 
-.. table::
+CON-mask.1 \:\: MUST
+    Column 4 MUST be an integer token with no sign and no decimal point.
 
-    +-------+----------------------------+----------------------------+
-    | Value | Spec 1 (no JSON line 2)    | Spec 2+                    |
-    +=======+============================+============================+
-    |     0 | Free                       | Free                       |
-    +-------+----------------------------+----------------------------+
-    |     1 | All-fixed (legacy boolean) | x-only                     |
-    +-------+----------------------------+----------------------------+
-    |   2-6 | Unused / undefined         | Per-direction combinations |
-    +-------+----------------------------+----------------------------+
-    |     7 | Unused / undefined         | Fixed in all directions    |
-    +-------+----------------------------+----------------------------+
+CON-mask.2 \:\: MUST
+    In spec 1, readers MUST treat 0 as free and 1 as fixed on x, y, and z.
 
-Spec-1 files used column 4 as a boolean (0 free, 1 fixed). Spec-2
-files use the 3-bit mask. Readers MUST therefore consult
-``con_spec_version`` before decoding 1: spec 1 keeps the legacy
-all-fixed reading; spec 2 treats 1 as x-only.
+CON-mask.3 \:\: MUST
+    In spec 1, any other column-4 token MUST be ``InvalidFixedFlag``.
 
-Writers MUST emit 7 for all-fixed atoms, never 1. Spec-2 writers
-MUST emit 1 for an atom fixed in x alone.
+CON-mask.4 \:\: MUST
+    In spec 2 and later, values 0 through 7 MUST be read as the bitmask above.
+
+CON-mask.5 \:\: MUST
+    A float spelling, a sign, or a value outside the legal set MUST be ``InvalidFixedFlag`` in every mode, including when ``validate`` is absent or false.
+
+CON-mask.6 \:\: MUST NOT
+    A spec 2 or later writer MUST NOT emit 1 to mean all-fixed.
+
+CON-mask.7 \:\: MUST
+    A spec 2 or later writer MUST emit 7 for an atom fixed on x, y, and z.
 
 .. _atom-index:
 
 Atom index (column 5)
 ~~~~~~~~~~~~~~~~~~~~~
 
-The atom index preserves the original position of each atom before
-type-based grouping. The CON format groups atoms by element type,
-which reorders them. Without a persistent index, the original
-ordering cannot be recovered after a read-write cycle.
+Column 5 is the atom id. No base is implied.
+Grouping by type reorders atoms relative to a pre-group sequence.
+eOn 3.6.0 stable-sorts by ascending id when the ids are unique, and keeps file order when any id repeats (``client/ConFileIO.cpp:147-176`` ``matter_order``, called at ``:691``).
+v3.4.0 has the same function.
 
-Version 2 requirements:
+CON-id.1 \:\: MUST
+    Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, and MUST NOT be parsed through binary64.
 
-- Writers MUST emit column 5 on every atom line.
+CON-id.2 \:\: MUST NOT
+    Readers MUST NOT assume that ids start at 0 or at 1.
 
-- Column 5 MUST contain the pre-grouping index.
+CON-id.3 \:\: MUST
+    Writers MUST emit ids that are unique within the frame.
 
-- Readers MUST parse and preserve column 5 through write-back.
+CON-id.4 \:\: MUST
+    Readers MUST accept repeated ids.
 
-Version 1 behavior:
+CON-id.5 \:\: MUST
+    The pre-grouping order of a frame MUST be ascending column-5 id when the ids are unique, and file order otherwise.
 
-- Column 5 is present but its semantics are undefined.
+CON-id.6 \:\: MUST
+    A reader MUST expose column-5 ids unchanged.
 
-Readers SHOULD accept 4-column atom lines. When column 5 is absent,
-default to the sequential position within the frame (0, 1, 2, ...).
+CON-id.7 \:\: MUST
+    A reader or consumer that returns atoms in pre-grouping order MUST use ``CON-id.5``.
+
+CON-id.8 \:\: MAY
+    A reader MAY return atoms in file order together with their column-5 ids.
+
+CON-id.9 \:\: MUST
+    A 4-column atom line MUST use the 0-based position of that atom in the frame as its id.
 
 .. _sections:
 
-Additional per-atom sections
-----------------------------
+Sections
+--------
 
-After coordinate blocks, a frame MAY contain additional per-atom data
-sections. Each section follows the same block structure: a blank
-separator line, then per-component blocks (symbol line, label line,
-data lines).
+A section is present exactly when its name is in ``sections``.
+An empty ``sections`` array means no section follows, and it disables the
+legacy velocity fallback. With no ``sections`` key, one blank line that
+begins a complete velocity block is a velocity section. A blank line
+that does not begin that block is line 1 of the next frame. That fallback
+is the only undeclared section, and ``CON-frame.5`` limits it.
+Minor 1 reserves the names in the table below.
+A vector row has arity 3 and a scalar row has arity 1.
+Those integers count value fields only.
 
 Section declaration
 ~~~~~~~~~~~~~~~~~~~
 
-Version 2 files declare sections in the JSON metadata using the
-``sections`` key:
+CON-section.1 \:\: MUST
+    On disk, a section MUST be treated as present exactly when its name is listed in ``sections``, aside from the legacy velocity fallback.
 
-::
+CON-section.2 \:\: MUST
+    Exactly one blank line MUST precede each section block.
 
-    {"con_spec_version":2,"sections":["velocities","forces"]}
+CON-section.3 \:\: MUST NOT
+    Writers MUST NOT put a blank line between the component blocks inside a section.
 
-The parser reads sections in the declared order. Parsers MUST reject
-unknown section names with an error. Every declared section MUST be
-present, complete, and parseable at its declared position. An empty
-``sections`` array declares that no additional per-atom sections follow.
+CON-section.4 \:\: MUST
+    Each component block MUST be a symbol line, a label, and one data row per atom of that type.
+
+CON-section.5 \:\: MUST
+    The per-atom energy section name MUST be ``energies``.
+
+CON-section.6 \:\: MUST NOT
+    ``atom_energies`` MUST NOT be used as a section name.
+
+CON-section.7 \:\: MUST
+    An unknown section name MUST be reported as ``UnknownSection`` when the frame minor is not newer than the minor this reader implements.
+
+CON-section.8 \:\: MAY
+    When the frame minor is newer than the reader implements, the reader MAY skip an unknown section whose value-field count is given by ``section_arity``.
+
+CON-section.9 \:\: MUST
+    If that minor is newer and ``section_arity`` does not give the value-field count, the reader MUST report ``UnknownSection``.
+
+CON-section.10 \:\: MUST
+    Adding a reserved section name MUST increase ``con_spec_minor``.
+
+CON-section.11 \:\: MUST NOT
+    Adding a reserved section name MUST NOT require a new major.
+
+CON-section.12 \:\: MUST
+    ``section_arity``, when present, MUST be an object mapping section names to integers >= 1, each the number of value fields on a data row, excluding the flag and the optional id.
+
+CON-section.13 \:\: MUST
+    An entry for a reserved section MUST equal 3 for a vector row and 1 for a scalar row, else ``InvalidVectorLength``.
+
+CON-section.14 \:\: MUST
+    A data row of an unknown section MUST hold that arity of value fields, then the flag, and an optional id, so the row has arity+1 or arity+2 tokens.
+
+CON-section.15 \:\: MUST
+    The label of any section MUST be its name compared under ``CON-file.5``, followed by ``of Component N``.
+
+CON-section.16 \:\: MUST
+    A writer of minor 2 or later MUST list in ``section_arity`` every section it emits that minor 1 does not reserve.
 
 .. table::
 
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | Section name      | Label pattern                      | Columns | Data                          |
-    +===================+====================================+=========+===============================+
-    | ``velocities``    | ``Velocities of Component /i/``    |       5 | vx vy vz fixed\_flag atom\_id |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``forces``        | ``Forces of Component /i/``        |       5 | fx fy fz fixed\_flag atom\_id |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``energies``      | ``Energies of Component /i/``      |       3 | energy fixed\_flag atom\_id   |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``charges``       | ``Charges of Component /i/``       |       3 | charge fixed\_flag atom\_id   |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``spins``         | ``Spins of Component /i/``         |       3 | spin fixed\_flag atom\_id     |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``magmoms``       | ``Magmoms of Component /i/``       |       5 | mx my mz fixed\_flag atom\_id |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``displacements`` | ``Displacements of Component /i/`` |       5 | dx dy dz fixed\_flag atom\_id |
-    +-------------------+------------------------------------+---------+-------------------------------+
-    | ``spreads``       | ``Spreads of Component /i/``       |       5 | sx sy sz fixed\_flag atom\_id |
-    +-------------------+------------------------------------+---------+-------------------------------+
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | Name              | Label                            | Row                                               |
+    +===================+==================================+===================================================+
+    | ``velocities``    | ``Velocities of Component N``    | ``vx vy vz`` flag id                              |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``forces``        | ``Forces of Component N``        | ``fx fy fz`` flag id                              |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``energies``      | ``Energies of Component N``      | energy flag id                                    |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``charges``       | ``Charges of Component N``       | charge flag id                                    |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``spins``         | ``Spins of Component N``         | spin flag id                                      |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``magmoms``       | ``Magmoms of Component N``       | ``mx my mz`` flag id                              |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``displacements`` | ``Displacements of Component N`` | ``dx dy dz`` flag id, ``units.length``            |
+    +-------------------+----------------------------------+---------------------------------------------------+
+    | ``spreads``       | ``Spreads of Component N``       | ``sx sy sz`` flag id, ``units.length``, each >= 0 |
+    +-------------------+----------------------------------+---------------------------------------------------+
 
-The ``energies`` section carries one scalar per atom, useful for ML
-potentials that decompose total energy into local contributions.
-Writers MAY emit it alongside ``forces``, alone, or omit it entirely.
+Identity columns repeat the coordinate flag and id.
+0 in a ``spreads`` row is a classical point.
 
-``charges`` and ``spins`` are optional scalar sections (same column layout as
-``energies``). ``magmoms``, ``displacements``, and ``spreads`` are optional 3-vector
-sections (same layout as ``velocities``); ``displacements`` carries one
-displacement vector per atom in Angstrom, such as a normal mode.
+CON-section.17 \:\: MAY
+    When ``validate`` is not true, readers MAY ignore an identity-column mismatch after the row has the right number of fields.
 
-``spreads`` carries, for every atom, the root-mean-square spread of its
-position distribution along x, y, and z, in Angstrom: three non-negative
-numbers per row, ``sx sy sz fixed_flag atom_id``, with the same block layout,
-identity columns, and strict validation as ``displacements``. The spread is
-taken about the coordinates on the same row of the coordinate block. Each
-value is a standard deviation (not a variance, not a full covariance), MUST
-be finite and non-negative, and 0 denotes a classical point. A frame that
-declares ``spreads`` records a delocalised nuclear configuration as centroid
-(the coordinates) plus spread. Producers include ring-polymer instanton
-beads collapsed to their centroid, ring-polymer and path-integral molecular
-dynamics bead trajectories, and thermostat statistics.
+CON-section.18 \:\: SHOULD
+    The ``energy`` metadata value SHOULD equal the sum of the ``energies`` rows.
 
-These sections are reserved names on the existing v2/v3 declared
-``sections`` surface: files MAY use ``con_spec_version`` 2 or 3; a format major
-bump is not required for these optional blocks.
+CON-section.19 \:\: MUST NOT
+    A mismatch between that sum and ``energy`` MUST NOT reject the frame.
 
-When the ``energies`` section is present:
-
-- The per-frame total ``energy`` metadata key SHOULD equal the sum of
-  the per-atom contributions. Implementations MAY warn on a mismatch
-  but MUST NOT reject the frame on that ground (a reader cannot tell
-  apart a numerical-noise mismatch from a deliberate definition where
-  the per-atom decomposition does not sum to the total).
-
-- The total ``energy`` metadata key MAY still be absent, in which case
-  the per-atom contributions are the only energy data on the frame.
-
-- The ``fixed_flag`` and ``atom_id`` columns SHOULD match the coordinate
-  block, exactly as for ``velocities`` and ``forces``. In ``validate=true``
-  mode they MUST match.
-
-The ``fixed_flag`` and ``atom_id`` columns in every additional section
-repeat the coordinate-block identity data for the same atom ordering.
-Writers SHOULD emit the same values as the coordinate block. Readers
-associate section rows by component order and MAY ignore the duplicate
-identity columns after parsing the row shape; in ``validate=true`` mode
-readers MUST verify that the ``fixed_flag`` and ``atom_id`` columns match
-the coordinate block.
+CON-section.20 \:\: MUST
+    Each ``spreads`` value MUST be finite and >= 0.
 
 .. _validation-mode:
 
 Validation mode
 ~~~~~~~~~~~~~~~
 
-Version 2 files MAY set ``validate`` to ``true`` in the JSON metadata:
+CON-validate.1 \:\: MUST
+    ``validate`` true MUST add the checks in ``CON-validate.4``.
 
-::
+CON-validate.2 \:\: MUST NOT
+    ``validate`` true MUST NOT relax a check that already applies in every mode.
 
-    {"con_spec_version":2,"sections":["velocities","forces"],"validate":true}
+CON-validate.3 \:\: MUST
+    When ``validate`` is true, ``sections`` MUST be present, and an empty array is legal.
 
-When ``validate`` is ``true``, the ``sections`` key MUST be present, even
-when the value is an empty array. Conforming readers MUST verify that
-the frame satisfies strict v2 invariants before accepting it. At
-minimum, this validation MUST check:
-
-- Reserved metadata keys use the declared JSON types.
-
-- Numeric tokens are finite.
-
-- Cell lengths are positive, cell angles are in ``(0, 180)`` degrees,
-  atom counts are positive, and masses are positive.
-
-- Coordinate component labels exactly match ``Coordinates of Component /i/``.
-
-- Component symbols are recognized element symbols, or ``X`` for an
-  explicitly unknown element.
-
-- Coordinate and additional-section ``fixed_flag`` and ``atom_id`` fields
-  are exact integer tokens.
-
-- The section component symbol matches the coordinate component
-  symbol.
-
-- The section label exactly matches the declared section and component
-  number (for example, ``Velocities of Component 1``).
-
-- Each section row's ``fixed_flag`` decodes to the same per-axis fixed
-  mask as the corresponding coordinate row.
-
-- Each section row's ``atom_id`` equals the corresponding coordinate
-  row's ``atom_id``.
-
-If any check fails, the reader MUST reject the frame. When ``validate``
-is absent or false, readers MAY parse files by associating section
-rows by component order and ignoring duplicate identity column
-mismatches after parsing the row shape.
-
-Error paths and ParseError variants
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The reference reader (``readcon-core``) surfaces validation failures as
-typed ``ParseError`` variants. Other implementations are expected to
-return analogous structured errors, but the variant names below are
-specific to ``readcon-core`` and are listed here so that the spec and
-the reference implementation stay in sync.
-
-.. table::
-
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ParseError variant                            | Fires when                                                                                                                                                                                                                                                                                                    |
-    +===============================================+===============================================================================================================================================================================================================================================================================================================+
-    | ``MissingSpecVersion``                        | Line 2 starts with ``{`` but no ``con_spec_version`` key.                                                                                                                                                                                                                                                     |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``UnsupportedSpecVersion(v)``                 | ``con_spec_version`` exceeds ``CON_SPEC_VERSION``.                                                                                                                                                                                                                                                            |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``InvalidMetadataJson(msg)``                  | JSON is malformed, ``validate`` is not a boolean, ``sections`` is not an array of strings, or a reserved key has the wrong JSON type. Also fires when ``validate=true`` omits the ``sections`` key.                                                                                                           |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``ValidationError(msg)`` (validate=true only) | Cell geometry, masses, coordinate component label, component symbol, ``fixed_flag`` / ``atom_id`` integer tokens, section component symbol, section label, or per-row identity columns mismatch the rules above. Numeric tokens that are not finite are rejected here as well, after parse-time tokenization. |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``UnknownSection(name)``                      | A name in the ``sections`` array does not match a known section.                                                                                                                                                                                                                                              |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``IncompleteHeader``                          | Fewer than 9 header lines remain.                                                                                                                                                                                                                                                                             |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``IncompleteFrame``                           | Coordinate block ends short.                                                                                                                                                                                                                                                                                  |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``IncompleteVelocitySection``                 | Declared velocity section ends short or is absent.                                                                                                                                                                                                                                                            |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``IncompleteForceSection``                    | Declared force section ends short or is absent.                                                                                                                                                                                                                                                               |
-    +-----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-
-A minimal example of each path: the file
-``resources/test/tiny_cuh2_strict_invalid.con`` (``validate=true``
-rejects column~4 value 8) and the clause-keyed corpus under
-``resources/conformance/``, plus the test cases under
-``src/parser.rs::tests`` and ``tests/parseforces.rs``.
-
-Legacy section detection
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Files without a ``sections`` key use blank-separator detection. A blank
-line that begins a complete velocity block (a symbol line, then a label
-containing the words ``of`` and ``Component``) is a velocity section.
-A blank line that does not begin that block is line 1 of the next frame,
-and that line may be empty. A present ``sections`` key disables this
-fallback, including when the value is ``[]``. This preserves backward
-compatibility with existing ``.convel`` files while giving v2 writers a
-precise declaration mechanism.
-
-Writers SHOULD always emit the ``sections`` key when writing additional
-sections.
-
-Velocity section
-~~~~~~~~~~~~~~~~
-
-Per component *i*: blank separator, symbol line, ``Velocities of Component /i/`` label, then one line per atom: ``vx vy vz fixed_flag atom_id``.
-
-Force section
-~~~~~~~~~~~~~
-
-Per component *i*: blank separator, symbol line, ``Forces of Component /i/`` label, then one line per atom: ``fx fy fz fixed_flag atom_id``.
-
-Frames with forces SHOULD include the ``potential`` and ``energy``
-metadata keys.
-
-Extending with new section types
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-New section types follow the same pattern: declare in the ``sections``
-array, use a blank separator, symbol line, ``<Name> of Component /i/``
-label, and data lines.
-
-Multi-frame files
------------------
-
-Frames are concatenated with no separator. After parsing a frame's
-data, the parser attempts the next 9-line header. If fewer than 9
-lines remain, parsing ends.
-
-Writers MUST NOT insert extra blank lines between frames.
-
-Data types and precision
-------------------------
-
-- **Floats**: any valid decimal representation. Writers SHOULD emit at
-  least 6 significant digits. For lossless f64 round-tripping, 17
-  digits suffice. Readers MUST reject non-finite values (``NaN``,
-  ``Infinity``, ``-Infinity``).
-
-- **Integers**: constraint bitmask (0-7), atom\_id, natm\_types, and
-  natms\_per\_type are non-negative integers.
-
-.. _compression:
-
-Compression
------------
-
-CON files MAY be gzip-compressed. Readers SHOULD detect compression
-by checking the first two bytes for the gzip magic number (``0x1f 0x8b``) rather than relying on file extension. The decompressed
-content MUST be a valid CON file.
-
-Constraints and limits
-----------------------
-
-- Atoms MUST appear grouped by type, in header-declared order.
-
-- Component numbering starts at 1.
-
-- A type count of 0 is a legal zero-atom frame. Lines 8 and 9 are whitespace, and they may be absent at end of file. A per-type count of 0 is an error when the type count is at least 1. A sign or a decimal point in a count field is InvalidCount.
-
-- Symbol strings SHOULD match `IUPAC <https://iupac.org>`_ element symbols.
-
-- No upper limit on atom types or atom count is imposed.
-
-.. _metadata-keys:
-
-Recommended metadata keys
--------------------------
-
-All keys are OPTIONAL. Parsers MUST preserve unrecognized keys.
-
-.. table::
-
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | Key                    | Type            | Description                                                      |
-    +========================+=================+==================================================================+
-    | ``sections``           | array of string | Declared per-atom sections (see `sections`_)                     |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``validate``           | bool            | Enable strict v2 validation (see `validation-mode`_)             |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``generator``          | string          | Tool name and version                                            |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``units``              | object          | Unit system (see `units`_)                                       |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``pbc``                | 3 bool array    | Periodic boundary conditions (see `pbc`_)                        |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``lattice_vectors``    | 3x3 float array | Exact 3x3 cell matrix (see `lattice-vectors`_)                   |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``energy``             | float           | Per-frame total energy                                           |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``potential``          | object          | ``{"type":"EMT","params":{...}}``                                |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``frame_index``        | int             | Zero-based frame number in trajectory                            |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``time``               | float           | Simulation time                                                  |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``timestep``           | float           | Integration timestep                                             |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``neb_bead``           | int             | NEB bead (image) index                                           |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``neb_band``           | int             | NEB band index                                                   |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``convergence_fmax``   | float           | Convergence criterion: max force component                       |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``convergence_energy`` | float           | Convergence criterion: energy change threshold                   |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``converged``          | bool            | Whether convergence criteria are met                             |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``fmax``               | float           | Current maximum force component across free atoms                |
-    +------------------------+-----------------+------------------------------------------------------------------+
-    | ``bonds``              | array           | Optional frame topology (see `bonds`_); NOT a ``sections`` block |
-    +------------------------+-----------------+------------------------------------------------------------------+
+CON-validate.4 \:\: MUST
+    In that mode, readers MUST reject a bad reserved-key type, a non-positive cell length, an angle outside (0, 180) degrees, a non-positive mass, a coordinate label that does not match, an unrecognized symbol other than ``X``, a section label or symbol mismatch, or an identity column that does not match the coordinate row, as ``ValidationError``.
 
 .. _bonds:
 
 Frame topology (bonds)
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The ``bonds`` key is OPTIONAL frame-level topology for tools that need explicit
-connectivity (chemfiles selection grammar ``bonds:`` / ``angles:`` / ``is_bonded``,
-molecular viewers, etc.). It is NOT a per-atom ``sections`` entry and MUST NOT
-appear in the ``sections`` array.
+``bonds`` is optional frame topology, not a section.
+Each entry is ``[i, j]`` or ``{"i": i, "j": j}`` with an optional integer ``order``.
+Indices are 0-based into coordinate-block order, not column-5 ids.
+This key is legal on major 3. It does not change the major.
 
-Each element is either:
+CON-bonds.1 \:\: MUST NOT
+    ``bonds`` MUST NOT appear in ``sections``.
 
-- A length-2 pair ``[i, j]`` of non-negative integers, or
+CON-bonds.2 \:\: MUST
+    With ``validate`` true, a malformed ``bonds`` entry MUST be rejected.
 
-- An object ``{"i": i, "j": j, "order"?: integer}`` where ``order`` is optional
-  chemfiles-style bond order (0=unknown, 1=single, 2=double, 3=triple, ...).
-
-Indices are 0-based into the frame ``atom_data`` order (coordinate block order),
-NOT ``atom_id`` column values. Absent or empty ``bonds`` means no topology is
-declared (legacy CON files). Implementations MUST preserve unknown shapes when
-``validate`` is false; with ``validate=true``, malformed entries MUST be rejected.
-
-Example:
-
-.. code:: json
-
-    {"con_spec_version":2,"bonds":[[0,1],[0,2],{"i":1,"j":2,"order":1}]}
-
-When the optional chemfiles feature is enabled, readers/writers MAY project
-``bonds`` onto chemfiles topology for selection and MAY import chemfiles topology
-back into ``bonds`` on chemfiles→CON conversion. The CON spec version remains 2;
-``bonds`` is an additive optional metadata key (library semver may bump for API).
-
-**Chemfiles import sidecars (optional, not CON columns).** Implementations that
-import via chemfiles MAY store extra JSON keys such as
-``chemfiles_atom_names`` and ``chemfiles_atom_types`` (string arrays in chemfiles /
-``atom_id`` order) so selection can restore chemfiles display ``name`` distinct
-from atomic ``type`` while the coordinate blocks still use one ``symbol`` per atom.
-These keys are implementation extras: parsers MUST preserve unknown keys;
-writers MUST NOT require them for valid v2 files. Hand-authored frames without
-sidecars behave as symbol-only for selection.
-
-**Selection (library behaviour).** Match indices are reported in type-grouped
-``atom_data`` order; bond endpoints use the same index space (``atom_id`` remap on
-import). Residue / ``resname``, properties not retained on import, topology beyond
-pair ``bonds``, and geometry-threshold minidialects are outside the CON selection
-surface because the format does not carry that data. Narrative:
-``chemfiles-explain.org``; APIs: ``bindings.org``.
+CON-bonds.3 \:\: MUST
+    With ``validate`` false, unknown ``bonds`` shapes MUST be preserved.
 
 .. _units:
 
-Units
-~~~~~
+Units (required)
+----------------
 
-The ``units`` key maps physical dimensions to unit strings (metatomic-style
-expressions: named bases combined with ``\*`` / ``/`` / ``^``).
+``units`` maps a dimension to a unit expression: names combined with ``\*``, ``/``, ``^``, and parentheses.
+Version 3 requires ``length`` and ``energy``.
+Velocity is length/time taken from ``units``.
+
+The natural time unit used by eOn and by ASE, verified by an eOn 3.6.0 round trip, is written exactly ``(amu*angstrom^2/eV)^0.5``.
+That expression is a time. ``units.rs`` parses it as about 10.180505710759414 fs.
+eOn hard-codes 10.1805055 fs (``include/eon/ParametersOptions.h:26``).
+The relative difference is about 2e-8.
+A writer that canonicalises the expression by inserting spaces is not using the pinned spelling.
+Names below are the ones ``src/units.rs`` at f09b1af accepts for length, energy, mass, and time, compared case-insensitively.
+
+CON-units.1 \:\: MUST
+    Major 3 MUST include ``units.length`` and ``units.energy`` as non-empty strings of the matching dimension.
+
+CON-units.2 \:\: MUST
+    Optional ``mass``, ``time``, ``velocity``, and ``force`` strings, when present, MUST have the matching dimension.
+
+CON-units.3 \:\: MUST
+    A writer of minor 1 or later MUST write ``units.time`` whenever the frame has a velocities section.
+
+CON-units.4 \:\: MUST NOT
+    A writer MUST NOT insert ``time: fs`` silently when the frame does not carry a time unit.
+
+CON-units.5 \:\: MUST
+    The natural unit MUST be written with the exact spelling ``(amu*angstrom^2/eV)^0.5``.
+
+CON-units.6 \:\: MUST NOT
+    Version 1 MUST NOT carry a ``units`` object.
+
+CON-units.7 \:\: MAY
+    Version 2 MAY carry ``units``.
+
+CON-units.8 \:\: MUST
+    In versions 1, 2, and 3.0, velocities MUST be read as ``units.length`` per the natural time unit, and length is angstrom when ``units.length`` is absent.
+
+CON-units.9 \:\: MUST NOT
+    Any ``units.time`` on versions 1, 2, and 3.0 MUST NOT be trusted.
+
+CON-units.10 \:\: MUST
+    From minor 1 onward, ``units.time`` MUST be authoritative for velocities.
+
+CON-units.11 \:\: MUST
+    A frame of minor 1 or later with a velocities section and no ``units.time`` MUST be rejected with ``InvalidUnits``.
+
+CON-units.12 \:\: MUST
+    A writer of minor 1 or later asked to write velocities with no time unit MUST fail with ``InvalidUnits``.
+
+CON-units.13 \:\: MUST
+    An invalid unit expression on write MUST be reported as ``InvalidUnits``.
+
+CON-units.14 \:\: MUST NOT
+    Writers MUST NOT replace an invalid unit with a default.
+
+CON-units.15 \:\: MAY
+    A consumer MAY apply an explicit velocity time-unit override when a file breaks ``CON-units.8`` through ``CON-units.10``.
+
+CON-units.16 \:\: MUST
+    A reader MUST accept at least these names case-insensitively: length m, meter, metre, angstrom, a, å, nm, nanometer, bohr, a0; energy j, joule, ev, mev, hartree, ha, kcal, kj; mass kg, kilogram, u, amu, dalton, da; time s, second, fs, femtosecond, ps, picosecond, ns, nanosecond; count mol.
+
+Minor 0 is the v3.0 rule because the producers of those velocity sections wrote natural-unit numbers under a ``fs`` label.
+
+.. _numbers:
+
+Numbers
+-------
+
+CON-num.1 \:\: MUST
+    Readers MUST reject NaN, Inf, Infinity, and the signed and mixed-case spellings of those words, in every numeric field and in every mode, as ``NonFiniteValue``.
+
+CON-num.2 \:\: MUST NOT
+    ``validate`` true MUST NOT be required before a reader applies ``CON-num.1``.
+
+CON-num.3 \:\: MUST NOT
+    ``validate`` true MUST NOT accept a non-finite value.
+
+CON-num.4 \:\: MUST NOT
+    The C ABI absent-value NaN sentinel MUST NOT be written to a file. It is specified in the implementation notes.
+
+CON-num.5 \:\: MUST
+    Readers MUST convert a finite decimal token to binary64 with correct rounding.
+
+CON-num.6 \:\: MUST
+    A conforming writer in its default mode MUST write each finite float so that parsing it returns the same binary64 (``FloatFormat::RoundTrip``).
+
+CON-num.7 \:\: MUST
+    Fixed-decimal output MUST be used only when the writer is asked for it, and it need not round-trip.
+
+CON-num.8 \:\: MUST
+    A token that is not a decimal number and not a non-finite spelling MUST be ``InvalidNumberFormat``, except where ``CON-error.3`` names another class.
+
+CON-num.9 \:\: MUST
+    A row with the wrong number of fields MUST be ``InvalidVectorLength``.
+
+eOn ``.convel`` output at 6 digits after the decimal (``kConvelPrecision`` in ``client/ConFileIO.cpp:43``) is fixed-decimal and lossy.
+The kinetic-energy loss for that rounding was measured on one 336-atom Pt slab at 300 K (one Maxwell-Boltzmann draw) as 5.8e-7 relative.
+
+A float token is an optional ``+`` or ``-``, a significand with at least one digit, an optional fraction (a leading dot is allowed), and an optional exponent. An integer token is one or more ASCII digits and nothing else.
+
+.. _compression:
+
+Compression
+-----------
+
+CON-compress.1 \:\: MUST
+    A gzip envelope MUST expose every member of a multi-member file, in order, as CON text.
+
+CON-compress.2 \:\: MUST
+    A zstd envelope MUST expose every frame in the stream as CON text.
+
+CON-compress.3 \:\: SHOULD
+    Readers SHOULD detect gzip and zstd by magic bytes, not only by the extension.
+
+Errors
+------
+
+Line numbers count from 1. Metadata failures are line 2.
+``IncompleteSection`` carries the section name.
+A reader that stops at the first error MUST use the lowest line number, so threads cannot change which error is reported.
 
 .. table::
 
-    +--------------+----------------+-----------------------------------+
-    | Dimension    | Default (LODE) | Examples                          |
-    +==============+================+===================================+
-    | ``length``   | angstrom       | ``angstrom``, ``bohr``, ``nm``    |
-    +--------------+----------------+-----------------------------------+
-    | ``mass``     | amu            | ``amu``, ``kg``                   |
-    +--------------+----------------+-----------------------------------+
-    | ``time``     | (none)         | ``fs``, ``(amu*angstrom^2/eV)^0.5`` |
-    +--------------+----------------+-----------------------------------+
-    | ``energy``   | eV             | ``eV``, ``hartree``, ``kcal/mol`` |
-    +--------------+----------------+-----------------------------------+
-    | ``velocity`` | derived        | length / time                     |
-    +--------------+----------------+-----------------------------------+
-    | ``force``    | derived        | energy / length                   |
-    +--------------+----------------+-----------------------------------+
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | Class                       | When                                                                                                                                                                                   |
+    +=============================+========================================================================================================================================================================================+
+    | ``MissingSpecVersion``      | Line 2 starts with ``{`` but omits ``con_spec_version``.                                                                                                                               |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidMetadataJson``     | Line 2 is malformed JSON, a reserved key has the wrong type, or ``validate`` true omits ``sections``.                                                                                  |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``NonFiniteValue``          | NaN, Inf, or a spelling of either, any mode.                                                                                                                                           |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidFixedFlag``        | Column 4 is not a legal integer flag, any mode.                                                                                                                                        |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidCount``            | A count field is not an unsigned integer, or a per-type count is 0 when the type count is 1 or more. A type count of 0 is a legal zero-atom frame.                                     |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidUnits``            | A unit expression is missing, mistyped, or the wrong dimension. A minor of 1 or later with velocities and no ``units.time`` is this class on read and on write.                        |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``IncompleteHeader``        | A started frame has too few header lines, other than ``CON-count.4``.                                                                                                                  |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``IncompleteFrame``         | A coordinate block is shorter than declared.                                                                                                                                           |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``IncompleteSection(name)`` | A declared section is missing or short.                                                                                                                                                |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidNumberFormat``     | Column 5 or another field is not a decimal number.                                                                                                                                     |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``InvalidVectorLength``     | A row has the wrong number of fields, or a reserved arity is not 3 for a vector or 1 for a scalar. An unknown-section row has that many value fields, then a flag, and an optional id. |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``UnknownSection``          | A section name is not known and cannot be skipped.                                                                                                                                     |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``UnsupportedVersion``      | Unknown major, or JSON major 0 or 1.                                                                                                                                                   |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    | ``ValidationError``         | A ``validate`` true check failed. It MUST NOT relax ``NonFiniteValue`` or ``InvalidFixedFlag``. A legal zero-atom frame is accepted.                                                   |
+    +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
-**Version 3:** ``units`` is **required** on JSON **line 2**. The object MUST include
-non-empty ``length`` and ``energy`` strings whose dimensions match those
-quantities. Optional keys (``mass``, ``time``, ``velocity``, ``force``) MUST be
-dimensionally valid when present. Version 2 MAY omit ``units``; readers SHOULD
-preserve the key when present.
+CON-error.1 \:\: MUST
+    Each class in the table MUST be distinguishable by a caller.
 
-Callers MAY write aliases (``A``, ``ev``, ``femtosecond``). A conforming **writer**
-SHALL canonicalize those strings to preferred names (``angstrom``, ``eV``,
-``fs``) before they appear on line 2 (``canonicalize_unit_expression`` /
-``set_units``). Readers MUST accept both aliases and preferred names.
-Library conversion uses ``unit_conversion_factor(from, to)`` (see
-``src/units.rs``).
+CON-error.2 \:\: MUST
+    Reported line numbers MUST count from 1, with metadata on line 2.
 
-.. _pbc:
+CON-error.3 \:\: MUST
+    A count field that is not an unsigned integer, including a sign, a decimal point, or ``-1``, MUST be ``InvalidCount``. Column 4 MUST be ``InvalidFixedFlag``. Column 5 and every other such field MUST be ``InvalidNumberFormat``.
 
-Periodic boundary conditions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``pbc`` key declares which cell directions are periodic as a
-3-element boolean array: ``[true, true, true]`` for full 3D periodicity,
-``[true, true, false]`` for a slab model with vacuum in z.
-
-When absent, readers SHOULD assume ``[true, true, true]`` (the default
-for bulk simulations).
-
-::
-
-    {"con_spec_version":2,"pbc":[true,true,false]}
-
-.. _lattice-vectors:
-
-Lattice vectors
-~~~~~~~~~~~~~~~
-
-The ``lattice_vectors`` key provides the exact 3x3 cell matrix as a
-nested array of three row vectors (angstroms):
-
-::
-
-    {"con_spec_version":2,"lattice_vectors":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,20.0]]}
-
-When present, readers SHOULD prefer this over the length/angle values
-on lines 3-4, which may lose precision through trigonometric
-round-trips. Writers that emit ``lattice_vectors`` MUST also write
-consistent length/angle values to lines 3-4 for legacy compatibility.
-
-Frame ordering
-~~~~~~~~~~~~~~
-
-Writers producing trajectories SHOULD include ``frame_index`` (and
-``time`` when available) so consumers can reconstruct ordering without
-relying on filesystem metadata.
+CON-error.4 \:\: MUST
+    A reader that stops at an error MUST report the one with the lowest line number.
 
 Version history
 ---------------
 
 .. table::
 
-    +---------+------------+----------------------------------------------------------------+
-    | Version |       Date | Changes                                                        |
-    +=========+============+================================================================+
-    |       1 | (original) | De facto format from eOn. Column 5 present, undefined.         |
-    +---------+------------+----------------------------------------------------------------+
-    |       2 | 2026-03-25 | JSON metadata. atom\_id semantics. Per-direction constraints.  |
-    +---------+------------+----------------------------------------------------------------+
-    | \       | \          | Declared sections. Force blocks. Compression.                  |
-    +---------+------------+----------------------------------------------------------------+
-    |       3 | 2026-06-27 | Required ``units`` (``length``, ``energy``) on line 2. Writers |
-    +---------+------------+----------------------------------------------------------------+
-    | \       | \          | emit canonical names. Optional ``storage_dtypes`` for          |
-    +---------+------------+----------------------------------------------------------------+
-    | \       | \          | in-memory SoA element types (float32/float64).                 |
-    +---------+------------+----------------------------------------------------------------+
+    +---------+------------+-------------------------------------------------------------------------+
+    | Version |       Date | Change                                                                  |
+    +=========+============+=========================================================================+
+    |       1 |   original | eOn text. Column 5 present. Column 4 is 0 or 1. No JSON.                |
+    +---------+------------+-------------------------------------------------------------------------+
+    |       2 | 2026-03-25 | JSON line 2, ids, bit masks, declared sections.                         |
+    +---------+------------+-------------------------------------------------------------------------+
+    |     3.0 | 2026-06-27 | ``units.length`` and ``units.energy`` MUST be present. Minor absent.    |
+    +---------+------------+-------------------------------------------------------------------------+
+    |     3.1 | 2026-10-11 | Minor 1. ``units.time`` when velocities are present. Natural-unit rule. |
+    +---------+------------+-------------------------------------------------------------------------+
 
-Version 3 (normative)
----------------------
+Normative changes on 2026-10-11, by decision:
 
-A file with ``con_spec_version`` equal to 3 SHALL satisfy all Version 2
-requirements and the following additional requirements.
+- Non-finite numbers are rejected in every mode (``D1``).
 
-``con_spec_minor`` is the minor of that major. ``ConFrameBuilder`` stamps
-``con_spec_minor`` 1 on every spec 3 frame it builds when the caller has
-not set the key. ``set_con_spec_minor`` (Rust, ``rkr_frame_builder_set_con_spec_minor``,
-and the C++ method of the same name) overrides that value before
-``build``. The writer does not invent or replace ``con_spec_minor`` (D15).
+- A partial last frame is an error. Trailing whitespace is not a frame. A blank line and then only whitespace is not a velocity block (``D2``).
 
-Units (required)
-~~~~~~~~~~~~~~~~
+- A section is present exactly when its name is in ``sections``. Builder clearing is not a format rule (``D3``).
 
-The metadata object SHALL contain a ``units`` member whose value is a JSON
-object. That object SHALL contain the string members ``length`` and ``energy``,
-each a non-empty unit expression whose physical dimension matches the
-named quantity (length and energy respectively). Implementations SHALL
-reject Version 3 inputs that omit ``units`` or supply dimensionally invalid
-strings for those members. A conforming writer SHALL emit preferred unit
-names on line 2 (``angstrom`` not ``A``, ``eV`` not ``ev``, ``fs`` not
-``femtosecond``). The natural time unit is written byte for byte as
-``(amu*angstrom^2/eV)^0.5``. ``canonicalize_unit_expression`` returns that
-spelling for any whitespace or case variant of the same expression.
-``set_units``, ``set_metadata_json``, and ``from_ase`` all go through that
-function on write, so the file contains those exact bytes (D10).
+- A type count of 0 with empty lines 8 and 9 is a legal zero-atom frame. A zero per-type count when the type count is >= 1 is ``InvalidCount``. D4 revised after checking eOn 3.6.0 (``D4``).
 
-Optional members ``mass``, ``time``, ``velocity``, and ``force``, when present,
-SHALL likewise be dimensionally valid for those quantities.
+- One blank line before a section, and none between its component blocks (``D5``).
 
-``default_v3_units_json`` supplies ``length``, ``energy``, and ``mass`` only.
-It does not supply ``time: fs``. A spec 3 frame at minor 1 or newer that
-has a velocities section and no ``units.time`` is ``InvalidUnits`` on read
-and on write. The writer must not invent ``time: fs`` to fill that gap (D10).
+- The scalar energy section is ``energies`` (``D6``).
 
-Unit expressions follow the same lexical conventions as metatomic-style
-host unit strings: case-insensitive names, ``\*`` / ``/`` / ``^``, and parentheses.
-The library provides conversion factors between compatible expressions
-(``unit_conversion_factor``); it does not silently rewrite on-disk numeric
-fields when units differ between frames.
+- ``bonds`` is specified for major 3 (``D7``).
 
-Storage dtypes (optional; in-memory contract)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Column 4 is an integer flag, with spec-1 and spec-2 meanings (``D8``).
 
-The metadata object MAY contain a ``storage_dtypes`` member describing how a
-conforming implementation holds per-atom numeric fields **after** parsing or
-construction. This does **not** change on-disk CON text encoding (coordinates
-and section values remain decimal representations of binary64).
+- Column 5 is an integer id. Unique ids define ascending pre-grouping order. A repeated id keeps file order (``D9``).
 
-When present, ``storage_dtypes`` SHALL be a JSON object. Recognized members:
+- Velocity units follow the version rules, and the natural spelling is pinned (``D10``).
+
+- Invalid units fail the writer (``D11``).
+
+- Lines 3-4 and ``lattice_vectors`` follow the cell convention. Missing ``pbc`` is fully periodic (``D12``).
+
+- Default float text round-trips binary64. Fixed decimals are opt-in (``D13``).
+
+- Unknown keys are kept. Unknown sections of a newer minor MAY be skipped by ``section_arity`` (``D14``).
+
+- The major stays 3. ``con_spec_minor`` is 1. A same-major reader accepts every minor's version number (``D15``).
+
+- Gzip members and zstd frames are normative envelopes (``D16``).
+
+- Line 2 is one JSON line. Trailing space is ignored. Labels collapse spaces (``D17``).
+
+``con_spec_minor`` is the minor of that major. ``ConFrameBuilder`` stamps ``con_spec_minor`` 1 on every spec 3 frame it builds when the caller has not set the key. ``set_con_spec_minor`` (Rust, ``rkr_frame_builder_set_con_spec_minor``, and the C++ method of the same name) overrides that value before ``build``. The writer MUST NOT invent or replace ``con_spec_minor`` (D15).
+
+The media type ``chemical/x-con`` is informative, as is ``text/plain; charset=utf-8``.
+CON has no magic bytes. Identify a file by extension and by this header.
+
+Reader compatibility
+--------------------
+
+Version 1 is the text of the pre-readcon eOn writer (``svn-Dec16_2020`` ``client/Matter.cpp:748``).
+The eOn 2.17-3.4 column calls readcon.
+Cells cite ``file:line`` at eOn v3.6.0, v3.4.0, and v2.17.10, ASE 3.29.0, and readcon f09b1af.
 
 .. table::
 
-    +-------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+--------------------+
-    | Member                                                                  | Permitted values (host DLPack)                                                                                       | Default if omitted |
-    +=========================================================================+======================================================================================================================+====================+
-    | ``positions`` / ``velocities`` / ``forces`` / ``energies`` / ``masses`` | ``float16``, ``float32``, ``float64``, ``int8=…=int64``, ``uint8=…=uint64``, ``bool``, ``complex64``, ``complex128`` | ``float64``        |
-    +-------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+--------------------+
-    | ``atom_ids``                                                            | ``uint8=…=uint64``, ``int8=…=int64``                                                                                 | ``uint64``         |
-    +-------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------+--------------------+
-
-Hosted element types are those **dlpk** can own on the CPU (``float16`` via
-``half``, complex as ``[f32;2]`` / ``[f64;2]``, integers, ``bool``). DLPack ABI codes
-without a host (``bfloat16``, ``float8_*``, ``opaque``) SHALL be rejected in
-``storage_dtypes`` with a validation error.
-
-Implementations that expose DLPack SHALL export arrays whose element type
-matches the effective storage dtype for that field (queryable prior to
-export). Callers MAY request projection between hosted dtypes in memory;
-writers SHALL still serialize binary64 text on disk.
-
-DLPack interchange (informative for implementations)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Numeric fields are treated as opaque, shaped arrays (metatensor-style):
-implementations SHOULD expose ``shape``, element type, and device for each
-field, and an ``as_dlpack(device, stream, max_version)`` operation that
-returns a ``DLManagedTensorVersioned`` describing the **actual** backing
-buffer. Ingest (``from_dlpack``) SHALL update that backing and keep any
-AoS projection consistent for CON serialization. Preferred placement is
-negotiated via the device argument; changing element type is a storage
-projection (``storage_dtypes`` / ``project_storage_dtypes``), not the primary
-export contract.
-
-Detecting the spec version
---------------------------
-
-Read line 2. If it starts with ``{``, parse as JSON and extract
-``con_spec_version``. Otherwise the file predates this specification
-(implicit version 1).
-
-Machine-readable metadata schema
---------------------------------
-
-The reserved metadata vocabulary is published as JSON Schema
-(draft 2020-12) at ``schema/con-metadata.schema.json`` in the reference
-implementation repository. The schema accepts every object the
-reference writer emits and rejects the violations this document calls
-out: missing v3 ``units``, malformed ``pbc``, ``storage_dtypes`` element
-types without a host. Unknown keys validate successfully by design;
-parsers MUST preserve them. The reference test suite
-(``tests/spec_metadata_schema.rs``) keeps writer output and the schema
-in lockstep.
-
-Media type and file identification (informative)
-------------------------------------------------
-
-No IANA media type is registered for CON. Until one is,
-implementations SHOULD label CON content ``chemical/x-con`` and fall
-back to ``text/plain; charset=utf-8`` for strict consumers. CON carries
-no magic bytes: identify files by the ``.con`` / ``.convel`` extension
-(optionally with a ``.gz`` / ``.zst`` compression suffix) combined with
-the structural check above (nine-line header; line 2 either JSON with
-``con_spec_version`` or legacy free text).
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | Feature        | eOn >= 3.5                                                                                                                                         | eOn 2.17-3.4                                                                                                                                          | ASE 3.29.0 ``ase/io/eon.py``                                                 | chemfiles                        | OVITO 3.16.1                                    | readcon f09b1af                                                                                                                   |
+    +================+====================================================================================================================================================+=======================================================================================================================================================+==============================================================================+==================================+=================================================+===================================================================================================================================+
+    | JSON line 2    | v3.6.0 ``client/ConFileIO.cpp:586`` ``read_all_frames``, ``:463`` ``frame_from_matter``.                                                           | v3.4.0 ``client/ConFileIO.cpp:573``. v2.17.10 ``client/ConFileIO.cpp:294``.                                                                           | ``:72`` stores line 2 as text. ``:255`` writes ``preBox_header_2``.          | No CON reader (``src/formats``). | No CON reader. The input list has no CON entry. | ``src/parser.rs:458``.                                                                                                            |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | Masks 1-6      | v3.6.0 ``client/ConFileIO.cpp:386`` ``getFixedMask``, ``:714`` ``setFixedMask``.                                                                   | v3.4.0 ``client/ConFileIO.cpp:386`` and ``:701``. v2.17.10 ``:144-146`` writes one boolean on all axes and ``:384-385`` collapses any fixed bit to 1. | ``:139`` ``bool(int(tokens[3]))``. Writer emits 0 or 1.                      | No CON reader.                   | No CON reader.                                  | ``src/types.rs:644``. Outside 0-7 is not ``InvalidFixedFlag`` unless ``validate`` is true.                                        |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | Sections       | v3.6.0 ``client/ConFileIO.cpp:422-424`` leaves forces off.                                                                                         | v3.4.0 ``client/ConFileIO.cpp:422``. v2.17.10 has velocities only (``:174``).                                                                         | ``:177`` reads the next line as a header, so a section blank does not parse. | No CON reader.                   | No CON reader.                                  | ``src/parser.rs:1100``.                                                                                                           |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | 4-column lines | v3.6.0 ``client/ConFileIO.cpp:586`` via readcon.                                                                                                   | v3.4.0 ``client/ConFileIO.cpp:573``. v2.17.10 ``client/ConFileIO.cpp:294``.                                                                           | ``:138-139`` reads xyz and column 4, not column 5.                           | No CON reader.                   | No CON reader.                                  | ``src/parser.rs:665`` defaults column 5 to the 0-based index.                                                                     |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | Gzip           | v3.6.0 ``client/ConFileIO.cpp:577-578`` one gzip member.                                                                                           | v3.4.0 ``client/ConFileIO.cpp:564-565``. v2.17.10 ``:118`` ``compression_from_extension``.                                                            | ``:177`` reads text lines. No gzip decoder in this module.                   | No CON reader.                   | No CON reader.                                  | ``src/compression.rs:85`` ``GzDecoder`` reads the first member.                                                                   |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
+    | Velocities     | v3.6.0 ``client/ConFileIO.cpp:43`` precision 6, ``:444`` ``set_atom_velocity``, ``include/eon/ParametersOptions.h:26`` ``timeUnit`` 10.1805055 fs. | v3.4.0 ``client/ConFileIO.cpp:43`` and ``:431``, same ``ParametersOptions.h:26``. v2.17.10 ``client/ConFileIO.cpp:174``.                              | ``:303`` writes xyz, flag, and id. No velocity block.                        | No CON reader.                   | No CON reader.                                  | ``src/parser.rs:1117`` parses the numbers and does not apply ``units.time``. ``src/writer.rs:269`` can still insert ``time: fs``. |
+    +----------------+----------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------+
 
 Examples
 --------
 
-Minimal v2 file
-~~~~~~~~~~~~~~~
+Version 3.1
+~~~~~~~~~~~
+
+Two types, ``lattice_vectors``, ``pbc``, masks 0, 3, and 7, ids out of order, velocities with ``units.time``, and forces.
+Ids 2, 0, 1 appear in that file order. Mask 3 is x and y. Mask 7 is all three.
 
 ::
+    :name: v31-frame
 
-    Generated by eOn
-    {"con_spec_version":2}
-    10.000000 10.000000 10.000000
-    90.000000 90.000000 90.000000
-
-
-    1
-    2
-    63.546000
-    Cu
-    Coordinates of Component 1
-    0.000000 0.000000 0.000000 7 0
-    5.000000 5.000000 5.000000 0 1
-
-File with velocities and forces
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-::
-
-    Generated by eOn
-    {"con_spec_version":2,"sections":["velocities","forces"],"energy":-42.5,"potential":{"type":"EMT","params":{}}}
-    15.345600 21.702000 100.000000
-    90.000000 90.000000 90.000000
-    0 0
-    218 0 1
-    2
-    2 2
-    63.546000 1.007930
-    Cu
-    Coordinates of Component 1
-       0.639400    0.904500    6.975300 7    0
-       3.196900    0.904500    6.975300 7    1
-    H
-    Coordinates of Component 2
-       8.682300    9.947000   11.733000 0  2
-       7.942100    9.947000   11.733000 0  3
-
-    Cu
-    Velocities of Component 1
-       0.001234    0.002345   -0.003456 7    0
-       0.004567   -0.005678    0.006789 7    1
-    H
-    Velocities of Component 2
-      -0.012345    0.023456    0.034567 0  2
-       0.045678   -0.056789   -0.067890 0  3
-
-    Cu
-    Forces of Component 1
-       0.123456    0.234567   -0.345678 7    0
-       0.456789   -0.567890    0.678901 7    1
-    H
-    Forces of Component 2
-      -1.234567    2.345678    3.456789 0  2
-       4.567890   -5.678901   -6.789012 0  3
-
-Trajectory frame with metadata
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-::
-
-    Generated by eOn 3.1
-    {"con_spec_version":2,"generator":"eOn 3.1","units":{"length":"angstrom","energy":"eV"},"frame_index":5,"time":2.5,"timestep":0.5}
-    15.345600 21.702000 100.000000
-    90.000000 90.000000 90.000000
-
-
-    2
-    2 2
-    63.546000 1.007930
-    Cu
-    Coordinates of Component 1
-       0.639400    0.904500    6.975300 7    0
-       3.196900    0.904500    6.975300 7    1
-    H
-    Coordinates of Component 2
-       8.682300    9.947000   11.733000 0  2
-       7.942100    9.947000   11.733000 0  3
-
-Legacy (pre-v2) file
-~~~~~~~~~~~~~~~~~~~~
-
-::
-
-    Random Number Seed
-    0.0000 TIME
-    15.345600 21.702000 100.000000
-    90.000000 90.000000 90.000000
+    Generated by readcon v3.1 example
+    {"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"},"pbc":[true,true,false],"lattice_vectors":[[10.0,0.0,0.0],[0.0,10.0,0.0],[0.0,0.0,20.0]],"sections":["velocities","forces"]}
+    10.0 10.0 20.0
+    90.0 90.0 90.0
     0 0
     0 0 0
     2
-    216 2
-    63.546 1.00793
-    Cu
+    2 1
+    195.084 1.00794
+    Pt
     Coordinates of Component 1
-       0.639400    0.904500   -0.000100 1    0
-       3.197000    0.904500   -0.000100 1    1
-    ...
+    0.0 0.0 0.0 0 2
+    5.0 5.0 0.0 3 0
+    H
+    Coordinates of Component 2
+    5.0 5.0 10.0 7 1
 
-A conforming v2 reader processes this without error, assigning
-``spec_version = 1`` because line 2 does not start with ``{``.
+    Pt
+    Velocities of Component 1
+    0.01 0.0 0.0 0 2
+    0.0 0.02 0.0 3 0
+    H
+    Velocities of Component 2
+    0.0 0.0 0.03 7 1
 
-.. _builder-mutation:
+    Pt
+    Forces of Component 1
+    0.1 0.0 0.0 0 2
+    0.0 -0.2 0.0 3 0
+    H
+    Forces of Component 2
+    0.0 0.0 0.3 7 1
 
-Builder mutation surface (informative)
---------------------------------------
+The same frame as a version 1 reader sees it
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This section is informative; it describes the *reference implementation's* in-memory authoring API rather than the on-disk
-format itself, but is recorded here so that conforming bindings can
-expose the same surface.
+Spec 1 cannot store masks 3 or 7, JSON, or sections.
+The projection below uses column 4 values 0 and 1 only.
+Mask 3 and mask 7 both become 1, meaning all-fixed.
+Velocities and forces are omitted because a version 1 reader that treats a blank line as the next header cannot return them.
+ASE ``read_eon`` is that reader.
 
-The reference Rust ``ConFrameBuilder`` exposes per-atom and bulk
-in-place mutation in addition to the append-only ``add_atom`` /
-``with_*`` flow. These are intended for hot-loop consumers (MD
-integrators, saddle-search drivers, NEB image updaters) that hold a
-single builder across many simulation steps and serialise to disk
-only at I/O boundaries:
+::
+    :name: v31-as-v1
 
-- Per-atom mutators MUST validate the index against the current atom
-  count and SHOULD return a typed *index out of bounds* error
-  (``ParseError::IndexOutOfBounds`` in the Rust core; mapped to
-  ``RKR_STATUS_INDEX_OUT_OF_BOUNDS`` in the C ABI; raised as
-  ``IndexError`` in PyO3 / equivalent in Julia).
+    Generated by readcon v3.1 example
+    0.0000 TIME
+    10.0 10.0 20.0
+    90.0 90.0 90.0
+    0 0
+    0 0 0
+    2
+    2 1
+    195.084 1.00794
+    Pt
+    Coordinates of Component 1
+    0.0 0.0 0.0 0 2
+    5.0 5.0 0.0 1 0
+    H
+    Coordinates of Component 2
+    5.0 5.0 10.0 1 1
 
-- Bulk mutators take a flat row-major buffer
-  (``[x0, y0, z0, x1, y1, z1, ...]`` for positions / forces;
-  ``[e0, e1, ..., e(N-1)]`` for energies). They MUST validate the
-  buffer length against the expected size (3 N for vector buffers,
-  N for energies) and SHOULD reuse the existing length-mismatch
-  error path (``ParseError::InvalidVectorLength``).
+Zero atoms
+~~~~~~~~~~
 
-- Setting force / velocity / energy on any atom MUST cause the next
-  ``build()`` to declare the corresponding section
-  (``"forces"`` / ``"velocities"`` / ``"energies"``). Implementations
-  MUST NOT short-circuit on inspecting only atom 0; the section flag
-  is set when *any* atom carries the field.
+Nine header lines. Line 7 is 0. Lines 8 and 9 are empty.
+No coordinate block and no section follow.
 
-- ``clear_atom_velocity`` / ``_force`` / ``_energy`` MUST remove the
-  field from the named atom only. If every atom subsequently lacks
-  the field, the next ``build()`` MUST NOT declare the section.
+::
+    :name: zero-atom-frame
 
-- ``set_atom_mass`` updates the per-type ``masses_per_type`` entry on
-  ``build()``. The .con format binds one mass per element type. If
-  multiple atoms of the same symbol carry masses that differ by
-  more than the implementation tolerance (reference:
-  ``ConFrameBuilder::TYPE_MASS_ABS_TOL`` = :math:`10^{-8}`), ``build()``
-  MUST return an error (``ParseError::MassMismatch``). The C ABI
-  maps that error to a ``NULL`` handle from
-  ``rkr_frame_builder_build``.
+    zero-atom frame
+    {"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}
+    10.0 10.0 10.0
+    90.0 90.0 90.0
 
-The reference implementation surface lands in v0.11.0:
 
-- Rust core (``ConFrameBuilder::set_atom_position``,
-  ``set_atom_velocity``, ``set_atom_force``, ``set_atom_energy``,
-  ``set_atom_fixed``, ``set_atom_mass``, ``clear_atom_*``,
-  ``set_positions_from_flat``, ``set_forces_from_flat``,
-  ``set_atom_energies_from_flat``, ``get_atom_*``, ``atom_count``).
+    0
 
-- C ABI (``rkr_frame_builder_atom_count`` and the matching
-  ``rkr_frame_builder_set_atom_*`` / ``get_atom_*`` / ``clear_atom_*``
-  family in ``readcon-core.h``).
+.. _tokens:
 
-- C++ wrapper (the same surface as instance methods on
-  ``readcon::ConFrameBuilder``, with ``std::optional`` return for
-  optional-vector getters).
+Token grammar
+-------------
 
-- Python: ``readcon.Atom`` already exposes per-atom fields with
-  ``#[pyo3(get, set)]`` so Python users have always been able to do
-  ``frame.atoms[i].x = ...`` /  ``.fx = ...`` /  ``.energy = ...`` for
-  in-place mutation. This is the recommended Python pattern; no
-  separate ``readcon.ConFrameBuilder`` class is exposed because the
-  Python module is value-based rather than handle-based.
+CON-token.1 \:\: MUST
+    Integer tokens MUST match one or more ASCII digits, with no sign and no decimal point.
 
-- Julia: equivalently, ``ReadCon.Atom`` fields are mutable Julia
-  struct fields; mutate directly and call ``write_con(path, frame)``.
-  No public Julia builder class.
+CON-token.2 \:\: MUST
+    Float tokens MUST be finite decimals. A leading sign, a leading dot, and an exponent are allowed. Non-finite spellings are ``CON-num.1``, not floats.
 
-Bindings for other languages SHOULD pick the idiom that matches
-their existing surface: handle-based (Rust / C / C++) gets the
-typed mutation API, value-based (Python / Julia / Ruby / ...) gets
-direct field assignment on the per-atom struct.
+CON-token.3 \:\: MUST
+    The separators inside a line MUST be spaces or tabs.
 
-Rationale (non-normative): the append-only authoring path forced
-every step of a long simulation to allocate a fresh builder, push
-N atoms, and discard. Reusing one builder across the simulation
-loop and serialising only at trajectory boundaries reduces
-allocation pressure to the *output* cadence rather than the
-*integration* cadence. The mutation API is purely additive; the
-existing ``add_atom`` + ``with_*`` flow continues to work and remains
-the recommended path for one-shot frame authoring.
+CON-token.4 \:\: MUST
+    The included PEG is informative surface syntax. A reader MUST follow this document when the PEG allows a token these clauses reject.
 
-.. _builder-storage-layout:
+Appendix: PEG
+-------------
 
-Storage layout (informative)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The surface grammar is ``grammar/readcon.pest``.
+A bare ``src`` include leaves the language empty and does not export, so this include names ``text``.
 
-The v0.11.0 reference implementation holds per-atom fields as
-structure-of-arrays (SoA) buffers, each owned by an
-``ndarray::Array2<f64>`` or ``ndarray::Array1<T>`` in row-major
-("C") layout:
+.. code:: text
 
-.. table::
+    // CON / convel surface syntax (PEG / Pest).
+    //
+    // Aligns with docs/orgmode/spec.org (CON v3.1). This grammar defines the
+    // *syntactic* shape of one or more concatenated frames. Semantic rules
+    // (atom counts matching header N_i, fixed-mask legal sets, validate=true
+    // geometry, section_arity skips) are enforced by src/parser.rs.
+    // Where this PEG and the specification disagree, the specification wins
+    // (CON-token.4).
+    //
+    // Hot-path I/O does not depend on Pest. gzip and zstd envelopes are not
+    // grammar (CON-compress): readers detect them by magic bytes.
+    //
+    // Section row arities (spec sections):
+    //   vector: velocities, forces, magmoms, displacements, spreads
+    //           -> v0 v1 v2 fixed atom_id
+    //   scalar: energies, charges, spins -> value fixed atom_id
+    //   unknown: a newer minor may skip a block whose data rows have the
+    //           token count declared by section_arity (semantic; the PEG
+    //           accepts the generic block shape).
 
-    +-------------------+-------------------------------------+------------+
-    | Field             | Type                                | Shape      |
-    +===================+=====================================+============+
-    | ``positions``     | ``ndarray::Array2<f64>``            | ``(N, 3)`` |
-    +-------------------+-------------------------------------+------------+
-    | ``velocities``    | ``ndarray::Array2<f64>`` (optional) | ``(N, 3)`` |
-    +-------------------+-------------------------------------+------------+
-    | ``forces``        | ``ndarray::Array2<f64>`` (optional) | ``(N, 3)`` |
-    +-------------------+-------------------------------------+------------+
-    | ``atom_energies`` | ``ndarray::Array1<f64>`` (optional) | ``(N,)``   |
-    +-------------------+-------------------------------------+------------+
-    | ``masses``        | ``ndarray::Array1<f64>``            | ``(N,)``   |
-    +-------------------+-------------------------------------+------------+
-    | ``atom_ids``      | ``ndarray::Array1<u64>``            | ``(N,)``   |
-    +-------------------+-------------------------------------+------------+
-    | ``symbols``       | ``Vec<String>``                     | ``(N,)``   |
-    +-------------------+-------------------------------------+------------+
-    | ``fixed``         | ``Vec<[bool; 3]>``                  | ``(N, 3)`` |
-    +-------------------+-------------------------------------+------------+
+    /// One or more frames. No leading BOM. Trailing whitespace-only lines
+    /// after the last frame are ignored (CON-file.6, CON-frame.1).
+    file = { SOI ~ !bom ~ frame+ ~ (ws* ~ NL)* ~ EOI }
 
-Bindings MUST surface these fields as contiguous row-major buffers
-or as a DLPack-managed tensor (preferred for cross-language zero-
-copy); see `builder-dlpack-export`_ for the cross-language
-contract.
+    bom = { "\u{FEFF}" }
 
-The SoA-per-field choice (rather than AoS, NumPy-structured-array
-style, or per-atom ``Option<[f64; 3]>``) matches the layout used by
-LAMMPS, GROMACS, ASE, MDAnalysis, OpenMM, chemfiles, i-PI, h5md
-(the canonical MD libraries) *and* Apache Arrow, DuckDB, Polars,
-Pandas v2, Parquet, PyTorch, JAX, DGL (the canonical columnar /
-ML stacks). It is the layout NumPy *recommends against* structured
-arrays for, on the same SIMD-throughput grounds.
+    /// Header lines 1-6. The type count chooses a zero-atom tail or typed body.
+    header_open = {
+        free_line ~ NL
+        ~ metadata_line ~ NL
+        ~ float3_line
+        ~ float3_line
+        ~ free_line ~ NL
+        ~ free_line ~ NL
+    }
 
-The ``Arc<RwLock<ndarray::ArrayD<T>>>`` storage hook + DLPack 1.0
-export pattern adopted here mirrors the design described in
-:cite:t:`bigiMetatensorMetatomicFoundational2026`, where
-the same layout serves as the foundational data exchange surface
-across the metatensor / metatomic atomistic machine-learning
-libraries.
+    /// One or more frames. A type count of 0 has no coordinate block (CON-count.1).
+    frame = { header_open ~ (zero_atom | typed_body) }
 
-.. _builder-section-presence:
+    /// Free-form line. Does not consume the trailing newline.
+    free_line = { (!NL ~ ANY)* }
 
-Section presence semantics (normative)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    /// Line 2 is one JSON object when it starts with `{`, otherwise legacy text.
+    metadata_line = { ws* ~ json_object | legacy_metadata }
+    legacy_metadata = { ws* ~ !"{" ~ free_line }
 
-The optional sections (``"velocities"``, ``"forces"``,
-``"atom_energies"``) are **column-level**, not per-atom: when declared,
-the section applies to every atom in the frame. Per-atom NULL does
-not round-trip to disk because the .con on-disk format has no NULL
-encoding.
+    json_object = {
+        "{" ~ ws*
+        ~ (json_pair ~ (ws* ~ "," ~ ws* ~ json_pair)*)?
+        ~ ws* ~ "}" ~ ws*
+    }
+    json_pair = { json_string ~ ws* ~ ":" ~ ws* ~ json_value }
+    json_value = {
+        json_string | json_number | json_object | json_array | "true" | "false" | "null"
+    }
+    json_array = {
+        "[" ~ ws*
+        ~ (json_value ~ (ws* ~ "," ~ ws* ~ json_value)*)?
+        ~ ws* ~ "]"
+    }
+    json_string = @{ "\"" ~ json_char* ~ "\"" }
+    json_char = _{
+        "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t"
+        | "\\u" ~ ASCII_HEX_DIGIT{4}
+        | (!("\"" | "\\") ~ ANY)
+    }
+    json_number = @{
+        "-"? ~ ASCII_DIGIT+
+        ~ ("." ~ ASCII_DIGIT+)?
+        ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+    }
 
-Implementations MUST follow:
+    float3_line = { ws* ~ float ~ ws+ ~ float ~ ws+ ~ float ~ ws* ~ NL }
 
-- ``add_atom`` MUST pad newly added rows with zero in every already-
-  declared optional section so the per-field buffer length stays
-  coherent with ``atom_count()``.
+    /// Type count >= 1 (CON-count.3). A type count of 0 uses zero_atom.
+    count_line = { ws* ~ positive_integer ~ ws* ~ NL }
 
-- ``with_velocity`` / ``_force`` / ``_energy``, ``set_atom_velocity`` /
-  ``_force`` / ``_energy``, ``set_velocities_from_flat`` /
-  ``set_forces_from_flat`` / ``set_atom_energies_from_flat`` MUST
-  declare the corresponding section on first call.
+    count_list_line = { ws* ~ positive_integer ~ (ws+ ~ positive_integer)* ~ ws* ~ NL }
 
-- ``clear_atom_velocity`` / ``_force`` / ``_energy`` MUST zero the slot
-  but MUST NOT change section presence; the field stays declared
-  and a subsequent ``build()`` emits the section block. This matches
-  Apache Arrow's column-level validity (a column either exists or
-  does not) and h5md's "dataset present or absent" rule.
+    float_list_line = { ws* ~ float ~ (ws+ ~ float)* ~ ws* ~ NL }
 
-- ``clear_velocities_section`` / ``_forces_section`` /
-  ``_energies_section`` MUST drop the entire section: free the
-  storage, set the presence flag to false, and ensure the next
-  ``build()`` does not emit the section block.
+    /// "0", "00", ... with no other token. The newline may be absent at EOI.
+    zero_integer = @{ "0"+ }
+    zero_count_line = { ws* ~ zero_integer ~ ws* ~ (NL | EOI) }
+    blank_line = { ws* ~ NL }
 
-.. _builder-dlpack-export:
+    /// Whitespace lines 8 and 9, shortened only at end of file (CON-count.4).
+    zero_atom = {
+        zero_count_line ~
+        (
+            blank_line ~ (blank_line | EOI)
+            | EOI
+        )
+    }
 
-DLPack export contract (normative)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    typed_body = {
+        count_line
+        ~ count_list_line
+        ~ float_list_line
+        ~ type_block+
+        ~ section*
+    }
 
-The reference implementation exposes every per-atom field with a
-contiguous backing as a DLPack-managed tensor for cross-language
-zero-copy interop. DLPack 1.0 is the universal exchange ABI
-supported by PyTorch, TensorFlow, JAX, NumPy, CuPy, MXNet, TVM,
-OneFlow, MNN, OneAPI, and mlx, plus a stable C ABI
-(``DLManagedTensorVersioned``) for non-Python consumers.
+    /// One chemical-type block: symbol, "Coordinates of Component k", atom lines.
+    type_block = {
+        symbol_line ~ NL
+        ~ coord_label ~ NL
+        ~ vector_atom_line ~ (NL ~ vector_atom_line)*
+        ~ NL?
+    }
 
-The DLPack tier exposes (builder and, for optional sections, frame C ABI):
+    symbol_line = { ws* ~ symbol ~ ws* }
 
-- ``positions_dlpack`` — shape ``(N, 3)``; write-through mut variant on the builder.
+    /// Element / type symbol (letters, optional trailing digits/underscore).
+    symbol = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-- ``velocities_dlpack`` / ``forces_dlpack`` — ``(N, 3)`` or absent (``None`` / ``SECTION_ABSENT``).
+    /// Labels are case-insensitive. Runs of spaces are `ws+` (CON-file.4).
+    coord_label = {
+        ws* ~ ^"Coordinates of Component" ~ ws+ ~ positive_integer ~ ws*
+    }
 
-- ``atom_energies_dlpack`` — ``(N,)`` or absent.
+    /// Coordinate row: v0 v1 v2 fixed_mask [atom_id]. Column 4 and 5 are
+    /// unsigned integer tokens (no sign, no decimal point).
+    vector_atom_line = {
+        ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
+        ~ ws+ ~ integer
+        ~ (ws+ ~ integer)?
+        ~ ws*
+    }
 
-- ``masses_dlpack`` — ``(N,)``.
+    /// Scalar section row: value fixed_mask atom_id. Identity columns required.
+    scalar_atom_line = {
+        ws* ~ float
+        ~ ws+ ~ integer
+        ~ ws+ ~ integer
+        ~ ws*
+    }
 
-- ``atom_ids_dlpack`` — ``(N,)`` integer ids.
+    /// Backward-compatible alias used by tests and older notes.
+    atom_line = { vector_atom_line }
 
-Consumers MUST read shape, strides, **dtype** (code/bits/lanes), and device from
-the tensor; they MUST NOT assume a host ``f64`` / ``double`` buffer type. On-disk
-CON coordinates and section values are IEEE binary64 in current writers, and
-implementations today report ``kDLFloat`` / 64 for those fields and ``kDLUInt`` / 64
-for ``atom_id``; a future implementation MAY change bits while keeping the same
-shapes—interop goes through the tensor metadata.
+    /// Optional section: one blank line, then homogeneous type blocks.
+    section = {
+        ws* ~ NL
+        ~ (section_type_block_vector+ | section_type_block_scalar+ | generic_type_block+)
+    }
 
-The returned tensor MUST report:
+    section_type_block_vector = {
+        symbol_line ~ NL
+        ~ section_label_vector ~ NL
+        ~ vector_section_line ~ (NL ~ vector_section_line)*
+        ~ NL?
+    }
 
-- shape: the field's natural shape (``(N, 3)`` or ``(N,)``).
+    section_type_block_scalar = {
+        symbol_line ~ NL
+        ~ section_label_scalar ~ NL
+        ~ scalar_atom_line ~ (NL ~ scalar_atom_line)*
+        ~ NL?
+    }
 
-- strides: row-major standard layout for the dtype.
+    /// Unknown section shape. The hand parser skips it only for a newer minor
+    /// whose `section_arity` names the exact token count (CON-section.8).
+    generic_type_block = {
+        symbol_line ~ NL
+        ~ generic_label ~ NL
+        ~ token_line ~ (NL ~ token_line)*
+        ~ NL?
+    }
 
-- dtype: as carried by the implementation (see above for current values).
+    generic_label = { ws* ~ symbol ~ (ws+ ~ (symbol | positive_integer))* ~ ws* }
 
-- device: ``kDLCPU`` (device id 0) for the default backing. GPU /
-  optional ``--features cuda`` enables real CUDA allocate and H2D export
-  for matching ``kDLCUDA`` requests; default builds reject non-CPU devices.
+    token_line = { ws* ~ (float | integer) ~ (ws+ ~ (float | integer))* ~ ws* }
 
-- data pointer: the backing array's first element.
+    /// Vector section rows require the flag and the id (exact five tokens).
+    vector_section_line = {
+        ws* ~ float ~ ws+ ~ float ~ ws+ ~ float
+        ~ ws+ ~ integer
+        ~ ws+ ~ integer
+        ~ ws*
+    }
 
-Lifetime: ``DLPackTensorRef<'a>`` borrows from ``&'a self`` and MUST
-NOT outlive the builder. C / FFI consumers that need an owning
-tensor go through the C-ABI export
-(``rkr_frame_builder_*_dlpack``) which fills a
-``DLManagedTensorVersioned*`` with a clone of the field's storage
-plus a deleter callback owned by the consumer; the original
-builder is then free to drop.
+    section_kind_vector = { ^"Velocities" | ^"Forces" | ^"Magmoms" | ^"Displacements" | ^"Spreads" }
+    section_kind_scalar = { ^"Energies" | ^"Charges" | ^"Spins" }
 
-.. _builder-pointer-stability:
+    /// Union of all section kinds (docs / tests).
+    section_kind = { section_kind_vector | section_kind_scalar }
 
-Pointer stability (normative)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    section_label_vector = {
+        ws* ~ section_kind_vector ~ ws+ ~ ^"of Component" ~ ws+ ~ positive_integer ~ ws*
+    }
 
-The data pointer returned by any DLPack export is stable as long
-as no ``add_atom`` call grows the underlying ndarray buffer. Callers
-that hold raw pointers across ``add_atom`` MUST refresh after the
-push (the ndarray reallocates when capacity is exceeded; the
-DLPack view becomes invalid).
+    section_label_scalar = {
+        ws* ~ section_kind_scalar ~ ws+ ~ ^"of Component" ~ ws+ ~ positive_integer ~ ws*
+    }
 
-Bulk and per-element mutation (``set_atom_*``, ``set_*_from_flat``,
-``clear_atom_*``) MUST NOT reallocate the underlying buffer and the
-data pointer MUST stay stable across these operations.
+    /// Finite decimal, or a non-finite spelling the semantic layer rejects
+    /// as NonFiniteValue (CON-num.1, CON-token.2). A leading sign, a leading
+    /// dot, and an exponent are allowed.
+    float = _{ finite_float | non_finite }
+
+    finite_float = @{
+        ("+" | "-")?
+        ~ (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? | "." ~ ASCII_DIGIT+)
+        ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+    }
+
+    non_finite = @{
+        ("+" | "-")? ~ (^"infinity" | ^"nan" | ^"inf")
+    }
+
+    /// Unsigned digit token. No sign and no decimal point (CON-token.1).
+    integer = @{ ASCII_DIGIT+ }
+
+    positive_integer = @{ ("1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9") ~ ASCII_DIGIT* }
+
+    ws = _{ " " | "\t" }
+    NL = _{ "\r\n" | "\n" }
 
 .. _references:
 
 References
 ----------
+
+The metadata schema is ``schema/con-metadata.schema.json``.
+Unknown keys validate. ``con_spec_minor`` and ``section_arity`` are reserved.
 
 .. bibliography::
    :style: alpha

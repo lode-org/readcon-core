@@ -304,6 +304,13 @@ class TestRestartDefects:
         ids = [a.atom_id for a in readcon.ConFrame.from_ase(atoms).atoms]
         assert ids == [7, 3, 5]
 
+    def test_from_ase_scalar_pbc_is_stored(self):
+        atoms = ase.Atoms(
+            "H", positions=[[0.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True
+        )
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert list(frame.metadata["pbc"]) == [True, True, True]
+
     def test_multi_frame_empty_line1_round_trip(self, tmp_path):
         atoms = ase.Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]], cell=[8, 8, 8])
         frame = readcon.ConFrame.from_ase(atoms)

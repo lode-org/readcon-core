@@ -9,14 +9,383 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Line source with peek for section detection (blank-line separators).
 ///
 /// Implemented by the memchr cursor on the hot iterator path and by
 /// `Peekable<I>` for tests / ad-hoc callers.
+/// Rows of one coordinate block, in file order.
+///
+/// `atoms` is empty unless the caller asked for per-atom shells. The
+/// numeric columns are the bytes a serial `next_coord_row` loop would
+/// have stored.
+#[doc(hidden)]
+pub struct CoordRows {
+    pub xyz: Vec<f64>,
+    pub ids: Vec<u64>,
+    pub flags: Vec<[bool; 3]>,
+    pub atoms: Vec<crate::types::AtomDatum>,
+    pub consumed: usize,
+}
+
+/// Worker count for a coordinate block that is too wide to hand to one task.
+///
+/// One means the calling thread parses the block. The frame iterator sets
+/// this only for a single wide frame, then puts it back.
+pub(crate) fn wide_workers() -> usize {
+    WIDE_WORKERS.with(|slot| slot.get())
+}
+
+pub(crate) fn set_wide_workers(n: usize) {
+    WIDE_WORKERS.with(|slot| slot.set(n.max(1)));
+}
+
+std::thread_local! {
+    static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
+}
+
+/// Fill `n` coordinate rows.
+///
+/// `breaks[i]` is the absolute index of that row's `\n`. Row 0 begins at
+/// `row0`. `xyz` receives `n * 3` values. `ids` and `flags` may be null
+/// when the caller does not want them. `flags` is the packed column-4 mask.
+#[cfg(feature = "parallel")]
+pub(crate) fn fill_rows_from_breaks(
+    bytes: &[u8],
+    breaks: &[usize],
+    row0: usize,
+    spec_version: u32,
+    start_id: u64,
+    workers: usize,
+    xyz: *mut f64,
+    ids: *mut u64,
+    flags: *mut u8,
+) -> Result<(), ParseError> {
+    let n = breaks.len();
+    if n == 0 {
+        return Ok(());
+    }
+    let chunk = n.div_ceil(workers.max(1)).max(1);
+    let groups = n.div_ceil(chunk);
+    let xyz_ptr = xyz as usize;
+    let ids_ptr = ids as usize;
+    let flags_ptr = flags as usize;
+    let fill = || {
+        use rayon::prelude::*;
+        (0..groups).into_par_iter().try_for_each(|group| {
+            let first = group * chunk;
+            let last = (first + chunk).min(n);
+            for row_index in first..last {
+                let start = if row_index == 0 {
+                    row0
+                } else {
+                    breaks[row_index - 1] + 1
+                };
+                let end = breaks[row_index] + 1;
+                if end > bytes.len() || start > end {
+                    return Err(ParseError::IncompleteFrame);
+                }
+                let default_id = start_id + row_index as u64;
+                let ((row, fixed, atom_id), _next) =
+                    parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        row.as_ptr(),
+                        (xyz_ptr as *mut f64).add(row_index * 3),
+                        3,
+                    );
+                    if ids_ptr != 0 {
+                        *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+                    }
+                    if flags_ptr != 0 {
+                        let mask = u8::from(fixed[0])
+                            | (u8::from(fixed[1]) << 1)
+                            | (u8::from(fixed[2]) << 2);
+                        *((flags_ptr as *mut u8).add(row_index)) = mask;
+                    }
+                }
+            }
+            Ok(())
+        })
+    };
+    on_pool(workers, fill)
+}
+
+/// Run `body` on a pool of `workers` threads.
+///
+/// The pool for a given size is kept for the process. Building one per
+/// call was a serial pause on the wide-frame read and the row formatter.
+#[cfg(feature = "parallel")]
+pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
+    if workers < 2 {
+        return body();
+    }
+    let pool = {
+        use std::sync::{Mutex, OnceLock};
+        static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> = OnceLock::new();
+        let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
+        let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
+        if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
+            *pool
+        } else {
+            let built = match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+                Ok(pool) => pool,
+                Err(_) => return body(),
+            };
+            let pool: &'static rayon::ThreadPool = Box::leak(Box::new(built));
+            guard.push((workers, pool));
+            pool
+        }
+    };
+    pool.install(body)
+}
+
+/// Coordinate rows in `bytes`, which begins at the first row.
+///
+/// `n` rows are required. The returned `consumed` count is the number of
+/// bytes those rows occupy, including their newlines. `symbol` builds the
+/// per-atom shells; `None` leaves `atoms` empty. A structural miss returns
+/// `Err` and the caller keeps the serial loop.
+#[cfg(feature = "parallel")]
+pub(crate) fn parallel_coord_rows(
+    bytes: &[u8],
+    n: usize,
+    spec_version: u32,
+    start_id: u64,
+    workers: usize,
+    symbol: Option<&std::sync::Arc<str>>,
+) -> Result<CoordRows, ParseError> {
+    let ranges = coord_line_ranges(bytes, n, workers)?;
+    let consumed = ranges.last().map(|(_, end)| *end).unwrap_or(0);
+    let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
+    let mut ids = Vec::<u64>::with_capacity(n);
+    let mut flags = Vec::<[bool; 3]>::with_capacity(n);
+    // Every lane is overwritten before a read. `f64` and `bool` have no
+    // destructor, so a short write still drops cleanly.
+    unsafe {
+        xyz.set_len(n * 3);
+        ids.set_len(n);
+        flags.set_len(n);
+    }
+    let mut atoms_raw: Vec<std::mem::MaybeUninit<crate::types::AtomDatum>> = Vec::new();
+    if symbol.is_some() {
+        atoms_raw = Vec::with_capacity(n);
+        unsafe { atoms_raw.set_len(n) };
+    }
+    let xyz_ptr = xyz.as_mut_ptr() as usize;
+    let ids_ptr = ids.as_mut_ptr() as usize;
+    let flags_ptr = flags.as_mut_ptr() as usize;
+    let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
+    let chunk = n.div_ceil(workers.max(1)).max(1);
+    let built = on_pool(workers, || {
+        use rayon::prelude::*;
+        ranges
+            .par_chunks(chunk)
+            .enumerate()
+            .try_for_each(|(chunk_index, group)| {
+                write_coord_group(
+                    bytes,
+                    group,
+                    chunk_index * chunk,
+                    spec_version,
+                    start_id,
+                    symbol,
+                    xyz_ptr,
+                    ids_ptr,
+                    flags_ptr,
+                    atoms_ptr,
+                )
+            })
+    });
+    if let Err(err) = built {
+        std::mem::forget(atoms_raw);
+        return Err(err);
+    }
+    let atoms = if symbol.is_some() {
+        let mut raw = std::mem::ManuallyDrop::new(atoms_raw);
+        unsafe {
+            Vec::from_raw_parts(
+                raw.as_mut_ptr() as *mut crate::types::AtomDatum,
+                n,
+                raw.capacity(),
+            )
+        }
+    } else {
+        Vec::new()
+    };
+    Ok(CoordRows {
+        xyz,
+        ids,
+        flags,
+        atoms,
+        consumed,
+    })
+}
+
+#[cfg(feature = "parallel")]
+fn coord_line_ranges(
+    bytes: &[u8],
+    n: usize,
+    workers: usize,
+) -> Result<Vec<(usize, usize)>, ParseError> {
+    let newlines = newline_index(bytes, workers);
+    let mut ranges = Vec::with_capacity(n);
+    let mut start = 0usize;
+    for index in 0..n {
+        if start > bytes.len() {
+            return Err(ParseError::IncompleteFrame);
+        }
+        let end = if index < newlines.len() {
+            newlines[index] + 1
+        } else if index == newlines.len() && start < bytes.len() {
+            bytes.len()
+        } else {
+            return Err(ParseError::IncompleteFrame);
+        };
+        if end < start {
+            return Err(ParseError::IncompleteFrame);
+        }
+        ranges.push((start, end));
+        start = end;
+    }
+    Ok(ranges)
+}
+
+/// Newline positions in `bytes`.
+///
+/// Chunks are cut on byte boundaries, then each interior cut that lands
+/// inside a line is moved to the next newline so a row is not split.
+/// Each chunk counts its newlines, a prefix sum of those counts gives
+/// the write range, and the chunks fill one buffer. `workers < 2`
+/// scans on the calling thread.
+#[cfg(feature = "parallel")]
+pub(crate) fn newline_index(bytes: &[u8], workers: usize) -> Vec<usize> {
+    newline_index_at(bytes, 0, workers)
+}
+
+/// [`newline_index`] with `base` added to every stored offset.
+#[cfg(feature = "parallel")]
+pub(crate) fn newline_index_at(bytes: &[u8], base: usize, workers: usize) -> Vec<usize> {
+    if bytes.is_empty() || workers < 2 || bytes.len() < (1 << 20) {
+        return memchr::memchr_iter(b'\n', bytes)
+            .map(|index| base + index)
+            .collect();
+    }
+    let workers = workers.min(bytes.len());
+    let mut cuts = Vec::with_capacity(workers + 1);
+    cuts.push(0usize);
+    for index in 1..workers {
+        let mut at = index * bytes.len() / workers;
+        // A cut in the middle of a row belongs to the chunk that holds
+        // the newline. Move it to the first byte after that newline.
+        if at > 0 && at < bytes.len() && bytes[at - 1] != b'\n' {
+            if let Some(rel) = memchr::memchr(b'\n', &bytes[at..]) {
+                at += rel + 1;
+            } else {
+                at = bytes.len();
+            }
+        }
+        if cuts.last().copied() != Some(at) {
+            cuts.push(at);
+        }
+    }
+    if cuts.last().copied() != Some(bytes.len()) {
+        cuts.push(bytes.len());
+    }
+    let nchunks = cuts.len() - 1;
+    let mut counts = vec![0usize; nchunks];
+    on_pool(workers, || {
+        use rayon::prelude::*;
+        counts
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, count)| {
+                let (from, to) = (cuts[index], cuts[index + 1]);
+                *count = memchr::memchr_iter(b'\n', &bytes[from..to]).count();
+            });
+        let mut slot = vec![0usize; nchunks];
+        let mut total = 0usize;
+        for index in 0..nchunks {
+            slot[index] = total;
+            total += counts[index];
+        }
+        let mut out = vec![0usize; total];
+        let out_ptr = out.as_mut_ptr() as usize;
+        (0..nchunks).into_par_iter().for_each(|index| {
+            let (from, to) = (cuts[index], cuts[index + 1]);
+            let mut at = slot[index];
+            for rel in memchr::memchr_iter(b'\n', &bytes[from..to]) {
+                unsafe {
+                    *((out_ptr as *mut usize).add(at)) = base + from + rel;
+                }
+                at += 1;
+            }
+        });
+        out
+    })
+}
+
+#[cfg(feature = "parallel")]
+fn write_coord_group(
+    bytes: &[u8],
+    group: &[(usize, usize)],
+    row0: usize,
+    spec_version: u32,
+    start_id: u64,
+    symbol: Option<&std::sync::Arc<str>>,
+    xyz_ptr: usize,
+    ids_ptr: usize,
+    flags_ptr: usize,
+    atoms_ptr: usize,
+) -> Result<(), ParseError> {
+    let mut shares = symbol.map(|symbol| symbol_shares(symbol, group.len()));
+    for (offset, &(start, end)) in group.iter().enumerate() {
+        let row_index = row0 + offset;
+        let default_id = start_id + row_index as u64;
+        let ((row, fixed, atom_id), _next) =
+            parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                row.as_ptr(),
+                (xyz_ptr as *mut f64).add(row_index * 3),
+                3,
+            );
+            *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+            *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
+            if let Some(shares) = shares.as_mut() {
+                let atom = crate::types::AtomDatum::coords(
+                    shares.take(),
+                    row[0],
+                    row[1],
+                    row[2],
+                    fixed,
+                    atom_id,
+                );
+                (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
+                    .add(row_index))
+                .write(atom);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub trait LineStream<'a> {
     fn next_line(&mut self) -> Option<&'a str>;
     fn peek_line(&mut self) -> Option<&'a str>;
+    /// Take `n` coordinate rows starting at the cursor, or `None` to keep
+    /// the one-row loop. The cursor moves only when this returns `Some`.
+    fn try_take_coord_block(
+        &mut self,
+        _n: usize,
+        _spec_version: u32,
+        _start_id: u64,
+        _symbol: &std::sync::Arc<str>,
+        _workers: usize,
+    ) -> Option<CoordRows> {
+        None
+    }
     /// True when every remaining line, including the current peek, is
     /// empty or whitespace. Default is false so a one-line peek cannot
     /// hide a following section.
@@ -49,6 +418,29 @@ pub trait LineStream<'a> {
     ) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
         let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
         parse_coord_row(line, spec_version, default_id)
+    }
+
+    /// One vector-section row (xyz, flag, required id), fused with the line
+    /// scan when the stream can do it. End of input is [`ParseError::IncompleteFrame`];
+    /// callers that are inside a named section map that to `IncompleteSection`.
+    fn next_vector_row(
+        &mut self,
+        spec_version: u32,
+    ) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+        let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
+        parse_vector_section_row(line, spec_version)
+    }
+}
+
+fn take_vector_row<'a>(
+    lines: &mut impl LineStream<'a>,
+    spec_version: u32,
+    section: &str,
+) -> Result<([f64; 3], [bool; 3], u64), ParseError> {
+    match lines.next_vector_row(spec_version) {
+        Ok(row) => Ok(row),
+        Err(ParseError::IncompleteFrame) => Err(ParseError::IncompleteSection(section.to_string())),
+        Err(err) => Err(err),
     }
 }
 
@@ -579,14 +971,7 @@ fn parse_coord_fields_fast(
         if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
             return None;
         }
-        if looks_like_nonfinite(bytes, i) {
-            return None;
-        }
-        let (val, consumed) = fast_float2::parse_partial::<f64, _>(&bytes[i..]).ok()?;
-        if !val.is_finite() {
-            return None;
-        }
-        let next = i + consumed;
+        let (val, next) = crate::fast_dec::parse_f64_hot(bytes, i)?;
         if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
             return None;
         }
@@ -720,6 +1105,18 @@ pub(crate) fn parse_coord_row_at(
         return Err(ParseError::IncompleteFrame);
     }
     parse_coord_fields(bytes, i, spec_version, Some(default_id))
+}
+
+/// Vector-section row at `i`. The id column is required.
+pub(crate) fn parse_vector_row_at(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+) -> Result<(ParsedCoord, usize), ParseError> {
+    if i >= bytes.len() {
+        return Err(ParseError::IncompleteFrame);
+    }
+    parse_coord_fields(bytes, i, spec_version, None)
 }
 
 /// Scalar section row: one finite float, a flag, and an id. Exact width 3.
@@ -1211,7 +1608,11 @@ pub fn parse_frame_header<'a>(
     // rejects trailing junk after the value.
     let trimmed = prebox2_raw.trim();
     let (spec_version, metadata, sections, validate, sections_declared) =
-        if trimmed.starts_with('{') {
+        if trimmed == "{\"con_spec_version\":2}" {
+            // The line written by every stock trajectory. Same object the
+            // JSON parser would build: major 2, no extra keys.
+            (2, BTreeMap::new(), Vec::new(), false, false)
+        } else if trimmed.starts_with('{') {
             let json_val: serde_json::Value = serde_json::from_str(trimmed)
                 .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
             let json_obj = json_val.as_object().ok_or_else(|| {
@@ -1448,6 +1849,61 @@ where
     }
 }
 
+struct CoordShell {
+    atoms: Vec<crate::types::AtomDatum>,
+    coords: Vec<f64>,
+    ids: Vec<u64>,
+}
+
+thread_local! {
+    static COORD_SHELLS: std::cell::RefCell<Vec<CoordShell>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Allocate `n_frames` coordinate shells on this thread before the parse.
+///
+/// One tight reservation, then each frame takes a shell. Doing the
+/// reservations inside the parse mixed the allocator with the float
+/// parse and made eight threads slower than the bytes they write.
+pub(crate) fn prestash_coord_shells(n_frames: usize, n_atoms: usize) {
+    // Small frames (the 32-atom strong-scaling files) are cheaper to
+    // allocate inside the parse. A burst of shells ahead of those frames
+    // made eight threads slower. Wide atoms, as in the weak-scaling
+    // fixture, are the case the burst is for.
+    if n_frames == 0 || n_atoms < 128 {
+        return;
+    }
+    COORD_SHELLS.with(|pool| {
+        let mut pool = pool.borrow_mut();
+        pool.reserve(n_frames);
+        for _ in 0..n_frames {
+            pool.push(CoordShell {
+                atoms: Vec::with_capacity(n_atoms),
+                coords: Vec::with_capacity(n_atoms.saturating_mul(3)),
+                ids: Vec::with_capacity(n_atoms),
+            });
+        }
+    });
+}
+
+pub(crate) fn clear_coord_shells() {
+    COORD_SHELLS.with(|pool| pool.borrow_mut().clear());
+}
+
+fn take_coord_shell(n_atoms: usize) -> Option<CoordShell> {
+    COORD_SHELLS.with(|pool| {
+        let shell = pool.borrow_mut().pop()?;
+        if shell.atoms.capacity() >= n_atoms
+            && shell.coords.capacity() >= n_atoms.saturating_mul(3)
+            && shell.ids.capacity() >= n_atoms
+        {
+            Some(shell)
+        } else {
+            None
+        }
+    })
+}
+
 /// Frame parse over a [`LineStream`].
 ///
 /// Coordinate rows go through [`LineStream::next_coord_row`] so the memchr
@@ -1464,15 +1920,20 @@ where
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
-    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
+    let shell = take_coord_shell(total_atoms);
+    let (mut pos_flat, mut ids, mut atom_data) = match shell {
+        Some(shell) => (shell.coords, shell.ids, shell.atoms),
+        None => (
+            Vec::with_capacity(total_atoms.saturating_mul(3)),
+            Vec::with_capacity(total_atoms),
+            Vec::with_capacity(total_atoms),
+        ),
+    };
     let mut positions_other = if f64_positions {
         None
     } else {
         Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
-    let mut ids = Vec::with_capacity(total_atoms);
-    let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(total_atoms);
-
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
@@ -1513,12 +1974,11 @@ struct CoordSink<'a> {
 }
 
 /// Parse `n` coordinate rows into flat SoA buffers.
-#[inline(always)]
 fn ingest_coord_rows<'a, L>(
     lines: &mut L,
     n: usize,
     spec_version: u32,
-    mut global_atom_idx: u64,
+    global_atom_idx: u64,
     symbol: &Arc<str>,
     sink: CoordSink<'_>,
 ) -> Result<u64, ParseError>
@@ -1531,14 +1991,25 @@ where
         positions_other,
         atom_data,
     } = sink;
+    if positions_other.is_none() {
+        return ingest_coord_rows_f64(
+            lines,
+            n,
+            spec_version,
+            global_atom_idx,
+            symbol,
+            pos_flat,
+            ids,
+            atom_data,
+        );
+    }
+    let mut global_atom_idx = global_atom_idx;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         if let Some(pos) = positions_other.as_mut() {
             pos.set_f64_row(ids.len(), xyz);
         }
-        pos_flat.push(xyz[0]);
-        pos_flat.push(xyz[1]);
-        pos_flat.push(xyz[2]);
+        pos_flat.extend_from_slice(&xyz);
         ids.push(atom_id);
         atom_data.push(AtomDatum::coords(
             Arc::clone(symbol),
@@ -1551,6 +2022,152 @@ where
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
+}
+
+/// Coordinate rows for the f64 storage path.
+///
+/// The symbol `Arc` is bumped once for the whole block. Cloning it per atom
+/// was a visible share of the coordinate parse.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn ingest_coord_rows_f64<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    let workers = wide_workers();
+    if workers >= 2 && n >= 4096 {
+        if let Some(block) =
+            lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
+        {
+            if pos_flat.is_empty() {
+                *pos_flat = block.xyz;
+            } else {
+                pos_flat.extend_from_slice(&block.xyz);
+            }
+            if ids.is_empty() {
+                *ids = block.ids;
+            } else {
+                ids.extend_from_slice(&block.ids);
+            }
+            if atom_data.is_empty() {
+                *atom_data = block.atoms;
+            } else {
+                atom_data.extend(block.atoms);
+            }
+            return Ok(global_atom_idx + n as u64);
+        }
+    }
+    let mut shares = symbol_shares(symbol, n);
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        let sym = shares.take();
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+/// `n` extra strong references to `symbol`, taken one at a time.
+///
+/// `Arc<str>` stores the header (strong count, weak count) immediately
+/// before the bytes. One `fetch_add` covers the block; each [`SymbolShares::take`]
+/// turns one of those counts into an `Arc`. Leftovers drop with the guard.
+struct SymbolShares {
+    data: *const u8,
+    len: usize,
+    left: usize,
+}
+
+impl SymbolShares {
+    fn raw(&self) -> *const str {
+        std::ptr::slice_from_raw_parts(self.data, self.len) as *const str
+    }
+
+    fn take(&mut self) -> Arc<str> {
+        debug_assert!(self.left > 0);
+        self.left -= 1;
+        unsafe { Arc::from_raw(self.raw()) }
+    }
+}
+
+impl Drop for SymbolShares {
+    fn drop(&mut self) {
+        for _ in 0..self.left {
+            drop(unsafe { Arc::from_raw(self.raw()) });
+        }
+        self.left = 0;
+    }
+}
+
+fn symbol_shares(symbol: &Arc<str>, n: usize) -> SymbolShares {
+    if n == 0 {
+        return SymbolShares {
+            data: std::ptr::null(),
+            len: 0,
+            left: 0,
+        };
+    }
+    let data = Arc::as_ptr(symbol);
+    let offset = arc_str_header(symbol.as_ref());
+    // SAFETY: `Arc::as_ptr` points at the `str` inside the allocation, and
+    // the two atomic counts sit in front of it. This is the same subtraction
+    // `Arc::increment_strong_count` performs, done once for `n` clones.
+    let bytes = data as *const u8;
+    let strong = unsafe { bytes.sub(offset) as *const AtomicUsize };
+    unsafe { (*strong).fetch_add(n, Ordering::Relaxed) };
+    SymbolShares {
+        data: bytes,
+        len: symbol.len(),
+        left: n,
+    }
+}
+
+fn arc_str_header(text: &str) -> usize {
+    let header = 2 * std::mem::size_of::<usize>();
+    let align = std::mem::align_of_val(text);
+    let rem = header % align;
+    if rem == 0 {
+        header
+    } else {
+        header + (align - rem)
+    }
+}
+
+#[cfg(test)]
+mod symbol_share_tests {
+    use super::symbol_shares;
+    use std::sync::Arc;
+
+    #[test]
+    fn one_bump_matches_n_clones() {
+        for text in ["", "Cu", "Gold", "a-much-longer-component-symbol"] {
+            let symbol: Arc<str> = Arc::from(text);
+            let mut shares = symbol_shares(&symbol, 3);
+            assert_eq!(Arc::strong_count(&symbol), 4);
+            let owned = [shares.take(), shares.take(), shares.take()];
+            assert!(owned.iter().all(|arc| arc.as_ref() == text));
+            drop(owned);
+            assert_eq!(Arc::strong_count(&symbol), 1);
+            let mut partial = symbol_shares(&symbol, 2);
+            let one = partial.take();
+            drop(partial);
+            drop(one);
+            assert_eq!(Arc::strong_count(&symbol), 1);
+        }
+    }
 }
 
 fn validate_header_geometry(boxl: &[f64], angles: &[f64]) -> Result<(), ParseError> {
@@ -1809,10 +2426,8 @@ pub fn parse_velocity_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let vel_line = lines
-                .next_line()
-                .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(vel_line, header.spec_version)?;
+            let (vals, fixed, atom_id) =
+                take_vector_row(lines, header.spec_version, SECTION_VELOCITIES)?;
             if validate {
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
@@ -1863,10 +2478,8 @@ pub fn parse_force_section<'a>(
         }
 
         for _ in 0..num_atoms {
-            let force_line = lines
-                .next_line()
-                .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(force_line, header.spec_version)?;
+            let (vals, fixed, atom_id) =
+                take_vector_row(lines, header.spec_version, SECTION_FORCES)?;
             if validate {
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
@@ -2032,11 +2645,11 @@ pub fn parse_declared_sections<'a>(
                     applied += 1;
                 }
                 other => {
-                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR) {
-                        if let Some(arity) = section_row_arity(header, other) {
-                            skip_unknown_section(lines, header, other, arity)?;
-                            continue;
-                        }
+                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR)
+                        && let Some(arity) = section_row_arity(header, other)
+                    {
+                        skip_unknown_section(lines, header, other, arity)?;
+                        continue;
                     }
                     return Err(ParseError::UnknownSection(other.to_string()));
                 }
@@ -2195,10 +2808,7 @@ fn parse_vector_named_section<'a>(
             )?;
         }
         for _ in 0..num_atoms {
-            let row = lines
-                .next_line()
-                .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-            let (vals, fixed, atom_id) = parse_vector_section_row(row, header.spec_version)?;
+            let (vals, fixed, atom_id) = take_vector_row(lines, header.spec_version, section_name)?;
             check_row(atom_idx, vals)?;
             if validate {
                 validate_section_atom_identity(section_name, atom_idx, fixed, atom_id, atom_data)?;

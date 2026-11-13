@@ -66,8 +66,16 @@ fi
 grep -q 'package-clib.sh' .github/workflows/c_lib_tarball.yml \
     || die "c_lib_tarball.yml must call scripts/package-clib.sh"
 if ! grep -q 'workflow_dispatch:' .github/workflows/c_lib_tarball.yml \
-    || ! grep -q 'tag:' .github/workflows/c_lib_tarball.yml; then
-    die "c_lib_tarball.yml must support workflow_dispatch with a tag input"
+    || ! grep -q 'tag:' .github/workflows/c_lib_tarball.yml \
+    || ! grep -Fq "'v*'" .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'upload-release-assets.sh' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'persist-credentials: false' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must run on v* tags, accept a tag input, and upload without git credentials"
+fi
+if grep -q 'types: \[published\]' .github/workflows/c_lib_tarball.yml \
+    || grep -q 'action-gh-release' .github/workflows/c_lib_tarball.yml \
+    || grep -q 'cargo publish' .github/workflows/c_lib_tarball.yml; then
+    die "c_lib_tarball.yml must not use the release event, create the release, or publish crates"
 fi
 
 # Windows chemfiles stays the official prebuilt wheel, never from-sources.
@@ -78,6 +86,23 @@ fi
 if ! grep -q 'windows-chemfiles-skip' .github/workflows/c_lib_tarball.yml \
     && ! grep -q 'Windows + chemfiles is not a clib' .github/workflows/c_lib_tarball.yml; then
     die "c_lib_tarball.yml must make the Windows chemfiles skip explicit"
+fi
+
+# Two Windows builds must match. Linux and macOS re-pack the same libraries.
+if ! grep -q 'dist-clib-rebuild' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'compare-repro-archives.py' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'rm -rf src/target' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'GNU tar' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q -- '--backfill' .github/workflows/c_lib_tarball.yml \
+    || ! grep -q 'reproducible-rustflags.sh' scripts/package-clib.sh \
+    || ! grep -q 'link-arg=/Brepro' scripts/reproducible-rustflags.sh \
+    || ! grep -q 'MSYS2_ENV_CONV_EXCL' scripts/reproducible-rustflags.sh \
+    || ! grep -q 'remap-path-prefix' scripts/reproducible-rustflags.sh \
+    || ! grep -q '::warning::' scripts/upload-release-assets.sh \
+    || ! grep -q -- '--backfill' scripts/upload-release-assets.sh \
+    || ! grep -q -- '--format=gnu' scripts/reproducible-tar.sh \
+    || ! grep -q 'COPYFILE_DISABLE' scripts/reproducible-tar.sh; then
+    die "clib archives must be reproducible and a backfill must warn instead of overwriting"
 fi
 
 # --- unpack one tarball and assert the cargo-c / prefix layout ---
