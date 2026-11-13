@@ -1,295 +1,225 @@
 hardware Intel(R) Xeon(R) Processor x86_64 nproc 8 memory_kib 49342816
 serial, warmup 1, samples 6, percentile type 7
-eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
-warmup tool=readcon op=read fixture=claisen.con warmup_s=1.020063999e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.034629000e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.245056999e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.291124001e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.237536002e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.114782001e-03
-sample tool=readcon op=read fixture=claisen.con sample_s=1.089075002e-03
-summary tool=readcon op=read fixture=claisen.con median_s=1.176159001e-03 iqr_s=1.476749985e-04
-warmup tool=readcon op=write fixture=claisen.con warmup_s=1.617019989e-04
-sample tool=readcon op=write fixture=claisen.con sample_s=4.604389978e-04
-sample tool=readcon op=write fixture=claisen.con sample_s=6.136219999e-04
-sample tool=readcon op=write fixture=claisen.con sample_s=2.231580002e-04
-sample tool=readcon op=write fixture=claisen.con sample_s=6.550100079e-05
-sample tool=readcon op=write fixture=claisen.con sample_s=5.194400001e-05
-sample tool=readcon op=write fixture=claisen.con sample_s=4.968099893e-05
-summary tool=readcon op=write fixture=claisen.con median_s=1.443295005e-04 iqr_s=3.457854982e-04
-warmup tool=ase-readcon-con op=read fixture=claisen.con warmup_s=3.768069982e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.987849984e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=3.097970002e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.833990002e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.567820011e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.427309992e-04
-sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.691449990e-04
-summary tool=ase-readcon-con op=read fixture=claisen.con median_s=2.762719996e-04 iqr_s=3.506574831e-05
-warmup tool=ase-readcon-con op=write fixture=claisen.con warmup_s=3.475100020e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.880669999e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.566559997e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.814779982e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.890710020e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.373730022e-04
-sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.402789978e-04
-summary tool=ase-readcon-con op=write fixture=claisen.con median_s=2.690669990e-04 iqr_s=4.204650122e-05
-warmup tool=ase-eon op=read fixture=claisen.con warmup_s=4.085580003e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=3.003800011e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=2.726559978e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=2.675379983e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=2.553190025e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=2.512069987e-04
-sample tool=ase-eon op=read fixture=claisen.con sample_s=2.553569975e-04
-summary tool=ase-eon op=read fixture=claisen.con median_s=2.614474979e-04 iqr_s=1.604799672e-05
-warmup tool=ase-eon op=write fixture=claisen.con warmup_s=5.755950006e-04
-sample tool=ase-eon op=write fixture=claisen.con sample_s=7.970549996e-04
-sample tool=ase-eon op=write fixture=claisen.con sample_s=6.280099988e-04
-sample tool=ase-eon op=write fixture=claisen.con sample_s=1.068379002e-03
-sample tool=ase-eon op=write fixture=claisen.con sample_s=5.370700019e-04
-sample tool=ase-eon op=write fixture=claisen.con sample_s=4.724430000e-04
-sample tool=ase-eon op=write fixture=claisen.con sample_s=4.629850009e-04
-summary tool=ase-eon op=write fixture=claisen.con median_s=5.825400003e-04 iqr_s=2.661939989e-04
-warmup tool=eon-python op=read fixture=claisen.con warmup_s=1.644936001e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.609892999e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.564438000e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.568045001e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.555252999e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.550494002e-03
-sample tool=eon-python op=read fixture=claisen.con sample_s=1.520807000e-03
-summary tool=eon-python op=read fixture=claisen.con median_s=1.559845499e-03 iqr_s=1.545949999e-05
-warmup tool=eon-python op=write fixture=claisen.con warmup_s=8.109280025e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=5.510859992e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=5.060719996e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=5.054059984e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=5.139950008e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=4.991440001e-04
-sample tool=eon-python op=write fixture=claisen.con sample_s=4.922059998e-04
-summary tool=eon-python op=write fixture=claisen.con median_s=5.057389990e-04 iqr_s=1.130475084e-05
-warmup tool=readcon op=read fixture=neb_band_3.con warmup_s=1.021823999e-03
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.004971000e-03
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=9.945040001e-04
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=9.913659997e-04
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.033759003e-03
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.053562999e-03
-sample tool=readcon op=read fixture=neb_band_3.con sample_s=9.918659998e-04
-summary tool=readcon op=read fixture=neb_band_3.con median_s=9.997375000e-04 iqr_s=3.403650226e-05
-warmup tool=readcon op=write fixture=neb_band_3.con warmup_s=1.426329982e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=4.283550006e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=4.587009971e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=3.028779975e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=3.868370004e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=2.282280002e-04
-sample tool=readcon op=write fixture=neb_band_3.con sample_s=2.948660003e-04
-summary tool=readcon op=write fixture=neb_band_3.con median_s=3.448574989e-04 iqr_s=1.211065010e-04
-warmup tool=ase-readcon-con op=read fixture=neb_band_3.con warmup_s=7.916120012e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.627160001e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.547580015e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.285329982e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.094890014e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=5.957409994e-04
-sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=7.631430017e-04
-summary tool=ase-readcon-con op=read fixture=neb_band_3.con median_s=6.416454999e-04 iqr_s=4.647649985e-05
-warmup tool=ase-readcon-con op=write fixture=neb_band_3.con warmup_s=7.060160024e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=6.065130001e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.827280002e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.988199991e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.489220021e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.719269975e-04
-sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.706720003e-04
-summary tool=ase-readcon-con op=write fixture=neb_band_3.con median_s=5.773274988e-04 iqr_s=2.381124978e-05
+eon_commit
+warmup tool=readcon op=read fixture=claisen.con warmup_s=6.074799967e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.403799954e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=1.940799848e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=1.677500040e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=1.679900015e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=1.607400191e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=1.916700057e-05
+summary tool=readcon op=read fixture=claisen.con median_s=1.798300036e-05 iqr_s=2.566748663e-06
+warmup tool=readcon op=write fixture=claisen.con warmup_s=1.356659996e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=6.590769990e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=6.739710007e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=6.163499966e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=3.142599999e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=4.508089987e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=2.699390025e-04
+summary tool=readcon op=write fixture=claisen.con median_s=5.335794976e-04 iqr_s=2.999979988e-04
+warmup tool=ase-readcon-con op=read fixture=claisen.con warmup_s=4.195049987e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=3.001570003e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.684969986e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.968440022e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.805250006e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.491369996e-04
+sample tool=ase-readcon-con op=read fixture=claisen.con sample_s=2.510429986e-04
+summary tool=ase-readcon-con op=read fixture=claisen.con median_s=2.745109996e-04 iqr_s=3.735775317e-05
+warmup tool=ase-readcon-con op=write fixture=claisen.con warmup_s=3.522949992e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=4.543010000e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.989940003e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.546029973e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.567919983e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.414980008e-04
+sample tool=ase-readcon-con op=write fixture=claisen.con sample_s=2.374489995e-04
+summary tool=ase-readcon-con op=write fixture=claisen.con median_s=2.556974978e-04 iqr_s=4.366924986e-05
+warmup tool=ase-eon op=read fixture=claisen.con warmup_s=3.804070002e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=2.886790026e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.105030009e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=2.658920021e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.133259997e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=2.834769984e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=2.733080000e-04
+summary tool=ase-eon op=read fixture=claisen.con median_s=2.860780005e-04 iqr_s=2.919675171e-05
+warmup tool=ase-eon op=write fixture=claisen.con warmup_s=5.932890017e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=6.427320004e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=1.178027000e-03
+sample tool=ase-eon op=write fixture=claisen.con sample_s=1.290664000e-03
+sample tool=ase-eon op=write fixture=claisen.con sample_s=7.069210005e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=6.878759996e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=1.102350998e-03
+summary tool=ase-eon op=write fixture=claisen.con median_s=9.046359992e-04 iqr_s=4.664707494e-04
+skip tool=eon-python op=read fixture=claisen.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=claisen.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=neb_band_3.con warmup_s=7.588599692e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.700099867e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.086500172e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.944299947e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.849099863e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.787799920e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=1.882299694e-05
+summary tool=readcon op=read fixture=neb_band_3.con median_s=1.913299820e-05 iqr_s=1.935502951e-06
+warmup tool=readcon op=write fixture=neb_band_3.con warmup_s=1.095840016e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=3.461160013e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=2.811929990e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=2.841059977e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=3.068830010e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=1.759869992e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=4.839699977e-05
+summary tool=readcon op=write fixture=neb_band_3.con median_s=2.826494983e-04 iqr_s=9.890025103e-05
+warmup tool=ase-readcon-con op=read fixture=neb_band_3.con warmup_s=8.831750019e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.899619984e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.332800003e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.047370007e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.421590006e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.367570022e-04
+sample tool=ase-readcon-con op=read fixture=neb_band_3.con sample_s=6.363060020e-04
+summary tool=ase-readcon-con op=read fixture=neb_band_3.con median_s=6.365315021e-04 iqr_s=6.772000233e-06
+warmup tool=ase-readcon-con op=write fixture=neb_band_3.con warmup_s=7.417480010e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=6.391839997e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.571909969e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.876420000e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.667969999e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.442110014e-04
+sample tool=ase-readcon-con op=write fixture=neb_band_3.con sample_s=5.484680005e-04
+summary tool=ase-readcon-con op=write fixture=neb_band_3.con median_s=5.619939984e-04 iqr_s=3.178200041e-05
 skip tool=ase-eon op=read fixture=neb_band_3.con status=read_error detail=ValueError: could not convert string to float: 'Forces'
 skip tool=ase-eon op=write fixture=neb_band_3.con status=write_error detail=ValueError: could not convert string to float: 'Forces'
-warmup tool=eon-python op=read fixture=neb_band_3.con warmup_s=1.601189000e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.559600001e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.621206000e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.514915002e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.511504001e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.495686000e-03
-sample tool=eon-python op=read fixture=neb_band_3.con sample_s=1.507992001e-03
-summary tool=eon-python op=read fixture=neb_band_3.con median_s=1.513209501e-03 iqr_s=3.955875036e-05
-warmup tool=eon-python op=write fixture=neb_band_3.con warmup_s=7.198370004e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=5.855519994e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=6.945810019e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=5.740779998e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=5.836829987e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=5.469349999e-04
-sample tool=eon-python op=write fixture=neb_band_3.con sample_s=5.386609992e-04
-summary tool=eon-python op=write fixture=neb_band_3.con median_s=5.788804992e-04 iqr_s=3.136399937e-05
-warmup tool=readcon op=read fixture=pt100_slab.con warmup_s=9.962849981e-04
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=9.938629992e-04
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.008260002e-03
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=9.909670007e-04
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=9.855909993e-04
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=9.834630000e-04
-sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.001605000e-03
-summary tool=readcon op=read fixture=pt100_slab.con median_s=9.924149999e-04 iqr_s=1.273450016e-05
-warmup tool=readcon op=write fixture=pt100_slab.con warmup_s=1.198419995e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=3.538609999e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=1.590960019e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.320559979e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.024200003e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.368230016e-04
-sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.450430002e-04
-summary tool=readcon op=write fixture=pt100_slab.con median_s=2.344394998e-04 iqr_s=3.315900085e-05
-warmup tool=ase-readcon-con op=read fixture=pt100_slab.con warmup_s=3.683320028e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=3.226369990e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.827699973e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.603219982e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.456189977e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=3.051990025e-04
-sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.441659999e-04
-summary tool=ase-readcon-con op=read fixture=pt100_slab.con median_s=2.715459977e-04 iqr_s=5.029700333e-05
-warmup tool=ase-readcon-con op=write fixture=pt100_slab.con warmup_s=2.719299991e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.110379974e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.850430017e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.909309976e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.930239996e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.780979983e-04
-sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.694480015e-04
-summary tool=ase-readcon-con op=write fixture=pt100_slab.con median_s=1.879869997e-04 iqr_s=1.266649997e-05
-warmup tool=ase-eon op=read fixture=pt100_slab.con warmup_s=2.441990000e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.984849987e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.660200032e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.537889984e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.462450018e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.421210000e-04
-sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.385379983e-04
-summary tool=ase-eon op=read fixture=pt100_slab.con median_s=1.500170001e-04 iqr_s=1.981025162e-05
-warmup tool=ase-eon op=write fixture=pt100_slab.con warmup_s=2.782279989e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=5.598089992e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.349899998e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=2.149840002e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=2.464390018e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=5.267030028e-04
-sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.391050013e-04
-summary tool=ase-eon op=write fixture=pt100_slab.con median_s=3.370475006e-04 iqr_s=2.112267512e-04
-warmup tool=eon-python op=read fixture=pt100_slab.con warmup_s=1.468384002e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.407477001e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.403416998e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.385735002e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.380930997e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.410244000e-03
-sample tool=eon-python op=read fixture=pt100_slab.con sample_s=1.485763001e-03
-summary tool=eon-python op=read fixture=pt100_slab.con median_s=1.405446999e-03 iqr_s=1.939674894e-05
-warmup tool=eon-python op=write fixture=pt100_slab.con warmup_s=4.293450002e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=3.856049989e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=3.517949990e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=3.473210018e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=4.444580009e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=3.430779980e-04
-sample tool=eon-python op=write fixture=pt100_slab.con sample_s=3.274090013e-04
-summary tool=eon-python op=write fixture=pt100_slab.con median_s=3.495580004e-04 iqr_s=3.301375000e-05
-warmup tool=readcon op=read fixture=tiny_multi_cuh2.convel warmup_s=9.970430001e-04
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.011195000e-03
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=9.926809980e-04
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=9.835210003e-04
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.031216001e-03
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.043374999e-03
-sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=9.906849991e-04
-summary tool=readcon op=read fixture=tiny_multi_cuh2.convel median_s=1.001937999e-03 iqr_s=3.502675190e-05
-warmup tool=readcon op=write fixture=tiny_multi_cuh2.convel warmup_s=1.265689971e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.210390012e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=1.456540012e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=1.949809994e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.471189982e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.312729994e-04
-sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.852190009e-04
-summary tool=readcon op=write fixture=tiny_multi_cuh2.convel median_s=2.261560003e-04 iqr_s=4.166199869e-05
-warmup tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel warmup_s=4.736480005e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.631119980e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.266489985e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.100520007e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.356649977e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.149629993e-04
-sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.154619990e-04
-summary tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel median_s=3.210554987e-04 iqr_s=1.832324870e-05
-warmup tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel warmup_s=3.201789987e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.467199993e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.365120017e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.149059983e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.201069983e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.054859979e-04
-sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=1.985859999e-04
-summary tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel median_s=2.175064983e-04 iqr_s=2.456975290e-05
+skip tool=eon-python op=read fixture=neb_band_3.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=neb_band_3.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=pt100_slab.con warmup_s=5.575400064e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=4.380199971e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.865600279e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.629600229e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.537599746e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.546100248e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.559999873e-05
+summary tool=readcon op=read fixture=pt100_slab.con median_s=1.594800051e-05 iqr_s=2.570251127e-06
+warmup tool=readcon op=write fixture=pt100_slab.con warmup_s=1.093350002e-04
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=6.589499753e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=4.836299922e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=3.705720010e-04
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=3.568909997e-04
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=3.107350021e-04
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.905180008e-04
+summary tool=readcon op=write fixture=pt100_slab.con median_s=3.006265015e-04 iqr_s=2.233012519e-04
+warmup tool=ase-readcon-con op=read fixture=pt100_slab.con warmup_s=3.881229968e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.939599981e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.777669979e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.589119977e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.447410006e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.379509970e-04
+sample tool=ase-readcon-con op=read fixture=pt100_slab.con sample_s=2.368989990e-04
+summary tool=ase-readcon-con op=read fixture=pt100_slab.con median_s=2.518264992e-04 iqr_s=3.340474996e-05
+warmup tool=ase-readcon-con op=write fixture=pt100_slab.con warmup_s=2.775350004e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.236470027e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.008180018e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.245649994e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.575030012e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=1.837670025e-04
+sample tool=ase-readcon-con op=write fixture=pt100_slab.con sample_s=2.557059997e-04
+summary tool=ase-readcon-con op=write fixture=pt100_slab.con median_s=2.241060010e-04 iqr_s=4.139549765e-05
+warmup tool=ase-eon op=read fixture=pt100_slab.con warmup_s=2.584979993e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.736230006e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.568059997e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.508860005e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.474379969e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.483530032e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.454199992e-04
+summary tool=ase-eon op=read fixture=pt100_slab.con median_s=1.496195018e-04 iqr_s=7.659251423e-06
+warmup tool=ase-eon op=write fixture=pt100_slab.con warmup_s=2.952169998e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.402559996e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.078949994e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=2.864839989e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.105369979e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=1.913590022e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=1.836009978e-04
+summary tool=ase-eon op=write fixture=pt100_slab.con median_s=2.971894992e-04 iqr_s=9.473624687e-05
+skip tool=eon-python op=read fixture=pt100_slab.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=pt100_slab.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=tiny_multi_cuh2.convel warmup_s=5.289300316e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=2.058699829e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.709699791e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.464099842e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.418800093e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.342999894e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.464200250e-05
+summary tool=readcon op=read fixture=tiny_multi_cuh2.convel median_s=1.464150046e-05 iqr_s=2.181998752e-06
+warmup tool=readcon op=write fixture=tiny_multi_cuh2.convel warmup_s=1.104290022e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=8.922300185e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.503140022e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.109620000e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=4.376149991e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.303020010e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=2.797139969e-04
+summary tool=readcon op=write fixture=tiny_multi_cuh2.convel median_s=2.403080016e-04 iqr_s=5.656699796e-05
+warmup tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel warmup_s=4.696729993e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.817680008e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.463299981e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.221250008e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.158790023e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.069220002e-04
+sample tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel sample_s=3.398740009e-04
+summary tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel median_s=3.309995009e-04 iqr_s=2.727549690e-05
+warmup tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel warmup_s=3.640919967e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=4.402529994e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.657990008e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.902590022e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=3.567960011e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=2.854209997e-04
+sample tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel sample_s=3.412330007e-04
+summary tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel median_s=3.157460014e-04 iqr_s=6.627475068e-05
 skip tool=ase-eon op=read fixture=tiny_multi_cuh2.convel status=read_error detail=ValueError: could not convert string to float: 'Velocities'
 skip tool=ase-eon op=write fixture=tiny_multi_cuh2.convel status=write_error detail=ValueError: could not convert string to float: 'Velocities'
-warmup tool=eon-python op=read fixture=tiny_multi_cuh2.convel warmup_s=1.486710000e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.467811002e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.423534999e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.407870997e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.419405002e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.428431999e-03
-sample tool=eon-python op=read fixture=tiny_multi_cuh2.convel sample_s=1.475072000e-03
-summary tool=eon-python op=read fixture=tiny_multi_cuh2.convel median_s=1.425983499e-03 iqr_s=3.752875000e-05
-warmup tool=eon-python op=write fixture=tiny_multi_cuh2.convel warmup_s=6.124579995e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=5.162179987e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=4.780169984e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=4.934089993e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=4.749670006e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=4.863690010e-04
-sample tool=eon-python op=write fixture=tiny_multi_cuh2.convel sample_s=4.896070022e-04
-summary tool=eon-python op=write fixture=tiny_multi_cuh2.convel median_s=4.879880016e-04 iqr_s=1.235350101e-05
-warmup tool=readcon op=read fixture=v30_fs_label.convel warmup_s=9.928610016e-04
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=9.898060016e-04
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=9.841569990e-04
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.003215002e-03
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.066847999e-03
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=9.858390004e-04
-sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=9.821399981e-04
-summary tool=readcon op=read fixture=v30_fs_label.convel median_s=9.878225010e-04 iqr_s=1.528525263e-05
-warmup tool=readcon op=write fixture=v30_fs_label.convel warmup_s=1.270440007e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=3.741109977e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=3.332269989e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=3.359729999e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=1.651989987e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=2.973730006e-04
-sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.457000250e-05
-summary tool=readcon op=write fixture=v30_fs_label.convel median_s=3.152999998e-04 iqr_s=1.370440004e-04
-warmup tool=ase-readcon-convel op=read fixture=v30_fs_label.convel warmup_s=3.288549997e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.599689979e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.308919975e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.151230001e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.088910005e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.021789987e-04
-sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.457079972e-04
-summary tool=ase-readcon-convel op=read fixture=v30_fs_label.convel median_s=2.230074988e-04 iqr_s=3.155499689e-05
-warmup tool=ase-readcon-convel op=write fixture=v30_fs_label.convel warmup_s=2.424339982e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.801920007e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.623070020e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.591529981e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.548280015e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.448119983e-04
-sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=1.352729996e-04
-summary tool=ase-readcon-convel op=write fixture=v30_fs_label.convel median_s=1.569904998e-04 iqr_s=1.420250192e-05
-warmup tool=ase-eon op=read fixture=v30_fs_label.convel warmup_s=2.409299996e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.661549977e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.426079980e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.385970027e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.636230008e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.416380001e-04
-sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.222549981e-04
-summary tool=ase-eon op=read fixture=v30_fs_label.convel median_s=1.421229990e-04 iqr_s=1.901199812e-05
-warmup tool=ase-eon op=write fixture=v30_fs_label.convel warmup_s=2.457010014e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.991230019e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.796159995e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.910829997e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.660410016e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.709110002e-04
-sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.622150012e-04
-summary tool=ase-eon op=write fixture=v30_fs_label.convel median_s=1.752634998e-04 iqr_s=2.095774835e-05
-warmup tool=eon-python op=read fixture=v30_fs_label.convel warmup_s=1.386593001e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.347830002e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.348104000e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.318301998e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.313852001e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.373723000e-03
-sample tool=eon-python op=read fixture=v30_fs_label.convel sample_s=1.357394998e-03
-summary tool=eon-python op=read fixture=v30_fs_label.convel median_s=1.347967001e-03 iqr_s=2.938824946e-05
-warmup tool=eon-python op=write fixture=v30_fs_label.convel warmup_s=4.280850007e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.569289984e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.451470002e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.265340019e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.124809991e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.033240027e-04
-sample tool=eon-python op=write fixture=v30_fs_label.convel sample_s=3.036359994e-04
-summary tool=eon-python op=write fixture=v30_fs_label.convel median_s=3.195075005e-04 iqr_s=3.464650126e-05
+skip tool=eon-python op=read fixture=tiny_multi_cuh2.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=tiny_multi_cuh2.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=v30_fs_label.convel warmup_s=4.267600161e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.752599928e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.299799987e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.192899799e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.148700176e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.187800081e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.221300045e-05
+summary tool=readcon op=read fixture=v30_fs_label.convel median_s=1.207099922e-05 iqr_s=9.109999155e-07
+warmup tool=readcon op=write fixture=v30_fs_label.convel warmup_s=1.313449975e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=1.884359990e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.646240013e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=1.715559993e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=1.744350011e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.918400009e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.268400153e-05
+summary tool=readcon op=write fixture=v30_fs_label.convel median_s=1.729955002e-04 iqr_s=1.051587496e-04
+warmup tool=ase-readcon-convel op=read fixture=v30_fs_label.convel warmup_s=3.412409969e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.554829989e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.728319996e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=3.232609997e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.894509998e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.501550007e-04
+sample tool=ase-readcon-convel op=read fixture=v30_fs_label.convel sample_s=2.120140016e-04
+summary tool=ase-readcon-convel op=read fixture=v30_fs_label.convel median_s=2.641574993e-04 iqr_s=3.380924954e-05
+warmup tool=ase-readcon-convel op=write fixture=v30_fs_label.convel warmup_s=2.780720024e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=2.743320001e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=5.338100018e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=5.670809987e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=3.446970004e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=3.471339987e-04
+sample tool=ase-readcon-convel op=write fixture=v30_fs_label.convel sample_s=3.449200012e-04
+summary tool=ase-readcon-convel op=write fixture=v30_fs_label.convel median_s=3.460270000e-04 iqr_s=1.423882504e-04
+warmup tool=ase-eon op=read fixture=v30_fs_label.convel warmup_s=2.307560026e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.650980012e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=8.245719982e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.922590018e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.494459975e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.534080002e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.326620004e-04
+summary tool=ase-eon op=read fixture=v30_fs_label.convel median_s=1.592530007e-04 iqr_s=3.503225344e-05
+warmup tool=ase-eon op=write fixture=v30_fs_label.convel warmup_s=2.550950012e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=4.547869976e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=3.464680012e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.679329991e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.918300015e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=3.084479977e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.538500001e-04
+summary tool=ase-eon op=write fixture=v30_fs_label.convel median_s=3.001389996e-04 iqr_s=6.305575062e-05
+skip tool=eon-python op=read fixture=v30_fs_label.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=v30_fs_label.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn

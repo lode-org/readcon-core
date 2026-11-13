@@ -1,11 +1,11 @@
 binding	op	median_s	iqr_s	path_peak_rss_mib
-rust	read	0.04125	0.000243
-rust	write	0.04916	0.0008115
-c	read	0.03997	0.0003721	76
-c	write	0.07535	0.00884
-c++	read	0.0477	0.00056
-c++	write	0.04674	0.001731
-fortran	read	0.09474	0.0006004	655
-fortran	write	0.06889	0.004831
-python	read	0.03919	0.0004125
-python	write	0.04312	0.000719
+rust	read	0.0386	0.000481	419
+rust	write	0.0413	0.000573
+c	read	0.0382	0.000349	418
+c	write	0.0616	0.00343
+c++	read	0.0421	0.000912	457
+c++	write	0.0422	0.00111
+fortran	read	0.0541	0.0199	422
+fortran	write	0.0611	0.00403
+python	read	0.0391	0.000213	481
+python	write	0.0576	0.00213

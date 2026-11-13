@@ -1,17 +1,27 @@
 {
   "readcon-db": {
-    "error": "Traceback (most recent call last):\n  File \"<string>\", line 8, in <module>\nModuleNotFoundError: No module named 'readcon_db'\n"
+    "wall_s": {
+      "n": 6,
+      "median": 0.004857997000726755,
+      "iqr": 0.00026142574643017724
+    },
+    "rss_above_baseline": {
+      "n": 6,
+      "median": 3760128.0,
+      "iqr": 0.0
+    },
+    "frames": 40
   },
   "ase.db": {
     "wall_s": {
       "n": 6,
-      "median": 0.06783854400055134,
-      "iqr": 0.014033021749128238
+      "median": 0.07064069200168888,
+      "iqr": 0.017141343248113117
     },
     "rss_above_baseline": {
       "n": 6,
-      "median": 62369792.0,
-      "iqr": 154624.0
+      "median": 68222976.0,
+      "iqr": 190464.0
     },
     "frames": 40
   }

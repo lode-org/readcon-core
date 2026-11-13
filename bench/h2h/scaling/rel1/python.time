@@ -1,18 +1,18 @@
 	Command being timed: "taskset -c 0 /usr/bin/python3 -c import readcon; frames=readcon.read_con('/agent/repos/readcon-core/bench/h2h/work/parallel-frames/frames-32x100000.con', n_threads=1); assert len(frames)==100000"
-	User time (seconds): 0.39
+	User time (seconds): 0.41
 	System time (seconds): 0.09
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.48
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.50
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 492028
+	Maximum resident set size (kbytes): 492844
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 5494
-	Voluntary context switches: 2
-	Involuntary context switches: 5
+	Minor (reclaiming a frame) page faults: 5703
+	Voluntary context switches: 1
+	Involuntary context switches: 3
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 0
