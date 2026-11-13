@@ -832,6 +832,14 @@ impl AtomDatum {
         }
     }
 
+    pub(crate) fn store_velocity(&mut self, value: [f64; 3]) {
+        self.set_velocity(Some(value));
+    }
+
+    pub(crate) fn store_force(&mut self, value: [f64; 3]) {
+        self.set_force(Some(value));
+    }
+
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
         if value.is_none() && matches!(self.tail, AtomSections::Empty) {
             return;
@@ -1126,6 +1134,8 @@ impl Drop for ConFrame {
         let n_atoms = self.atom_data.len();
         if n_atoms >= ATOM_REUSE_MIN {
             stash_atom_buf(std::mem::take(&mut self.atom_data));
+        } else if n_atoms > 0 {
+            crate::frame_pool::recycle_small(self);
         }
         if n_atoms >= crate::frame_pool::SOA_MIN {
             crate::frame_pool::recycle_large(self);
@@ -3353,7 +3363,7 @@ pub(crate) fn con_frame_coords_only_with_ids(
     let n = atom_data.len();
     debug_assert_eq!(positions.nrows(), n);
     debug_assert_eq!(ids.len(), n);
-    use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
+    use crate::storage_dtype::{FloatArray1, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
 
     let mass_flat = if n >= crate::frame_pool::SOA_MIN {
@@ -3380,9 +3390,19 @@ pub(crate) fn con_frame_coords_only_with_ids(
     };
 
     let ids_arr = ndarray::Array1::from(ids).into_shared();
+    assemble_coord_frame(header, atom_data, positions, masses_arr, ids_arr, &dt)
+}
 
-    let mut header = header;
-    if dt != StorageDtypes::all_f64() {
+pub(crate) fn assemble_coord_frame(
+    mut header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    positions: crate::storage_dtype::FloatArray2,
+    masses: crate::storage_dtype::FloatArray1,
+    atom_ids: ndarray::ArcArray1<u64>,
+    dt: &crate::storage_dtype::StorageDtypes,
+) -> ConFrame {
+    use crate::storage_dtype::{FloatArray1, FloatArray2};
+    if *dt != crate::storage_dtype::StorageDtypes::all_f64() {
         dt.insert_into(&mut header.metadata);
     }
     ConFrame {
@@ -3397,8 +3417,8 @@ pub(crate) fn con_frame_coords_only_with_ids(
         magmoms: FloatArray2::zeros(dt.forces, 0, 3),
         displacements: FloatArray2::zeros(dt.forces, 0, 3),
         spreads: FloatArray2::zeros(dt.forces, 0, 3),
-        masses: masses_arr,
-        atom_ids: ids_arr,
+        masses,
+        atom_ids,
     }
 }
 

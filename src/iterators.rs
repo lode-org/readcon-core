@@ -304,6 +304,37 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         self.pos = pos;
         Ok(row)
     }
+    fn apply_vector_rows(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        rows: &mut [crate::types::AtomDatum],
+        mut index: usize,
+        store: fn(&mut crate::types::AtomDatum, [f64; 3]),
+    ) -> Result<usize, crate::error::ParseError> {
+        let mut left = n;
+        if let Some(p) = self.peeked.take()
+            && left > 0
+        {
+            let (row, _) = crate::parser::parse_vector_row_at(p.as_bytes(), 0, spec_version)?;
+            if index < rows.len() {
+                store(&mut rows[index], row.0);
+            }
+            index += 1;
+            left -= 1;
+        }
+        while left > 0 {
+            let (row, pos) =
+                crate::parser::parse_vector_row_at(self.bytes, self.pos, spec_version)?;
+            self.pos = pos;
+            if index < rows.len() {
+                store(&mut rows[index], row.0);
+            }
+            index += 1;
+            left -= 1;
+        }
+        Ok(index)
+    }
     fn remainder_is_whitespace(&mut self) -> bool {
         if self.utf8_bad {
             return false;
@@ -445,6 +476,15 @@ pub struct ConFrameIterator<'a> {
     /// Successful `next` and `forward_fast` advance it. A failure leaves
     /// it on the frame that failed.
     frame_index: u64,
+}
+
+impl Drop for ConFrameIterator<'_> {
+    fn drop(&mut self) {
+        // Short-frame arrays are only a win inside one reader. Holding them
+        // after the reader finishes changes the allocator for a later write
+        // in the same process. The large-frame pool is left alone.
+        crate::frame_pool::release_small();
+    }
 }
 
 /// Newlines seen and the byte index just past the `n`-th `\n`.

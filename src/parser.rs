@@ -90,6 +90,80 @@ pub trait LineStream<'a> {
         let line = self.next_line().ok_or(ParseError::IncompleteFrame)?;
         parse_vector_section_row(line, spec_version)
     }
+
+    /// `n` vector rows stored with `store`. A byte cursor overrides this and
+    /// calls [`parse_vector_row_at`] so the section walk and the row parser
+    /// share one scan.
+    fn apply_vector_rows(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        rows: &mut [AtomDatum],
+        mut index: usize,
+        store: fn(&mut AtomDatum, [f64; 3]),
+    ) -> Result<usize, ParseError> {
+        for _ in 0..n {
+            let (xyz, _, _) = self.next_vector_row(spec_version)?;
+            if index < rows.len() {
+                store(&mut rows[index], xyz);
+            }
+            index += 1;
+        }
+        Ok(index)
+    }
+}
+
+fn read_vector_components<'a>(
+    lines: &mut impl LineStream<'a>,
+    header: &FrameHeader,
+    atom_data: &mut [AtomDatum],
+    section: &str,
+    heading: &str,
+    identity: &str,
+    store: fn(&mut AtomDatum, [f64; 3]),
+) -> Result<bool, ParseError> {
+    let validate = header.strict_validation;
+    let mut atom_idx = 0usize;
+    let prefix = match heading {
+        "Velocities" => "Velocities of Component",
+        "Forces" => "Forces of Component",
+        _ => heading,
+    };
+    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section.to_string()))?
+            .trim();
+        let comp_line = lines
+            .next_line()
+            .ok_or_else(|| ParseError::IncompleteSection(section.to_string()))?;
+        if !label_has_prefix(comp_line, prefix) {
+            return Err(ParseError::IncompleteSection(section.to_string()));
+        }
+        if validate {
+            validate_section_component(
+                heading, type_idx, atom_idx, symbol, comp_line, header, atom_data,
+            )?;
+            for _ in 0..num_atoms {
+                let (vals, fixed, atom_id) = take_vector_row(lines, header.spec_version, section)?;
+                validate_section_atom_identity(identity, atom_idx, fixed, atom_id, atom_data)?;
+                if atom_idx < atom_data.len() {
+                    store(&mut atom_data[atom_idx], vals);
+                }
+                atom_idx += 1;
+            }
+        } else {
+            atom_idx = lines
+                .apply_vector_rows(num_atoms, header.spec_version, atom_data, atom_idx, store)
+                .map_err(|err| match err {
+                    ParseError::IncompleteFrame => {
+                        ParseError::IncompleteSection(section.to_string())
+                    }
+                    other => other,
+                })?;
+        }
+    }
+    Ok(true)
 }
 
 fn take_vector_row<'a>(
@@ -255,6 +329,62 @@ pub fn parse_line_of_range_f64_stack(
         found += 1;
     }
     Ok(found)
+}
+
+fn read_header_f64s<const N: usize>(line: &str) -> Result<[f64; N], ParseError> {
+    let mut out = [0.0; N];
+    if scan_header_f64s(line, N, &mut out) {
+        return Ok(out);
+    }
+    let parsed = parse_line_of_n_f64(line, N)?;
+    out.copy_from_slice(&parsed);
+    Ok(out)
+}
+
+fn read_header_f64_vec(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
+    if n <= 8 {
+        let mut buf = [0.0; 8];
+        if scan_header_f64s(line, n, &mut buf) {
+            return Ok(buf[..n].to_vec());
+        }
+    }
+    parse_line_of_n_f64(line, n)
+}
+
+/// `n` plain decimals separated by spaces or tabs. `false` when the shape
+/// needs the general parser (an exponent, a non-finite token, a bad width).
+fn scan_header_f64s(line: &str, n: usize, out: &mut [f64]) -> bool {
+    if n > out.len() {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    let mut found = 0usize;
+    while found < n {
+        while i < bytes.len() && is_header_ws(bytes[i]) {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            return false;
+        }
+        let Some((val, next)) = crate::fast_dec::parse_f64_hot(bytes, i) else {
+            return false;
+        };
+        if next < bytes.len() && !is_header_ws(bytes[next]) {
+            return false;
+        }
+        out[found] = val;
+        found += 1;
+        i = next;
+    }
+    while i < bytes.len() && is_header_ws(bytes[i]) {
+        i += 1;
+    }
+    i == bytes.len()
+}
+
+fn is_header_ws(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\r' | 0x0c)
 }
 
 /// Parses a line of whitespace-separated f64 values using fast-float2.
@@ -1599,8 +1729,8 @@ pub fn parse_frame_header<'a>(
         };
     let prebox2 = prebox2_raw.to_string();
 
-    let boxl_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
-    let angles_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
+    let boxl = read_header_f64s::<3>(lines.next().ok_or(ParseError::IncompleteHeader)?)?;
+    let angles = read_header_f64s::<3>(lines.next().ok_or(ParseError::IncompleteHeader)?)?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
@@ -1626,14 +1756,14 @@ pub fn parse_frame_header<'a>(
                 "each per-type count must be >= 1".into(),
             ));
         }
-        let masses_per_type = parse_line_of_n_f64(
+        let masses_per_type = read_header_f64_vec(
             lines.next().ok_or(ParseError::IncompleteHeader)?,
             natm_types,
         )?;
         (natms_per_type, masses_per_type)
     };
     if validate {
-        validate_header_geometry(&boxl_vec, &angles_vec)?;
+        validate_header_geometry(&boxl, &angles)?;
         validate_masses(&masses_per_type)?;
     }
     Ok(FrameHeader {
@@ -1641,8 +1771,8 @@ pub fn parse_frame_header<'a>(
             user: prebox1,
             metadata_line: prebox2,
         },
-        boxl: boxl_vec.try_into().unwrap(),
-        angles: angles_vec.try_into().unwrap(),
+        boxl,
+        angles,
         postbox_header: [postbox1, postbox2],
         natm_types,
         natms_per_type,
@@ -1787,6 +1917,73 @@ where
     parse_long_frame(lines, header, total_atoms)
 }
 
+fn parse_short_f64<'a, L>(
+    lines: &mut L,
+    header: FrameHeader,
+    total_atoms: usize,
+    validate: bool,
+    dt: &crate::storage_dtype::StorageDtypes,
+) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
+    let mut positions = crate::frame_pool::take_small_positions(total_atoms);
+    let mut ids = crate::frame_pool::take_small_ids(total_atoms);
+    let mut atom_data = Vec::with_capacity(total_atoms);
+    let mut global_atom_idx: u64 = 0;
+    {
+        let pos = positions
+            .f64_slice_mut()
+            .expect("short f64 positions are contiguous");
+        let id_slice = ids
+            .as_slice_memory_order_mut()
+            .expect("short f64 ids are contiguous");
+        for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
+            let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+            let symbol: Arc<str> = Arc::from(symbol_line.trim());
+            let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+            if validate {
+                validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
+            }
+            let mut shares = symbol_shares(&symbol, *num_atoms);
+            for _ in 0..*num_atoms {
+                let (xyz, fixed, atom_id) =
+                    lines.next_coord_row(header.spec_version, global_atom_idx)?;
+                let at = global_atom_idx as usize;
+                let o = at * 3;
+                pos[o] = xyz[0];
+                pos[o + 1] = xyz[1];
+                pos[o + 2] = xyz[2];
+                id_slice[at] = atom_id;
+                atom_data.push(AtomDatum::coords(
+                    shares.take(),
+                    xyz[0],
+                    xyz[1],
+                    xyz[2],
+                    fixed,
+                    atom_id,
+                ));
+                global_atom_idx += 1;
+            }
+        }
+    }
+    let masses = crate::frame_pool::take_small_masses(&header, total_atoms);
+    if dt.masses != crate::storage_dtype::ElementKind::Float64 {
+        let mut projected = crate::storage_dtype::FloatArray1::zeros(dt.masses, total_atoms);
+        if let Some(src) = masses.f64_slice() {
+            for (i, &v) in src.iter().enumerate() {
+                projected.set_f64(i, v);
+            }
+        }
+        return Ok(crate::types::assemble_coord_frame(
+            header, atom_data, positions, projected, ids, dt,
+        ));
+    }
+    Ok(crate::types::assemble_coord_frame(
+        header, atom_data, positions, masses, ids, dt,
+    ))
+}
+
 #[inline(never)]
 fn parse_short_frame<'a, L>(
     lines: &mut L,
@@ -1800,6 +1997,9 @@ where
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
+    if f64_positions {
+        return parse_short_f64(lines, header, total_atoms, validate, &dt);
+    }
     let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
     let mut positions_other = if f64_positions {
         None
@@ -2544,7 +2744,6 @@ pub fn parse_velocity_section<'a>(
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
-    let validate = header.strict_validation;
     // A blank line followed only by whitespace to EOF is not a velocity
     // block (CON-frame.5, D2). Leave those lines for the iterator.
     match lines.peek_line() {
@@ -2563,47 +2762,15 @@ pub fn parse_velocity_section<'a>(
         _ => return Ok(false),
     }
 
-    let mut atom_idx: usize = 0;
-    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        // Symbol line
-        let symbol = lines
-            .next_line()
-            .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?
-            .trim();
-
-        // "Velocities of Component N" line
-        let comp_line = lines
-            .next_line()
-            .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
-        if !label_has_prefix(comp_line, "Velocities of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_VELOCITIES.into()));
-        }
-        if validate {
-            validate_section_component(
-                "Velocities",
-                type_idx,
-                atom_idx,
-                symbol,
-                comp_line,
-                header,
-                atom_data,
-            )?;
-        }
-
-        for _ in 0..num_atoms {
-            let (vals, fixed, atom_id) =
-                take_vector_row(lines, header.spec_version, SECTION_VELOCITIES)?;
-            if validate {
-                validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
-            }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].set_velocity(Some(vals));
-            }
-            atom_idx += 1;
-        }
-    }
-
-    Ok(true)
+    read_vector_components(
+        lines,
+        header,
+        atom_data,
+        SECTION_VELOCITIES,
+        "Velocities",
+        "velocities",
+        AtomDatum::store_velocity,
+    )
 }
 
 /// Attempts to parse a force section following coordinate (and optional velocity) blocks.
@@ -2618,44 +2785,19 @@ pub fn parse_force_section<'a>(
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
 ) -> Result<bool, ParseError> {
-    let validate = header.strict_validation;
     if !open_section(lines)? {
         return Ok(false);
     }
 
-    let mut atom_idx: usize = 0;
-    for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
-        let symbol = lines
-            .next_line()
-            .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?
-            .trim();
-
-        let comp_line = lines
-            .next_line()
-            .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
-        if !label_has_prefix(comp_line, "Forces of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_FORCES.into()));
-        }
-        if validate {
-            validate_section_component(
-                "Forces", type_idx, atom_idx, symbol, comp_line, header, atom_data,
-            )?;
-        }
-
-        for _ in 0..num_atoms {
-            let (vals, fixed, atom_id) =
-                take_vector_row(lines, header.spec_version, SECTION_FORCES)?;
-            if validate {
-                validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
-            }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].set_force(Some(vals));
-            }
-            atom_idx += 1;
-        }
-    }
-
-    Ok(true)
+    read_vector_components(
+        lines,
+        header,
+        atom_data,
+        SECTION_FORCES,
+        "Forces",
+        "forces",
+        AtomDatum::store_force,
+    )
 }
 
 /// Attempts to parse an energies section following coordinate (and optional

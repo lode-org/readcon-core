@@ -447,6 +447,14 @@ impl Array2Storage {
         }
     }
 
+    /// Contiguous f64 elements when this matrix is float64 and uniquely owned.
+    pub(crate) fn f64_slice_mut(&mut self) -> Option<&mut [f64]> {
+        match self {
+            Self::F64(a) => a.as_slice_memory_order_mut(),
+            _ => None,
+        }
+    }
+
     #[inline]
     pub fn set_f64_row(&mut self, i: usize, v: [f64; 3]) {
         match self {
@@ -708,6 +716,14 @@ impl Array1Storage {
             Self::U64(a) => a.len(),
             Self::C64(a) => a.len(),
             Self::C128(a) => a.len(),
+        }
+    }
+
+    /// Contiguous f64 elements when this column is float64 and uniquely owned.
+    pub(crate) fn f64_slice_mut(&mut self) -> Option<&mut [f64]> {
+        match self {
+            Self::F64(a) => a.as_slice_memory_order_mut(),
+            _ => None,
         }
     }
 
