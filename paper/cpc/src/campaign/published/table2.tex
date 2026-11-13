@@ -1,0 +1,20 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Same-format extended XYZ read of \(10^{6}\) atoms, on one core of the Xeon in Section~\ref{sec:compute}.
+readcon is commit \texttt{2e4f37cb}.
+Each entry is the type-7 median in seconds, from \texttt{h2h\_table\_1e6}.}
+\label{tab:h2h-main}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Reader & Time \\
+\midrule
+readcon & 0.1695 \\
+ASE \texttt{extxyz} & 1.942 \\
+chemfiles & 0.5706 \\
+OVITO & 0.2077 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,18 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Thread reads into memory from the pinned campaign. Each entry is the median in seconds.}
+\label{tab:r6-read}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+File & 1 & 2 & 4 & 8 \\
+\midrule
+con-100k & 0.368122 & 0.160515 & 0.088376 & 0.048762 \\
+con-1e6 & 0.039475 & 0.024942 & 0.013530 & 0.007333 \\
+convel & 0.648877 & 0.272239 & 0.166941 & 0.093445 \\
+extxyz-alloy & 0.088153 & 0.040071 & 0.025244 & 0.016403 \\
+extxyz-cu & 0.255395 & 0.120359 & 0.070027 & 0.026877 \\
+extxyz-md & 0.090060 & 0.037844 & 0.020795 & 0.011218 \\
+\bottomrule
+\end{tabular}
+\end{table}

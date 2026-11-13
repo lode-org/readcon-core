@@ -1,0 +1,23 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Serial reads of the five fidelity files on one core of the Xeon in Section~\ref{sec:compute}.
+readcon-core 0.22.0.
+Each entry is the median of six reads after one warmup, in seconds, with the interquartile range in parentheses.
+ASE's eon reader stops on a following force block and on a following velocity block.
+The files, the library versions and the command that repeats the comparison are in the data availability statement.}
+\label{tab:fidelity-time}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+File & readcon & ASE eon & \texttt{loadcons} \\
+\midrule
+\texttt{hop.con} & \num[round-mode=figures,round-precision=3]{1.97245008e-05} (\num[round-mode=figures,round-precision=3]{3.04599871e-06}) & \num[round-mode=figures,round-precision=3]{2.43134500e-04} (\num[round-mode=figures,round-precision=3]{3.32489981e-05}) & \num[round-mode=figures,round-precision=3]{4.51591999e-04} (\num[round-mode=figures,round-precision=3]{4.98155023e-05}) \\
+\texttt{neb\_band\_3.con} & \num[round-mode=figures,round-precision=3]{2.4752499939495465e-05} (\num[round-mode=figures,round-precision=3]{3.070750153710833e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.00028445699990697904} (\num[round-mode=figures,round-precision=3]{2.340324988381326e-05}) \\
+\texttt{pt100\_slab.con} & \num[round-mode=figures,round-precision=3]{1.9455000256130006e-05} (\num[round-mode=figures,round-precision=3]{2.0862501060037175e-06}) & \num[round-mode=figures,round-precision=3]{0.00015356499989138683} (\num[round-mode=figures,round-precision=3]{2.0202000087010674e-05}) & \num[round-mode=figures,round-precision=3]{0.0002605030001632258} (\num[round-mode=figures,round-precision=3]{6.620725037009834e-05}) \\
+\texttt{tiny\_multi\_cuh2.convel} & \num[round-mode=figures,round-precision=3]{1.9027999996978906e-05} (\num[round-mode=figures,round-precision=3]{6.806000101278187e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.0002502375000403845} (\num[round-mode=figures,round-precision=3]{2.0246250187483383e-05}) \\
+\texttt{v30\_fs\_label.convel} & \num[round-mode=figures,round-precision=3]{1.5827999959583394e-05} (\num[round-mode=figures,round-precision=3]{2.533000042603817e-06}) & \num[round-mode=figures,round-precision=3]{0.0001370275001590926} (\num[round-mode=figures,round-precision=3]{1.1501749554554408e-05}) & \num[round-mode=figures,round-precision=3]{0.0001879344999906607} (\num[round-mode=figures,round-precision=3]{1.6037749787756184e-05}) \\
+\bottomrule
+\end{tabular}}
+\end{table}

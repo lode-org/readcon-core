@@ -1,0 +1,16 @@
+\begin{table}[tbp]
+\centering
+\caption{CON read of \num{100000} frames of 32 atoms on the same Xeon.
+readcon is commit \texttt{2e4f37cb}.
+The triple is the first quartile, the median and the third quartile, in seconds, from \texttt{h2h\_table\_100k}.}
+\label{tab:conread}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Reader & First, median, third \\
+\midrule
+readcon & 0.388855, 0.403147, 0.431849 \\
+eOn C++ client & 1.543305, 1.561890, 1.574955 \\
+ASE eon & 10.777980, 10.819129, 10.856387 \\
+\bottomrule
+\end{tabular}
+\end{table}

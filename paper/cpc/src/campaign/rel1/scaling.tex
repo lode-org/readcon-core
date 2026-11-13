@@ -1,0 +1,33 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Weak thread scaling from the pinned campaign. \(n\) frames is the frames per worker times the workers. Efficiency is the one-worker median divided by the median.}
+\label{tab:weak-threads}
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+Workers & Frames & Median (s) & IQR & Efficiency \\
+\midrule
+1 & 8000 & 0.1129 & 0.002522 & 1 \\
+2 & 16000 & 0.1334 & 0.02013 & 0.8466 \\
+4 & 32000 & 0.1174 & 0.02571 & 0.9614 \\
+8 & 64000 & 0.1297 & 0.0268 & 0.8705 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Weak rank scaling from the pinned campaign. Efficiency is the one-rank median divided by the median.}
+\label{tab:weak-ranks}
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+Ranks & Frames & Median (s) & IQR & Efficiency \\
+\midrule
+1 & 2000 & 0.02795 & 0.0001422 & 1 \\
+2 & 4000 & 0.03836 & 0.01861 & 0.7285 \\
+4 & 8000 & 0.02822 & 0.001151 & 0.9902 \\
+8 & 16000 & 0.0342 & 0.001371 & 0.8172 \\
+\bottomrule
+\end{tabular}
+\end{table}

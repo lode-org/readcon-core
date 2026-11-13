@@ -1,0 +1,37 @@
+\begin{table}[tbp]
+\centering
+\caption{Median read and write time in seconds for gzip CON, readcon-core 0.22.0.
+The write is the \num{100000}-frame file.
+Six samples follow one warmup, on one core.}
+\label{tab:gzip}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
+\midrule
+readcon, Rust & 0.398 & 0.0878 & 3.85 \\
+readcon, C & 0.426 & 0.0902 & 3.91 \\
+readcon, C++ & 0.427 & 0.0959 & 3.91 \\
+readcon, Fortran & 0.480 & 0.0873 & 3.94 \\
+readcon, Python & 0.706 & 0.0651 & 4.05 \\
+ASE eon & 11.3 & 1.62 & \\
+gzip, then plain read & 1.07 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\caption{Median read and write time in seconds for zstd CON, on the same files and with the same protocol as Table~\ref{tab:gzip}.}
+\label{tab:zstd}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
+\midrule
+readcon, Rust & 0.386 & 0.0846 & 0.638 \\
+readcon, C & 0.416 & 0.0869 & 0.638 \\
+readcon, C++ & 0.415 & 0.0926 & 0.637 \\
+readcon, Fortran & 0.445 & 0.0755 & 0.663 \\
+readcon, Python & 0.701 & 0.0607 & 0.878 \\
+\bottomrule
+\end{tabular}
+\end{table}

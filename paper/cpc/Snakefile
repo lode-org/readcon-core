@@ -140,3 +140,30 @@ rule reader_figures:
         "src/figures/generated/memory.pdf",
     shell:
         "cd scripts && python3 -c 'import plot_union_extra as u; u.reader_figures()'"
+
+# Pinned campaign. Change REL1_COMMIT when a later release rerun lands.
+# The manuscript switch is \campaignid in src/campaign.tex (published by default).
+REL1_COMMIT = "b73ff2ea"
+
+rule campaign:
+    output:
+        "src/campaign/published/table2.tex",
+        "src/campaign/published/table3.tex",
+        "src/campaign/published/fig7.tex",
+        "src/campaign/published/fig8.tex",
+        "src/campaign/published/s61.tex",
+        "src/campaign/published/scaling.tex",
+        "src/campaign/published/compressed.tex",
+        "src/campaign/published/rcdb.tex",
+        "src/campaign/published/fidelity.tex",
+    shell:
+        "python3 scripts/campaign_tables.py --campaign published --out src/campaign/published"
+
+rule campaign_draft:
+    params:
+        commit=REL1_COMMIT,
+    output:
+        "src/rg_main_rel1.pdf",
+        "src/rg_supp_rel1.pdf",
+    shell:
+        "python3 scripts/campaign_tables.py --campaign rel1 --commit {params.commit} --out src/campaign/rel1 --draft"

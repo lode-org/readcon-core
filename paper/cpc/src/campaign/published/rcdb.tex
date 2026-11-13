@@ -1,0 +1,19 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{readcon-db on one core.
+Time is the type-7 median in seconds.
+RSS and massif are the increase above the loaded input, in mebibytes.
+The ASE rows are the same thousand random-frame reads.}
+\label{tab:rcdb}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Operation & Time (s) & RSS & Massif \\
+\midrule
+append & 6.25 & 34.7 & 5.2 \\
+1000 random-frame reads & 0.0242 & 58.9 & 7.19 \\
+ASE database, 1000 reads & 0.297 & & \\
+ASE trajectory, 1000 reads & 0.047 & & \\
+\bottomrule
+\end{tabular}
+\end{table}

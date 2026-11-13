@@ -28,6 +28,8 @@ evidence/results/
 src/figures/generated/**
 src/rg_main.pdf
 src/rg_supp.pdf
+src/rg_main_rel1.pdf
+src/rg_supp_rel1.pdf
 src/figures/generated/work/
 src/figures/generated/*.aux
 evidence/work/

@@ -1,0 +1,19 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Serial reads from the pinned fidelity timing file. An entry is the median in seconds at four significant figures, or the status the file records when the read did not return a time.}
+\label{tab:fidelity-time}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+File & readcon & ASE eon & \texttt{loadcons} \\
+\midrule
+\texttt{claisen.con} & 0.001078 & 0.0002915 & unavailable \\
+\texttt{neb\_band\_3.con} & 0.001093 & stops & unavailable \\
+\texttt{pt100\_slab.con} & 0.001091 & 0.0001837 & unavailable \\
+\texttt{tiny\_multi\_cuh2.convel} & 0.001068 & stops & unavailable \\
+\texttt{v30\_fs\_label.convel} & 0.001101 & 0.0001458 & unavailable \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

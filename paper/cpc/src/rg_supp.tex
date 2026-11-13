@@ -2,6 +2,7 @@
 % Supplementary material of the Computer Physics Communications manuscript.
 \documentclass[preprint,12pt]{elsarticle}
 \usepackage{graphicx}
+\input{campaign}
 \journal{Computer Physics Communications}
 \usepackage{iftex}
 \ifPDFTeX\usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{lmodern}\else\usepackage{fontspec}\fi
@@ -1514,43 +1515,7 @@ The Python write takes 4.05~s as gzip and 0.878~s as zstd.
 ASE's eon reader takes 11.3~s on the \num{100000}-frame gzip file and 1.62~s on the million-atom gzip file.
 Inflating that \num{100000}-frame gzip member and then reading the plain text from Python takes 1.07~s.
 
-\begin{table}[tbp]
-\centering
-\caption{Median read and write time in seconds for gzip CON, readcon-core 0.22.0.
-The write is the \num{100000}-frame file.
-Six samples follow one warmup, on one core.}
-\label{tab:gzip}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
-\midrule
-readcon, Rust & 0.398 & 0.0878 & 3.85 \\
-readcon, C & 0.426 & 0.0902 & 3.91 \\
-readcon, C++ & 0.427 & 0.0959 & 3.91 \\
-readcon, Fortran & 0.480 & 0.0873 & 3.94 \\
-readcon, Python & 0.706 & 0.0651 & 4.05 \\
-ASE eon & 11.3 & 1.62 & \\
-gzip, then plain read & 1.07 & & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Median read and write time in seconds for zstd CON, on the same files and with the same protocol as Table~\ref{tab:gzip}.}
-\label{tab:zstd}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
-\midrule
-readcon, Rust & 0.386 & 0.0846 & 0.638 \\
-readcon, C & 0.416 & 0.0869 & 0.638 \\
-readcon, C++ & 0.415 & 0.0926 & 0.637 \\
-readcon, Fortran & 0.445 & 0.0755 & 0.663 \\
-readcon, Python & 0.701 & 0.0607 & 0.878 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{campaign/\campaignid/compressed}
 
 Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes.
 Each row is a type-7 median of six repeats after one warmup, on one core.
@@ -1586,25 +1551,7 @@ One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set o
 The coordinates match.
 ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
 
-\begin{table}[tbp]
-\centering
-\footnotesize
-\caption{readcon-db on one core.
-Time is the type-7 median in seconds.
-RSS and massif are the increase above the loaded input, in mebibytes.
-The ASE rows are the same thousand random-frame reads.}
-\label{tab:rcdb}
-\begin{tabular}{@{}lrrr@{}}
-\toprule
-Operation & Time (s) & RSS & Massif \\
-\midrule
-append & 6.25 & 34.7 & 5.2 \\
-1000 random-frame reads & 0.0242 & 58.9 & 7.19 \\
-ASE database, 1000 reads & 0.297 & & \\
-ASE trajectory, 1000 reads & 0.047 & & \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{campaign/\campaignid/rcdb}
 
 \begin{figure*}[tbp]
 \centering
@@ -1627,7 +1574,8 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 \section{In-memory scaling}\label{sec:r6}
 The medians are the type-7 median of six samples after one warmup, on the Xeon of Section~\ref{sec:compute}.
 Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
-\input{figures/generated/r6_read_table}
+\input{campaign/\campaignid/s61}
+\input{campaign/\campaignid/scaling}
 
 \begin{figure}[tbp]
 \centering

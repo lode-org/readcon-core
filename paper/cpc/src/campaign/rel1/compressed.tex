@@ -1,0 +1,27 @@
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Gzip read and write of the million-atom frame from the pinned campaign. Each entry is the median in seconds.}
+\label{tab:gzip}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Codec & File & Read & Write \\
+\midrule
+gzip & con-1e6 & 0.04675 & 0.1199 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\caption{Zstd read and write of the same frame from the pinned campaign.}
+\label{tab:zstd}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Codec & File & Read & Write \\
+\midrule
+zstd & con-1e6 & 0.04803 & 0.06953 \\
+\bottomrule
+\end{tabular}
+\end{table}
