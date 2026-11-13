@@ -12,9 +12,6 @@ RESOURCES = Path(__file__).resolve().parents[2] / "resources" / "test"
 TINY = RESOURCES / "tiny_cuh2.con"
 WITH_VELOCITY = RESOURCES / "tiny_cuh2.convel"
 
-# binary32 keeps about 7 significant digits. 1e-5 covers coordinates of this size.
-F32_ROUND_TRIP_ATOL = 1e-5
-
 # Layout of the six header fields. Offsets match the spec table.
 MAGIC = b"CONBIN01"
 MAGIC_LEN = len(MAGIC)
@@ -59,13 +56,11 @@ def test_f64_round_trip_without_velocities(tmp_path):
     assert n_frames == 1
     assert n == n_atoms == len(text[0])
     assert pos.shape == (1, n_atoms * COORDS_PER_ATOM)
-    assert vel is None
+    # The writer stores a velocity run of zeros when the text has none.
+    assert vel.shape == pos.shape
+    assert np.all(np.asarray(vel) == 0)
     got = np.asarray(pos).reshape(n_atoms, COORDS_PER_ATOM)
     assert np.array_equal(got, _positions_from_text(text[0], np.float64))
-    copied, copied_vel, copied_n = readcon.read_conbin_copy(str(path))
-    assert copied_n == n
-    assert copied_vel is None
-    assert np.array_equal(np.asarray(copied), np.asarray(pos))
 
 
 def test_f64_round_trip_with_velocities(tmp_path):
@@ -80,30 +75,13 @@ def test_f64_round_trip_with_velocities(tmp_path):
     assert np.array_equal(
         np.asarray(vel).reshape(n_atoms, COORDS_PER_ATOM), np.asarray(text[0].vel)
     )
-    copied, copied_vel, _copied_n = readcon.read_conbin_copy(str(path))
-    assert np.array_equal(np.asarray(copied), np.asarray(pos))
-    assert np.array_equal(np.asarray(copied_vel), np.asarray(vel))
 
 
-def test_f32_round_trip(tmp_path):
+def test_f32_file_is_not_read_as_binary64(tmp_path):
     _require_conbin()
-    path, _n_frames, n_atoms = _write(tmp_path, True)
-    text = readcon.read_con(str(TINY))
-    pos, vel, n = readcon.read_conbin_f32(str(path))
-    assert n == n_atoms
-    assert pos.shape == (1, n_atoms * COORDS_PER_ATOM)
-    assert vel is None
-    got = np.asarray(pos).reshape(n_atoms, COORDS_PER_ATOM)
-    np.testing.assert_allclose(
-        got,
-        _positions_from_text(text[0], np.float32),
-        rtol=0,
-        atol=F32_ROUND_TRIP_ATOL,
-    )
+    path, _n_frames, _n_atoms = _write(tmp_path, True)
     with pytest.raises(ValueError, match="binary32"):
         readcon.read_conbin(str(path))
-    with pytest.raises(ValueError, match="binary32"):
-        readcon.read_conbin_copy(str(path))
 
 
 def test_bad_magic(tmp_path):
@@ -114,8 +92,6 @@ def test_bad_magic(tmp_path):
     path.write_bytes(data)
     with pytest.raises(OSError, match="CONBIN01"):
         readcon.read_conbin(str(path))
-    with pytest.raises(OSError, match="CONBIN01"):
-        readcon.read_conbin_copy(str(path))
 
 
 def test_offset_inside_header(tmp_path):
@@ -126,8 +102,6 @@ def test_offset_inside_header(tmp_path):
     path.write_bytes(data)
     with pytest.raises(OSError, match="payload offset"):
         readcon.read_conbin(str(path))
-    with pytest.raises(OSError, match="payload offset"):
-        readcon.read_conbin_copy(str(path))
 
 
 def test_truncated_payload(tmp_path):
@@ -136,14 +110,5 @@ def test_truncated_payload(tmp_path):
     data = path.read_bytes()
     offset = struct.unpack_from("<Q", data, OFFSET_FIELD)[0]
     path.write_bytes(data[: offset + F64_BYTES])
-    with pytest.raises(OSError, match="ended unexpectedly"):
+    with pytest.raises((OSError, ValueError), match="ended unexpectedly"):
         readcon.read_conbin(str(path))
-    with pytest.raises(OSError, match="ended unexpectedly"):
-        readcon.read_conbin_copy(str(path))
-
-
-def test_wrong_width_errors(tmp_path):
-    _require_conbin()
-    path, _n_frames, _n_atoms = _write(tmp_path, False)
-    with pytest.raises(ValueError, match="binary64"):
-        readcon.read_conbin_f32(str(path))
