@@ -7,8 +7,8 @@ ceiling are recorded with the scaling rows. Table 2 is the extended XYZ
 head-to-head, including extxyz 0.4.6, its C reader, and MDAnalysis.
 Table 3 is one row per language binding, at three significant figures.
 Fig 7 is the thread ladder and Fig 8 is the MPI ladder. S61 is the
-strong-scaling table. These numbers are provisional: the memory and gzip
-work and the faster Python extended XYZ reader are not in this build.
+strong-scaling table. The extended XYZ rows were retimed after the
+one-pass reader. The memory and gzip rows are unchanged.
 """
 
 from __future__ import annotations
