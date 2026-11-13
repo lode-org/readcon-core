@@ -1457,46 +1457,32 @@ fn stream_coord_rows(
     spec_version: u32,
     want_vel: bool,
 ) -> Result<Vec<u8>, WriteError> {
-    // Several ranges per worker so the first range can hit the file while
-    // later ranges are still being formatted. The calling thread writes.
-    // Each formatter draws a spare buffer, so it does not wait for that
-    // write before formatting the next range, and it does not allocate one.
+    // Every worker formats and `pwrite`s. Several ranges per worker let a
+    // finished range hit the file while later ranges are still formatted.
+    // The offset is the header plus the prefix sum of earlier lengths, so
+    // there is no writer thread. Two workers used to be one formatter and
+    // that writer.
+    let workers = workers.max(1).min(atoms.len().max(1));
     let groups = workers.saturating_mul(4).max(workers);
     let chunk = atoms.len().div_ceil(groups).max(1);
-    let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
-    let nparts = pieces.len();
-    let cap = chunk.saturating_mul(48);
-    // The calling thread writes. The rest format. A spare buffer per
-    // formatter lets that format stay ahead of the write.
-    let format_threads = workers.saturating_sub(1).max(1);
-    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let nparts = atoms.len().div_ceil(chunk);
+    let base = file.stream_position().map_err(WriteError::Io)?;
+    let lengths: Vec<std::sync::atomic::AtomicU64> = (0..nparts)
+        .map(|_| std::sync::atomic::AtomicU64::new(0))
+        .collect();
     let bad_ids = std::sync::atomic::AtomicBool::new(false);
-    // Two buffers per formatter. A formatter can fill the next range
-    // while the writer still holds the previous one.
-    let spare = format_threads.saturating_mul(2).max(2);
-    let pool = std::sync::Mutex::new(Vec::<(Vec<u8>, Vec<u8>)>::with_capacity(spare));
-    {
-        let mut guard = pool.lock().expect("buffer pool");
-        for _ in 0..spare {
-            guard.push((
-                Vec::with_capacity(cap),
-                if want_vel {
-                    Vec::with_capacity(cap)
-                } else {
-                    Vec::new()
-                },
-            ));
-        }
-    }
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>, Vec<u8>)>(spare);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let vel_parts: Vec<std::sync::Mutex<Option<Vec<u8>>>> =
+        (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
     let flag = &bad_ids;
-    let vel = std::thread::scope(|scope| {
-        for _ in 0..format_threads {
-            let done_tx = done_tx.clone();
-            let pieces = &pieces;
+    std::thread::scope(|scope| -> Result<(), WriteError> {
+        let mut handles = Vec::with_capacity(workers);
+        for worker in 0..workers {
+            let cloned = file.try_clone().map_err(WriteError::Io)?;
+            let lengths = &lengths;
             let next_job = &next_job;
-            let pool = &pool;
-            scope.spawn(move || {
+            let vel_parts = &vel_parts;
+            handles.push(scope.spawn(move || -> Result<(), WriteError> {
                 let mut ryu = ryu::Buffer::new();
                 let mut slots = [FmtSlot::new(); 3];
                 let mut vel_slots = [FmtSlot::new(); 3];
@@ -1505,21 +1491,15 @@ fn stream_coord_rows(
                     if index >= nparts {
                         break;
                     }
-                    let (mut coord, mut vel) =
-                        pool.lock().expect("buffer pool").pop().unwrap_or_else(|| {
-                            (
-                                Vec::with_capacity(cap),
-                                if want_vel {
-                                    Vec::with_capacity(cap)
-                                } else {
-                                    Vec::new()
-                                },
-                            )
-                        });
-                    coord.clear();
-                    vel.clear();
-                    let group = pieces[index];
                     let start = index * chunk;
+                    let end = (start + chunk).min(atoms.len());
+                    let group = &atoms[start..end];
+                    let mut coord = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut vel = if want_vel {
+                        Vec::with_capacity(group.len().saturating_mul(48))
+                    } else {
+                        Vec::new()
+                    };
                     let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
@@ -1537,36 +1517,53 @@ fn stream_coord_rows(
                             spec_version,
                         );
                     }
-                    if done_tx.send((index, coord, vel)).is_err() {
-                        break;
+                    lengths[index]
+                        .store(coord.len() as u64 + 1, std::sync::atomic::Ordering::Release);
+                    let mut offset = base;
+                    for prev in 0..index {
+                        loop {
+                            let known = lengths[prev].load(std::sync::atomic::Ordering::Acquire);
+                            if known != 0 {
+                                offset += known - 1;
+                                break;
+                            }
+                            std::hint::spin_loop();
+                        }
+                    }
+                    pwrite_full(&cloned, &coord, offset)?;
+                    if want_vel {
+                        *vel_parts[index].lock().expect("vel part") = Some(vel);
                     }
                 }
-            });
+                Ok(())
+            }));
         }
-        drop(done_tx);
-        let mut next = 0usize;
-        let mut pending = BTreeMap::<usize, (Vec<u8>, Vec<u8>)>::new();
-        let mut vel_bytes = Vec::new();
-        while next < nparts {
-            let (index, coord, part_vel) = done_rx
-                .recv()
-                .map_err(|err| WriteError::Io(io::Error::other(err.to_string())))?;
-            pending.insert(index, (coord, part_vel));
-            while let Some((coord, part_vel)) = pending.remove(&next) {
-                file.write_all(&coord).map_err(WriteError::Io)?;
-                if want_vel {
-                    vel_bytes.extend_from_slice(&part_vel);
-                }
-                pool.lock().expect("buffer pool").push((coord, part_vel));
-                next += 1;
-            }
+        for handle in handles {
+            handle
+                .join()
+                .unwrap_or_else(|_| Err(WriteError::Io(io::Error::other("formatter panicked"))))?;
         }
-        Ok::<Vec<u8>, WriteError>(vel_bytes)
+        Ok(())
     })?;
+    let mut end = base;
+    for length in &lengths {
+        end += length
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .saturating_sub(1);
+    }
+    file.seek(SeekFrom::Start(end)).map_err(WriteError::Io)?;
     if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
         ensure_unique_ids(atoms, 1)?;
     }
-    Ok(vel)
+    let mut vel_bytes = Vec::new();
+    if want_vel {
+        for part in &vel_parts {
+            if let Some(vel) = part.lock().expect("vel part").as_ref() {
+                vel_bytes.extend_from_slice(vel);
+            }
+        }
+    }
+    Ok(vel_bytes)
 }
 
 fn push_xyz_line(
