@@ -353,9 +353,52 @@ fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
 ///   [`chemfiles_internal_units_json`].
 /// - `generator` defaults to `readcon-core chemfiles import` when unset.
 /// - `frame_index` defaults to chemfiles `step` when unset.
+/// Positions without `Frame::positions`.
+///
+/// Chemfiles 0.10 builds a slice from a null pointer when a corrupt file
+/// produces a frame with no coordinate storage. That violates
+/// `from_raw_parts` and aborts the process.
+fn frame_positions(frame: &Frame) -> Result<&[[f64; 3]], ChemfilesImportError> {
+    let n = frame.size();
+    if n == 0 {
+        return Ok(&[]);
+    }
+    let mut ptr = std::ptr::null_mut();
+    let mut natoms = 0u64;
+    let status = unsafe {
+        chemfiles_sys::chfl_frame_positions(frame_c_handle(frame), &mut ptr, &mut natoms)
+    };
+    if status != chemfiles_sys::chfl_status::CHFL_SUCCESS || ptr.is_null() || natoms as usize != n {
+        return Err(ChemfilesImportError::InvalidFrame(
+            "chemfiles frame has no position storage".into(),
+        ));
+    }
+    Ok(unsafe { std::slice::from_raw_parts(ptr, n) })
+}
+
+fn frame_velocities(frame: &Frame) -> Result<&[[f64; 3]], ChemfilesImportError> {
+    let n = frame.size();
+    if n == 0 || !frame.has_velocities() {
+        return Err(ChemfilesImportError::InvalidFrame(
+            "chemfiles frame has no velocities".into(),
+        ));
+    }
+    let mut ptr = std::ptr::null_mut();
+    let mut natoms = 0u64;
+    let status = unsafe {
+        chemfiles_sys::chfl_frame_velocities(frame_c_handle(frame), &mut ptr, &mut natoms)
+    };
+    if status != chemfiles_sys::chfl_status::CHFL_SUCCESS || ptr.is_null() || natoms as usize != n {
+        return Err(ChemfilesImportError::InvalidFrame(
+            "chemfiles frame has no velocity storage".into(),
+        ));
+    }
+    Ok(unsafe { std::slice::from_raw_parts(ptr, n) })
+}
+
 pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImportError> {
     let n = frame.size();
-    let positions = frame.positions();
+    let positions = frame_positions(frame)?;
     if positions.len() != n {
         return Err(ChemfilesImportError::InvalidFrame(format!(
             "position count {} != atom count {n}",
@@ -366,7 +409,7 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     let cell_ref = frame.cell();
     let (boxl, angles, has_pbc) = cell_to_box_and_angles(&cell_ref);
     let velocities = if frame.has_velocities() {
-        frame.velocities()
+        Some(frame_velocities(frame)?)
     } else {
         None
     };
@@ -1281,6 +1324,22 @@ mod tests {
             con.header
                 .metadata
                 .contains_key(&format!("{CHEMFILES_EXTRA_PREFIX}library_version"))
+        );
+    }
+
+    #[test]
+    fn a_star_count_line_does_not_abort() {
+        let result = std::panic::catch_unwind(|| con_frames_from_memory("*\n\n", "XYZ"));
+        let err = result
+            .expect("chemfiles import panicked")
+            .expect_err("not a frame");
+        let message = err.to_string();
+        assert!(
+            message.contains("position")
+                || message.contains("atoms")
+                || message.contains("XYZ")
+                || message.contains("chemfiles"),
+            "{message}"
         );
     }
 

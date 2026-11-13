@@ -90,28 +90,128 @@ fn compile_chemfiles_atom_view() {
     build.compile("readcon_chemfiles_atom_view");
 }
 
-#[cfg(feature = "chemfiles")]
-fn chemfiles_generated_include() -> PathBuf {
-    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let build_dir = out
-        .parent()
-        .and_then(|path| path.parent())
-        .expect("OUT_DIR should sit in target/<profile>/build/<crate>/out");
-    let mut found = None;
-    if let Ok(entries) = fs::read_dir(build_dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if !name.starts_with("chemfiles-sys-") {
-                continue;
-            }
-            let include = entry.path().join("out/include");
-            if include.join("chemfiles/exports.h").is_file() {
-                found = Some(include);
+/// `chemfiles-sys` writes `exports.h` under its build-script output.
+///
+/// Cargo used to name that directory `chemfiles-sys-<hash>`. A target
+/// build now uses `chemfiles-sys/<hash>`. Both layouts are accepted.
+fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
+    let exports = |dir: &Path| {
+        let include = dir.join("out/include");
+        include
+            .join("chemfiles/exports.h")
+            .is_file()
+            .then(|| include)
+    };
+    let entries = fs::read_dir(build_dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name != "chemfiles-sys" && !name.starts_with("chemfiles-sys-") {
+            continue;
+        }
+        if let Some(include) = exports(&entry.path()) {
+            return Some(include);
+        }
+        let Ok(children) = fs::read_dir(entry.path()) else {
+            continue;
+        };
+        for child in children.flatten() {
+            if let Some(include) = exports(&child.path()) {
+                return Some(include);
             }
         }
     }
-    found.expect("chemfiles-sys did not generate include/chemfiles/exports.h")
+    None
+}
+
+/// Directories that can hold `chemfiles-sys`'s build-script output.
+///
+/// `OUT_DIR` for this build script is the host tree
+/// (`target/<profile>/build/<crate>/<hash>/out`). With `--target`, the
+/// dependency is built under `target/<triple>/<profile>/build` even when
+/// the triple is the host. The package directory is either
+/// `<crate>-<hash>` or `<crate>/<hash>`.
+fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let Some(hash_or_pkg) = out_dir.parent() else {
+        return dirs;
+    };
+    let Some(pkg_or_build) = hash_or_pkg.parent() else {
+        return dirs;
+    };
+    let build = if pkg_or_build.file_name().and_then(|name| name.to_str()) == Some("build") {
+        pkg_or_build.to_path_buf()
+    } else {
+        match pkg_or_build.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => return dirs,
+        }
+    };
+    dirs.push(build.clone());
+    if let Ok(target) = env::var("TARGET") {
+        if let Some(profile) = build.parent() {
+            if let Some(target_root) = profile.parent() {
+                if let Some(profile_name) = profile.file_name() {
+                    let triple = target_root.join(target).join(profile_name).join("build");
+                    if triple != build {
+                        dirs.push(triple);
+                    }
+                }
+            }
+        }
+    }
+    dirs
+}
+
+#[cfg(feature = "chemfiles")]
+fn chemfiles_generated_include() -> PathBuf {
+    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+    for dir in chemfiles_build_dirs(&out) {
+        if let Some(include) = chemfiles_exports_include(&dir) {
+            return include;
+        }
+    }
+    panic!("chemfiles-sys did not generate include/chemfiles/exports.h");
+}
+
+#[cfg(test)]
+mod chemfiles_include_tests {
+    use super::{chemfiles_build_dirs, chemfiles_exports_include};
+    use std::fs;
+
+    #[test]
+    fn nested_hash_directory_is_found() {
+        let root =
+            std::env::temp_dir().join(format!("readcon-chemfiles-layout-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let include = root.join("chemfiles-sys/77b8730f9d878a0f/out/include/chemfiles");
+        fs::create_dir_all(&include).unwrap();
+        fs::write(include.join("exports.h"), "/* generated */\n").unwrap();
+        let found = chemfiles_exports_include(&root).expect("nested layout");
+        assert!(found.join("chemfiles/exports.h").is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn target_triple_build_is_found_from_the_host_out_dir() {
+        let root =
+            std::env::temp_dir().join(format!("readcon-chemfiles-triple-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let out = root.join("target/release/build/readcon-core/hosthash/out");
+        let include = root.join(
+            "target/x86_64-unknown-linux-gnu/release/build/chemfiles-sys/77b8730f9d878a0f/out/include/chemfiles",
+        );
+        fs::create_dir_all(&out).unwrap();
+        fs::create_dir_all(&include).unwrap();
+        fs::write(include.join("exports.h"), "/* generated */\n").unwrap();
+        // SAFETY: this test is the only writer of TARGET, and it runs alone.
+        unsafe { std::env::set_var("TARGET", "x86_64-unknown-linux-gnu") };
+        let dirs = chemfiles_build_dirs(&out);
+        let found = dirs.iter().find_map(|dir| chemfiles_exports_include(dir));
+        unsafe { std::env::remove_var("TARGET") };
+        assert!(found.is_some(), "dirs: {dirs:?}");
+        let _ = fs::remove_dir_all(&root);
+    }
 }
 
 #[cfg(feature = "chemfiles")]

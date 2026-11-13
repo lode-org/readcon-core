@@ -3,7 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 use readcon_core::ffi::{
     con_frame_iterator_next, free_con_frame_iterator, free_rkr_frame, free_rkr_frame_array,
-    read_con_buffer_iterator, rkr_read_all_frames_n_threads,
+    read_con_buffer_iterator, rkr_read_all_frames_n_threads, rkr_read_chemfiles_memory,
 };
 use std::ffi::CString;
 
@@ -42,6 +42,22 @@ fuzz_target!(|data: &[u8]| {
     for threads in [1usize, 8] {
         let mut count = 0usize;
         let frames = unsafe { rkr_read_all_frames_n_threads(c_path.as_ptr(), &mut count, threads) };
+        if !frames.is_null() {
+            unsafe { free_rkr_frame_array(frames, count) };
+        }
+    }
+    // Same chemfiles memory entry the C API uses. Interior NULs cannot be
+    // a C string, so the prefix before the first NUL is the buffer.
+    let end = data
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(data.len());
+    let slice = &data[..end.min(16 * 1024)];
+    if let Ok(c_data) = CString::new(slice) {
+        let format = CString::new("XYZ").expect("format");
+        let mut count = 0usize;
+        let frames =
+            unsafe { rkr_read_chemfiles_memory(c_data.as_ptr(), format.as_ptr(), &mut count) };
         if !frames.is_null() {
             unsafe { free_rkr_frame_array(frames, count) };
         }

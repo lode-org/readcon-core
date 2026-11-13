@@ -58,4 +58,14 @@ fuzz_target!(|data: &[u8]| {
         }
         assert!(parsed <= data.len().saturating_add(1));
     }
+    // The chemfiles memory reader is the path through
+    // `chemfiles_import_imp` and `rc_chemfiles_atom_view`. Without the
+    // feature it returns FeatureDisabled and does not touch that code.
+    if let Ok(text) = std::str::from_utf8(data) {
+        let text = &text[..text.len().min(16 * 1024)];
+        if let Ok(frames) = readcon_core::chemfiles_import::con_frames_from_memory(text, "XYZ") {
+            assert!(frames.len() <= text.len().saturating_add(1));
+            touch_metadata(&frames);
+        }
+    }
 });
