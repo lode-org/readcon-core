@@ -1,0 +1,51 @@
+{
+  "commit": "9ab424486b9861d9d26b6b1fe627783b6a590548",
+  "topology": {
+    "physical_cores": 8,
+    "smt_siblings_per_core": 1,
+    "logical_cpus": 8,
+    "sockets": 1,
+    "numa_nodes": 1,
+    "l1d": "48 KiB private",
+    "l1i": "64 KiB private",
+    "l2": "2 MiB private",
+    "l3": "480 MiB shared",
+    "note": "thread_siblings_list is a single cpu id on every core. Eight workers are eight physical cores, not four cores with SMT."
+  },
+  "compute_ceiling_s": {
+    "1": 0.036614,
+    "2": 0.021355,
+    "4": 0.012371,
+    "8": 0.007884
+  },
+  "compute_note": "Formatter only, throwaway buffer, con-1e6, one warmup, n=6, type-7. Eight threads are 0.0079 s against an ideal 0.0046 s, about 0.58 of linear. That is the format, measured with no file IO.",
+  "mapping_ceiling_s": {
+    "tmpfs": {
+      "1": 0.013074,
+      "2": 0.008943,
+      "4": 0.006714,
+      "8": 0.005949
+    },
+    "page_cache": {
+      "1": 0.015453,
+      "2": 0.013089,
+      "4": 0.011553,
+      "8": 0.012146
+    }
+  },
+  "pwrite_ceiling_s": {
+    "tmpfs": {
+      "1": 0.010444,
+      "2": 0.009768,
+      "4": 0.009462,
+      "8": 0.008871
+    },
+    "page_cache": {
+      "1": 0.00991,
+      "2": 0.009838,
+      "4": 0.010008,
+      "8": 0.010034
+    }
+  },
+  "same_day_perf7_8thread": "Rebuilt 6644fc35 on this host. Memory medians 0.0112/0.0097/0.0107 s across three runs; page cache 0.0131 s. The recorded 0.0074 s is below today's format time."
+}
