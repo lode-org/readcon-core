@@ -98,6 +98,9 @@ pub struct ConFrameWriter<W: Write> {
     /// Last x/y/z spellings. A value is formatted on the second sight and
     /// copied after that, which is the common lattice column.
     fmt_slot: [FmtSlot; 3],
+    /// Spellings of values that repeat without being adjacent. The column
+    /// slots above only see the previous row.
+    spell: SpellCache,
 }
 
 /// One column of the round-trip float cache.
@@ -118,6 +121,45 @@ impl FmtSlot {
             len: 0,
             state: 0,
         }
+    }
+}
+
+/// Direct-mapped cache of shortest round-trip spellings.
+///
+/// A repeated `f64` bit pattern is formatted twice, then copied. A value
+/// seen once does not store its text, so a stream of unique numbers only
+/// pays for a compare.
+struct SpellCache {
+    slots: [FmtSlot; 128],
+}
+
+impl SpellCache {
+    const fn new() -> Self {
+        Self {
+            slots: [FmtSlot::new(); 128],
+        }
+    }
+
+    fn push(&mut self, buf: &mut Vec<u8>, value: f64) {
+        let bits = value.to_bits();
+        let idx = (bits.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 57) as usize;
+        let slot = &mut self.slots[idx];
+        if slot.state != 0 && slot.bits == bits {
+            if slot.state == 2 {
+                buf.extend_from_slice(&slot.text[..slot.len as usize]);
+                return;
+            }
+            let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
+            debug_assert!(n <= 24);
+            slot.len = n as u8;
+            slot.state = 2;
+            buf.extend_from_slice(&slot.text[..n]);
+            return;
+        }
+        write_finite(buf, value);
+        slot.bits = bits;
+        slot.len = 0;
+        slot.state = 1;
     }
 }
 
@@ -260,6 +302,7 @@ impl<W: Write> ConFrameWriter<W> {
             scratch: Vec::with_capacity(16 * 1024),
             ryu: ryu::Buffer::new(),
             fmt_slot: [FmtSlot::new(); 3],
+            spell: SpellCache::new(),
         }
     }
 
@@ -507,19 +550,20 @@ impl<W: Write> ConFrameWriter<W> {
             let buf = &mut self.scratch;
             let ryu = &mut self.ryu;
             let slots = &mut self.fmt_slot;
+            let spell = &mut self.spell;
 
             // --- Write the 9-line Header ---
-            push_f64(buf, ryu, boxl[0], prec);
+            push_f64(buf, ryu, spell, boxl[0], prec);
             buf.push(b' ');
-            push_f64(buf, ryu, boxl[1], prec);
+            push_f64(buf, ryu, spell, boxl[1], prec);
             buf.push(b' ');
-            push_f64(buf, ryu, boxl[2], prec);
+            push_f64(buf, ryu, spell, boxl[2], prec);
             buf.push(b'\n');
-            push_f64(buf, ryu, angles[0], prec);
+            push_f64(buf, ryu, spell, angles[0], prec);
             buf.push(b' ');
-            push_f64(buf, ryu, angles[1], prec);
+            push_f64(buf, ryu, spell, angles[1], prec);
             buf.push(b' ');
-            push_f64(buf, ryu, angles[2], prec);
+            push_f64(buf, ryu, spell, angles[2], prec);
             buf.push(b'\n');
             push_str_line(buf, &frame.header.postbox_header[0]);
             push_str_line(buf, &frame.header.postbox_header[1]);
@@ -538,7 +582,7 @@ impl<W: Write> ConFrameWriter<W> {
                 if i > 0 {
                     buf.push(b' ');
                 }
-                push_f64(buf, ryu, *m, prec);
+                push_f64(buf, ryu, spell, *m, prec);
             }
             buf.push(b'\n');
 
@@ -555,6 +599,7 @@ impl<W: Write> ConFrameWriter<W> {
                         buf,
                         ryu,
                         slots,
+                        spell,
                         [atom.x, atom.y, atom.z],
                         prec,
                         written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -582,6 +627,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             [vx, vy, vz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -610,6 +656,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             [fx, fy, fz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -638,6 +685,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             e,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -663,6 +711,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             q,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -688,6 +737,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             s,
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -713,6 +763,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             [mx, my, mz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -738,6 +789,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             [dx, dy, dz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -774,6 +826,7 @@ impl<W: Write> ConFrameWriter<W> {
                             buf,
                             ryu,
                             slots,
+                            spell,
                             [sx, sy, sz],
                             prec,
                             written_fixed_flag(atom.fixed, frame.header.spec_version),
@@ -901,10 +954,16 @@ fn push_component_line(buf: &mut Vec<u8>, label: &str, index: usize) {
     buf.push(b'\n');
 }
 
-fn push_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, value: f64, format: FloatFormat) {
+fn push_f64(
+    buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
+    spell: &mut SpellCache,
+    value: f64,
+    format: FloatFormat,
+) {
     match format {
         FloatFormat::DecimalPlaces(precision) => push_f64_prec(buf, value, precision),
-        FloatFormat::RoundTrip => push_round_trip(buf, ryu, None, value),
+        FloatFormat::RoundTrip => push_round_trip(buf, ryu, None, spell, value),
     }
 }
 
@@ -915,6 +974,7 @@ fn push_round_trip(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
     slot: Option<&mut FmtSlot>,
+    spell: &mut SpellCache,
     value: f64,
 ) {
     if !value.is_finite() {
@@ -938,12 +998,12 @@ fn push_round_trip(
                 return;
             }
         }
-        write_finite(buf, value);
+        spell.push(buf, value);
         slot.bits = bits;
         slot.state = 1;
         return;
     }
-    write_finite(buf, value);
+    spell.push(buf, value);
 }
 
 fn write_finite(buf: &mut Vec<u8>, value: f64) {
@@ -992,6 +1052,7 @@ fn push_xyz_line(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
     slots: &mut [FmtSlot; 3],
+    spell: &mut SpellCache,
     xyz: [f64; 3],
     prec: FloatFormat,
     fixed: u8,
@@ -1000,18 +1061,18 @@ fn push_xyz_line(
     let [x, y, z] = xyz;
     match prec {
         FloatFormat::RoundTrip => {
-            push_round_trip(buf, ryu, Some(&mut slots[0]), x);
+            push_round_trip(buf, ryu, Some(&mut slots[0]), spell, x);
             buf.push(b' ');
-            push_round_trip(buf, ryu, Some(&mut slots[1]), y);
+            push_round_trip(buf, ryu, Some(&mut slots[1]), spell, y);
             buf.push(b' ');
-            push_round_trip(buf, ryu, Some(&mut slots[2]), z);
+            push_round_trip(buf, ryu, Some(&mut slots[2]), spell, z);
         }
         FloatFormat::DecimalPlaces(_) => {
-            push_f64(buf, ryu, x, prec);
+            push_f64(buf, ryu, spell, x, prec);
             buf.push(b' ');
-            push_f64(buf, ryu, y, prec);
+            push_f64(buf, ryu, spell, y, prec);
             buf.push(b' ');
-            push_f64(buf, ryu, z, prec);
+            push_f64(buf, ryu, spell, z, prec);
         }
     }
     buf.push(b' ');
@@ -1026,14 +1087,15 @@ fn push_scalar_line(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
     slots: &mut [FmtSlot; 3],
+    spell: &mut SpellCache,
     v: f64,
     prec: FloatFormat,
     fixed: u8,
     atom_id: u64,
 ) {
     match prec {
-        FloatFormat::RoundTrip => push_round_trip(buf, ryu, Some(&mut slots[0]), v),
-        FloatFormat::DecimalPlaces(_) => push_f64(buf, ryu, v, prec),
+        FloatFormat::RoundTrip => push_round_trip(buf, ryu, Some(&mut slots[0]), spell, v),
+        FloatFormat::DecimalPlaces(_) => push_f64(buf, ryu, spell, v, prec),
     }
     buf.push(b' ');
     push_u64(buf, u64::from(fixed));
