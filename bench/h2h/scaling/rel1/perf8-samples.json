@@ -1,0 +1,370 @@
+{
+  "commit": "36e91c545bae5a21218efcd151fb0f14104d5586",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  },
+  "output_bytes": 23589082,
+  "sha256_prefix": "361546ecf130",
+  "two_worker_gap": "The 0.016 s format and 0.007 s pwrite figures were sums of per-piece times on one worker, not a split of the campaign sample. On the previous writer the two workers finished each piece together, so the wall was about that sum, and every sample also allocated and first-touched a fresh format buffer. That is the time between 0.016+0.007 and the 0.0347 s sample. Keeping the buffers across calls, and formatting eight ranges per worker so a pwrite is in flight during the next format, brings the 2-worker memory sample to 0.0232 s.",
+  "mpi_bound": "Each rank is pinned to one core. Formatting the rank's slice and copying it into the page cache both need that core, so the wall stays near the sum. Two waves pwrite the first half while the second half is formatted; the copy does not leave the core, and an exclusive scan per wave is not free. Eight-rank tmpfs pwrite of the same 23.6 MB is about 0.008 s. The 8-rank memory write is 0.0145 s, the format plus that copy. Efficiency 0.8 at 8 ranks would need about 0.008 s, which is the pwrite ceiling and leaves no time for the format.",
+  "ceilings": {
+    "threads": {
+      "pwrite_tmpfs": {
+        "1": {
+          "median_s": 0.010444,
+          "iqr_s": 0.0010042499999999982,
+          "samples_s": [
+            0.010963,
+            0.010946,
+            0.010648,
+            0.01024,
+            0.009665,
+            0.009743
+          ]
+        },
+        "2": {
+          "median_s": 0.0097685,
+          "iqr_s": 0.00023975000000000038,
+          "samples_s": [
+            0.010174,
+            0.009564,
+            0.009789,
+            0.009544,
+            0.00987,
+            0.009748
+          ]
+        },
+        "4": {
+          "median_s": 0.009461500000000001,
+          "iqr_s": 0.000672250000000001,
+          "samples_s": [
+            0.009047,
+            0.009809,
+            0.009738,
+            0.009097,
+            0.009185,
+            0.010133
+          ]
+        },
+        "8": {
+          "median_s": 0.008871,
+          "iqr_s": 0.000677999999999998,
+          "samples_s": [
+            0.009165,
+            0.009234,
+            0.008526,
+            0.008577,
+            0.009307,
+            0.008466
+          ]
+        }
+      },
+      "pwrite_page_cache": {
+        "1": {
+          "median_s": 0.00991,
+          "iqr_s": 0.0001577499999999999,
+          "samples_s": [
+            0.010341,
+            0.009957,
+            0.009908,
+            0.009748,
+            0.009912,
+            0.009257
+          ]
+        },
+        "2": {
+          "median_s": 0.009837499999999999,
+          "iqr_s": 0.00033124999999999995,
+          "samples_s": [
+            0.010186,
+            0.010017,
+            0.009621,
+            0.009318,
+            0.009906,
+            0.009769
+          ]
+        },
+        "4": {
+          "median_s": 0.010008,
+          "iqr_s": 0.0005929999999999998,
+          "samples_s": [
+            0.009393,
+            0.009998,
+            0.010018,
+            0.010177,
+            0.009373,
+            0.010204
+          ]
+        },
+        "8": {
+          "median_s": 0.010034,
+          "iqr_s": 0.00045224999999999953,
+          "samples_s": [
+            0.010372,
+            0.009378,
+            0.010199,
+            0.009778,
+            0.010271,
+            0.009869
+          ]
+        }
+      },
+      "memcpy": {
+        "1": {
+          "median_s": 0.0021409999999999997,
+          "iqr_s": 0.0005267499999999999,
+          "samples_s": [
+            0.002892,
+            0.002766,
+            0.002087,
+            0.002176,
+            0.002106,
+            0.00198
+          ]
+        },
+        "2": {
+          "median_s": 0.001414,
+          "iqr_s": 0.00016274999999999992,
+          "samples_s": [
+            0.001576,
+            0.001582,
+            0.001432,
+            0.001396,
+            0.001371,
+            0.00127
+          ]
+        },
+        "4": {
+          "median_s": 0.001397,
+          "iqr_s": 0.00029625000000000007,
+          "samples_s": [
+            0.001097,
+            0.001476,
+            0.00146,
+            0.000848,
+            0.001349,
+            0.001445
+          ]
+        },
+        "8": {
+          "median_s": 0.001746,
+          "iqr_s": 0.0006282499999999997,
+          "samples_s": [
+            0.002103,
+            0.001348,
+            0.00187,
+            0.001622,
+            0.00107,
+            0.002262
+          ]
+        }
+      }
+    },
+    "ranks": {
+      "pwrite_tmpfs": {
+        "1": {
+          "median_s": 0.00574,
+          "iqr_s": 0.00014700000000000043,
+          "samples_s": [
+            0.006546,
+            0.005791,
+            0.005821,
+            0.005659,
+            0.005689,
+            0.005648
+          ]
+        },
+        "2": {
+          "median_s": 0.007876,
+          "iqr_s": 0.0002177499999999992,
+          "samples_s": [
+            0.00771,
+            0.008215,
+            0.007663,
+            0.007923,
+            0.007969,
+            0.007829
+          ]
+        },
+        "4": {
+          "median_s": 0.00766,
+          "iqr_s": 0.00041299999999999844,
+          "samples_s": [
+            0.007164,
+            0.007596,
+            0.00794,
+            0.008163,
+            0.007724,
+            0.007432
+          ]
+        },
+        "8": {
+          "median_s": 0.008012,
+          "iqr_s": 0.0007777499999999998,
+          "samples_s": [
+            0.008144,
+            0.00788,
+            0.00828,
+            0.006929,
+            0.007231,
+            0.00818
+          ]
+        }
+      },
+      "pwrite_page_cache": {
+        "1": {
+          "median_s": 0.005201,
+          "iqr_s": 3.525000000000056e-05,
+          "samples_s": [
+            0.006035,
+            0.005232,
+            0.00521,
+            0.005191,
+            0.005192,
+            0.005153
+          ]
+        },
+        "2": {
+          "median_s": 0.007082,
+          "iqr_s": 0.0006519999999999998,
+          "samples_s": [
+            0.007216,
+            0.007114,
+            0.00793,
+            0.00705,
+            0.006368,
+            0.006039
+          ]
+        },
+        "4": {
+          "median_s": 0.0065925,
+          "iqr_s": 0.00039275000000000074,
+          "samples_s": [
+            0.007631,
+            0.006902,
+            0.006688,
+            0.006497,
+            0.006442,
+            0.006118
+          ]
+        },
+        "8": {
+          "median_s": 0.007511,
+          "iqr_s": 0.00017825000000000046,
+          "samples_s": [
+            0.008773,
+            0.00737,
+            0.007468,
+            0.007385,
+            0.007594,
+            0.007554
+          ]
+        }
+      },
+      "memcpy_tmpfs": {
+        "1": {
+          "median_s": 0.001622,
+          "iqr_s": 7.150000000000017e-05,
+          "samples_s": [
+            0.00207,
+            0.00162,
+            0.001703,
+            0.001608,
+            0.001624,
+            0.001609
+          ]
+        },
+        "2": {
+          "median_s": 0.0008205,
+          "iqr_s": 6.725000000000004e-05,
+          "samples_s": [
+            0.001061,
+            0.000818,
+            0.00081,
+            0.0009,
+            0.000812,
+            0.000823
+          ]
+        },
+        "4": {
+          "median_s": 0.000414,
+          "iqr_s": 2.2499999999999734e-06,
+          "samples_s": [
+            0.000503,
+            0.000404,
+            0.000414,
+            0.000414,
+            0.000416,
+            0.000413
+          ]
+        },
+        "8": {
+          "median_s": 0.000229,
+          "iqr_s": 2.2500000000000005e-06,
+          "samples_s": [
+            0.000272,
+            0.000231,
+            0.000229,
+            0.000229,
+            0.000228,
+            0.000228
+          ]
+        }
+      },
+      "memcpy_page_cache_host": {
+        "1": {
+          "median_s": 0.0016135,
+          "iqr_s": 3.375000000000014e-05,
+          "samples_s": [
+            0.001649,
+            0.001609,
+            0.001678,
+            0.001607,
+            0.001605,
+            0.001618
+          ]
+        },
+        "2": {
+          "median_s": 0.0008145,
+          "iqr_s": 2.3000000000000017e-05,
+          "samples_s": [
+            0.001039,
+            0.000797,
+            0.000828,
+            0.000812,
+            0.000799,
+            0.000817
+          ]
+        },
+        "4": {
+          "median_s": 0.0004155,
+          "iqr_s": 2.599999999999998e-05,
+          "samples_s": [
+            0.000448,
+            0.000418,
+            0.000408,
+            0.000411,
+            0.000413,
+            0.000444
+          ]
+        },
+        "8": {
+          "median_s": 0.00023549999999999998,
+          "iqr_s": 1.6499999999999994e-05,
+          "samples_s": [
+            0.000265,
+            0.000234,
+            0.000237,
+            0.000231,
+            0.000231,
+            0.000252
+          ]
+        }
+      }
+    }
+  }
+}
