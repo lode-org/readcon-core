@@ -179,6 +179,20 @@ def _meta(frame) -> dict:
     }
 
 
+def _legacy_natural_stamp(labels_got: list, auth_ref: list, auth_got: list) -> bool:
+    """True when a legacy file's round trip only records the natural unit.
+
+    Versions below 3 and minor 0 already store velocities in that unit.
+    The writer writes the label and minor 1 so the label becomes authoritative.
+    """
+    return (
+        auth_ref == auth_got
+        and bool(auth_ref)
+        and all(unit == NATURAL for unit in auth_ref)
+        and all(label == NATURAL for label in labels_got)
+    )
+
+
 def authoritative_time(spec: int, minor: int | None, label) -> str:
     if spec < 3 or (minor or 0) == 0:
         return NATURAL
@@ -527,6 +541,22 @@ def compare_frames(
                 "not_representable",
                 citation=unit_cite,
                 detail=f"authoritative input unit {auth_ref[0]!r}; the tool does not store the label",
+            )
+        elif labels_ref != labels_got and _legacy_natural_stamp(
+            labels_got, auth_ref, auth_got
+        ):
+            # Spec 1, 2, and 3.0 ignore a units.time label. The writer
+            # records the natural unit and minor 1, which is the unit the
+            # numbers already used.
+            unit_row = _blank(
+                "velocity_unit",
+                "exact",
+                "exact",
+                citation=CITE_UNITS,
+                detail=(
+                    f"label {labels_ref!r} -> {labels_got!r}; "
+                    f"authoritative {auth_ref!r} stays the natural unit"
+                ),
             )
         elif labels_ref != labels_got:
             unit_row = _blank(

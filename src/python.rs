@@ -1086,10 +1086,24 @@ impl PyConFrame {
             }
             let xyz = Array2::from_shape_vec((n_atoms, 3), data)
                 .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
-                .into_pyarray(py)
-                .unbind();
+                .into_pyarray(py);
+            // Atom slots alias `frame.positions`. The NumPy array is the
+            // coordinate storage for this frame, so retarget before the
+            // parse buffer is dropped. Otherwise the first coordinate read
+            // back is freed memory.
+            if n_atoms > 0 {
+                let base = {
+                    let contiguous = unsafe { xyz.as_slice() }.map_err(|err| {
+                        pyo3::exceptions::PyValueError::new_err(format!(
+                            "frame coordinates are not contiguous: {err}"
+                        ))
+                    })?;
+                    contiguous.as_ptr() as *mut f64
+                };
+                retarget_frames_to_slab(std::slice::from_mut(&mut frame), base, n_atoms);
+            }
             frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
-            Some(xyz)
+            Some(xyz.unbind())
         } else {
             None
         };
