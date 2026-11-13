@@ -252,7 +252,6 @@ def cmd_plugin(out: Path, repeats: int) -> None:
 def _mw_frame(seed: int, n_particles: int = 64) -> tuple[np.ndarray, np.ndarray, float]:
     rng = np.random.default_rng(seed)
     length = (n_particles / MW_DENSITY) ** (1.0 / 3.0)
-    box = np.eye(3) * length
     points = []
     while len(points) < n_particles:
         trial = rng.random(3) * length

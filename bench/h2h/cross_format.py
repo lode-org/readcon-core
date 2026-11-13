@@ -1446,9 +1446,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 ]
             )
         )
-    (out / "cross-format.tsv").write_text(
-        f"commit {sha}\n" + "\n".join(table) + "\n"
-    )
+    (out / "cross-format.tsv").write_text(f"commit {sha}\n" + "\n".join(table) + "\n")
     print("wrote", out / "cross-format.tsv", flush=True)
 
 
