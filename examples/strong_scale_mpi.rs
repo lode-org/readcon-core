@@ -25,110 +25,77 @@ fn atoms_from_lines(slice: &[u8], symbol: &std::sync::Arc<str>) -> RankAtoms {
     }
 }
 
-/// One rank's strided coordinate slices, in file order.
-///
-/// Slice `w` is global group `w * nranks + rank`. Writing wave `w` on every
-/// rank, in rank order, lays the groups down in file order. The `pwrite` of
-/// wave `w` runs while wave `w + 1` is formatted.
+/// Rank 0's header plus that rank's coordinate slice.
 struct RankPieces {
     header: Vec<u8>,
     pieces: Vec<RankAtoms>,
 }
 
-fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Result<()> {
-    use std::os::unix::io::AsRawFd;
-    if buf.is_empty() {
-        return Ok(());
-    }
-    let fd = file.as_raw_fd();
-    let mut written = 0usize;
-    while written < buf.len() {
-        let n = unsafe {
-            libc::pwrite(
-                fd,
-                buf[written..].as_ptr() as *const libc::c_void,
-                buf.len() - written,
-                offset as libc::off_t,
-            )
-        };
-        if n < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() == std::io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(err);
-        }
-        if n == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
-        }
-        written += n as usize;
-        offset += n as u64;
-    }
-    Ok(())
-}
-
-fn write_split_overlapped(comm: &Comm, path: &std::path::Path, prepared: &RankPieces) {
+fn write_mapped(comm: &Comm, path: &std::path::Path, prepared: &RankPieces) {
     let world = comm.raw();
+    // One contiguous slice per rank. The formatted length is the byte count;
+    // a second counting pass would format twice.
+    let piece = prepared.pieces.first().expect("rank slice");
+    let mut buf = readcon_core::writer::format_coordinate_lines(&piece.atoms).expect("format");
+    if comm.rank() == 0 && !prepared.header.is_empty() {
+        let mut with_header = Vec::with_capacity(prepared.header.len() + buf.len());
+        with_header.extend_from_slice(&prepared.header);
+        with_header.append(&mut buf);
+        readcon_core::writer::recycle_format_buffer(buf);
+        buf = with_header;
+    }
+    let len = buf.len() as u64;
+    let mut local_off = 0u64;
+    world.exclusive_scan_into(
+        &len,
+        &mut local_off,
+        mpi::collective::SystemOperation::sum(),
+    );
     if comm.rank() == 0 {
-        let _ = std::fs::File::create(path);
+        local_off = 0;
+    }
+    let mut total = 0u64;
+    world.all_reduce_into(&len, &mut total, mpi::collective::SystemOperation::sum());
+    if comm.rank() == 0 {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .expect("create");
+        file.set_len(total).expect("truncate");
     }
     world.barrier();
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(path)
-        .expect("open");
-    let mut cursor = 0u64;
-    // The previous wave's bytes are written on a side thread while this wave
-    // is formatted. `mpirun --bind-to core` pins that thread to the rank's
-    // core, so the overlap is the kernel copy yielding to the formatter only
-    // when the copy stalls. The scan is per wave, not per byte.
-    let mut inflight: Option<std::thread::JoinHandle<std::io::Result<()>>> = None;
-    for (wave, piece) in prepared.pieces.iter().enumerate() {
-        let mut buf = readcon_core::writer::format_coordinate_lines(&piece.atoms).expect("format");
-        if wave == 0 && comm.rank() == 0 && !prepared.header.is_empty() {
-            let mut with_header = Vec::with_capacity(prepared.header.len() + buf.len());
-            with_header.extend_from_slice(&prepared.header);
-            with_header.extend_from_slice(&buf);
-            readcon_core::writer::recycle_format_buffer(buf);
-            buf = with_header;
-        }
-        let len = buf.len() as u64;
-        let mut local_off = 0u64;
-        world.exclusive_scan_into(
-            &len,
-            &mut local_off,
-            mpi::collective::SystemOperation::sum(),
-        );
-        if comm.rank() == 0 {
-            // Rank 0's exclusive-scan result is undefined.
-            local_off = 0;
-        }
-        let mut wave_bytes = 0u64;
-        world.all_reduce_into(
-            &len,
-            &mut wave_bytes,
-            mpi::collective::SystemOperation::sum(),
-        );
-        let file_off = cursor + local_off;
-        if let Some(handle) = inflight.take() {
-            handle.join().expect("pwrite").expect("pwrite");
-        }
-        if !buf.is_empty() {
-            let cloned = file.try_clone().expect("dup");
-            inflight = Some(std::thread::spawn(move || {
-                let wrote = pwrite_all(&cloned, &buf, file_off);
-                readcon_core::writer::recycle_format_buffer(buf);
-                wrote
-            }));
-        }
-        cursor += wave_bytes;
+    if !buf.is_empty() {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .expect("open");
+        // Map only this rank's bytes. The offset has to be page aligned.
+        let page = 4096u64;
+        let aligned = local_off & !(page - 1);
+        let delta = (local_off - aligned) as usize;
+        let span = delta + buf.len();
+        let mut map = unsafe {
+            memmap2::MmapOptions::new()
+                .offset(aligned)
+                .len(span)
+                .map_mut(&file)
+                .expect("mmap")
+        };
+        map[delta..delta + buf.len()].copy_from_slice(&buf);
+        drop(map);
+        drop(file);
     }
-    if let Some(handle) = inflight.take() {
-        handle.join().expect("pwrite").expect("pwrite");
-    }
+    readcon_core::writer::recycle_format_buffer(buf);
     if std::env::var_os("READCON_MPI_SYNC").is_some() {
         world.barrier();
         if comm.rank() == 0 {
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .expect("sync open");
             file.sync_data().expect("sync");
         }
     }
@@ -167,22 +134,13 @@ fn main() {
         .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/readcon-r7-mpi.con"));
     let out = out_buf.as_path();
     let file_bytes = std::fs::read(path).expect("map");
+    // One rank keeps the serial writer. The shared mapping was slower there.
     let split = held.n_total == 1 && comm.size() > 1;
     let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
         let symbol = component_symbol(&file_bytes);
-        // Two waves. Group `w * nranks + rank` is this rank's slice of wave
-        // `w`, so a wave written in rank order is the next run of atoms.
-        // A third wave was an extra exclusive scan and did not hide any more
-        // of the format.
-        let waves = 2usize;
-        let groups = comm.size() * waves;
-        let mut pieces = Vec::with_capacity(waves);
-        for wave in 0..waves {
-            let group = wave * comm.size() + comm.rank();
-            let range = rank_line_range(&file_bytes, start, end, group, groups);
-            pieces.push(atoms_from_lines(&file_bytes[range], &symbol));
-        }
+        let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
+        let pieces = vec![atoms_from_lines(&file_bytes[range], &symbol)];
         let header = if comm.rank() == 0 {
             file_bytes[..start].to_vec()
         } else {
@@ -195,7 +153,7 @@ fn main() {
     world.barrier();
     if op == "write" {
         if let Some((pieces, _, _)) = &prepared {
-            write_split_overlapped(&comm, out, pieces);
+            write_mapped(&comm, out, pieces);
         } else {
             write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("warmup write");
         }
@@ -211,7 +169,7 @@ fn main() {
         let started = Instant::now();
         if op == "write" {
             if let Some((pieces, _, _)) = &prepared {
-                write_split_overlapped(&comm, out, pieces);
+                write_mapped(&comm, out, pieces);
             } else {
                 write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("write");
             }

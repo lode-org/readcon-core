@@ -103,9 +103,12 @@ pub struct ConFrameWriter<W: Write> {
     /// Binding stamp for the next [`Self::write_frame`]. The atoms stay in
     /// `frame`; only the header the writer emits changes.
     bound: Option<BoundHeader>,
-    /// Wide-frame rows are formatted on several threads and written to this
-    /// file as each chunk finishes, so the disk write overlaps the format.
+    /// Wide-frame rows are formatted on several threads and copied into a
+    /// shared mapping of this file. `pwrite` of one inode does not scale.
     stream_file: Option<File>,
+    /// Use the shared mapping even below the wide-frame cutoff. Tests compare
+    /// that path with a serial write for odd atom counts.
+    force_map: bool,
     /// Leave the frame text in `scratch` instead of copying it into `writer`.
     /// The format-only path reads `scratch` back, so the copy was a second
     /// pass over the same bytes.
@@ -280,6 +283,7 @@ impl<W: Write> ConFrameWriter<W> {
             atom_workers: 1,
             bound: None,
             stream_file: None,
+            force_map: false,
             keep_scratch: false,
         }
     }
@@ -296,6 +300,15 @@ impl<W: Write> ConFrameWriter<W> {
     /// in file order.
     pub fn parallel_atoms(mut self, n: usize) -> Self {
         self.atom_workers = n.max(1);
+        self
+    }
+
+    /// Copy formatted rows into a shared mapping of `stream_file`.
+    ///
+    /// The wide path does this on its own. Tests turn it on for short frames
+    /// so an odd atom count still takes the mapping.
+    pub fn map_rows(mut self, on: bool) -> Self {
+        self.force_map = on;
         self
     }
 
@@ -633,6 +646,8 @@ impl<W: Write> ConFrameWriter<W> {
                 push_component_line(buf, "Coordinates of Component", type_idx);
 
                 let mut vel_buf = Vec::new();
+                let mapped = self.force_map
+                    || (self.atom_workers >= 2 && num_atoms_in_type >= WIDE_ATOM_GRAIN);
                 append_coord_rows(
                     buf,
                     ryu,
@@ -641,6 +656,7 @@ impl<W: Write> ConFrameWriter<W> {
                     prec,
                     spec_version,
                     self.atom_workers,
+                    mapped,
                     stream_file.as_mut(),
                     if save_velocity {
                         Some(&mut vel_buf)
@@ -1324,6 +1340,7 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
         FloatFormat::RoundTrip,
         2,
         1,
+        false,
         None,
         None,
     )?;
@@ -1344,12 +1361,13 @@ fn append_coord_rows(
     prec: FloatFormat,
     spec_version: u32,
     workers: usize,
+    mapped: bool,
     stream: Option<&mut File>,
     mut vel: Option<&mut Vec<u8>>,
 ) -> Result<(), WriteError> {
     let want_vel = vel.is_some();
     if let Some(file) = stream {
-        if workers >= 2 && atoms.len() >= WIDE_ATOM_GRAIN {
+        if mapped && !atoms.is_empty() {
             file.write_all(buf).map_err(WriteError::Io)?;
             buf.clear();
             let vel_bytes = stream_coord_rows(file, atoms, workers, prec, spec_version, want_vel)?;
@@ -1488,34 +1506,106 @@ fn stream_coord_rows(
     spec_version: u32,
     want_vel: bool,
 ) -> Result<Vec<u8>, WriteError> {
-    // Every worker formats and `pwrite`s. Several ranges per worker let a
-    // finished range hit the file while later ranges are still formatted.
-    // The offset is the header plus the prefix sum of earlier lengths, so
-    // there is no writer thread. Two workers used to be one formatter and
-    // that writer.
+    // Format each range into a reused buffer. The exact byte length is the
+    // formatted size; a second counting pass would repeat the float
+    // conversion, and a memcpy of those bytes is cheaper than `pwrite`.
+    // The file is then truncated to the prefix sum and each range is copied
+    // into its slice of a shared mapping. Same-inode `pwrite` does not scale.
     let workers = workers.max(1).min(atoms.len().max(1));
-    // Eight ranges per worker. A finished range is on the file while the
-    // worker formats the next one, including at two workers.
-    let groups = workers.saturating_mul(8).max(workers);
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(workers);
+    // Spare cores copy into the mapping while the others format. A full
+    // machine does not have those cores, so it pwrites fewer, larger ranges.
+    let side_copies = workers >= 2 && workers.saturating_mul(2) <= cpus;
+    let groups = if side_copies {
+        workers.saturating_mul(8).max(workers)
+    } else {
+        workers.saturating_mul(4).max(workers)
+    };
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
     let base = file.stream_position().map_err(WriteError::Io)?;
+    let upper = atoms.len().saturating_mul(128);
+    let mut map = if side_copies {
+        file.set_len(base + upper as u64).map_err(WriteError::Io)?;
+        Some(unsafe { memmap2::MmapMut::map_mut(&*file).map_err(WriteError::Io)? })
+    } else {
+        None
+    };
+    let dest_base = map
+        .as_mut()
+        .map(|mapping| mapping.as_mut_ptr() as usize + base as usize)
+        .unwrap_or(0);
+    let pwrite_file = if side_copies {
+        None
+    } else {
+        Some(file.try_clone().map_err(WriteError::Io)?)
+    };
     let lengths: Vec<std::sync::atomic::AtomicU64> = (0..nparts)
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
     let bad_ids = std::sync::atomic::AtomicBool::new(false);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let produced = std::sync::atomic::AtomicUsize::new(0);
+    let copies: std::sync::Mutex<Vec<(Vec<u8>, usize)>> = std::sync::Mutex::new(Vec::new());
+    let ready = std::sync::Condvar::new();
     let vel_parts: Vec<std::sync::Mutex<Option<Vec<u8>>>> =
         (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
     let flag = &bad_ids;
     std::thread::scope(|scope| -> Result<(), WriteError> {
-        let mut handles = Vec::with_capacity(workers);
-        for worker in 0..workers {
-            let cloned = file.try_clone().map_err(WriteError::Io)?;
+        let mut copiers = Vec::with_capacity(workers);
+        if side_copies {
+            for _worker in 0..workers {
+                let copies = &copies;
+                let ready = &ready;
+                let produced = &produced;
+                copiers.push(scope.spawn(move || {
+                    loop {
+                        let job = {
+                            let mut queue = copies.lock().expect("copies");
+                            loop {
+                                if let Some(job) = queue.pop() {
+                                    break Some(job);
+                                }
+                                if produced.load(std::sync::atomic::Ordering::Acquire) == nparts {
+                                    break None;
+                                }
+                                queue = ready.wait(queue).expect("copies");
+                            }
+                        };
+                        let Some((coord, offset)) = job else {
+                            break;
+                        };
+                        let n = coord.len();
+                        if n > 0 {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    coord.as_ptr(),
+                                    (dest_base + offset) as *mut u8,
+                                    n,
+                                );
+                            }
+                        }
+                        give_format_buf(coord);
+                    }
+                }));
+            }
+        }
+        let mut formatters = Vec::with_capacity(workers);
+        for _worker in 0..workers {
             let lengths = &lengths;
             let next_job = &next_job;
             let vel_parts = &vel_parts;
-            handles.push(scope.spawn(move || -> Result<(), WriteError> {
+            let copies = &copies;
+            let ready = &ready;
+            let produced = &produced;
+            let out_file = pwrite_file
+                .as_ref()
+                .map(|handle| handle.try_clone())
+                .transpose()
+                .map_err(WriteError::Io)?;
+            formatters.push(scope.spawn(move || -> Result<(), WriteError> {
                 let mut ryu = ryu::Buffer::new();
                 let mut slots = [FmtSlot::new(); 3];
                 let mut vel_slots = [FmtSlot::new(); 3];
@@ -1527,7 +1617,11 @@ fn stream_coord_rows(
                     let start = index * chunk;
                     let end = (start + chunk).min(atoms.len());
                     let group = &atoms[start..end];
-                    let mut coord = take_format_buf(group.len().saturating_mul(48));
+                    let mut coord = if side_copies {
+                        take_format_buf(group.len().saturating_mul(48))
+                    } else {
+                        Vec::with_capacity(group.len().saturating_mul(48))
+                    };
                     let mut vel = if want_vel {
                         Vec::with_capacity(group.len().saturating_mul(48))
                     } else {
@@ -1550,21 +1644,35 @@ fn stream_coord_rows(
                             spec_version,
                         );
                     }
-                    lengths[index]
-                        .store(coord.len() as u64 + 1, std::sync::atomic::Ordering::Release);
-                    let mut offset = base;
+                    let n = coord.len();
+                    if side_copies && n > group.len().saturating_mul(128) {
+                        return Err(WriteError::Io(io::Error::other(
+                            "coordinate line exceeded the mapped reserve",
+                        )));
+                    }
+                    lengths[index].store(n as u64 + 1, std::sync::atomic::Ordering::Release);
+                    let mut offset = 0usize;
                     for prev in 0..index {
                         loop {
                             let known = lengths[prev].load(std::sync::atomic::Ordering::Acquire);
                             if known != 0 {
-                                offset += known - 1;
+                                offset += (known - 1) as usize;
                                 break;
                             }
                             std::hint::spin_loop();
                         }
                     }
-                    pwrite_full(&cloned, &coord, offset)?;
-                    give_format_buf(coord);
+                    if let Some(out_file) = &out_file {
+                        pwrite_full(out_file, &coord, base + offset as u64)
+                            .map_err(WriteError::Io)?;
+                    } else {
+                        let mut queue = copies.lock().expect("copies");
+                        queue.push((coord, offset));
+                    }
+                    if side_copies {
+                        produced.fetch_add(1, std::sync::atomic::Ordering::Release);
+                        ready.notify_one();
+                    }
                     if want_vel {
                         *vel_parts[index].lock().expect("vel part") = Some(vel);
                     }
@@ -1572,18 +1680,32 @@ fn stream_coord_rows(
                 Ok(())
             }));
         }
-        for handle in handles {
+        for handle in formatters {
             handle
                 .join()
                 .unwrap_or_else(|_| Err(WriteError::Io(io::Error::other("formatter panicked"))))?;
         }
+        // Every range has been queued. Wake copiers waiting on an empty queue.
+        produced.store(nparts, std::sync::atomic::Ordering::Release);
+        ready.notify_all();
+        for handle in copiers {
+            handle
+                .join()
+                .map_err(|_| WriteError::Io(io::Error::other("copy panicked")))?;
+        }
         Ok(())
     })?;
-    let mut end = base;
+    let mut cursor = 0u64;
     for length in &lengths {
-        end += length
+        cursor += length
             .load(std::sync::atomic::Ordering::Relaxed)
             .saturating_sub(1);
+    }
+    drop(map);
+    let end = base + cursor;
+    if side_copies {
+        // The mapping was reserved above the exact prefix sum.
+        file.set_len(end).map_err(WriteError::Io)?;
     }
     file.seek(SeekFrom::Start(end)).map_err(WriteError::Io)?;
     if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
@@ -1877,7 +1999,15 @@ pub fn write_frame_refs_to_path(
         }
         .canonical(canonical)
         .parallel_atoms(workers);
-        writer.stream_file = Some(File::create(path).map_err(WriteError::Io)?);
+        writer.stream_file = Some(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(path)
+                .map_err(WriteError::Io)?,
+        );
         return if bind {
             writer.write_frame_bound(frames[0])
         } else {
@@ -2528,5 +2658,44 @@ mod parallel_write_tests {
         let got = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(got, b"abcdef\ng");
+    }
+
+    #[test]
+    fn mapped_write_matches_the_serial_write() {
+        use crate::types::ConFrameBuilder;
+        for n in [1usize, 3, 7, 4097, 8191] {
+            let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+            for i in 0..n {
+                let x = (i % 97) as f64 * 0.125;
+                let y = (i % 13) as f64;
+                let z = if i % 2 == 0 { i as f64 * 0.001 } else { -0.5 };
+                builder.add_atom("Cu", x, y, z, [false, i % 5 == 0, false], i as u64, 63.546);
+            }
+            let frame = builder.build().expect("frame");
+            let serial = super::write_frames_to_vec(std::slice::from_ref(&frame)).expect("serial");
+            for workers in [1usize, 2, 3, 8] {
+                let path = std::env::temp_dir().join(format!(
+                    "readcon-map-{n}-{workers}-{}.con",
+                    std::process::id()
+                ));
+                let mut writer = super::ConFrameWriter::new(Vec::<u8>::new())
+                    .parallel_atoms(workers)
+                    .map_rows(true);
+                writer.stream_file = Some(
+                    std::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&path)
+                        .expect("create"),
+                );
+                writer.write_frame(&frame).expect("mapped");
+                drop(writer);
+                let got = std::fs::read(&path).expect("read");
+                let _ = std::fs::remove_file(&path);
+                assert_eq!(got, serial, "n={n} workers={workers}");
+            }
+        }
     }
 }
