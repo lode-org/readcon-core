@@ -340,9 +340,9 @@ readcon.write_con("band.con", frames)
 \end{lstlisting}
 
 
-\section{Claisen drawings}\label{sec:supp-claisen-draw}
-Figure~\ref{fig:claisen-land} and Figure~\ref{fig:claisen-struct-ids} of the main text are the stationary points.
-Section~\ref{sec:claisen} gives the distances and the band that does not stay on the chair.
+\section{Hop drawings}\label{sec:supp-claisen-draw}
+Figure~\ref{fig:claisen-land} and Figure~\ref{fig:claisen-struct-ids} of the main text are the EMT model of Section~\ref{sec:claisen}.
+The left panel is the bridge, and the right panel is the two exchanged copper rows.
 
 
 \section{Restart tables}\label{sec:supp-restart-tables}
@@ -624,19 +624,14 @@ Python & C & C++ \\
 \end{tabular}}
 \end{table}
 
-\section{Hausdorff renumbering of the Claisen product}\label{sec:supp-claisen-protocol}
-IRA reassigns the product of Section~\ref{sec:claisen} by the rotation and the permutation that minimise the Hausdorff distance, with \(k_{\max}\) factor 3
-\cite{gundeIRAShapeMatching2021}.
-The permutation is \([0,4,3,1,2,5,6,7,11,12,13,9,8,10]\), and it moves 10 of the 14 atoms.
-The Hausdorff distance is \(2.109\,\text{\AA}\).
-Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on this map and \(1.519\,\text{\AA}\) on the identity map.
-The shorter distance pairs the wrong nuclei for the [3,3] shift.
-A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(-81.439\,\mathrm{eV}\) on the identity product: the same molecule, rigidly moved, so the endpoints are equivalent and only the labelling differs.
-
-The product file with a different nucleus in each slot is not the map of the ether.
-The carbonyl in that file is O3--C2.
-The same permutation on the ether and on the aldehyde restores the chair of Section~\ref{sec:claisen}.
-The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
+\section{Identifier order and the swapped copper rows}\label{sec:supp-claisen-protocol}
+The chemical map of Section~\ref{sec:claisen} is the atom id, not the row.
+On the id-ordered product the hydrogen moves 2.553~\text{\AA} from one hollow to the next, and each copper stays within \(0.001\,\text{\AA}\) of its reactant position.
+\texttt{product\_swapped.con} exchanges the rows of copper ids 8 and 11, and the identifiers travel with those rows.
+Pairing the rows by slot then moves one copper by 3.610~\text{\AA}.
+Pairing them by identifier leaves that copper in place and keeps the hydrogen step at 2.553~\text{\AA}.
+The images of Eq.~\eqref{eq:lerp} on the slot pairing drag those two copper atoms across the cell, which is the 15.6~eV image of Figure~\ref{fig:claisen-land}.
+\texttt{reorder\_like} puts the swapped file back into the identifier order of the reactant.
 
 \section{Water quench}\label{sec:supp-water-protocol}
 The trajectory of Section~\ref{sec:connectivity} is mW water, 4096 molecules
@@ -725,16 +720,13 @@ The round trip reaches the same barrier, with a shift of 0, in 922 optimiser ste
 Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
 
 \section{The three applications in full}\label{sec:supp-applications}
-The Claisen landscape of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and the restart drift is Figure~\ref{fig:restartfmt}.
+The hop of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and the restart drift is Figure~\ref{fig:restartfmt}.
 \subsection{The three studies}
 \subsection{Hydrogen hop}
-A hydrogen adatom hops between fourfold hollows of Cu(100).
+EMT is the cheap model surface of Section~\ref{sec:claisen}.
 The reactant and the product are the same thirteen atoms, and the bottom layer is held.
-Energies and forces are the effective-medium theory in ASE.
-The band is a climbing-image NEB with the improved tangent, seven images, converged to \(0.048\,\mathrm{eV}/\text{\AA}\).
-The bridge is 0.0399~eV above the hollow.
-One imaginary mode, \(147\,\mathrm{cm}^{-1}\), displaces the hydrogen along the hop.
-The four Cu--H contacts are 2.318~\text{\AA} in each hollow and 2.113~\text{\AA} on the bridge, and the hydrogen is 1.399~\text{\AA} above the top layer in the hollow and 1.608~\text{\AA} at the bridge.
+ASE 3.29.0 runs the nudged elastic band with spring constant \(0.8\,\mathrm{eV}/\text{\AA}^{2}\), the improved tangent and FIRE.
+The seven images are written as CON and read back through readcon.
 
 Label the atoms once, in the reactant.
 The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
@@ -747,23 +739,9 @@ A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\math
 The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
-Figure~\ref{fig:claisen-land} is the id-matched hop and the scrambled band of Section~\ref{sec:claisen}.
-Figure~\ref{fig:claisen-struct-ids} is the bridge beside the highest image of that scrambled band.
-Exchanging two copper positions, with no identifier sort, moves that image to 15.6~eV.
-
-The minimum-Hausdorff assignment minimises a distance.
-The chemical map is the atom id, and that id has to travel with the coordinates.
-A CON row stores the id beside the position, and readcon-core 0.22.0 returns the id with the position.
-The oxygen-first product, with C5 one cell of \(18\,\text{\AA}\) along \(+x\), is the file of Section~\ref{sec:fidelity}.
-The index-wise oxygen step there is 15.7607~\text{\AA}.
-Pairing by id follows the four Cu--H contacts of 2.318~\text{\AA} in the hollow to the two contacts of 2.113~\text{\AA} on the bridge.
-The unit test requires that index-wise oxygen step to exceed 5~\text{\AA} and checks the id-matched oxygen displacement of 0.150~\text{\AA}.
-A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
-The same test requires the file-slot step of that image to exceed 1.5~\text{\AA} and the id-matched step of atom 0 to stay under 0.1~\text{\AA}.
-Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
-Frame indices count from zero, so frame 2 is the third image.
-
-The bridge is Figure~\ref{fig:claisen-struct-ids}.
+Figure~\ref{fig:claisen-land} is that identifier order beside the exchanged copper rows.
+Figure~\ref{fig:claisen-struct-ids} draws both from above.
+Losing the identifier is the difference between 0.04~eV and 15.6~eV on this model.
 
 
 

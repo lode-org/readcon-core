@@ -1647,15 +1647,13 @@ The Xeon is Section~\ref{sec:compute}.}
 \input{si_from_main}
 
 \FloatBarrier \section{The atom-id test}\label{sec:supp-atomid}
-The distances of Section~\ref{sec:claisen} come from two tests of the released API in readcon-core 0.22.0.
-\texttt{claisen\_positional\_\allowbreak zip\_is\_the\_\allowbreak wrong\_displacement} checks the vinyl-ether bond of 1.360~\text{\AA}, the carbonyl of 1.210~\text{\AA} and the id-matched oxygen displacement of 0.150~\text{\AA}, and it requires the index-wise oxygen step to exceed 5~\text{\AA}.
-\texttt{a\_renumbered\_\allowbreak band\_image\_\allowbreak keeps\_its\_ids} requires the file-slot step to exceed 1.5~\text{\AA} and the id-matched step to stay under 0.1~\text{\AA}.
-The measured index-wise norm is Section~\ref{sec:fidelity}.
-Listing~\ref{lst:atomid} is the command for each.
+The hop distances of Section~\ref{sec:claisen} come from \texttt{hop\_positional\_zip\_is\_the\_wrong\_displacement} in readcon-core 0.22.0.
+Index pairing of the exchanged copper row moves that copper by 3.610~\text{\AA}.
+Matching column 5 leaves the copper in place and moves the hydrogen by 2.553~\text{\AA}, and \texttt{reorder\_like} restores the identifier order.
+Listing~\ref{lst:atomid} is the command.
 
-\begin{lstlisting}[caption={Commands for the atom-id distances of Section~\ref{sec:claisen}.},label={lst:atomid},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true]
-cargo test --test atom_correspondence claisen_positional_zip_is_the_wrong_displacement
-cargo test --test atom_correspondence a_renumbered_band_image_keeps_its_ids
+\begin{lstlisting}[caption={Command for the hop distances of Section~\ref{sec:claisen}.},label={lst:atomid},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true]
+cargo test --features parallel --test atom_correspondence hop_positional_zip_is_the_wrong_displacement
 \end{lstlisting}
 
 \bibliography{rg_main} \end{document}
