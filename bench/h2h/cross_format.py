@@ -1326,7 +1326,15 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
     if arm_id == "readcon-chemfiles":
         path = directory / "chemfiles.xyz"
         if not path.is_file():
-            write_chemfiles_xyz(path, spec)
+            # The chemfiles Python package writes this file when that row
+            # runs first. The linked library can still read an XYZ written
+            # here, which is the case in the wheel and pytest jobs.
+            try:
+                import chemfiles  # noqa: F401
+            except ImportError:
+                write_xyz_for_readcon(path, spec)
+            else:
+                write_chemfiles_xyz(path, spec)
         return path
     if arm_id == "readcon-conbin":
         plain = directory / "readcon.con"

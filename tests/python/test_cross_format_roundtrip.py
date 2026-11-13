@@ -29,6 +29,28 @@ def test_cross_format_roundtrip(tmp_path: Path) -> None:
         assert row["file_bytes"] > 0
 
 
+def test_readcon_chemfiles_roundtrip_without_the_python_package(tmp_path, monkeypatch):
+    import builtins
+
+    import readcon
+
+    if not readcon.has_chemfiles_support():
+        return
+    real_import = builtins.__import__
+
+    def guarded(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "chemfiles" or name.startswith("chemfiles."):
+            raise ImportError("chemfiles is not installed")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    rows, notes = cross_format.roundtrip_report(tmp_path, n_atoms=4, n_frames=2)
+    matched = [row for row in rows if row["arm"] == "readcon-chemfiles"]
+    assert matched, notes
+    row = matched[0]
+    assert row["position_error"] <= row["precision"], row
+
+
 def test_pdb_above_serial_is_reported() -> None:
     arms, _notes = cross_format.arm_table(100_000)
     pdb = [arm for arm in arms if arm["id"] == "mda-pdb"]
