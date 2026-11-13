@@ -458,6 +458,58 @@ def read_extxyz_ovito(path: str, need: set[str]) -> dict:
     }
 
 
+def read_extxyz_chemfiles(path: str, _need: set[str]) -> dict:
+    import chemfiles
+
+    positions, cells = [], []
+    checksum = 0.0
+    with chemfiles.Trajectory(path, "r", "XYZ") as traj:
+        for _step in range(traj.nsteps):
+            frame = traj.read()
+            pos = np.array(frame.positions, dtype=np.float64, copy=True)
+            cell = cell6_from_matrix(
+                np.diag(np.asarray(list(frame.cell.lengths), dtype=np.float64))
+            )
+            positions.append(pos)
+            cells.append(cell)
+            checksum += consume(pos) + consume(cell)
+    return {
+        "n_frames": len(positions),
+        "n_atoms": int(positions[0].shape[0]),
+        "positions": stack_frames(positions),
+        "masses": None,
+        "cell": stack_frames(cells),
+        "velocities": None,
+        "fixed": None,
+        "species": [],
+        "checksum": checksum,
+    }
+
+
+def read_extxyz_mdanalysis(path: str, _need: set[str]) -> dict:
+    import MDAnalysis as mda
+
+    universe = mda.Universe(path, format="XYZ")
+    blocks = []
+    checksum = 0.0
+    for _ts in universe.trajectory:
+        pos = np.array(universe.atoms.positions, dtype=np.float64, copy=True)
+        blocks.append(pos)
+        checksum += consume(pos)
+    positions = stack_frames(blocks)
+    return {
+        "n_frames": int(positions.shape[0]),
+        "n_atoms": int(positions.shape[1]),
+        "positions": positions,
+        "masses": None,
+        "cell": None,
+        "velocities": None,
+        "fixed": None,
+        "species": [],
+        "checksum": checksum,
+    }
+
+
 def read_extxyz_lib(path: str, need: set[str], c_reader: bool) -> dict:
     import extxyz
 
@@ -527,21 +579,21 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
     # chemfiles keeps element masses (H is 1.008, not the file's 1.00784)
     # and drops vel and fixed. MDAnalysis keeps tokens 2-4 as coordinates,
     # guesses masses, and stores no cell. Neither is the same parse.
-    skipped = [
-        {
-            "reader": "chemfiles",
-            "reason": (
-                "XYZ reader returns element masses and no velocities or "
-                "constraints, so it is not the same field set"
-            ),
-        },
-        {
-            "reader": "mdanalysis",
-            "reason": (
-                "XYZ reader keeps only x,y,z, guesses masses, and stores no cell"
-            ),
-        },
-    ]
+    # Measured, not ranked. Chemfiles returns element masses (H is 1.008,
+    # not the file's 1.00784) and drops velocities and constraints.
+    # MDAnalysis keeps only x, y, z, guesses masses, and stores no cell.
+    unscored = (
+        (
+            "chemfiles",
+            "XYZ reader returns element masses and no velocities or constraints",
+            read_extxyz_chemfiles,
+        ),
+        (
+            "mdanalysis",
+            "XYZ reader keeps only x,y,z, guesses masses, and stores no cell",
+            read_extxyz_mdanalysis,
+        ),
+    )
     readers = (
         ("readcon", read_extxyz_readcon),
         ("ovito", read_extxyz_ovito),
@@ -609,9 +661,44 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     )
                     if abs(warm["checksum"] - view["checksum"]) > 1e-6:
                         raise SystemExit(f"{name} {reader} warm and cold parses differ")
+        for reader, reason, fn in unscored:
+            for cache in ("warm", "cold"):
+                print(f"h2h {name} {reader} {cache} unscored", flush=True)
+
+                def once(fn=fn, path=path, need=need):
+                    return fn(os.fspath(path), need)
+
+                samples, view, pages = time_python(once, repeats, path, cache)
+                median, iqr = type7(samples)
+                rows.append(
+                    {
+                        "file": name,
+                        "reader": reader,
+                        "cache": cache,
+                        "op": "read",
+                        "scored": False,
+                        "reason": reason,
+                        "median_s": median,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "n_atoms": view["n_atoms"],
+                        "n_frames": view["n_frames"],
+                        "pages_resident": pages,
+                        "checksum": view["checksum"],
+                    }
+                )
+                lines.append(
+                    f"unscored {name} {reader} {cache} median {median:.9f} "
+                    f"iqr {iqr:.9f} reason {reason}"
+                )
+                for sample in samples:
+                    lines.append(f"sample {sample:.9f}")
+                print(f"  {median:.4f}", flush=True)
     payload = {
         "rows": rows,
-        "skipped": skipped,
+        "unscored": [
+            {"reader": name, "reason": reason} for name, reason, _fn in unscored
+        ],
         "versions": versions,
         "startup": "excluded",
         "fields": "positions masses cell species, plus vel and fixed when the file declares them",
@@ -620,7 +707,7 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
     (out / "h2h.log").write_text("\n".join(lines) + "\n")
     tsv = ["file\treader\tmedian_s\tiqr_s"]
     for row in rows:
-        if row["cache"] != "warm":
+        if row["cache"] != "warm" or row.get("scored") is False:
             continue
         tsv.append(
             f"{row['file']}\t{row['reader']}\t{row['median_s']:.3g}\t{row['iqr_s']:.3g}"
@@ -706,48 +793,37 @@ def read_con_readcon(path: str, expect_vel: bool) -> dict:
     import readcon
 
     frames = readcon.read_con(path, n_threads=1)
-    positions, masses, cells, fixed, vels = [], [], [], [], []
-    checksum = 0.0
-    has_vel = False
-    for frame in frames:
-        pos = np.array(frame.xyz, dtype=np.float64, copy=True)
-        cell = np.concatenate(
-            [
-                np.asarray(frame.cell, dtype=np.float64),
-                np.asarray(frame.angles, dtype=np.float64),
-            ]
-        )
-        atoms = frame.atoms
-        n = len(atoms)
-        mass = np.empty(n, dtype=np.float64)
-        mask = np.empty((n, 3), dtype=np.float64)
-        for i, atom in enumerate(atoms):
-            mass[i] = float(atom.mass)
-            mask[i, 0] = 1.0 if atom.fixed[0] else 0.0
-            mask[i, 1] = 1.0 if atom.fixed[1] else 0.0
-            mask[i, 2] = 1.0 if atom.fixed[2] else 0.0
-        positions.append(pos)
-        masses.append(mass)
-        cells.append(cell)
-        fixed.append(mask)
-        checksum += consume(pos) + consume(mass) + consume(cell) + consume(mask)
-        vel = frame.vel
-        if vel is not None:
-            has_vel = True
-            arr = np.array(vel, dtype=np.float64, copy=True)
-            vels.append(arr)
-            checksum += consume(arr)
-    if expect_vel and not has_vel:
+    # One slab plus one array per field. Indexing frames would build an
+    # Atom object per site; columns() does not.
+    cols = frames.columns()
+    positions = np.asarray(cols["positions"], dtype=np.float64)
+    masses = np.asarray(cols["masses"], dtype=np.float64)
+    cell = np.asarray(cols["cell"], dtype=np.float64)
+    fixed = np.asarray(cols["fixed"], dtype=np.float64)
+    velocities = cols["velocities"]
+    forces = cols["forces"]
+    if velocities is not None:
+        velocities = np.asarray(velocities, dtype=np.float64)
+    if forces is not None:
+        forces = np.asarray(forces, dtype=np.float64)
+    checksum = consume(positions) + consume(masses) + consume(cell) + consume(fixed)
+    if velocities is not None:
+        checksum += consume(velocities)
+    if forces is not None:
+        checksum += consume(forces)
+    if expect_vel and velocities is None:
         raise RuntimeError("readcon returned no velocities")
     return {
-        "n_frames": len(frames),
-        "n_atoms": int(positions[0].shape[0]),
-        "positions": stack_frames(positions),
-        "masses": stack_frames(masses),
-        "cell": stack_frames(cells),
-        "fixed": stack_frames(fixed),
-        "velocities": stack_frames(vels) if has_vel else None,
+        "n_frames": int(cols["n_frames"]),
+        "n_atoms": int(cols["n_atoms"]),
+        "positions": positions,
+        "masses": masses,
+        "cell": cell,
+        "fixed": fixed,
+        "velocities": velocities,
+        "forces": forces,
         "checksum": checksum,
+        "columns": cols,
         "frames": frames,
     }
 
@@ -1010,13 +1086,13 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                 samples, _payload = time_eon("write", "warm", path, dest, repeats)
                 written = dest
             elif reader == "readcon":
-                frames = source["frames"]
+                columns = source["columns"]
 
-                def once(frames=frames, dest=dest):
+                def once(columns=columns, dest=dest):
                     dest.unlink(missing_ok=True)
                     import readcon
 
-                    readcon.write_con(os.fspath(dest), frames, n_threads=1)
+                    readcon.write_columns(os.fspath(dest), columns, n_threads=1)
 
                 samples, _view, _pages = time_python(once, repeats, path, "warm")
                 written = dest

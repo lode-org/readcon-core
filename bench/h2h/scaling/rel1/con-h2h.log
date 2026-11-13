@@ -1,181 +1,181 @@
-commit 0f5c362b6b1ea10b9b3f4cd3a85de9d4c463acdc
+commit ce84696cc936096b032a38eb4a1fcf164929bdf3
 versions {"MDAnalysis": "2.11.0", "ase": "3.29.0", "chemfiles": "0.10.4", "eon": "579738a9387e8d0ea55496f45dd057812cfab892", "eon_flags": "eon 579738a9387e8d0ea55496f45dd057812cfab892\ntimer -O3\nlibrary /tmp/eon-build/client/libeonclib.so\nconfile -O3\nmirror bench/h2h/eon_stub/ReadconDbMirror.h\nbuildtype release", "extxyz": "0.4.6", "numpy": "2.5.4", "ovito": "3.17.2", "readcon": "0.23.0"}
 startup excluded
 warmup 1 samples 6 percentile type7 serial 1
 writes unlink then create
 eon corpus mirror is not in the timed read or write
-read con-1e6 readcon warm median 0.673697779 iqr 0.022858214 atoms 1000000
-sample 0.612400748
-sample 0.711089270
-sample 0.688024342
-sample 0.671155224
-sample 0.659241759
-sample 0.676240333
-read con-1e6 ase warm median 2.030596055 iqr 0.062047993 atoms 1000000
-sample 2.041221423
-sample 1.917442416
-sample 2.008822616
-sample 2.019970687
-sample 2.084548456
-sample 2.084469694
-read con-1e6 eon warm median 0.336964000 iqr 0.020393750 atoms 1000000
-sample 0.329354000
-sample 0.333576000
-sample 0.403347000
-sample 0.329197000
-sample 0.354287000
-sample 0.340352000
+read con-1e6 readcon warm median 0.073618954 iqr 0.013045227 atoms 1000000
+sample 0.058795349
+sample 0.130836343
+sample 0.080458978
+sample 0.078947954
+sample 0.068289954
+sample 0.066618008
+read con-1e6 ase warm median 1.885559702 iqr 0.161015215 atoms 1000000
+sample 2.046527877
+sample 1.939490432
+sample 1.831628972
+sample 1.779848363
+sample 1.958581496
+sample 1.685407217
+read con-1e6 eon warm median 0.346238500 iqr 0.006342000 atoms 1000000
+sample 0.374173000
+sample 0.346882000
+sample 0.345525000
+sample 0.345595000
+sample 0.353552000
+sample 0.342910000
 compare {"pairs": [{"left": "readcon", "right": "ase", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "ase", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}], "ok": true}
-read con-1e6 readcon cold median 0.706718950 iqr 0.037072099 atoms 1000000
-sample 0.745348204
-sample 0.758239145
-sample 0.699518256
-sample 0.712118226
-sample 0.688324081
-sample 0.701319674
-read con-1e6 ase cold median 2.100495289 iqr 0.252940319 atoms 1000000
-sample 2.105661643
-sample 2.095328935
-sample 2.246551350
-sample 1.912741828
-sample 2.248671017
-sample 1.840978676
-read con-1e6 eon cold median 0.356991000 iqr 0.009435500 atoms 1000000
-sample 0.363691000
-sample 0.356378000
-sample 0.344395000
-sample 0.545087000
-sample 0.351519000
-sample 0.357604000
+read con-1e6 readcon cold median 0.084380692 iqr 0.004102439 atoms 1000000
+sample 0.065229013
+sample 0.099723406
+sample 0.083316757
+sample 0.086390144
+sample 0.081629516
+sample 0.085444628
+read con-1e6 ase cold median 1.838386865 iqr 0.117723543 atoms 1000000
+sample 1.758480619
+sample 2.048274729
+sample 1.905069206
+sample 1.853951071
+sample 1.754415565
+sample 1.822822658
+read con-1e6 eon cold median 0.373351000 iqr 0.017740750 atoms 1000000
+sample 0.371909000
+sample 0.357028000
+sample 0.381949000
+sample 0.359256000
+sample 0.374793000
+sample 0.387957000
 compare {"pairs": [{"left": "readcon", "right": "ase", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "ase", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}], "ok": true}
-write con-1e6 readcon median 0.541688073 iqr 0.047515869 correct 1
-sample 0.640365412
-sample 0.600674246
-sample 0.539603720
-sample 0.502732725
-sample 0.543772427
-sample 0.538709323
-write con-1e6 ase median 2.451948437 iqr 0.021787883 correct 1
-sample 2.408880259
-sample 2.450053264
-sample 2.430820107
-sample 2.453843609
-sample 2.458607169
-sample 2.474102639
-write con-1e6 eon median 0.589538000 iqr 0.033740000 correct 1
-sample 0.636201000
-sample 0.580792000
-sample 0.593844000
-sample 0.585232000
-sample 0.578825000
-sample 0.622908000
-read con-h2h-mask readcon warm median 0.662257279 iqr 0.017902381 atoms 1000000
-sample 0.621639383
-sample 0.805751983
-sample 0.679757934
-sample 0.665753658
-sample 0.658219012
-sample 0.658760901
-read con-h2h-mask ase warm median 2.487166850 iqr 0.118722460 atoms 1000000
-sample 2.475251353
-sample 2.546511167
-sample 2.706635435
-sample 2.499082346
-sample 2.396158218
-sample 2.332591219
-read con-h2h-mask eon warm median 0.340660500 iqr 0.012463250 atoms 1000000
-sample 0.340241000
-sample 0.332143000
-sample 0.331454000
-sample 0.341080000
-sample 0.348481000
-sample 0.357005000
+write con-1e6 readcon median 0.088375208 iqr 0.002515001 correct 1
+sample 0.088627780
+sample 0.088122636
+sample 0.089880590
+sample 0.117323209
+sample 0.086599282
+sample 0.086695637
+write con-1e6 ase median 2.429835959 iqr 0.020287557 correct 1
+sample 2.409219118
+sample 2.432959440
+sample 2.463620686
+sample 2.434186874
+sample 2.426712479
+sample 2.409028309
+write con-1e6 eon median 0.614678000 iqr 0.011160500 correct 1
+sample 0.616968000
+sample 0.623519000
+sample 0.612388000
+sample 0.623729000
+sample 0.609896000
+sample 0.610165000
+read con-h2h-mask readcon warm median 0.067424012 iqr 0.002239647 atoms 1000000
+sample 0.061948689
+sample 0.079007277
+sample 0.066040413
+sample 0.067157901
+sample 0.068849201
+sample 0.067690123
+read con-h2h-mask ase warm median 2.178972300 iqr 0.162734001 atoms 1000000
+sample 2.220396709
+sample 2.137547892
+sample 2.235158051
+sample 2.045795655
+sample 2.297129896
+sample 1.839373192
+read con-h2h-mask eon warm median 0.368418000 iqr 0.013697750 atoms 1000000
+sample 0.374318000
+sample 0.374178000
+sample 0.363722000
+sample 0.373114000
+sample 0.354367000
+sample 0.359045000
 compare {"pairs": [{"left": "readcon", "right": "ase", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "ase", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}], "ok": true}
-read con-h2h-mask readcon cold median 0.712009065 iqr 0.013150143 atoms 1000000
-sample 0.649713205
-sample 0.814739583
-sample 0.709436978
-sample 0.714581152
-sample 0.718312384
-sample 0.702493585
-read con-h2h-mask ase cold median 2.409976208 iqr 0.389444508 atoms 1000000
-sample 2.010757926
-sample 2.589195897
-sample 2.256396835
-sample 2.563555581
-sample 2.172322802
-sample 2.735833691
-read con-h2h-mask eon cold median 0.381888500 iqr 0.024951500 atoms 1000000
-sample 0.372802000
-sample 0.390975000
-sample 0.396463000
-sample 0.401297000
-sample 0.369252000
-sample 0.349237000
+read con-h2h-mask readcon cold median 0.081609737 iqr 0.005410690 atoms 1000000
+sample 0.084758092
+sample 0.101226730
+sample 0.082962189
+sample 0.078445473
+sample 0.080257285
+sample 0.077490904
+read con-h2h-mask ase cold median 1.919169672 iqr 0.091182895 atoms 1000000
+sample 1.955339079
+sample 2.079560473
+sample 1.884430658
+sample 1.847071259
+sample 1.953908686
+sample 1.856921228
+read con-h2h-mask eon cold median 0.370097500 iqr 0.011088500 atoms 1000000
+sample 0.366888000
+sample 0.373307000
+sample 0.362129000
+sample 0.375073000
+sample 0.343608000
+sample 0.374774000
 compare {"pairs": [{"left": "readcon", "right": "ase", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}, {"left": "ase", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "ok": true, "fixed": 0.0}], "ok": true}
-write con-h2h-mask readcon median 0.489222352 iqr 0.058133772 correct 1
-sample 0.550759813
-sample 0.478317894
-sample 0.500126809
-sample 0.477411648
-sample 0.547653706
-sample 0.476399895
-write con-h2h-mask ase median 2.367066463 iqr 0.012997879 correct 1
-sample 2.362867840
-sample 2.357263212
-sample 2.355771910
-sample 2.371794636
-sample 2.375091619
-sample 2.371265085
-write con-h2h-mask eon median 0.609113500 iqr 0.003546000 correct 1
-sample 0.594720000
-sample 0.608950000
-sample 0.605376000
-sample 0.609995000
-sample 0.609277000
-sample 0.618530000
+write con-h2h-mask readcon median 0.088163705 iqr 0.001552719 correct 1
+sample 0.089430182
+sample 0.088533979
+sample 0.087793431
+sample 0.087408995
+sample 0.087606739
+sample 0.090304506
+write con-h2h-mask ase median 2.395185172 iqr 0.030913794 correct 1
+sample 2.426190326
+sample 2.380778611
+sample 2.407975967
+sample 2.377012892
+sample 2.413469806
+sample 2.382394377
+write con-h2h-mask eon median 0.601279500 iqr 0.004499500 correct 1
+sample 0.600967000
+sample 0.601592000
+sample 0.595241000
+sample 0.602623000
+sample 0.613705000
+sample 0.596832000
 skip con-h2h ase velocities are not representable
-read con-h2h readcon warm median 1.331355358 iqr 0.018735606 atoms 1000000
-sample 1.323648537
-sample 1.520703432
-sample 1.344299254
-sample 1.317258791
-sample 1.324860221
-sample 1.337850495
-read con-h2h eon warm median 0.610117500 iqr 0.020382000 atoms 1000000
-sample 0.682176000
-sample 0.596133000
-sample 0.609300000
-sample 0.622764000
-sample 0.610935000
-sample 0.585791000
+read con-h2h readcon warm median 0.719613608 iqr 0.023668512 atoms 1000000
+sample 0.704053412
+sample 0.744407582
+sample 0.772714511
+sample 0.720306221
+sample 0.718920994
+sample 0.713311308
+read con-h2h eon warm median 0.632545000 iqr 0.014131750 atoms 1000000
+sample 0.634380000
+sample 0.620087000
+sample 0.630710000
+sample 0.649326000
+sample 0.644416000
+sample 0.626797000
 compare {"pairs": [{"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "ok": true, "fixed": 0.0}], "ok": true}
-read con-h2h readcon cold median 1.413059969 iqr 0.041299758 atoms 1000000
-sample 1.410434839
-sample 1.511636097
-sample 1.459066479
-sample 1.405750222
-sample 1.389602058
-sample 1.415685099
-read con-h2h eon cold median 0.637323000 iqr 0.035481500 atoms 1000000
-sample 0.648342000
-sample 0.648885000
-sample 0.605908000
-sample 0.644635000
-sample 0.630011000
-sample 0.597449000
+read con-h2h readcon cold median 0.793573066 iqr 0.040299871 atoms 1000000
+sample 0.782294979
+sample 0.847639627
+sample 0.834808775
+sample 0.795402115
+sample 0.791744017
+sample 0.769232343
+read con-h2h eon cold median 0.647695500 iqr 0.015067000 atoms 1000000
+sample 0.650228000
+sample 0.623597000
+sample 0.656853000
+sample 0.645163000
+sample 0.667767000
+sample 0.638452000
 compare {"pairs": [{"left": "readcon", "right": "eon", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 1.4210854715202004e-14, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "ok": true, "fixed": 0.0}], "ok": true}
-write con-h2h readcon median 0.687249619 iqr 0.031942920 correct 1
-sample 0.655256496
-sample 0.693842011
-sample 0.672443062
-sample 0.680657227
-sample 0.710638694
-sample 0.719777427
-write con-h2h eon median 0.875047000 iqr 0.021308750 correct 1
-sample 0.881567000
-sample 0.863191000
-sample 0.920953000
-sample 0.889881000
-sample 0.865816000
-sample 0.868527000
+write con-h2h readcon median 0.201112933 iqr 0.009042237 correct 1
+sample 0.213069534
+sample 0.196295508
+sample 0.200642315
+sample 0.201583551
+sample 0.211592521
+sample 0.199849950
+write con-h2h eon median 0.891599000 iqr 0.012298750 correct 1
+sample 0.878795000
+sample 0.892444000
+sample 0.890754000
+sample 0.875558000
+sample 0.894630000
+sample 0.901568000

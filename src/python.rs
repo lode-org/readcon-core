@@ -1499,6 +1499,387 @@ fn read_coords(py: Python<'_>, path: &str) -> PyResult<Py<PyDict>> {
     Ok(dict.unbind())
 }
 
+struct PackedColumns {
+    n_frames: usize,
+    n_atoms: usize,
+    positions: Vec<f64>,
+    masses: Vec<f64>,
+    fixed: Vec<f64>,
+    cell: Vec<f64>,
+    velocities: Option<Vec<f64>>,
+    forces: Option<Vec<f64>>,
+}
+
+fn frame_has_vel(frame: &ConFrame) -> bool {
+    frame.velocities.nrows() == frame.atom_data.len() && !frame.atom_data.is_empty()
+        || frame
+            .atom_data
+            .first()
+            .is_some_and(|atom| atom.has_velocity())
+}
+
+fn frame_has_force(frame: &ConFrame) -> bool {
+    frame.forces.nrows() == frame.atom_data.len() && !frame.atom_data.is_empty()
+        || frame
+            .atom_data
+            .first()
+            .is_some_and(|atom| atom.has_forces())
+}
+
+fn push_masses(frame: &ConFrame, into: &mut Vec<f64>) {
+    if let Some(slice) = frame.masses.f64_slice() {
+        if slice.len() == frame.atom_data.len() {
+            into.extend_from_slice(slice);
+            return;
+        }
+    }
+    let mut written = 0usize;
+    for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let mass = frame
+            .header
+            .masses_per_type
+            .get(type_idx)
+            .copied()
+            .unwrap_or(0.0);
+        into.extend(std::iter::repeat_n(mass, count));
+        written += count;
+    }
+    if written < frame.atom_data.len() {
+        let mass = *into.last().unwrap_or(&0.0);
+        into.extend(std::iter::repeat_n(mass, frame.atom_data.len() - written));
+    }
+}
+
+fn push_vec3(
+    storage: &crate::storage_dtype::Array2Storage,
+    frame: &ConFrame,
+    into: &mut Vec<f64>,
+    from_atom: impl Fn(&crate::types::AtomDatum) -> Option<[f64; 3]>,
+) {
+    let n = frame.atom_data.len();
+    if let Some(slice) = storage.f64_slice() {
+        if slice.len() == n * 3 {
+            into.extend_from_slice(slice);
+            return;
+        }
+    }
+    if storage.nrows() == n {
+        for row in 0..n {
+            into.extend_from_slice(&storage.as_f64_row(row));
+        }
+        return;
+    }
+    for atom in &frame.atom_data {
+        into.extend_from_slice(&from_atom(atom).unwrap_or([0.0; 3]));
+    }
+}
+
+fn pack_frame_columns<'a>(
+    frames: impl Iterator<Item = &'a ConFrame>,
+    pack_positions: bool,
+) -> Option<PackedColumns> {
+    let frames: Vec<&ConFrame> = frames.collect();
+    if frames.is_empty() {
+        return Some(PackedColumns {
+            n_frames: 0,
+            n_atoms: 0,
+            positions: Vec::new(),
+            masses: Vec::new(),
+            fixed: Vec::new(),
+            cell: Vec::new(),
+            velocities: None,
+            forces: None,
+        });
+    }
+    let n_atoms = frames[0].atom_data.len();
+    if frames.iter().any(|frame| frame.atom_data.len() != n_atoms) {
+        return None;
+    }
+    let n_frames = frames.len();
+    let mut masses = Vec::with_capacity(n_frames * n_atoms);
+    let mut fixed = Vec::with_capacity(n_frames * n_atoms * 3);
+    let mut cell = Vec::with_capacity(n_frames * 6);
+    let mut positions = Vec::new();
+    if pack_positions {
+        positions.reserve(n_frames * n_atoms * 3);
+    }
+    let any_vel = frames.iter().any(|frame| frame_has_vel(frame));
+    let any_force = frames.iter().any(|frame| frame_has_force(frame));
+    let mut velocities = any_vel.then(|| Vec::with_capacity(n_frames * n_atoms * 3));
+    let mut forces = any_force.then(|| Vec::with_capacity(n_frames * n_atoms * 3));
+    for frame in frames {
+        if pack_positions {
+            for atom in &frame.atom_data {
+                positions.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+            }
+        }
+        push_masses(frame, &mut masses);
+        for atom in &frame.atom_data {
+            let flags = atom.fixed();
+            fixed.push(if flags[0] { 1.0 } else { 0.0 });
+            fixed.push(if flags[1] { 1.0 } else { 0.0 });
+            fixed.push(if flags[2] { 1.0 } else { 0.0 });
+        }
+        cell.extend_from_slice(&frame.header.boxl);
+        cell.extend_from_slice(&frame.header.angles);
+        if let Some(dest) = velocities.as_mut() {
+            push_vec3(&frame.velocities, frame, dest, |atom| atom.velocity());
+        }
+        if let Some(dest) = forces.as_mut() {
+            push_vec3(&frame.forces, frame, dest, |atom| atom.force());
+        }
+    }
+    Some(PackedColumns {
+        n_frames,
+        n_atoms,
+        positions,
+        masses,
+        fixed,
+        cell,
+        velocities,
+        forces,
+    })
+}
+
+/// Write one contiguous column dict, the shape returned by
+/// ``ConFrameList.columns``.
+///
+/// Arrays are borrowed once. Frame shells are built and the file is
+/// formatted with the GIL released. There is no per-atom Python loop.
+#[pyfunction]
+#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
+fn write_columns(
+    py: Python<'_>,
+    path: &str,
+    columns: &Bound<'_, PyDict>,
+    symbol: &str,
+    n_threads: Option<usize>,
+) -> PyResult<()> {
+    let positions = columns
+        .get_item("positions")?
+        .ok_or_else(|| PyValueError::new_err("positions"))?;
+    let masses = columns
+        .get_item("masses")?
+        .ok_or_else(|| PyValueError::new_err("masses"))?;
+    let cell = columns
+        .get_item("cell")?
+        .ok_or_else(|| PyValueError::new_err("cell"))?;
+    let pos = positions.cast::<PyArray3<f64>>()?.readonly();
+    let mass = masses.cast::<PyArray2<f64>>()?.readonly();
+    let cell_arr = cell.cast::<PyArray2<f64>>()?.readonly();
+    let shape = pos.dims();
+    if shape[2] != 3 {
+        return Err(PyValueError::new_err("positions"));
+    }
+    let n_frames = shape[0];
+    let n_atoms = shape[1];
+    let pos_slice = pos.as_slice()?;
+    let mass_slice = mass.as_slice()?;
+    let cell_slice = cell_arr.as_slice()?;
+    if mass_slice.len() != n_frames * n_atoms || cell_slice.len() != n_frames * 6 {
+        return Err(PyValueError::new_err("positions, masses and cell disagree"));
+    }
+    let fixed_owned = match columns.get_item("fixed")? {
+        Some(value) if !value.is_none() => {
+            let arr = value.cast::<PyArray3<f64>>()?.readonly();
+            let slice = arr.as_slice()?;
+            if slice.len() != n_frames * n_atoms * 3 {
+                return Err(PyValueError::new_err("fixed"));
+            }
+            Some(slice.to_vec())
+        }
+        _ => None,
+    };
+    let vel_owned = optional_vec3(columns, "velocities", n_frames, n_atoms)?;
+    let force_owned = optional_vec3(columns, "forces", n_frames, n_atoms)?;
+    let pos_owned = pos_slice.to_vec();
+    let mass_owned = mass_slice.to_vec();
+    let cell_owned = cell_slice.to_vec();
+    let path_owned = path.to_owned();
+    let symbol_owned = symbol.to_owned();
+    let workers = n_threads.unwrap_or(1);
+    py.detach(move || {
+        let frames = frames_from_columns(
+            &pos_owned,
+            &mass_owned,
+            &cell_owned,
+            fixed_owned.as_deref(),
+            vel_owned.as_deref(),
+            force_owned.as_deref(),
+            n_frames,
+            n_atoms,
+            &symbol_owned,
+        )?;
+        let refs: Vec<&ConFrame> = frames.iter().collect();
+        crate::writer::write_frame_refs_to_path(
+            Path::new(&path_owned),
+            &refs,
+            workers,
+            None,
+            false,
+            true,
+        )
+        .map_err(|err| err.to_string())
+    })
+    .map_err(PyIOError::new_err)
+}
+
+fn optional_vec3(
+    columns: &Bound<'_, PyDict>,
+    name: &str,
+    n_frames: usize,
+    n_atoms: usize,
+) -> PyResult<Option<Vec<f64>>> {
+    match columns.get_item(name)? {
+        Some(value) if !value.is_none() => {
+            let arr = value.cast::<PyArray3<f64>>()?.readonly();
+            let slice = arr.as_slice()?;
+            if slice.len() != n_frames * n_atoms * 3 {
+                return Err(PyValueError::new_err(name.to_string()));
+            }
+            Ok(Some(slice.to_vec()))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn frames_from_columns(
+    positions: &[f64],
+    masses: &[f64],
+    cell: &[f64],
+    fixed: Option<&[f64]>,
+    velocities: Option<&[f64]>,
+    forces: Option<&[f64]>,
+    n_frames: usize,
+    n_atoms: usize,
+    symbol: &str,
+) -> Result<Vec<ConFrame>, String> {
+    let mut frames = Vec::with_capacity(n_frames);
+    for index in 0..n_frames {
+        let p = index * n_atoms * 3;
+        let m = index * n_atoms;
+        let c = index * 6;
+        frames.push(frame_from_column_slice(
+            &positions[p..p + n_atoms * 3],
+            &masses[m..m + n_atoms],
+            &cell[c..c + 6],
+            fixed.map(|flags| &flags[p..p + n_atoms * 3]),
+            velocities.map(|vals| &vals[p..p + n_atoms * 3]),
+            forces.map(|vals| &vals[p..p + n_atoms * 3]),
+            symbol,
+        )?);
+    }
+    Ok(frames)
+}
+
+fn frame_from_column_slice(
+    positions: &[f64],
+    masses: &[f64],
+    cell: &[f64],
+    fixed: Option<&[f64]>,
+    velocities: Option<&[f64]>,
+    forces: Option<&[f64]>,
+    symbol: &str,
+) -> Result<ConFrame, String> {
+    let n = masses.len();
+    if positions.len() != n * 3 || cell.len() != 6 || n == 0 {
+        return Err("positions, masses and cell disagree".to_string());
+    }
+    let shared: std::sync::Arc<str> = std::sync::Arc::from(symbol);
+    let mass0 = masses[0];
+    let mut metadata = BTreeMap::new();
+    metadata.insert(meta::CON_SPEC_MINOR.to_string(), serde_json::json!(1));
+    metadata.insert(meta::CON_SPEC_VERSION.to_string(), serde_json::json!(2));
+    let mut pos_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
+    for i in 0..n {
+        let base = i * 3;
+        pos_storage.set_f64_row(
+            i,
+            [positions[base], positions[base + 1], positions[base + 2]],
+        );
+    }
+    let slot = pos_storage.f64_slice().ok_or("positions")?.as_ptr() as *mut f64;
+    let mut atom_data = Vec::with_capacity(n);
+    for i in 0..n {
+        let flags = match fixed {
+            Some(flags) => {
+                let base = i * 3;
+                [
+                    flags[base] != 0.0,
+                    flags[base + 1] != 0.0,
+                    flags[base + 2] != 0.0,
+                ]
+            }
+            None => [false, false, false],
+        };
+        let atom = crate::types::AtomDatum::at_slot(
+            std::sync::Arc::clone(&shared),
+            unsafe { slot.add(i * 3) },
+            flags,
+            i as u64,
+        );
+        atom_data.push(atom);
+    }
+    if let Some(vel) = velocities {
+        for (i, atom) in atom_data.iter_mut().enumerate() {
+            let base = i * 3;
+            atom.set_velocity(Some([vel[base], vel[base + 1], vel[base + 2]]));
+        }
+    }
+    if let Some(force) = forces {
+        for (i, atom) in atom_data.iter_mut().enumerate() {
+            let base = i * 3;
+            atom.set_force(Some([force[base], force[base + 1], force[base + 2]]));
+        }
+    }
+    let mut velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(0, 3);
+    if velocities.is_some() {
+        velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
+        for i in 0..n {
+            let base = i * 3;
+            let vel = velocities.unwrap();
+            velocities_storage.set_f64_row(i, [vel[base], vel[base + 1], vel[base + 2]]);
+        }
+    }
+    let mut forces_storage = crate::storage_dtype::Array2Storage::zeros_f64(0, 3);
+    if let Some(force) = forces {
+        forces_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
+        for i in 0..n {
+            let base = i * 3;
+            forces_storage.set_f64_row(i, [force[base], force[base + 1], force[base + 2]]);
+        }
+    }
+    let _ = mass0;
+    Ok(ConFrame {
+        header: crate::types::FrameHeader {
+            prebox_header: crate::types::PreboxHeader::new("readcon"),
+            boxl: [cell[0], cell[1], cell[2]],
+            angles: [cell[3], cell[4], cell[5]],
+            postbox_header: ["0 0".to_string(), "0 0".to_string()],
+            natm_types: 1,
+            natms_per_type: vec![n],
+            masses_per_type: vec![masses[0]],
+            spec_version: 2,
+            metadata: crate::types::FrameMeta::from_map(metadata),
+            sections: Vec::new(),
+            strict_validation: false,
+            sections_declared: true,
+        },
+        atom_data,
+        positions: pos_storage,
+        velocities: velocities_storage.into(),
+        forces: forces_storage.into(),
+        atom_energies: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
+        charges: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
+        spins: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
+        magmoms: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
+        displacements: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
+        spreads: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
+        masses: crate::storage_dtype::Array1Storage::from_f64_vec(masses.to_vec()),
+        atom_ids: ndarray::Array1::from_iter(0..n as u64).into_shared(),
+    })
+}
+
 /// Write coordinates from contiguous arrays.
 ///
 /// `positions` is `(frames, atoms, 3)`, `masses` is `(frames, atoms)` and
@@ -1809,6 +2190,73 @@ impl ConFrameList {
             phases.touch_minflt = touch_minflt;
         }
         Ok((digest, touch_s))
+    }
+
+    /// Positions, masses, constraint flags, cell, and any velocity or
+    /// force block as one contiguous NumPy array each.
+    ///
+    /// Positions are the coordinate slab from the read. The other arrays
+    /// are filled from the parsed frames with the GIL released. Indexing
+    /// a frame still builds Python atoms; this does not.
+    fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let frames = self.frames.lock().expect("frames");
+        if frames.iter().any(|slot| slot.is_none()) {
+            return Err(PyIOError::new_err(
+                "columns() needs every frame still stored; indexing a frame borrows it",
+            ));
+        }
+        let pack_positions = self.slab.is_none();
+        let packed = py.detach(|| {
+            pack_frame_columns(
+                frames.iter().map(|slot| slot.as_ref().unwrap()),
+                pack_positions,
+            )
+        });
+        drop(frames);
+        let Some(packed) = packed else {
+            return Err(PyValueError::new_err(
+                "columns() needs the same atom count in every frame",
+            ));
+        };
+        let dict = PyDict::new(py);
+        if let Some(slab) = &self.slab {
+            dict.set_item("positions", slab.clone_ref(py))?;
+        } else {
+            let pos = ndarray::Array3::from_shape_vec(
+                (packed.n_frames, packed.n_atoms, 3),
+                packed.positions,
+            )
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            dict.set_item("positions", pos.into_pyarray(py))?;
+        }
+        let masses =
+            ndarray::Array2::from_shape_vec((packed.n_frames, packed.n_atoms), packed.masses)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let fixed =
+            ndarray::Array3::from_shape_vec((packed.n_frames, packed.n_atoms, 3), packed.fixed)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let cell = ndarray::Array2::from_shape_vec((packed.n_frames, 6), packed.cell)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        dict.set_item("masses", masses.into_pyarray(py))?;
+        dict.set_item("fixed", fixed.into_pyarray(py))?;
+        dict.set_item("cell", cell.into_pyarray(py))?;
+        dict.set_item("n_frames", packed.n_frames)?;
+        dict.set_item("n_atoms", packed.n_atoms)?;
+        if let Some(values) = packed.velocities {
+            let arr = ndarray::Array3::from_shape_vec((packed.n_frames, packed.n_atoms, 3), values)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            dict.set_item("velocities", arr.into_pyarray(py))?;
+        } else {
+            dict.set_item("velocities", py.None())?;
+        }
+        if let Some(values) = packed.forces {
+            let arr = ndarray::Array3::from_shape_vec((packed.n_frames, packed.n_atoms, 3), values)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            dict.set_item("forces", arr.into_pyarray(py))?;
+        } else {
+            dict.set_item("forces", py.None())?;
+        }
+        Ok(dict.unbind())
     }
 
     /// Return each frame's position buffer and symbol storage to the
@@ -4574,6 +5022,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_positions, m)?)?;
     m.add_function(wrap_pyfunction!(read_coords, m)?)?;
     m.add_function(wrap_pyfunction!(write_coords, m)?)?;
+    m.add_function(wrap_pyfunction!(write_columns, m)?)?;
     m.add_class::<ConBinMapping>()?;
     m.add_function(wrap_pyfunction!(read_conbin, m)?)?;
     m.add_function(wrap_pyfunction!(write_conbin, m)?)?;

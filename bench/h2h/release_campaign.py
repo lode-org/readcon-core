@@ -57,6 +57,8 @@ def write_table2(h2h: list[dict] | dict) -> None:
             continue
         if row.get("cache", "warm") != "warm":
             continue
+        if row.get("scored") is False:
+            continue
         lines.append(
             f"{row['file']}\t{row['reader']}\t{sig3(row['median_s'])}\t{sig3(row['iqr_s'])}"
         )
