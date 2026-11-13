@@ -7,7 +7,7 @@ use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyString, PyTuple};
+use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -4650,9 +4650,60 @@ fn read_extxyz<'py>(
     Ok(dict)
 }
 
+struct OwnedText {
+    symbols: Vec<String>,
+    ids: Vec<u32>,
+}
+
+fn intern_text_column(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
+    let mut symbols_py: Vec<pyo3::Py<pyo3::types::PyString>> = Vec::new();
+    let mut ptrs: Vec<usize> = Vec::new();
+    let mut ids = Vec::new();
+    for frame in value.try_iter()? {
+        let frame = frame?;
+        for atom in frame.try_iter()? {
+            let atom = atom?;
+            let text = atom.cast::<pyo3::types::PyString>()?;
+            let ptr = text.as_ptr() as usize;
+            if let Some(index) = ptrs.iter().position(|known| *known == ptr) {
+                ids.push(index as u32);
+                continue;
+            }
+            if ptrs.len() == 64 {
+                return owned_text_flat(value);
+            }
+            ptrs.push(ptr);
+            ids.push((ptrs.len() - 1) as u32);
+            symbols_py.push(text.clone().unbind());
+        }
+    }
+    let mut symbols = Vec::with_capacity(symbols_py.len());
+    for item in symbols_py {
+        symbols.push(item.bind(value.py()).to_str()?.to_string());
+    }
+    Ok(OwnedText { symbols, ids })
+}
+
+fn owned_text_flat(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
+    let mut symbols = Vec::new();
+    for frame in value.try_iter()? {
+        let frame = frame?;
+        for atom in frame.try_iter()? {
+            symbols.push(atom?.cast::<pyo3::types::PyString>()?.to_str()?.to_string());
+        }
+    }
+    Ok(OwnedText {
+        symbols,
+        ids: Vec::new(),
+    })
+}
+
 struct TextColumn<'a> {
     name: &'a str,
-    tokens: &'a [&'a str],
+    /// Unique spellings, or one spelling per atom when `ids` is empty.
+    tokens: &'a [String],
+    /// Index into `tokens` for each atom. Empty means `tokens[base]`.
+    ids: &'a [u32],
 }
 
 struct RealColumn<'a> {
@@ -4675,7 +4726,12 @@ impl crate::extxyz_scan::ExtxyzSource for TextColumn<'_> {
     }
 
     fn write_fields(&self, base: usize, out: &mut Vec<u8>) {
-        out.extend_from_slice(self.tokens[base].as_bytes());
+        let text = if self.ids.is_empty() {
+            self.tokens[base].as_str()
+        } else {
+            self.tokens[self.ids[base] as usize].as_str()
+        };
+        out.extend_from_slice(text.as_bytes());
     }
 }
 
@@ -4736,7 +4792,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
         .ok_or_else(|| PyValueError::new_err("arrays"))?;
     let arrays = arrays_obj.cast::<PyDict>()?;
     let mut text_names = Vec::new();
-    let mut text_items: Vec<Vec<Bound<'_, PyString>>> = Vec::new();
+    let mut text_items: Vec<OwnedText> = Vec::new();
     let mut real3_meta: Vec<(String, usize)> = Vec::new();
     let mut real3_arrays: Vec<Bound<'_, PyArray3<f64>>> = Vec::new();
     let mut real2_names = Vec::new();
@@ -4764,18 +4820,8 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
             real2_arrays.push(thin.clone());
             order.push(2u8);
         } else {
-            let mut items = Vec::new();
-            let frames = value
-                .try_iter()
-                .map_err(|_| PyValueError::new_err(format!("column {name}")))?;
-            for frame in frames {
-                let frame = frame?;
-                for atom in frame.try_iter()? {
-                    items.push(atom?.cast::<PyString>()?.clone());
-                }
-            }
             text_names.push(name);
-            text_items.push(items);
+            text_items.push(intern_text_column(&value)?);
             order.push(0u8);
         }
     }
@@ -4791,14 +4837,6 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
     for view in &real2_views {
         real2_slices.push(view.as_slice()?);
     }
-    let mut text_refs = Vec::with_capacity(text_items.len());
-    for items in &text_items {
-        let mut refs = Vec::with_capacity(items.len());
-        for item in items {
-            refs.push(item.to_str()?);
-        }
-        text_refs.push(refs);
-    }
     let mut texts = Vec::new();
     let mut reals = Vec::new();
     let mut plan = Vec::new();
@@ -4810,7 +4848,8 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
             0 => {
                 texts.push(TextColumn {
                     name: &text_names[text_index],
-                    tokens: &text_refs[text_index],
+                    tokens: &text_items[text_index].symbols,
+                    ids: &text_items[text_index].ids,
                 });
                 plan.push((0u8, texts.len() - 1));
                 text_index += 1;

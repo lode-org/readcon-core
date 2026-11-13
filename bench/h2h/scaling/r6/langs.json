@@ -1,0 +1,52 @@
+[
+  {
+    "lang": "rust",
+    "op": "read",
+    "line": "kind=pos workers=1 median=0.038183 samples=0.038421,0.038635,0.038121,0.038056,0.038225,0.038141"
+  },
+  {
+    "lang": "rust",
+    "op": "write",
+    "line": "kind=write workers=1 median=0.061909 samples=0.067239,0.064595,0.061780,0.058215,0.061611,0.062038"
+  },
+  {
+    "lang": "c",
+    "op": "read",
+    "line": "read 0.037756027\nread 0.037194037\nread 0.037174707\nread 0.041413019\nread 0.037359174\nread 0.037264798\nhwm_kib 77500\n"
+  },
+  {
+    "lang": "c",
+    "op": "write",
+    "line": "write 0.047574841\nwrite 0.065447844\nwrite 0.059795455\nwrite 0.062011985\nwrite 0.059704831\nwrite 0.057038318\nhwm_kib 171748\n"
+  },
+  {
+    "lang": "c++",
+    "op": "read",
+    "line": "read 0.045758032\nread 0.044450494\nread 0.044391513\nread 0.044415413\nread 0.044465543\nread 0.044444022\nn_frames 1\n"
+  },
+  {
+    "lang": "c++",
+    "op": "write",
+    "line": "write 0.052710458\nwrite 0.043917550\nwrite 0.042605311\nwrite 0.042375327\nwrite 0.042368509\nwrite 0.044140161\n"
+  },
+  {
+    "lang": "fortran",
+    "op": "read",
+    "line": "read      0.055349188\nread      0.096346149\nread      0.103092426\nread      0.102347340\nread      0.102043494\nread      0.101020120\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 902388\n"
+  },
+  {
+    "lang": "fortran",
+    "op": "write",
+    "line": "write      0.067334439\nwrite      0.065035500\nwrite      0.060711728\nwrite      0.058914225\nwrite      0.061839103\nwrite      0.057341482\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 396712\n"
+  },
+  {
+    "lang": "python",
+    "op": "read",
+    "line": "median=0.036558 iqr=0.000020 samples=0.037126,0.036574,0.036477,0.036550,0.036561,0.036555"
+  },
+  {
+    "lang": "python",
+    "op": "write",
+    "line": "median=0.058348 iqr=0.000941 samples=0.061387,0.059061,0.057880,0.058238,0.054474,0.058459"
+  }
+]
