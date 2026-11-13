@@ -1,0 +1,155 @@
+hardware Intel(R) Xeon(R) Processor x86_64 nproc 8 memory_kib 49342816
+serial, warmup 1, samples 6, percentile type 7
+eon_commit 
+warmup tool=readcon op=read fixture=claisen.con warmup_s=6.250500155e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=3.109099998e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.489899998e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.184400000e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.129399945e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.096300159e-05
+sample tool=readcon op=read fixture=claisen.con sample_s=2.112500079e-05
+summary tool=readcon op=read fixture=claisen.con median_s=2.156899973e-05 iqr_s=2.967999535e-06
+warmup tool=readcon op=write fixture=claisen.con warmup_s=1.478909981e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=1.091099984e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=4.056210018e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=2.739049996e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=3.131079975e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=1.025249985e-04
+sample tool=readcon op=write fixture=claisen.con sample_s=5.461399996e-05
+summary tool=readcon op=write fixture=claisen.con median_s=1.915074990e-04 iqr_s=1.991359995e-04
+skip tool=ase-readcon-con op=read fixture=claisen.con status=unavailable detail=ase format readcon-con is not installed
+skip tool=ase-readcon-con op=write fixture=claisen.con status=unavailable detail=ase format readcon-con is not installed
+warmup tool=ase-eon op=read fixture=claisen.con warmup_s=4.650029987e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.471160016e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.251769995e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.069449995e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.023229983e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.328269995e-04
+sample tool=ase-eon op=read fixture=claisen.con sample_s=3.183800000e-04
+summary tool=ase-eon op=read fixture=claisen.con median_s=3.217784997e-04 iqr_s=2.111074991e-05
+warmup tool=ase-eon op=write fixture=claisen.con warmup_s=7.631389999e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=6.288090008e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=8.495290022e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=7.040780001e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=5.956780005e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=5.624689984e-04
+sample tool=ase-eon op=write fixture=claisen.con sample_s=5.793490018e-04
+summary tool=ase-eon op=write fixture=claisen.con median_s=6.122435007e-04 iqr_s=1.018294988e-04
+skip tool=eon-python op=read fixture=claisen.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=claisen.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=neb_band_3.con warmup_s=9.817199680e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=3.986400043e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=3.076099892e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.815900007e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.609100193e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.672100163e-05
+sample tool=readcon op=read fixture=neb_band_3.con sample_s=2.728199979e-05
+summary tool=readcon op=read fixture=neb_band_3.con median_s=2.772049993e-05 iqr_s=3.249248039e-06
+warmup tool=readcon op=write fixture=neb_band_3.con warmup_s=1.004939986e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=7.846000153e-05
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=2.156400005e-04
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=6.415100142e-05
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=5.694300125e-05
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=5.584599785e-05
+sample tool=readcon op=write fixture=neb_band_3.con sample_s=5.847699867e-05
+summary tool=readcon op=write fixture=neb_band_3.con median_s=6.131400005e-05 iqr_s=1.755625090e-05
+skip tool=ase-readcon-con op=read fixture=neb_band_3.con status=unavailable detail=ase format readcon-con is not installed
+skip tool=ase-readcon-con op=write fixture=neb_band_3.con status=unavailable detail=ase format readcon-con is not installed
+skip tool=ase-eon op=read fixture=neb_band_3.con status=read_error detail=ValueError: could not convert string to float: 'Forces'
+skip tool=ase-eon op=write fixture=neb_band_3.con status=write_error detail=ValueError: could not convert string to float: 'Forces'
+skip tool=eon-python op=read fixture=neb_band_3.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=neb_band_3.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=pt100_slab.con warmup_s=7.783499677e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=2.924499859e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=2.289699842e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.964399780e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.919499846e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.824100036e-05
+sample tool=readcon op=read fixture=pt100_slab.con sample_s=1.997800064e-05
+summary tool=readcon op=read fixture=pt100_slab.con median_s=1.981099922e-05 iqr_s=2.860000677e-06
+warmup tool=readcon op=write fixture=pt100_slab.con warmup_s=9.616699754e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=7.832600022e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=2.483819990e-04
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=5.996099935e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=5.216100180e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=4.991300011e-05
+sample tool=readcon op=write fixture=pt100_slab.con sample_s=5.004400009e-05
+summary tool=readcon op=write fixture=pt100_slab.con median_s=5.606100058e-05 iqr_s=2.316149948e-05
+skip tool=ase-readcon-con op=read fixture=pt100_slab.con status=unavailable detail=ase format readcon-con is not installed
+skip tool=ase-readcon-con op=write fixture=pt100_slab.con status=unavailable detail=ase format readcon-con is not installed
+warmup tool=ase-eon op=read fixture=pt100_slab.con warmup_s=3.034149995e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=2.154559988e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=2.248379969e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.983959992e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=2.054030010e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=1.837470008e-04
+sample tool=ase-eon op=read fixture=pt100_slab.con sample_s=2.161690027e-04
+summary tool=ase-eon op=read fixture=pt100_slab.con median_s=2.104294999e-04 iqr_s=1.584300207e-05
+warmup tool=ase-eon op=write fixture=pt100_slab.con warmup_s=3.210390023e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.258389988e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=2.707299973e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=5.127900004e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=4.001519992e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.606070022e-04
+sample tool=ase-eon op=write fixture=pt100_slab.con sample_s=3.774350007e-04
+summary tool=ase-eon op=write fixture=pt100_slab.con median_s=3.690210015e-04 iqr_s=5.994174990e-05
+skip tool=eon-python op=read fixture=pt100_slab.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=pt100_slab.con status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=tiny_multi_cuh2.convel warmup_s=7.070699940e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=2.752400178e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=2.324899833e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.987900032e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.853299909e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.801100007e-05
+sample tool=readcon op=read fixture=tiny_multi_cuh2.convel sample_s=1.858300311e-05
+summary tool=readcon op=read fixture=tiny_multi_cuh2.convel median_s=1.923100172e-05 iqr_s=3.860998731e-06
+warmup tool=readcon op=write fixture=tiny_multi_cuh2.convel warmup_s=9.211499855e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=6.913300240e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=1.938179994e-04
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=5.568800043e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=5.150300058e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=5.058599709e-05
+sample tool=readcon op=write fixture=tiny_multi_cuh2.convel sample_s=5.141499787e-05
+summary tool=readcon op=write fixture=tiny_multi_cuh2.convel median_s=5.359550050e-05 iqr_s=1.433475336e-05
+skip tool=ase-readcon-convel op=read fixture=tiny_multi_cuh2.convel status=unavailable detail=ase format readcon-convel is not installed
+skip tool=ase-readcon-convel op=write fixture=tiny_multi_cuh2.convel status=unavailable detail=ase format readcon-convel is not installed
+skip tool=ase-eon op=read fixture=tiny_multi_cuh2.convel status=read_error detail=ValueError: could not convert string to float: 'Velocities'
+skip tool=ase-eon op=write fixture=tiny_multi_cuh2.convel status=write_error detail=ValueError: could not convert string to float: 'Velocities'
+skip tool=eon-python op=read fixture=tiny_multi_cuh2.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=tiny_multi_cuh2.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+warmup tool=readcon op=read fixture=v30_fs_label.convel warmup_s=5.844800035e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=2.534699888e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.972700193e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.793400224e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.757999780e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.674100349e-05
+sample tool=readcon op=read fixture=v30_fs_label.convel sample_s=1.743200119e-05
+summary tool=readcon op=read fixture=v30_fs_label.convel median_s=1.775700002e-05 iqr_s=1.809751666e-06
+warmup tool=readcon op=write fixture=v30_fs_label.convel warmup_s=8.062499910e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=6.869500066e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=1.364650016e-04
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=5.101300121e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.871800047e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.686999819e-05
+sample tool=readcon op=write fixture=v30_fs_label.convel sample_s=4.825799988e-05
+summary tool=readcon op=write fixture=v30_fs_label.convel median_s=4.986550084e-05 iqr_s=1.590150077e-05
+skip tool=ase-readcon-convel op=read fixture=v30_fs_label.convel status=unavailable detail=ase format readcon-convel is not installed
+skip tool=ase-readcon-convel op=write fixture=v30_fs_label.convel status=unavailable detail=ase format readcon-convel is not installed
+warmup tool=ase-eon op=read fixture=v30_fs_label.convel warmup_s=2.512200008e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.887270009e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.684060007e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.584279998e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.672590006e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.556060015e-04
+sample tool=ase-eon op=read fixture=v30_fs_label.convel sample_s=1.554049995e-04
+summary tool=ase-eon op=read fixture=v30_fs_label.convel median_s=1.628435002e-04 iqr_s=1.180774962e-05
+warmup tool=ase-eon op=write fixture=v30_fs_label.convel warmup_s=2.643019980e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.343999986e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.952360010e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.123960003e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=1.979949993e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=2.990020002e-04
+sample tool=ase-eon op=write fixture=v30_fs_label.convel sample_s=4.541010021e-04
+summary tool=ase-eon op=write fixture=v30_fs_label.convel median_s=2.648179998e-04 iqr_s=8.016350057e-05
+skip tool=eon-python op=read fixture=v30_fs_label.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn
+skip tool=eon-python op=write fixture=v30_fs_label.convel status=unavailable detail=eon.fileio is not installed; set EON_ROOT to a checkout of eOn

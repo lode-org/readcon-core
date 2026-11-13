@@ -1,24 +1,42 @@
-rev_parse 5e1430ddf6da5d2b0d4652f47dce889e7895598f
-tree 7df8390b6ee7cfd73f0b849b02313a365121d4a2
+rev_parse 6d58416c472833aa02cd479ec8881b25b0c5237f
+tree 97d22a6b9dfda3d99c3fb95bc7017996ca1837ee
 command python3 paper/cpc/bench/db_v2.py
-date_utc 2026-11-05T08:24:23Z
+date_utc 2026-11-13T05:15:53Z
 uname_m x86_64
 nproc 8
 cpu_model Intel Xeon Processor
 pwd .
 tmpdir paper/cpc/bench/work/v2
 repeats 6
-baseline_rss_bytes=29204480
-repeat 0 kind readcon-db seconds 0.006240564998734044 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
-repeat 0 kind ase.db seconds 0.10351818699928117 rss_bytes 89636864 rss_above_baseline 60432384 frames 40 error
-repeat 1 kind ase.db seconds 0.08124185300039244 rss_bytes 89571328 rss_above_baseline 60366848 frames 40 error
-repeat 1 kind readcon-db seconds 0.005746310998802073 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
-repeat 2 kind readcon-db seconds 0.003665125997940777 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
-repeat 2 kind ase.db seconds 0.10350268600086565 rss_bytes 89640960 rss_above_baseline 60436480 frames 40 error
-repeat 3 kind ase.db seconds 0.0591945019987179 rss_bytes 89538560 rss_above_baseline 60334080 frames 40 error
-repeat 3 kind readcon-db seconds 0.00556730500102276 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
-repeat 4 kind readcon-db seconds 0.0037774779993924312 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
-repeat 4 kind ase.db seconds 0.06339448499784339 rss_bytes 89513984 rss_above_baseline 60309504 frames 40 error
-repeat 5 kind ase.db seconds 0.05423903599876212 rss_bytes 89477120 rss_above_baseline 60272640 frames 40 error
-repeat 5 kind readcon-db seconds 0.0033583500007807743 rss_bytes 29335552 rss_above_baseline 131072 frames 40 error
+baseline_rss_bytes=29044736
+repeat 0 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
+repeat 0 kind ase.db seconds 0.08652807399994344 rss_bytes 89239552 rss_above_baseline 60194816 frames 40 error 
+repeat 1 kind ase.db seconds 0.08537556800001767 rss_bytes 91639808 rss_above_baseline 62595072 frames 40 error 
+repeat 1 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
+repeat 2 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
+repeat 2 kind ase.db seconds 0.0844102630035195 rss_bytes 91627520 rss_above_baseline 62582784 frames 40 error 
+repeat 3 kind ase.db seconds 0.05812653900284204 rss_bytes 91672576 rss_above_baseline 62627840 frames 40 error 
+repeat 3 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
+repeat 4 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
+repeat 4 kind ase.db seconds 0.058382326998980716 rss_bytes 91762688 rss_above_baseline 62717952 frames 40 error 
+repeat 5 kind ase.db seconds 0.06271396499869297 rss_bytes 91660288 rss_above_baseline 62615552 frames 40 error 
+repeat 5 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+ModuleNotFoundError: No module named 'readcon_db'
+
 exit_code 0
