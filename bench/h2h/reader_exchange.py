@@ -224,13 +224,29 @@ def sample_arm(arm: str, path: Path, cache: str) -> dict:
     # second. One mmap threshold for every arm keeps the treatment the same.
     env["MALLOC_MMAP_THRESHOLD_"] = "65536"
     if arm == "eon":
-        env["PYTHONPATH"] = str(br.EON_PY)
-        env["LD_LIBRARY_PATH"] = (
-            str(br.EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+        # pyeonclient is installed next to the built libeonclib. The paper
+        # tree's peer checkout is used when it is actually present.
+        lib_dirs = [
+            "/tmp/eon-build/client",
+            "/tmp/eon-build/client/potentials/SocketNWChem",
+            "/tmp/eon-build/client/potentials/EMT",
+            "/tmp/eon-build/client/potentials/EMT/Asap",
+            "/tmp/eon-build/client/potentials/ExtPot",
+            "/tmp/eon-build/client/potentials/Rgpot",
+            "/tmp/eon-build/client/potentials/LAMMPS",
+            "/tmp/eon-build/subprojects/rgpot/CppCore",
+            str(br.EON_LIB),
+        ]
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(
+            [d for d in lib_dirs if Path(d).is_dir()]
+            + ([env["LD_LIBRARY_PATH"]] if env.get("LD_LIBRARY_PATH") else [])
         )
+        if (Path(br.EON_PY) / "pyeonclient").is_dir():
+            env["PYTHONPATH"] = str(br.EON_PY)
     if arm == "eon_py":
-        env["EON_PKG"] = str(br.EON_PKG)
-        env["PYTHONPATH"] = str(br.EON_PKG)
+        pkg = br.EON_PKG if (br.EON_PKG / "eon").is_dir() else Path("/tmp/eOn")
+        env["EON_PKG"] = str(pkg)
+        env["PYTHONPATH"] = str(pkg)
     if arm == "readcon_eon_api":
         env["EON_ALLFRAMES"] = str(br.EON_BIN)
     proc = subprocess.Popen(
