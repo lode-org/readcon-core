@@ -4,16 +4,19 @@
 The workload is the one in ``paper/cpc/scripts/bench_readers.py``: one
 trajectory of 32 copper atoms, fresh process per sample, VmHWM after the
 read minus VmHWM after the import. The paper's log used 100000 frames
-and six repeats. This run is serial and pinned to the process affinity
-set, with one untimed round and then the timed rounds. The raw log keeps
-every sample. ``reader-exchange.json`` is what
-``paper/cpc/scripts/plot_union_extra.py`` reads for the timing, ratio and
-memory figures.
+and six repeats. This run is serial. Each sample is pinned to one
+physical core, because none of these arms ask for a thread pool. One
+untimed round, then the timed rounds. An arm whose warm IQR/median is
+still over 10% is repeated at n=12. The raw log keeps every sample.
+``reader-exchange.json`` is what ``paper/cpc/scripts/plot_union_extra.py``
+reads for the timing, ratio and memory figures.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
+import gc
 import json
 import math
 import os
@@ -26,7 +29,6 @@ from pathlib import Path
 import numpy as np
 
 from campaign_protocol import head_sha, stamp_file
-from sample_protocol import core_list, pin_cores
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "paper" / "cpc" / "scripts"))
@@ -113,8 +115,10 @@ def _install_worker() -> None:
     """
     ready = 'print(f"READY {before}", flush=True)\nsys.stdin.readline()\n'
     ready_new = (
+        "import ctypes\n"
         "import gc\n"
         "gc.collect()\n"
+        "ctypes.CDLL('libc.so.6').malloc_trim(0)\n"
         "gc.disable()\n"
         'print(f"READY {before}", flush=True)\n'
         "sys.stdin.readline()\n"
@@ -210,8 +214,72 @@ def _drop_until_cold(path: Path) -> None:
     )
 
 
-def sample_arm(arm: str, path: Path, cache: str) -> dict:
-    """One fresh pinned process. ``cache`` is ``warm`` or ``cold`` for every arm."""
+def _physical_core() -> int:
+    """One physical core. This guest has no SMT, so the lowest allowed cpu is one."""
+    allowed = sorted(os.sched_getaffinity(0))
+    if not allowed:
+        raise SystemExit("this process has an empty CPU affinity set")
+    return allowed[0]
+
+
+def _cpu_mhz(core: int) -> str:
+    blocks = (
+        Path("/proc/cpuinfo")
+        .read_text(encoding="utf-8", errors="replace")
+        .split("\n\n")
+    )
+    for block in blocks:
+        proc = None
+        mhz = None
+        for line in block.splitlines():
+            if line.startswith("processor"):
+                proc = int(line.split(":", 1)[1])
+            elif line.lower().startswith("cpu mhz"):
+                mhz = line.split(":", 1)[1].strip()
+        if proc == core and mhz is not None:
+            return mhz
+    return "absent"
+
+
+def _clock_note(core: int) -> str:
+    """Governor and the guest clock, measured on ``core`` and outside the samples."""
+    os.sched_setaffinity(0, {core})
+    gov_path = Path(f"/sys/devices/system/cpu/cpu{core}/cpufreq/scaling_governor")
+    governor = (
+        gov_path.read_text(encoding="utf-8").strip() if gov_path.is_file() else "absent"
+    )
+    sib_path = Path(f"/sys/devices/system/cpu/cpu{core}/topology/thread_siblings_list")
+    siblings = (
+        sib_path.read_text(encoding="utf-8").strip() if sib_path.is_file() else "absent"
+    )
+    before = _cpu_mhz(core)
+    started = time.perf_counter()
+    acc = 0
+    while time.perf_counter() - started < 0.2:
+        acc += 1
+    elapsed = time.perf_counter() - started
+    after = _cpu_mhz(core)
+    return (
+        f"pin core={core} siblings={siblings} governor={governor} "
+        f"cpu_mhz={before} cpu_mhz_after_spin={after} "
+        f"spin_s={elapsed:.6f} spin_iters={acc}"
+    )
+
+
+def _release_heap() -> None:
+    """Return the parent's free arenas between samples.
+
+    Each sample is already a new process. The 0.17.3 warmup was still
+    slower than the scored calls that followed it, which is kernel page
+    state left behind by the previous process. Trim what this process
+    can, so the next child does not inherit a dirty heap from the parent.
+    """
+    gc.collect()
+    ctypes.CDLL("libc.so.6").malloc_trim(0)
+
+
+def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
+    """One fresh process, pinned to ``core``. ``cache`` is ``warm`` or ``cold``."""
     if cache not in {"warm", "cold"}:
         raise SystemExit(f"unknown cache {cache}")
     env = os.environ.copy()
@@ -219,6 +287,14 @@ def sample_arm(arm: str, path: Path, cache: str) -> dict:
     env["READCON_V0173"] = str(br.RELEASE_DIR)
     env.pop("TMPDIR", None)
     env.pop("PYTHONPATH", None)
+    for key in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        env[key] = "1"
     # The 0.17.3 reader allocates a small Python object per atom. The
     # default glibc arena policy moves that sample by a few tenths of a
     # second. One mmap threshold for every arm keeps the treatment the same.
@@ -253,7 +329,7 @@ def sample_arm(arm: str, path: Path, cache: str) -> dict:
         [
             "taskset",
             "-c",
-            core_list(),
+            str(core),
             sys.executable,
             "-c",
             br.WORKER,
@@ -313,7 +389,10 @@ def sample_arm(arm: str, path: Path, cache: str) -> dict:
 def run(out: Path, frames: int, repeats: int) -> None:
     if frames < 1 or repeats < 1:
         raise SystemExit("frames and repeats must be positive")
-    pin_cores()
+    allowed = sorted(os.sched_getaffinity(0))
+    core = _physical_core()
+    os.sched_setaffinity(0, {core})
+    clock = _clock_note(core)
     _install_worker()
     br.N_FRAMES = frames
     br.REPEATS = repeats
@@ -336,12 +415,18 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "schedule each arm warmup then its repeats back-to-back; warm phase then cold phase",
         "settle drop_caches plus 2 s after any arm whose sample is at least 5 s",
         "process fresh",
-        f"affinity taskset -c {core_list()}",
+        f"affinity_allowed {','.join(str(cpu) for cpu in allowed)}",
+        f"affinity taskset -c {core}",
+        clock,
+        "threads 1; read_positions n_threads None stays on the calling thread",
         "serial 1",
+        "malloc_trim and gc.collect between samples, and in the child before READY",
         "page_cache primed after READY, before the warm clock",
         "cold drops the page cache after READY, before the cold clock",
         "clock parse only; the coordinate check is outside the clock",
-        "gc collect then disable before READY, every arm",
+        "gc collect, malloc_trim, then gc.disable before READY, every arm",
+        "readcon_first stays on the warm gate: its warm median was 0.040 s and its cold median 0.111 s",
+        "an arm whose warm IQR/median exceeds 0.10 is rerun at n=12",
         "MALLOC_MMAP_THRESHOLD_=65536 for every arm",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
         "numpy_percentile method=linear type=7",
@@ -394,7 +479,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
                 "mib": None,
                 "exit": 1,
             }
-        return sample_arm(name, paths[name], cache)
+        return sample_arm(name, paths[name], cache, core)
 
     def record(name: str, cache: str, rep: int | None, doc: dict) -> None:
         label = "warmup" if rep is None else f"sample rep={rep}"
@@ -438,6 +523,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
                 os.environ["READER_EXCHANGE_INNER"] = "1"
             lines.append(f"arm {name} cache={cache}")
             record(name, cache, None, take(name, cache))
+            _release_heap()
             last = 0.0
             for rep in range(repeats):
                 doc = take(name, cache)
@@ -445,9 +531,47 @@ def run(out: Path, frames: int, repeats: int) -> None:
                 record(name, cache, rep, doc)
                 if doc.get("seconds"):
                     last = float(doc["seconds"])
+                _release_heap()
             os.environ["READER_EXCHANGE_INNER"] = "1"
             if last >= 5.0:
                 settle(f"{name} cache={cache}")
+
+    def _rerun(name: str, n_rep: int) -> None:
+        for cache in ("warm", "cold"):
+            if name == "conbin" and cache == "warm":
+                os.environ["READER_EXCHANGE_INNER"] = str(conbin_inner)
+            else:
+                os.environ["READER_EXCHANGE_INNER"] = "1"
+            taken[name][cache] = []
+            lines.append(f"arm {name} cache={cache} repeats={n_rep}")
+            record(name, cache, None, take(name, cache))
+            _release_heap()
+            last = 0.0
+            for rep in range(n_rep):
+                doc = take(name, cache)
+                taken[name][cache].append(doc)
+                record(name, cache, rep, doc)
+                if doc.get("seconds"):
+                    last = float(doc["seconds"])
+                _release_heap()
+            os.environ["READER_EXCHANGE_INNER"] = "1"
+            if last >= 5.0:
+                settle(f"{name} cache={cache} n={n_rep}")
+
+    for name in names:
+        got = [
+            row
+            for row in taken[name]["warm"]
+            if row.get("seconds") is not None and not row.get("error")
+        ]
+        if len(got) < repeats:
+            continue
+        med, iqr, _, _ = _type7([row["seconds"] for row in got])
+        ratio = iqr / med if med else float("inf")
+        if ratio <= 0.10:
+            continue
+        lines.append(f"raise_n arm={name} warm_iqr_over_median={ratio:.6f} to=12")
+        _rerun(name, 12)
     payload_arms: dict[str, dict] = {}
     for name in names:
         warm = taken[name]["warm"]
@@ -528,7 +652,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "repeats": repeats,
         "warmup": 1,
         "serial": True,
-        "pinned": f"taskset -c {core_list()}",
+        "pinned": f"taskset -c {core}",
         "percentile": "numpy linear (type-7)",
         "memory": "VmHWM after the read minus VmHWM after the import, MiB",
         "arms": payload_arms,
