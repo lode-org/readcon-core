@@ -208,6 +208,9 @@ allow_exact = {
     # The fidelity campaign records the package it measured.
     "bench/fidelity/results/fidelity.json",
     "bench/fidelity/results/timing.json",
+    # The head-to-head pin records the readcon build that was timed,
+    # the same way the fidelity results do.
+    "bench/h2h/versions.json",
 }
 skip_dirs = {
     ".git",
@@ -223,7 +226,9 @@ skip_dirs = {
 # bench/h2h/work is generated campaign output. It is gitignored, and a
 # full-tree walk would still open it. The gate lists tracked files and
 # also skips this prefix.
-skip_prefixes = ("bench/h2h/work/",)
+# Campaign logs and rows record the version they measured. They are not
+# package metadata. bench/h2h/work is generated output and is gitignored.
+skip_prefixes = ("bench/h2h/work/", "bench/h2h/scaling/")
 bad = []
 listed = subprocess.check_output(["git", "ls-files", "-z"])
 for raw in listed.split(b"\0"):

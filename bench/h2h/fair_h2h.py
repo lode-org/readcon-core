@@ -59,6 +59,14 @@ def pins() -> dict:
     return json.loads((BENCH / "versions.json").read_text())
 
 
+def readcon_version(readcon) -> str:
+    """The installed package version, not a literal baked into this file."""
+    found = getattr(readcon, "__version__", None)
+    if isinstance(found, str) and found:
+        return found
+    return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+
 def pages_resident(path: Path) -> tuple[int, int]:
     import ctypes
     import mmap
@@ -247,7 +255,7 @@ def check_versions() -> dict:
         "MDAnalysis": MDAnalysis.__version__,
         "extxyz": extxyz.__version__,
         "ovito": "3.17.2",
-        "readcon": readcon.__version__ if hasattr(readcon, "__version__") else "0.23.0",
+        "readcon": readcon_version(readcon),
     }
     import ovito
 
