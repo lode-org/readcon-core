@@ -331,7 +331,9 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
 
                         def go(data=data, dest=dest, workers=workers, sync=sync):
                             drop_file(dest)
-                            readcon.write_extxyz(os.fspath(dest), data, n_threads=workers)
+                            readcon.write_extxyz(
+                                os.fspath(dest), data, n_threads=workers
+                            )
                             if sync:
                                 fd = os.open(dest, os.O_RDONLY)
                                 try:
@@ -344,7 +346,9 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
 
                         def go(frames=frames, dest=dest, workers=workers, sync=sync):
                             drop_file(dest)
-                            readcon.write_con(os.fspath(dest), frames, n_threads=workers)
+                            readcon.write_con(
+                                os.fspath(dest), frames, n_threads=workers
+                            )
                             if sync:
                                 fd = os.open(dest, os.O_RDONLY)
                                 try:
@@ -658,7 +662,9 @@ def mpi_strong(paths: dict[str, Path], rows: list[dict]) -> None:
                             ("memory", shm_root / f"mpi-{name}.con", False),
                         )
                     for sink, dest, sync in sinks:
-                        if have(rows, op=op, file=name, workers=ranks, kind="mpi", sink=sink):
+                        if have(
+                            rows, op=op, file=name, workers=ranks, kind="mpi", sink=sink
+                        ):
                             continue
                         extra = {}
                         if dest is not None:
