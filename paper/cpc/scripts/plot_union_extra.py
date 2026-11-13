@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import csv
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -160,161 +161,65 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
     return med, q1, q3
 
 
-# perf19 writes this record by rerunning the reader-exchange workload.
-# Until that file is in the tree, the plot falls back to the 0.17.3 log.
-EXCHANGE_JSON = ROOT / "logs" / "reader-exchange.json"
-EXCHANGE_LOG = ROOT / "logs" / "reader-exchange.log"
-EXCHANGE_MACROS = OUT / "exchange_macros.tex"
-# The committed log names this release commit and no version string.
-LOG_RELEASE = {
-    "12ca800bc2212c565941e04094cba6b4d99a62e0": "0.17.3",
-}
+READER_LOG = ROOT / "logs" / "reader-exchange.log"
+READER_JSON = Path(
+    os.environ.get("READER_EXCHANGE_JSON", str(ROOT / "logs" / "reader-exchange.json"))
+)
 
 
-def _header(text: str) -> dict[str, str]:
-    found = {}
-    for line in text.splitlines():
-        if line.startswith("sample ") or line.startswith("summary "):
-            break
-        parts = line.split(" ", 1)
-        if len(parts) == 2 and parts[0]:
-            found[parts[0]] = parts[1].strip()
-    return found
-
-
-def _from_log(text: str) -> dict:
-    header = _header(text)
-    commit = header.get("release_commit", "")
-    version = header.get("release_version") or LOG_RELEASE.get(commit)
-    if not version:
-        raise SystemExit(
-            "reader-exchange.log has no release_version, and its release_commit is not 0.17.3"
-        )
-    arms: dict[str, list[float]] = {}
-    mib: dict[str, float] = {}
-    for line in text.splitlines():
-        if line.startswith("sample "):
-            fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
-            seconds = fields.get("seconds")
-            if seconds in (None, "", "None"):
-                continue
-            arms.setdefault(fields["arm"], []).append(float(seconds))
-        elif line.startswith("summary "):
-            fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
-            if fields.get("mib_median") not in (None, "", "None"):
-                mib[fields["arm"]] = float(fields["mib_median"])
-    if "readcon_tip" not in arms:
-        raise SystemExit("reader-exchange.log has no readcon_tip samples")
-    n = int(header["repeats"])
-    if len(arms["readcon_tip"]) != n:
-        raise SystemExit(
-            f"readcon_tip has {len(arms['readcon_tip'])} samples; the log says n={n}"
-        )
-    return {
-        "version": version,
-        "host": header["cpu_model"],
-        "cpus": int(header["nproc"]),
-        "frames": int(header["frames"]),
-        "atoms": int(header["atoms"]),
-        "n": n,
-        "rss_mib": mib["readcon_tip"],
-        "samples": arms,
-        "mib": mib,
-        "source": "reader-exchange.log",
-    }
-
-
-def _samples_of(arm: dict) -> list[float]:
-    raw = arm.get("samples_s", arm.get("seconds"))
-    if raw is None:
-        raise SystemExit("a reader-exchange arm needs samples_s")
-    return [float(value) for value in raw if value is not None]
-
-
-def _from_json(doc: dict) -> dict:
-    """The record perf19 writes. version, host, n and the readcon RSS are required."""
-    missing = [key for key in ("version", "host", "n", "frames", "atoms") if key not in doc]
-    if missing:
-        raise SystemExit(f"reader-exchange.json lacks {', '.join(missing)}")
-    arms_in = doc.get("arms") or {}
-    samples = {name: _samples_of(arm) for name, arm in arms_in.items()}
-    mib = {}
-    for name, arm in arms_in.items():
-        if arm.get("mib_median") is not None:
-            mib[name] = float(arm["mib_median"])
-    if "rss_mib" in doc:
-        rss = float(doc["rss_mib"])
-    elif "readcon_tip" in mib:
-        rss = mib["readcon_tip"]
-    else:
-        raise SystemExit("reader-exchange.json has no rss_mib and no readcon_tip mib_median")
-    n = int(doc["n"])
-    if "readcon_tip" in samples and len(samples["readcon_tip"]) != n:
-        raise SystemExit(
-            f"readcon_tip has {len(samples['readcon_tip'])} samples; the record says n={n}"
-        )
-    cpus = int(doc["cpus"]) if "cpus" in doc else int(doc.get("nproc", 0))
-    return {
-        "version": str(doc["version"]),
-        "host": str(doc["host"]),
-        "cpus": cpus,
-        "frames": int(doc["frames"]),
-        "atoms": int(doc["atoms"]),
-        "n": n,
-        "rss_mib": rss,
-        "samples": samples,
-        "mib": mib,
-        "source": "reader-exchange.json",
-    }
-
-
-def load_exchange() -> dict:
-    if EXCHANGE_JSON.is_file():
-        return _from_json(json.loads(EXCHANGE_JSON.read_text(encoding="utf-8")))
-    if EXCHANGE_LOG.is_file():
-        return _from_log(EXCHANGE_LOG.read_text(encoding="utf-8"))
-    raise SystemExit("reader-exchange.json is missing, and so is reader-exchange.log")
-
-
-def _tex(value: str) -> str:
-    return (
-        value.replace("\\", r"\textbackslash{}")
-        .replace("&", r"\&")
-        .replace("%", r"\%")
-        .replace("_", r"\_")
-    )
-
-
-def write_exchange_macros(record: dict) -> None:
-    """Version, host, n and the readcon RSS, for the reader-exchange captions."""
-    rss = f"{record['rss_mib']:.0f}"
-    lines = [
-        f"% Written by paper/cpc/scripts/exchange_figures.py from {record['source']}.",
-        f"\\newcommand{{\\exReadconVersion}}{{{_tex(record['version'])}}}",
-        f"\\newcommand{{\\exHost}}{{{_tex(record['host'])}}}",
-        f"\\newcommand{{\\exCpus}}{{{record['cpus']}}}",
-        f"\\newcommand{{\\exFrames}}{{{record['frames']}}}",
-        f"\\newcommand{{\\exAtoms}}{{{record['atoms']}}}",
-        f"\\newcommand{{\\exN}}{{{record['n']}}}",
-        f"\\newcommand{{\\exRssMib}}{{{rss}}}",
-        "",
-    ]
-    EXCHANGE_MACROS.write_text("\n".join(lines), encoding="utf-8")
+def _reader_document() -> dict | None:
+    """The campaign JSON. The historical log remains the fallback."""
+    if READER_JSON.is_file():
+        return json.loads(READER_JSON.read_text(encoding="utf-8"))
+    return None
 
 
 def _reader_samples() -> dict[str, list[float]]:
-    """Wall times from the exchange record. One list per arm."""
-    arms = load_exchange()["samples"]
-    if "readcon_tip" not in arms or not arms["readcon_tip"]:
-        raise SystemExit("The tip readcon row needs samples.")
+    """Wall times, one list per arm. Prefer reader-exchange.json."""
+    doc = _reader_document()
+    if doc is not None:
+        arms = {}
+        for name, row in doc["arms"].items():
+            seconds = [
+                float(value) for value in row.get("seconds", []) if value is not None
+            ]
+            if seconds and not row.get("error"):
+                arms[name] = seconds
+        if "readcon_tip" not in arms or len(arms["readcon_tip"]) < 6:
+            raise SystemExit("The tip readcon row needs at least six samples.")
+        return arms
+    if not READER_LOG.is_file():
+        raise SystemExit(
+            "reader-exchange.json is missing. Run the reader_exchange campaign first."
+        )
+    arms: dict[str, list[float]] = {}
+    for line in READER_LOG.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("sample "):
+            continue
+        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        seconds = fields.get("seconds")
+        if seconds in (None, "", "None"):
+            continue
+        arms.setdefault(fields["arm"], []).append(float(seconds))
+    if "readcon_tip" not in arms or len(arms["readcon_tip"]) < 6:
+        raise SystemExit("The tip readcon row needs at least six samples.")
     return arms
 
 
 def _summary_rows() -> list[dict[str, str]]:
-    record = load_exchange()
-    return [
-        {"arm": name, "mib_median": str(value)} for name, value in record["mib"].items()
-    ]
+    doc = _reader_document()
+    if doc is not None:
+        return [
+            {"arm": name, "mib_median": str(row["mib_median"])}
+            for name, row in doc["arms"].items()
+            if "mib_median" in row
+        ]
+    rows = []
+    for line in READER_LOG.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("summary "):
+            continue
+        rows.append(dict(part.split("=", 1) for part in line.split() if "=" in part))
+    return rows
 
 
 # All-frame CON readers. First-frame rows stay out of these figures.
@@ -617,6 +522,179 @@ def structures() -> None:
         cairosvg.svg2pdf(url=str(page), write_to=str(OUT / "structures.pdf"))
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+# Caption macros. The campaign JSON stores seconds and mib_median and does
+# not name a version or a host. Those two stay on the 0.17.3 log until the
+# record carries them. % PENDING perf19 marks the captions that use them.
+EXCHANGE_MACROS = OUT / "exchange_macros.tex"
+LOG_RELEASE = {
+    "12ca800bc2212c565941e04094cba6b4d99a62e0": "0.17.3",
+}
+
+
+def _header(text: str) -> dict[str, str]:
+    found = {}
+    for line in text.splitlines():
+        if line.startswith("sample ") or line.startswith("summary "):
+            break
+        parts = line.split(" ", 1)
+        if len(parts) == 2 and parts[0]:
+            found[parts[0]] = parts[1].strip()
+    return found
+
+
+def _from_log(text: str) -> dict:
+    header = _header(text)
+    commit = header.get("release_commit", "")
+    version = header.get("release_version") or LOG_RELEASE.get(commit)
+    if not version:
+        raise SystemExit(
+            "reader-exchange.log has no release_version, and its release_commit is not 0.17.3"
+        )
+    arms: dict[str, list[float]] = {}
+    mib: dict[str, float] = {}
+    for line in text.splitlines():
+        if line.startswith("sample "):
+            fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+            seconds = fields.get("seconds")
+            if seconds in (None, "", "None"):
+                continue
+            arms.setdefault(fields["arm"], []).append(float(seconds))
+        elif line.startswith("summary "):
+            fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+            if fields.get("mib_median") not in (None, "", "None"):
+                mib[fields["arm"]] = float(fields["mib_median"])
+    if "readcon_tip" not in arms:
+        raise SystemExit("reader-exchange.log has no readcon_tip samples")
+    n = int(header["repeats"])
+    if len(arms["readcon_tip"]) != n:
+        raise SystemExit(
+            f"readcon_tip has {len(arms['readcon_tip'])} samples; the log says n={n}"
+        )
+    return {
+        "version": version,
+        "host": header["cpu_model"],
+        "cpus": int(header["nproc"]),
+        "frames": int(header["frames"]),
+        "atoms": int(header["atoms"]),
+        "n": n,
+        "rss_mib": mib["readcon_tip"],
+        "samples": arms,
+        "mib": mib,
+        "source": "reader-exchange.log",
+    }
+
+
+def _caption_fallback() -> dict:
+    """Version and host from the historical log, when the JSON omits them."""
+    if not READER_LOG.is_file():
+        return {}
+    return _from_log(READER_LOG.read_text(encoding="utf-8"))
+
+
+def _samples_of(arm: dict) -> list[float]:
+    raw = arm.get("seconds", arm.get("samples_s"))
+    if not raw:
+        return []
+    return [float(value) for value in raw if value is not None]
+
+
+def _from_json(doc: dict) -> dict:
+    """perf19's reader-exchange.json: arms carry seconds and mib_median."""
+    for key in ("frames", "atoms"):
+        if key not in doc:
+            raise SystemExit(f"reader-exchange.json lacks {key}")
+    arms_in = doc.get("arms") or {}
+    samples = {}
+    mib = {}
+    for name, arm in arms_in.items():
+        if arm.get("error"):
+            continue
+        got = _samples_of(arm)
+        if got:
+            samples[name] = got
+        if arm.get("mib_median") is not None:
+            mib[name] = float(arm["mib_median"])
+    if "rss_mib" in doc:
+        rss = float(doc["rss_mib"])
+    elif "readcon_tip" in mib:
+        rss = mib["readcon_tip"]
+    else:
+        raise SystemExit(
+            "reader-exchange.json has no rss_mib and no readcon_tip mib_median"
+        )
+    if "n" in doc:
+        n = int(doc["n"])
+    else:
+        n = int(doc.get("repeats", len(samples.get("readcon_tip", []))))
+    if "readcon_tip" not in samples or len(samples["readcon_tip"]) != n:
+        raise SystemExit(
+            f"readcon_tip has {len(samples.get('readcon_tip', []))} samples; the record says n={n}"
+        )
+    fallback = _caption_fallback()
+    version = (
+        doc.get("version") or doc.get("release_version") or fallback.get("version")
+    )
+    host = doc.get("host") or doc.get("cpu_model") or fallback.get("host")
+    if "cpus" in doc:
+        cpus = int(doc["cpus"])
+    elif "nproc" in doc:
+        cpus = int(doc["nproc"])
+    else:
+        cpus = int(fallback.get("cpus", 0))
+    if not version or not host:
+        raise SystemExit(
+            "reader-exchange.json has no version or host, and the log does not either"
+        )
+    return {
+        "version": str(version),
+        "host": str(host),
+        "cpus": cpus,
+        "frames": int(doc["frames"]),
+        "atoms": int(doc["atoms"]),
+        "n": n,
+        "rss_mib": rss,
+        "samples": samples,
+        "mib": mib,
+        "source": "reader-exchange.json",
+    }
+
+
+def load_exchange() -> dict:
+    doc = _reader_document()
+    if doc is not None:
+        return _from_json(doc)
+    if READER_LOG.is_file():
+        return _from_log(READER_LOG.read_text(encoding="utf-8"))
+    raise SystemExit("reader-exchange.json is missing, and so is reader-exchange.log")
+
+
+def _tex(value: str) -> str:
+    return (
+        value.replace("\\", r"\textbackslash{}")
+        .replace("&", r"\&")
+        .replace("%", r"\%")
+        .replace("_", r"\_")
+    )
+
+
+def write_exchange_macros(record: dict) -> None:
+    """Version, host, n and the readcon RSS, for the reader-exchange captions."""
+    rss = f"{record['rss_mib']:.0f}"
+    lines = [
+        f"% Written by paper/cpc/scripts/exchange_figures.py from {record['source']}.",
+        f"\\newcommand{{\\exReadconVersion}}{{{_tex(record['version'])}}}",
+        f"\\newcommand{{\\exHost}}{{{_tex(record['host'])}}}",
+        f"\\newcommand{{\\exCpus}}{{{record['cpus']}}}",
+        f"\\newcommand{{\\exFrames}}{{{record['frames']}}}",
+        f"\\newcommand{{\\exAtoms}}{{{record['atoms']}}}",
+        f"\\newcommand{{\\exN}}{{{record['n']}}}",
+        f"\\newcommand{{\\exRssMib}}{{{rss}}}",
+        "",
+    ]
+    EXCHANGE_MACROS.write_text("\n".join(lines), encoding="utf-8")
+
 
 
 def reader_figures() -> None:

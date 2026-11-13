@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -46,6 +47,7 @@ def save(fig, name: str) -> None:
 
 
 def bars(name: str, labels, values, ylabel: str, colors=None) -> None:
+    face()
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
     colors = colors or [CYCLE[i % len(CYCLE)] for i in range(len(labels))]
     ax.bar(range(len(labels)), values, color=colors, edgecolor=BLACK, linewidth=0.4)
@@ -116,11 +118,16 @@ def toc() -> None:
     save(fig, "toc")
 
 
+def _reads_path() -> Path:
+    """``reads.json`` from the roofline rule, or the historical r0174 record."""
+    override = os.environ.get("READS_JSON")
+    if override:
+        return Path(override)
+    return ROOT / "bench" / "results" / "r0174" / "reads.json"
+
+
 def timing_and_fairness() -> None:
-    face()
-    cells = json.loads(
-        (ROOT / "bench" / "results" / "r0174" / "reads.json").read_text()
-    )["cells"]
+    cells = json.loads(_reads_path().read_text())["cells"]
 
     def med(reader: str, threads: int = 1) -> float:
         for cell in cells.values():

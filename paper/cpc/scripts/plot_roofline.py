@@ -26,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import plot_restored as restored  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-READS = ROOT / "bench" / "results" / "reads.json"
 BARS = (
     ("readcon", 1, "full, 1"),
     ("readcon", 8, "full, 8"),
@@ -77,9 +76,10 @@ def _from_cells(doc: dict) -> tuple[list[str], list[float]]:
 
 
 def main() -> int:
-    if not READS.is_file():
-        raise SystemExit(f"{READS} is missing. perf19 writes it.")
-    doc = json.loads(READS.read_text(encoding="utf-8"))
+    reads = restored._reads_path()
+    if not reads.is_file():
+        raise SystemExit(f"{reads} is missing. perf19 writes it.")
+    doc = json.loads(reads.read_text(encoding="utf-8"))
     if "rates" in doc:
         labels, rates = _from_rates(doc)
     elif "cells" in doc:

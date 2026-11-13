@@ -1,24 +1,26 @@
-rev_parse 5a302674c0dc391d69167ca276f1f829b7b6dba4
-tree fd73499904dceadf51adb04943c90c0d25e88839
+rev_parse 6644fc355f6bdcb83bb6750ea76dac6afb650289
+tree aba123678f3a995f0127aa717d4dfa1f8603d01b
 command python3 paper/cpc/bench/db_v2.py
-date_utc 2026-11-12T23:50:24Z
+date_utc 2026-11-13T09:53:43Z
 uname_m x86_64
 nproc 8
 cpu_model Intel Xeon Processor
 pwd .
 tmpdir paper/cpc/bench/work/v2
 repeats 6
-baseline_rss_bytes=28770304
-repeat 0 kind readcon-db seconds 0.006015977000060957 rss_bytes 28770304 rss_above_baseline 0 frames 40 error 
-repeat 0 kind ase.db seconds 0.06579126599990559 rss_bytes 89649152 rss_above_baseline 60878848 frames 40 error 
-repeat 1 kind ase.db seconds 0.045076152000092407 rss_bytes 89739264 rss_above_baseline 60968960 frames 40 error 
-repeat 1 kind readcon-db seconds 0.0051014910000048985 rss_bytes 28901376 rss_above_baseline 131072 frames 40 error 
-repeat 2 kind readcon-db seconds 0.003310445999886724 rss_bytes 28901376 rss_above_baseline 131072 frames 40 error 
-repeat 2 kind ase.db seconds 0.04529142999990654 rss_bytes 89800704 rss_above_baseline 61030400 frames 40 error 
-repeat 3 kind ase.db seconds 0.04304377300013584 rss_bytes 89571328 rss_above_baseline 60801024 frames 40 error 
-repeat 3 kind readcon-db seconds 0.0039059119999365066 rss_bytes 28901376 rss_above_baseline 131072 frames 40 error 
-repeat 4 kind readcon-db seconds 0.003587364999930287 rss_bytes 28901376 rss_above_baseline 131072 frames 40 error 
-repeat 4 kind ase.db seconds 0.04954763899968384 rss_bytes 89870336 rss_above_baseline 61100032 frames 40 error 
-repeat 5 kind ase.db seconds 0.050085529000170936 rss_bytes 89894912 rss_above_baseline 61124608 frames 40 error 
-repeat 5 kind readcon-db seconds 0.004629899000065052 rss_bytes 28901376 rss_above_baseline 131072 frames 40 error 
+readcon_db_rev 39ee7bbc72638a8999cb4571ff160d346e7de4b8
+readcon_db_version 0.2.1
+baseline_rss_bytes=29241344
+repeat 0 kind readcon-db seconds 0.006122101993241813 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
+repeat 0 kind ase.db seconds 0.10122149699600413 rss_bytes 97718272 rss_above_baseline 68476928 frames 40 error
+repeat 1 kind ase.db seconds 0.10251774799689883 rss_bytes 97611776 rss_above_baseline 68370432 frames 40 error
+repeat 1 kind readcon-db seconds 0.004363488995295484 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
+repeat 2 kind readcon-db seconds 0.005314260000886861 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
+repeat 2 kind ase.db seconds 0.09846769800060429 rss_bytes 97857536 rss_above_baseline 68616192 frames 40 error
+repeat 3 kind ase.db seconds 0.07314063199737575 rss_bytes 97615872 rss_above_baseline 68374528 frames 40 error
+repeat 3 kind readcon-db seconds 0.004673834999266546 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
+repeat 4 kind readcon-db seconds 0.004147143998125102 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
+repeat 4 kind ase.db seconds 0.07897608599887462 rss_bytes 97574912 rss_above_baseline 68333568 frames 40 error
+repeat 5 kind ase.db seconds 0.08974282100098208 rss_bytes 97972224 rss_above_baseline 68730880 frames 40 error
+repeat 5 kind readcon-db seconds 0.00456120099988766 rss_bytes 33001472 rss_above_baseline 3760128 frames 40 error
 exit_code 0

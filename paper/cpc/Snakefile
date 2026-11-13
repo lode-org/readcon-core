@@ -163,11 +163,27 @@ rule scaling_figures:
     shell:
         "python3 src/figures/plot_thread_scaling.py --commit " + FINAL_COMMIT
 
+def _campaign_out():
+    # bench/h2h/Snakefile writes the rerun under bench/h2h/scaling/rel1.
+    return Path(workflow.basedir).parents[1] / "bench" / "h2h" / "scaling" / "rel1"
+
+
 def exchange_source(wildcards):
-    # perf19 writes the JSON. Until then the 0.17.3 log is the record.
+    # perf19 writes reader-exchange.json. Until that file is present, the
+    # 0.17.3 log is the record.
+    campaign = _campaign_out() / "reader-exchange.json"
+    if campaign.is_file():
+        return str(campaign)
     if (Path(workflow.basedir) / "logs" / "reader-exchange.json").is_file():
         return "logs/reader-exchange.json"
     return "logs/reader-exchange.log"
+
+
+def _reader_env(wildcards, input):
+    path = str(input[0])
+    if path.endswith(".json"):
+        return f"READER_EXCHANGE_JSON={path}"
+    return ""
 
 
 rule reader_figures:
@@ -178,16 +194,28 @@ rule reader_figures:
         "src/figures/generated/ratios.pdf",
         "src/figures/generated/memory.pdf",
         "src/figures/generated/exchange_macros.tex",
+    params:
+        env=_reader_env,
     shell:
-        "python3 scripts/exchange_figures.py"
+        "{params.env} python3 scripts/exchange_figures.py"
+
+
+def reads_source(wildcards):
+    # perf19 writes reads.json beside the other rel1 campaign records.
+    # bench/results/reads.json remains the fallback named by the earlier rule.
+    campaign = _campaign_out() / "reads.json"
+    if campaign.is_file():
+        return str(campaign)
+    return "bench/results/reads.json"
+
 
 rule roofline:
     input:
-        "bench/results/reads.json",
+        reads_source,
     output:
         "src/figures/generated/roofline.pdf",
     shell:
-        "python3 scripts/plot_roofline.py"
+        "READS_JSON={input} python3 scripts/plot_roofline.py"
 
 # Pinned campaign. Change REL1_COMMIT when a later release rerun lands.
 # The manuscript switch is \campaignid in src/campaign.tex (published by default).
