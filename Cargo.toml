@@ -122,7 +122,9 @@ pest_derive = { version = "2.8", optional = true }
 flate2 = { version = "1", default-features = false, features = ["zlib-ng"] }
 
 [target.'cfg(miri)'.dependencies]
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "1", default-features = false, features = [
+  "rust_backend",
+] }
 
 [dev-dependencies]
 pest = "2.8"

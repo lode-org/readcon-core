@@ -180,7 +180,9 @@ def _reader_samples() -> dict[str, list[float]]:
     if doc is not None:
         arms = {}
         for name, row in doc["arms"].items():
-            seconds = [float(value) for value in row.get("seconds", []) if value is not None]
+            seconds = [
+                float(value) for value in row.get("seconds", []) if value is not None
+            ]
             if seconds and not row.get("error"):
                 arms[name] = seconds
         if "readcon_tip" not in arms or len(arms["readcon_tip"]) < 6:

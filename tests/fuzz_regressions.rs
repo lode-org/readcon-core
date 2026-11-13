@@ -201,7 +201,10 @@ fn extxyz_does_not_panic(bytes: &[u8]) {
 
 #[test]
 fn extxyz_huge_stride_does_not_panic() {
-    extxyz_does_not_panic(include_bytes!("fuzz_data/extxyz_huge_stride.bin"));
+    let bytes = include_bytes!("fuzz_data/extxyz_huge_stride.bin");
+    // The corpus is included as bytes. A trailing newline is a different input.
+    assert_ne!(bytes.last().copied(), Some(b'\n'));
+    extxyz_does_not_panic(bytes);
 }
 
 #[test]

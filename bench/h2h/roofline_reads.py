@@ -69,7 +69,8 @@ def ensure_payload(frames: int) -> tuple[Path, str]:
         and stamp.is_file()
         and note.is_file()
         and note.read_text().strip() == str(frames)
-        and hashlib.sha256(traj_path.read_bytes()).hexdigest() == stamp.read_text().strip()
+        and hashlib.sha256(traj_path.read_bytes()).hexdigest()
+        == stamp.read_text().strip()
     ):
         return work, stamp.read_text().strip()
     mp.N_FRAMES = frames
@@ -102,7 +103,9 @@ def one_cell(work: Path, reader: str, threads: int) -> dict:
     ready = proc.stdout.readline().strip()
     if ready != "READY":
         err = proc.stderr.read() if proc.stderr is not None else ""
-        raise SystemExit(f"{reader} x{threads} printed {ready!r} instead of READY: {err[-2000:]}")
+        raise SystemExit(
+            f"{reader} x{threads} printed {ready!r} instead of READY: {err[-2000:]}"
+        )
     out, err = proc.communicate("\n")
     if proc.returncode != 0:
         raise SystemExit(f"{reader} x{threads} exited {proc.returncode}: {err[-2000:]}")

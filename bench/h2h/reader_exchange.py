@@ -45,7 +45,11 @@ def ensure_pinned(commit: str, dest: Path) -> str | None:
     would time this commit twice and label one copy as 0.17.3.
     """
     marker = dest / ".pinned-commit"
-    if marker.is_file() and marker.read_text().strip() == commit and (dest / "readcon").is_dir():
+    if (
+        marker.is_file()
+        and marker.read_text().strip() == commit
+        and (dest / "readcon").is_dir()
+    ):
         return None
     if dest.exists():
         shutil.rmtree(dest)
