@@ -1920,6 +1920,109 @@ mod float_format_tests {
         }
     }
 
+    fn spelling(value: f64) -> Vec<u8> {
+        let mut buf = Vec::new();
+        let mut spell = super::SpellCache::new();
+        spell.push(&mut buf, value);
+        buf
+    }
+
+    /// The raw stores stop on the last reserved byte. A `Vec` whose
+    /// capacity is exactly that bound makes one extra store a bounds error
+    /// under Miri and AddressSanitizer.
+    #[test]
+    fn miri_writer_exact_window() {
+        let mut id_buf = Vec::with_capacity(20);
+        assert_eq!(id_buf.capacity(), 20);
+        push_u64(&mut id_buf, u64::MAX);
+        assert_eq!(id_buf.len(), 20, "u64::MAX is 20 digits");
+        assert_eq!(id_buf.capacity(), 20);
+        assert_eq!(id_buf, u64::MAX.to_string().as_bytes());
+
+        // Spellings that use all 24 bytes of a slot. Found from the same
+        // LCG as the fuzz corpus (seed 0xC0FFEE).
+        let longs = [
+            f64::from_bits(9644804704421148890),
+            f64::from_bits(9631386537837340337),
+            f64::from_bits(11246622634637742919),
+        ];
+        let mut xyz = [0.0; 3];
+        for (i, value) in longs.into_iter().enumerate() {
+            let bytes = spelling(value);
+            assert_eq!(bytes.len(), 24, "{value:?}");
+            let mut buf = Vec::with_capacity(24);
+            assert_eq!(buf.capacity(), 24);
+            let mut spell = super::SpellCache::new();
+            spell.push(&mut buf, value);
+            assert_eq!(buf.len(), 24);
+            assert_eq!(buf.capacity(), 24);
+            assert_eq!(buf, bytes);
+            xyz[i] = value;
+        }
+
+        let mut line = Vec::with_capacity(98);
+        assert_eq!(line.capacity(), 98);
+        let mut ryu = ryu::Buffer::new();
+        let mut slots = [super::FmtSlot::new(); 3];
+        let mut spell = super::SpellCache::new();
+        super::push_xyz_line(
+            &mut line,
+            &mut ryu,
+            &mut slots,
+            &mut spell,
+            xyz,
+            super::FloatFormat::RoundTrip,
+            7,
+            u64::MAX,
+        );
+        assert_eq!(line.len(), 98, "{}", String::from_utf8_lossy(&line));
+        assert_eq!(line.capacity(), 98);
+        assert_eq!(*line.last().unwrap(), b'\n');
+    }
+
+    #[test]
+    fn miri_writer_fuzz_corpus() {
+        let mut state = 0xC0FFEE_u64;
+        let mut next_bits = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            state
+        };
+        let mut frames = Vec::new();
+        for &(n, mode) in &[(1usize, 0u8), (2, 1), (7, 0), (16, 2), (50, 0), (128, 1)] {
+            let mut builder =
+                crate::types::ConFrame::builder([18.0, 18.0, 18.0], [90.0, 90.0, 90.0]);
+            for i in 0..n {
+                let mut take = || {
+                    let bits = next_bits();
+                    let value = f64::from_bits(bits);
+                    if mode == 2 || value.is_finite() {
+                        value
+                    } else {
+                        0.0
+                    }
+                };
+                let id = if mode == 1 {
+                    (n - 1 - i) as u64
+                } else {
+                    i as u64
+                };
+                builder.add_atom(
+                    "Cu",
+                    take(),
+                    take(),
+                    take(),
+                    [i % 3 == 0, false, i % 5 == 0],
+                    id,
+                    63.546,
+                );
+            }
+            frames.push(builder.build().expect("build"));
+        }
+        let bytes = super::write_frames_to_vec(&frames).expect("write");
+        assert!(bytes.ends_with(b"\n"));
+        assert!(std::str::from_utf8(&bytes).is_ok());
+    }
+
     #[test]
     fn u64_matches_decimal_display() {
         let mut values = vec![0, 1, 9, 10, 11, 99, 100, 101, 999, 1000, 50000, u64::MAX];
