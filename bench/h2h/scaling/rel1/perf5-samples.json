@@ -1,0 +1,102 @@
+{
+  "protocol": "One warmup, then 6 samples. The median is the type-7 value used by bench/h2h/scale_r6.py: the mean of the 3rd and 4th sorted samples. These rows time the Rust parsers on bytes already in memory. They are not the campaign harness rows in s61-strong.tsv.",
+  "host": "Intel Xeon model 173, 8 cores, one NUMA node. /tmp and the repo are ext4 on /dev/vdc. /dev/shm is tmpfs.",
+  "stream_triad": {
+    "threads_8_GBps": 161.51,
+    "threads_1_GBps": 26.82,
+    "note": "20 passes of a[i]=b[i]+1.25*c[i], 4M doubles. 39589039 bytes at the 8-thread triad rate is 0.25 ms."
+  },
+  "con_file_bytes": 39589039,
+  "newline_count_ceiling": {
+    "note": "Eight threads counting newlines in the resident 40MB CON buffer. This is the scan ceiling. It is not the triad rate: memchr and bytecount move one byte stream, not three. A 0.30 ms scan would be 133 GB/s.",
+    "memchr_iter_1": {
+      "median_s": 0.001352,
+      "samples_s": [0.001332, 0.001334, 0.001345, 0.001359, 0.00166, 0.003251]
+    },
+    "bytecount_1": {
+      "median_s": 0.001314,
+      "samples_s": [0.001311, 0.001312, 0.001314, 0.001315, 0.001328, 0.00133]
+    },
+    "memchr_iter_8": {
+      "median_s": 0.000531,
+      "samples_s": [0.00039, 0.000474, 0.000527, 0.000535, 0.000549, 0.001124],
+      "GBps": 74.6
+    },
+    "bytecount_8": {
+      "median_s": 0.000478,
+      "samples_s": [0.000417, 0.00043, 0.000433, 0.000523, 0.000897, 0.001534]
+    },
+    "library_index_1": {
+      "median_s": 0.00699,
+      "samples_s": [0.006576, 0.006922, 0.006987, 0.006993, 0.007004, 0.007237],
+      "note": "memchr_iter collected into a Vec on the calling thread."
+    },
+    "library_index_8": {
+      "median_s": 0.001337,
+      "samples_s": [0.001097, 0.001291, 0.001325, 0.001349, 0.001531, 0.001701],
+      "note": "Count, exclusive prefix sum, then each worker writes offsets into its own slice of one unzeroed buffer. Zeroing that buffer first touched every page on one thread and made the store miss. The store pass is why the index is slower than the count."
+    }
+  },
+  "con_1e6_read_in_memory": {
+    "note": "positions_from_con_bytes and positions_parallel on the resident buffer. The file read is not in these samples. A separate fs::read of the same path during the session was about 0.025 s and is a cold read, not the warm map the campaign uses. Published campaign serial read_positions is 0.039993 s.",
+    "serial": {
+      "median_s": 0.0366,
+      "samples_s": [0.035948, 0.036322, 0.036464, 0.036736, 0.036812, 0.037145]
+    },
+    "workers_8": {
+      "median_s": 0.005357,
+      "samples_s": [0.004971, 0.005177, 0.005272, 0.005441, 0.005646, 0.00584],
+      "efficiency": 0.854
+    },
+    "phases_before_the_mass_fill_was_parallel": {
+      "note": "Outer median 0.006052 s with the constant mass extended on the calling thread. Eight chunks. The fill is the float parse.",
+      "scan_s": [0.001223, 0.001408, 0.000928, 0.000765, 0.000704, 0.001234],
+      "fill_s": [0.005368, 0.00466, 0.005025, 0.004841, 0.008808, 0.004618]
+    }
+  },
+  "extxyz_alloy_read_in_memory": {
+    "path": "bench/h2h/work/r6/alloy-1e6.extxyz",
+    "bytes": 17700091,
+    "note": "Rust tables only. Campaign serial read_extxyz is 0.060281 s; the gap is the Python species tuples, which this timer does not build.",
+    "serial": {
+      "median_s": 0.028256,
+      "samples_s": [0.027962, 0.028099, 0.028191, 0.028322, 0.028419, 0.028691]
+    },
+    "workers_8": {
+      "median_s": 0.005567,
+      "samples_s": [0.005068, 0.005222, 0.005478, 0.005656, 0.005886, 0.00602],
+      "efficiency_vs_rust_serial": 0.635
+    }
+  },
+  "extxyz_same_read_in_memory": {
+    "path": "bench/h2h/work/r6/atoms-1000000x1.extxyz",
+    "bytes": 61572357,
+    "note": "One frame with vel, id, and fixed. The general parallel scanner used to leave that frame on one worker, which was slower than serial. The streaming scanner now splits the atoms. Eight workers stay faster than one. A repeat while 8-thread memchr was 0.0008 s instead of 0.0005 s measured parallel 0.023537 s against serial 0.090754 s.",
+    "serial": {
+      "median_s": 0.101048,
+      "samples_s": [0.100687, 0.100941, 0.101021, 0.101074, 0.101166, 0.101925]
+    },
+    "workers_8": {
+      "median_s": 0.014613,
+      "samples_s": [0.014183, 0.014407, 0.014468, 0.014758, 0.014828, 0.015326],
+      "efficiency_vs_rust_serial": 0.864
+    }
+  },
+  "perf4_folded": {
+    "note": "In-memory samples from the perf4 pass, kept because that commit is not an ancestor of this tip.",
+    "con_serial_s": 0.039081,
+    "con_workers_8_s": 0.007786,
+    "con_efficiency_8": 0.627,
+    "con_newline_index_s": 0.0022,
+    "con_fill_s": 0.0047,
+    "extxyz_serial_s": 0.029313,
+    "extxyz_workers_8_s": 0.007293,
+    "extxyz_efficiency_8": 0.502,
+    "extxyz_line_split_s": 0.0017,
+    "extxyz_fill_s": 0.0051,
+    "mpi_pwrite_s": {"1": 0.05649, "2": 0.03061, "4": 0.02287, "8": 0.01774},
+    "raw_pwrite_ceiling_8_s": 0.01,
+    "empty_scope_s": 0.00004
+  },
+  "output_identity": "Parallel CON positions, masses, and cells match the serial walk on con-1000000x1.con. Parallel extxyz positions match the serial tables on the alloy file and on atoms-1000000x1.extxyz, bit for bit."
+}

@@ -265,9 +265,9 @@ fn coord_line_ranges(
 ///
 /// Chunks are cut on byte boundaries, then each interior cut that lands
 /// inside a line is moved to the next newline so a row is not split.
-/// Each chunk counts its newlines, a prefix sum of those counts gives
-/// the write range, and the chunks fill one buffer. `workers < 2`
-/// scans on the calling thread.
+/// Workers count those newlines, a prefix sum places each run, and the
+/// same workers write the offsets. The offset array is not zeroed, so
+/// the writer is the first touch. `workers < 2` scans on the calling thread.
 #[cfg(feature = "parallel")]
 pub(crate) fn newline_index(bytes: &[u8], workers: usize) -> Vec<usize> {
     newline_index_at(bytes, 0, workers)
@@ -281,7 +281,21 @@ pub(crate) fn newline_index_at(bytes: &[u8], base: usize, workers: usize) -> Vec
             .map(|index| base + index)
             .collect();
     }
-    let workers = workers.min(bytes.len());
+    let cuts = newline_cuts(bytes, workers);
+    newline_index_exact(&cuts, bytes, base)
+}
+
+/// One cache line, so adjacent chunk counters do not share a line.
+#[cfg(feature = "parallel")]
+#[derive(Clone)]
+#[repr(C, align(64))]
+struct ChunkTally {
+    n: usize,
+}
+
+#[cfg(feature = "parallel")]
+fn newline_cuts(bytes: &[u8], workers: usize) -> Vec<usize> {
+    let workers = workers.min(bytes.len()).max(1);
     let mut cuts = Vec::with_capacity(workers + 1);
     cuts.push(0usize);
     for index in 1..workers {
@@ -302,37 +316,218 @@ pub(crate) fn newline_index_at(bytes: &[u8], base: usize, workers: usize) -> Vec
     if cuts.last().copied() != Some(bytes.len()) {
         cuts.push(bytes.len());
     }
-    let nchunks = cuts.len() - 1;
-    let mut counts = vec![0usize; nchunks];
-    on_pool(workers, || {
+    cuts
+}
+
+/// Count newlines in each `cuts` window. One store per chunk, so the
+/// counters do not bounce a cache line during the scan.
+#[cfg(feature = "parallel")]
+fn count_newline_chunks(bytes: &[u8], cuts: &[usize]) -> Vec<usize> {
+    let nchunks = cuts.len().saturating_sub(1);
+    let mut tallies = vec![ChunkTally { n: 0 }; nchunks];
+    if nchunks == 0 {
+        return Vec::new();
+    }
+    let ptr = tallies.as_mut_ptr() as usize;
+    let count = || {
         use rayon::prelude::*;
-        counts
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(index, count)| {
-                let (from, to) = (cuts[index], cuts[index + 1]);
-                *count = memchr::memchr_iter(b'\n', &bytes[from..to]).count();
-            });
-        let mut slot = vec![0usize; nchunks];
-        let mut total = 0usize;
-        for index in 0..nchunks {
-            slot[index] = total;
-            total += counts[index];
-        }
-        let mut out = vec![0usize; total];
-        let out_ptr = out.as_mut_ptr() as usize;
         (0..nchunks).into_par_iter().for_each(|index| {
-            let (from, to) = (cuts[index], cuts[index + 1]);
-            let mut at = slot[index];
+            let n = memchr::memchr_iter(b'\n', &bytes[cuts[index]..cuts[index + 1]]).count();
+            unsafe {
+                (*(ptr as *mut ChunkTally).add(index)).n = n;
+            }
+        });
+    };
+    if nchunks < 2 {
+        count();
+    } else {
+        on_pool(nchunks, count);
+    }
+    tallies.into_iter().map(|tally| tally.n).collect()
+}
+
+/// Byte start and row count for each worker that parses `n_rows`
+/// coordinate lines beginning at `start`.
+///
+/// The newline *count* places the rows. Workers then parse their own
+/// slice in order, so the read does not materialise an offset per line.
+/// The returned end is the first byte after the `n_rows`-th newline.
+#[cfg(feature = "parallel")]
+pub(crate) fn plan_coord_chunks(
+    bytes: &[u8],
+    start: usize,
+    n_rows: usize,
+    workers: usize,
+) -> Result<(Vec<(usize, usize)>, usize), ParseError> {
+    if n_rows == 0 {
+        return Ok((Vec::new(), start));
+    }
+    if start >= bytes.len() {
+        return Err(ParseError::IncompleteFrame);
+    }
+    let mut window = n_rows.saturating_mul(96).max(1);
+    loop {
+        let end = start.saturating_add(window).min(bytes.len());
+        let region = &bytes[start..end];
+        let cuts = newline_cuts(region, workers);
+        let counts = count_newline_chunks(region, &cuts);
+        let total: usize = counts.iter().sum();
+        if total >= n_rows || end == bytes.len() {
+            if total < n_rows {
+                return Err(ParseError::IncompleteFrame);
+            }
+            return chunks_from_counts(bytes, start, &cuts, &counts, n_rows);
+        }
+        window = window.saturating_mul(2);
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn chunks_from_counts(
+    bytes: &[u8],
+    start: usize,
+    cuts: &[usize],
+    counts: &[usize],
+    n_rows: usize,
+) -> Result<(Vec<(usize, usize)>, usize), ParseError> {
+    let mut need = n_rows;
+    let mut chunks = Vec::new();
+    let mut end_abs = start;
+    for index in 0..counts.len() {
+        if need == 0 {
+            break;
+        }
+        let have = counts[index];
+        if have == 0 {
+            continue;
+        }
+        let from = start + cuts[index];
+        let to = start + cuts[index + 1];
+        let take = have.min(need);
+        let chunk_end = if take == have && to > from && bytes[to - 1] == b'\n' {
+            to
+        } else {
+            let mut seen = 0usize;
+            let mut found = None;
             for rel in memchr::memchr_iter(b'\n', &bytes[from..to]) {
+                seen += 1;
+                if seen == take {
+                    found = Some(from + rel + 1);
+                    break;
+                }
+            }
+            found.ok_or(ParseError::IncompleteFrame)?
+        };
+        chunks.push((from, take));
+        end_abs = chunk_end;
+        need -= take;
+    }
+    if need != 0 {
+        return Err(ParseError::IncompleteFrame);
+    }
+    Ok((chunks, end_abs))
+}
+
+/// Parse coordinate rows described by [`plan_coord_chunks`].
+///
+/// Each chunk is a contiguous run of lines. The worker walks that run
+/// and writes `nrows` coordinates at the prefix-summed row.
+#[cfg(feature = "parallel")]
+pub(crate) fn fill_rows_from_chunks(
+    bytes: &[u8],
+    chunks: &[(usize, usize)],
+    spec_version: u32,
+    start_id: u64,
+    workers: usize,
+    xyz: *mut f64,
+    ids: *mut u64,
+    flags: *mut u8,
+) -> Result<(), ParseError> {
+    if chunks.is_empty() {
+        return Ok(());
+    }
+    let mut row0 = Vec::with_capacity(chunks.len());
+    let mut acc = 0usize;
+    for (_, nrows) in chunks {
+        row0.push(acc);
+        acc += *nrows;
+    }
+    let xyz_ptr = xyz as usize;
+    let ids_ptr = ids as usize;
+    let flags_ptr = flags as usize;
+    let fill = || {
+        use rayon::prelude::*;
+        chunks
+            .par_iter()
+            .zip(row0.par_iter().copied())
+            .try_for_each(|(&(start, nrows), mut row)| {
+                let mut pos = start;
+                for _ in 0..nrows {
+                    let ((xyz, fixed, atom_id), next) =
+                        parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            xyz.as_ptr(),
+                            (xyz_ptr as *mut f64).add(row * 3),
+                            3,
+                        );
+                        if ids_ptr != 0 {
+                            *((ids_ptr as *mut u64).add(row)) = atom_id;
+                        }
+                        if flags_ptr != 0 {
+                            let mask = u8::from(fixed[0])
+                                | (u8::from(fixed[1]) << 1)
+                                | (u8::from(fixed[2]) << 2);
+                            *((flags_ptr as *mut u8).add(row)) = mask;
+                        }
+                    }
+                    pos = next;
+                    row += 1;
+                }
+                Ok(())
+            })
+    };
+    if workers < 2 || chunks.len() < 2 {
+        fill()
+    } else {
+        on_pool(workers, fill)
+    }
+}
+
+/// Exact index: count, prefix sum, then store into an unzeroed buffer.
+#[cfg(feature = "parallel")]
+fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> {
+    let nchunks = cuts.len() - 1;
+    let counts = count_newline_chunks(bytes, cuts);
+    let mut slots = vec![0usize; nchunks];
+    let mut total = 0usize;
+    for index in 0..nchunks {
+        slots[index] = total;
+        total += counts[index];
+    }
+    let mut out = Vec::<usize>::with_capacity(total);
+    let ptr = out.as_mut_ptr() as usize;
+    let store = || {
+        use rayon::prelude::*;
+        (0..nchunks).into_par_iter().for_each(|index| {
+            let from = cuts[index];
+            let mut at = slots[index];
+            for rel in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]) {
                 unsafe {
-                    *((out_ptr as *mut usize).add(at)) = base + from + rel;
+                    *((ptr as *mut usize).add(at)) = base + from + rel;
                 }
                 at += 1;
             }
         });
-        out
-    })
+    };
+    if nchunks < 2 {
+        store();
+    } else {
+        on_pool(nchunks.max(1), store);
+    }
+    // SAFETY: the store wrote every index in `0..total`.
+    unsafe { out.set_len(total) };
+    out
 }
 
 #[cfg(feature = "parallel")]
@@ -4217,5 +4412,36 @@ Coordinates of Component 1
                 );
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod newline_index_bench {
+    use super::newline_index_at;
+
+    #[test]
+    fn index_matches_memchr() {
+        let mut bytes = vec![b'x'; 80_000];
+        for index in (20..bytes.len()).step_by(23) {
+            bytes[index] = b'\n';
+        }
+        let serial: Vec<usize> = memchr::memchr_iter(b'\n', &bytes).collect();
+        assert_eq!(newline_index_at(&bytes, 0, 8), serial);
+        // Above the 1 MiB serial cutoff, including a buffer of bare newlines.
+        let mut long = Vec::new();
+        while long.len() < (1 << 20) + 64 {
+            long.extend_from_slice(b"01234567 1.25 -2.5 3.5 0 7\n");
+        }
+        let long_serial: Vec<usize> = memchr::memchr_iter(b'\n', &long).collect();
+        assert_eq!(newline_index_at(&long, 40, 8), {
+            let mut shifted = long_serial.clone();
+            for offset in &mut shifted {
+                *offset += 40;
+            }
+            shifted
+        });
+        let bare = vec![b'\n'; (1 << 20) + 64];
+        let bare_serial: Vec<usize> = memchr::memchr_iter(b'\n', &bare).collect();
+        assert_eq!(newline_index_at(&bare, 0, 8), bare_serial);
     }
 }

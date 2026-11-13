@@ -49,6 +49,9 @@ pub struct ConPositions {
     /// Absolute newline positions of the coordinate rows, one vector per
     /// frame. Empty when the rows were not indexed.
     pub(crate) wide_breaks: Vec<Vec<usize>>,
+    /// `(byte start, row count)` per worker for a wide frame.
+    /// Empty when that frame was not split this way.
+    pub(crate) wide_chunks: Vec<Vec<(usize, usize)>>,
 }
 
 impl ConPositions {
@@ -193,6 +196,33 @@ fn fill_frame_rows(
     }
     let head = out.head_ends[frame];
     let spec = frame_spec(bytes, out.spans[frame].start)?;
+    if out
+        .wide_chunks
+        .get(frame)
+        .is_some_and(|chunks| chunks.iter().map(|(_, nrows)| *nrows).sum::<usize>() == count)
+    {
+        let chunks = &out.wide_chunks[frame];
+        let ids_ptr = if rich {
+            unsafe { ids.add(dest) }
+        } else {
+            std::ptr::null_mut()
+        };
+        let flags_ptr = if rich {
+            unsafe { flags.add(dest) }
+        } else {
+            std::ptr::null_mut()
+        };
+        return crate::parser::fill_rows_from_chunks(
+            bytes,
+            chunks,
+            spec,
+            0,
+            workers,
+            unsafe { positions.add(dest * 3) },
+            ids_ptr,
+            flags_ptr,
+        );
+    }
     if out.wide_breaks.get(frame).map(|item| item.len()) == Some(count) {
         let breaks = &out.wide_breaks[frame];
         let ids_ptr = if rich {
@@ -297,6 +327,7 @@ fn parse_con(
         components: Vec::new(),
         head_ends: Vec::new(),
         wide_breaks: Vec::new(),
+        wide_chunks: Vec::new(),
     };
     loop {
         if pos >= bytes.len() || bytes[pos..].iter().all(u8::is_ascii_whitespace) {
@@ -324,6 +355,7 @@ fn parse_one_frame(
     workers: usize,
 ) -> Result<(usize, bool), ParseError> {
     out.wide_breaks.push(Vec::new());
+    out.wide_chunks.push(Vec::new());
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
     let spec = spec_version(meta)?;
@@ -393,16 +425,40 @@ fn parse_one_frame(
         } else if counts.len() == 1 && *count >= 4096 && workers >= 2 {
             #[cfg(feature = "parallel")]
             {
-                let start = *pos;
-                let mut index = crate::parser::newline_index_at(&bytes[start..], start, workers);
-                if index.len() < *count {
-                    return Err(ParseError::IncompleteFrame);
+                let (chunks, end) = crate::parser::plan_coord_chunks(bytes, *pos, *count, workers)?;
+                // The constant mass is a streaming store. Doing it on the
+                // same workers as the newline count keeps it off the
+                // calling thread.
+                let origin = out.masses.len();
+                let mut row_at = Vec::with_capacity(chunks.len());
+                let mut acc = origin;
+                for (_, nrows) in &chunks {
+                    row_at.push(acc);
+                    acc += *nrows;
                 }
-                let end = index[*count - 1] + 1;
-                index.truncate(*count);
-                *out.wide_breaks.last_mut().expect("frame breaks") = index;
+                out.masses.reserve(acc - origin);
+                let ptr = out.masses.as_mut_ptr() as usize;
+                let mass_value = *mass;
+                let nchunks = chunks.len();
+                if nchunks >= 2 {
+                    crate::parser::on_pool(workers, || {
+                        use rayon::prelude::*;
+                        (0..nchunks).into_par_iter().for_each(|index| {
+                            let start = row_at[index];
+                            let rows = chunks[index].1;
+                            for step in 0..rows {
+                                unsafe {
+                                    *((ptr as *mut f64).add(start + step)) = mass_value;
+                                }
+                            }
+                        });
+                    });
+                    unsafe { out.masses.set_len(acc) };
+                } else {
+                    out.masses.extend(std::iter::repeat_n(mass_value, *count));
+                }
+                *out.wide_chunks.last_mut().expect("frame chunks") = chunks;
                 *pos = end;
-                out.masses.extend(std::iter::repeat_n(*mass, *count));
                 n += *count;
             }
             #[cfg(not(feature = "parallel"))]
@@ -799,6 +855,10 @@ mod tests {
             first_bit_mismatch(&parallel.positions, &serial.positions),
             None
         );
-        assert_eq!(parallel.wide_breaks[0].len(), n);
+        let covered: usize = parallel.wide_chunks[0]
+            .iter()
+            .map(|(_, nrows)| *nrows)
+            .sum();
+        assert_eq!(covered, n);
     }
 }

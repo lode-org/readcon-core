@@ -283,6 +283,10 @@ pub fn tables_from_extxyz_bytes_reporting(
     if workers < 2 {
         return tables_serial(bytes);
     }
+    #[cfg(feature = "parallel")]
+    if let Some(parsed) = tables_stream_parallel(bytes, workers, batches) {
+        return parsed;
+    }
     let lines = split_lines_fast(bytes, workers);
     let mut specs: Vec<ColumnSpec> = Vec::new();
     let mut first_props: &[u8] = b"";
@@ -360,7 +364,9 @@ pub fn tables_from_extxyz_bytes_reporting(
         );
     }
     let chunk = n_frames.div_ceil(workers).max(1);
-    // The columns are disjoint by frame. Each worker writes its frames.
+    // One fat frame has no frame axis to split. Splitting the atoms keeps
+    // eight workers from doing the whole body on one thread after the
+    // line index, which was slower than the serial scan.
     let column_ptrs: Vec<(usize, usize, u8, usize)> = columns
         .iter_mut()
         .map(|column| {
@@ -374,15 +380,25 @@ pub fn tables_from_extxyz_bytes_reporting(
         .collect();
     let spec_ref = &specs;
     let line_ref = &lines;
+    let wide_atoms = n_frames == 1 && n_atoms >= 4096 && workers >= 2;
     let worker_species =
         std::thread::scope(|scope| -> Result<Vec<(Vec<String>, Vec<u32>)>, String> {
             let mut handles = Vec::new();
             for worker in 0..workers {
-                let from = worker * chunk;
-                if from >= n_frames {
-                    break;
-                }
-                let to = (from + chunk).min(n_frames);
+                let (frame_from, frame_to, atom_from, atom_to) = if wide_atoms {
+                    let atom_chunk = n_atoms.div_ceil(workers);
+                    let atom_from = worker * atom_chunk;
+                    if atom_from >= n_atoms {
+                        break;
+                    }
+                    (0, 1, atom_from, (atom_from + atom_chunk).min(n_atoms))
+                } else {
+                    let from = worker * chunk;
+                    if from >= n_frames {
+                        break;
+                    }
+                    (from, (from + chunk).min(n_frames), 0, n_atoms)
+                };
                 let column_ptrs = &column_ptrs;
                 let starts = &starts;
                 let cell_ptr = cell_ptr;
@@ -390,22 +406,26 @@ pub fn tables_from_extxyz_bytes_reporting(
                     scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
                         let mut pool = Vec::new();
                         let mut ids = Vec::new();
-                        for frame in from..to {
+                        for frame in frame_from..frame_to {
                             let comment = line_ref[starts[frame] - 1];
                             let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
                             let frame_cell = lattice_cell(lattice)?;
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(
-                                    frame_cell.as_ptr(),
-                                    (cell_ptr as *mut f64).add(frame * 6),
-                                    6,
-                                );
+                            if atom_from == 0 {
+                                unsafe {
+                                    std::ptr::copy_nonoverlapping(
+                                        frame_cell.as_ptr(),
+                                        (cell_ptr as *mut f64).add(frame * 6),
+                                        6,
+                                    );
+                                }
                             }
                             let base_atom = frame * n_atoms;
-                            for (atom, line) in line_ref[starts[frame]..starts[frame] + n_atoms]
+                            for (offset, line) in line_ref
+                                [starts[frame] + atom_from..starts[frame] + atom_to]
                                 .iter()
                                 .enumerate()
                             {
+                                let atom = atom_from + offset;
                                 let mut cursor = 0usize;
                                 for (col, spec) in spec_ref.iter().enumerate() {
                                     let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
@@ -1003,6 +1023,252 @@ fn assemble_tables(
         species_ids: Vec::new(),
         columns,
     })
+}
+
+/// One wide frame of [`tables_stream`], split by atom instead of by a
+/// line-pointer vector. `None` means the file is not that shape and the
+/// caller keeps the frame walker. Output matches the serial stream,
+/// including intern order and `uniform_species` staying empty.
+#[cfg(feature = "parallel")]
+fn tables_stream_parallel(
+    bytes: &[u8],
+    workers: usize,
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
+) -> Option<Result<XyzTables, String>> {
+    if workers < 2 || bytes.len() < (1 << 20) {
+        return None;
+    }
+    let (count_end, count_line) = line_span(bytes, 0)?;
+    let count_line = trim(count_line);
+    if count_line.is_empty() {
+        return None;
+    }
+    let n_atoms = parse_f64(count_line).ok()? as usize;
+    if n_atoms < 4096 {
+        return None;
+    }
+    // A multi-frame file is larger than one fat frame of ordinary lines.
+    // Counting it here would throw the work away and run the frame walker.
+    if bytes.len() > n_atoms.saturating_mul(512) {
+        return None;
+    }
+    let (body, comment) = line_span(bytes, count_end)?;
+    let properties = quoted_after(comment, b"Properties=")?;
+    let lattice = quoted_after(comment, b"Lattice=")?;
+    let frame_cell = lattice_cell(lattice).ok()?;
+    let specs = property_columns(properties).ok()?;
+    if !stream_layout(&specs) {
+        return None;
+    }
+    let (chunks, end) = crate::parser::plan_coord_chunks(bytes, body, n_atoms, workers).ok()?;
+    let mut cursor = end;
+    while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        cursor += 1;
+    }
+    if cursor != bytes.len() {
+        return None;
+    }
+    fill_stream_chunks(bytes, n_atoms, &specs, frame_cell, &chunks, batches).map(Ok)
+}
+
+#[cfg(feature = "parallel")]
+fn fill_stream_chunks(
+    bytes: &[u8],
+    n_atoms: usize,
+    specs: &[ColumnSpec],
+    frame_cell: [f64; 6],
+    chunks: &[(usize, usize)],
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
+) -> Option<XyzTables> {
+    let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
+    let mut mass_slot = None;
+    let mut extra_at = vec![None; specs.len()];
+    let mut extras: Vec<Vec<f64>> = Vec::new();
+    for (index, spec) in specs.iter().enumerate() {
+        if spec.name == "masses" || spec.name == "mass" {
+            mass_slot = Some(index);
+        } else if index > 0 && spec.name != "pos" && spec.kind != b'S' {
+            extra_at[index] = Some(extras.len());
+            extras.push(Vec::with_capacity(n_atoms.saturating_mul(spec.width)));
+        }
+    }
+    let mut masses = if mass_slot.is_some() {
+        Vec::with_capacity(n_atoms)
+    } else {
+        Vec::new()
+    };
+    let pos_ptr = positions.as_mut_ptr() as usize;
+    let mass_ptr = masses.as_mut_ptr() as usize;
+    let extra_ptrs: Vec<usize> = (0..specs.len())
+        .map(|index| {
+            extra_at[index]
+                .map(|extra| extras[extra].as_mut_ptr() as usize)
+                .unwrap_or(0)
+        })
+        .collect();
+    let mut slots: Vec<Option<(Vec<String>, Vec<u32>)>> = (0..chunks.len()).map(|_| None).collect();
+    let slots_ptr = slots.as_mut_ptr() as usize;
+    let extra_ptrs = extra_ptrs.as_slice();
+    crate::parser::on_pool(chunks.len().max(1), || {
+        use rayon::prelude::*;
+        (0..chunks.len()).into_par_iter().for_each(|worker| {
+            let (start, nrows) = chunks[worker];
+            let atom0 = start_atom(chunks, worker);
+            let mut pool = Vec::new();
+            let mut ids = Vec::with_capacity(nrows);
+            let mut pos = start;
+            for offset in 0..nrows {
+                // A short line: memchr's setup costs more than the scan.
+                let mut end = pos;
+                while end < bytes.len() && bytes[end] != b'\n' {
+                    end += 1;
+                }
+                let mut line_end = end;
+                if line_end > pos && bytes[line_end - 1] == b'\r' {
+                    line_end -= 1;
+                }
+                let line = &bytes[pos..line_end];
+                pos = if end < bytes.len() { end + 1 } else { end };
+                if !write_stream_line(
+                    line,
+                    specs,
+                    &mut pool,
+                    &mut ids,
+                    pos_ptr as *mut f64,
+                    mass_ptr as *mut f64,
+                    extra_ptrs,
+                    atom0 + offset,
+                ) {
+                    return;
+                }
+            }
+            unsafe {
+                *(slots_ptr as *mut Option<(Vec<String>, Vec<u32>)>).add(worker) =
+                    Some((pool, ids));
+            }
+        });
+    });
+    let mut worker_species = Vec::with_capacity(slots.len());
+    for slot in slots {
+        worker_species.push(slot?);
+    }
+    for (worker, (local_pool, local_ids)) in worker_species.iter().enumerate() {
+        let chunk = if local_pool.len() == 1 {
+            SpeciesChunk::Uniform {
+                symbol: local_pool[0].clone(),
+                atoms: local_ids.len(),
+            }
+        } else {
+            SpeciesChunk::Mixed {
+                pool: local_pool.clone(),
+                ids: local_ids.clone(),
+            }
+        };
+        emit_species(batches, worker as u16, 0, &chunk);
+    }
+    unsafe {
+        positions.set_len(n_atoms * 3);
+        if mass_slot.is_some() {
+            masses.set_len(n_atoms);
+        }
+        for (index, spec) in specs.iter().enumerate() {
+            if let Some(extra) = extra_at[index] {
+                extras[extra].set_len(n_atoms * spec.width);
+            }
+        }
+    }
+    let mut pool = Vec::new();
+    let mut ids = Vec::with_capacity(n_atoms);
+    for (local_pool, local_ids) in worker_species {
+        let mut map = Vec::with_capacity(local_pool.len());
+        for symbol in &local_pool {
+            map.push(intern_symbol(&mut pool, symbol.as_bytes()));
+        }
+        ids.extend(local_ids.into_iter().map(|id| map[id as usize]));
+    }
+    if mass_slot.is_none() {
+        masses = vec![f64::NAN; n_atoms];
+    }
+    let mut columns = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate() {
+        let real = if spec.kind == b'S' || spec.name == "pos" || Some(index) == mass_slot {
+            Vec::new()
+        } else if let Some(extra) = extra_at[index] {
+            std::mem::take(&mut extras[extra])
+        } else {
+            Vec::new()
+        };
+        columns.push(XyzColumn {
+            name: spec.name.clone(),
+            kind: spec.kind,
+            width: spec.width,
+            text: Vec::new(),
+            real,
+        });
+    }
+    Some(XyzTables {
+        n_frames: 1,
+        n_atoms,
+        positions,
+        masses,
+        cell: frame_cell.to_vec(),
+        species: Vec::new(),
+        uniform_species: None,
+        species_pool: pool,
+        species_ids: ids,
+        columns,
+    })
+}
+
+#[cfg(feature = "parallel")]
+fn start_atom(chunks: &[(usize, usize)], worker: usize) -> usize {
+    chunks.iter().take(worker).map(|(_, nrows)| *nrows).sum()
+}
+
+#[cfg(feature = "parallel")]
+fn write_stream_line(
+    line: &[u8],
+    specs: &[ColumnSpec],
+    pool: &mut Vec<String>,
+    ids: &mut Vec<u32>,
+    pos_ptr: *mut f64,
+    mass_ptr: *mut f64,
+    extra_ptrs: &[usize],
+    atom: usize,
+) -> bool {
+    let mut index = 0usize;
+    while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
+        index += 1;
+    }
+    let start = index;
+    while index < line.len() && line[index] != b' ' && line[index] != b'\t' {
+        index += 1;
+    }
+    if start == index {
+        return false;
+    }
+    ids.push(intern_symbol(pool, &line[start..index]));
+    for (slot, spec) in specs.iter().enumerate().skip(1) {
+        for k in 0..spec.width {
+            let Some(value) = next_number(line, &mut index) else {
+                return false;
+            };
+            unsafe {
+                if spec.name == "pos" {
+                    *pos_ptr.add(atom * 3 + k) = value;
+                } else if spec.name == "masses" || spec.name == "mass" {
+                    *mass_ptr.add(atom) = value;
+                } else if extra_ptrs.get(slot).copied().unwrap_or(0) != 0 {
+                    let dest = extra_ptrs[slot] as *mut f64;
+                    *dest.add(atom * spec.width + k) = value;
+                }
+            }
+        }
+    }
+    while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
+        index += 1;
+    }
+    index == line.len()
 }
 
 fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
@@ -2530,6 +2796,22 @@ Cu 4.0 5.0 6.0 63.546
                 assert_eq!(x.to_bits(), y.to_bits());
             }
         }
+    }
+
+    /// Extra columns keep this off the species/pos fast path. Eight workers
+    /// must still match the serial scan.
+    #[test]
+    fn a_wide_general_frame_matches_the_serial_scan() {
+        let n = 4096usize;
+        let mut text = format!(
+            "{n}\nLattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3:vel:R:3 pbc=\"T T T\"\n"
+        );
+        for index in 0..n {
+            text.push_str(&format!("Cu {index}.125 0.25 0.5 0.1 0.2 0.3\n"));
+        }
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 8).unwrap();
+        assert_same_tables(&serial, &parallel);
     }
 
     #[test]
