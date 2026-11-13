@@ -55,12 +55,97 @@ fn main() {
             let text = std::fs::read_to_string(&path).unwrap();
             let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
             let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
-            let out = std::path::Path::new("/tmp/readcon-r6-rust-write.con");
+            let out = std::path::Path::new("/dev/shm/r7-rust-write.con");
             time_it(6, || {
                 readcon_core::writer::write_frame_refs_to_path(
                     out, &refs, workers, None, false, true,
                 )
                 .unwrap();
+            })
+        }
+        "floats" => {
+            let n = 1_000_000usize;
+            let values: Vec<f64> = (0..n).map(|i| (i as f64) * 0.001 + 1.25).collect();
+            time_it(6, || {
+                let chunk = n.div_ceil(workers.max(1));
+                let mut parts: Vec<Vec<u8>> = (0..workers.max(1)).map(|_| Vec::new()).collect();
+                if workers < 2 {
+                    parts[0].reserve(n * 24);
+                    for value in &values {
+                        readcon_core::extxyz_scan::append_extxyz_number(&mut parts[0], *value);
+                        parts[0].push(b' ');
+                    }
+                } else {
+                    let owned = std::thread::scope(|scope| {
+                        let mut handles = Vec::new();
+                        for worker in 0..workers.max(1) {
+                            let from = worker * chunk;
+                            if from >= n {
+                                break;
+                            }
+                            let to = (from + chunk).min(n);
+                            let values = &values;
+                            handles.push(scope.spawn(move || {
+                                let mut part = Vec::with_capacity((to - from) * 24);
+                                for value in &values[from..to] {
+                                    readcon_core::extxyz_scan::append_extxyz_number(
+                                        &mut part, *value,
+                                    );
+                                    part.push(b' ');
+                                }
+                                part
+                            }));
+                        }
+                        handles
+                            .into_iter()
+                            .map(|handle| handle.join().unwrap())
+                            .collect::<Vec<_>>()
+                    });
+                    parts = owned;
+                }
+                std::hint::black_box(parts.iter().map(|part| part.len()).sum::<usize>());
+            })
+        }
+        "xfmt" => {
+            let bytes = std::fs::read(&path).unwrap();
+            let tables =
+                readcon_core::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, 1)
+                    .unwrap();
+            let symbols = if let Some(symbol) = &tables.uniform_species {
+                vec![symbol.clone(); tables.n_frames * tables.n_atoms]
+            } else if !tables.species_ids.is_empty() {
+                tables
+                    .species_ids
+                    .iter()
+                    .map(|id| tables.species_pool[*id as usize].clone())
+                    .collect()
+            } else {
+                tables.species.clone()
+            };
+            let mut columns = tables.columns;
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "species") {
+                column.text = symbols;
+            }
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "pos") {
+                column.real.clone_from(&tables.positions);
+            }
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "masses") {
+                column.real.clone_from(&tables.masses);
+            }
+            let sources: Vec<&(dyn readcon_core::extxyz_scan::ExtxyzSource + Sync)> = columns
+                .iter()
+                .map(|column| column as &(dyn readcon_core::extxyz_scan::ExtxyzSource + Sync))
+                .collect();
+            time_it(6, || {
+                let out = readcon_core::extxyz_scan::extxyz_bytes_with_threads(
+                    tables.n_frames,
+                    tables.n_atoms,
+                    &tables.cell,
+                    &sources,
+                    workers,
+                )
+                .unwrap();
+                std::hint::black_box(out.len());
             })
         }
         "xyz" => {

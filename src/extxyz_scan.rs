@@ -254,9 +254,31 @@ pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
 ///
 /// `workers < 2` is the serial scan. Two or more workers split frames
 /// after the line index. The tables match the serial scan.
+///
+/// One worker's species rows, sent as that worker finishes so the binding
+/// can build frame tuples while the other workers are still scanning.
+/// `frames == 0` is one slice of a single frame: `n_atoms` is the slice
+/// length and the slices concatenate in `worker` order.
+pub struct SpeciesBatch {
+    pub worker: u16,
+    pub n_atoms: usize,
+    pub frames: usize,
+    pub uniform: Option<String>,
+    pub pool: Vec<String>,
+    pub ids: Vec<u32>,
+}
+
 pub fn tables_from_extxyz_bytes_with_threads(
     bytes: &[u8],
     workers: usize,
+) -> Result<XyzTables, String> {
+    tables_from_extxyz_bytes_reporting(bytes, workers, None)
+}
+
+pub fn tables_from_extxyz_bytes_reporting(
+    bytes: &[u8],
+    workers: usize,
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
 ) -> Result<XyzTables, String> {
     if workers < 2 {
         return tables_serial(bytes);
@@ -335,7 +357,7 @@ pub fn tables_from_extxyz_bytes_with_threads(
         .collect();
     if let Some(nfloat) = fast_nfloat {
         return fill_species_pos_parallel(
-            n_frames, n_atoms, nfloat, workers, &lines, &starts, cell, columns,
+            n_frames, n_atoms, nfloat, workers, &lines, &starts, cell, columns, batches,
         );
     }
     let chunk = n_frames.div_ceil(workers).max(1);
@@ -652,6 +674,7 @@ fn fill_species_pos_parallel(
     starts: &[usize],
     mut cell: Vec<f64>,
     columns: Vec<XyzColumn>,
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
 ) -> Result<XyzTables, String> {
     let cell_ptr = cell.as_mut_ptr() as usize;
     let pos_ptr = columns
@@ -700,14 +723,16 @@ fn fill_species_pos_parallel(
                             }
                         }
                     }
-                    if pool.len() == 1 {
-                        let symbol = pool.pop().unwrap_or_default();
-                        return Ok(SpeciesChunk::Uniform {
-                            symbol,
+                    let chunk = if pool.len() == 1 {
+                        SpeciesChunk::Uniform {
+                            symbol: pool.pop().unwrap_or_default(),
                             atoms: ids.len(),
-                        });
-                    }
-                    Ok(SpeciesChunk::Mixed { pool, ids })
+                        }
+                    } else {
+                        SpeciesChunk::Mixed { pool, ids }
+                    };
+                    emit_species(batches, worker as u16, 0, &chunk);
+                    Ok(chunk)
                 }));
             }
             handles
@@ -797,14 +822,17 @@ fn fill_species_pos_parallel(
                         }
                     }
                 }
-                if pool.len() == 1 {
-                    let symbol = pool.pop().unwrap_or_default();
-                    return Ok(SpeciesChunk::Uniform {
-                        symbol,
+                let frames = if n_atoms == 0 { 0 } else { ids.len() / n_atoms };
+                let chunk = if pool.len() == 1 {
+                    SpeciesChunk::Uniform {
+                        symbol: pool.pop().unwrap_or_default(),
                         atoms: ids.len(),
-                    });
-                }
-                Ok(SpeciesChunk::Mixed { pool, ids })
+                    }
+                } else {
+                    SpeciesChunk::Mixed { pool, ids }
+                };
+                emit_species(batches, worker as u16, frames, &chunk);
+                Ok(chunk)
             }));
         }
         handles
@@ -851,6 +879,72 @@ fn fill_species_pos_parallel(
     Ok(tables)
 }
 
+fn fill_nan(n: usize) -> Vec<f64> {
+    let mut values = Vec::with_capacity(n);
+    if n == 0 {
+        return values;
+    }
+    // SAFETY: every lane is written before the vector is read.
+    unsafe { values.set_len(n) };
+    let ptr = values.as_mut_ptr() as usize;
+    let threads = (n / 65_536).clamp(1, 8);
+    std::thread::scope(|scope| {
+        let chunk = n.div_ceil(threads);
+        for thread in 0..threads {
+            let from = thread * chunk;
+            if from >= n {
+                break;
+            }
+            let to = (from + chunk).min(n);
+            scope.spawn(move || unsafe {
+                let dest = ptr as *mut f64;
+                for index in from..to {
+                    *dest.add(index) = f64::NAN;
+                }
+            });
+        }
+    });
+    values
+}
+
+fn emit_species(
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
+    worker: u16,
+    frames: usize,
+    chunk: &SpeciesChunk,
+) {
+    let Some(tx) = batches else {
+        return;
+    };
+    let batch = match chunk {
+        SpeciesChunk::Uniform { symbol, atoms } => SpeciesBatch {
+            worker,
+            n_atoms: if frames == 0 {
+                *atoms
+            } else {
+                atoms / frames.max(1)
+            },
+            frames,
+            uniform: Some(symbol.clone()),
+            pool: Vec::new(),
+            ids: Vec::new(),
+        },
+        SpeciesChunk::Mixed { pool, ids } => SpeciesBatch {
+            worker,
+            n_atoms: if frames == 0 {
+                ids.len()
+            } else {
+                ids.len() / frames.max(1)
+            },
+            frames,
+            uniform: None,
+            pool: pool.clone(),
+            ids: ids.clone(),
+        },
+    };
+    let _ = tx.send(batch);
+}
+
 fn assemble_tables(
     n_frames: usize,
     n_atoms: usize,
@@ -858,7 +952,7 @@ fn assemble_tables(
     mut columns: Vec<XyzColumn>,
 ) -> Result<XyzTables, String> {
     let mut positions = Vec::new();
-    let mut masses = vec![f64::NAN; n_frames * n_atoms];
+    let mut masses = fill_nan(n_frames * n_atoms);
     let mut species = Vec::new();
     for column in &mut columns {
         if column.name == "pos" {
@@ -1145,26 +1239,32 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         {
             return Err("properties".to_string());
         }
-        let mut probe = cursor;
-        let mut available = 0usize;
-        while available < count && probe < bytes.len() {
-            if let Some(rel) = memchr::memchr(b'\n', &bytes[probe..]) {
-                available += 1;
-                probe += rel + 1;
-            } else {
-                available += 1;
-                break;
-            }
-        }
-        if available < count {
-            return Err("atoms".to_string());
-        }
-        for _ in 0..count {
+        for index in 0..count {
             let Some((next, line)) = line_span(bytes, cursor) else {
                 return Err("atoms".to_string());
             };
             cursor = next;
-            push_atom(line, &specs, &mut columns, &mut pool, &mut ids)?;
+            if let Err(err) = push_atom(line, &specs, &mut columns, &mut pool, &mut ids) {
+                // A short frame reports "atoms" before a bad token on the
+                // lines that do exist, matching the line-count check.
+                let mut seen = index + 1;
+                let mut probe = cursor;
+                while seen < count && probe < bytes.len() {
+                    if let Some(rel) = memchr::memchr(b'\n', &bytes[probe..]) {
+                        seen += 1;
+                        probe += rel + 1;
+                    } else if probe < bytes.len() {
+                        seen += 1;
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                if seen < count {
+                    return Err("atoms".to_string());
+                }
+                return Err(err);
+            }
         }
         cell.extend_from_slice(&frame_cell);
         n_frames += 1;
@@ -1218,6 +1318,10 @@ fn format_number(value: f64) -> String {
 }
 
 /// `format!("{value}")`, written straight into `out`. NaN stays `nan`.
+pub fn append_extxyz_number(out: &mut Vec<u8>, value: f64) {
+    push_number(out, value);
+}
+
 fn push_number(out: &mut Vec<u8>, value: f64) {
     if value.is_nan() {
         out.extend_from_slice(b"nan");
@@ -1364,30 +1468,39 @@ pub fn extxyz_bytes_with_threads(
             "{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n"
         );
         let chunk = n_atoms.div_ceil(workers);
-        let mut parts: Vec<Vec<u8>> = (0..workers).map(|_| Vec::new()).collect();
-        std::thread::scope(|scope| {
-            for (worker, part) in parts.iter_mut().enumerate() {
+        // Each worker owns its buffer. A `&mut Vec` into one shared
+        // allocation false-shares the length word on every digit.
+        let parts = std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for worker in 0..workers {
                 let from = worker * chunk;
                 if from >= n_atoms {
                     break;
                 }
                 let to = (from + chunk).min(n_atoms);
-                scope.spawn(move || {
-                    part.reserve((to - from).saturating_mul(48));
+                handles.push(scope.spawn(move || {
+                    let mut part = Vec::with_capacity((to - from).saturating_mul(64));
                     for atom in from..to {
                         for (index, column) in columns.iter().enumerate() {
                             if index > 0 {
                                 part.push(b' ');
                             }
                             let base = atom * column.column_width();
-                            column.write_fields(base, part);
+                            column.write_fields(base, &mut part);
                         }
                         part.push(b'\n');
                     }
-                });
+                    part
+                }));
             }
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap_or_default())
+                .collect::<Vec<_>>()
         });
         let mut out = header.into_bytes();
+        let total: usize = parts.iter().map(|part| part.len()).sum();
+        out.reserve(total);
         for part in parts {
             out.extend_from_slice(&part);
         }
@@ -1449,6 +1562,102 @@ pub fn extxyz_bytes_with_threads(
         }
     }
     Ok(out)
+}
+
+/// Format one wide frame into `path`, overlapping the file copy with formatting.
+///
+/// Seven cores format atom ranges into private buffers. The calling
+/// core writes those buffers in order, so the copy is not a second pass
+/// after every digit is done.
+pub fn extxyz_path_with_threads(
+    path: &std::path::Path,
+    n_frames: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&(dyn ExtxyzSource + Sync)],
+    workers: usize,
+) -> Result<(), String> {
+    if !(workers >= 2 && n_frames == 1 && n_atoms >= 4096) {
+        let bytes = extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, workers)?;
+        return std::fs::write(path, bytes).map_err(|err| err.to_string());
+    }
+    if cell.len() < 6 {
+        return Err("cell".to_string());
+    }
+    let properties = columns
+        .iter()
+        .map(|column| {
+            format!(
+                "{}:{}:{}",
+                column.column_name(),
+                column.column_kind() as char,
+                column.column_width()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(":");
+    let lattice = lattice_from_cell(&cell[..6])?;
+    let lattice_text = lattice
+        .iter()
+        .map(|value| format_number(*value))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let header =
+        format!("{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n");
+    let groups = workers.saturating_mul(4).max(workers);
+    let chunk = n_atoms.div_ceil(groups).max(1);
+    let nparts = n_atoms.div_ceil(chunk);
+    let mut file = std::fs::File::create(path).map_err(|err| err.to_string())?;
+    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>)>(2);
+    let format_threads = workers.saturating_sub(1).max(1);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let jobs = &next_job;
+    std::thread::scope(|scope| {
+        for _ in 0..format_threads {
+            let tx = tx.clone();
+            scope.spawn(move || {
+                loop {
+                    let index = jobs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= nparts {
+                        break;
+                    }
+                    let from = index * chunk;
+                    if from >= n_atoms {
+                        break;
+                    }
+                    let to = (from + chunk).min(n_atoms);
+                    let mut part = Vec::with_capacity((to - from).saturating_mul(64));
+                    for atom in from..to {
+                        for (slot, column) in columns.iter().enumerate() {
+                            if slot > 0 {
+                                part.push(b' ');
+                            }
+                            column.write_fields(atom * column.column_width(), &mut part);
+                        }
+                        part.push(b'\n');
+                    }
+                    if tx.send((index, part)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        use std::io::Write;
+        file.write_all(header.as_bytes())
+            .map_err(|err| err.to_string())?;
+        let mut next = 0usize;
+        let mut pending = std::collections::BTreeMap::<usize, Vec<u8>>::new();
+        while next < nparts {
+            let (index, part) = rx.recv().map_err(|_| "write".to_string())?;
+            pending.insert(index, part);
+            while let Some(part) = pending.remove(&next) {
+                file.write_all(&part).map_err(|err| err.to_string())?;
+                next += 1;
+            }
+        }
+        Ok(())
+    })
 }
 
 fn format_extxyz_range(

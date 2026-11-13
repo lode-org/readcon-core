@@ -488,12 +488,17 @@ impl<W: Write> ConFrameWriter<W> {
             )));
         }
         #[cfg(feature = "parallel")]
-        let checked_with_rows = self.stream_file.is_none()
-            && self.atom_workers >= 2
-            && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
+        let parallel_rows = self.atom_workers >= 2 && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
         #[cfg(not(feature = "parallel"))]
-        let checked_with_rows = false;
-        if !checked_with_rows {
+        let parallel_rows = false;
+        if parallel_rows && self.stream_file.is_some() {
+            // The coordinate formatter reads every atom. The id compare
+            // rides that pass; a separate scan walked the whole frame first.
+        } else if parallel_rows {
+            if !ids_are_dense(&frame.atom_data, self.atom_workers) {
+                ensure_unique_ids(&frame.atom_data, self.atom_workers)?;
+            }
+        } else {
             ensure_unique_ids(&frame.atom_data, 1)?;
         }
         let prec = self.float_format;
@@ -1392,10 +1397,13 @@ fn stream_coord_rows(
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>, Vec<u8>)>(2);
+    // One core writes. The rest format, so the copy stays under the format.
     let format_threads = workers.saturating_sub(1).max(1);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
-    std::thread::scope(|scope| {
+    let bad_ids = std::sync::atomic::AtomicBool::new(false);
+    let flag = &bad_ids;
+    let vel = std::thread::scope(|scope| {
         for _ in 0..format_threads {
             let tx = tx.clone();
             let pieces = &pieces;
@@ -1416,7 +1424,11 @@ fn stream_coord_rows(
                     let mut ryu = ryu::Buffer::new();
                     let mut slots = [FmtSlot::new(); 3];
                     let mut vel_slots = [FmtSlot::new(); 3];
-                    for atom in group {
+                    let base = index * chunk;
+                    for (offset, atom) in group.iter().enumerate() {
+                        if atom.atom_id != (base + offset) as u64 {
+                            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                         push_atom_motion(
                             &mut local,
                             if want_vel { Some(&mut local_vel) } else { None },
@@ -1451,8 +1463,12 @@ fn stream_coord_rows(
         for part in vel_parts {
             vel_bytes.extend_from_slice(&part);
         }
-        Ok(vel_bytes)
-    })
+        Ok::<Vec<u8>, WriteError>(vel_bytes)
+    })?;
+    if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
+        ensure_unique_ids(atoms, 1)?;
+    }
+    Ok(vel)
 }
 
 fn push_xyz_line(

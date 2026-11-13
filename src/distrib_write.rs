@@ -137,6 +137,23 @@ pub fn write_block(
 }
 
 /// [`write_block`] over borrowed frames (used by the C ABI).
+/// Write each rank's bytes in rank order. Rank 0's buffer is the start
+/// of the file. Used when one frame's atom lines are split across ranks.
+pub fn write_ranked_bytes(comm: &Comm, path: &Path, bytes: &[u8]) -> Result<u64, BoxErr> {
+    let len = bytes.len() as u64;
+    let world = comm.raw();
+    let mut offset = 0u64;
+    world.exclusive_scan_into(&len, &mut offset, ::mpi::collective::SystemOperation::sum());
+    if comm.rank() == 0 {
+        offset = 0;
+    }
+    let mut total = 0u64;
+    world.all_reduce_into(&len, &mut total, ::mpi::collective::SystemOperation::sum());
+    write_mpiio(comm, path, bytes, offset, total)?;
+    world.barrier();
+    Ok(total)
+}
+
 pub fn write_block_refs(
     comm: &Comm,
     path: &Path,

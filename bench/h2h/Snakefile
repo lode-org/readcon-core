@@ -3,27 +3,27 @@
 
 rule publication:
     input:
-        "bench/h2h/scaling/r6/rows.json",
-        "bench/h2h/scaling/r6/hardware.json",
-        "bench/h2h/scaling/r6/h2h.json",
-        "bench/h2h/scaling/r6/langs.json",
-        "bench/h2h/scaling/r6/scaling.pdf",
+        "bench/h2h/scaling/r7/rows.json",
+        "bench/h2h/scaling/r7/hardware.json",
+        "bench/h2h/scaling/r7/h2h.json",
+        "bench/h2h/scaling/r7/langs.json",
+        "bench/h2h/scaling/r7/scaling.pdf",
 
 
 rule measure:
     output:
-        "bench/h2h/scaling/r6/rows.json",
-        "bench/h2h/scaling/r6/hardware.json",
-        "bench/h2h/scaling/r6/h2h.json",
-        "bench/h2h/scaling/r6/langs.json",
+        "bench/h2h/scaling/r7/rows.json",
+        "bench/h2h/scaling/r7/hardware.json",
+        "bench/h2h/scaling/r7/h2h.json",
+        "bench/h2h/scaling/r7/langs.json",
     shell:
         "python3 bench/h2h/scale_r6.py"
 
 
 rule figure:
     input:
-        "bench/h2h/scaling/r6/rows.json",
+        "bench/h2h/scaling/r7/rows.json",
     output:
-        "bench/h2h/scaling/r6/scaling.pdf",
+        "bench/h2h/scaling/r7/scaling.pdf",
     shell:
         "python3 bench/h2h/plot_r6.py"

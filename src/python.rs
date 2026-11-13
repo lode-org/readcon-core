@@ -4512,6 +4512,105 @@ fn py_text_frames<'py>(
     Ok(frames)
 }
 
+fn species_list_from_batches(
+    rx: std::sync::mpsc::Receiver<crate::extxyz_scan::SpeciesBatch>,
+) -> Option<pyo3::Py<pyo3::types::PyList>> {
+    pyo3::Python::attach(|py| {
+        let mut waiting = std::collections::BTreeMap::new();
+        let mut next = 0u16;
+        let mut rows: Vec<pyo3::Py<pyo3::types::PyTuple>> = Vec::new();
+        let mut partials: Vec<Vec<pyo3::Py<pyo3::types::PyString>>> = Vec::new();
+        let mut shared: Option<(String, usize, pyo3::Py<pyo3::types::PyTuple>)> = None;
+        let mut prev_ids: Vec<u32> = Vec::new();
+        let mut prev_tuple: Option<pyo3::Py<pyo3::types::PyTuple>> = None;
+        while let Ok(batch) = rx.recv() {
+            waiting.insert(batch.worker, batch);
+            while let Some(batch) = waiting.remove(&next) {
+                if batch.frames == 0 {
+                    partials.push(slice_symbols(py, &batch)?);
+                } else if let Some(symbol) = batch.uniform.clone() {
+                    let tuple = if shared.as_ref().is_some_and(|(known, atoms, _)| {
+                        known == &symbol && *atoms == batch.n_atoms
+                    }) {
+                        shared.as_ref().unwrap().2.clone_ref(py)
+                    } else {
+                        let py_symbol = pyo3::types::PyString::new(py, &symbol).unbind();
+                        let tuple = pyo3::types::PyTuple::new(
+                            py,
+                            (0..batch.n_atoms).map(|_| py_symbol.clone_ref(py)),
+                        )?
+                        .unbind();
+                        shared = Some((symbol, batch.n_atoms, tuple.clone_ref(py)));
+                        tuple
+                    };
+                    for _ in 0..batch.frames {
+                        rows.push(tuple.clone_ref(py));
+                    }
+                } else {
+                    let symbols = pool_symbols(py, &batch)?;
+                    let width = batch.n_atoms.max(1);
+                    for frame in 0..batch.frames {
+                        let start = frame * width;
+                        let row = &batch.ids[start..start + width];
+                        if prev_tuple.is_some() && prev_ids == row {
+                            rows.push(prev_tuple.as_ref().unwrap().clone_ref(py));
+                            continue;
+                        }
+                        let tuple = pyo3::types::PyTuple::new(
+                            py,
+                            row.iter().map(|id| symbols[*id as usize].clone_ref(py)),
+                        )?
+                        .unbind();
+                        prev_ids = row.to_vec();
+                        prev_tuple = Some(tuple.clone_ref(py));
+                        rows.push(tuple);
+                    }
+                }
+                next += 1;
+            }
+        }
+        if !partials.is_empty() {
+            let flat: Vec<_> = partials.into_iter().flatten().collect();
+            rows.push(pyo3::types::PyTuple::new(py, flat)?.unbind());
+        }
+        if rows.is_empty() {
+            return Ok::<_, pyo3::PyErr>(None);
+        }
+        Ok(Some(pyo3::types::PyList::new(py, rows)?.unbind()))
+    })
+    .ok()
+    .flatten()
+}
+
+fn pool_symbols<'py>(
+    py: Python<'py>,
+    batch: &crate::extxyz_scan::SpeciesBatch,
+) -> PyResult<Vec<pyo3::Py<pyo3::types::PyString>>> {
+    Ok(batch
+        .pool
+        .iter()
+        .map(|symbol| pyo3::types::PyString::new(py, symbol).unbind())
+        .collect())
+}
+
+fn slice_symbols<'py>(
+    py: Python<'py>,
+    batch: &crate::extxyz_scan::SpeciesBatch,
+) -> PyResult<Vec<pyo3::Py<pyo3::types::PyString>>> {
+    if let Some(symbol) = &batch.uniform {
+        let py_symbol = pyo3::types::PyString::new(py, symbol).unbind();
+        return Ok((0..batch.n_atoms)
+            .map(|_| py_symbol.clone_ref(py))
+            .collect());
+    }
+    let pool = pool_symbols(py, batch)?;
+    Ok(batch
+        .ids
+        .iter()
+        .map(|id| pool[*id as usize].clone_ref(py))
+        .collect())
+}
+
 fn indexed_symbol_frames<'py>(
     py: Python<'py>,
     pool: &[String],
@@ -4573,10 +4672,25 @@ fn read_extxyz<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let path_owned = path.to_string();
     let workers = n_threads.unwrap_or(1);
-    let mut tables = py
+    let (mut tables, prebuilt_species) = py
         .detach(move || {
-            let bytes = std::fs::read(&path_owned).map_err(|_| "read".to_string())?;
-            crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
+            let file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
+            // The map is the parse input. A second copy of the file was a
+            // serial pass in front of every threaded read.
+            // SAFETY: the file is not truncated while this map is alive.
+            let bytes = unsafe { memmap2::Mmap::map(&file) }.map_err(|_| "read".to_string())?;
+            if workers < 2 {
+                let tables =
+                    crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)?;
+                return Ok((tables, None));
+            }
+            let (tx, rx) = std::sync::mpsc::sync_channel(workers.max(1));
+            let builder = std::thread::spawn(move || species_list_from_batches(rx));
+            let tables =
+                crate::extxyz_scan::tables_from_extxyz_bytes_reporting(&bytes, workers, Some(&tx));
+            drop(tx);
+            let species = builder.join().unwrap_or(None);
+            tables.map(|tables| (tables, species))
         })
         .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let n_frames = tables.n_frames;
@@ -4623,6 +4737,11 @@ fn read_extxyz<'py>(
     }
     let species = match shared_species {
         Some(found) => found,
+        None if prebuilt_species.is_some() => {
+            let built = prebuilt_species.unwrap().bind(py).clone();
+            arrays.set_item("species", &built)?;
+            built
+        }
         None => {
             let built = if let Some(symbol) = tables.uniform_species.as_deref() {
                 uniform_symbol_frames(py, symbol, n_frames, n_atoms)?
@@ -4656,6 +4775,70 @@ struct OwnedText {
 }
 
 fn intern_text_column(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
+    let frames = match frame_tuples(value) {
+        Some(frames) => frames,
+        None => return intern_text_iter(value),
+    };
+    let total: usize = frames.iter().map(|frame| frame.len()).sum();
+    let mut uniq = Vec::new();
+    let mut ids = Vec::with_capacity(total);
+    for frame in &frames {
+        let base = frame.as_ptr();
+        for index in 0..frame.len() {
+            let ptr = unsafe { pyo3::ffi::PyTuple_GET_ITEM(base, index as isize) } as usize;
+            if let Some(id) = uniq.iter().position(|known| *known == ptr) {
+                ids.push(id as u32);
+                continue;
+            }
+            if uniq.len() == 64 {
+                return intern_text_iter(value);
+            }
+            uniq.push(ptr);
+            ids.push((uniq.len() - 1) as u32);
+        }
+    }
+    let mut symbols = Vec::with_capacity(uniq.len());
+    let py = value.py();
+    for ptr in uniq {
+        let obj = unsafe { Bound::from_borrowed_ptr(py, ptr as *mut pyo3::ffi::PyObject) };
+        symbols.push(obj.cast::<pyo3::types::PyString>()?.to_str()?.to_string());
+    }
+    Ok(OwnedText { symbols, ids })
+}
+
+fn frame_tuples<'a>(value: &Bound<'a, PyAny>) -> Option<Vec<Bound<'a, pyo3::types::PyTuple>>> {
+    if let Ok(tuple) = value.cast::<pyo3::types::PyTuple>() {
+        if tuple.is_empty() {
+            return Some(Vec::new());
+        }
+        if tuple
+            .get_item(0)
+            .ok()?
+            .cast::<pyo3::types::PyString>()
+            .is_ok()
+        {
+            return Some(vec![tuple.clone()]);
+        }
+    }
+    let mut frames = Vec::new();
+    for frame in value.try_iter().ok()? {
+        let frame = frame.ok()?;
+        let tuple = frame.cast::<pyo3::types::PyTuple>().ok()?.clone();
+        if !tuple.is_empty()
+            && tuple
+                .get_item(0)
+                .ok()?
+                .cast::<pyo3::types::PyString>()
+                .is_err()
+        {
+            return None;
+        }
+        frames.push(tuple);
+    }
+    Some(frames)
+}
+
+fn intern_text_iter(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
     let mut symbols_py: Vec<pyo3::Py<pyo3::types::PyString>> = Vec::new();
     let mut ptrs: Vec<usize> = Vec::new();
     let mut ids = Vec::new();
@@ -4753,8 +4936,7 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
             if slot > 0 {
                 out.push(b' ');
             }
-            let text = format!("{}", self.values[base + slot]);
-            out.extend_from_slice(text.as_bytes());
+            crate::extxyz_scan::append_extxyz_number(out, self.values[base + slot]);
         }
     }
 }
@@ -4884,20 +5066,98 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
             }
         })
         .collect();
-    let bytes = crate::extxyz_scan::extxyz_bytes_with_threads(
-        n_frames,
-        n_atoms,
-        cell,
-        &sources,
-        n_threads.unwrap_or(1),
-    )
-    .map_err(PyValueError::new_err)?;
+    let workers = n_threads.unwrap_or(1);
+    if workers >= 2 && n_frames == 1 && n_atoms >= 4096 {
+        if let Some(parent) = std::path::Path::new(path).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
+        }
+        return crate::extxyz_scan::extxyz_path_with_threads(
+            std::path::Path::new(path),
+            n_frames,
+            n_atoms,
+            cell,
+            &sources,
+            workers,
+        )
+        .map_err(PyValueError::new_err);
+    }
+    let bytes =
+        crate::extxyz_scan::extxyz_bytes_with_threads(n_frames, n_atoms, cell, &sources, workers)
+            .map_err(PyValueError::new_err)?;
     if let Some(parent) = std::path::Path::new(path).parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
     }
-    std::fs::write(path, bytes).map_err(|_| PyValueError::new_err("write"))
+    write_bytes_parallel(path, &bytes, n_threads.unwrap_or(1))
+        .map_err(|_| PyValueError::new_err("write"))
+}
+
+fn write_bytes_parallel(path: &str, bytes: &[u8], workers: usize) -> std::io::Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    let _ = OpenOptionsExt::mode(&mut opts, 0o644);
+    let file = opts.open(path)?;
+    file.set_len(bytes.len() as u64)?;
+    if workers < 2 || bytes.len() < (1 << 20) {
+        use std::io::Write;
+        let mut file = file;
+        return file.write_all(bytes);
+    }
+    let chunk = bytes.len().div_ceil(workers);
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for worker in 0..workers {
+            let from = worker * chunk;
+            if from >= bytes.len() {
+                break;
+            }
+            let to = (from + chunk).min(bytes.len());
+            let cloned = file.try_clone()?;
+            handles.push(scope.spawn(move || pwrite_all(&cloned, &bytes[from..to], from as u64)));
+        }
+        for handle in handles {
+            handle
+                .join()
+                .unwrap_or_else(|_| Err(std::io::Error::other("write")))?;
+        }
+        Ok(())
+    })
+}
+
+fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    if buf.is_empty() {
+        return Ok(());
+    }
+    let fd = file.as_raw_fd();
+    let mut written = 0usize;
+    while written < buf.len() {
+        let n = unsafe {
+            libc::pwrite(
+                fd,
+                buf[written..].as_ptr() as *const libc::c_void,
+                buf.len() - written,
+                offset as libc::off_t,
+            )
+        };
+        if n < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err);
+        }
+        if n == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
+        }
+        written += n as usize;
+        offset += n as u64;
+    }
+    Ok(())
 }
 
 /// Read a PDB file into positions, masses and the cell.

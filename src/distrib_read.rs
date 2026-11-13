@@ -898,3 +898,120 @@ mod tests {
         });
     }
 }
+
+/// Byte span of the coordinate lines in one CON frame.
+///
+/// The span starts after `Coordinates of Component 1` and stops at the
+/// blank line that ends the block, or at the end of the file.
+pub fn frame_coord_span(bytes: &[u8]) -> Option<(usize, usize)> {
+    let marker = b"Coordinates of Component 1\n";
+    let at = memchr::memmem::find(bytes, marker)?;
+    let start = at + marker.len();
+    let mut end = start;
+    while end < bytes.len() {
+        if bytes[end] == b'\n' && end + 1 < bytes.len() && bytes[end + 1] == b'\n' {
+            return Some((start, end + 1));
+        }
+        end += 1;
+    }
+    Some((start, bytes.len()))
+}
+
+/// Newline-aligned slice of `[start, end)` for `rank` of `size`.
+///
+/// Rank 0 starts at `start` and the last rank ends at `end`. A cut that
+/// lands mid-line moves forward to the next newline so every line belongs
+/// to one rank.
+pub fn rank_line_range(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+    rank: usize,
+    size: usize,
+) -> std::ops::Range<usize> {
+    if size == 0 || rank >= size || start >= end {
+        return start..start;
+    }
+    let mut cuts = Vec::with_capacity(size + 1);
+    cuts.push(start);
+    let span = end - start;
+    for index in 1..size {
+        let mut at = start + span * index / size;
+        if at > start && at < end && bytes[at - 1] != b'\n' {
+            while at < end && bytes[at] != b'\n' {
+                at += 1;
+            }
+            if at < end {
+                at += 1;
+            }
+        }
+        if at < *cuts.last().unwrap_or(&start) {
+            at = *cuts.last().unwrap_or(&start);
+        }
+        cuts.push(at.min(end));
+    }
+    cuts.push(end);
+    cuts[rank]..cuts[rank + 1]
+}
+
+/// Parse `x y z` from each non-empty line. The returned buffer is three
+/// floats per line, in file order.
+pub fn parse_coord_lines(slice: &[u8]) -> Result<Vec<f64>, String> {
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < slice.len() {
+        let start = cursor;
+        while cursor < slice.len() && slice[cursor] != b'\n' {
+            cursor += 1;
+        }
+        let mut line = &slice[start..cursor];
+        if cursor < slice.len() {
+            cursor += 1;
+        }
+        if line.last() == Some(&b'\r') {
+            line = &line[..line.len() - 1];
+        }
+        if line.iter().all(|byte| byte.is_ascii_whitespace()) {
+            continue;
+        }
+        let mut index = 0usize;
+        for _ in 0..3 {
+            while index < line.len() && line[index].is_ascii_whitespace() {
+                index += 1;
+            }
+            let (value, used) = fast_float2::parse_partial::<f64, _>(&line[index..])
+                .map_err(|_| "float".to_string())?;
+            if used == 0 {
+                return Err("float".to_string());
+            }
+            out.push(value);
+            index += used;
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod atom_range_tests {
+    use super::{frame_coord_span, parse_coord_lines, rank_line_range};
+
+    #[test]
+    fn one_frame_splits_across_ranks_without_dropping_a_line() {
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2}\n1 1 1\n90 90 90\n0 0\n0 0\n1\n5\n1.0\nH\nCoordinates of Component 1\n",
+        );
+        for index in 0..5 {
+            text.push_str(&format!("{index}.5 0 1 0 {index}\n"));
+        }
+        let bytes = text.as_bytes();
+        let (start, end) = frame_coord_span(bytes).unwrap();
+        let mut coords = Vec::new();
+        for rank in 0..4 {
+            let range = rank_line_range(bytes, start, end, rank, 4);
+            coords.extend(parse_coord_lines(&bytes[range]).unwrap());
+        }
+        assert_eq!(coords.len(), 15);
+        assert_eq!(coords[0], 0.5);
+        assert_eq!(coords[12], 4.5);
+    }
+}
