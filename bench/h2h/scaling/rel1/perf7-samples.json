@@ -1,0 +1,30 @@
+{
+  "bug": "stream_coord_rows formatted on workers-1 threads and wrote on the calling thread. Two workers were one formatter plus that writer, so the 2-worker point could not scale.",
+  "fix": "Every worker formats its own ranges and pwrite()s them. The offset is the header plus the prefix sum of earlier range lengths. A range is written as soon as those lengths are known, so later ranges are still being formatted. Output of the million-atom CON rewrite is 23589082 bytes, sha256 prefix 361546ecf130.",
+  "profile_per_worker_s": {
+    "note": "Sums across the ranges that worker formatted, one sample of the direct Rust path on /dev/shm. Wait is the spin for earlier lengths and is ~0.",
+    "workers_2": {"format": [0.0165, 0.0167], "wait": [0.0, 0.0], "pwrite": [0.0062, 0.0077]},
+    "workers_4": {"format": [0.0083, 0.0082, 0.0082, 0.0083], "wait": [0.0, 0.0, 0.0, 0.0], "pwrite": [0.0024, 0.0033, 0.0045, 0.0028]},
+    "workers_8": {"format": [0.0031, 0.0021, 0.0051, 0.0031, 0.0051, 0.0052, 0.0042, 0.0051], "pwrite": [0.0070, 0.0059, 0.0035, 0.0065, 0.0034, 0.0037, 0.0034, 0.0039]}
+  },
+  "ceilings": {
+    "bytes": 23589082,
+    "memcpy_1_thread_s": 0.003309,
+    "pwrite_8_tmpfs_s": 0.009597,
+    "pwrite_8_tmpfs_samples_s": [0.009091, 0.009102, 0.009322, 0.009871, 0.01031, 0.012556],
+    "pwrite_8_page_cache_s": 0.010903,
+    "pwrite_8_page_cache_samples_s": [0.009638, 0.01002, 0.010893, 0.010912, 0.012156, 0.012613],
+    "note": "Raw 8-thread pwrite of the finished 23.6 MB file, unlink and create each sample. One-thread memcpy is the memory-bandwidth floor for moving those bytes."
+  },
+  "direct_rust_unlink_create": {
+    "note": "write_frame_refs_to_path, one warmup, six samples, type-7 median. Same bytes as the campaign write.",
+    "shm": {"1": 0.049594, "2": 0.02804, "4": 0.01565, "8": 0.010129},
+    "disk": {"1": 0.043588, "2": 0.02678, "4": 0.022427, "8": 0.013151}
+  },
+  "campaign_s61": {
+    "memory": {"1": 0.041733, "2": 0.034666, "4": 0.014158, "8": 0.007422, "eff": {"2": 0.6019, "4": 0.7369, "8": 0.7029}},
+    "disk": {"1": 0.042054, "2": 0.036339, "4": 0.015238, "8": 0.008879, "eff": {"2": 0.5786, "4": 0.6899, "8": 0.5921}},
+    "mpi_disk": {"1": 0.051788, "2": 0.028359, "4": 0.019382, "8": 0.015671, "eff8": 0.4131},
+    "note": "8-thread memory write 0.0074 s is under the 0.0096 s raw tmpfs pwrite. The gap to efficiency 0.8 (0.0065 s) is the part of the format that does not hide behind that write. MPI already pwrites at an exclusive-scan offset; 0.0157 s is that format plus the ~0.011 s page-cache pwrite."
+  }
+}
