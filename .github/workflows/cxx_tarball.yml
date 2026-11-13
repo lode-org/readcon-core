@@ -1,20 +1,38 @@
 name: cxx source tarball
 
-# Attaches slim + vendor cxx tarballs after cargo-dist publishes the
-# GitHub Release. Slim URL is the FetchContent / wrapdb default.
+# Attaches slim + vendor cxx tarballs to the GitHub Release cargo-dist
+# creates for a v* tag. Slim URL is the FetchContent / wrapdb default.
 # cbindgen is not installed and not invoked.
+#
+# Do not trigger on the release event. cargo-dist runs `gh release create`
+# with GITHUB_TOKEN, and events from that token do not start workflows. The
+# release event last started this workflow on v0.14.9, when a person
+# published the release. A v* tag push starts it alongside crates.io,
+# cargo-dist, and the wheel workflow.
+#
+# The upload waits until that Release exists, then runs
+# `gh release upload --clobber`. It does not create a release, move a tag,
+# or publish crates or wheels. workflow_dispatch input `tag` backfills an
+# existing release the same way, without waiting and without publishing.
+# The uploader is checked out from this workflow ref so an older tag still
+# has the script.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Git tag to checkout and attach cxx tarballs to
+        description: Existing vX.Y.Z tag whose GitHub Release should receive cxx tarballs
         required: true
         type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: cxx-tarball-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   cxx-tarball:
@@ -23,25 +41,98 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          persist-credentials: false
+
+      - name: Checkout uploader from the workflow ref
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: uploader
+          persist-credentials: false
+          fetch-depth: 1
+
+      # Host gitconfig is invisible inside a container. source-date-epoch.sh
+      # marks the tree it is reading. gtar covers a future macOS runner;
+      # reproducible-tar.sh still sorts a BSD tar list when gtar is absent.
+      - name: Mark the checkout as a safe git directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ -d "$GITHUB_WORKSPACE/uploader" ]; then
+            git config --global --add safe.directory "$GITHUB_WORKSPACE/uploader"
+          fi
+
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install gnu-tar
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Assemble slim and vendor cxx tarballs
         run: |
-          mkdir -p dist-cxx
-          bash scripts/package-cxx.sh dist-cxx
-          bash scripts/package-cxx.sh dist-cxx --vendor
-          ls -lh dist-cxx
+          set -euo pipefail
+          ver="$(tr -d '[:space:]' < VERSION)"
+          mkdir -p dist-cxx build-cxx/slim build-cxx/vendor
+          bash scripts/package-cxx.sh build-cxx/slim
+          bash scripts/package-cxx.sh build-cxx/vendor --vendor
+          # Release assets are the two archives and their sha256 sidecars.
+          # Wrap files stay in build-cxx so the vendor hash cannot replace
+          # the slim wrap, and they are not uploaded.
+          cp "build-cxx/slim/readcon-core-cxx-${ver}.tar.gz" dist-cxx/
+          cp "build-cxx/slim/readcon-core-cxx-${ver}.tar.gz.sha256" dist-cxx/
+          cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz" dist-cxx/
+          cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz.sha256" dist-cxx/
+          ls -lh dist-cxx build-cxx/slim build-cxx/vendor
+
+      # Tag push: the packed checkout's readcon-core.sha256 is the only pin.
+      # workflow_dispatch packs that tag from a newer workflow ref. The
+      # script next to the uploader may accept that ref's pin when both
+      # trees name the same VERSION and the pin is the archive just built.
+      - name: Refuse a wrap pin that is not this build
+        run: |
+          set -euo pipefail
+          ver="$(tr -d '[:space:]' < VERSION)"
+          built="$(tr -d '[:space:]' < "dist-cxx/readcon-core-cxx-${ver}.tar.gz.sha256")"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            bash "$GITHUB_WORKSPACE/uploader/scripts/accept-cxx-wrap-pin.sh" \
+              "$built" "$GITHUB_WORKSPACE"
+          else
+            bash "$GITHUB_WORKSPACE/scripts/accept-cxx-wrap-pin.sh" \
+              "$built" "$GITHUB_WORKSPACE"
+          fi
+
+      - name: Require tarball names to match the tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: python3 scripts/check_release_artifacts.py --tag "$RELEASE_TAG" --dist dist-cxx
 
       - name: Upload tarballs to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          files: |
-            dist-cxx/readcon-core-cxx-*.tar.gz
-            dist-cxx/readcon-core-cxx-*.tar.gz.sha256
-          fail_on_unmatched_files: true
-          append_body: true
-          body: |
-            C/C++ source tarballs: `readcon-core-cxx-$VERSION.tar.gz` (FetchContent / wrap default) and `readcon-core-cxx-$VERSION-vendor.tar.gz` (offline crates). Headers are pre-generated; cbindgen is not required.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          UPLOAD_WAIT: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            script="$GITHUB_WORKSPACE/uploader/scripts/upload-release-assets.sh"
+          else
+            script="$GITHUB_WORKSPACE/scripts/upload-release-assets.sh"
+          fi
+          # Unmatched globs stay literal, and the uploader rejects those paths.
+          set -- dist-cxx/readcon-core-cxx-*.tar.gz dist-cxx/readcon-core-cxx-*.tar.gz.sha256
+          for asset in "$@"; do
+            if [ ! -f "$asset" ]; then
+              echo "missing cxx asset: $asset" >&2
+              exit 1
+            fi
+          done
+          if [ "$UPLOAD_WAIT" = "true" ]; then
+            bash "$script" --tag "$RELEASE_TAG" --wait "$@"
+          else
+            bash "$script" --tag "$RELEASE_TAG" --backfill "$@"
+          fi

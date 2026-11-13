@@ -1,0 +1,23 @@
+proseguard_main_exit=0
+proseguard_supp_exit=0
+snap_main_exit=0
+snap_supp_exit=0
+snap_repro_exit=0
+snap_summary_exit=0
+snap_results_exit=0
+snap_form_exit=0
+snap_readme_exit=0
+snap_org_exit=0
+persona=rohit-paper
+no_llm=1
+actionable=0
+
+== proseguard rg_main.tex ==
+proseguard: 1 finding(s), 0 actionable
+
+== proseguard rg_supp.tex ==
+proseguard: 3 finding(s), 0 actionable
+
+== snapper ==
+snapper --check --format markdown exited 0 on rg_main.tex and rg_supp.tex.
+snapper -f markdown --check exited 0 on the six prose files.

@@ -1,0 +1,12 @@
+rev_parse a3abea918e60cda6bb73c4dcfd9f3a8766a96ede
+tree 0f195ed54cb7a29a16c442e6807dea48f585aeab
+command python3 paper/cpc/scripts/mpi_fallback.py
+mode scatter
+open_fails_on_nonzero_ranks 1
+rank 0 open_ok 1 rchar 1895 frames 8 local 2 ns 221212
+rank 1 open_ok 0 rchar 103 frames 8 local 2 ns 217822
+rank 2 open_ok 0 rchar 103 frames 8 local 2 ns 226839
+rank 3 open_ok 0 rchar 103 frames 8 local 2 ns 208851
+only_rank0_scanned 1
+others_waited_on_blocking_broadcast 1
+exit_code 0

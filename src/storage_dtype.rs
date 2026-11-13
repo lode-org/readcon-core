@@ -238,9 +238,24 @@ impl PartialEq for Array2Storage {
     }
 }
 
+fn empty_f64_rows() -> Array2Storage {
+    static EMPTY: std::sync::LazyLock<ndarray::ArcArray2<f64>> =
+        std::sync::LazyLock::new(|| ndarray::Array2::zeros((0, 3)).into_shared());
+    Array2Storage::F64(EMPTY.clone())
+}
+
+fn empty_f64_col() -> Array1Storage {
+    static EMPTY: std::sync::LazyLock<ndarray::ArcArray1<f64>> =
+        std::sync::LazyLock::new(|| ndarray::Array1::zeros(0).into_shared());
+    Array1Storage::F64(EMPTY.clone())
+}
+
 impl Array2Storage {
     pub fn zeros(kind: ElementKind, n: usize, c: usize) -> Self {
         use ElementKind::*;
+        if n == 0 && c == 3 && kind == Float64 {
+            return empty_f64_rows();
+        }
         match kind {
             Float64 => Self::F64(ndarray::ArcArray2::zeros((n, c))),
             Float32 => Self::F32(ndarray::ArcArray2::zeros((n, c))),
@@ -349,9 +364,7 @@ impl Array2Storage {
             Self::I16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::I32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::I64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => {
-                a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8)
-            }
+            Self::U8(a) | Self::Bool(a) => a.as_slice_memory_order().map(|s| s.as_ptr()),
             Self::U16(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::U32(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
             Self::U64(a) => a.as_slice_memory_order().map(|s| s.as_ptr() as *const u8),
@@ -627,6 +640,9 @@ impl PartialEq for Array1Storage {
 impl Array1Storage {
     pub fn zeros(kind: ElementKind, n: usize) -> Self {
         use ElementKind::*;
+        if n == 0 && kind == Float64 {
+            return empty_f64_col();
+        }
         match kind {
             Float64 => Self::F64(ndarray::ArcArray1::zeros(n)),
             Float32 => Self::F32(ndarray::ArcArray1::zeros(n)),
@@ -673,6 +689,10 @@ impl Array1Storage {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Self::F64(a) => a.len(),
@@ -709,7 +729,7 @@ impl Array1Storage {
             Self::I16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::I32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::I64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
-            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
+            Self::U8(a) | Self::Bool(a) => a.as_slice().map(|s| s.as_ptr()),
             Self::U16(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::U32(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
             Self::U64(a) => a.as_slice().map(|s| s.as_ptr() as *const u8),
@@ -859,6 +879,10 @@ impl IdArray1 {
                 )));
             }
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn len(&self) -> usize {

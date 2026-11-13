@@ -222,11 +222,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v7
         with:
           pattern: '{sdist-*,wheels-*}'
           merge-multiple: true
           path: dist/
+      - name: Require artifact versions to match the tag
+        run: python3 scripts/check_release_artifacts.py --tag "${{ github.ref }}" --dist dist
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -244,11 +247,15 @@ jobs:
     permissions:
       id-token: write
     steps:
+      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v7
         with:
           pattern: '{sdist-*,wheels-*}'
           merge-multiple: true
           path: dist/
+
+      - name: Require artifact versions to match the tag
+        run: python3 scripts/check_release_artifacts.py --tag "${{ github.ref }}" --dist dist
 
       - name: List artifacts
         run: |

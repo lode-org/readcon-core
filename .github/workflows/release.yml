@@ -6,8 +6,12 @@
 # actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 (v7.0.0).
 # Those SHAs run on Node 24. The previous v4 pins ran on Node 20, which
 # GitHub removed on 2026-09-23. Also re-applied: scripts/install-cargo-dist-ci.sh
-# (sha256-pinned dist 0.28.0) on every install-dist step, and sha256-checked
-# rustup-init 1.28.2 with toolchain 1.88.0 when matrix.container is set.
+# (sha256-pinned dist 0.28.0) on every install-dist step, sha256-checked
+# rustup-init 1.28.2 with toolchain 1.88.0 when matrix.container is set, and
+# actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 (v6.3.0) with
+# Python 3.12 before the host artifact check. ubuntu-22.04's python3 is 3.10
+# and has no tomllib. `dist-workspace.toml` sets `allow-dirty = ["ci"]`, so
+# `dist generate` leaves this file in place and `dist plan` does not reject it.
 #
 # Copyright 2022-2024, axodotdev
 # SPDX-License-Identifier: MIT or Apache-2.0
@@ -258,6 +262,16 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Require dist metadata to match the tag
+        shell: bash
+        run: |
+          python3 scripts/check_release_artifacts.py \
+            --tag "${{ github.ref_name }}" \
+            --dist target/distrib \
+            --manifest target/distrib/plan-dist-manifest.json
       - id: host
         shell: bash
         run: |
@@ -278,6 +292,13 @@ jobs:
           pattern: artifacts-*
           path: artifacts
           merge-multiple: true
+      - name: Require GitHub release files to match the tag
+        shell: bash
+        run: |
+          python3 scripts/check_release_artifacts.py \
+            --tag "${{ needs.plan.outputs.tag }}" \
+            --dist artifacts \
+            --manifest artifacts/plan-dist-manifest.json
       - name: Cleanup
         run: |
           # Remove the granular manifests
@@ -292,7 +313,7 @@ jobs:
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          gh release create "${{ needs.plan.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
   announce:
     needs:

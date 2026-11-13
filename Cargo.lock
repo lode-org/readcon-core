@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "readcon-core"
-version = "0.17.3"
+version = "0.22.0"
 dependencies = [
  "capnp",
  "capnp-rpc",
@@ -1612,6 +1612,7 @@ dependencies = [
  "memchr",
  "memmap2",
  "metatensor",
+ "metatensor-sys",
  "mpi",
  "ndarray",
  "numpy",

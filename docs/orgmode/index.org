@@ -103,6 +103,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
 
    getting-started
    howto
+   atom-correspondence
    migrate
    chemfiles-howto
 
@@ -114,6 +115,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    evolution
    architecture
    benchmarks
+   fidelity
    chemfiles-explain
 
 .. toctree::
@@ -123,6 +125,7 @@ Full matrix (Julia, C/Fortran, packages): :doc:`getting-started`.
    spec
    implementation-notes
    bindings
+   python-api
    chemfiles-reference
    rpc
    mpi

@@ -1,5 +1,8 @@
 pub mod array;
+mod columns;
 pub mod compression;
+pub mod conbin;
+pub mod correspondence;
 #[cfg(feature = "cuda")]
 pub mod cuda_array;
 pub mod distrib;
@@ -8,6 +11,8 @@ pub mod distrib_read;
 #[cfg(feature = "mpi")]
 pub mod distrib_write;
 pub mod error;
+pub mod extxyz_scan;
+mod fast_dec;
 pub mod ffi;
 pub mod frame_index;
 #[cfg(feature = "grammar")]
@@ -18,6 +23,7 @@ pub mod hostlabel;
 pub mod index_proj;
 pub mod iterators;
 pub mod parser;
+pub mod pdb_scan;
 /// RCSO/RCSB cooked numerics for a caller-side broadcast. No MPI in this crate.
 pub mod rcso;
 pub mod storage_dtype;
@@ -72,6 +78,11 @@ pub const CON_SPEC_MINOR: u32 = 1;
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub use correspondence::{
+    CorrespondenceError, IdentityCheck, atom_id_permutation, check_atom_id_consistency,
+    minimum_image_delta, minimum_image_displacements, reorder_like,
+};
 
 #[cfg(test)]
 mod tests {

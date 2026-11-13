@@ -5,22 +5,38 @@ name: C ABI library tarball
 #
 # Attach-to-tag: workflow_dispatch inputs.tag works like cxx_tarball.yml so
 # an already-published tag (v0.14.7) can receive clib assets later.
-# The packager (scripts/package-clib.sh) comes from the *workflow ref*
-# (the branch selected in Actions). Sources and the Release tag come from
-# inputs.tag (dispatch) or github.ref (release published). That split is
-# required because v0.14.7 does not contain package-clib.sh.
+# The packager (scripts/package-clib.sh and scripts/upload-release-assets.sh)
+# comes from the workflow ref. Sources and the Release tag come from
+# inputs.tag (dispatch) or github.ref (v* tag push). That split is required
+# because v0.14.7 does not contain package-clib.sh.
+#
+# Do not trigger on the release event. cargo-dist runs `gh release create`
+# with GITHUB_TOKEN, and events from that token do not start workflows. The
+# release event last started this workflow on v0.14.9, when a person
+# published the release. A v* tag push starts it alongside crates.io,
+# cargo-dist, and the wheel workflow.
+#
+# The upload waits until that Release exists, then runs
+# `gh release upload --clobber`. It does not create a release, move a tag,
+# or publish crates or wheels. workflow_dispatch input `tag` backfills an
+# existing release the same way, without waiting and without publishing.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Git tag to checkout and attach clib tarballs to
+        description: Existing vX.Y.Z tag whose GitHub Release should receive clib tarballs
         required: true
         type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: clib-tarball-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_HTTP_MULTIPLEXING: "false"
@@ -60,17 +76,50 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: packager
+          persist-credentials: false
 
       - name: Checkout tag sources
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           path: src
+          persist-credentials: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      # BSD tar rejects GNU --sort=name. gtar is GNU tar; reproducible-tar.sh
+      # uses it, and falls back to a sorted file list when it is absent.
+      - name: Install GNU tar
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install gnu-tar
+
+      # The published Windows archive has empty uname and no pax headers,
+      # which is GNU tar --numeric-owner. bsdtar on Windows writes atime
+      # and ctime into pax headers and the bytes move.
+      - name: Require GNU tar on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! tar --version 2>&1 | head -n 1 | grep -q 'GNU tar'; then
+            echo "Windows clib archives need GNU tar" >&2
+            tar --version >&2 || true
+            exit 1
+          fi
+
+      # Host gitconfig does not enter the manylinux container. That job
+      # marks /io, /io/src, and /io/packager inside the container as well.
+      - name: Mark checkouts as safe git directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/src"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/packager"
 
       - name: Linux BFD linker
         if: runner.os == 'Linux'
@@ -112,6 +161,11 @@ jobs:
             "$MANYLINUX_IMAGE" \
             bash -lc '
               set -euo pipefail
+              if command -v git >/dev/null 2>&1; then
+                git config --global --add safe.directory /io
+                git config --global --add safe.directory /io/src
+                git config --global --add safe.directory /io/packager
+              fi
               export PATH="/io/src/.ci-cargo/bin:$PATH"
               if ! command -v rustc >/dev/null 2>&1; then
                 curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -146,18 +200,100 @@ jobs:
             "${feat_args[@]}"
           ls -lh dist-clib
 
+      # Windows links twice from an empty target directory. /Brepro and the
+      # path remap live in package-clib.sh; a cache hit would hide a linker
+      # timestamp. Linux and macOS pack the libraries just built a second
+      # time, which checks the tar header without another compile.
+      - name: Prove the clib tarball is reproducible
+        shell: bash
+        env:
+          CARGO_FEATURES: ${{ matrix.features }}
+          MANYLINUX_IMAGE: ${{ matrix.manylinux_image }}
+          CARGO_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-clib-rebuild
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            rm -rf src/target
+            feat_args=()
+            if [ -n "${CARGO_FEATURES:-}" ]; then
+              feat_args=(--features "${CARGO_FEATURES}")
+            fi
+            bash packager/scripts/package-clib.sh dist-clib-rebuild \
+              --root src \
+              --target "$CARGO_TARGET" \
+              "${feat_args[@]}"
+          elif [ "$RUNNER_OS" = "Linux" ]; then
+            docker run --rm \
+              -e CARGO_TARGET \
+              -v "$GITHUB_WORKSPACE":/io \
+              -w /io \
+              "$MANYLINUX_IMAGE" \
+              bash -lc 'bash /io/packager/scripts/package-clib.sh /io/dist-clib-rebuild --root /io/src --target "$CARGO_TARGET" --no-build'
+          else
+            bash packager/scripts/package-clib.sh dist-clib-rebuild \
+              --root src \
+              --target "$CARGO_TARGET" \
+              --no-build
+          fi
+          shopt -s nullglob
+          first=(dist-clib/readcon-core-clib-*.tar.gz)
+          second=(dist-clib-rebuild/readcon-core-clib-*.tar.gz)
+          if [ "${#first[@]}" -ne 1 ] || [ "${#second[@]}" -ne 1 ]; then
+            echo "expected one clib tarball in each directory" >&2
+            exit 1
+          fi
+          python3 packager/scripts/compare-repro-archives.py "${first[0]}" "${second[0]}"
+
+      - name: Require clib names to match the tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # packager/ is the workflow ref. src/ is the tag that was packed.
+          # VERSION has to be the packed tree, and the script has to be the
+          # packager copy. Both paths are absolute so the workspace root,
+          # which has neither scripts/ nor VERSION, is not the lookup root.
+          # A Git Bash /d/a path loses its drive letter in Windows pathlib.
+          # cygpath -w yields D:\a\... . ${GITHUB_WORKSPACE} is already that
+          # native path when the runner set it; cygpath covers a POSIX copy.
+          native() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -w "$1"
+            else
+              printf '%s\n' "$1"
+            fi
+          }
+          python3 "$(native "$GITHUB_WORKSPACE/packager/scripts/check_release_artifacts.py")" \
+            --tag "$RELEASE_TAG" \
+            --version-file "$(native "$GITHUB_WORKSPACE/src/VERSION")" \
+            --dist "$(native "$GITHUB_WORKSPACE/dist-clib")"
+
       - name: Upload tarball to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          files: |
-            dist-clib/readcon-core-clib-*.tar.gz
-            dist-clib/readcon-core-clib-*.tar.gz.sha256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          UPLOAD_WAIT: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          script="$GITHUB_WORKSPACE/packager/scripts/upload-release-assets.sh"
+          # Unmatched globs stay literal, and the uploader rejects those paths.
+          set -- dist-clib/readcon-core-clib-*.tar.gz \
+            dist-clib/readcon-core-clib-*.tar.gz.sha256 \
             dist-clib/Artifacts-*.toml
-          fail_on_unmatched_files: true
-          append_body: true
-          body: |
-            Prebuilt C ABI: `readcon-core-clib-$VERSION-$target.tar.gz` (shipped headers + `libreadcon_core` + `readcon-core.pc`). cbindgen is not required. Julia/Fortran: unpack and set `READCON_CORE_LIB` / `PKG_CONFIG_PATH`. Windows + chemfiles is not a clib asset (Python wheel path only).
+          for asset in "$@"; do
+            if [ ! -f "$asset" ]; then
+              echo "missing clib asset: $asset" >&2
+              exit 1
+            fi
+          done
+          if [ "$UPLOAD_WAIT" = "true" ]; then
+            bash "$script" --tag "$RELEASE_TAG" --wait "$@"
+          else
+            bash "$script" --tag "$RELEASE_TAG" --backfill "$@"
+          fi
 
   # Explicit skip: do not silently omit Windows chemfiles from the matrix.
   # Official prebuilt libchemfiles for x86_64-pc-windows-msvc is the Python

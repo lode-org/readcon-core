@@ -11,6 +11,7 @@
 | 4 | =benches/multiformat_traj.py= | Equal-geometry wall times: ASE XYZ/extXYZ/CON vs readcon CON |
 | 5 | =benches/ase_traj_vs_con.py= | ASE =.traj= / NetCDF / XYZ vs =readcon.read_chemfiles= vs native CON |
 | 6 | =benches/h5md_vs_con.py= | MDAnalysis H5MD / h5py positions vs CON / chemfiles XYZ |
+| local | =benchmarks/workflow/weak/Snakefile= launches asv and mpirun | Frames per worker stay fixed. Efficiency is t(1)/t(w). |
 | local | =cargo bench= (Criterion) | Rust microbench latency; optional PR job saves baselines |
 | local | =benches/stream_compressed.py= | Peak resident memory and wall time of Python =iter_con= by mode, plain and gzip |
 
@@ -199,6 +200,16 @@ the code, not a promise about every host):
   =benches/results/wall_scale.json= (host, date, commit). That JSON is
   Table io in =paper/cpc/main.tex=. Do not mix it with the Python
   =readcon.read_con= wall table.
+- Weak scaling grows the frame count with the worker count:
+  =n_frames = frames_per_worker * workers=. Threads and MPI ranks are
+  separate curves. The ladder is every power of two from 1 through the
+  physical core count, plus that count when it is not a power of two.
+  Physical cores are lscpu cores per socket times sockets. Six is the
+  number of serial repeats at each point. Efficiency is =t(1)/t(w)=
+  with a dashed ideal at 1.
+  =benchmarks/workflow/weak/Snakefile= launches asv for threads and
+  =mpirun= for ranks. Tables are named from the CPU model. The CUDA
+  feature is a DLPack export, not a point on those curves.
 - Skip without atoms: =forward= / =forward_fast= (Cachegrind =forward_*=)
 
 h5py =position/value= alone loads a coordinate array (not cell / constraints /
@@ -230,7 +241,7 @@ JSON you generate; regenerate after peer runs if you need them current.
 
 **Python**
 
-Multi-frame parse paths release the GIL via =py.detach= (=src/python.rs=) around
+Multi-frame parse paths release the global interpreter lock (GIL) via =py.detach= (=src/python.rs=) around
 the Rust work; =iter_con= yields full frames.
 
 * Criterion (local Rust latency)
@@ -282,6 +293,31 @@ concatenation, and streaming iteration — see [[file:spec.org][spec.org]].
 [[https://github.com/HaoZeke/bayescomp][bayescomp]] can fit Gamma-family models
 to Criterion JSON and =compare_readers.py= timings when you want credible
 intervals; it is not part of the PR gate.
+
+* Head to head
+
+=benchmarks/workflow/Snakefile= target =h2h= runs one rule per reader.
+Each rule calls an asv class under =bench/h2h/asv/=.
+The class sets =timeout = 600= and defines =time_*= and =track_*= methods.
+Paper numbers come from those rules.
+The same-file table reads one con file: readcon from C, Fortran, and Python, the upstream eon client, eon Python, and the Atomic Simulation Environment (ASE) with the eon format.
+The nearest-native table reads different files that carry the same atoms and the same cell.
+NumPy reads an npy coordinate array, which has no cell.
+ASE and chemfiles read extended xyz.
+=OVITO= reads extended xyz.
+pymatgen reads a POSCAR.
+MDAnalysis reads a PDB file with a CRYST1 record.
+=scripts/check_version_sot.sh= scans the tree for the package version string.
+It allows that string only in a fixed list of packaging files and in =docs/source= rst pages.
+A file outside that list fails the scan.
+The paper directory is outside the list, so a full =cargo test= reports those paths.
+The 207 library tests do not run that scan.
+A row passes only when the atom count, the cell, and the coordinates match.
+NumPy has no cell, so that row fails the cell check.
+The host line is Intel Xeon Processor, the =uname -m= value, =nproc=, and the memory total.
+Every arm is pinned with =taskset -c 0=.
+The in-process Python read and the fresh-process Python read are separate rows.
+The measured medians are in =bench/h2h/SUMMARY.md=.
 
 * Reproduce (one place)
 

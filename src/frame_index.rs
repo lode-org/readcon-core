@@ -173,9 +173,7 @@ fn reject_with_absolute_utf8(
         None => bytes.len(),
     };
     let end = end.min(bytes.len());
-    if let Err(adjusted) = std::str::from_utf8(&bytes[..end]) {
-        return Err(adjusted);
-    }
+    std::str::from_utf8(&bytes[..end])?;
     std::str::from_utf8(bytes).map(|_| ())
 }
 
@@ -206,15 +204,23 @@ pub fn validate_utf8_sliced(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
             Err(err) => reject_with_absolute_utf8(bytes, w[0], err),
         }
     };
+    let windows: Vec<&[usize]> = cuts.windows(2).collect();
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        let windows: Vec<&[usize]> = cuts.windows(2).collect();
-        windows.par_iter().try_for_each(|w| check(w))?;
+        // One window has no second slice to run beside it. `par_iter`
+        // would still start the global pool.
+        if windows.len() >= 2 {
+            windows.par_iter().try_for_each(|w| check(w))?;
+        } else {
+            for w in &windows {
+                check(w)?;
+            }
+        }
     }
     #[cfg(not(feature = "parallel"))]
     {
-        for w in cuts.windows(2) {
+        for w in &windows {
             check(w)?;
         }
     }
@@ -253,7 +259,9 @@ fn block_hash(block: &[u8]) -> u64 {
     let (strides, rest) = block.as_chunks::<64>();
     for stride in strides {
         for (lane, w) in lanes.iter_mut().zip(stride.as_chunks::<8>().0) {
-            *lane = (*lane ^ u64::from_le_bytes(*w)).wrapping_mul(K).rotate_left(31);
+            *lane = (*lane ^ u64::from_le_bytes(*w))
+                .wrapping_mul(K)
+                .rotate_left(31);
         }
     }
     let tail = fnv1a(FNV_OFFSET, rest);
@@ -616,7 +624,15 @@ mod tests {
     fn content_hash_sees_every_byte_and_block_order() {
         let base: Vec<u8> = (0..HASH_BLOCK * 3 + 77).map(|i| (i % 251) as u8).collect();
         let h = content_hash(&base);
-        for at in [0, 63, 64, HASH_BLOCK - 1, HASH_BLOCK, 2 * HASH_BLOCK + 5, base.len() - 1] {
+        for at in [
+            0,
+            63,
+            64,
+            HASH_BLOCK - 1,
+            HASH_BLOCK,
+            2 * HASH_BLOCK + 5,
+            base.len() - 1,
+        ] {
             let mut b = base.clone();
             b[at] ^= 0x20;
             assert_ne!(content_hash(&b), h, "byte {at}");

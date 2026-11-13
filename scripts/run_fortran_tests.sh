@@ -36,15 +36,17 @@ if [[ "$FEATURES" == *metatensor* ]]; then
     set +a
   fi
   if [[ -n "${READCON_METATENSOR_LIB_DIR:-}" && -d "${READCON_METATENSOR_LIB_DIR}" ]]; then
-    EXTRA="-L${READCON_METATENSOR_LIB_DIR} -lmetatensor $EXTRA"
+    EXTRA="-L${READCON_METATENSOR_LIB_DIR} -Wl,-rpath,${READCON_METATENSOR_LIB_DIR} -Wl,-rpath-link,${READCON_METATENSOR_LIB_DIR} -lmetatensor $EXTRA"
     export LD_LIBRARY_PATH="${READCON_METATENSOR_LIB_DIR}:$LD_LIBRARY_PATH"
   else
-    # Fallback: scan metatensor-sys out (first build may race env file)
-    for d in "$ROOT"/target/release/build/metatensor-sys-*/out/lib \
-             "$ROOT"/target/release/build/metatensor-sys-*/out/build/target/*/release/deps \
-             "$ROOT"/target/release/build/metatensor-sys-*/out; do
-      if [[ -d "$d" ]] && ls "$d"/libmetatensor.so >/dev/null 2>&1; then
-        EXTRA="-L$d -lmetatensor $EXTRA"
+    # Cargo 1.100: build/metatensor-sys/<hash>/out/lib
+    # Older Cargo: build/metatensor-sys-<hash>/out/lib
+    for d in "$ROOT"/target/release/build/metatensor-sys/*/out/lib \
+             "$ROOT"/target/release/build/metatensor-sys-*/out/lib \
+             "$ROOT"/target/release/build/metatensor-sys/*/out/build/target/*/release \
+             "$ROOT"/target/release/build/metatensor-sys-*/out/build/target/*/release; do
+      if [[ -d "$d" && -e "$d/libmetatensor.so" ]]; then
+        EXTRA="-L$d -Wl,-rpath,$d -Wl,-rpath-link,$d -lmetatensor $EXTRA"
         export LD_LIBRARY_PATH="$d:$LD_LIBRARY_PATH"
         break
       fi

@@ -155,14 +155,18 @@ fn core_scenarios() -> Vec<Scenario> {
 }
 
 fn all_scenarios() -> Vec<Scenario> {
-    let mut s = core_scenarios();
     #[cfg(feature = "chemfiles")]
     {
+        let mut s = core_scenarios();
         s.push(("chemfiles_xyz_path", scenario_xyz_to_con));
         s.push(("chemfiles_xyz_memory", scenario_xyz_memory_to_con));
         s.push(("chemfiles_select_name_O", scenario_select_name_o));
+        s
     }
-    s
+    #[cfg(not(feature = "chemfiles"))]
+    {
+        core_scenarios()
+    }
 }
 
 fn main() {

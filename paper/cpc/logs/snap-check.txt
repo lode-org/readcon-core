@@ -1,0 +1,4 @@
+snapper_check_main
+snap_main_exit=0
+snapper_check_supp
+snap_supp_exit=0

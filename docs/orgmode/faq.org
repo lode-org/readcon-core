@@ -5,8 +5,10 @@
 .. note::
 
    Explanation (why the format looks like this). Learning path:
-   :doc:`tutorial`. Task recipes: :doc:`howto`.
+   :doc:`tutorial`.    Task recipes: :doc:`howto`.
 #+end_export
+
+#+INCLUDE: "rfc2119-note.inc"
 
 * What CON is for
 
@@ -62,7 +64,7 @@ selection *symbols* but error clearly until that feature is linked. Docs for
 conversion live under =docs/orgmode/chemfiles-*.org=; language APIs in
 =bindings.org=; on-disk =bonds= in =spec.org=.
 
-On *import* only, display names such as =H1= versus types such as =H= may be
+On *import* only, display names such as =H1= versus types such as =H= MAY be
 kept in sidecars (=chemfiles_atom_names= / =chemfiles_atom_types=); the on-disk
 column remains a single =symbol=. Hand-built frames without sidecars use
 =symbol= for both.
@@ -75,7 +77,7 @@ by one O atom. Without a persistent identity field, the original
 ordering vanishes after one read-write cycle.
 
 This matters for:
-- *NEB calculations*: interpolated images must maintain consistent
+- *NEB calculations*: interpolated images MUST maintain consistent
   atom ordering across the band. If atom ordering drifts, the
   interpolation produces nonsense.
 - *Dimer searches*: the displacement vector references specific atom
@@ -138,15 +140,15 @@ and their order. Known names on the v2/v3 surface:
 
 Optional physics blocks such as =charges= / =spins= / =magmoms= /
 =displacements= / =spreads= use the same
-declared-section channel; they do not require a new =con_spec_version=.
+declared-section channel. They MUST NOT require a new =con_spec_version=.
 
 Compared with the legacy approach (detecting velocities by peeking for a blank
 separator):
-- Declared sections fix what the reader must consume
+- Declared sections fix what the reader MUST consume
 - New section names need no positional guesswork once reserved in the spec
 - Section order is explicit
 
-Declared sections must be present at the declared position. Use an
+Declared sections MUST be present at the declared position. Use an
 empty =sections= array (=[]=) to state that no additional per-atom
 sections follow.
 When the key is absent, the reader keeps the blank-separator fallback
@@ -164,7 +166,7 @@ not satisfy strict ordering and schema invariants:
 {"con_spec_version":2,"sections":["velocities"],"validate":true}
 #+end_example
 
-In this mode, =sections= must be present. Readers verify the
+In this mode, =sections= MUST be present. Readers verify the
 declared section order, exact component labels, component symbols,
 integer identity columns, matching fixed masks and atom ids across
 sections, finite numeric values, physical cell geometry, positive
@@ -242,6 +244,14 @@ gap:
 
 Both APIs mirror across every supported binding (Rust, C ABI, C++,
 Python, Julia).
+
+Matching one frame onto another is :doc:`atom-correspondence`.
+=atom_id_permutation= maps frame B onto frame A.
+=reorder_like= returns B in A's atom order.
+=check_atom_id_consistency= names the first frame and atom that break
+a trajectory or NEB band.
+=minimum_image_displacements= is the periodic displacement of the
+matched pairs, using the reference cell.
 
 * What languages are supported?
 
@@ -435,7 +445,7 @@ LMDB corpus on top of it (indexes for energy / formula / section
 presence, content-hash dedup, multi-reader SWMR). Multi-frame CON files
 (optionally gzip/zstd) and =iter_con= / =forward= cover trajectory-style loads
 in =readcon-core= itself. Large corpora stay CON text; =readcon-db=
-indexes them. Do not switch the on-disk structure to another dialect
+indexes them. Campaigns MUST NOT switch the on-disk structure to another dialect
 for screening.
 
 Install: =cargo add readcon-db= / =pip install readcon-db=.

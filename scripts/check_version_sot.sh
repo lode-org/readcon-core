@@ -80,6 +80,7 @@ python3 - "$ver" <<'PY'
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 sys.path.insert(0, "scripts")
@@ -194,6 +195,16 @@ allow_exact = {
     "include/readcon-core-version.h",
     "packaging/wrapdb/readcon-core.wrap",
     "README.md",
+    # Cargo writes the path dependency's version into these lockfiles.
+    # A lockfile that omits it is not a lockfile cargo will keep.
+    "paper/cpc/bench/mpi_cost/Cargo.lock",
+    "paper/cpc/bench/dlpack_cost/Cargo.lock",
+    "paper/cpc/bench/readcon-bench/Cargo.lock",
+    # The release-guard fixtures name the current package version on purpose.
+    "tests/python/test_check_release_artifacts.py",
+    # The one macro the paper reads. scripts/cargo_version_tex.py writes
+    # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
+    "paper/cpc/src/cargo_version.tex",
 }
 skip_dirs = {
     ".git",
@@ -204,14 +215,23 @@ skip_dirs = {
     "docs/build",
     "docs/doctrees",
     ".venv",
+    "work",
 }
+# bench/h2h/work is generated campaign output. It is gitignored, and a
+# full-tree walk would still open it. The gate lists tracked files and
+# also skips this prefix.
+skip_prefixes = ("bench/h2h/work/",)
 bad = []
-for path in root.rglob("*"):
+listed = subprocess.check_output(["git", "ls-files", "-z"])
+for raw in listed.split(b"\0"):
+    if not raw:
+        continue
+    rel = raw.decode()
+    path = root / rel
     if not path.is_file():
         continue
-    rel = path.relative_to(root).as_posix()
-    parts = set(path.parts)
-    if parts & skip_dirs or any(part in skip_dirs for part in path.parts):
+    parts = set(pathlib.PurePosixPath(rel).parts)
+    if rel.startswith(skip_prefixes) or parts & skip_dirs or any(part in skip_dirs for part in parts):
         continue
     if rel in allow_exact or rel.startswith("docs/source/") and rel.endswith(".rst"):
         continue
@@ -219,7 +239,13 @@ for path in root.rglob("*"):
         data = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         continue
-    if version in data:
+    # A comparison pin such as ``trio>=0.22.0`` is not this package.
+    # A conda upper bound can contain these digits followed by a letter.
+    # Require a version token boundary so that pin is not this package.
+    if re.search(
+        rf"(?<![0-9A-Za-z.>=<~^]){re.escape(version)}(?![0-9A-Za-z.])",
+        data,
+    ):
         bad.append(rel)
 if bad:
     die("package version embedded outside the allowlist: " + ", ".join(bad))

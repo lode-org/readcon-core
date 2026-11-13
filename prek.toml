@@ -26,7 +26,7 @@ hooks = [
   { id = "trailing-whitespace" },
   # The natural-unit golden is byte-exact and has no trailing newline.
   # The zero-atom fixture keeps the two blank lines after the type count.
-  { id = "end-of-file-fixer", exclude = "(?x)(^resources/conformance/natural_time_unit\\.txt$|^resources/conformance/valid/zero_atom\\.con$)" },
+  { id = "end-of-file-fixer", exclude = "(?x)(^resources/conformance/natural_time_unit\\.txt$|^resources/conformance/valid/zero_atom\\.con$|^tests/writer_golden/valid__zero_atom\\.con$|^tests/writer_golden/valid__zero_atom_eof\\.con$)" },
   { id = "check-yaml" },
   { id = "check-toml" },
   { id = "check-merge-conflict" },
@@ -61,4 +61,4 @@ hooks = [{ id = "taplo-format", exclude = "^prek\\.toml$" }]
 [[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.1"
-hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD"] }]
+hooks = [{ id = "codespell", args = ["--skip=*.lock,*.svg,*.con,*.convel,*.json,*.html,*.bib,*.f90,docs/build,docs/_build,docs/source/crates", "-L", "crate,crates,nd,te,TE,ans,ro,RO,wit,inout,dum,fiter,implementors,implementor,NAMD,RcAll,ontop,anc"] }]

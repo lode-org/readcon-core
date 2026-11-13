@@ -46,6 +46,13 @@ pub fn tensor_block_into_raw_mts(block: TensorBlock) -> *mut mts_block_t {
 
 /// Free an owned `mts_block_t*` transferred via [`tensor_block_into_raw_mts`].
 /// Null-safe. Invokes metatensor-sys `mts_block_free` (C ABI destructor).
+///
+/// # Safety
+///
+/// `block` is null or a pointer produced by [`tensor_block_into_raw_mts`]
+/// that has not been freed. `mts_block_free` frees that allocation. A
+/// pointer from any other source, or a second free of the same pointer,
+/// is undefined behavior.
 pub unsafe fn mts_block_free_sys(block: *mut mts_block_t) {
     if !block.is_null() {
         // Ignore status: best-effort free on the C boundary.

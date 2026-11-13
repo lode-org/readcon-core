@@ -15,25 +15,36 @@ use std::path::Path;
 pub enum Compression {
     None,
     Gzip,
-    /// zstd frame, magic `28 B5 2F FD`. Build with `--features zstd`.
+    /// zstd data: a frame (`28 b5 2f fd`) or a skippable frame
+    /// (`5? 2a 4d 18`, RFC 8878). Build with `--features zstd`.
     Zstd,
+}
+
+/// A Zstandard frame or a skippable frame, in the byte order on disk.
+///
+/// RFC 8878 gives a frame the magic `28 b5 2f fd` and a skippable frame
+/// one of `50 2a 4d 18` through `5f 2a 4d 18`. A file from `pzstd` can
+/// start with the skippable frame.
+fn is_zstd_magic(bytes: &[u8]) -> bool {
+    bytes.len() >= 4
+        && (bytes[..4] == [0x28, 0xb5, 0x2f, 0xfd]
+            || ((0x50..=0x5f).contains(&bytes[0])
+                && bytes[1] == 0x2a
+                && bytes[2] == 0x4d
+                && bytes[3] == 0x18))
 }
 
 /// Detect compression format from the first bytes of a file.
 ///
 /// - `1f 8b` = gzip
-/// - `28 b5 2f fd` = zstd
+/// - `28 b5 2f fd` = zstd frame
+/// - `5? 2a 4d 18` = zstd skippable frame
 /// - Otherwise = uncompressed
 pub fn detect_compression(bytes: &[u8]) -> Compression {
     if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
         return Compression::Gzip;
     }
-    if bytes.len() >= 4
-        && bytes[0] == 0x28
-        && bytes[1] == 0xb5
-        && bytes[2] == 0x2f
-        && bytes[3] == 0xfd
-    {
+    if is_zstd_magic(bytes) {
         return Compression::Zstd;
     }
     Compression::None
@@ -83,6 +94,82 @@ pub fn read_file_text(path: &Path) -> Result<String, Box<dyn std::error::Error>>
     match read_contents(path, false)?.0 {
         FileContents::Owned(text) => Ok(text),
         FileContents::Mapped(_) => unreachable!("read_contents maps only when asked to"),
+    }
+}
+
+/// Bytes of one file, mapped when a plain file is large enough.
+///
+/// Compressed input is decoded into a buffer. A plain file under 64 KiB,
+/// or anything that is not a regular file, is read into a buffer. A larger
+/// plain file stays mapped for the parse and is not copied. The bytes are
+/// not checked as UTF-8; the parser reports a bad byte when it reaches it.
+pub enum ByteSource {
+    Buf(Vec<u8>),
+    Map(memmap2::Mmap),
+}
+
+impl ByteSource {
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            ByteSource::Buf(bytes) => bytes,
+            ByteSource::Map(map) => map,
+        }
+    }
+}
+
+/// Load `path` for a parse. See [`ByteSource`].
+pub fn read_bytes_owned(path: &Path) -> Result<ByteSource, Box<dyn std::error::Error>> {
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    let mut magic = [0u8; 4];
+    let n = (&mut file).take(4).read(&mut magic)?;
+    match detect_compression(&magic[..n]) {
+        Compression::None if metadata.is_file() && metadata.len() >= MMAP_THRESHOLD => {
+            let map = unsafe { memmap2::Mmap::map(&file)? };
+            Ok(ByteSource::Map(map))
+        }
+        Compression::None => {
+            let mut bytes = Vec::with_capacity(metadata.len().saturating_add(4) as usize);
+            bytes.extend_from_slice(&magic[..n]);
+            file.read_to_end(&mut bytes)?;
+            Ok(ByteSource::Buf(bytes))
+        }
+        Compression::Gzip | Compression::Zstd => {
+            drop(file);
+            Ok(ByteSource::Buf(read_file_bytes(path)?))
+        }
+    }
+}
+
+/// File bytes in one read when the file is not compressed.
+///
+/// Gzip and zstd still go through the decoder. Plain text skips the
+/// four-byte probe and the UTF-8 `String` allocation.
+pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let bytes = std::fs::read(path)?;
+    let magic = &bytes[..bytes.len().min(4)];
+    match detect_compression(magic) {
+        Compression::None => Ok(bytes),
+        Compression::Gzip => {
+            let mut decoder = flate2::read::MultiGzDecoder::new(std::io::Cursor::new(bytes));
+            let mut out = Vec::new();
+            decoder.read_to_end(&mut out)?;
+            Ok(out)
+        }
+        Compression::Zstd => {
+            #[cfg(feature = "zstd")]
+            {
+                let mut decoder = zstd::stream::read::Decoder::new(std::io::Cursor::new(bytes))?;
+                let mut out = Vec::new();
+                decoder.read_to_end(&mut out)?;
+                Ok(out)
+            }
+            #[cfg(not(feature = "zstd"))]
+            {
+                let _ = bytes;
+                Err(zstd_unsupported().into())
+            }
+        }
     }
 }
 
@@ -233,17 +320,11 @@ impl ForwardText {
         } else {
             FileContents::Owned(read_file_text(path)?)
         };
+        // One sequential check. Discarding the pages here would fault
+        // them back in during the parse, and a parallel check would
+        // start a worker pool for a single slice.
         if let FileContents::Mapped(m) = &contents {
-            let mut start = 0;
-            while start < m.len() {
-                let target = (start + RELEASE_STEP).min(m.len());
-                let end = memchr::memchr(b'\n', &m[target..]).map_or(m.len(), |p| target + p + 1);
-                if crate::frame_index::validate_utf8_sliced(&m[start..end]).is_err() {
-                    std::str::from_utf8(m)?;
-                }
-                release(m, start, end)?;
-                start = end;
-            }
+            std::str::from_utf8(m)?;
         }
         Ok(Self {
             contents,
@@ -274,6 +355,43 @@ impl ForwardText {
         }
         Ok(())
     }
+}
+
+/// Drop resident pages of `map` on `workers` threads, then the caller
+/// unmaps. Each thread advises a disjoint byte range. The page size is
+/// `sysconf(SC_PAGESIZE)`, not a host-tuned cutoff.
+pub fn advise_dontneed_parallel(map: &memmap2::Mmap, workers: usize) {
+    let len = map.len();
+    if len == 0 {
+        return;
+    }
+    let workers = workers.max(1);
+    if workers == 1 {
+        let _ = release(map, 0, len);
+        return;
+    }
+    let step = len.div_ceil(workers);
+    let advise_one = |worker: usize| {
+        let start = worker.saturating_mul(step);
+        if start >= len {
+            return;
+        }
+        let end = (start + step).min(len);
+        let _ = release(map, start, end);
+    };
+    // Inside the read's pool this stays on those workers. Outside it,
+    // a private scope avoids the global pool.
+    #[cfg(feature = "parallel")]
+    if rayon::current_thread_index().is_some() {
+        use rayon::prelude::*;
+        (0..workers).into_par_iter().for_each(advise_one);
+        return;
+    }
+    std::thread::scope(|scope| {
+        for worker in 0..workers {
+            scope.spawn(move || advise_one(worker));
+        }
+    });
 }
 
 /// Advise `MADV_DONTNEED` for the whole 64 KiB blocks of the map that
@@ -491,5 +609,75 @@ mod tests {
             let err = ForwardText::open(&path, map).err().unwrap().to_string();
             assert_eq!(Err(err), mapped_text(&path), "map {map}");
         }
+    }
+
+    #[test]
+    fn skippable_frame_magic_is_zstd() {
+        assert_eq!(
+            detect_compression(&[0x50, 0x2a, 0x4d, 0x18]),
+            Compression::Zstd
+        );
+        assert_eq!(
+            detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]),
+            Compression::Zstd
+        );
+        assert_eq!(
+            detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]),
+            Compression::None
+        );
+        assert_eq!(detect_compression(&[0x50, 0x2a, 0x4d]), Compression::None);
+        assert_eq!(
+            detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]),
+            Compression::Zstd
+        );
+    }
+
+    fn skippable_prefix(nibble: u8, payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(0x184D_2A50u32 + u32::from(nibble)).to_le_bytes());
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    #[cfg(not(feature = "zstd"))]
+    #[test]
+    fn a_leading_skippable_frame_needs_the_zstd_feature() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("skip-first.zst");
+        std::fs::write(&path, skippable_prefix(0, b"index")).unwrap();
+        let err = read_file_text(&path).unwrap_err().to_string();
+        assert!(err.contains("zstd-compressed input detected"), "{err}");
+        match open_decoded(&path) {
+            Err(err) => {
+                assert!(
+                    err.to_string().contains("zstd-compressed input detected"),
+                    "{err}"
+                );
+            }
+            Ok(_) => panic!("a skippable frame was treated as uncompressed"),
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn a_leading_skippable_frame_decodes_with_the_frames_after_it() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let frame = zstd::stream::encode_all(text.as_bytes(), 1).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("skip-first.con.zst");
+        let mut bytes = skippable_prefix(0, b"index");
+        bytes.extend_from_slice(&frame);
+        std::fs::write(&first, &bytes).unwrap();
+        assert_eq!(read_file_text(&first).unwrap(), text);
+        let frames = crate::iterators::read_all_frames(&first).unwrap();
+        assert_eq!(frames.len(), 1);
+
+        let mut between = frame.clone();
+        between.extend(skippable_prefix(0, b"index"));
+        between.extend_from_slice(&frame);
+        let mid = dir.path().join("skip-between.con.zst");
+        std::fs::write(&mid, &between).unwrap();
+        assert_eq!(read_file_text(&mid).unwrap(), format!("{text}{text}"));
     }
 }

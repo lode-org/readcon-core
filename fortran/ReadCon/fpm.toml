@@ -1,6 +1,6 @@
 name = "ReadCon"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
-version = "0.17.3"
+version = "0.22.0"
 # [[[end]]]
 license = "MIT"
 author = "LODE developers"
@@ -33,6 +33,11 @@ main = "test_add_atom_roundtrip.f90"
 name = "test_add_atom_restart"
 source-dir = "test"
 main = "test_add_atom_restart.f90"
+
+[[test]]
+name = "test_add_atom_frame"
+source-dir = "test"
+main = "test_add_atom_frame.f90"
 
 [[test]]
 name = "test_conformance_goldens"

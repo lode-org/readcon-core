@@ -1,0 +1,9 @@
+# Campaign settings. The plan builds the ladder from physical cores:
+# every power of two from 1 through that count, plus that count when it
+# is not a power of two. Six is the repeat count at each point.
+# 64 frames per worker. A rung above the physical cores is refused.
+frames_per_worker: 64
+fixture: resources/test/cuh2.con
+repeats: 6
+results: results/weak
+mpi_binary: target/release/examples/weak_scale_mpi

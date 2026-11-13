@@ -1,0 +1,1 @@
+proseguard: no styles path: pass --styles-path or set PROSEGUARD_STYLES (expected ~/.config/vale/styles)

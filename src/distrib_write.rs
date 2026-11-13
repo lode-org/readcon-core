@@ -200,13 +200,13 @@ fn gather_u64s(comm: &Comm, mine: &[u64]) -> Option<Vec<u64>> {
         let mut store = vec![0u64; sum.max(1)];
         {
             let mut part = PartitionMut::new(&mut store[..sum], &counts[..], &displs[..]);
-            root.gather_varcount_into_root(&mine[..], &mut part);
+            root.gather_varcount_into_root(mine, &mut part);
         }
         store.truncate(sum);
         Some(store)
     } else {
         root.gather_into(&n);
-        root.gather_varcount_into(&mine[..]);
+        root.gather_varcount_into(mine);
         None
     }
 }
@@ -297,10 +297,10 @@ fn write_gather(comm: &Comm, path: &Path, bytes: &[u8], total: u64) -> Result<()
             }
         };
         let mut sink = |chunk: &[u8], file: &mut Option<std::fs::File>| {
-            if let Some(f) = file.as_mut() {
-                if let Err(e) = f.write_all(chunk) {
-                    file_err.get_or_insert(e.to_string());
-                }
+            if let Some(f) = file.as_mut()
+                && let Err(e) = f.write_all(chunk)
+            {
+                file_err.get_or_insert(e.to_string());
             }
         };
         // Ranks always send so nobody blocks, even if the file failed.
@@ -333,10 +333,10 @@ fn write_gather(comm: &Comm, path: &Path, bytes: &[u8], total: u64) -> Result<()
             }
         }
         drop(sink);
-        if let Some(f) = file.as_mut() {
-            if let Err(e) = f.sync_all() {
-                file_err.get_or_insert(e.to_string());
-            }
+        if let Some(f) = file.as_mut()
+            && let Err(e) = f.sync_all()
+        {
+            file_err.get_or_insert(e.to_string());
         }
         match file_err {
             Some(e) => Err(e.into()),

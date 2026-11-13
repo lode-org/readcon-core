@@ -1,0 +1,17 @@
+[package]
+name = "mpi_cost"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "mpi_cost"
+path = "src/main.rs"
+
+[[bin]]
+name = "mpi_fallback"
+path = "src/fallback.rs"
+
+[dependencies]
+mpi = { version = "0.8", default-features = false }
+readcon-core = { path = "../../../..", features = ["mpi"] }

@@ -1,6 +1,8 @@
 #+title: MPI: distributed read and collective write
 #+options: toc:nil num:nil ^:nil
 
+#+INCLUDE: "rfc2119-note.inc"
+
 * Overview
 
 readcon-core can read and write one CON file across the ranks of an MPI
@@ -10,7 +12,7 @@ Each rank owns a contiguous block of frames, and the frames of ranks
 A collective write of those blocks produces the same bytes (sha256) as a
 serial write, for any rank count.
 
-The library never calls =MPI_Init= or =MPI_Finalize= and never assumes
+The library MUST NOT call =MPI_Init= or =MPI_Finalize= and MUST NOT assume
 =MPI_COMM_WORLD=.
 Every entry point takes the communicator the host passes in (an eOn band
 communicator, a LAMMPS sub-communicator, an mpi4py =Split=), and the
@@ -32,7 +34,7 @@ caller's MPI.
 
 Rank =r= of =P= owns frames =[r*q + min(r, m), ...)= where =q = n / P= and
 =m = n % P=; the first =m= ranks get one extra frame.
-Ranks may own no frames (more ranks than frames).
+Ranks MAY own no frames (more ranks than frames).
 =rkr_block_range= (C) and =distrib::block_range= (Rust) compute it without
 MPI.
 

@@ -12,9 +12,9 @@
  *     free_rkr_frame_array(frames, *num_frames). Each individual frame is
  *     released by free_rkr_frame_array; do NOT also call free_rkr_frame.
  *   - char* values returned by rkr_frame_metadata_json,
- *     rkr_frame_potential_type, and rkr_frame_get_header_line_cpp are heap
- *     allocated; free them with rkr_free_string. rkr_free_string is safe
- *     to call with NULL (no-op).
+ *     rkr_frame_potential_type, rkr_frame_get_header_line_cpp, and
+ *     rkr_write_frames_to_string are heap allocated; free them with
+ *     rkr_free_string. rkr_free_string is safe to call with NULL (no-op).
  *   - const char* returned by rkr_library_version and rkr_status_message
  *     is process-static; do NOT free it.
  *   - const char* returned by rkr_last_error_message is thread-local.
@@ -251,6 +251,10 @@ typedef enum RKRStatus {
      * Build cannot allocate on the requested non-CPU device (use caller-supplied buffers).
      */
     RKR_STATUS_DEVICE_ALLOC_UNSUPPORTED = -13,
+    /**
+     * A CON text parse failed. `rkr_last_error` names the class.
+     */
+    RKR_STATUS_PARSE_ERROR = -14,
 } RKRStatus;
 
 /**
@@ -491,6 +495,67 @@ uint64_t rkr_frame_atom_index_by_id(const struct RKRConFrame *frame_handle,
                                     uint64_t atom_id);
 
 /**
+ * `out_perm[i]` is the index in `frame_b` of the atom whose `atom_id`
+ * equals atom `i` of `frame_a`. `strict == 0` allows a mass or fixed-mask
+ * difference. Duplicate ids, missing or extra ids, and a symbol mismatch
+ * fail either way. The detail is `rkr_last_error_message`.
+ *
+ * `out_len` is the number of `uint64_t` slots. An empty map may pass a
+ * null `out_perm`.
+ *
+ * # Safety
+ * Both handles are valid. `out_perm` is writable for `out_len` values
+ * when it is non-null.
+ */
+enum RKRStatus rkr_frame_atom_id_permutation(const struct RKRConFrame *frame_a,
+                                             const struct RKRConFrame *frame_b,
+                                             uint8_t strict,
+                                             uint64_t *out_perm,
+                                             uintptr_t out_len);
+
+/**
+ * Frame B stored in frame A's atom order. The caller owns the handle
+ * and frees it with `free_rkr_frame`. Returns NULL on error; the detail
+ * is `rkr_last_error_message`.
+ *
+ * # Safety
+ * Both handles are valid or null.
+ */
+struct RKRConFrame *rkr_frame_reorder_like(const struct RKRConFrame *frame_a,
+                                           const struct RKRConFrame *frame_b,
+                                           uint8_t strict);
+
+/**
+ * Compare each frame after the first with `frames[0]`. On failure the
+ * out pointers, when non-null, receive the first offending frame index
+ * and atom id. On success those outputs are `UINT64_MAX`.
+ *
+ * # Safety
+ * `frames` points at `nframes` valid handles. Out pointers are null or
+ * writable.
+ */
+enum RKRStatus rkr_frames_check_atom_ids(const struct RKRConFrame *const *frames,
+                                         uintptr_t nframes,
+                                         uint8_t strict,
+                                         uint64_t *out_frame_index,
+                                         uint64_t *out_atom_id);
+
+/**
+ * Row-major `(N, 3)` minimum-image displacements of frame A's atoms
+ * toward the same `atom_id` in frame B. The cell is frame A's.
+ * `out_len` counts doubles and must be at least `3 * N`.
+ *
+ * # Safety
+ * Both handles are valid. `out_disp` is writable for `out_len` doubles
+ * when N is not zero.
+ */
+enum RKRStatus rkr_frame_minimum_image_displacements(const struct RKRConFrame *frame_a,
+                                                     const struct RKRConFrame *frame_b,
+                                                     uint8_t strict,
+                                                     double *out_disp,
+                                                     uintptr_t out_len);
+
+/**
  * Returns the atomic number for a chemical symbol, or 0 if the symbol
  * is unknown or `symbol` is NULL. Lookup covers H..U (Z = 1..=92) and
  * is case-sensitive: "Fe" works, "fe" does not.
@@ -640,18 +705,29 @@ enum RKRStatus rkr_frame_bond_at(const struct RKRConFrame *frame_handle,
 const char *rkr_status_message(enum RKRStatus status);
 
 /**
- * Detailed message from the most recent failing `rkr_writer_extend`,
- * `rkr_writer_flush`, `rkr_trajectory_open` or `rkr_trajectory_read_frame`
- * on this thread, or from `rkr_trajectory_len` on a NULL handle.
+ * Thread-local failure from the most recent NULL return or negative status
+ * on this thread, including a failing `rkr_writer_extend`, `rkr_writer_flush`,
+ * `rkr_trajectory_open` or `rkr_trajectory_read_frame`, or
+ * `rkr_trajectory_len` on a NULL handle.
+ * `message` is valid until the next such failure or `rkr_clear_error`.
+ * Do not free the struct or the message. NULL when no error is stored.
+ * `line` is 1-based. `frame_index` is 0-based.
  *
- * `rkr_status_message` stays a fixed string per status code. This pointer
- * carries the underlying I/O or format text, for example
+ * `rkr_last_error_message` is that same `message` pointer. Writer failures
+ * store the underlying I/O or format text there, for example
  * `CON validation failed: atom id 1 is repeated in the frame`.
- * Returns NULL when that call succeeded or no such failure has been
- * recorded. The pointer is valid until the next call on this thread that
- * records or clears the message. Do NOT free it.
+ * `rkr_status_message` stays a fixed string per status code.
  */
+typedef struct rkr_error {
+    int32_t code;
+    const char *message;
+    uint32_t line;
+    uint64_t frame_index;
+} rkr_error;
+
 const char *rkr_last_error_message(void);
+const struct rkr_error *rkr_last_error(void);
+void rkr_clear_error(void);
 
 /**
  * Creates a new iterator for a .con / .convel path, including transparent
@@ -869,6 +945,27 @@ struct RKRConFrameWriter *create_writer_from_path_c(const char *filename_c);
 struct RKRConFrameWriter *create_writer_from_path_round_trip_c(const char *filename_c);
 
 /**
+ * Opens an uncompressed file for appending.
+ * A missing file is created. A non-empty file that does not end in a
+ * newline receives one. Gzip and zstd paths return NULL.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be a valid path or null.
+ */
+struct RKRConFrameWriter *create_writer_from_path_append_c(const char *filename_c);
+
+/**
+ * Opens an uncompressed file for appending with a fixed decimal precision.
+ * The caller OWNS the returned pointer and MUST call `free_rkr_writer`.
+ *
+ * # Safety
+ * filename_c must be a valid path or null.
+ */
+struct RKRConFrameWriter *create_writer_from_path_append_with_precision_c(const char *filename_c,
+                                                                          uint8_t precision);
+
+/**
  * Flush buffered CON data. Returns RKR_STATUS_IO_ERROR on write failure.
  * On failure, `rkr_last_error_message` returns the underlying I/O text.
  */
@@ -905,6 +1002,30 @@ struct RKRConFrame *rkr_frame_binding_rewrite(const struct RKRConFrame *frame_ha
 enum RKRStatus rkr_writer_extend(struct RKRConFrameWriter *writer_handle,
                                  const struct RKRConFrame *const *frame_handles,
                                  uintptr_t num_frames);
+
+/**
+ * Serialize frames to a newly allocated CON string. No file is created.
+ * On success `*out_text` is NUL-terminated and `*out_len` is the payload
+ * length, excluding that NUL. Free `*out_text` with `rkr_free_string`.
+ * The bytes match `create_writer_from_path_c` writing the same frames.
+ * `num_frames == 0` accepts a null `frame_handles` and returns an empty string.
+ *
+ * # Safety
+ * out_text and out_len must be valid. Each frame handle must be valid
+ * when num_frames > 0.
+ */
+enum RKRStatus rkr_write_frames_to_string(const struct RKRConFrame *const *frame_handles,
+                                          uintptr_t num_frames,
+                                          char **out_text,
+                                          uintptr_t *out_len);
+
+/**
+ * Write frames with the binding metadata stamp and the caller's atoms.
+ * The stamp is restored before return. Atoms are not copied.
+ */
+enum RKRStatus rkr_writer_extend_binding(struct RKRConFrameWriter *writer_handle,
+                                         struct RKRConFrame **frame_handles,
+                                         uintptr_t num_frames);
 
 /**
  * Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
@@ -1943,6 +2064,68 @@ struct RKRConFrame **rkr_read_all_frames(const char *filename_c,
 struct RKRConFrame **rkr_read_all_frames_n_threads(const char *filename_c,
                                                    uintptr_t *num_frames,
                                                    uintptr_t n_threads);
+
+/**
+ * Opaque owner of one row-major coordinate column.
+ */
+typedef struct RKRPositionBlock RKRPositionBlock;
+
+/**
+ * Coordinates of every frame from the column walker.
+ * On success `*n_frames` and `*n_atoms` are set and the handle owns
+ * `n_frames * n_atoms * 3` doubles, read with
+ * `rkr_position_block_values`. The caller frees the handle with
+ * `rkr_free_position_block`. A file whose frames do not share one atom
+ * count returns NULL. `n_threads == 0` and `n_threads == 1` parse on the
+ * calling thread. `n_threads >= 2` uses that many workers when the library
+ * is built with `parallel`.
+ *
+ * Returns NULL on error. `rkr_last_error` matches `rkr_read_all_frames`
+ * for a file that reader rejects.
+ *
+ * # Safety
+ * filename_c, n_frames, and n_atoms must be valid. The caller takes
+ * ownership of the returned handle.
+ */
+struct RKRPositionBlock *rkr_read_positions_n_threads(const char *filename_c,
+                                                      uintptr_t *n_frames,
+                                                      uintptr_t *n_atoms,
+                                                      uintptr_t n_threads);
+
+/**
+ * Coordinates of every frame, one worker, no frame objects.
+ * Like `rkr_read_positions_n_threads` with one worker. On success the
+ * caller owns the handle and reads row-major `x y z` doubles from
+ * `rkr_position_block_values` until `rkr_free_position_block`. A file
+ * whose frames do not share one atom count returns NULL.
+ *
+ * # Safety
+ * Same contract as `rkr_read_positions_n_threads`.
+ */
+struct RKRPositionBlock *rkr_read_positions(const char *filename_c,
+                                            uintptr_t *n_frames,
+                                            uintptr_t *n_atoms);
+
+/**
+ * Row-major `x y z` pointer for a block from `rkr_read_positions`.
+ * Valid until `rkr_free_position_block`. NULL when `block` is NULL.
+ *
+ * # Safety
+ * block is NULL or a live handle from `rkr_read_positions`.
+ */
+const double *rkr_position_block_values(const struct RKRPositionBlock *block);
+
+/**
+ * Frees a handle from `rkr_read_positions` or
+ * `rkr_read_positions_n_threads`, including its coordinate buffer.
+ * NULL is a no-op. The pointer from `rkr_position_block_values` is
+ * invalid after this call.
+ *
+ * # Safety
+ * block is NULL or the pointer from `rkr_read_positions` or
+ * `rkr_read_positions_n_threads`.
+ */
+void rkr_free_position_block(struct RKRPositionBlock *block);
 
 /**
  * Frees an array of frame handles returned by `rkr_read_all_frames`.

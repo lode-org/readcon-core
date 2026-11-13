@@ -48,6 +48,36 @@ class TestReadCon:
         assert auto[0].atoms[0].atom_id == one[0].atoms[0].atom_id
         assert one[1].atoms[0].x == pytest.approx(two[1].atoms[0].x)
 
+    def test_lazy_list_matches_serial_positions(self):
+        import numpy as np
+
+        path = _resource("tiny_multi_cuh2.con")
+        serial = readcon.read_positions(path, n_threads=1)
+        lazy = readcon.read_con(path, n_threads=2)
+        stacked = np.stack([frame.xyz for frame in lazy])
+        assert np.array_equal(stacked, serial)
+        eager, eager_phases = readcon.read_con_phases(path, n_threads=2, build="eager")
+        again, lazy_phases = readcon.read_con_phases(path, n_threads=2, build="lazy")
+        assert lazy_phases["build"] == "lazy"
+        assert eager_phases["build"] == "eager"
+        for key in (
+            "open_mmap_s",
+            "pool_join_s",
+            "scan_s",
+            "slot_alloc_s",
+            "worker_parse_s",
+            "python_build_s",
+            "return_s",
+        ):
+            assert key in lazy_phases
+        assert eager[1].atoms[0].x == pytest.approx(again[1].atoms[0].x)
+        assert lazy_phases["n_frames"] == len(lazy)
+        assert readcon.scan_probe(path, 2, True)[2] is True
+        one = readcon.read_con(path, n_threads=1).touch_checksum()
+        two = readcon.read_con(path, n_threads=2).touch_checksum()
+        assert one[0] == two[0]
+        assert one[1] >= 0.0
+
 
 class TestReadConvel:
     def test_read_convel(self):
@@ -504,13 +534,21 @@ class TestConFrameConstructor:
             try:
                 list(readcon.iter_con(str(plain)))
                 message = None
-            except IOError as e:
+                exc_type = OSError
+            except OSError as e:
                 message = str(e)
-            if message.startswith("stream did not contain valid UTF-8"):
-                message = "parse error: CON validation failed: invalid UTF-8"
+                exc_type = OSError
+            except readcon.ConError as e:
+                message = str(e)
+                exc_type = type(e)
+            if message is not None and message.startswith(
+                "stream did not contain valid UTF-8"
+            ):
+                message = "CON validation failed: invalid UTF-8"
+                exc_type = OSError
             it = readcon.iter_con(str(path), stream=True)
             assert len([next(it) for _ in range(3)]) == 3
-            with pytest.raises(IOError) as raised:
+            with pytest.raises(exc_type) as raised:
                 next(it)
             assert str(raised.value) == message
             assert next(it, None) is None
@@ -560,7 +598,8 @@ class TestConFrameConstructor:
         assert float(xyz[0, 0]) == pytest.approx(fr.atoms[0].x)
         assert float(xyz[0, 0]) == pytest.approx(float(pos[0, 0]))
         xyz[0, 0] = -999.0
-        assert float(fr.xyz[0, 0]) == pytest.approx(fr.atoms[0].x)
+        assert float(fr.xyz[0, 0]) == -999.0
+        assert float(fr.atoms[0].x) == pytest.approx(0.6394, abs=1e-3)
 
     def test_coords_array_matches_atoms_after_full_frame_load(self):
         path = _resource("tiny_multi_cuh2.con")
@@ -826,7 +865,7 @@ class TestErrorHandling:
             readcon.read_con("/nonexistent/path.con")
 
     def test_malformed_data(self):
-        with pytest.raises(OSError):
+        with pytest.raises(readcon.ConError):
             readcon.read_con_string("not a valid con file\n")
 
 

@@ -1,27 +1,38 @@
 #+TITLE: CPC manuscript (readcon-core)
 
-Target: Computer Physics Communications.
+The paper is =src/rg_main.tex= and its supplement =src/rg_supp.tex=.
+Both =\input= =src/commit.tex=, whose one macro =\readconcommit= is the readcon-core commit that the paper describes, and =src/release.tex=, which =scripts/gen_release.py= writes from it: readcon-core 0.17.4, the role of that commit (the release commit, which tag v0.17.4 names), the digest of its library, and commit =d0b7d3c7=, the head of pull request 80 to the main branch after the published release named in Cargo.toml, which it descends from.
+If tag v0.17.4 names another commit, that commit goes into =src/commit.tex=, and =gen_release.py= stops unless it holds the library that every record names; the section Release of =REPRO-ARCHIVE.md= lists what the change rewrites.
+This directory is the supplementary material of the article, =paper-cpc.tar.gz=, which =scripts/pack_paper.py= writes.
+The git bundle =readcon-core.bundle= beside it holds that commit with its whole history; the commit holds no =paper= directory, and this directory unpacks into a checkout of it.
 
-The source of truth is =src/rg_main.org=. Do not hand-edit
-=src/rg_main.tex=. Numbers in the Performance and Applications
-tables come from =scripts/gen_tables.py=, which reads committed
-JSON / Cachegrind rst / =neb_band.con= / the companion
-=freeze/ase_fair_campaign_1.json= payload (tiny_cuh2.con
-ladder 10/50/100/200/500). That fair-campaign table is
-appendix material, not a main-claim parse. Do not invent a
-cheaper ladder or type those rates into the org.
+Every table, figure and macro under =src/figures/generated/= is written by a script in =scripts/=, =evidence/= or =bench/= from a record under =data/=, =evidence/results/= or =bench/results/=; the first line of each generated TeX file names its script.
+Each record that a readcon-core build wrote carries a =provenance= block (=scripts/provenance.py=) with the readcon-core version, the digests of the library sources and of the readcon module, the compiler, the Python and peer versions, and the host.
 
-* Build
+* Rebuild
 
-#+begin_src bash
-python paper/cpc/scripts/gen_tables.py
-emacs -nl --script paper/cpc/scripts/org2tex.el paper/cpc/src/rg_main.org
-# then, in paper/cpc/src/:
-latexmk -pdf rg_main.tex
-#+end_src
+With =readcon-core.bundle= and =paper-cpc.tar.gz= in one directory, and git, conda and TeX Live on the path:
 
-From the repo root, =pixi r cpc-tex= runs the table generator and
-the org export.
+#+begin_src bash git clone readcon-core.bundle readcon-core cd readcon-core tar -xzf ../paper-cpc.tar.gz git checkout "$(python3 paper/cpc/scripts/gen_release.py --commit)" conda create -n readcon-cpc --file paper/cpc/environment/conda-linux-64.txt conda activate readcon-cpc python3 -m pip install --no-deps -r paper/cpc/environment/requirements.txt python3 -m pip install .
+python3 paper/cpc/scripts/regen_paper.py bash paper/cpc/scripts/build_tex.sh python3 paper/cpc/scripts/trace_numbers.py --check #+end_src
 
-Do not invent a DOI. Do not type a wall-clock number into the org
-that is not in a committed artifact.
+These are the commands of the listing in the section Reproduction of the supplement, which prints the commit of =src/commit.tex= in its =git checkout=; here =gen_release.py --commit= reads that file, with any Python 3, after the unpacking.
+The PDFs were typeset with the TeX Live 2023 of Ubuntu 24.04, whose =pdftex --version= prints =pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)=.
+Apart from the sources of the paper and the configuration, font map and format that the installation generates, every file that pdfTeX and BibTeX read for the two documents belongs to one of nine Ubuntu packages: =texlive-base=, =texlive-latex-base=, =texlive-latex-recommended=, =texlive-latex-extra=, =texlive-science=, =texlive-publishers= and =texlive-plain-generic= at version =2023.20240207-1=, =texlive-binaries= at =2023.20230311.66589-9build3= and =lmodern= at =2.005-1=.
+=apt install texlive-latex-extra texlive-science texlive-publishers texlive-plain-generic lmodern= installs the nine with the packages they depend on.
+=environment/= is the Python environment that ran the scripts of the paper: =conda-linux-64.txt= is its conda explicit list and =requirements.txt= the packages that pip adds.
+=scripts/export_env.py= wrote both from the package records of that environment.
+The environment lives outside the checkout, because =regen_paper.py= records every file under the checkout that a step opens.
+
+=regen_paper.py= reads the records and times nothing.
+=regen_paper.py --measure= first reruns the measurements that write those records: the survey, the survey listing, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history.
+=evidence/e1_restart.py= reruns the eOn band, =scripts/run_restart_walls.py= the resume wall times and =scripts/file_sizes.py= the file sizes.
+The performance records in =bench/results/r0174/= come from =bench/make_payloads.py=, =bench/cpp_reads.py= (the C++ programs and their checks), =bench/reads.py= (the time of every Python and C++ read), =bench/memray_peaks.py=, =bench/cachegrind.py= and =bench/r0174.py=, the head-to-head records in =bench/results/r0174/h2h/= from =bench/build_chemfiles.sh= and then =bench/h2h.py=, and the records of the native trajectory readers in =bench/results/r0174/binary_formats/= from =bench/binary_formats.py=, which downloads xdrfile, libxtc, TNG and the DCD reader of MDAnalysis at the versions it pins and builds them with the system =gcc= and =g++=, and from =bench/settle_period.py=, which measures on the host how long every CPU is kept busy before each run of that campaign (=settle.json=).
+The conformance records come from =scripts/corpus31_results.py= (=data/corpus31-results.json=), =scripts/corpus_paths.py= (=data/corpus_paths.json=), =scripts/every_path_count.py= (=data/every_path.json=), =scripts/corpus_crosscheck.py= (=data/corpus_crosscheck.json=), =scripts/referee_probes.py= (=data/referee_probes.json=), =scripts/mutant_differential.py= (=data/spec/mutant_differential.json=) and =scripts/clause_coverage.py= (=data/spec/clause_coverage.json=).
+=bench/make_payloads.py --check= rebuilds the timed files from a new trajectory in a temporary directory and stops unless each SHA-256 is the one =bench/results/r0174/payloads.json= records.
+
+* Checks
+
+=scripts/trace_numbers.py= finds every number printed in the prose of both documents and in the captions of the generated tables, matches it to a rule in =scripts/number_rules/= that recomputes it from a record or a driver constant, and writes =data/trace/numbers.csv=.
+=scripts/check_manuscript.py= runs after =build_tex.sh= in a checkout of the commit of =src/commit.tex=; its docstring lists the checks.
+It needs the git history of the checkout, the =corpus31_report= example of readcon-core built with =--features zstd,parallel=, and the pandoc, pdftotext and pdfinfo of the environment.

@@ -10,7 +10,7 @@ module readcon
   public :: rkr_status_invalid_utf8, rkr_status_invalid_json, rkr_status_io_error
   public :: rkr_status_index_out_of_bounds, rkr_status_buffer_too_small
   public :: rkr_status_internal_error, rkr_status_section_absent, rkr_status_validation_error
-  public :: rkr_status_feature_disabled
+  public :: rkr_status_feature_disabled, rkr_status_parse_error
   public :: catom_t, cframe_t
   public :: dl_tensor_t, dl_managed_tensor_versioned_t, dl_device_t, dl_data_type_t
   public :: dlpack_inspect, dlpack_data_ptr
@@ -18,7 +18,7 @@ module readcon
   public :: frame_metatensor_forces_block, frame_metatensor_atom_energies_block
   public :: mts_block_free_rkr
   public :: library_version, readcon_version, con_spec_version, has_chemfiles_support, status_message
-  public :: last_error_message
+  public :: last_error_code, last_error_line, last_error_frame, last_error_message, clear_error
   public :: symbol_to_z, z_to_symbol
   public :: frame_t, iterator_t, builder_t, writer_t
   public :: read_first_frame, read_all_frames, read_nth_frame, count_frames
@@ -42,11 +42,19 @@ module readcon
   integer(c_int), parameter :: rkr_status_validation_error = -9
   integer(c_int), parameter :: rkr_status_selection_error = -10
   integer(c_int), parameter :: rkr_status_feature_disabled = -11
+  integer(c_int), parameter :: rkr_status_parse_error = -14
+
+  type, bind(C) :: rkr_error
+    integer(c_int32_t) :: code
+    type(c_ptr) :: message
+    integer(c_int32_t) :: line
+    integer(c_int64_t) :: frame_index
+  end type rkr_error
 
   ! Package version. Stamped by cogapp from VERSION.
   ! https://cog.readthedocs.io/en/latest/
   ! [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, '  character(len=*), parameter :: readcon_version = "{v}"')]]]
-  character(len=*), parameter :: readcon_version = "0.17.3"
+  character(len=*), parameter :: readcon_version = "0.22.0"
   ! [[[end]]]
 
   type, bind(C), public :: catom_t
@@ -225,6 +233,12 @@ module readcon
       import :: c_ptr
       type(c_ptr) :: c_rkr_last_error_message
     end function
+    function c_rkr_last_error() bind(C, name="rkr_last_error")
+      import :: c_ptr
+      type(c_ptr) :: c_rkr_last_error
+    end function
+    subroutine c_rkr_clear_error() bind(C, name="rkr_clear_error")
+    end subroutine
     function c_rkr_read_first_frame(fn) bind(C, name="rkr_read_first_frame")
       import :: c_char, c_ptr
       character(kind=c_char), intent(in) :: fn(*)
@@ -518,6 +532,13 @@ module readcon
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_writer_extend
     end function
+    function c_rkr_writer_extend_binding(w, frames, n) bind(C, name="rkr_writer_extend_binding")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: w
+      type(c_ptr), intent(in) :: frames(*)
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_writer_extend_binding
+    end function
     function c_rkr_writer_set_canonical(w, canonical) bind(C, name="rkr_writer_set_canonical")
       import :: c_ptr, c_int8_t, c_int
       type(c_ptr), value :: w
@@ -536,16 +557,23 @@ module readcon
       type(c_ptr), value :: pb0, pb1, pob0, pob1
       type(c_ptr) :: c_rkr_frame_new
     end function
-    ! C header order: x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
+    ! include/readcon-core.h rkr_frame_add_atom_full:
+    ! builder, symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass, velocity, force.
     function c_rkr_frame_add_atom_full(b, sym, x, y, z, fx, fy, fz, aid, mass, vel, frc) &
          bind(C, name="rkr_frame_add_atom_full")
       import :: c_ptr, c_char, c_double, c_int64_t, c_bool, c_int
       type(c_ptr), value :: b
       character(kind=c_char), intent(in) :: sym(*)
-      real(c_double), value :: x, y, z, mass
+      real(c_double), value :: x
+      real(c_double), value :: y
+      real(c_double), value :: z
+      logical(c_bool), value :: fx
+      logical(c_bool), value :: fy
+      logical(c_bool), value :: fz
       integer(c_int64_t), value :: aid
-      logical(c_bool), value :: fx, fy, fz
-      type(c_ptr), value :: vel, frc
+      real(c_double), value :: mass
+      type(c_ptr), value :: vel
+      type(c_ptr), value :: frc
       integer(c_int) :: c_rkr_frame_add_atom_full
     end function
     function c_rkr_frame_builder_set_energy(b, e) bind(C, name="rkr_frame_builder_set_energy")
@@ -768,12 +796,40 @@ contains
     s = from_c(c_rkr_status_message(int(st, c_int)), .false.)
   end function
 
-  ! Underlying text from the most recent failing writer call on this thread.
-  ! Empty when that call succeeded. rkr_status_message stays the generic code.
+  integer function last_error_code()
+    type(rkr_error), pointer :: err
+    last_error_code = 0
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_code = int(err%code)
+  end function
+
+  integer function last_error_line()
+    type(rkr_error), pointer :: err
+    last_error_line = 0
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_line = int(err%line)
+  end function
+
+  integer(int64) function last_error_frame()
+    type(rkr_error), pointer :: err
+    last_error_frame = 0_int64
+    if (.not. c_associated(c_rkr_last_error())) return
+    call c_f_pointer(c_rkr_last_error(), err)
+    last_error_frame = int(err%frame_index, int64)
+  end function
+
+  ! Underlying text from the most recent failure on this thread.
+  ! Empty when nothing is stored. rkr_status_message stays the generic code.
   function last_error_message() result(s)
     character(len=:), allocatable :: s
     s = from_c(c_rkr_last_error_message(), .false.)
   end function
+
+  subroutine clear_error()
+    call c_rkr_clear_error()
+  end subroutine
 
   integer(int64) function symbol_to_z(sym)
     character(len=*), intent(in) :: sym
@@ -1328,25 +1384,26 @@ contains
     end if
   end subroutine
 
-  integer function bd_add_atom(self, symbol, x, y, z, atom_id, mass, &
-       fixed_x, fixed_y, fixed_z, velocity)
+  ! Same order as rkr_frame_add_atom_full: fixed flags, then atom id, then mass.
+  integer function bd_add_atom(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+       atom_id, mass, velocity)
     class(builder_t), intent(inout) :: self
     character(len=*), intent(in) :: symbol
     real(real64), intent(in) :: x, y, z, mass
-    integer(int64), intent(in) :: atom_id
     logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    integer(int64), intent(in) :: atom_id
     real(real64), intent(in), optional :: velocity(3)
-    bd_add_atom = bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
-         fixed_x, fixed_y, fixed_z, velocity=velocity)
+    bd_add_atom = bd_add_atom_full(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+         atom_id, mass, velocity=velocity)
   end function
 
-  integer function bd_add_atom_full(self, symbol, x, y, z, atom_id, mass, &
-       fixed_x, fixed_y, fixed_z, velocity, force)
+  integer function bd_add_atom_full(self, symbol, x, y, z, fixed_x, fixed_y, fixed_z, &
+       atom_id, mass, velocity, force)
     class(builder_t), intent(inout) :: self
     character(len=*), intent(in) :: symbol
     real(real64), intent(in) :: x, y, z, mass
-    integer(int64), intent(in) :: atom_id
     logical, intent(in) :: fixed_x, fixed_y, fixed_z
+    integer(int64), intent(in) :: atom_id
     real(real64), intent(in), optional :: velocity(3), force(3)
     character(kind=c_char), allocatable :: cs(:)
     real(c_double), target :: vv(3), ff(3)
@@ -1483,19 +1540,11 @@ contains
     class(writer_t), intent(inout) :: self
     class(frame_t), intent(in) :: fr
     type(c_ptr) :: arr(1)
-    type(c_ptr) :: prepared
     wr_extend_one = rkr_status_null_pointer
     if (.not. c_associated(self%w) .or. .not. c_associated(fr%handle)) return
-    ! Parsed frames omit con_spec_minor unless the file had it. The builder
-    ! stamps it, which is what the Python, Julia, and C rewrites emit.
-    prepared = c_rkr_frame_binding_rewrite(fr%handle)
-    if (.not. c_associated(prepared)) then
-      wr_extend_one = rkr_status_validation_error
-      return
-    end if
-    arr(1) = prepared
-    wr_extend_one = int(c_rkr_writer_extend(self%w, arr, 1_c_size_t))
-    call c_free_rkr_frame(prepared)
+    ! Stamp con_spec_minor on the header for this write. Atoms stay put.
+    arr(1) = fr%handle
+    wr_extend_one = int(c_rkr_writer_extend_binding(self%w, arr, 1_c_size_t))
   end function
 
   function read_chemfiles_first(path) result(fr)

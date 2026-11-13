@@ -278,6 +278,19 @@ class ConFrame {
     /// O(N) per call.
     std::optional<size_t> atom_index_by_id(uint64_t atom_id) const;
 
+    /// `perm[i]` is the index in `other` of this frame's atom `i`.
+    /// `strict` also requires the mass and the fixed mask to agree.
+    std::vector<size_t> atom_id_permutation(const ConFrame &other,
+                                            bool strict = true) const;
+
+    /// `other` stored in this frame's atom order.
+    ConFrame reorder_like(const ConFrame &other, bool strict = true) const;
+
+    /// Minimum-image displacement of each atom toward the same id in
+    /// `other`. The cell is this frame's.
+    std::vector<std::array<double, 3>>
+    minimum_image_displacements(const ConFrame &other, bool strict = true) const;
+
     uint32_t spec_version() const;
     std::string metadata_json() const;
 
@@ -681,20 +694,6 @@ class SelectionResult {
 
 inline bool has_chemfiles_support() { return rkr_has_chemfiles_support() != 0; }
 
-inline SelectionResult ConFrame::select(std::string_view selection) const {
-    if (!has_chemfiles_support()) {
-        throw std::runtime_error(
-            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
-    }
-    std::string sel(selection);
-    RKRSelectionResult *raw = nullptr;
-    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
-    if (st != RKR_STATUS_SUCCESS) {
-        throw std::runtime_error(std::string("rkr_frame_select: ") + rkr_status_message(st));
-    }
-    return SelectionResult(raw);
-}
-
 inline std::vector<size_t> ConFrame::select_atom_indices(std::string_view selection) const {
     SelectionResult res = select(selection);
     if (res.context_size() != 1) {
@@ -733,6 +732,15 @@ class ConFrameWriter {
     enum class Compression { None, Gzip, Zstd };
 
     /**
+     * @brief Whether a path writer replaces the file or extends it.
+     *
+     * `Append` is only valid for an uncompressed file. A missing file is
+     * created. A non-empty file that does not end in a newline receives
+     * one before the next frame.
+     */
+    enum class OpenMode { Truncate, Append };
+
+    /**
      * @brief Constructs a writer and opens the specified file for writing.
      * @param path The path to the output .con file.
      * @throws std::runtime_error if the file cannot be created.
@@ -758,6 +766,25 @@ class ConFrameWriter {
                             Compression compression, uint8_t precision);
 
     /**
+     * @brief Opens `path` for a truncating write or an uncompressed append.
+     * @throws std::runtime_error if the file cannot be opened, or if
+     *         `OpenMode::Append` is asked to extend a gzip or zstd path.
+     */
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode);
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode,
+                            uint8_t precision);
+
+    /**
+     * @brief Opens a writer through create_writer_from_path_round_trip_c.
+     *
+     * Finite binary64 values round-trip. The default path constructor
+     * uses the same text. Call this when the round-trip entry point
+     * must be named.
+     * @throws readcon::Error if the file cannot be created.
+     */
+    static ConFrameWriter round_trip(const std::filesystem::path &path);
+
+    /**
      * @brief Picks a compression codec from a path's file extension.
      * @param path The output path to inspect.
      * @return `Compression::Gzip` for `.gz`, `Compression::Zstd` for `.zst`,
@@ -777,6 +804,15 @@ class ConFrameWriter {
      */
     void extend(const std::vector<ConFrame> &frames);
 
+    /**
+     * @brief Flushes buffered frames to the file.
+     *
+     * After this returns, a reader sees a complete, parseable prefix,
+     * before this object is destroyed.
+     * @throws std::runtime_error if the flush fails.
+     */
+    void flush();
+
     /// Campaign-stable CON serialization (deterministic metadata key order).
     void set_canonical(bool on);
     [[nodiscard]] bool is_canonical() const {
@@ -784,14 +820,28 @@ class ConFrameWriter {
     }
 
   private:
+    explicit ConFrameWriter(const std::filesystem::path &path, OpenMode mode,
+                            std::optional<uint8_t> precision);
+
     struct WriterDeleter {
         void operator()(RKRConFrameWriter *ptr) const {
             if (ptr)
                 free_rkr_writer(ptr);
         }
     };
+    explicit ConFrameWriter(RKRConFrameWriter *raw);
+
     std::unique_ptr<RKRConFrameWriter, WriterDeleter> writer_handle_;
 };
+
+/**
+ * @brief Serializes frames to CON text. No file is created.
+ *
+ * The bytes match `ConFrameWriter` writing the same frames to a new file.
+ * @throws std::runtime_error if a frame cannot be serialized.
+ */
+[[nodiscard]] std::string
+write_frames_to_string(const std::vector<ConFrame> &frames);
 
 /**
  * @brief A builder for constructing ConFrame objects from in-memory data.
@@ -843,6 +893,24 @@ class ConFrameBuilder {
      * managed automatically by the writer and ignored if present.
      */
     ConFrameBuilder &set_metadata_json(const std::string &metadata_json);
+
+    /**
+     * @brief Sets the units object from a JSON object.
+     *
+     * Example:
+     * `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+     * Aliases are rewritten. The natural time spelling is kept byte for byte.
+     * @throws readcon::Error when the JSON or a unit expression is invalid.
+     */
+    ConFrameBuilder &set_units(const std::string &units_json);
+
+    /**
+     * @brief Sets con_spec_minor before build.
+     *
+     * A v3 frame built without this call carries minor 1.
+     * The writer does not invent or replace the minor.
+     */
+    ConFrameBuilder &set_con_spec_minor(uint32_t minor);
 
     /// Sets a numeric metadata key.
     ConFrameBuilder &set_scalar_metadata(const std::string &key, double value);
@@ -1057,10 +1125,47 @@ inline std::string z_to_symbol(uint64_t z) {
     return symbol ? std::string(symbol) : std::string("X");
 }
 
+class Error : public std::runtime_error {
+  public:
+    int32_t code;
+    uint32_t line;
+    uint64_t frame_index;
+
+    Error(int32_t code_, std::string message, uint32_t line_, uint64_t frame_index_)
+        : std::runtime_error(std::move(message)), code(code_), line(line_),
+          frame_index(frame_index_) {}
+
+    static Error from_last(const std::string &operation) {
+        const rkr_error *err = rkr_last_error();
+        if (err != nullptr && err->message != nullptr) {
+            return Error(err->code, operation + ": " + err->message, err->line,
+                         err->frame_index);
+        }
+        if (err != nullptr) {
+            return Error(err->code, operation, err->line, err->frame_index);
+        }
+        return Error(static_cast<int32_t>(RKR_STATUS_INTERNAL_ERROR), operation, 0, 0);
+    }
+};
+
 inline void throw_on_error(RKRStatus status, const std::string &operation) {
     if (status != RKRStatus::RKR_STATUS_SUCCESS) {
-        throw std::runtime_error(operation + ": " + status_message(status));
+        throw Error::from_last(operation);
     }
+}
+
+inline SelectionResult ConFrame::select(std::string_view selection) const {
+    if (!has_chemfiles_support()) {
+        throw std::runtime_error(
+            "readcon::ConFrame::select requires a chemfiles-enabled readcon_core build");
+    }
+    std::string sel(selection);
+    RKRSelectionResult *raw = nullptr;
+    RKRStatus st = rkr_frame_select(frame_handle_.get(), sel.c_str(), &raw);
+    if (st != RKR_STATUS_SUCCESS) {
+        throw Error::from_last("rkr_frame_select");
+    }
+    return SelectionResult(raw);
 }
 
 /**
@@ -1070,8 +1175,7 @@ inline void throw_on_error(RKRStatus status, const std::string &operation) {
 inline ConFrame read_first_frame(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_first_frame(path.string().c_str());
     if (!handle) {
-        throw std::runtime_error("Failed to read first frame from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read first frame from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1079,7 +1183,7 @@ inline ConFrame read_first_frame(const std::filesystem::path &path) {
 inline std::size_t count_frames(const std::filesystem::path &path) {
     std::size_t n = rkr_count_frames(path.string().c_str());
     if (n == static_cast<std::size_t>(-1))
-        throw std::runtime_error("count_frames failed: " + path.string());
+        throw Error::from_last("count_frames failed: " + path.string());
     return n;
 }
 
@@ -1087,9 +1191,8 @@ inline ConFrame read_nth_frame(const std::filesystem::path &path,
                                std::size_t index) {
     RKRConFrame *handle = rkr_read_nth_frame(path.string().c_str(), index);
     if (!handle) {
-        throw std::runtime_error("Failed to read frame " +
-                                 std::to_string(index) + " from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read frame " + std::to_string(index) +
+                               " from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1141,8 +1244,8 @@ class Trajectory {
 inline ConFrame read_chemfiles_first(const std::filesystem::path &path) {
     RKRConFrame *handle = rkr_read_chemfiles_first(path.string().c_str());
     if (!handle) {
-        throw std::runtime_error("Failed to read chemfiles first frame from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read chemfiles first frame from: " +
+                               path.string());
     }
     return ConFrame(handle);
 }
@@ -1151,9 +1254,8 @@ inline ConFrame read_chemfiles_nth(const std::filesystem::path &path,
                                    std::size_t index) {
     RKRConFrame *handle = rkr_read_chemfiles_nth(path.string().c_str(), index);
     if (!handle) {
-        throw std::runtime_error("Failed to read chemfiles frame " +
-                                 std::to_string(index) + " from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read chemfiles frame " +
+                               std::to_string(index) + " from: " + path.string());
     }
     return ConFrame(handle);
 }
@@ -1161,7 +1263,7 @@ inline ConFrame read_chemfiles_nth(const std::filesystem::path &path,
 inline std::size_t chemfiles_nsteps(const std::filesystem::path &path) {
     std::size_t n = rkr_chemfiles_nsteps(path.string().c_str());
     if (n == static_cast<std::size_t>(-1)) {
-        throw std::runtime_error("chemfiles_nsteps failed: " + path.string());
+        throw Error::from_last("chemfiles_nsteps failed: " + path.string());
     }
     return n;
 }
@@ -1174,8 +1276,7 @@ inline std::vector<ConFrame>
 adopt_frame_handles(RKRConFrame **handles, size_t num_frames,
                     const std::filesystem::path &path) {
     if (!handles) {
-        throw std::runtime_error("Failed to read frames from: " +
-                                 path.string());
+        throw Error::from_last("Failed to read frames from: " + path.string());
     }
     std::vector<ConFrame> frames;
     frames.reserve(num_frames);
@@ -1240,8 +1341,8 @@ read_all_frames(const std::filesystem::path &path, std::size_t n_threads) {
 inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {
     CConFrameIterator *iter_ptr = read_con_file_iterator(path.string().c_str());
     if (!iter_ptr) {
-        throw std::runtime_error("Failed to open .con file for iteration: " +
-                                 path.string());
+        throw Error::from_last("Failed to open .con file for iteration: " +
+                               path.string());
     }
     iterator_ptr_.reset(iter_ptr);
 }
@@ -1308,8 +1409,7 @@ inline void ConFrame::cache_data() const {
     // Extract the C-struct once for numeric data.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
     if (!c_frame) {
-        throw std::runtime_error(
-            "Failed to extract CFrame from handle for caching.");
+        throw Error::from_last("Failed to extract CFrame from handle for caching.");
     }
 
     cell_cache_ = {c_frame->cell[0], c_frame->cell[1], c_frame->cell[2]};
@@ -1425,6 +1525,66 @@ ConFrame::atom_index_by_id(uint64_t atom_id) const {
         return std::nullopt;
     }
     return static_cast<size_t>(idx);
+}
+
+inline std::vector<size_t>
+ConFrame::atom_id_permutation(const ConFrame &other, bool strict) const {
+    const size_t n = rkr_frame_atom_count(frame_handle_.get());
+    std::vector<uint64_t> raw(n);
+    throw_on_error(rkr_frame_atom_id_permutation(
+                       frame_handle_.get(), other.frame_handle_.get(),
+                       strict ? 1 : 0, raw.empty() ? nullptr : raw.data(), n),
+                   "ConFrame::atom_id_permutation");
+    std::vector<size_t> perm(n);
+    for (size_t i = 0; i < n; ++i) {
+        perm[i] = static_cast<size_t>(raw[i]);
+    }
+    return perm;
+}
+
+inline ConFrame ConFrame::reorder_like(const ConFrame &other, bool strict) const {
+    RKRConFrame *raw = rkr_frame_reorder_like(
+        frame_handle_.get(), other.frame_handle_.get(), strict ? 1 : 0);
+    if (!raw) {
+        throw Error::from_last("ConFrame::reorder_like");
+    }
+    return ConFrame(raw);
+}
+
+inline std::vector<std::array<double, 3>>
+ConFrame::minimum_image_displacements(const ConFrame &other, bool strict) const {
+    const size_t n = rkr_frame_atom_count(frame_handle_.get());
+    std::vector<double> raw(n * 3);
+    throw_on_error(rkr_frame_minimum_image_displacements(
+                       frame_handle_.get(), other.frame_handle_.get(),
+                       strict ? 1 : 0, raw.empty() ? nullptr : raw.data(),
+                       raw.size()),
+                   "ConFrame::minimum_image_displacements");
+    std::vector<std::array<double, 3>> out(n);
+    for (size_t i = 0; i < n; ++i) {
+        out[i] = {raw[i * 3], raw[i * 3 + 1], raw[i * 3 + 2]};
+    }
+    return out;
+}
+
+/// Frame 0 is the reference. Throws on the first frame that disagrees.
+inline void check_atom_id_consistency(const std::vector<const ConFrame *> &frames,
+                                      bool strict = true) {
+    std::vector<const RKRConFrame *> raw;
+    raw.reserve(frames.size());
+    for (const ConFrame *frame : frames) {
+        if (frame == nullptr || frame->get_handle() == nullptr) {
+            throw Error(static_cast<int32_t>(RKR_STATUS_NULL_POINTER),
+                        "check_atom_id_consistency: null frame", 0, 0);
+        }
+        raw.push_back(frame->get_handle());
+    }
+    uint64_t frame_index = 0;
+    uint64_t atom_id = 0;
+    throw_on_error(
+        rkr_frames_check_atom_ids(raw.empty() ? nullptr : raw.data(), raw.size(),
+                                  strict ? 1 : 0, &frame_index, &atom_id),
+        "check_atom_id_consistency");
 }
 
 inline uint32_t ConFrame::spec_version() const {
@@ -1567,7 +1727,7 @@ inline std::vector<Bond> ConFrame::bonds() const {
         int32_t order = 0;
         RKRStatus st = rkr_frame_bond_at(frame_handle_.get(), idx, &i, &j, &has_order, &order);
         if (st != RKR_STATUS_SUCCESS)
-            throw std::runtime_error(std::string("rkr_frame_bond_at: ") + rkr_status_message(st));
+            throw Error::from_last("rkr_frame_bond_at");
         Bond b;
         b.i = i;
         b.j = j;
@@ -1584,11 +1744,25 @@ inline bool ConFrame::has_bonds() const {
 
 // --- Implementation of ConFrameWriter methods ---
 
+inline ConFrameWriter::ConFrameWriter(RKRConFrameWriter *raw) {
+    writer_handle_.reset(raw);
+}
+
+inline ConFrameWriter
+ConFrameWriter::round_trip(const std::filesystem::path &path) {
+    RKRConFrameWriter *raw =
+        create_writer_from_path_round_trip_c(path.string().c_str());
+    if (!raw) {
+        throw Error::from_last(
+            "Failed to create round-trip writer for file: " + path.string());
+    }
+    return ConFrameWriter(raw);
+}
+
 inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path) {
     writer_handle_.reset(create_writer_from_path_c(path.string().c_str()));
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " +
-                                 path.string());
+        throw Error::from_last("Failed to create writer for file: " + path.string());
     }
 }
 
@@ -1597,8 +1771,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     writer_handle_.reset(
         create_writer_from_path_with_precision_c(path.string().c_str(), precision));
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " +
-                                 path.string());
+        throw Error::from_last("Failed to create writer for file: " + path.string());
     }
 }
 
@@ -1626,7 +1799,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     }
     writer_handle_.reset(raw);
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " + p);
+        throw Error::from_last("Failed to create writer for file: " + p);
     }
 }
 
@@ -1655,7 +1828,7 @@ inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
     }
     writer_handle_.reset(raw);
     if (!writer_handle_) {
-        throw std::runtime_error("Failed to create writer for file: " + p);
+        throw Error::from_last("Failed to create writer for file: " + p);
     }
 }
 
@@ -1675,6 +1848,65 @@ ConFrameWriter::compression_from_extension(
 inline void ConFrameWriter::set_canonical(bool on) {
     throw_on_error(rkr_writer_set_canonical(writer_handle_.get(), on ? 1 : 0),
                    "rkr_writer_set_canonical");
+}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      OpenMode mode)
+    : ConFrameWriter(path, mode, std::nullopt) {}
+
+inline ConFrameWriter::ConFrameWriter(const std::filesystem::path &path,
+                                      OpenMode mode, uint8_t precision)
+    : ConFrameWriter(path, mode, std::optional<uint8_t>(precision)) {}
+
+inline ConFrameWriter::ConFrameWriter(
+    const std::filesystem::path &path, OpenMode mode,
+    std::optional<uint8_t> precision) {
+    if (mode == OpenMode::Append &&
+        compression_from_extension(path) != Compression::None) {
+        throw std::runtime_error(
+            "append is only supported for an uncompressed file: " +
+            path.string());
+    }
+    const std::string p = path.string();
+    RKRConFrameWriter *raw = nullptr;
+    if (mode == OpenMode::Append) {
+        raw = precision ? create_writer_from_path_append_with_precision_c(
+                              p.c_str(), *precision)
+                        : create_writer_from_path_append_c(p.c_str());
+    } else {
+        raw = precision ? create_writer_from_path_with_precision_c(p.c_str(),
+                                                                   *precision)
+                        : create_writer_from_path_c(p.c_str());
+    }
+    writer_handle_.reset(raw);
+    if (!writer_handle_) {
+        throw std::runtime_error("Failed to create writer for file: " + p);
+    }
+}
+
+inline void ConFrameWriter::flush() {
+    throw_on_error(rkr_writer_flush(writer_handle_.get()), "rkr_writer_flush");
+}
+
+inline std::string
+write_frames_to_string(const std::vector<ConFrame> &frames) {
+    std::vector<const RKRConFrame *> handles;
+    handles.reserve(frames.size());
+    for (const auto &frame : frames) {
+        handles.push_back(frame.get_handle());
+    }
+    char *text = nullptr;
+    uintptr_t len = 0;
+    throw_on_error(rkr_write_frames_to_string(
+                       frames.empty() ? nullptr : handles.data(), frames.size(),
+                       &text, &len),
+                   "rkr_write_frames_to_string");
+    std::string out;
+    if (text != nullptr) {
+        out.assign(text, static_cast<std::size_t>(len));
+    }
+    rkr_free_string(text);
+    return out;
 }
 
 inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
@@ -1702,7 +1934,7 @@ inline ConFrameBuilder::ConFrameBuilder(
         rkr_frame_new(cell.data(), angles.data(), prebox[0].c_str(),
                       prebox[1].c_str(), postbox[0].c_str(), postbox[1].c_str());
     if (!builder_handle_) {
-        throw std::runtime_error("Failed to create frame builder.");
+        throw Error::from_last("Failed to create frame builder.");
     }
 }
 
@@ -1732,7 +1964,7 @@ ConFrameBuilder::operator=(ConFrameBuilder &&other) noexcept {
 inline ConFrameBuilder ConFrameBuilder::clone() const {
     RKRConFrameBuilder *cloned_handle = rkr_frame_builder_clone(builder_handle_);
     if (!cloned_handle) {
-        throw std::runtime_error("Failed to clone frame builder.");
+        throw Error::from_last("Failed to clone frame builder.");
     }
     // Construct a placeholder builder (with throwaway cell metadata; the
     // shared ArcArray storage from the source overrides anything the
@@ -2079,6 +2311,19 @@ ConFrameBuilder::set_metadata_json(const std::string &metadata_json) {
 }
 
 inline ConFrameBuilder &
+ConFrameBuilder::set_units(const std::string &units_json) {
+    throw_on_error(rkr_frame_builder_set_units(builder_handle_, units_json.c_str()),
+                   "Failed to set builder units");
+    return *this;
+}
+
+inline ConFrameBuilder &ConFrameBuilder::set_con_spec_minor(uint32_t minor) {
+    throw_on_error(rkr_frame_builder_set_con_spec_minor(builder_handle_, minor),
+                   "Failed to set con_spec_minor");
+    return *this;
+}
+
+inline ConFrameBuilder &
 ConFrameBuilder::set_scalar_metadata(const std::string &key, double value) {
     throw_on_error(rkr_frame_builder_set_scalar_metadata(
                        builder_handle_, key.c_str(), value),
@@ -2135,7 +2380,7 @@ inline ConFrame ConFrameBuilder::build() {
     RKRConFrame *frame = rkr_frame_builder_build(builder_handle_);
     builder_handle_ = nullptr; // ownership transferred
     if (!frame) {
-        throw std::runtime_error(
+        throw Error::from_last(
             "Failed to build frame from builder (null handle or same-symbol mass mismatch).");
     }
     return ConFrame(frame);

@@ -4,6 +4,11 @@ Cap'n Proto RPC serving
 
 
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 Overview
 --------
 
@@ -54,7 +59,7 @@ Round-trip helpers live in ``src/rpc/convert.rs`` (``fill_frame_builder`` /
 ``frame_from_reader``). Text ``.con`` remains the on-disk interchange authority.
 
 **Breaking note:** pre-v3 wire used a single ``isFixed: Bool`` and velocity-only
-atoms. Clients must regenerate from the current schema (0.x RPC surface).
+atoms. Clients MUST regenerate from the current schema (0.x RPC surface).
 
 Building
 --------
@@ -108,7 +113,7 @@ not UCX, libfabric, Mercury, or ADIOS.
     | ``unix:/abs/path``, ``unix:///abs/path``, or ``/abs/path`` | Unix domain socket |
     +------------------------------------------------------------+--------------------+
 
-Same-node HPC jobs should use a Unix socket (no TCP loopback). TCP is
+Same-node HPC jobs SHOULD use a Unix socket (no TCP loopback). TCP is
 for inet. UCX/ADIOS/DAOS are optional later adapters if a campaign
 consumer exists; they are not this crate and they are not the CON
 store. Corpus I/O decisions live in the readcon-db 2026-08-23
@@ -118,7 +123,7 @@ they do not replace a FrameKey mmap of CON).
 The MD-engine leaf is pack-then-Bcast on the **caller** comm. Encode a
 parsed frame with ``readcon_core::rcso::Rcso::encode_frame`` (magic
 ``RCSO``, v1, same bytes as readcon-db cooked SoA). Many frames go in
-one ``RCSB`` envelope. This crate never calls ``MPI_Init``.
+one ``RCSB`` envelope. This crate MUST NOT call ``MPI_Init``.
 
 .. code:: rust
 

@@ -304,6 +304,13 @@ class TestRestartDefects:
         ids = [a.atom_id for a in readcon.ConFrame.from_ase(atoms).atoms]
         assert ids == [7, 3, 5]
 
+    def test_from_ase_scalar_pbc_is_stored(self):
+        atoms = ase.Atoms(
+            "H", positions=[[0.0, 0.0, 0.0]], cell=[2.0, 2.0, 2.0], pbc=True
+        )
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert list(frame.metadata["pbc"]) == [True, True, True]
+
     def test_multi_frame_empty_line1_round_trip(self, tmp_path):
         atoms = ase.Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]], cell=[8, 8, 8])
         frame = readcon.ConFrame.from_ase(atoms)
@@ -311,6 +318,48 @@ class TestRestartDefects:
         path = tmp_path / "band.con"
         readcon.write_con(str(path), [frame, frame, frame])
         assert len(readcon.read_con(str(path))) == 3
+
+
+class TestAseZeroCell:
+    """A cell that was never set must not write a non-finite angle."""
+
+    def _round_trip(self, atoms):
+        frame = readcon.ConFrame.from_ase(atoms)
+        assert frame.cell == pytest.approx([0.0, 0.0, 0.0])
+        assert frame.angles == pytest.approx([90.0, 90.0, 90.0])
+        assert list(frame.metadata["pbc"]) == [False, False, False]
+        for text in (
+            readcon.write_con_string([frame]),
+            readcon.write_con_string([frame], precision=6),
+        ):
+            assert "NaN" not in text and "nan" not in text
+            lines = text.splitlines()
+            lengths = [float(token) for token in lines[2].split()]
+            angles = [float(token) for token in lines[3].split()]
+            assert lengths == pytest.approx([0.0, 0.0, 0.0])
+            assert angles == pytest.approx([90.0, 90.0, 90.0])
+            self._read_back(text, atoms)
+        assert "lattice_vectors" not in frame.metadata
+
+    def _read_back(self, text, atoms):
+        back = readcon.read_con_string(text)[0]
+        assert back.cell == pytest.approx([0.0, 0.0, 0.0])
+        assert back.angles == pytest.approx([90.0, 90.0, 90.0])
+        assert list(back.metadata["pbc"]) == [False, False, False]
+        assert [atom.z for atom in back.atoms] == pytest.approx(
+            [atom.position[2] for atom in atoms]
+        )
+
+    def test_from_ase_zero_cell_round_trip(self):
+        missing = ase.Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.7]])
+        explicit = ase.Atoms(
+            "H2",
+            positions=[[0, 0, 0], [0, 0, 0.7]],
+            cell=[0.0, 0.0, 0.0],
+            pbc=[False, False, False],
+        )
+        self._round_trip(missing)
+        self._round_trip(explicit)
 
 
 class TestLegacyVelocityLabel:

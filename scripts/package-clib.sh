@@ -78,11 +78,27 @@ if [[ ! -f "$ROOT_DIR/Cargo.toml" ]]; then
     exit 1
 fi
 
-VERSION="$(python3 -c 'import pathlib; print(pathlib.Path("'"$ROOT_DIR"'/VERSION").read_text().strip(), end="")')"
+# Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
+# drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The
+# path is an argument so those backslashes are not Python string escapes.
+version_file="$ROOT_DIR/VERSION"
+if command -v cygpath >/dev/null 2>&1; then
+    version_file="$(cygpath -w "$version_file")"
+fi
+VERSION="$(
+    python3 -c 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).read_text().strip(), end="")' \
+        "$version_file"
+)"
 if [[ -z "$VERSION" ]]; then
     echo "package-clib: could not read $ROOT_DIR/VERSION" >&2
     exit 1
 fi
+
+# Same archive metadata as the cxx tarball. The tar header is
+# SOURCE_DATE_EPOCH. Windows also links with /Brepro and remapped paths
+# so the DLL and import library bytes stay put across two builds.
+SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
+export SOURCE_DATE_EPOCH
 
 detect_host() {
     if command -v rustc >/dev/null 2>&1; then
@@ -219,6 +235,10 @@ else
         fi
         (
             cd "$ROOT_DIR"
+            # shellcheck disable=SC1091
+            source "$SCRIPT_DIR/reproducible-rustflags.sh"
+            reproducible_rustflags "$ROOT_DIR" "$TARGET"
+            export CARGO_INCREMENTAL=0
             feat_args=()
             if [[ -n "$FEATURES" ]]; then
                 feat_args=(--features "$FEATURES")
@@ -260,6 +280,10 @@ fi
 
 if find "$DEST" -name 'cbindgen.toml' -o -name 'cbindgen' | grep -q .; then
     echo "package-clib: tarball must not contain cbindgen" >&2
+    exit 1
+fi
+if find "$DEST" -name '*.pdb' -print | grep -q .; then
+    echo "package-clib: tarball must not contain PDB files" >&2
     exit 1
 fi
 
@@ -312,11 +336,20 @@ fpm test --flag "\$(pkg-config --cflags readcon-core) -cpp" \\
 this prefix instead of a local \`target/release\`.
 EOF
 
-tar -C "$TMP_DIR" -cf "${TMP_DIR}/${ARCHIVE_NAME}.tar" "$ARCHIVE_NAME"
-gzip -9 "${TMP_DIR}/${ARCHIVE_NAME}.tar"
+bash "$SCRIPT_DIR/reproducible-tar.sh" \
+    "$ROOT_DIR" \
+    "$TMP_DIR" \
+    "$ARCHIVE_NAME" \
+    "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz"
 cp "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz" "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 
-SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+if command -v sha256sum >/dev/null 2>&1; then
+    SHA="$(sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+    SHA="$(shasum -a 256 "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz" | awk '{print $1}')"
+else
+    SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz")"
+fi
 echo "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz"
 echo "sha256:${SHA}"
 echo "${SHA}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz.sha256"

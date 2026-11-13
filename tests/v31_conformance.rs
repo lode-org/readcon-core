@@ -46,7 +46,7 @@ fn header_only(line2: &str, counts: &str) -> String {
 #[test]
 fn m1_non_finite_rejected_without_validate() {
     for token in ["NaN", "nan", "+NaN", "-inf", "INF", "Infinity", "+infinity"] {
-        let cell = header_only(r#"{"con_spec_version":2}"#, &format!("1\n1\n1.0\n"));
+        let cell = header_only(r#"{"con_spec_version":2}"#, "1\n1\n1.0\n");
         let text = format!(
             "PRE\n{{\"con_spec_version\":2}}\n10.0 {token} 30.0\n90 90 90\nA\nB\n1\n1\n1.0\n"
         );

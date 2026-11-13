@@ -8,6 +8,11 @@ How-to — Chemfiles conversion and selection
    Diátaxis *how-to guides*. Learning path: :doc:`chemfiles-tutorial`.
    Executable Org: :doc:`chemfiles-notebook` (``scripts/run-chemfiles-notebook.sh``).
 
+Requirement words
+-----------------
+
+The words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY on this page follow `RFC 2119 <https://www.rfc-editor.org/rfc/rfc2119>`_.
+
 (:doc:`howto`) or finish :doc:`chemfiles-tutorial` once.
 
 How to convert a single structure file (XYZ, PDB, GRO, …) to CON
@@ -27,7 +32,7 @@ How to convert a single structure file (XYZ, PDB, GRO, …) to CON
     w.write_frame(&frame)?;
 
 Chemfiles selects the reader from the path. If the format has topology, CON
-line-2 JSON may include ``bonds`` (0-based ``atom_data`` indices after import
+line-2 JSON MAY include ``bonds`` (0-based ``atom_data`` indices after import
 remap) and ``chemfiles_residues``. Line-2 ``units.time`` is ``ps`` (chemfiles
 velocities are Å/ps), not the CON-native default ``fs``.
 
@@ -133,7 +138,7 @@ format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
     assert frame.has_bonds
     print(readcon.select_on_frame(frame, "bonds: all")["matches"])
     print(readcon.select_on_frame(frame, "angles: all")["matches"])
-    print(readcon.select_on_frame(frame, "is_bonded"))  # pair context
+    print(readcon.select_on_frame(frame, "pairs: is_bonded(#1, #2)"))  # pair context
 
 .. code:: rust
 
@@ -141,8 +146,8 @@ format, or ``ConFrameBuilder::set_bonds`` / ``header.set_bonds``).
     let r = evaluate_selection_on_con_frame("angles: all", frame)?;
     assert_eq!(r.context_size, 3);
 
-Angles/dihedrals are **derived by chemfiles from bonds** at projection time;
-you do not store angle arrays on disk in v0.13.
+Angles and dihedrals are **derived by chemfiles from bonds** at projection time.
+Writers MUST NOT store angle arrays on disk in v0.13.
 
 How to use the C API for selection
 ----------------------------------
@@ -173,23 +178,23 @@ How to install lean CON I/O only (no libchemfiles)
 
 .. code:: shell
 
-    pip install 'readcon==0.17.3'          # has_chemfiles_support() is False
+    pip install 'readcon==0.22.0'          # has_chemfiles_support() is False
     cargo build                            # stubs; FeatureDisabled on import/select
 
 Selection symbols still import in Python/Rust; they error clearly. Use this
-for CI that must not compile CMake/chemfiles.
+for CI that MUST NOT compile CMake/chemfiles.
 
 How to install full chemfiles support
 -------------------------------------
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.17.3'   # preferred PyPI
+    pip install 'readcon-chemfiles==0.22.0'   # preferred PyPI
     # or: pip install 'readcon[chemfiles]'   # depends on readcon-chemfiles==X.Y.Z
     cargo build --features chemfiles
     maturin develop --features python,chemfiles
 
-Do not install ``readcon`` and ``readcon-chemfiles`` together (module clash).
+Users MUST NOT install ``readcon`` and ``readcon-chemfiles`` together (module clash).
 
 How to batch-convert a directory of foreign trajectories
 --------------------------------------------------------

@@ -1,0 +1,6 @@
+rev_parse 5e1430ddf6da5d2b0d4652f47dce889e7895598f
+tree 7df8390b6ee7cfd73f0b849b02313a365121d4a2
+command ninja -C paper/cpc/bench/work/peers/eon/build-h2h client/python/_core.abi3.so
+ninja: Entering directory `paper/cpc/bench/work/peers/eon/build-h2h'
+ninja: no work to do.
+exit_code 0

@@ -91,6 +91,18 @@ fn compression_detect_extension_and_mmap_and_writers() {
         detect_compression(&[0x28, 0xb5, 0x2f, 0xfd]),
         Compression::Zstd
     );
+    assert_eq!(
+        detect_compression(&[0x50, 0x2a, 0x4d, 0x18]),
+        Compression::Zstd
+    );
+    assert_eq!(
+        detect_compression(&[0x5f, 0x2a, 0x4d, 0x18]),
+        Compression::Zstd
+    );
+    assert_eq!(
+        detect_compression(&[0x4f, 0x2a, 0x4d, 0x18]),
+        Compression::None
+    );
     assert_eq!(detect_compression(b"not"), Compression::None);
 
     let dir = tempfile::tempdir().unwrap();
@@ -166,7 +178,7 @@ fn convert_errors_and_path_helpers() {
     assert!(matches!(from_io, ConvertError::Io(_)));
     let from_cf: ConvertError = ChemfilesImportError::FeatureDisabled.into();
     assert!(matches!(from_cf, ConvertError::Chemfiles(_)));
-    assert!(from_cf.to_string().len() > 0);
+    assert!(!from_cf.to_string().is_empty());
     assert!(from_cf.source().is_some());
 
     // missing input
@@ -382,7 +394,7 @@ fn index_proj_and_helpers_extra() {
     let spans = frame_byte_spans(&multi).unwrap();
     assert!(!spans.is_empty());
     assert!(!spans[0].is_empty());
-    assert!(spans[0].len() > 0);
+    assert!(!spans[0].is_empty());
     let _ = spans[0].slice(&multi);
     let hist = symbol_histogram(&multi).unwrap();
     assert!(!hist.is_empty());

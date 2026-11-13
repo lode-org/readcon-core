@@ -1,0 +1,24 @@
+rev_parse 5e1430ddf6da5d2b0d4652f47dce889e7895598f
+tree 7df8390b6ee7cfd73f0b849b02313a365121d4a2
+command python3 -m pip install .
+Defaulting to user installation because normal site-packages is not writeable
+Processing .
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: readcon
+  Building wheel for readcon (pyproject.toml): started
+  Building wheel for readcon (pyproject.toml): finished with status 'done'
+  Created wheel for readcon: filename=readcon-<package-version>-cp312-cp312-linux_x86_64.whl size=998545 sha256=cc810cd87f2250c1efa10c34379c5270f1442767a30ab1228ecf7d72e54e0487
+  Stored in directory: .cache/pip/wheels/3d/34/9b/b6cc476792d08e97d0f5701284fa7654455355982911d82f90
+Successfully built readcon
+Installing collected packages: readcon
+  Attempting uninstall: readcon
+    Found existing installation: readcon <package-version>
+    Uninstalling readcon-<package-version>:
+      Successfully uninstalled readcon-<package-version>
+Successfully installed readcon-<package-version>
+exit_code 0

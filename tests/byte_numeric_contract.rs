@@ -13,7 +13,7 @@ const FRAME: &str = "seed\n{\"con_spec_version\":2}\n10 11 12\n90 90 90\n0 0\n0 
 #[test]
 fn byte_frames_preserve_order_identity_and_coordinates_at_every_worker_count() {
     let text = (0..32)
-        .map(|i| FRAME.replace("1.25 -2.5", &format!("{}.25 -2.5", i)))
+        .map(|i| FRAME.replace("1.25 -2.5", &format!("{i}.25 -2.5")))
         .collect::<String>()
         .replace('\n', "\r\n");
     let expected = ConFrameIterator::new(&text)
@@ -350,7 +350,7 @@ fn mapped_file_reports_invalid_utf8_on_a_corrupt_last_frame() {
         let err = read_all_frames_with_threads(&path, workers).expect_err("mapped corrupt tail");
         let message = err.to_string();
         assert!(
-            message.contains("invalid UTF-8"),
+            message.to_ascii_lowercase().contains("invalid utf-8"),
             "workers={workers:?} mapped read reported {message}"
         );
         assert!(

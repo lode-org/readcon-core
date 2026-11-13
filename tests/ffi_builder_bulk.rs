@@ -452,7 +452,7 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         let xyz = rkr_frame_xyz_f64(frame, &mut nn);
         assert!(!xyz.is_null());
         assert_eq!(nn, nat);
-        assert!((unsafe { *xyz } - buf[0]).abs() < 1e-15);
+        assert!((*xyz - buf[0]).abs() < 1e-15);
         let mut view = RKRArrayView {
             data: ptr::null(),
             n: 0,
@@ -535,14 +535,13 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         // metatensor blocks (feature on in coverage)
         #[cfg(feature = "metatensor")]
         {
-            let mut block: *mut metatensor::c_api::mts_block_t = ptr::null_mut();
             for export in [
                 rkr_frame_metatensor_positions_block as unsafe extern "C" fn(_, _) -> _,
                 rkr_frame_metatensor_velocities_block,
                 rkr_frame_metatensor_forces_block,
                 rkr_frame_metatensor_atom_energies_block,
             ] {
-                block = ptr::null_mut();
+                let mut block: *mut metatensor::c_api::mts_block_t = ptr::null_mut();
                 let st = export(frame, &mut block);
                 if st == RKRStatus::RKR_STATUS_SUCCESS && !block.is_null() {
                     rkr_mts_block_free(block);

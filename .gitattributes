@@ -1,1 +1,23 @@
 VERSION text eol=lf
+benches/results/v31_parse_ratio.csv binary
+paper/cpc/bench/results/hcn_loss.csv binary
+paper/cpc/bench/results/velocity_case.csv binary
+paper/cpc/data/cloud-runs-2/05/matrix.csv binary
+paper/cpc/data/cloud-runs-2/05/restart_formats.csv binary
+paper/cpc/data/corpus31/v31_cr_separator.con binary
+paper/cpc/data/corpus31/v31_crlf.con binary
+paper/cpc/data/corpus_crosscheck.csv binary
+paper/cpc/data/db/ingest_repeats.csv binary
+paper/cpc/data/db/query_repeats.csv binary
+paper/cpc/data/db/sizes.csv binary
+paper/cpc/data/db/summary.csv binary
+paper/cpc/data/failure/drift_con.csv binary
+paper/cpc/data/failure/drift_extxyz.csv binary
+paper/cpc/data/failure/matrix.csv binary
+paper/cpc/data/failure/restart_formats.csv binary
+paper/cpc/data/failure/version_safety.csv binary
+paper/cpc/data/restart_walls/restart_walls.csv binary
+paper/cpc/data/restart_walls/restart_walls_repeats.csv binary
+paper/cpc/data/trace/weak_io.csv binary
+paper/cpc/evidence/results/e4_comparison.csv binary
+paper/cpc/logs/install.log binary

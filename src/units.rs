@@ -5,7 +5,6 @@
 //! the multiplier `x_to = factor * x_from` when dimensions match.
 
 use crate::error::ParseError;
-use std::collections::HashMap;
 
 /// Physical dimension exponents: L, T, M, Q (charge), Θ (temperature).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,24 +31,30 @@ impl Dimension {
 
     fn mul(self, other: Self) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] + other.exponents[i];
+        for (slot, (left, right)) in e
+            .iter_mut()
+            .zip(self.exponents.iter().zip(other.exponents.iter()))
+        {
+            *slot = left + right;
         }
         Self { exponents: e }
     }
 
     fn div(self, other: Self) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] - other.exponents[i];
+        for (slot, (left, right)) in e
+            .iter_mut()
+            .zip(self.exponents.iter().zip(other.exponents.iter()))
+        {
+            *slot = left - right;
         }
         Self { exponents: e }
     }
 
     fn pow(self, p: f64) -> Self {
         let mut e = [0.0; 5];
-        for i in 0..5 {
-            e[i] = self.exponents[i] * p;
+        for (slot, exp) in e.iter_mut().zip(self.exponents.iter()) {
+            *slot = exp * p;
         }
         Self { exponents: e }
     }
@@ -63,175 +68,183 @@ impl Dimension {
 }
 
 /// Parsed unit: SI scale factor (value in SI = factor * value_in_unit) and dimensions.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct UnitValue {
     /// Multiply quantity in this unit by `si_factor` to get SI.
     si_factor: f64,
     dim: Dimension,
 }
 
-fn base_table() -> HashMap<&'static str, UnitValue> {
-    let mut m = HashMap::new();
-    let ins = |m: &mut HashMap<&'static str, UnitValue>, names: &[&'static str], u: UnitValue| {
-        for n in names {
-            m.insert(*n, u.clone());
-        }
-    };
-    // Length → meters
-    ins(
-        &mut m,
-        &["m", "meter", "metre"],
-        UnitValue {
-            si_factor: 1.0,
-            dim: Dimension::LENGTH,
-        },
-    );
-    ins(
-        &mut m,
-        &["angstrom", "a", "å"],
-        UnitValue {
-            si_factor: 1e-10,
-            dim: Dimension::LENGTH,
-        },
-    );
-    ins(
-        &mut m,
-        &["nm", "nanometer"],
-        UnitValue {
-            si_factor: 1e-9,
-            dim: Dimension::LENGTH,
-        },
-    );
-    ins(
-        &mut m,
-        &["bohr", "a0"],
-        UnitValue {
-            si_factor: 5.291_772_109_03e-11,
-            dim: Dimension::LENGTH,
-        },
-    );
-    // Time → seconds
-    ins(
-        &mut m,
-        &["s", "second"],
-        UnitValue {
-            si_factor: 1.0,
-            dim: Dimension::TIME,
-        },
-    );
-    ins(
-        &mut m,
-        &["fs", "femtosecond"],
-        UnitValue {
-            si_factor: 1e-15,
-            dim: Dimension::TIME,
-        },
-    );
-    ins(
-        &mut m,
-        &["ps", "picosecond"],
-        UnitValue {
-            si_factor: 1e-12,
-            dim: Dimension::TIME,
-        },
-    );
-    ins(
-        &mut m,
-        &["ns", "nanosecond"],
-        UnitValue {
-            si_factor: 1e-9,
-            dim: Dimension::TIME,
-        },
-    );
-    // Mass → kg
-    ins(
-        &mut m,
-        &["kg", "kilogram"],
-        UnitValue {
-            si_factor: 1.0,
-            dim: Dimension::MASS,
-        },
-    );
-    ins(
-        &mut m,
-        &["u", "amu", "dalton", "da"],
-        UnitValue {
-            si_factor: 1.660_539_066_60e-27,
-            dim: Dimension::MASS,
-        },
-    );
-    // Energy → joule (M L^2 T^-2)
-    let energy_dim = Dimension::MASS
-        .mul(Dimension::LENGTH.pow(2.0))
-        .div(Dimension::TIME.pow(2.0));
-    ins(
-        &mut m,
-        &["j", "joule"],
-        UnitValue {
-            si_factor: 1.0,
-            dim: energy_dim,
-        },
-    );
-    ins(
-        &mut m,
-        &["ev"],
-        UnitValue {
-            si_factor: 1.602_176_634e-19,
-            dim: energy_dim,
-        },
-    );
-    ins(
-        &mut m,
-        &["mev"],
-        UnitValue {
-            si_factor: 1.602_176_634e-22,
-            dim: energy_dim,
-        },
-    );
-    ins(
-        &mut m,
-        &["hartree", "ha"],
-        UnitValue {
-            si_factor: 4.359_744_722_207_1e-18,
-            dim: energy_dim,
-        },
-    );
-    // Charge
-    ins(
-        &mut m,
-        &["e", "electron_charge"],
-        UnitValue {
-            si_factor: 1.602_176_634e-19,
-            dim: Dimension::CHARGE,
-        },
-    );
-    // 1 mol = N_A entities. `kcal / mol` is then 4184/N_A J per entity
-    // (metatomic: eV -> kcal/mol is ~23.06).
-    ins(
-        &mut m,
-        &["mol"],
-        UnitValue {
-            si_factor: 6.022_140_76e23,
-            dim: Dimension::ZERO,
-        },
-    );
-    ins(
-        &mut m,
-        &["kcal"],
-        UnitValue {
-            si_factor: 4184.0,
-            dim: energy_dim,
-        },
-    );
-    ins(
-        &mut m,
-        &["kj"],
-        UnitValue {
-            si_factor: 1000.0,
-            dim: energy_dim,
-        },
-    );
-    m
+/// M L^2 T^-2. Same exponents as `MASS * LENGTH^2 / TIME^2`.
+const ENERGY: Dimension = Dimension {
+    exponents: [2.0, -2.0, 1.0, 0.0, 0.0],
+};
+
+struct BaseUnit {
+    name: &'static str,
+    value: UnitValue,
+}
+
+const fn unit(si_factor: f64, dim: Dimension) -> UnitValue {
+    UnitValue { si_factor, dim }
+}
+
+/// Names are lowercase and sorted. Lookup is a binary search, so the table
+/// is plain static data: no `HashMap`, and no hashbrown control bytes for
+/// Valgrind to treat as an interior pointer of a process-lifetime allocation.
+const BASE_UNITS: &[BaseUnit] = &[
+    BaseUnit {
+        name: "a",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "a0",
+        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "amu",
+        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "angstrom",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "bohr",
+        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "da",
+        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "dalton",
+        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "e",
+        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+    },
+    BaseUnit {
+        name: "electron_charge",
+        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+    },
+    BaseUnit {
+        name: "ev",
+        value: unit(1.602_176_634e-19, ENERGY),
+    },
+    BaseUnit {
+        name: "femtosecond",
+        value: unit(1e-15, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "fs",
+        value: unit(1e-15, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "ha",
+        value: unit(4.359_744_722_207_1e-18, ENERGY),
+    },
+    BaseUnit {
+        name: "hartree",
+        value: unit(4.359_744_722_207_1e-18, ENERGY),
+    },
+    BaseUnit {
+        name: "j",
+        value: unit(1.0, ENERGY),
+    },
+    BaseUnit {
+        name: "joule",
+        value: unit(1.0, ENERGY),
+    },
+    BaseUnit {
+        name: "kcal",
+        value: unit(4184.0, ENERGY),
+    },
+    BaseUnit {
+        name: "kg",
+        value: unit(1.0, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "kilogram",
+        value: unit(1.0, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "kj",
+        value: unit(1000.0, ENERGY),
+    },
+    BaseUnit {
+        name: "m",
+        value: unit(1.0, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "meter",
+        value: unit(1.0, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "metre",
+        value: unit(1.0, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "mev",
+        value: unit(1.602_176_634e-22, ENERGY),
+    },
+    BaseUnit {
+        name: "mol",
+        value: unit(6.022_140_76e23, Dimension::ZERO),
+    },
+    BaseUnit {
+        name: "nanometer",
+        value: unit(1e-9, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "nanosecond",
+        value: unit(1e-9, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "nm",
+        value: unit(1e-9, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "ns",
+        value: unit(1e-9, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "picosecond",
+        value: unit(1e-12, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "ps",
+        value: unit(1e-12, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "s",
+        value: unit(1.0, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "second",
+        value: unit(1.0, Dimension::TIME),
+    },
+    BaseUnit {
+        name: "u",
+        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "å",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+];
+
+#[cfg(test)]
+pub(crate) fn cached_unit_table_addr() -> usize {
+    BASE_UNITS.as_ptr() as usize
+}
+
+fn lookup_base(name: &str) -> Option<&'static UnitValue> {
+    BASE_UNITS
+        .binary_search_by(|entry| entry.name.cmp(name))
+        .ok()
+        .map(|index| &BASE_UNITS[index].value)
 }
 
 /// Parse a unit expression into SI factor and dimension.
@@ -240,12 +253,11 @@ pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError>
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
     }
-    let table = base_table();
     // CON-units.16 names are case-insensitive, including `Å`.
-    parse_expr(&s.to_lowercase(), &table)
+    parse_expr(&s.to_lowercase())
 }
 
-fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimension), ParseError> {
+fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
     // Split on * and / with left-associative scan; handle ^N on atoms.
     let mut factor = 1.0_f64;
     let mut dim = Dimension::ZERO;
@@ -262,7 +274,7 @@ fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimensi
             i += 1;
             continue;
         }
-        let (atom_f, atom_d, consumed) = parse_atom(&s[i..], table)?;
+        let (atom_f, atom_d, consumed) = parse_atom(&s[i..])?;
         i += consumed;
         if pending_div {
             factor /= atom_f;
@@ -276,10 +288,7 @@ fn parse_expr(s: &str, table: &HashMap<&str, UnitValue>) -> Result<(f64, Dimensi
     Ok((factor, dim))
 }
 
-fn parse_atom(
-    s: &str,
-    table: &HashMap<&str, UnitValue>,
-) -> Result<(f64, Dimension, usize), ParseError> {
+fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
         return Err(ParseError::ValidationError(
@@ -295,7 +304,7 @@ fn parse_atom(
                 depth -= 1;
                 if depth == 0 {
                     let inner = &s[1..j];
-                    let (f, d) = parse_expr(inner, table)?;
+                    let (f, d) = parse_expr(inner)?;
                     let mut end = j + 1;
                     let (f2, d2, extra) = apply_power(f, d, &s[end..])?;
                     end += extra;
@@ -318,8 +327,7 @@ fn parse_atom(
         )));
     }
     let name = &s[..j];
-    let base = table
-        .get(name)
+    let base = lookup_base(name)
         .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
@@ -356,6 +364,15 @@ fn apply_power(f: f64, d: Dimension, rest: &str) -> Result<(f64, Dimension, usiz
 }
 
 /// Multiplicative factor: `value_in_to = factor * value_in_from`.
+///
+/// The names are the ones accepted in a CON `units` object. The table is
+/// built once per process and reused by every reader.
+///
+/// ```
+/// use readcon_core::units::unit_conversion_factor;
+/// let meters = unit_conversion_factor("angstrom", "m").unwrap();
+/// assert!((meters - 1.0e-10).abs() < 1.0e-20);
+/// ```
 pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, ParseError> {
     let (f_from, d_from) = parse_unit_expression(from_unit)?;
     let (f_to, d_to) = parse_unit_expression(to_unit)?;
@@ -609,6 +626,39 @@ pub fn canonicalize_units_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn base_table_is_shared_across_calls_and_threads() {
+        for pair in BASE_UNITS.windows(2) {
+            assert!(
+                pair[0].name < pair[1].name,
+                "{} is not before {}",
+                pair[0].name,
+                pair[1].name
+            );
+        }
+        let energy = Dimension::MASS
+            .mul(Dimension::LENGTH.pow(2.0))
+            .div(Dimension::TIME.pow(2.0));
+        assert!(
+            parse_unit_expression("eV").unwrap().1.compatible(energy),
+            "energy exponents drifted from M L^2 T^-2"
+        );
+        let first = cached_unit_table_addr();
+        let second = cached_unit_table_addr();
+        assert_eq!(first, second);
+        let factors = std::thread::scope(|scope| {
+            let mut joins = Vec::new();
+            for _ in 0..8 {
+                joins.push(scope.spawn(|| parse_unit_expression("Angstrom").unwrap().0));
+            }
+            joins
+                .into_iter()
+                .map(|join| join.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert!(factors.iter().all(|factor| (*factor - 1e-10).abs() < 1e-22));
+    }
 
     #[test]
     fn angstrom_to_nm() {
