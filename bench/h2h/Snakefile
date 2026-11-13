@@ -38,7 +38,7 @@ rule mem_r1:
 
 
 # One rerun of the paper campaigns on this commit. Raw logs stay under
-# bench/h2h/scaling/rel1. h2h6 is still outstanding.
+# bench/h2h/scaling/rel1.
 rule release:
     output:
         "bench/h2h/scaling/rel1/rows.json",
@@ -58,3 +58,10 @@ rule release:
         "bench/h2h/scaling/rel1/DONE",
     shell:
         "python3 bench/h2h/release_campaign.py"
+
+
+# The release rerun: extxyz head-to-head, bindings, compressed CON,
+# strong and weak scaling, fidelity, and readcon-db.
+rule campaign:
+    input:
+        "bench/h2h/scaling/rel1/DONE",

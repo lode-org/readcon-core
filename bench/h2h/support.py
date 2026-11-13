@@ -396,18 +396,29 @@ def format_result(row: dict, extra: dict | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _stale_link(binary: Path, archive: Path, source: Path | None = None) -> bool:
+    """True when the binary is missing or older than the library or source."""
+    if not binary.is_file() or not archive.is_file():
+        return True
+    if archive.stat().st_mtime > binary.stat().st_mtime:
+        return True
+    return source is not None and source.stat().st_mtime > binary.stat().st_mtime
+
+
 def compile_tools() -> None:
-    so = ROOT / "target" / "release" / "libreadcon_core.so"
+    # `cargo build --example` updates the rlib the example links, and leaves
+    # libreadcon_core.a in place. C, C++ and Fortran time against that
+    # archive, so a campaign has to refresh it or it times the previous
+    # checkout.
+    subprocess.run(
+        ["cargo", "build", "--release", "--features", "parallel"],
+        cwd=ROOT,
+        check=True,
+    )
     archive = ROOT / "target" / "release" / "libreadcon_core.a"
-    if not so.is_file() or not archive.is_file():
-        subprocess.run(
-            ["cargo", "build", "--release", "--features", "parallel"],
-            cwd=ROOT,
-            check=True,
-        )
     binary = WORK / "time_f"
     source = BENCH / "time_f.f90"
-    if (not binary.is_file()) or source.stat().st_mtime > binary.stat().st_mtime:
+    if _stale_link(binary, archive, source):
         mod = WORK / "fmod"
         mod.mkdir(parents=True, exist_ok=True)
         subprocess.run(
@@ -443,7 +454,7 @@ def compile_tools() -> None:
             check=True,
         )
     c_bin = WORK / "time_c"
-    if not c_bin.is_file():
+    if _stale_link(c_bin, archive, BENCH / "time_c.c"):
         subprocess.run(
             [
                 "gcc",

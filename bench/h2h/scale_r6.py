@@ -425,6 +425,8 @@ def build_tools() -> None:
             "--example",
             "scale_probe",
             "--example",
+            "serial_probe",
+            "--example",
             "weak_scale_threads",
         ]
     )
@@ -436,7 +438,15 @@ def build_tools() -> None:
     support.compile_tools()
     cpp = WORK / "time_cpp"
     source = BENCH / "time_cpp.cpp"
-    if (not cpp.exists()) or source.stat().st_mtime > cpp.stat().st_mtime:
+    archive = ROOT / "target" / "release" / "libreadcon_core.a"
+    archive_newer = archive.is_file() and (
+        not cpp.exists() or archive.stat().st_mtime > cpp.stat().st_mtime
+    )
+    if (
+        (not cpp.exists())
+        or source.stat().st_mtime > cpp.stat().st_mtime
+        or archive_newer
+    ):
         run(
             [
                 "g++",

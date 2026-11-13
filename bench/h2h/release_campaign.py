@@ -73,7 +73,9 @@ def write_table3(langs: list[dict], memory: dict) -> None:
             continue
         median, iqr = type7(samples)
         lines.append(f"{row['lang']}\t{row['op']}\t{sig3(median)}\t{sig3(iqr)}\t{rss}")
-    (OUT / "table3-bindings.tsv").write_text("\n".join(lines) + "\n")
+    (OUT / "table3-bindings.tsv").write_text(
+        "\n".join(line.rstrip() for line in lines) + "\n"
+    )
 
 
 def write_s_memory(memory: dict) -> None:
@@ -86,7 +88,7 @@ def write_s_memory(memory: dict) -> None:
         f"{gzip['peak_rss_kib']}\t{sig3(gzip['peak_rss_kib'] / 1024)}\t"
         f"{sig3(gzip['median_s'])}\t{sig3(gzip['iqr_s'])}"
     )
-    (OUT / "s-memory.tsv").write_text("\n".join(lines) + "\n")
+    (OUT / "s-memory.tsv").write_text("\n".join(line.rstrip() for line in lines) + "\n")
 
 
 def write_s61(rows: list[dict]) -> None:
@@ -216,9 +218,37 @@ def measure_memory() -> dict:
     return memory
 
 
+def ensure_python_extension() -> None:
+    """Install the wheel built from this checkout before any Python timing."""
+    subprocess.run(
+        ["maturin", "build", "--release", "--features", "python,zstd"],
+        cwd=ROOT,
+        check=True,
+    )
+    wheels = sorted(
+        (ROOT / "target" / "wheels").glob("readcon-*.whl"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    if not wheels:
+        raise SystemExit("maturin did not write a readcon wheel")
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            "--no-deps",
+            str(wheels[-1]),
+        ],
+        check=True,
+    )
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     LOG.mkdir(parents=True, exist_ok=True)
+    ensure_python_extension()
     env = os.environ.copy()
     env["READCON_SCALE_OUT"] = str(OUT)
     env["READCON_SCALE_LOG"] = str(LOG)
@@ -268,9 +298,7 @@ def main() -> None:
     head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    (OUT / "DONE").write_text(
-        f"{head}\nprovisional: mem-r2 is in, h2h6 is still outstanding\n"
-    )
+    (OUT / "DONE").write_text(f"{head}\nrelease campaign\n")
     print("release logs", OUT)
 
 
