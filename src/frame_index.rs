@@ -766,6 +766,58 @@ mod tests {
         assert_eq!(super::fold_slice_parts(0, &[]), content_hash(&[]));
     }
 
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig {
+            cases: 48,
+            failure_persistence: None,
+            ..proptest::prelude::ProptestConfig::default()
+        })]
+        #[test]
+        fn folded_rank_slices_match_the_full_file_hash(
+            bytes in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..2048),
+            raw_cuts in proptest::collection::vec(proptest::prelude::any::<u16>(), 0..10),
+        ) {
+            let mut points = vec![0usize];
+            let n = bytes.len();
+            for cut in raw_cuts {
+                points.push((cut as usize) % (n + 1));
+            }
+            points.push(n);
+            points.sort_unstable();
+            let parts: Vec<super::SliceParts> = points
+                .windows(2)
+                .map(|span| super::slice_block_parts(span[0] as u64, &bytes[span[0]..span[1]]))
+                .collect();
+            proptest::prop_assert_eq!(
+                super::fold_slice_parts(n as u64, &parts),
+                content_hash(&bytes)
+            );
+        }
+    }
+
+    /// Cuts that land inside a block and on a block boundary, including
+    /// an empty rank, still fold to the hash of the whole buffer.
+    #[test]
+    fn folded_blocks_match_across_an_empty_rank() {
+        let data: Vec<u8> = (0..HASH_BLOCK * 2 + 80).map(|i| (i % 251) as u8).collect();
+        let whole = content_hash(&data);
+        let mut cuts = vec![
+            0usize,
+            1,
+            7,
+            HASH_BLOCK - 1,
+            HASH_BLOCK,
+            HASH_BLOCK,
+            HASH_BLOCK + 3,
+        ];
+        cuts.push(data.len());
+        let parts: Vec<super::SliceParts> = cuts
+            .windows(2)
+            .map(|span| super::slice_block_parts(span[0] as u64, &data[span[0]..span[1]]))
+            .collect();
+        assert_eq!(super::fold_slice_parts(data.len() as u64, &parts), whole);
+    }
+
     #[test]
     fn known_hash_sidecar_matches_a_file_fingerprint() {
         let dir = std::env::temp_dir().join(format!("rcidx-known-{}", std::process::id()));

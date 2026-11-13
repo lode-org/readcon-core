@@ -671,6 +671,57 @@ mod ranked_sink_tests {
         assert_eq!(got.len(), 8);
         let _ = std::fs::remove_file(&path);
     }
+
+    /// A same-length file keeps its pages, and the ranked writes still
+    /// have to replace every byte. A hole, an empty rank, or a page
+    /// boundary must not leave the previous contents in place.
+    #[test]
+    fn a_same_length_rewrite_replaces_every_byte() {
+        let splits: &[&[usize]] = &[&[16], &[10, 6], &[1, 0, 15], &[4090, 20], &[3, 5, 0, 8]];
+        for (case, split) in splits.iter().enumerate() {
+            let total: usize = split.iter().sum();
+            let path = std::path::PathBuf::from(format!(
+                "/dev/shm/readcon-rewrite-{}-{case}",
+                std::process::id()
+            ));
+            if std::fs::write(&path, vec![b'x'; total]).is_err() {
+                let path = std::env::temp_dir()
+                    .join(format!("readcon-rewrite-{}-{case}", std::process::id()));
+                rewrite_same_length(&path, split);
+                let _ = std::fs::remove_file(&path);
+            } else {
+                rewrite_same_length(&path, split);
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    fn rewrite_same_length(path: &std::path::Path, split: &[usize]) {
+        let total: usize = split.iter().sum();
+        std::fs::write(path, vec![b'x'; total]).unwrap();
+        super::prepare_ranked_file(path, total as u64).unwrap();
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        let tmpfs = crate::writer::file_is_tmpfs(&file);
+        let mut expect = Vec::with_capacity(total);
+        let mut offset = 0u64;
+        for (rank, &len) in split.iter().enumerate() {
+            let bytes: Vec<u8> = (0..len).map(|i| b'A' + ((rank + i) % 26) as u8).collect();
+            if !bytes.is_empty() && tmpfs {
+                super::copy_mapped(&file, &bytes, offset).unwrap();
+            } else {
+                super::pwrite_all(&file, &bytes, offset).unwrap();
+            }
+            expect.extend_from_slice(&bytes);
+            offset += len as u64;
+        }
+        drop(file);
+        let got = std::fs::read(path).unwrap();
+        assert_eq!(got, expect, "stale bytes after a same-length rewrite");
+    }
 }
 
 #[cfg(test)]

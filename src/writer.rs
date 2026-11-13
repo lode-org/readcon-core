@@ -3201,6 +3201,51 @@ mod section_arity_tests {
     }
 }
 
+#[cfg(test)]
+mod weight_partition {
+    use super::pack_frames_by_weight;
+    use proptest::prelude::*;
+
+    /// Groups are a half-open partition of `0..n` in file order.
+    /// An empty range drops a frame; a step backwards repeats one.
+    fn is_ordered_partition(n: usize, workers: usize, ranges: &[(usize, usize)]) -> bool {
+        if n == 0 {
+            return ranges.is_empty();
+        }
+        let workers = workers.max(1).min(n);
+        if ranges.len() != workers {
+            return false;
+        }
+        let mut cursor = 0usize;
+        for &(start, end) in ranges {
+            if start != cursor || end <= start || end > n {
+                return false;
+            }
+            cursor = end;
+        }
+        cursor == n
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 64,
+            failure_persistence: None,
+            ..ProptestConfig::default()
+        })]
+        #[test]
+        fn byte_weights_do_not_drop_or_reorder_frames(
+            weights in prop::collection::vec(0usize..50_000, 0..48),
+            workers in 1usize..17,
+        ) {
+            let ranges = pack_frames_by_weight(&weights, workers);
+            prop_assert!(
+                is_ordered_partition(weights.len(), workers, &ranges),
+                "weights={weights:?} workers={workers} ranges={ranges:?}"
+            );
+        }
+    }
+}
+
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_write_tests {
     use super::{frame_byte_weight, pack_frames_by_weight, pipeline_format_threads};
