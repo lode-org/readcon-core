@@ -2531,13 +2531,27 @@ impl PyConFrameIterator {
         // An empty line 1 is the user line (CON-header.4). The core iterator
         // owns that boundary and trailing whitespace. The cursor is rebuilt
         // on the remainder, so the file line is `line_base` plus its line.
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.next_with_raw_span(slice) {
-            Some(Ok((frame, span))) => {
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
-                let lines = newlines_in(span);
+        // The iterator borrows the unread tail. Finish that borrow before
+        // `release_before` shortens the buffer.
+        let parsed = {
+            let slice = &contents.as_str()[*pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.next_with_raw_span(slice) {
+                Some(Ok((frame, span))) => {
+                    let consumed = (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize)
+                        + span.len();
+                    let lines = newlines_in(span);
+                    Ok(Some((frame, consumed, lines)))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Err(parse_err_to_py(py, &e, line, self.frame_index))
+                }
+                None => Ok(None),
+            }
+        };
+        match parsed {
+            Ok(Some((frame, consumed, lines))) => {
                 *pos += consumed;
                 self.line_base = self.line_base.saturating_add(lines);
                 self.frame_index = self.frame_index.saturating_add(1);
@@ -2546,14 +2560,11 @@ impl PyConFrameIterator {
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(Some(PyConFrame::from_owned(py, frame)?))
             }
-            Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
-                Err(parse_err_to_py(py, &e, line, self.frame_index))
-            }
-            None => {
+            Ok(None) => {
                 *pos = contents.as_str().len();
                 Ok(None)
             }
+            Err(err) => Err(err),
         }
     }
 
@@ -2576,12 +2587,24 @@ impl PyConFrameIterator {
         if *pos >= contents.as_str().len() {
             return Ok(false);
         }
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.forward() {
-            Some(Ok(())) => {
-                let consumed = iter.byte_pos();
-                let lines = newlines_in(&slice[..consumed]);
+        let stepped = {
+            let slice = &contents.as_str()[*pos..];
+            let mut iter = ConFrameIterator::new(slice);
+            match iter.forward() {
+                Some(Ok(())) => {
+                    let consumed = iter.byte_pos();
+                    let lines = newlines_in(&slice[..consumed]);
+                    Ok(Some((consumed, lines)))
+                }
+                Some(Err(e)) => {
+                    let line = file_line(self.line_base, iter.lines.line_no());
+                    Err(parse_err_to_py(py, &e, line, self.frame_index))
+                }
+                None => Ok(None),
+            }
+        };
+        match stepped {
+            Ok(Some((consumed, lines))) => {
                 *pos += consumed;
                 self.line_base = self.line_base.saturating_add(lines);
                 self.frame_index = self.frame_index.saturating_add(1);
@@ -2590,11 +2613,8 @@ impl PyConFrameIterator {
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
                 Ok(true)
             }
-            Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
-                Err(parse_err_to_py(py, &e, line, self.frame_index))
-            }
-            None => Ok(false),
+            Ok(None) => Ok(false),
+            Err(err) => Err(err),
         }
     }
 
