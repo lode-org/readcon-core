@@ -166,8 +166,32 @@ def _prime(path: Path) -> None:
             pass
 
 
-def sample_arm(arm: str, path: Path) -> dict:
-    """One fresh pinned process. The file is cached before the clock starts."""
+def _drop_until_cold(path: Path) -> None:
+    """Drop the page cache until ``path`` has no resident pages.
+
+    ``posix_fadvise(DONTNEED)`` was leaving pages resident and widening
+    the cold spread, so this is the same sync-and-drop the head-to-head
+    cold reads use. It runs outside the clock.
+    """
+    from fair_h2h import drop_page_cache, pages_resident
+
+    if not path.is_file():
+        return
+    resident, total = pages_resident(path)
+    for _ in range(5):
+        drop_page_cache()
+        resident, total = pages_resident(path)
+        if resident == 0:
+            return
+    raise SystemExit(
+        f"{path} still has {resident}/{total} pages resident after drop_caches"
+    )
+
+
+def sample_arm(arm: str, path: Path, cache: str) -> dict:
+    """One fresh pinned process. ``cache`` is ``warm`` or ``cold`` for every arm."""
+    if cache not in {"warm", "cold"}:
+        raise SystemExit(f"unknown cache {cache}")
     env = os.environ.copy()
     env["READCON_BASE"] = str(br.BASE_DIR)
     env["READCON_V0173"] = str(br.RELEASE_DIR)
@@ -217,9 +241,12 @@ def sample_arm(arm: str, path: Path) -> dict:
             "mib": None,
             "exit": proc.returncode,
         }
-    _prime(path)
+    if cache == "warm":
+        _prime(path)
+    else:
+        _drop_until_cold(path)
     proc.stdin.write("\n")
-    proc.stdin.close()
+    proc.stdin.flush()
     out, err = proc.communicate()
     lines = [
         ln for ln in out.splitlines() if ln.startswith("{") or ln.startswith("READY")
@@ -264,13 +291,14 @@ def run(out: Path, frames: int, repeats: int) -> None:
         f"atoms {br.N_ATOMS}",
         f"repeats {repeats}",
         "warmup 1",
-        "schedule interleaved",
+        "schedule warm phase then cold phase, arms rotated inside each phase",
         "process fresh",
         f"affinity taskset -c {core_list()}",
         "serial 1",
-        "page_cache primed after READY, before the clock",
+        "page_cache primed after READY, before the warm clock",
+        "cold drops the page cache after READY, before the cold clock",
         "clock parse only; the coordinate check is outside the clock",
-        "gc collect then disable before READY",
+        "gc collect then disable before READY, every arm",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
         "numpy_percentile method=linear type=7",
         "git_status_begin",
@@ -310,65 +338,73 @@ def run(out: Path, frames: int, repeats: int) -> None:
     ]
     names = [name for name, _ in arms]
     paths = dict(arms)
-    lines.append("warmup round")
-    for name in names:
+    def take(name: str, cache: str) -> dict:
         if pin_errors.get(name):
-            doc = {
+            return {
                 "error": pin_errors[name],
                 "seconds": None,
+                "matched": 0,
+                "got": 0,
+                "requested": frames,
                 "mib": None,
                 "exit": 1,
             }
-        else:
-            doc = sample_arm(name, paths[name])
+        return sample_arm(name, paths[name], cache)
+
+    def record(name: str, cache: str, rep: int | None, doc: dict) -> None:
+        label = "warmup" if rep is None else f"sample rep={rep}"
         lines.append(
-            f"warmup arm={name} seconds={doc.get('seconds')} mib={doc.get('mib')} "
-            f"exit={doc.get('exit')} error={doc.get('error', '')}"
+            f"{label} arm={name} cache={cache} seconds={doc.get('seconds')} "
+            f"mib={doc.get('mib')} matched={doc.get('matched')} got={doc.get('got')} "
+            f"requested={doc.get('requested')} exit={doc.get('exit')} "
+            f"error={doc.get('error', '')}"
         )
-    samples: dict[str, list[dict]] = {name: [] for name in names}
-    for rep in range(repeats):
-        order = names[rep % len(names) :] + names[: rep % len(names)]
-        lines.append("order " + " ".join(order))
-        for name in order:
-            if pin_errors.get(name):
-                doc = {
-                    "error": pin_errors[name],
-                    "seconds": None,
-                    "matched": 0,
-                    "got": 0,
-                    "requested": frames,
-                    "mib": None,
-                    "exit": 1,
-                }
-            else:
-                doc = sample_arm(name, paths[name])
-            samples[name].append(doc)
-            lines.append(
-                f"sample arm={name} rep={rep} seconds={doc.get('seconds')} "
-                f"mib={doc.get('mib')} matched={doc.get('matched')} got={doc.get('got')} "
-                f"requested={doc.get('requested')} exit={doc.get('exit')} "
-                f"error={doc.get('error', '')}"
-            )
+
+    # Warm repeats finish before any cold repeat. A cold sample drops
+    # the page cache for the whole machine; doing that between warm
+    # samples made one repeat slow for every arm.
+    taken: dict[str, dict[str, list[dict]]] = {
+        name: {"warm": [], "cold": []} for name in names
+    }
+    for cache in ("warm", "cold"):
+        lines.append(f"phase {cache}")
+        lines.append(f"warmup round cache={cache}")
+        for name in names:
+            record(name, cache, None, take(name, cache))
+        for rep in range(repeats):
+            order = names[rep % len(names) :] + names[: rep % len(names)]
+            lines.append(f"order cache={cache} " + " ".join(order))
+            for name in order:
+                doc = take(name, cache)
+                taken[name][cache].append(doc)
+                record(name, cache, rep, doc)
     payload_arms: dict[str, dict] = {}
     for name in names:
-        got = [
-            row
-            for row in samples[name]
-            if row.get("seconds") is not None and not row.get("error")
+        warm = taken[name]["warm"]
+        cold = taken[name]["cold"]
+        got = [row for row in warm if row.get("seconds") is not None and not row.get("error")]
+        got_cold = [
+            row for row in cold if row.get("seconds") is not None and not row.get("error")
         ]
-        if len(got) < repeats:
+        if len(got) < repeats or len(got_cold) < repeats:
             err = next(
-                (row.get("error") for row in samples[name] if row.get("error")),
+                (
+                    row.get("error")
+                    for row in [*warm, *cold]
+                    if row.get("error")
+                ),
                 "short",
             )
             lines.append(f"summary arm={name} error={err} exit=1")
             payload_arms[name] = {
-                "seconds": [row.get("seconds") for row in samples[name]],
-                "mib": [row.get("mib") for row in samples[name]],
+                "seconds": [row.get("seconds") for row in warm],
+                "cold_seconds": [row.get("seconds") for row in cold],
+                "mib": [row.get("mib") for row in warm],
                 "error": err,
             }
             continue
         med, iqr, q1, q3 = _type7([row["seconds"] for row in got])
+        cold_med, cold_iqr, cold_q1, cold_q3 = _type7([row["seconds"] for row in got_cold])
         mib, mib_iqr, mib_q1, mib_q3 = _type7([row["mib"] for row in got])
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
@@ -376,18 +412,25 @@ def run(out: Path, frames: int, repeats: int) -> None:
         if name == "readcon_eon_api":
             scope = "readcon_through_eon"
         lines.append(
-            f"summary arm={name} scope={scope} n_rep={len(got)} median_s={med:.9e} "
-            f"iqr_s={iqr:.9e} mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "
+            f"summary arm={name} scope={scope} n_rep={len(got)} "
+            f"median_s={med:.9e} iqr_s={iqr:.9e} "
+            f"cold_median_s={cold_med:.9e} cold_iqr_s={cold_iqr:.9e} "
+            f"mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "
             f"requested={requested} matched={matched} failed={requested - matched} exit=0"
         )
         payload_arms[name] = {
             "scope": scope,
             "seconds": [row["seconds"] for row in got],
+            "cold_seconds": [row["seconds"] for row in got_cold],
             "mib": [row["mib"] for row in got],
             "median_s": med,
             "iqr_s": iqr,
             "q1_s": q1,
             "q3_s": q3,
+            "cold_median_s": cold_med,
+            "cold_iqr_s": cold_iqr,
+            "cold_q1_s": cold_q1,
+            "cold_q3_s": cold_q3,
             "mib_median": mib,
             "mib_iqr": mib_iqr,
             "mib_q1": mib_q1,
