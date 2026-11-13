@@ -113,27 +113,36 @@ def pages_resident(path: Path) -> tuple[int, int]:
         mapped.close()
 
 
+def drop_page_cache() -> None:
+    """Drop the page cache. Cold samples call this outside the clock.
+
+    Dirty pages survive drop_caches, so sync first. The sync and the drop
+    are both outside the timed read.
+    """
+    subprocess.run(["sync"], check=False)
+    subprocess.run(
+        ["sudo", "tee", "/proc/sys/vm/drop_caches"],
+        input="3\n",
+        text=True,
+        check=False,
+        capture_output=True,
+    )
+
+
 def prepare_cache(path: Path, cache: str) -> tuple[int, int]:
     if cache == "cold":
-        import gc
-
-        gc.collect()
-        resident, total = 0, 0
-        # DONTNEED is not always finished when mincore runs. Every tool
-        # waits for the same drop, so a cold sample is actually cold.
-        for _ in range(40):
-            fd = os.open(path, os.O_RDONLY)
-            try:
-                os.fsync(fd)
-                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
-            finally:
-                os.close(fd)
+        # The warmup read above this call is outside the clock. Dropping
+        # the cache here leaves the timed read cold. fadvise alone was
+        # still leaving pages resident, which widened the cold IQR.
+        resident, total = pages_resident(path)
+        for _ in range(5):
+            drop_page_cache()
             resident, total = pages_resident(path)
             if resident == 0:
-                return resident, total
-            time.sleep(0.05)
+                break
         return resident, total
     if cache == "warm":
+        # One full read before the clock. The timed call then hits a hot cache.
         with path.open("rb") as handle:
             handle.read()
     else:
@@ -1002,15 +1011,35 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
         "interleave": "rotate-per-sample",
         "affinity": f"taskset -c {core_list()}",
         "fields": "positions masses cell species, plus vel and fixed when the file declares them",
+        "warm": "file read once before the clock",
+        "cold": "drop_caches before the timed read, after the warmup",
     }
     (out / "h2h.json").write_text(json.dumps(payload) + "\n")
     (out / "h2h.log").write_text("\n".join(lines) + "\n")
-    tsv = ["file\treader\tmedian_s\tiqr_s"]
-    for row in rows:
-        if row["cache"] != "warm" or row.get("scored") is False:
-            continue
+    tsv = ["file\treader\twarm_median_s\twarm_iqr_s\tcold_median_s\tcold_iqr_s"]
+    warm_rows = {
+        (row["file"], row["reader"]): row
+        for row in rows
+        if row["cache"] == "warm" and row.get("scored") is not False
+    }
+    cold_rows = {
+        (row["file"], row["reader"]): row
+        for row in rows
+        if row["cache"] == "cold" and row.get("scored") is not False
+    }
+    for key, warm in warm_rows.items():
+        cold = cold_rows.get(key)
         tsv.append(
-            f"{row['file']}\t{row['reader']}\t{row['median_s']:.3g}\t{row['iqr_s']:.3g}"
+            "\t".join(
+                [
+                    warm["file"],
+                    warm["reader"],
+                    f"{warm['median_s']:.6g}",
+                    f"{warm['iqr_s']:.6g}",
+                    "" if cold is None else f"{cold['median_s']:.6g}",
+                    "" if cold is None else f"{cold['iqr_s']:.6g}",
+                ]
+            )
         )
     (out / "table2-h2h.tsv").write_text("\n".join(tsv) + "\n")
 
@@ -1483,6 +1512,8 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
         "process": "fresh subprocess per sample",
         "interleave": "rotate-per-sample",
         "affinity": f"taskset -c {core_list()}",
+        "warm": "file read once before the clock",
+        "cold": "drop_caches before the timed read, after the warmup",
         "skipped": [
             {
                 "file": "con-h2h",
@@ -1493,6 +1524,34 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
     }
     (out / "con-h2h.json").write_text(json.dumps(payload) + "\n")
     (out / "con-h2h.log").write_text("\n".join(lines) + "\n")
+    tsv = ["file\treader\top\twarm_median_s\twarm_iqr_s\tcold_median_s\tcold_iqr_s"]
+    grouped: dict[tuple, dict] = {}
+    for row in rows:
+        if row.get("scored") is False:
+            continue
+        grouped.setdefault((row["file"], row["reader"], row["op"]), {})[
+            row["cache"]
+        ] = row
+    for key, parts in grouped.items():
+        warm = parts.get("warm")
+        cold = parts.get("cold")
+        base = warm or cold
+        if base is None:
+            continue
+        tsv.append(
+            "\t".join(
+                [
+                    key[0],
+                    key[1],
+                    key[2],
+                    "" if warm is None else f"{warm['median_s']:.6g}",
+                    "" if warm is None else f"{warm['iqr_s']:.6g}",
+                    "" if cold is None else f"{cold['median_s']:.6g}",
+                    "" if cold is None else f"{cold['iqr_s']:.6g}",
+                ]
+            )
+        )
+    (out / "con-h2h.tsv").write_text("\n".join(tsv) + "\n")
 
 
 def main() -> None:

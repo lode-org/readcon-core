@@ -3,7 +3,7 @@ startup excluded
 warmup 1 samples 6 percentile type7 serial 1
 fresh process per sample, taskset -c 0,1,2,3,4,5,6,7, rotate order each sample
 cache warm and cold use the same prepare_cache for every reader
-loadavg 0.67 0.27 0.52 1/302 42215
+loadavg 0.09 0.58 0.78 1/311 59427
 governor {"0": "absent", "1": "absent", "2": "absent", "3": "absent", "4": "absent", "5": "absent", "6": "absent", "7": "absent"}
 cpu_mhz 2700.0
 file extxyz-alloy columns ['masses', 'pos', 'species']
@@ -13,112 +13,112 @@ order extxyz-alloy warm ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon o
 order extxyz-alloy warm cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-alloy warm extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-alloy warm chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-alloy readcon warm median 0.062414398 iqr 0.000762240 atoms 1000000 frames 1
-sample 0.063048911
-sample 0.063066864
-sample 0.061522147
-sample 0.062066989
-sample 0.062465994
-sample 0.062362801
-extxyz-alloy ovito warm median 0.163558181 iqr 0.004989361 atoms 1000000 frames 1
-sample 0.170873598
-sample 0.162313364
-sample 0.162826440
-sample 0.168478017
-sample 0.159586171
-sample 0.164289923
-extxyz-alloy ase-extxyz warm median 1.412568065 iqr 0.020679585 atoms 1000000 frames 1
-sample 1.415916372
-sample 1.409219757
-sample 1.423889872
-sample 1.398549297
-sample 1.390971964
-sample 1.428297196
-extxyz-alloy cextxyz warm median 0.109523277 iqr 0.002859511 atoms 1000000 frames 1
-sample 0.109888477
-sample 0.109158076
-sample 0.112602117
-sample 0.108988841
-sample 0.109032903
-sample 0.113645455
-extxyz-alloy extxyz warm median 1.554761747 iqr 0.076974878 atoms 1000000 frames 1
-sample 1.570587972
-sample 1.525518616
-sample 1.538935522
-sample 1.625550213
-sample 1.617600970
-sample 1.517567415
+extxyz-alloy readcon warm median 0.061478894 iqr 0.002202515 atoms 1000000 frames 1
+sample 0.060850797
+sample 0.066061126
+sample 0.061878641
+sample 0.063520986
+sample 0.061079147
+sample 0.060096137
+extxyz-alloy ovito warm median 0.156369308 iqr 0.000487716 atoms 1000000 frames 1
+sample 0.161176012
+sample 0.154347049
+sample 0.156249199
+sample 0.156323497
+sample 0.156415118
+sample 0.156868947
+extxyz-alloy ase-extxyz warm median 1.376826797 iqr 0.002947309 atoms 1000000 frames 1
+sample 1.378229803
+sample 1.371132758
+sample 1.375536042
+sample 1.375160561
+sample 1.378117551
+sample 1.401887365
+extxyz-alloy cextxyz warm median 0.106421222 iqr 0.002284058 atoms 1000000 frames 1
+sample 0.103711607
+sample 0.105464929
+sample 0.105818141
+sample 0.108108286
+sample 0.107024303
+sample 0.111107579
+extxyz-alloy extxyz warm median 1.524841175 iqr 0.073409292 atoms 1000000 frames 1
+sample 1.485197212
+sample 1.576499918
+sample 1.549277576
+sample 1.586224022
+sample 1.494911796
+sample 1.500404774
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
-unscored extxyz-alloy chemfiles warm median 0.367550862 iqr 0.007615594 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.362274896
-sample 0.360032658
-sample 0.365547136
-sample 0.369554589
-sample 0.375600270
-sample 0.371093203
-unscored extxyz-alloy mdanalysis warm median 8.447835360 iqr 0.404753795 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 8.378236221
-sample 8.214506415
-sample 8.855675199
-sample 8.227202453
-sample 8.517434500
-sample 8.720474753
+unscored extxyz-alloy chemfiles warm median 0.336298514 iqr 0.006979252 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.347174289
+sample 0.343837504
+sample 0.336076299
+sample 0.330980842
+sample 0.334679978
+sample 0.336520729
+unscored extxyz-alloy mdanalysis warm median 7.748299448 iqr 0.084562014 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 7.686654709
+sample 7.702520488
+sample 7.768904842
+sample 7.929893425
+sample 7.727694053
+sample 7.801532911
 order extxyz-alloy cold readcon ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis
 order extxyz-alloy cold ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon
 order extxyz-alloy cold ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon ovito
 order extxyz-alloy cold cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-alloy cold extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-alloy cold chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-alloy readcon cold median 0.084640880 iqr 0.008850462 atoms 1000000 frames 1
-sample 0.075670179
-sample 0.084688315
-sample 0.077194872
-sample 0.095716216
-sample 0.084593444
-sample 0.088963864
-extxyz-alloy ovito cold median 0.188934372 iqr 0.016202561 atoms 1000000 frames 1
-sample 0.201278187
-sample 0.179889136
-sample 0.188612828
-sample 0.207731227
-sample 0.175135328
-sample 0.189255917
-extxyz-alloy ase-extxyz cold median 1.494486721 iqr 0.043076007 atoms 1000000 frames 1
-sample 1.499042058
-sample 1.524573063
-sample 1.956984856
-sample 1.462246394
-sample 1.470175279
-sample 1.489931383
-extxyz-alloy cextxyz cold median 0.136496433 iqr 0.017358868 atoms 1000000 frames 1
-sample 0.131205325
-sample 0.155955605
-sample 0.134864123
-sample 0.133898654
-sample 0.156272541
-sample 0.138128744
-extxyz-alloy extxyz cold median 1.609084828 iqr 0.036564484 atoms 1000000 frames 1
-sample 1.585320361
-sample 1.639603445
-sample 1.783524499
-sample 1.616662647
-sample 1.601507009
-sample 1.595902679
+extxyz-alloy readcon cold median 0.082154755 iqr 0.003870176 atoms 1000000 frames 1
+sample 0.078954158
+sample 0.082763913
+sample 0.077918241
+sample 0.084664982
+sample 0.081545596
+sample 0.083708287
+extxyz-alloy ovito cold median 0.174156621 iqr 0.008921865 atoms 1000000 frames 1
+sample 0.181513487
+sample 0.176492540
+sample 0.185519326
+sample 0.169614026
+sample 0.171174946
+sample 0.171820703
+extxyz-alloy ase-extxyz cold median 1.410109153 iqr 0.032529634 atoms 1000000 frames 1
+sample 1.502496157
+sample 1.423154712
+sample 1.397063595
+sample 1.389002136
+sample 1.429670958
+sample 1.394995152
+extxyz-alloy cextxyz cold median 0.129474866 iqr 0.006068144 atoms 1000000 frames 1
+sample 0.130964369
+sample 0.124134995
+sample 0.125729943
+sample 0.158128442
+sample 0.132827799
+sample 0.127985362
+extxyz-alloy extxyz cold median 1.568937552 iqr 0.072199990 atoms 1000000 frames 1
+sample 1.525328335
+sample 1.600530703
+sample 1.600532888
+sample 1.537344402
+sample 1.604288219
+sample 1.514409621
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
-unscored extxyz-alloy chemfiles cold median 0.408849911 iqr 0.039184324 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.388309675
-sample 0.413478165
-sample 0.443117462
-sample 0.467589976
-sample 0.404221658
-sample 0.393957199
-unscored extxyz-alloy mdanalysis cold median 8.828991087 iqr 0.242107630 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 8.871241758
-sample 8.597467423
-sample 8.786740415
-sample 8.575490806
-sample 9.462098903
-sample 8.892110482
+unscored extxyz-alloy chemfiles cold median 0.360765999 iqr 0.018624587 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.393097119
+sample 0.347181209
+sample 0.354070871
+sample 0.362059698
+sample 0.378041188
+sample 0.359472301
+unscored extxyz-alloy mdanalysis cold median 7.735009544 iqr 0.040042565 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 7.754348011
+sample 7.729992591
+sample 7.834623504
+sample 7.740026497
+sample 7.704302560
+sample 7.662426875
 file extxyz-md columns ['masses', 'pos', 'species']
 order extxyz-md warm readcon ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis
 order extxyz-md warm ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon
@@ -126,112 +126,112 @@ order extxyz-md warm ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon ovit
 order extxyz-md warm cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-md warm extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-md warm chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-md readcon warm median 0.062414655 iqr 0.002935801 atoms 96 frames 10000
-sample 0.065394821
-sample 0.062938301
-sample 0.061829517
-sample 0.067661644
-sample 0.061333572
-sample 0.061891009
-extxyz-md ovito warm median 1.485671825 iqr 0.082565488 atoms 96 frames 10000
-sample 1.472633295
-sample 1.611358187
-sample 1.498710354
-sample 1.573540289
-sample 1.472145325
-sample 1.432131294
-extxyz-md ase-extxyz warm median 2.591143713 iqr 0.058135619 atoms 96 frames 10000
-sample 2.575441092
-sample 2.541853570
-sample 2.613348923
-sample 2.606846335
-sample 2.635885157
-sample 2.546303178
-extxyz-md cextxyz warm median 0.534908524 iqr 0.009418278 atoms 96 frames 10000
-sample 0.519468781
-sample 0.538494205
-sample 0.540799024
-sample 0.531322842
-sample 0.571234268
-sample 0.530631775
-extxyz-md extxyz warm median 4.664568444 iqr 0.070052744 atoms 96 frames 10000
-sample 4.675301240
-sample 4.878730996
-sample 4.657222409
-sample 4.671914478
-sample 4.569995922
-sample 4.586794937
+extxyz-md readcon warm median 0.061462307 iqr 0.000587786 atoms 96 frames 10000
+sample 0.063597462
+sample 0.061418277
+sample 0.061506337
+sample 0.061835228
+sample 0.061024255
+sample 0.061080867
+extxyz-md ovito warm median 1.409990107 iqr 0.017351483 atoms 96 frames 10000
+sample 1.411565764
+sample 1.399897588
+sample 1.421982460
+sample 1.442610303
+sample 1.408414449
+sample 1.377834485
+extxyz-md ase-extxyz warm median 2.463490357 iqr 0.034021335 atoms 96 frames 10000
+sample 2.455592496
+sample 2.471388217
+sample 2.471840766
+sample 2.524452264
+sample 2.431744226
+sample 2.430940454
+extxyz-md cextxyz warm median 0.511047808 iqr 0.004026787 atoms 96 frames 10000
+sample 0.510747395
+sample 0.513719176
+sample 0.512997595
+sample 0.511348222
+sample 0.506220872
+sample 0.507828821
+extxyz-md extxyz warm median 4.563173600 iqr 0.067550695 atoms 96 frames 10000
+sample 4.754397715
+sample 4.597562758
+sample 4.520805051
+sample 4.583138429
+sample 4.502098702
+sample 4.543208771
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
-unscored extxyz-md chemfiles warm median 0.648671466 iqr 0.009047669 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.655802979
-sample 0.660377317
-sample 0.647224952
-sample 0.641172404
-sample 0.644703763
-sample 0.650117980
-unscored extxyz-md mdanalysis warm median 0.539809658 iqr 0.004966436 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 0.548410363
-sample 0.533429147
-sample 0.539946507
-sample 0.539672809
-sample 0.532060144
-sample 0.539959829
+unscored extxyz-md chemfiles warm median 0.598997024 iqr 0.012648676 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.607171011
+sample 0.588681646
+sample 0.591058481
+sample 0.604868207
+sample 0.594414261
+sample 0.603579787
+unscored extxyz-md mdanalysis warm median 0.529955781 iqr 0.011103683 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 0.536360803
+sample 0.526020424
+sample 0.537734689
+sample 0.533891137
+sample 0.524179464
+sample 0.523290261
 order extxyz-md cold readcon ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis
 order extxyz-md cold ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon
 order extxyz-md cold ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon ovito
 order extxyz-md cold cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-md cold extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-md cold chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-md readcon cold median 0.078098767 iqr 0.002699578 atoms 96 frames 10000
-sample 0.077996927
-sample 0.077553616
-sample 0.081085160
-sample 0.083071547
-sample 0.078200606
-sample 0.073923612
-extxyz-md ovito cold median 1.430319440 iqr 0.066729186 atoms 96 frames 10000
-sample 1.483404877
-sample 1.443640345
-sample 1.491914407
-sample 1.416998535
-sample 1.403313233
-sample 1.399601501
-extxyz-md ase-extxyz cold median 2.406957763 iqr 0.020148688 atoms 96 frames 10000
-sample 2.721558897
-sample 2.408394179
-sample 2.428876293
-sample 2.405521346
-sample 2.402968986
-sample 2.393353456
-extxyz-md cextxyz cold median 0.527786232 iqr 0.020994354 atoms 96 frames 10000
-sample 0.552754079
-sample 0.529660210
-sample 0.525734207
-sample 0.552477360
-sample 0.524991128
-sample 0.525912254
-extxyz-md extxyz cold median 4.695887776 iqr 0.051720915 atoms 96 frames 10000
-sample 4.710996773
-sample 4.708970417
-sample 4.650757314
-sample 4.644224455
-sample 4.682805135
-sample 4.794347323
+extxyz-md readcon cold median 0.079039966 iqr 0.003775061 atoms 96 frames 10000
+sample 0.078798842
+sample 0.079281089
+sample 0.088977433
+sample 0.076304743
+sample 0.082108173
+sample 0.077235508
+extxyz-md ovito cold median 1.474068927 iqr 0.065266975 atoms 96 frames 10000
+sample 1.523819884
+sample 1.445510896
+sample 1.442059455
+sample 1.460998459
+sample 1.487139395
+sample 1.732326527
+extxyz-md ase-extxyz cold median 2.513329994 iqr 0.017508385 atoms 96 frames 10000
+sample 2.490660839
+sample 2.515785923
+sample 2.516965602
+sample 2.495258375
+sample 2.510874064
+sample 2.529238453
+extxyz-md cextxyz cold median 0.525869300 iqr 0.004793736 atoms 96 frames 10000
+sample 0.525368076
+sample 0.520726433
+sample 0.591862659
+sample 0.522287074
+sample 0.528344573
+sample 0.526370524
+extxyz-md extxyz cold median 4.559507942 iqr 0.031587964 atoms 96 frames 10000
+sample 4.543255382
+sample 4.583777729
+sample 4.981780802
+sample 4.531604693
+sample 4.561900350
+sample 4.557115534
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
-unscored extxyz-md chemfiles cold median 0.666821379 iqr 0.002653659 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.668977524
-sample 0.667589724
-sample 0.666053033
-sample 0.676806410
-sample 0.665951543
-sample 0.656213109
-unscored extxyz-md mdanalysis cold median 0.539270579 iqr 0.002364028 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 0.539342766
-sample 0.539198391
-sample 0.541711829
-sample 0.544734007
-sample 0.538607917
-sample 0.535502988
+unscored extxyz-md chemfiles cold median 0.625412184 iqr 0.012474752 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.636415584
+sample 0.628611824
+sample 0.679266703
+sample 0.621915674
+sample 0.612843408
+sample 0.622212544
+unscored extxyz-md mdanalysis cold median 0.551372171 iqr 0.008503289 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 0.555242561
+sample 0.559660151
+sample 0.544250591
+sample 0.551890794
+sample 0.550853548
+sample 0.539586461
 file extxyz-same columns ['fixed', 'id', 'masses', 'pos', 'species', 'vel']
 order extxyz-same warm readcon ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis
 order extxyz-same warm ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon
@@ -239,109 +239,109 @@ order extxyz-same warm ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon ov
 order extxyz-same warm cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-same warm extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-same warm chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-same readcon warm median 0.116252879 iqr 0.004779800 atoms 1000000 frames 1
-sample 0.114149418
-sample 0.118502442
-sample 0.118775699
-sample 0.113531682
-sample 0.118356340
-sample 0.113259069
-extxyz-same ovito warm median 0.268299320 iqr 0.014366490 atoms 1000000 frames 1
-sample 0.294343930
-sample 0.258803089
-sample 0.270608827
-sample 0.276418737
-sample 0.265989813
-sample 0.254276668
-extxyz-same ase-extxyz warm median 2.007132808 iqr 0.082551371 atoms 1000000 frames 1
-sample 2.022158798
-sample 2.074819034
-sample 1.992106818
-sample 1.963590541
-sample 2.392687493
-sample 1.974767866
-extxyz-same cextxyz warm median 0.192464713 iqr 0.004343243 atoms 1000000 frames 1
-sample 0.187400962
-sample 0.189240989
-sample 0.193410734
-sample 0.194401299
-sample 0.194629942
-sample 0.191518691
-extxyz-same extxyz warm median 2.760562719 iqr 0.050579537 atoms 1000000 frames 1
-sample 2.730248901
-sample 2.799949142
-sample 2.746848097
-sample 2.788545202
-sample 2.774277341
-sample 2.596842266
+extxyz-same readcon warm median 0.115966882 iqr 0.003005023 atoms 1000000 frames 1
+sample 0.115016688
+sample 0.113516741
+sample 0.113730021
+sample 0.118320277
+sample 0.116917076
+sample 0.117103255
+extxyz-same ovito warm median 0.261210382 iqr 0.004457173 atoms 1000000 frames 1
+sample 0.270099112
+sample 0.258336987
+sample 0.261109773
+sample 0.266782517
+sample 0.261310991
+sample 0.260906693
+extxyz-same ase-extxyz warm median 1.984793112 iqr 0.020637771 atoms 1000000 frames 1
+sample 1.988738777
+sample 2.001811046
+sample 1.976924461
+sample 2.003403891
+sample 1.980847446
+sample 1.956768637
+extxyz-same cextxyz warm median 0.185789688 iqr 0.000892426 atoms 1000000 frames 1
+sample 0.185777308
+sample 0.184244254
+sample 0.185802067
+sample 0.185911431
+sample 0.184729783
+sample 0.186951219
+extxyz-same extxyz warm median 2.714234761 iqr 0.054946781 atoms 1000000 frames 1
+sample 2.839404830
+sample 2.685620635
+sample 2.670706824
+sample 2.734022015
+sample 2.745691507
+sample 2.694447507
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}], "ok": true}
-unscored extxyz-same chemfiles warm median 0.662279675 iqr 0.042827549 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.645637327
-sample 0.708819452
-sample 0.695879058
-sample 0.651987173
-sample 0.645182113
-sample 0.672572178
-unscored extxyz-same mdanalysis warm median 5.437053040 iqr 0.103775519 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 5.361077272
-sample 5.547558007
-sample 5.548252970
-sample 5.440213876
-sample 5.433892204
-sample 5.411297872
+unscored extxyz-same chemfiles warm median 0.600534608 iqr 0.006793721 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.636979849
+sample 0.600247551
+sample 0.599166845
+sample 0.600821665
+sample 0.608033769
+sample 0.592372971
+unscored extxyz-same mdanalysis warm median 5.373837288 iqr 0.048287887 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 5.348438311
+sample 5.298497995
+sample 5.386266272
+sample 5.404536172
+sample 5.411228228
+sample 5.361408305
 order extxyz-same cold readcon ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis
 order extxyz-same cold ovito ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon
 order extxyz-same cold ase-extxyz cextxyz extxyz chemfiles mdanalysis readcon ovito
 order extxyz-same cold cextxyz extxyz chemfiles mdanalysis readcon ovito ase-extxyz
 order extxyz-same cold extxyz chemfiles mdanalysis readcon ovito ase-extxyz cextxyz
 order extxyz-same cold chemfiles mdanalysis readcon ovito ase-extxyz cextxyz extxyz
-extxyz-same readcon cold median 0.136192237 iqr 0.005459134 atoms 1000000 frames 1
-sample 0.139935984
-sample 0.135474340
-sample 0.136910134
-sample 0.139787950
-sample 0.132987702
-sample 0.129667326
-extxyz-same ovito cold median 0.284274592 iqr 0.006051272 atoms 1000000 frames 1
-sample 0.286745286
-sample 0.281679074
-sample 0.281803898
-sample 0.295305884
-sample 0.288100307
-sample 0.269224396
-extxyz-same ase-extxyz cold median 2.059223921 iqr 0.024826436 atoms 1000000 frames 1
-sample 2.099526405
-sample 2.070010190
-sample 2.040512449
-sample 2.053817661
-sample 2.064630180
-sample 2.034090472
-extxyz-same cextxyz cold median 0.215448398 iqr 0.003529677 atoms 1000000 frames 1
-sample 0.216979336
-sample 0.217318127
-sample 0.225106149
-sample 0.213632516
-sample 0.213917461
-sample 0.210537699
-extxyz-same extxyz cold median 2.686386197 iqr 0.104484857 atoms 1000000 frames 1
-sample 2.660970491
-sample 2.711801903
-sample 2.773452821
-sample 2.605675065
-sample 2.651083482
-sample 2.856955567
+extxyz-same readcon cold median 0.147422470 iqr 0.011946036 atoms 1000000 frames 1
+sample 0.145297532
+sample 0.136548919
+sample 0.155515033
+sample 0.156375156
+sample 0.149547408
+sample 0.141003610
+extxyz-same ovito cold median 0.327093203 iqr 0.060628395 atoms 1000000 frames 1
+sample 0.283237859
+sample 0.277205183
+sample 0.356636248
+sample 0.338252409
+sample 0.315933998
+sample 0.357558315
+extxyz-same ase-extxyz cold median 2.069982335 iqr 0.065072706 atoms 1000000 frames 1
+sample 2.060221265
+sample 2.039406027
+sample 2.061948615
+sample 2.141629060
+sample 2.078016054
+sample 2.148973739
+extxyz-same cextxyz cold median 0.228497501 iqr 0.028758249 atoms 1000000 frames 1
+sample 0.204779889
+sample 0.215940667
+sample 0.292239303
+sample 0.241054335
+sample 0.212569868
+sample 0.242542977
+extxyz-same extxyz cold median 2.901135764 iqr 0.129355623 atoms 1000000 frames 1
+sample 2.888503959
+sample 2.913767570
+sample 2.741350476
+sample 2.939024142
+sample 2.987884015
+sample 2.774971182
 compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}], "ok": true}
-unscored extxyz-same chemfiles cold median 0.703267802 iqr 0.013382603 reason XYZ reader returns element masses and no velocities or constraints
-sample 0.690219397
-sample 0.693656398
-sample 0.709852076
-sample 0.705739492
-sample 0.700796113
-sample 0.713467320
-unscored extxyz-same mdanalysis cold median 5.628964434 iqr 0.054426739 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
-sample 5.622880868
-sample 5.599754523
-sample 5.535198317
-sample 6.260849809
-sample 5.668267798
-sample 5.635047999
+unscored extxyz-same chemfiles cold median 0.629422113 iqr 0.007301171 reason XYZ reader returns element masses and no velocities or constraints
+sample 0.630671883
+sample 0.635959466
+sample 0.608105325
+sample 0.627057752
+sample 0.628172343
+sample 0.651510422
+unscored extxyz-same mdanalysis cold median 5.518111549 iqr 0.129579468 reason XYZ reader keeps only x,y,z, guesses masses, and stores no cell
+sample 5.468333050
+sample 5.493523121
+sample 5.651196899
+sample 5.628332722
+sample 5.542699978
+sample 5.471952383

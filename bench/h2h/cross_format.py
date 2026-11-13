@@ -5,9 +5,12 @@ readcon reads and writes CON (plain, gzip, zstd). ASE, chemfiles,
 MDAnalysis, and OVITO, where they import, read and write the same atoms,
 cell, and frames in their own format: extxyz, XYZ, PDB, DCD, XTC, and
 Amber NetCDF, plus a compressed variant when that library supports it.
-Chemfiles has no CON format. The readcon-chemfiles row is CON produced
-by ``read_chemfiles`` on a build that links libchemfiles; it is omitted
-when ``has_chemfiles_support()`` is false, not filled with another reader.
+Chemfiles reads CON by taking the frames readcon parsed and copying
+positions and the cell out of a chemfiles Frame. That row exists only
+when ``has_chemfiles_support()`` is true. Compressed XYZ rows exist when
+this chemfiles build opens ``.xyz.gz``, ``.xyz.xz`` and ``.xyz.bz2``.
+TRR is chemfiles' binary trajectory. PDB above 99,999 atoms stays in the
+table with that limit in the Drops column.
 
 Each arm is converted once, outside the clock. Samples are fresh processes
 pinned to the same CPU set, one warmup, six serial samples, rotated order.
@@ -19,12 +22,12 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
-
 from sample_protocol import (
     core_list,
     host_snapshot,
@@ -54,6 +57,7 @@ PRECISION = {
     "dcd": 1e-4,
     "xtc": 1e-2,
     "ncdf": 1e-4,
+    "trr": 1e-3,
 }
 FIELD_TOL = 1e-4
 
@@ -148,10 +152,32 @@ def _max_abs(left, right) -> float:
     return float(np.max(np.abs(a - b)))
 
 
-def _consume(positions: np.ndarray, cell: np.ndarray) -> None:
-    # The sum is part of the timed result, same shape for every arm.
-    np.sum(positions, dtype=np.float64)
-    np.sum(cell, dtype=np.float64)
+def _materialize(positions, cell) -> tuple[np.ndarray, np.ndarray, float]:
+    """Copy positions and the cell into owned numpy arrays and read every value.
+
+    A lazy reader that never filled its buffer fails this: the sum is
+    non-finite or the shape is empty. The checksum is what the campaign
+    checks against the conversion done outside the clock.
+    """
+    pos = np.array(positions, dtype=np.float64, copy=True, order="C")
+    cel = np.array(cell, dtype=np.float64, copy=True, order="C")
+    if pos.size == 0 or cel.size == 0:
+        raise RuntimeError("reader returned an empty coordinate or cell array")
+    checksum = float(np.sum(pos, dtype=np.float64) + np.sum(cel, dtype=np.float64))
+    if not np.isfinite(checksum):
+        raise RuntimeError(f"materialised coordinates are not finite ({checksum})")
+    return pos, cel, checksum
+
+
+def drop_page_cache() -> None:
+    subprocess.run(["sync"], check=False)
+    subprocess.run(
+        ["sudo", "tee", "/proc/sys/vm/drop_caches"],
+        input="3\n",
+        text=True,
+        check=False,
+        capture_output=True,
+    )
 
 
 def _columns(spec: dict) -> dict:
@@ -216,16 +242,19 @@ def write_xyz_for_readcon(path: Path, spec: dict) -> None:
     path.write_text("\n".join(lines) + "\n")
 
 
-def write_chemfiles_xyz(path: Path, spec: dict) -> None:
+def write_chemfiles(path: Path, spec: dict, fmt: str) -> None:
     import chemfiles
 
     path.unlink(missing_ok=True)
     n_atoms = spec["n_atoms"]
-    with chemfiles.Trajectory(os.fspath(path), "w", "XYZ") as traj:
+    with chemfiles.Trajectory(os.fspath(path), "w", fmt) as traj:
         for frame_index in range(spec["n_frames"]):
             frame = chemfiles.Frame()
             frame.resize(n_atoms)
             frame.positions[:] = spec["positions"][frame_index]
+            if fmt == "TRR":
+                frame.add_velocities()
+                frame.velocities[:] = spec["velocities"][frame_index]
             lengths = [float(value) for value in spec["cell"][frame_index, :3]]
             frame.cell = chemfiles.UnitCell(lengths)
             for atom_index, name in enumerate(spec["symbols"]):
@@ -233,12 +262,104 @@ def write_chemfiles_xyz(path: Path, spec: dict) -> None:
             traj.write(frame)
 
 
+def write_chemfiles_xyz(path: Path, spec: dict) -> None:
+    write_chemfiles(path, spec, "XYZ")
+
+
+def write_chemfiles_compressed(path: Path, spec: dict, codec: str) -> None:
+    """Chemfiles writes the compressed file. The extension selects gzip, xz, or bzip2."""
+    del codec
+    write_chemfiles(path, spec, "")
+
+
+_CODECS: dict | None = None
+
+
+def chemfiles_codecs() -> dict:
+    """Which compressed XYZ files, and TRR, this chemfiles build can open."""
+    global _CODECS
+    if _CODECS is not None:
+        return _CODECS
+    import bz2
+    import gzip
+    import lzma
+    import tempfile
+
+    import chemfiles
+
+    text = "1\nprobe\nCu 0.0 0.0 0.0\n"
+    root = Path(tempfile.mkdtemp(prefix="h2h5-cf-"))
+    found = {"gz": False, "bz2": False, "xz": False, "trr": False}
+    blobs = {
+        "gz": (gzip.compress(text.encode()), "t.xyz.gz"),
+        "bz2": (bz2.compress(text.encode()), "t.xyz.bz2"),
+        "xz": (lzma.compress(text.encode()), "t.xyz.xz"),
+    }
+    # Empty format lets chemfiles read the compression from the extension
+    # (XYZ/GZ, XYZ/BZ2, XYZ/XZ). Passing "XYZ" skips that.
+    for name, (blob, filename) in blobs.items():
+        path = root / filename
+        path.write_bytes(blob)
+        try:
+            with chemfiles.Trajectory(os.fspath(path), "r", "") as traj:
+                frame = traj.read()
+                found[name] = len(frame.positions) == 1
+        except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
+            found[name] = False
+    try:
+        spec = make_spec(1, 1)
+        trr = root / "t.trr"
+        write_chemfiles(trr, spec, "TRR")
+        with chemfiles.Trajectory(os.fspath(trr), "r", "TRR") as traj:
+            frame = traj.read()
+            found["trr"] = len(frame.positions) == 1
+    except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
+        found["trr"] = False
+    _CODECS = found
+    return found
+
+
+def read_chemfiles_con(path: str) -> dict:
+    """Chemfiles frame filled from readcon's CON parse, then copied to numpy.
+
+    The CON grammar is readcon's. Chemfiles does not have a CON format of
+    its own. ``has_chemfiles_support()`` must be true: this is the
+    readcon-chemfiles build, not a second reader pretending to be it.
+    """
+    import chemfiles
+    import readcon
+
+    if not readcon.has_chemfiles_support():
+        raise RuntimeError("readcon was built without the chemfiles feature")
+    parsed = readcon.read_con(path, n_threads=1)
+    positions = []
+    cells = []
+    for frame in parsed:
+        pos = np.asarray(frame.xyz, dtype=np.float64)
+        cell = np.asarray(frame.cell, dtype=np.float64).reshape(-1)
+        chem = chemfiles.Frame()
+        chem.resize(int(pos.shape[0]))
+        chem.positions[:] = pos
+        chem.cell = chemfiles.UnitCell([float(value) for value in cell[:3]])
+        positions.append(np.array(chem.positions, dtype=np.float64, copy=True))
+        lengths = np.asarray(list(chem.cell.lengths), dtype=np.float64)
+        angles = np.asarray(list(chem.cell.angles), dtype=np.float64)
+        cells.append(np.concatenate([lengths, angles]))
+    return {
+        "positions": np.stack(positions),
+        "cell": np.stack(cells),
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
 def read_chemfiles_xyz(path: str) -> dict:
     import chemfiles
 
     positions = []
     cells = []
-    with chemfiles.Trajectory(path, "r", "XYZ") as traj:
+    with chemfiles.Trajectory(path, "r", "") as traj:
         for _step in range(traj.nsteps):
             frame = traj.read()
             positions.append(np.array(frame.positions, dtype=np.float64, copy=True))
@@ -460,7 +581,7 @@ def read_ovito(path: str) -> dict:
 
 
 def read_chemfiles_as_con(path: str) -> dict:
-    """CON frames obtained by reading XYZ through the chemfiles-linked build."""
+    """CON frames from the Lattice XYZ, through the chemfiles-linked build."""
     import readcon
 
     frames = readcon.read_chemfiles(path, format="XYZ")
@@ -528,12 +649,23 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
         },
     ]
     notes = [
-        "chemfiles has no CON format; CON is not read by the chemfiles library.",
+        (
+            "chemfiles has no native CON format; the chemfiles-con row copies "
+            "positions and the cell out of a chemfiles Frame filled from readcon."
+        ),
     ]
     try:
         import readcon
 
         if readcon.has_chemfiles_support():
+            arms.append(
+                {
+                    "id": "chemfiles-con",
+                    "tool": "chemfiles",
+                    "format": "con",
+                    "precision": PRECISION["con"],
+                }
+            )
             arms.append(
                 {
                     "id": "readcon-chemfiles",
@@ -544,7 +676,8 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             )
         else:
             notes.append(
-                "readcon-chemfiles is not built; has_chemfiles_support() is false."
+                "chemfiles-con and readcon-chemfiles omitted; "
+                "has_chemfiles_support() is false."
             )
     except ImportError:
         notes.append("readcon is not installed.")
@@ -559,10 +692,39 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 "precision": PRECISION["xyz"],
             }
         )
+        codecs = chemfiles_codecs()
+        try:
+            from chemfiles.external import EXTERNAL_CHEMFILES
+        except ImportError:
+            EXTERNAL_CHEMFILES = "bundled"
         notes.append(
-            "this chemfiles build reads XYZ as text and does not decompress "
-            ".gz, .bz2, .xz, or .zst."
+            f"chemfiles compression library {EXTERNAL_CHEMFILES} "
+            f"opens {json.dumps(codecs, sort_keys=True)}"
         )
+        for codec, suffix in (("gz", "xyz.gz"), ("xz", "xyz.xz"), ("bz2", "xyz.bz2")):
+            if codecs.get(codec):
+                arms.append(
+                    {
+                        "id": f"chemfiles-xyz-{codec}",
+                        "tool": "chemfiles",
+                        "format": suffix,
+                        "precision": PRECISION["xyz"],
+                        "codec": codec,
+                    }
+                )
+            else:
+                notes.append(f"chemfiles did not open .{suffix}; that row is omitted.")
+        if codecs.get("trr"):
+            arms.append(
+                {
+                    "id": "chemfiles-trr",
+                    "tool": "chemfiles",
+                    "format": "trr",
+                    "precision": PRECISION["trr"],
+                }
+            )
+        else:
+            notes.append("chemfiles TRR write/read failed; binary row omitted.")
     except ImportError:
         notes.append("chemfiles is not installed.")
     try:
@@ -589,19 +751,18 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
     try:
         import MDAnalysis  # noqa: F401
 
-        if n_atoms <= PDB_MAX_ATOMS:
-            arms.append(
-                {
-                    "id": "mda-pdb",
-                    "tool": "mdanalysis",
-                    "format": "pdb",
-                    "precision": PRECISION["pdb"],
-                }
+        pdb = {
+            "id": "mda-pdb",
+            "tool": "mdanalysis",
+            "format": "pdb",
+            "precision": PRECISION["pdb"],
+        }
+        if n_atoms > PDB_MAX_ATOMS:
+            pdb["unsupported"] = True
+            pdb["drops"] = (
+                "unsupported: PDB atom serial is five digits (max 99999 atoms)"
             )
-        else:
-            notes.append(
-                f"PDB is skipped at {n_atoms} atoms; the atom serial is five digits."
-            )
+        arms.append(pdb)
         arms.append(
             {
                 "id": "mda-dcd",
@@ -659,9 +820,30 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         path = directory / "readcon.con.zst"
         write_readcon(path, spec, "zstd")
         return path
+    if arm_id == "chemfiles-con":
+        path = directory / "readcon.con"
+        if not path.is_file():
+            write_readcon(path, spec, None)
+        return path
     if arm_id == "chemfiles-xyz":
         path = directory / "chemfiles.xyz"
         write_chemfiles_xyz(path, spec)
+        return path
+    if arm_id == "chemfiles-xyz-gz":
+        path = directory / "chemfiles.xyz.gz"
+        write_chemfiles_compressed(path, spec, "gz")
+        return path
+    if arm_id == "chemfiles-xyz-xz":
+        path = directory / "chemfiles.xyz.xz"
+        write_chemfiles_compressed(path, spec, "xz")
+        return path
+    if arm_id == "chemfiles-xyz-bz2":
+        path = directory / "chemfiles.xyz.bz2"
+        write_chemfiles_compressed(path, spec, "bz2")
+        return path
+    if arm_id == "chemfiles-trr":
+        path = directory / "chemfiles.trr"
+        write_chemfiles(path, spec, "TRR")
         return path
     if arm_id == "readcon-chemfiles":
         path = directory / "readcon-chemfiles.xyz"
@@ -699,12 +881,31 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
 
 
 def read_arm(arm_id: str, path: str) -> dict:
+    got = _dispatch_read(arm_id, path)
+    positions, cell, checksum = _materialize(got["positions"], got["cell"])
+    got = dict(got)
+    got["positions"] = positions
+    got["cell"] = cell
+    got["checksum"] = checksum
+    return got
+
+
+def _dispatch_read(arm_id: str, path: str) -> dict:
     if arm_id.startswith("readcon-con"):
         return read_readcon(path)
+    if arm_id == "chemfiles-con":
+        return read_chemfiles_con(path)
     if arm_id == "readcon-chemfiles":
         return read_chemfiles_as_con(path)
-    if arm_id == "chemfiles-xyz":
+    if arm_id in (
+        "chemfiles-xyz",
+        "chemfiles-xyz-gz",
+        "chemfiles-xyz-xz",
+        "chemfiles-xyz-bz2",
+    ):
         return read_chemfiles_xyz(path)
+    if arm_id == "chemfiles-trr":
+        return _read_chemfiles_format(path, "TRR")
     if arm_id.startswith("ase-"):
         return read_ase(path)
     if arm_id == "mda-pdb":
@@ -784,16 +985,47 @@ def roundtrip_report(
     return rows, notes
 
 
-def _timed_read(arm_id: str, path: str) -> None:
-    got = read_arm(arm_id, path)
-    _consume(got["positions"], got["cell"])
+def _read_chemfiles_format(path: str, fmt: str) -> dict:
+    import chemfiles
+
+    positions = []
+    cells = []
+    with chemfiles.Trajectory(path, "r", fmt) as traj:
+        for _step in range(traj.nsteps):
+            frame = traj.read()
+            positions.append(np.array(frame.positions, dtype=np.float64, copy=True))
+            lengths = np.asarray(list(frame.cell.lengths), dtype=np.float64)
+            angles = np.asarray(list(frame.cell.angles), dtype=np.float64)
+            cells.append(np.concatenate([lengths, angles]))
+    return {
+        "positions": np.stack(positions),
+        "cell": np.stack(cells),
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
+def _timed_read(arm_id: str, path: str) -> float:
+    return float(read_arm(arm_id, path)["checksum"])
 
 
 def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
     if arm_id == "readcon-con":
         write_readcon(dest, spec, None)
+    elif arm_id == "chemfiles-con":
+        project_spec_into_chemfiles(spec)
+        dest.write_bytes(b"projected\n")
     elif arm_id == "chemfiles-xyz":
         write_chemfiles_xyz(dest, spec)
+    elif arm_id == "chemfiles-xyz-gz":
+        write_chemfiles_compressed(dest, spec, "gz")
+    elif arm_id == "chemfiles-xyz-xz":
+        write_chemfiles_compressed(dest, spec, "xz")
+    elif arm_id == "chemfiles-xyz-bz2":
+        write_chemfiles_compressed(dest, spec, "bz2")
+    elif arm_id == "chemfiles-trr":
+        write_chemfiles(dest, spec, "TRR")
     elif arm_id in ("ase-extxyz", "ase-extxyz-gz"):
         write_ase(dest, spec)
     elif arm_id in ("mda-pdb", "mda-dcd", "mda-xtc", "mda-ncdf"):
@@ -804,6 +1036,27 @@ def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
         raise SystemExit(arm_id)
 
 
+def project_spec_into_chemfiles(spec: dict) -> None:
+    """Put already-parsed coordinates into a chemfiles Frame and copy them out."""
+    import chemfiles
+
+    for frame_index in range(spec["n_frames"]):
+        pos = np.asarray(spec["positions"][frame_index], dtype=np.float64)
+        chem = chemfiles.Frame()
+        chem.resize(int(pos.shape[0]))
+        chem.positions[:] = pos
+        lengths = [float(value) for value in spec["cell"][frame_index, :3]]
+        chem.cell = chemfiles.UnitCell(lengths)
+        copied = np.array(chem.positions, dtype=np.float64, copy=True)
+        cell_out = np.asarray(list(chem.cell.lengths), dtype=np.float64)
+        if copied.shape != pos.shape or not np.isfinite(np.sum(copied)):
+            raise RuntimeError("chemfiles did not hold the CON positions")
+        if abs(float(np.sum(copied) - np.sum(pos))) > 1e-4:
+            raise RuntimeError("chemfiles CON projection changed positions")
+        if not np.isfinite(np.sum(cell_out)):
+            raise RuntimeError("chemfiles did not hold the CON cell")
+
+
 def worker_main() -> None:
     pin_cores()
     serial_threads()
@@ -811,10 +1064,23 @@ def worker_main() -> None:
     if job["op"] == "read":
         path = job["path"]
         arm = job["arm"]
+        cache = job.get("cache", "warm")
 
         def once(path=path, arm=arm):
-            _timed_read(arm, path)
+            return _timed_read(arm, path)
 
+        # Warm: one byte read before the clock, then the parser warmup.
+        # Cold: warmup first, then drop the page cache, then the timed read.
+        if cache != "cold":
+            with open(path, "rb") as handle:
+                handle.read()
+        once()
+        if cache == "cold":
+            drop_page_cache()
+        started = time.perf_counter()
+        checksum = once()
+        result_line(time.perf_counter() - started, checksum=checksum)
+        return
     else:
         spec = load_spec(job["spec"])
         dest = Path(job["dest"])
@@ -860,6 +1126,7 @@ def worker_main() -> None:
 def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> dict:
     found = {arm["id"]: [] for arm in arms}
     rss = {arm["id"]: [] for arm in arms}
+    checksums = {arm["id"]: [] for arm in arms}
     script = Path(__file__).resolve()
     for index in range(repeats):
         order = rotate(arms, index)
@@ -869,8 +1136,10 @@ def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> d
             result = spawn_worker(script, arm["job"])
             found[arm["id"]].append(float(result["wall_s"]))
             rss[arm["id"]].append(int(result.get("rss_bytes") or 0))
+            if "checksum" in result:
+                checksums[arm["id"]].append(float(result["checksum"]))
             print(f"    {arm['id']} {result['wall_s']:.4f}", flush=True)
-    return {"samples": found, "rss": rss}
+    return {"samples": found, "rss": rss, "checksums": checksums}
 
 
 def type7(values: list[float]) -> tuple[float, float]:
@@ -892,7 +1161,8 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
         f"loadavg {host['loadavg']}",
         f"governor {json.dumps(host['governor'], sort_keys=True)}",
         f"cpu_mhz {host['cpu_mhz']}",
-        "chemfiles has no CON format; CON is not read by the chemfiles library.",
+        "warm reads the file once before the clock; cold drops the page cache after warmup",
+        "every timed read copies positions and the cell into numpy and checks the sum",
     ]
     for label, n_atoms, n_frames in structures:
         directory = WORK / label
@@ -907,6 +1177,32 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 lines.append(f"note {note}")
         usable = []
         for arm in arms:
+            if arm.get("unsupported"):
+                rows.append(
+                    {
+                        "structure": label,
+                        "atoms": n_atoms,
+                        "frames": n_frames,
+                        "tool": arm["tool"],
+                        "format": arm["format"],
+                        "arm": arm["id"],
+                        "op": "read",
+                        "cache": "unsupported",
+                        "median_s": None,
+                        "iqr_s": None,
+                        "samples_s": [],
+                        "rss_bytes": None,
+                        "file_bytes": None,
+                        "loses": arm["drops"],
+                        "position_error": None,
+                        "cell_error": None,
+                        "precision": arm["precision"],
+                        "checksum_ok": None,
+                        "n": 0,
+                    }
+                )
+                lines.append(f"unsupported {label} {arm['id']} {arm['drops']}")
+                continue
             if arm["id"] == "readcon-con-zst" and not _try_zstd(spec, directory):
                 note = "readcon-con-zst skipped; this build has no zstd feature."
                 if note not in notes:
@@ -937,20 +1233,10 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
             arm["path"] = path
             arm["file_bytes"] = path.stat().st_size
             arm["audit"] = checked
+            arm["checksum"] = float(got["checksum"])
             usable.append(arm)
-        read_jobs = []
         write_jobs = []
         for arm in usable:
-            read_jobs.append(
-                {
-                    "id": arm["id"],
-                    "job": {
-                        "op": "read",
-                        "arm": arm["id"],
-                        "path": os.fspath(arm["path"]),
-                    },
-                }
-            )
             if arm["id"] == "readcon-chemfiles":
                 dest = directory / "timed" / "readcon-chemfiles.con"
             else:
@@ -965,19 +1251,51 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                         "spec": os.fspath(spec_path),
                         "dest": os.fspath(dest),
                         "plain": os.fspath(directory / "readcon.con"),
-                        "xyz": os.fspath(directory / "chemfiles.xyz"),
+                        "xyz": os.fspath(directory / "readcon-chemfiles.xyz"),
                     },
                 }
             )
-        print(f"cross {label} read", flush=True)
-        read_timed = _interleave(read_jobs, repeats, lines, f"read {label}")
+        timed = {}
+        for cache in ("warm", "cold"):
+            read_jobs = [
+                {
+                    "id": arm["id"],
+                    "job": {
+                        "op": "read",
+                        "arm": arm["id"],
+                        "path": os.fspath(arm["path"]),
+                        "cache": cache,
+                    },
+                }
+                for arm in usable
+            ]
+            print(f"cross {label} read {cache}", flush=True)
+            timed[cache] = _interleave(
+                read_jobs, repeats, lines, f"read-{cache} {label}"
+            )
         print(f"cross {label} write", flush=True)
         write_timed = _interleave(write_jobs, repeats, lines, f"write {label}")
         for arm in usable:
-            for op, timed in (("read", read_timed), ("write", write_timed)):
-                samples = timed["samples"][arm["id"]]
+            for cache in ("warm", "cold"):
+                samples = timed[cache]["samples"][arm["id"]]
                 median, iqr = type7(samples)
-                rss_values = timed["rss"][arm["id"]]
+                rss_values = timed[cache]["rss"][arm["id"]]
+                checks = timed[cache]["checksums"][arm["id"]]
+                expected = arm["checksum"]
+                scale = max(1.0, abs(expected))
+                checksum_ok = bool(checks) and all(
+                    abs(value - expected) / scale < 1e-6 for value in checks
+                )
+                lines.append(
+                    f"checksum {cache} {label} {arm['id']} "
+                    f"expected {expected:.6g} "
+                    f"got {' '.join(f'{value:.6g}' for value in checks)} "
+                    f"ok {checksum_ok}"
+                )
+                if not checksum_ok:
+                    note = f"{label} {arm['id']} {cache} checksum did not match"
+                    notes.append(note)
+                    lines.append(f"note {note}")
                 row = {
                     "structure": label,
                     "atoms": n_atoms,
@@ -985,7 +1303,8 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                     "tool": arm["tool"],
                     "format": arm["format"],
                     "arm": arm["id"],
-                    "op": op,
+                    "op": "read",
+                    "cache": cache,
                     "median_s": median,
                     "iqr_s": iqr,
                     "samples_s": samples,
@@ -995,16 +1314,52 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                     "position_error": arm["audit"]["position_error"],
                     "cell_error": arm["audit"]["cell_error"],
                     "precision": arm["precision"],
+                    "checksum_ok": checksum_ok,
+                    "checksum": expected,
+                    "n": len(samples),
                 }
                 rows.append(row)
                 lines.append(
-                    f"{op} {label} {arm['id']} {median:.6f} {iqr:.6f} "
+                    f"read {cache} {label} {arm['id']} {median:.6f} {iqr:.6f} "
                     f"rss {row['rss_bytes']} bytes {row['file_bytes']} "
                     f"loses {row['loses']}"
                 )
                 for sample in samples:
                     lines.append(f"sample {sample:.9f}")
-                print(f"  {op} {arm['id']} {median:.4f}", flush=True)
+                print(f"  read {cache} {arm['id']} {median:.4f}", flush=True)
+            samples = write_timed["samples"][arm["id"]]
+            median, iqr = type7(samples)
+            rss_values = write_timed["rss"][arm["id"]]
+            row = {
+                "structure": label,
+                "atoms": n_atoms,
+                "frames": n_frames,
+                "tool": arm["tool"],
+                "format": arm["format"],
+                "arm": arm["id"],
+                "op": "write",
+                "cache": "create",
+                "median_s": median,
+                "iqr_s": iqr,
+                "samples_s": samples,
+                "rss_bytes": int(np.median(rss_values)),
+                "file_bytes": arm["file_bytes"],
+                "loses": arm["audit"]["loses"],
+                "position_error": arm["audit"]["position_error"],
+                "cell_error": arm["audit"]["cell_error"],
+                "precision": arm["precision"],
+                "checksum_ok": None,
+                "n": len(samples),
+            }
+            rows.append(row)
+            lines.append(
+                f"write {label} {arm['id']} {median:.6f} {iqr:.6f} "
+                f"rss {row['rss_bytes']} bytes {row['file_bytes']} "
+                f"loses {row['loses']}"
+            )
+            for sample in samples:
+                lines.append(f"sample {sample:.9f}")
+            print(f"  write {arm['id']} {median:.4f}", flush=True)
     payload = {
         "host": host,
         "warmup": 1,
@@ -1014,32 +1369,63 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
         "process": "fresh subprocess per sample",
         "interleave": "rotate-per-sample",
         "affinity": f"taskset -c {core_list()}",
+        "warm": "file read once before the clock",
+        "cold": "drop_caches after warmup, before the timed read",
         "notes": notes,
         "rows": rows,
     }
     (out / "cross-format.json").write_text(json.dumps(payload, indent=2) + "\n")
     (out / "cross-format.log").write_text("\n".join(lines) + "\n")
+    # One row per timed operation. median_s for a read is the warm run.
+    # cold_* is the labelled cold column. n is how many samples that median used.
     header = (
-        "structure\ttool\tformat\top\tmedian_s\tiqr_s\trss_bytes\t"
-        "file_bytes\tloses\tposition_error\tcell_error\tprecision"
+        "structure\ttool\tformat\top\tmedian_s\tiqr_s\tn\t"
+        "rss_bytes\tfile_bytes\tloses\tposition_error\tcell_error\tprecision\t"
+        "cold_median_s\tcold_iqr_s\tcold_n\tchecksum_ok"
     )
     table = [header]
+    grouped: dict[tuple, dict] = {}
     for row in rows:
+        key = (row["structure"], row["tool"], row["format"], row["arm"], row["op"])
+        grouped.setdefault(key, {})[row.get("cache")] = row
+
+    def cell(part, field):
+        if part is None or part.get(field) is None:
+            return ""
+        value = part[field]
+        if isinstance(value, float):
+            return f"{value:.6g}"
+        return str(value)
+
+    for key, parts in grouped.items():
+        if key[4] == "write":
+            part = parts.get("create")
+            cold = None
+        else:
+            part = parts.get("warm") or parts.get("unsupported")
+            cold = parts.get("cold")
+        if part is None:
+            continue
         table.append(
             "\t".join(
                 [
-                    row["structure"],
-                    row["tool"],
-                    row["format"],
-                    row["op"],
-                    f"{row['median_s']:.6g}",
-                    f"{row['iqr_s']:.6g}",
-                    str(row["rss_bytes"]),
-                    str(row["file_bytes"]),
-                    row["loses"],
-                    f"{row['position_error']:.3g}",
-                    f"{row['cell_error']:.3g}",
-                    f"{row['precision']:.0e}",
+                    key[0],
+                    key[1],
+                    key[2],
+                    key[4],
+                    cell(part, "median_s"),
+                    cell(part, "iqr_s"),
+                    cell(part, "n"),
+                    cell(part, "rss_bytes"),
+                    cell(part, "file_bytes"),
+                    str(part["loses"]),
+                    cell(part, "position_error"),
+                    cell(part, "cell_error"),
+                    cell(part, "precision"),
+                    cell(cold, "median_s"),
+                    cell(cold, "iqr_s"),
+                    cell(cold, "n"),
+                    cell(part, "checksum_ok"),
                 ]
             )
         )
