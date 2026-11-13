@@ -2329,6 +2329,13 @@ fn commit_temporary(
     }
 }
 
+/// Write `frames` to `path`, replacing that path only after the bytes are complete.
+///
+/// `workers` below 2 uses the serial writer. `workers >= 2` with two or
+/// more frames formats groups in parallel. One frame of at least 4096 atoms
+/// formats its coordinate lines on those workers. `precision` is the decimal
+/// count, or the writer default when `None`. `canonical` selects the
+/// canonical header. `bind` writes each frame through [`ConFrameWriter::write_frame_bound`].
 pub fn write_frame_refs_to_path(
     path: &std::path::Path,
     frames: &[&ConFrame],

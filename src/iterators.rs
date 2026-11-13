@@ -1404,6 +1404,11 @@ fn take_complete_frames(
 /// `frame * n_atoms * 3`. The returned buffer is the only retained
 /// coordinate storage. A file whose frames do not share one atom count
 /// is rejected, because the buffer is rectangular.
+/// Rectangular coordinates for every frame of one file.
+///
+/// `values` is row-major `x, y, z`, index `frame * n_atoms * 3 + atom * 3`.
+/// That `Vec` is the only coordinate allocation. Python `read_positions`
+/// moves it into the NumPy array and does not copy the doubles again.
 pub struct PositionBlock {
     pub n_frames: usize,
     pub n_atoms: usize,
@@ -1415,7 +1420,23 @@ pub struct PositionBlock {
 /// `num_threads` of `None`, `Some(0)`, and `Some(1)` stay on the calling
 /// thread. `Some(n)` with `n >= 2` uses that many workers when `parallel`
 /// is enabled. The buffer is rectangular: frames that do not share one
-/// atom count are an error. Python `read_positions` returns this buffer.
+/// atom count are an error. The returned [`PositionBlock`] owns the parse
+/// buffer. Python `read_positions` moves `values` into NumPy.
+///
+/// # Examples
+///
+/// ```
+/// # use std::path::Path;
+/// let block = readcon_core::iterators::read_positions_with_threads(
+///     Path::new("resources/test/tiny_cuh2.con"),
+///     None,
+/// )
+/// .unwrap();
+/// assert_eq!(
+///     (block.n_frames, block.n_atoms, block.values.len()),
+///     (1, 4, 12)
+/// );
+/// ```
 pub fn read_positions_with_threads(
     path: &Path,
     num_threads: Option<usize>,

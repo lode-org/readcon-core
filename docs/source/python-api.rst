@@ -42,7 +42,10 @@ remains the path that returns frames, metadata, and optional sections.
    coords = readcon.read_coords(path)
 
 ``read_positions`` returns one ``float64`` array of shape
-``(frames, atoms, 3)``. ``n_threads`` is ``None``, ``0``, or ``1`` for the
+``(frames, atoms, 3)``. The parser allocates that buffer once. The
+returned array views it: ``base`` is the buffer and ``OWNDATA`` is false,
+so the doubles are not copied again on the way into NumPy.
+``n_threads`` is ``None``, ``0``, or ``1`` for the
 calling thread, and ``n >= 2`` for a Rayon pool of that size when the
 build has ``parallel``. ``read_coords`` returns a dict. ``positions`` has
 that same shape, ``masses`` is ``(frames, atoms)``, and ``cell`` is
@@ -58,20 +61,58 @@ carries ``n_frames``, ``n_atoms``, ``parse_s``, ``convert_s``, and
 
 .. code:: python
 
-   import readcon
+    import readcon
 
-   frame = readcon.ConFrame(
-       (10.0, 10.0, 10.0),
-       (90.0, 90.0, 90.0),
-       [readcon.Atom("H", 1.25, 0.0, 0.0, atom_id=1, mass=1.0)],
-   )
-   readcon.write_con("one.con", [frame])
-   positions = readcon.read_positions("one.con")
-   coords = readcon.read_coords("one.con")
-   assert positions.shape == (1, 1, 3)
-   assert positions[0, 0, 0] == coords["positions"][0, 0, 0] == 1.25
-   assert coords["masses"][0, 0] == 1.0
-   assert list(coords["cell"][0]) == [10.0, 10.0, 10.0, 90.0, 90.0, 90.0]
+    frame = readcon.ConFrame(
+        (10.0, 10.0, 10.0),
+        (90.0, 90.0, 90.0),
+        [readcon.Atom("H", 1.25, 0.0, 0.0, atom_id=1, mass=1.0)],
+    )
+    readcon.write_con("one.con", [frame])
+    positions = readcon.read_positions("one.con")
+    coords = readcon.read_coords("one.con")
+    assert positions.shape == (1, 1, 3)
+    assert positions[0, 0, 0] == coords["positions"][0, 0, 0] == 1.25
+    assert coords["masses"][0, 0] == 1.0
+    assert list(coords["cell"][0]) == [10.0, 10.0, 10.0, 90.0, 90.0, 90.0]
+    assert positions.base is not None
+    assert not positions.flags["OWNDATA"]
+    assert positions.flags["C_CONTIGUOUS"]
+
+``ConFrameList.columns`` and ``write_columns``
+----------------------------------------------
+
+A ``read_con`` result keeps one coordinate slab when every frame has the
+same atom count. ``columns()`` returns that slab as ``positions``. A second
+call is the same array object. ``masses`` is ``(frames, atoms)``. ``fixed``
+is ``(frames, atoms, 3)``, with ``1.0`` where that axis is held. ``cell`` is
+``(frames, 6)``, lengths then angles. ``velocities`` and ``forces`` are
+``(frames, atoms, 3)`` when any frame carries that section, and ``None``
+otherwise. ``n_frames`` and ``n_atoms`` are the two sizes.
+
+Indexing ``frames[i]`` takes that frame out of the stored list.
+``columns()`` then raises ``OSError``. Call ``columns()`` before any index.
+
+``write_columns(path, columns, symbol="Cu", n_threads=None)`` writes the
+dict. Every atom is ``symbol``. The NumPy arrays are borrowed once and the
+file is formatted with the GIL released. There is no per-atom Python loop.
+``n_threads`` of 2 or more is the parallel writer.
+
+.. code:: python
+
+    import readcon
+
+    stored = readcon.read_con("one.con")
+    cols = stored.columns()
+    assert cols["positions"] is stored.columns()["positions"]
+    assert cols["positions"].shape == (1, 1, 3)
+    assert cols["masses"][0, 0] == 1.0
+    readcon.write_columns("from_columns.con", cols, symbol="H")
+    written = readcon.read_positions("from_columns.con")
+    assert written.shape == cols["positions"].shape
+    assert written[0, 0, 0] == cols["positions"][0, 0, 0]
+    assert written.base is not None
+    assert not written.flags["OWNDATA"]
 
 ``read_con_string``
 -------------------

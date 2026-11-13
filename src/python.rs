@@ -2195,9 +2195,12 @@ impl ConFrameList {
     /// Positions, masses, constraint flags, cell, and any velocity or
     /// force block as one contiguous NumPy array each.
     ///
-    /// Positions are the coordinate slab from the read. The other arrays
-    /// are filled from the parsed frames with the GIL released. Indexing
-    /// a frame still builds Python atoms; this does not.
+    /// `positions` is the coordinate slab from the read, the same array
+    /// object on every call. The other arrays are filled from the parsed
+    /// frames with the GIL released. Indexing a frame takes that frame
+    /// out of the list, and a later call then fails. Call this before
+    /// `frames[i]`. `write_columns` writes the dict back. Indexing a
+    /// frame still builds Python atoms; this does not.
     fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let frames = self.frames.lock().expect("frames");
         if frames.iter().any(|slot| slot.is_none()) {
@@ -2770,7 +2773,10 @@ fn read_con(
 /// One `[frames, atoms, 3]` float64 array of coordinates.
 ///
 /// The array is allocated once. Parsing writes each frame at its offset
-/// from the boundary walk. No per-frame Python object is built.
+/// from the boundary walk. NumPy views that buffer (`base` is the
+/// container, `OWNDATA` is false). The doubles are not copied into a
+/// second allocation before the function returns. No per-frame Python
+/// object is built.
 #[pyfunction]
 #[pyo3(name = "read_positions", signature = (path, n_threads=None))]
 fn read_positions(

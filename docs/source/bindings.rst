@@ -720,6 +720,21 @@ Include ``readcon-core.hpp`` for RAII wrappers.
         }
     }
 
+``read_positions`` returns the same coordinate column as ``rkr_read_positions``
+and does not build frame objects. ``data()`` is row-major ``x y z``, index
+``frame * n_atoms * 3 + atom * 3``, and it is the parse buffer. A worker
+count below 2 stays on the calling thread. Destroying the block frees
+that buffer. ``read_positions(path)`` uses one worker.
+
+.. code:: cpp
+
+    #include "readcon-core.hpp"
+
+    readcon::PositionBlock block = readcon::read_positions("trajectory.con", 1);
+    const double *xyz = block.data();
+    std::cout << block.n_frames() << " " << block.n_atoms()
+              << " " << xyz[0] << "\n";
+
 Builder metadata helpers:
 
 .. code:: cpp
@@ -978,6 +993,20 @@ Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
     st = frame_metatensor_positions_block(fr, block)  ! fat lib
     call mts_block_free_rkr(block)
     call fr%free()
+
+``read_positions`` returns a ``position_block_t``. ``xyz_ptr`` views the C
+buffer as ``xyz(3, n_atoms, n_frames)``. ``xyz(1, atom, frame)`` is x. The
+pointer is not a copy. A worker count below 2 stays on the calling
+thread. ``free`` releases the block.
+
+.. code:: fortran
+
+    type(position_block_t) :: cols
+    real(c_double), pointer :: xyz(:,:,:)
+    integer :: nf, na
+    cols = read_positions("structure.con", 1)
+    call cols%xyz_ptr(xyz, nf, na)
+    call cols%free()
 
 ``builder%add_atom`` and ``builder%add_atom_full`` follow
 ``rkr_frame_add_atom_full``: symbol, coordinates, then the three fixed

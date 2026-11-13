@@ -54,7 +54,7 @@ One frame is split by atom lines, so a million-atom frame uses every rank.
 
 | Mode | When | Path |
 |------+------+------|
-| =mpiio= | the default collective write | =MPI_Exscan= of the formatted lengths, then each rank =pwrite=s its bytes at that offset |
+| =mpiio= | the default collective write | =MPI_Exscan= of the formatted lengths, then each rank calls =pwrite= at that offset |
 | =gather= | no MPI-IO | rank 0 collects the blocks (=MPI_Gatherv=, point-to-point above 2 GiB) and writes |
 | =auto= | default | =mpiio= |
 

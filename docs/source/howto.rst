@@ -514,10 +514,18 @@ on the ``ase.ioformats`` entry point. ASE loads that group when
 
 .. code:: python
 
+    import readcon
     from ase.io import read, write
-    images = read("run.con", index=":", format="readcon-con")
-    write("again.con", images, format="readcon-con")
-    write("again.convel", images, format="readcon-convel")
+
+    atom = readcon.Atom("H", 0.0, 0.0, 0.0, atom_id=1, mass=1.0)
+    frame = readcon.ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom])
+    readcon.write_con("ase_roundtrip.con", [frame])
+    images = read("ase_roundtrip.con", index=":", format="readcon-con")
+    write("ase_roundtrip_again.con", images, format="readcon-con")
+    write("ase_roundtrip_again.convel", images, format="readcon-convel")
+    back = read("ase_roundtrip_again.con", index=0, format="readcon-con")
+    assert len(images) == 1
+    assert list(back.arrays["atom_id"]) == [1]
 
 A read walks ``iter_con(stream=True)`` unless the slice needs a length, in
 which case it uses ``count_frames`` and ``ConTrajectory``. A geometry file
@@ -584,6 +592,41 @@ Reading and inspecting frames
         for atom in frame.atoms:
             print(f"  {atom.symbol}: ({atom.x:.4f}, {atom.y:.4f}, {atom.z:.4f})")
             print(f"    fixed={atom.is_fixed}, id={atom.atom_id}, mass={atom.mass}")
+
+Column arrays
+~~~~~~~~~~~~~
+
+``read_con`` keeps one coordinate slab when every frame has the same atom
+count. ``columns()`` returns that slab as ``positions`` with no second copy,
+so a later call is the same array. ``masses`` is ``(frames, atoms)``, ``fixed``
+is ``(frames, atoms, 3)`` with ``1.0`` on a held axis, and ``cell`` is
+``(frames, 6)``. ``velocities`` and ``forces`` are present when any frame has
+that section. Indexing a frame takes it out of the list, and ``columns()``
+then raises ``OSError``. Call ``columns()`` first.
+
+``write_columns`` writes that dict. Every atom uses ``symbol``. The arrays
+are borrowed once. There is no per-atom Python loop.
+
+``read_positions`` is the path form of the same buffer. The returned
+array views it: ``base`` is that buffer and ``OWNDATA`` is false.
+
+.. code:: python
+
+    import readcon
+
+    atom = readcon.Atom("H", 1.25, 0.0, 0.0, atom_id=1, mass=1.0)
+    frame = readcon.ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom])
+    readcon.write_con("column_src.con", [frame, frame])
+    frames = readcon.read_con("column_src.con")
+    cols = frames.columns()
+    assert cols["positions"].shape == (2, 1, 3)
+    assert frames.columns()["positions"] is cols["positions"]
+    readcon.write_columns("columns.con", cols, symbol="H")
+    back = readcon.read_positions("columns.con")
+    assert back.shape == cols["positions"].shape
+    assert back.base is not None
+    assert not back.flags["OWNDATA"]
+    assert back[0, 0, 0] == 1.25
 
 Streaming a large or compressed trajectory
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
