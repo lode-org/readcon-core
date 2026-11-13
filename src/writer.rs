@@ -1253,6 +1253,28 @@ fn push_atom_motion(
     }
 }
 
+/// Coordinate lines for `atoms`, using the same formatter as a frame write.
+///
+/// One pass, private buffer. Callers that split a frame across ranks write
+/// these bytes at the offset from an exclusive scan of the lengths.
+pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<u8>, WriteError> {
+    let mut buf = Vec::with_capacity(atoms.len().saturating_mul(48));
+    let mut ryu = ryu::Buffer::new();
+    let mut slots = [FmtSlot::new(); 3];
+    append_coord_rows(
+        &mut buf,
+        &mut ryu,
+        &mut slots,
+        atoms,
+        FloatFormat::RoundTrip,
+        2,
+        1,
+        None,
+        None,
+    )?;
+    Ok(buf)
+}
+
 fn append_coord_rows(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,

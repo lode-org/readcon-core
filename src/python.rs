@@ -5067,7 +5067,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
         })
         .collect();
     let workers = n_threads.unwrap_or(1);
-    if workers >= 2 && n_frames == 1 && n_atoms >= 4096 {
+    if workers >= 2 {
         if let Some(parent) = std::path::Path::new(path).parent()
             && !parent.as_os_str().is_empty()
         {

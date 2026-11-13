@@ -18,8 +18,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = ROOT / "bench" / "h2h"
 WORK = BENCH / "work"
-OUT = BENCH / "scaling" / "r7"
-LOG = BENCH / "logs" / "scale-r7"
+OUT = BENCH / "scaling" / "r8"
+LOG = BENCH / "logs" / "scale-r8"
 THREADS = (1, 2, 4, 8)
 REPEATS = 6
 

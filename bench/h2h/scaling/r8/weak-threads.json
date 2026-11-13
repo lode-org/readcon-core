@@ -1,0 +1,42 @@
+{
+  "kind": "threads",
+  "relation": "n_frames = frames_per_worker * workers",
+  "frames_per_worker": 8000,
+  "fixture": "resources/test/cuh2.con",
+  "repeats": 6,
+  "serial_match": true,
+  "host": "Intel Xeon Processor",
+  "ncpus": 8,
+  "physical_cores": 8,
+  "mpi": "absent",
+  "gpu": "absent",
+  "commit": "7d8b8e4e9e8e8428109f07167e59d4cf8e4727ce",
+  "date_utc": "2026-11-13T03:50Z",
+  "complete": true,
+  "points": [
+    {
+      "workers": 1,
+      "n_frames": 8000,
+      "bytes": 134168000,
+      "samples_s": [0.106532199, 0.105608067, 0.105382050, 0.106604647, 0.106455490, 0.116964347]
+    },
+    {
+      "workers": 2,
+      "n_frames": 16000,
+      "bytes": 268336000,
+      "samples_s": [0.116617037, 0.114455725, 0.144360418, 0.118459987, 0.114931891, 0.116598756]
+    },
+    {
+      "workers": 4,
+      "n_frames": 32000,
+      "bytes": 536672000,
+      "samples_s": [0.128847194, 0.144623681, 0.163518872, 0.119412736, 0.118713411, 0.119351838]
+    },
+    {
+      "workers": 8,
+      "n_frames": 64000,
+      "bytes": 1073344000,
+      "samples_s": [0.163951363, 0.154240387, 0.140116439, 0.129504420, 0.127833259, 0.135514150]
+    }
+  ]
+}

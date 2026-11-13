@@ -421,11 +421,19 @@ fn tiled_span(path: &Path) -> Option<(usize, usize)> {
         return None;
     }
     let span = iter.byte_pos();
-    if span < 2 || !len.is_multiple_of(span) {
+    if span < 2 {
         return None;
     }
     let n = len / span;
     if n == 0 {
+        return None;
+    }
+    // A trailing newline is not another frame. Ranking the whole file
+    // for that byte made rank 0 index every read.
+    if !map[n * span..]
+        .iter()
+        .all(|byte| byte.is_ascii_whitespace())
+    {
         return None;
     }
     if n >= 2 {

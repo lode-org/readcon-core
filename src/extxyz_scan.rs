@@ -1532,24 +1532,32 @@ pub fn extxyz_bytes_with_threads(
             Ok(())
         });
         error?;
-        let mut out = Vec::new();
-        for part in parts {
-            out.extend_from_slice(&part);
-        }
+        let total: usize = parts.iter().map(|part| part.len()).sum();
+        let mut out = Vec::with_capacity(total);
+        unsafe { out.set_len(total) };
+        let dest = out.as_mut_ptr() as usize;
+        std::thread::scope(|scope| {
+            let mut at = 0usize;
+            for part in &parts {
+                let src = part.as_ptr() as usize;
+                let n = part.len();
+                let offset = at;
+                scope.spawn(move || unsafe {
+                    std::ptr::copy_nonoverlapping(src as *const u8, (dest + offset) as *mut u8, n);
+                });
+                at += n;
+            }
+        });
         return Ok(out);
     }
     let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
     for frame in 0..n_frames {
-        let lattice = lattice_from_cell(&cell[frame * 6..frame * 6 + 6])?;
-        let lattice_text = lattice
-            .iter()
-            .map(|value| format_number(*value))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let header = format!(
-            "{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n"
-        );
-        out.extend_from_slice(header.as_bytes());
+        push_frame_header(
+            &mut out,
+            n_atoms,
+            &cell[frame * 6..frame * 6 + 6],
+            &properties,
+        )?;
         for atom in 0..n_atoms {
             for (index, column) in columns.iter().enumerate() {
                 if index > 0 {
@@ -1577,6 +1585,9 @@ pub fn extxyz_path_with_threads(
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
 ) -> Result<(), String> {
+    if workers >= 2 && n_frames >= 2 {
+        return write_frame_batches(path, n_frames, n_atoms, cell, columns, workers);
+    }
     if !(workers >= 2 && n_frames == 1 && n_atoms >= 4096) {
         let bytes = extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, workers)?;
         return std::fs::write(path, bytes).map_err(|err| err.to_string());
@@ -1660,6 +1671,115 @@ pub fn extxyz_path_with_threads(
     })
 }
 
+fn push_usize(out: &mut Vec<u8>, mut value: usize) {
+    if value == 0 {
+        out.push(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut at = buf.len();
+    while value > 0 {
+        at -= 1;
+        buf[at] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    out.extend_from_slice(&buf[at..]);
+}
+
+/// Frame comment written straight into `out`. No per-frame `String`.
+fn push_frame_header(
+    out: &mut Vec<u8>,
+    n_atoms: usize,
+    cell: &[f64],
+    properties: &str,
+) -> Result<(), String> {
+    let lattice = lattice_from_cell(cell)?;
+    push_usize(out, n_atoms);
+    out.extend_from_slice(b"\nLattice=\"");
+    for (index, value) in lattice.iter().enumerate() {
+        if index > 0 {
+            out.push(b' ');
+        }
+        push_number(out, *value);
+    }
+    out.extend_from_slice(b"\" Properties=");
+    out.extend_from_slice(properties.as_bytes());
+    out.extend_from_slice(b" pbc=\"T T T\"\n");
+    Ok(())
+}
+
+/// Many frames, batched. Each job formats a run of frames into one buffer.
+/// There is no per-frame handshake. One core writes finished runs in order
+/// while the other cores format the runs that follow.
+fn write_frame_batches(
+    path: &std::path::Path,
+    n_frames: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&(dyn ExtxyzSource + Sync)],
+    workers: usize,
+) -> Result<(), String> {
+    if cell.len() < n_frames * 6 {
+        return Err("cell".to_string());
+    }
+    let properties = columns
+        .iter()
+        .map(|column| {
+            format!(
+                "{}:{}:{}",
+                column.column_name(),
+                column.column_kind() as char,
+                column.column_width()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(":");
+    let groups = workers.saturating_mul(4).max(workers);
+    let chunk = n_frames.div_ceil(groups).max(1);
+    let nparts = n_frames.div_ceil(chunk);
+    let mut file = std::fs::File::create(path).map_err(|err| err.to_string())?;
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(usize, Vec<u8>), String>>();
+    let format_threads = workers.saturating_sub(1).max(1);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let jobs = &next_job;
+    let props = properties.as_str();
+    std::thread::scope(|scope| {
+        for _ in 0..format_threads {
+            let tx = tx.clone();
+            scope.spawn(move || {
+                loop {
+                    let index = jobs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= nparts {
+                        break;
+                    }
+                    let from = index * chunk;
+                    if from >= n_frames {
+                        break;
+                    }
+                    let to = (from + chunk).min(n_frames);
+                    let part = format_extxyz_range(from, to, n_atoms, cell, columns, props);
+                    if tx.send(part.map(|buf| (index, buf))).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        use std::io::Write;
+        let mut next = 0usize;
+        let mut pending = std::collections::BTreeMap::<usize, Vec<u8>>::new();
+        while next < nparts {
+            let (index, part) = rx.recv().map_err(|_| "write".to_string())??;
+            pending.insert(index, part);
+            while let Some(part) = pending.remove(&next) {
+                file.write_all(&part).map_err(|err| err.to_string())?;
+                next += 1;
+            }
+        }
+        Ok(())
+    })
+}
+
 fn format_extxyz_range(
     from: usize,
     to: usize,
@@ -1668,18 +1788,16 @@ fn format_extxyz_range(
     columns: &[&(dyn ExtxyzSource + Sync)],
     properties: &str,
 ) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
+    let frames = to.saturating_sub(from);
+    let mut out =
+        Vec::with_capacity(frames.saturating_mul(n_atoms.saturating_mul(48).saturating_add(96)));
     for frame in from..to {
-        let lattice = lattice_from_cell(&cell[frame * 6..frame * 6 + 6])?;
-        let lattice_text = lattice
-            .iter()
-            .map(|value| format_number(*value))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let header = format!(
-            "{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n"
-        );
-        out.extend_from_slice(header.as_bytes());
+        push_frame_header(
+            &mut out,
+            n_atoms,
+            &cell[frame * 6..frame * 6 + 6],
+            properties,
+        )?;
         for atom in 0..n_atoms {
             for (index, column) in columns.iter().enumerate() {
                 if index > 0 {

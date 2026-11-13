@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-OUT = Path(__file__).resolve().parents[0] / "scaling" / "r7"
+OUT = Path(__file__).resolve().parents[0] / "scaling" / "r8"
 WORKERS = (1, 2, 4, 8)
 
 

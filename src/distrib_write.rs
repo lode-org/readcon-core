@@ -82,23 +82,20 @@ pub fn format_frames(
     precision: Option<usize>,
 ) -> Result<(Vec<u8>, Vec<u64>), BoxErr> {
     let mut out = Vec::new();
+    let mut one = Vec::new();
     let mut starts = Vec::with_capacity(frames.len());
-    for f in frames {
+    for frame in frames {
         starts.push(out.len() as u64);
-        // Parsed frames omit con_spec_minor unless the file had it.
-        // The C++ `mpi::write` path, the Fortran collective writer, and
-        // the Rust writer all come through here. Rebuilding stamps the
-        // minor the way ConFrameBuilder does for the other bindings.
-        // A failure is reported on every rank by the caller.
-        let rewritten = crate::writer::binding_rewrite_frame(f)?;
-        let mut one = Vec::new();
+        one.clear();
+        // The binding stamp is the header only. Cloning every atom before
+        // formatting it read the frame twice.
         {
-            let mut w = match precision {
+            let mut writer = match precision {
                 Some(p) => ConFrameWriter::with_precision(&mut one, p),
                 None => ConFrameWriter::new(&mut one),
             };
-            w.write_frame(&rewritten)?;
-            w.flush()?;
+            writer.write_frame_bound(frame)?;
+            writer.flush()?;
         }
         out.extend_from_slice(&one);
     }
@@ -149,9 +146,73 @@ pub fn write_ranked_bytes(comm: &Comm, path: &Path, bytes: &[u8]) -> Result<u64,
     }
     let mut total = 0u64;
     world.all_reduce_into(&len, &mut total, ::mpi::collective::SystemOperation::sum());
-    write_mpiio(comm, path, bytes, offset, total)?;
+    write_pwrite(comm, path, bytes, offset, total)?;
     world.barrier();
     Ok(total)
+}
+
+/// Each rank writes its own bytes at `offset`. Lengths were already
+/// exchanged by an exclusive scan. Nothing is gathered to rank 0.
+fn write_pwrite(
+    comm: &Comm,
+    path: &Path,
+    bytes: &[u8],
+    offset: u64,
+    total: u64,
+) -> Result<(), BoxErr> {
+    let created = if comm.rank() == 0 {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .and_then(|file| file.set_len(total))
+            .map_err(BoxErr::from)
+    } else {
+        Ok(())
+    };
+    collective(comm, created, "create")?;
+    comm.raw().barrier();
+    let opened = std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .map_err(BoxErr::from);
+    let file = collective(comm, opened, "open")?;
+    let wrote = pwrite_all(&file, bytes, offset).map_err(BoxErr::from);
+    collective(comm, wrote, "pwrite")?;
+    Ok(())
+}
+
+fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    if buf.is_empty() {
+        return Ok(());
+    }
+    let fd = file.as_raw_fd();
+    let mut written = 0usize;
+    while written < buf.len() {
+        let n = unsafe {
+            libc::pwrite(
+                fd,
+                buf[written..].as_ptr() as *const libc::c_void,
+                buf.len() - written,
+                offset as libc::off_t,
+            )
+        };
+        if n < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err);
+        }
+        if n == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
+        }
+        written += n as usize;
+        offset += n as u64;
+    }
+    Ok(())
 }
 
 pub fn write_block_refs(
@@ -174,7 +235,7 @@ pub fn write_block_refs(
     world.all_reduce_into(&len, &mut total, ::mpi::collective::SystemOperation::sum());
 
     match mode {
-        WriteMode::Auto | WriteMode::MpiIo => write_mpiio(comm, path, &bytes, offset, total)?,
+        WriteMode::Auto | WriteMode::MpiIo => write_pwrite(comm, path, &bytes, offset, total)?,
         WriteMode::Gather => write_gather(comm, path, &bytes, total)?,
     }
 

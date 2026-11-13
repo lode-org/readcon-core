@@ -12,23 +12,92 @@ use readcon_core::distrib_read::{
 use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
 
-fn format_coords(coords: &[f64], id0: u64) -> Vec<u8> {
-    let mut out = Vec::with_capacity(coords.len().saturating_mul(8));
-    for (index, xyz) in coords.chunks(3).enumerate() {
-        for (slot, value) in xyz.iter().enumerate() {
-            if slot > 0 {
-                out.push(b' ');
-            }
-            readcon_core::extxyz_scan::append_extxyz_number(&mut out, *value);
+fn atoms_from_lines(
+    slice: &[u8],
+    symbol: &std::sync::Arc<str>,
+) -> Vec<readcon_core::types::AtomDatum> {
+    let mut atoms = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < slice.len() {
+        let start = cursor;
+        while cursor < slice.len() && slice[cursor] != b'\n' {
+            cursor += 1;
         }
-        out.push(b' ');
-        out.push(b'0');
-        out.push(b' ');
-        let id = id0 + index as u64;
-        out.extend_from_slice(id.to_string().as_bytes());
-        out.push(b'\n');
+        let line = &slice[start..cursor];
+        if cursor < slice.len() {
+            cursor += 1;
+        }
+        if line.iter().all(|byte| byte.is_ascii_whitespace()) {
+            continue;
+        }
+        let mut index = 0usize;
+        let mut xyz = [0.0f64; 3];
+        for value in &mut xyz {
+            while index < line.len() && line[index].is_ascii_whitespace() {
+                index += 1;
+            }
+            let (parsed, used) =
+                fast_float2::parse_partial::<f64, _>(&line[index..]).expect("coord");
+            *value = parsed;
+            index += used;
+        }
+        while index < line.len() && line[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        let mut fixed_bits = 0u8;
+        let mut id = atoms.len() as u64;
+        if index < line.len() {
+            let (value, used) = parse_u64(&line[index..]);
+            fixed_bits = value as u8;
+            index += used;
+            while index < line.len() && line[index].is_ascii_whitespace() {
+                index += 1;
+            }
+            if index < line.len() {
+                let (value, _) = parse_u64(&line[index..]);
+                id = value;
+            }
+        }
+        let fixed = [
+            fixed_bits & 1 != 0,
+            fixed_bits & 2 != 0,
+            fixed_bits & 4 != 0,
+        ];
+        atoms.push(readcon_core::types::AtomDatum::coords(
+            std::sync::Arc::clone(symbol),
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            fixed,
+            id,
+        ));
     }
-    out
+    atoms
+}
+
+fn parse_u64(bytes: &[u8]) -> (u64, usize) {
+    let mut value = 0u64;
+    let mut used = 0usize;
+    for byte in bytes {
+        if !byte.is_ascii_digit() {
+            break;
+        }
+        value = value * 10 + u64::from(byte - b'0');
+        used += 1;
+    }
+    (value, used)
+}
+
+fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
+    let marker = b"\nCoordinates of Component 1\n";
+    let at = memchr::memmem::find(bytes, marker).unwrap_or(0);
+    let start = bytes[..at]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let symbol = std::str::from_utf8(&bytes[start..at]).unwrap_or("X");
+    std::sync::Arc::from(symbol)
 }
 
 fn main() {
@@ -47,45 +116,31 @@ fn main() {
     let out = std::path::Path::new("/tmp/readcon-r7-mpi.con");
     let file_bytes = std::fs::read(path).expect("map");
     let split = held.n_total == 1 && comm.size() > 1;
-    let (coord_start, coord_end, id0) = if split {
+    let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
         let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
-        let mine = parse_coord_lines(&file_bytes[range]).expect("coords").len() as u64 / 3;
-        let mut offset = 0u64;
-        world.exclusive_scan_into(&mine, &mut offset, mpi::collective::SystemOperation::sum());
-        if comm.rank() == 0 {
-            offset = 0;
-        }
-        (start, end, offset)
+        let symbol = component_symbol(&file_bytes);
+        let atoms = atoms_from_lines(&file_bytes[range], &symbol);
+        let header = if comm.rank() == 0 {
+            file_bytes[..start].to_vec()
+        } else {
+            Vec::new()
+        };
+        Some((header, atoms, start, end))
     } else {
-        (0, 0, 0)
+        None
     };
     world.barrier();
     if op == "write" {
-        if split {
-            let (start, _) = (coord_start, coord_end);
-            let range = rank_line_range(&file_bytes, start, coord_end, comm.rank(), comm.size());
-            let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
-            let mut body = if comm.rank() == 0 {
-                file_bytes[..start].to_vec()
-            } else {
-                Vec::new()
-            };
-            body.extend(format_coords(&coords, id0));
+        if let Some((header, atoms, _, _)) = &prepared {
+            let mut body = header.clone();
+            body.extend(readcon_core::writer::format_coordinate_lines(atoms).expect("format"));
             write_ranked_bytes(&comm, out, &body).expect("warmup write");
         } else {
             write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("warmup write");
         }
-    } else if split {
-        let range = rank_line_range(
-            &file_bytes,
-            coord_start,
-            coord_end,
-            comm.rank(),
-            comm.size(),
-        );
-        let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
-        std::hint::black_box(coords.len());
+    } else if let Some((_, atoms, _, _)) = &prepared {
+        std::hint::black_box(atoms.len());
     } else {
         let _ = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("warmup read");
     }
@@ -95,33 +150,15 @@ fn main() {
         world.barrier();
         let started = Instant::now();
         if op == "write" {
-            if split {
-                let range = rank_line_range(
-                    &file_bytes,
-                    coord_start,
-                    coord_end,
-                    comm.rank(),
-                    comm.size(),
-                );
-                let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
-                let mut body = if comm.rank() == 0 {
-                    file_bytes[..coord_start].to_vec()
-                } else {
-                    Vec::new()
-                };
-                body.extend(format_coords(&coords, id0));
+            if let Some((header, atoms, _, _)) = &prepared {
+                let mut body = header.clone();
+                body.extend(readcon_core::writer::format_coordinate_lines(atoms).expect("format"));
                 write_ranked_bytes(&comm, out, &body).expect("write");
             } else {
                 write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("write");
             }
-        } else if split {
-            let range = rank_line_range(
-                &file_bytes,
-                coord_start,
-                coord_end,
-                comm.rank(),
-                comm.size(),
-            );
+        } else if let Some((_, _, start, end)) = &prepared {
+            let range = rank_line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
             let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
             std::hint::black_box(coords.len());
         } else {
