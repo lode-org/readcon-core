@@ -319,7 +319,7 @@ def compressed(store: Store, host: str) -> str:
     return "\n".join(chunks)
 
 
-def database(store: Store, host: str) -> str:
+def db_samples(store: Store) -> dict[str, list[float]]:
     samples: dict[str, list[float]] = {}
     for line in store.text(f"{REL1}/db.log").splitlines():
         if not line.startswith("repeat ") or " seconds " not in line:
@@ -328,6 +328,11 @@ def database(store: Store, host: str) -> str:
         seconds = line.split(" seconds ", 1)[1].split(" ", 1)[0]
         if seconds != "None":
             samples.setdefault(kind, []).append(float(seconds))
+    return samples
+
+
+def database(store: Store, host: str) -> str:
+    samples = db_samples(store)
     body = []
     for kind in ("readcon-db", "ase.db"):
         values = samples[kind]
@@ -505,6 +510,50 @@ def cross_format(store: Store, host: str) -> str:
     return "\n".join(chunks)
 
 
+def cross_rows(store: Store) -> list[dict]:
+    raw = store.text(f"{REL1}/cross-format.tsv")
+    rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
+    if not rows or "n" not in rows[0]:
+        raise SystemExit("cross-format.tsv has no n column")
+    return rows
+
+
+def cross_median(rows: list[dict], structure: str, tool: str, fmt: str, op: str) -> float:
+    for row in rows:
+        if (row["structure"], row["tool"], row["format"], row["op"]) == (structure, tool, fmt, op):
+            return float(row["median_s"])
+    raise SystemExit(f"cross-format.tsv has no {structure} {tool} {fmt} {op}")
+
+
+def cited_macros(store: Store, cross: Store) -> str:
+    """Numbers the prose quotes from the generated tables, so a rerun keeps them."""
+    ext = store.json(f"{REL1}/h2h.json")
+    warm = {}
+    for row in ext["rows"]:
+        if row["file"] == "extxyz-same" and row["op"] == "read" and row["cache"] == "warm":
+            warm[row["reader"]] = float(row["median_s"])
+    rows = cross_rows(cross)
+    xtc = float(sig(cross_median(rows, "1M", "mdanalysis", "xtc", "write"))) / float(
+        sig(cross_median(rows, "1M", "readcon", "con.zst", "write"))
+    )
+    ovito_traj = float(sig(cross_median(rows, "traj", "ovito", "xyz", "write"))) / float(
+        sig(cross_median(rows, "traj", "readcon", "con.zst", "write"))
+    )
+    samples = db_samples(store)
+    commands = {
+        "extxyzReadconMedian": sig(warm["readcon"]),
+        "extxyzOvitoMedian": sig(warm["ovito"]),
+        "xtcWriteOverZst": f"{xtc:.3g}",
+        "ovitoTrajWriteOverZst": f"{ovito_traj:.3g}",
+        "dbReadconMedian": sig(type7(samples["readcon-db"])),
+        "dbAseMedian": sig(type7(samples["ase.db"])),
+    }
+    lines = ["% Written by paper/cpc/scripts/make_tables.py from the pinned campaign."]
+    for name, value in commands.items():
+        lines.append(f"\\newcommand{{\\{name}}}{{{value}}}")
+    return "\n".join(lines) + "\n"
+
+
 def figure_tex(out_name: str, graphic: str, caption: str, label: str, host: str) -> str:
     return (
         "\\begin{figure}[tbp]\n\\centering\n"
@@ -538,6 +587,7 @@ def main() -> None:
         "db.tex": database(store, host),
         "fidelity.tex": fidelity(store, host),
         "cross_format.tex": cross_format(cross, cross_host),
+        "campaign_macros.tex": cited_macros(store, cross),
     }
     figures(store, out)
     files["fig7.tex"] = figure_tex(

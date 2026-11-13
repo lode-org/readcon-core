@@ -148,6 +148,7 @@ rule final_campaign:
         "src/campaign/final/fig7.tex",
         "src/campaign/final/fig8.tex",
         "src/campaign/final/cross_format.tex",
+        "src/campaign/final/campaign_macros.tex",
         "src/campaign/final/strong.pdf",
         "src/campaign/final/weak.pdf",
     shell:

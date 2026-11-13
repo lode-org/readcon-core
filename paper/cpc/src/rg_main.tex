@@ -76,6 +76,7 @@ Elsevier%
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
+\input{campaign/final/campaign_macros}
 \input{figures/generated/host_macros}
 \input{figures/generated/db_macros}
 % A value from a macro printed to a fixed number of significant figures.
@@ -573,7 +574,7 @@ The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h
 Table~\ref{tab:c-positions} is the C and Rust coordinate read (Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}).
 The \num{100000}-frame medians differ by more than 1\%.
 The convel file and the million-atom frame differ by less than 1\%.
-On one extended XYZ frame of \(10^{6}\) atoms, readcon takes 0.1103~s, ASE \texttt{extxyz} 2.011~s, chemfiles 0.6672~s and OVITO 0.2439~s (Table~\ref{tab:h2h-main}).
+On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} 2.011~s, chemfiles 0.6672~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
 On the million-atom CON frame, readcon takes 0.07444~s, ASE takes 1.876~s and eOn takes 0.3323~s (Table~\ref{tab:conread}).
 Table~\ref{tab:weak-write} is the weak write, and Figure~\ref{fig:memory} plots its ideal efficiency.
 
@@ -612,9 +613,9 @@ XTC is 3.548~MiB (3.72~MB), 2.63 times CON.zst.
 The million-atom PDB read is unsupported: the atom serial is five digits.
 Leaving out the two unused rows, the CON.zst write is the lowest write median on both tables: 0.1297~s on the million-atom frame and 0.001335~s on the trajectory.
 Plain CON is 0.181~s and 0.002616~s, 1.40 and 1.96 times those writes.
-On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.64, DCD 1.69, XTC 1.82, NetCDF 1.91, CON.gz 3.46, extended XYZ 32.7, TRR 63.1, XYZ 64.0, bzip2 XYZ 67.5, gzip XYZ 67.6, gzipped extended XYZ 69.4 and xz XYZ 94.5.
+On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.64, DCD 1.69, XTC \xtcWriteOverZst, NetCDF 1.91, CON.gz 3.46, extended XYZ 32.7, TRR 63.1, XYZ 64.0, bzip2 XYZ 67.5, gzip XYZ 67.6, gzipped extended XYZ 69.4 and xz XYZ 94.5.
 As a multiple of the plain CON write those rows are 1.18, 1.21, 1.31, 1.37, 2.48, 23.4, 45.2, 45.9, 48.3, 48.4, 49.7 and 67.7.
-On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.49, XTC 1.62, NetCDF 2.10, CON.gz 4.24, OVITO XYZ 4.27, extended XYZ 25.6, PDB 39.5, XYZ 49.4, TRR 49.9, bzip2 XYZ 51.6, gzip XYZ 52.4, gzipped extended XYZ 59.1 and xz XYZ 63.6.
+On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.49, XTC 1.62, NetCDF 2.10, CON.gz 4.24, OVITO XYZ \ovitoTrajWriteOverZst, extended XYZ 25.6, PDB 39.5, XYZ 49.4, TRR 49.9, bzip2 XYZ 51.6, gzip XYZ 52.4, gzipped extended XYZ 59.1 and xz XYZ 63.6.
 DCD and XTC writes on the trajectory are below the plain CON write, at 0.758 and 0.828 times it.
 The other trajectory writes, as a multiple of the plain CON write, are NetCDF 1.07, CON.gz 2.16, OVITO XYZ 2.18, extended XYZ 13.1, PDB 20.2, XYZ 25.2, TRR 25.4, bzip2 XYZ 26.3, gzip XYZ 26.7, gzipped extended XYZ 30.2 and xz XYZ 32.4.
 Among the rows that drop nothing, the plain extended XYZ read is 20.7 times the plain CON read on the million-atom frame and 19.3 times on the trajectory.

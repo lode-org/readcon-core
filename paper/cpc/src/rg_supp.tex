@@ -76,6 +76,7 @@ Elsevier%
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
+\input{campaign/final/campaign_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
 \makeatletter
@@ -1154,7 +1155,7 @@ OVITO 3.17.2 returns the same periodicities and does not expose those
 momenta as velocities.
 On the copper-grid extended XYZ files, chemfiles 0.10.4 opened as XYZ
 and OVITO 3.17.2 both match the positions.
-On the million-atom frame of Table~\ref{tab:h2h-main}, OVITO reads in 0.2439~s and readcon in 0.1103~s.
+On the million-atom frame of Table~\ref{tab:h2h-main}, readcon reads in \extxyzReadconMedian~s and OVITO in \extxyzOvitoMedian~s, so readcon is faster.
 On the 10000-frame file OVITO takes 0.657~s and readcon 0.294~s.
 The massif peaks on that file are 54.0~MiB for chemfiles 0.10.4 and 60.9~MiB for OVITO 3.17.2.
 
@@ -1268,14 +1269,14 @@ The mapped binary file reads the frames in \SI{0.0076}{\second}.
 
 \input{figures/generated/host_table}
 
-readcon-db ingests 40 frames in \SI{0.004618}{\second} and the ASE database in \SI{0.09411}{\second}.
+readcon-db ingests 40 frames in \SI{\dbReadconMedian}{\second} and the ASE database in \SI{\dbAseMedian}{\second}.
 Both stores keep all 40 frames.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
 Figures~\ref{fig:db-throughput}, \ref{fig:db-bandwidth}, \ref{fig:db-query}, \ref{fig:db-disk} and~\ref{fig:db-dedup} are the database campaigns on the Intel Xeon processor.
 On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and 33.1~MB/s.
 ASE's database ingests at 199 frames/s and 0.216~MB/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s and 1.68~MB/s.
-A separate 40-frame ingest takes 0.004618~s in readcon-db and 0.09411~s in the ASE database.
+A separate 40-frame ingest takes \dbReadconMedian~s in readcon-db and \dbAseMedian~s in the ASE database.
 The composition query on 1000 frames has cold medians of 0.00131~s for readcon-db, 0.0417~s for the ASE database and 0.0212~s for a directory of CON files, and warm medians of \(2.32\times 10^{-5}\)~s, 0.0321~s and 0.0139~s.
 The deduplication record stores 24000 frames and 7 unique frame hashes.
 One CON frame is 3826 bytes: preamble 280, coordinates 1429, mask 112, identifier 92, velocity header 30, velocity numbers 1860 and time unit 23.
