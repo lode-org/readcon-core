@@ -4499,6 +4499,18 @@ fn py_text_frames<'py>(
     Ok(frames)
 }
 
+fn uniform_symbol_frames<'py>(
+    py: Python<'py>,
+    symbol: &str,
+    n_frames: usize,
+    n_atoms: usize,
+) -> PyResult<Bound<'py, PyList>> {
+    let py_symbol = pyo3::types::PyString::new(py, symbol).unbind();
+    let row =
+        pyo3::types::PyTuple::new(py, (0..n_atoms).map(|_| py_symbol.clone_ref(py)))?.unbind();
+    pyo3::types::PyList::new(py, (0..n_frames).map(|_| row.clone_ref(py)))
+}
+
 /// Read an extended XYZ file.
 ///
 /// The comment line gives the lattice and the column order. The returned
@@ -4571,7 +4583,10 @@ fn read_extxyz<'py>(
     let species = match shared_species {
         Some(found) => found,
         None => {
-            let built = py_text_frames(py, &tables.species, n_atoms, 1)?;
+            let built = match tables.uniform_species.as_deref() {
+                Some(symbol) => uniform_symbol_frames(py, symbol, n_frames, n_atoms)?,
+                None => py_text_frames(py, &tables.species, n_atoms, 1)?,
+            };
             arrays.set_item("species", &built)?;
             built
         }

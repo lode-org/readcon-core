@@ -26,9 +26,12 @@ pub struct XyzTables {
     pub positions: Vec<f64>,
     pub masses: Vec<f64>,
     pub cell: Vec<f64>,
-    /// One symbol per atom, frame by frame. Empty strings when the file
-    /// has no `species` column.
+    /// One symbol per atom, frame by frame. Empty when `uniform_species`
+    /// is set, and empty when the file has no `species` column.
     pub species: Vec<String>,
+    /// Every atom in every frame is this symbol. `species` is then empty
+    /// so a million-atom copper frame does not allocate a string per atom.
+    pub uniform_species: Option<String>,
     /// Every per-atom column named by `Properties`, including species,
     /// positions, masses and forces.
     pub columns: Vec<XyzColumn>,
@@ -504,11 +507,211 @@ fn assemble_tables(
         masses,
         cell,
         species,
+        uniform_species: None,
         columns,
     })
 }
 
 fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
+    if let Some(tables) = fast_species_pos(bytes) {
+        return Ok(tables);
+    }
+    tables_general(bytes)
+}
+
+/// `species:S:1:pos:R:3` rows, with or without a following `masses:R:1`.
+///
+/// The general scanner allocates a token vector and a species string for
+/// every atom, then copies both columns. This walk parses the three
+/// floats with the same `fast_float2` call and records one symbol.
+/// Anything else returns `None` and the general scanner runs.
+fn fast_species_pos(bytes: &[u8]) -> Option<XyzTables> {
+    let (mut cursor, count_line) = line_span(bytes, 0)?;
+    if trim(count_line).is_empty() {
+        return None;
+    }
+    let count = parse_f64(trim(count_line)).ok()? as usize;
+    if count == 0 {
+        return None;
+    }
+    let (comment_end, comment) = line_span(bytes, cursor)?;
+    let props = quoted_after(comment, b"Properties=")?;
+    let nfloat = if props == b"species:S:1:pos:R:3" {
+        3
+    } else if props == b"species:S:1:pos:R:3:masses:R:1" {
+        4
+    } else {
+        return None;
+    };
+    let _ = comment_end;
+    let mut positions = Vec::<f64>::new();
+    let mut mass_values = if nfloat == 4 {
+        Some(Vec::<f64>::new())
+    } else {
+        None
+    };
+    let mut cell = Vec::new();
+    let mut symbol: &[u8] = b"";
+    let mut n_frames = 0usize;
+    cursor = 0;
+    while cursor < bytes.len() {
+        let (line_end, line) = line_span(bytes, cursor)?;
+        if trim(line).is_empty() {
+            return None;
+        }
+        let this_count = parse_f64(trim(line)).ok()? as usize;
+        if this_count != count {
+            return None;
+        }
+        let (comment_end, comment) = line_span(bytes, line_end)?;
+        if quoted_after(comment, b"Properties=")? != props {
+            return None;
+        }
+        let lattice = quoted_after(comment, b"Lattice=")?;
+        let frame_cell = lattice_cell(lattice).ok()?;
+        cell.extend_from_slice(&frame_cell);
+        cursor = comment_end;
+        positions.reserve(count * 3);
+        if let Some(values) = mass_values.as_mut() {
+            values.reserve(count);
+        }
+        for _ in 0..count {
+            let (next, line) = line_span(bytes, cursor)?;
+            cursor = next;
+            let (sym, xyz, mass) = species_pos_fields(line, nfloat)?;
+            if symbol.is_empty() {
+                symbol = sym;
+            } else if sym != symbol {
+                return None;
+            }
+            positions.extend_from_slice(&xyz);
+            if let Some(mass) = mass {
+                mass_values.as_mut()?.push(mass);
+            }
+        }
+        n_frames += 1;
+        if cursor >= bytes.len() {
+            break;
+        }
+    }
+    if n_frames == 0 || symbol.is_empty() {
+        return None;
+    }
+    let n = n_frames * count;
+    if positions.len() != n * 3 {
+        return None;
+    }
+    let species_text = String::from_utf8_lossy(symbol).into_owned();
+    let masses = mass_values.unwrap_or_else(|| vec![f64::NAN; n]);
+    if masses.len() != n {
+        return None;
+    }
+    let mut columns = vec![
+        XyzColumn {
+            name: "species".to_string(),
+            kind: b'S',
+            width: 1,
+            text: Vec::new(),
+            real: Vec::new(),
+        },
+        XyzColumn {
+            name: "pos".to_string(),
+            kind: b'R',
+            width: 3,
+            text: Vec::new(),
+            real: Vec::new(),
+        },
+    ];
+    if nfloat == 4 {
+        columns.push(XyzColumn {
+            name: "masses".to_string(),
+            kind: b'R',
+            width: 1,
+            text: Vec::new(),
+            real: Vec::new(),
+        });
+    }
+    Some(XyzTables {
+        n_frames,
+        n_atoms: count,
+        positions,
+        masses,
+        cell,
+        species: Vec::new(),
+        uniform_species: Some(species_text),
+        columns,
+    })
+}
+
+fn line_span(bytes: &[u8], start: usize) -> Option<(usize, &[u8])> {
+    if start >= bytes.len() {
+        return None;
+    }
+    let mut end = start;
+    while end < bytes.len() && bytes[end] != b'\n' {
+        end += 1;
+    }
+    let mut line_end = end;
+    if line_end > start && bytes[line_end - 1] == b'\r' {
+        line_end -= 1;
+    }
+    let next = if end < bytes.len() { end + 1 } else { end };
+    Some((next, &bytes[start..line_end]))
+}
+
+/// Symbol, xyz, and the optional mass. `None` means the general scanner
+/// must see this line: the float spelling is not a clean token.
+fn species_pos_fields(line: &[u8], nfloat: usize) -> Option<(&[u8], [f64; 3], Option<f64>)> {
+    let mut i = 0usize;
+    while i < line.len() && line[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    let sym_start = i;
+    while i < line.len() && !line[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if sym_start == i || line[sym_start..i].contains(&b'"') {
+        return None;
+    }
+    let sym = &line[sym_start..i];
+    let mut xyz = [0.0f64; 3];
+    for slot in &mut xyz {
+        *slot = next_float(line, &mut i)?;
+    }
+    let mass = if nfloat == 4 {
+        Some(next_float(line, &mut i)?)
+    } else {
+        None
+    };
+    while i < line.len() && line[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i != line.len() {
+        return None;
+    }
+    Some((sym, xyz, mass))
+}
+
+fn next_float(line: &[u8], i: &mut usize) -> Option<f64> {
+    while *i < line.len() && line[*i].is_ascii_whitespace() {
+        *i += 1;
+    }
+    if *i >= line.len() {
+        return None;
+    }
+    let (value, consumed) = fast_float2::parse_partial::<f64, _>(&line[*i..]).ok()?;
+    if consumed == 0 || !value.is_finite() {
+        return None;
+    }
+    let boundary = *i + consumed == line.len() || line[*i + consumed].is_ascii_whitespace();
+    if !boundary {
+        return None;
+    }
+    *i += consumed;
+    Some(value)
+}
+
+fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
     let mut lines = Vec::new();
     let mut index = 0;
     while index < bytes.len() {
@@ -605,6 +808,7 @@ fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
         masses,
         cell,
         species,
+        uniform_species: None,
         columns,
     })
 }
@@ -848,6 +1052,63 @@ pub fn write_extxyz_path(path: &Path, tables: &XyzTables) -> Result<(), String> 
 mod tests {
     use super::*;
 
+    fn expanded_species(tables: &XyzTables) -> Vec<String> {
+        match &tables.uniform_species {
+            Some(symbol) => vec![symbol.clone(); tables.n_frames * tables.n_atoms],
+            None => tables.species.clone(),
+        }
+    }
+
+    #[test]
+    fn fast_species_pos_matches_the_general_scanner_bit_for_bit() {
+        let text = "\
+3
+Lattice=\"4.0 0.0 0.0 0.0 5.5 0.0 0.0 0.0 6.25\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+Cu 0.1 0.2 0.3
+Cu -1.25 2.5 3.125
+Cu 1.0e-3 0.0 8.0
+3
+Lattice=\"4.0 0.0 0.0 0.0 5.5 0.0 0.0 0.0 6.25\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+Cu 0.10000001 -0.0 1.0
+Cu 2.0 3.0 4.0
+Cu 5.5 6.5 7.5
+";
+        let fast = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let general = tables_general(text.as_bytes()).unwrap();
+        assert_eq!(fast.n_frames, general.n_frames);
+        assert_eq!(fast.n_atoms, general.n_atoms);
+        assert_eq!(expanded_species(&fast), general.species);
+        assert_eq!(fast.cell.len(), general.cell.len());
+        for (left, right) in fast.cell.iter().zip(general.cell.iter()) {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+        assert_eq!(fast.positions.len(), general.positions.len());
+        for (left, right) in fast.positions.iter().zip(general.positions.iter()) {
+            assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
+        }
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
+        assert_eq!(expanded_species(&parallel), general.species);
+        for (left, right) in parallel.positions.iter().zip(general.positions.iter()) {
+            assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
+        }
+        let mixed = "\
+2
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+Cu 0.0 0.0 0.0
+H 1.0 0.0 0.0
+";
+        let mixed_fast = tables_from_extxyz_bytes(mixed.as_bytes()).unwrap();
+        let mixed_general = tables_general(mixed.as_bytes()).unwrap();
+        assert_eq!(expanded_species(&mixed_fast), mixed_general.species);
+        for (left, right) in mixed_fast
+            .positions
+            .iter()
+            .zip(mixed_general.positions.iter())
+        {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+    }
+
     #[test]
     fn threaded_tables_match_the_serial_scan() {
         let mut text = String::new();
@@ -932,7 +1193,10 @@ Cu 4.0 5.0 6.0 63.546
         assert_eq!(tables.n_atoms, 2);
         assert_eq!(tables.positions, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         assert_eq!(tables.masses, vec![63.546, 63.546]);
-        assert_eq!(tables.species, vec!["Cu".to_string(), "Cu".to_string()]);
+        assert_eq!(
+            expanded_species(&tables),
+            vec!["Cu".to_string(), "Cu".to_string()]
+        );
         assert!(tables.columns.iter().any(|column| column.name == "species"));
         assert!((tables.cell[0] - 10.0).abs() < 1e-12);
         assert!((tables.cell[3] - 90.0).abs() < 1e-8);
