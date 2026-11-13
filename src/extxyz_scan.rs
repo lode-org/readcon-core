@@ -346,11 +346,10 @@ pub fn tables_from_extxyz_bytes_reporting(
                 real: if spec.kind == b'S' {
                     Vec::new()
                 } else {
-                    // Every lane is overwritten by the workers before a read.
-                    // Zeroing here was a serial pass over the whole column.
-                    let mut values = Vec::with_capacity(n);
-                    unsafe { values.set_len(n) };
-                    values
+                    // Workers write each lane, then `assemble_tables` sets
+                    // the length. Publishing the length first would drop
+                    // uninitialised floats if a worker returned early.
+                    Vec::with_capacity(n)
                 },
             }
         })
@@ -559,9 +558,11 @@ fn split_lines_indexed(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
         newlines.len() + 1
     };
     let mut lines: Vec<&[u8]> = Vec::with_capacity(n);
-    // Each slot is written before the vector is read. `&[u8]` has no
-    // destructor, so a short write still drops.
-    unsafe { lines.set_len(n) };
+    if n == 0 {
+        return lines;
+    }
+    // The length stays 0 until every slot has a line. `&[u8]` has no
+    // destructor, so a short write still drops the empty vector.
     let ptr = lines.as_mut_ptr() as usize;
     let newlines = &newlines;
     let chunk = n.div_ceil(workers.max(1)).max(1);
@@ -590,6 +591,8 @@ fn split_lines_indexed(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
             });
         }
     });
+    // SAFETY: the scope wrote lines[0..n] before returning.
+    unsafe { lines.set_len(n) };
     lines
 }
 
@@ -884,8 +887,6 @@ fn fill_nan(n: usize) -> Vec<f64> {
     if n == 0 {
         return values;
     }
-    // SAFETY: every lane is written before the vector is read.
-    unsafe { values.set_len(n) };
     let ptr = values.as_mut_ptr() as usize;
     let threads = (n / 65_536).clamp(1, 8);
     std::thread::scope(|scope| {
@@ -904,6 +905,8 @@ fn fill_nan(n: usize) -> Vec<f64> {
             });
         }
     });
+    // SAFETY: every index in 0..n was assigned above.
+    unsafe { values.set_len(n) };
     values
 }
 
@@ -951,6 +954,23 @@ fn assemble_tables(
     cell: Vec<f64>,
     mut columns: Vec<XyzColumn>,
 ) -> Result<XyzTables, String> {
+    for column in &mut columns {
+        if column.kind == b'S' {
+            continue;
+        }
+        let n = n_frames
+            .saturating_mul(n_atoms)
+            .saturating_mul(column.width);
+        if column.real.len() == n {
+            continue;
+        }
+        if column.real.capacity() < n {
+            return Err("pos".to_string());
+        }
+        // SAFETY: the workers finished writing this column. The length
+        // stayed 0 so an error path drops an empty allocation.
+        unsafe { column.real.set_len(n) };
+    }
     let mut positions = Vec::new();
     let mut masses = fill_nan(n_frames * n_atoms);
     let mut species = Vec::new();
@@ -1534,20 +1554,30 @@ pub fn extxyz_bytes_with_threads(
         error?;
         let total: usize = parts.iter().map(|part| part.len()).sum();
         let mut out = Vec::with_capacity(total);
-        unsafe { out.set_len(total) };
-        let dest = out.as_mut_ptr() as usize;
-        std::thread::scope(|scope| {
-            let mut at = 0usize;
-            for part in &parts {
-                let src = part.as_ptr() as usize;
-                let n = part.len();
-                let offset = at;
-                scope.spawn(move || unsafe {
-                    std::ptr::copy_nonoverlapping(src as *const u8, (dest + offset) as *mut u8, n);
-                });
-                at += n;
-            }
-        });
+        if total > 0 {
+            let dest = out.as_mut_ptr() as usize;
+            std::thread::scope(|scope| {
+                let mut at = 0usize;
+                for part in &parts {
+                    let n = part.len();
+                    if n == 0 {
+                        continue;
+                    }
+                    let src = part.as_ptr() as usize;
+                    let offset = at;
+                    scope.spawn(move || unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            src as *const u8,
+                            (dest + offset) as *mut u8,
+                            n,
+                        );
+                    });
+                    at += n;
+                }
+            });
+            // SAFETY: the copies covered `total` disjoint bytes.
+            unsafe { out.set_len(total) };
+        }
         return Ok(out);
     }
     let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
@@ -2274,5 +2304,204 @@ Cu 4.0 5.0 6.0 63.546
         let serial = written(&many, 1);
         assert_eq!(written(&many, 2), serial);
         assert_eq!(written(&many, 8), serial);
+    }
+
+    fn assert_same_tables(left: &XyzTables, right: &XyzTables) {
+        assert_eq!(left.n_frames, right.n_frames);
+        assert_eq!(left.n_atoms, right.n_atoms);
+        assert_eq!(left.uniform_species, right.uniform_species);
+        assert_eq!(expanded_species(left), expanded_species(right));
+        for (a, b) in left.positions.iter().zip(&right.positions) {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+        for (a, b) in left.masses.iter().zip(&right.masses) {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+        for (a, b) in left.cell.iter().zip(&right.cell) {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+        assert_eq!(left.columns.len(), right.columns.len());
+        for (a, b) in left.columns.iter().zip(&right.columns) {
+            assert_eq!(a.name, b.name);
+            assert_eq!(a.text, b.text);
+            for (x, y) in a.real.iter().zip(&b.real) {
+                assert_eq!(x.to_bits(), y.to_bits());
+            }
+        }
+    }
+
+    #[test]
+    fn a_split_frame_does_not_become_uniform_when_workers_disagree() {
+        let n = 65536usize;
+        let mut text = format!(
+            "{n}\nLattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n"
+        );
+        for index in 0..n {
+            let symbol = if index < n / 2 { "Cu" } else { "H" };
+            text.push_str(&format!("{symbol} {index}.125 0.25 0.5\n"));
+        }
+        assert!(text.len() >= (1 << 20));
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 8).unwrap();
+        assert!(serial.uniform_species.is_none());
+        assert!(parallel.uniform_species.is_none());
+        assert_same_tables(&serial, &parallel);
+        let names = expanded_species(&parallel);
+        assert_eq!(names[0], "Cu");
+        assert_eq!(names[n / 2 - 1], "Cu");
+        assert_eq!(names[n / 2], "H");
+        assert_eq!(names[n - 1], "H");
+    }
+
+    #[test]
+    fn a_changing_lattice_stays_per_frame_when_the_file_is_indexed() {
+        let frames = 320usize;
+        let atoms = 200usize;
+        let symbols = ["Cu", "Ni", "Al", "H"];
+        let mut text = String::new();
+        for frame in 0..frames {
+            text.push_str(&format!(
+                "{atoms}\nLattice=\"{frame}.5 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n"
+            ));
+            for atom in 0..atoms {
+                let symbol = symbols[atom % 4];
+                text.push_str(&format!("{symbol} {frame}.{atom} 0.25 0.5\n"));
+            }
+        }
+        assert!(text.len() >= (1 << 20));
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 8).unwrap();
+        assert!(serial.uniform_species.is_none());
+        assert_same_tables(&serial, &parallel);
+        assert_eq!(serial.cell[0].to_bits(), 0.5f64.to_bits());
+        assert_eq!(
+            serial.cell[6 * (frames - 1)].to_bits(),
+            ((frames - 1) as f64 + 0.5).to_bits()
+        );
+    }
+
+    #[test]
+    fn uniform_worker_slices_of_different_symbols_stay_mixed() {
+        let mut text = String::new();
+        for frame in 0..4 {
+            let symbol = if frame < 2 { "Cu" } else { "H" };
+            let lattice = frame as f64 + 0.5;
+            text.push_str(&format!(
+                "2\nLattice=\"{lattice} 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n{symbol} 0.1 0.2 0.3\n{symbol} 1 0 0\n"
+            ));
+        }
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
+        assert!(parallel.uniform_species.is_none());
+        assert_eq!(
+            expanded_species(&parallel),
+            ["Cu", "Cu", "Cu", "Cu", "H", "H", "H", "H"].map(str::to_string)
+        );
+        assert_same_tables(&serial, &parallel);
+    }
+
+    #[test]
+    fn a_later_frame_with_a_different_properties_line_is_rejected() {
+        let text = "\
+2
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+Cu 0 0 0
+H 1 0 0
+2
+Lattice=\"2 0 0 0 2 0 0 0 2\" Properties=species:S:1:pos:R:3:masses:R:1 pbc=\"T T T\"
+Cu 0 0 0 63.546
+H 1 0 0 1.008
+";
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 8).unwrap_err();
+        assert_eq!(parallel, serial);
+        assert_eq!(serial, "properties");
+    }
+
+    #[test]
+    fn extra_text_and_real_columns_match_the_serial_scan() {
+        let text = "\
+2
+Lattice=\"1 0 0 0 2 0 0 0 3\" Properties=species:S:1:pos:R:3:label:S:1:forces:R:3 pbc=\"T T T\"
+Cu 0.1 0.2 0.3 alpha 0.25 0.5 1.0
+H 1 0 0 beta 0 0 0
+2
+Lattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3:label:S:1:forces:R:3 pbc=\"T T T\"
+Ni 0 0 1 gamma -1.5 0 0
+Al 2 0 0 delta 0.125 0.25 0.5
+";
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 4).unwrap();
+        assert_same_tables(&serial, &parallel);
+        let label = parallel
+            .columns
+            .iter()
+            .find(|column| column.name == "label")
+            .unwrap();
+        assert_eq!(
+            label.text,
+            ["alpha", "beta", "gamma", "delta"].map(str::to_string)
+        );
+    }
+
+    #[test]
+    fn path_writes_match_the_serial_bytes_for_mixed_frames_and_a_wide_frame() {
+        fn write_both(text: &str, workers: usize) -> (Vec<u8>, Vec<u8>) {
+            let tables = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+            let symbols = expanded_species(&tables);
+            let mut columns = tables.columns.clone();
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "species") {
+                column.text.clone_from(&symbols);
+            }
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "pos") {
+                column.real.clone_from(&tables.positions);
+            }
+            let sources: Vec<&(dyn ExtxyzSource + Sync)> = columns
+                .iter()
+                .map(|column| column as &(dyn ExtxyzSource + Sync))
+                .collect();
+            let memory = extxyz_bytes_with_threads(
+                tables.n_frames,
+                tables.n_atoms,
+                &tables.cell,
+                &sources,
+                1,
+            )
+            .unwrap();
+            let path = std::env::temp_dir().join(format!(
+                "readcon-extxyz-path-{}-{workers}-{}.xyz",
+                std::process::id(),
+                tables.n_frames
+            ));
+            extxyz_path_with_threads(
+                &path,
+                tables.n_frames,
+                tables.n_atoms,
+                &tables.cell,
+                &sources,
+                workers,
+            )
+            .unwrap();
+            let got = std::fs::read(&path).unwrap();
+            let _ = std::fs::remove_file(&path);
+            (memory, got)
+        }
+        let mut many = String::new();
+        for frame in 0..32 {
+            many.push_str(&format!(
+                "2\nLattice=\"{frame}.5 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\nCu 0.1 0.2 0.3\nH 1 0 0\n"
+            ));
+        }
+        let (memory, got) = write_both(&many, 8);
+        assert_eq!(got, memory);
+        let mut wide = String::from(
+            "4096\nLattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n",
+        );
+        for index in 0..4096 {
+            let symbol = if index < 2048 { "Cu" } else { "Ni" };
+            wide.push_str(&format!("{symbol} {index}.125 0.25 0.5\n"));
+        }
+        let (memory, got) = write_both(&wide, 8);
+        assert_eq!(got, memory);
     }
 }

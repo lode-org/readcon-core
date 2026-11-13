@@ -160,6 +160,10 @@ name = "weak_scale_mpi"
 required-features = ["mpi"]
 
 [[example]]
+name = "strong_scale_mpi"
+required-features = ["mpi"]
+
+[[example]]
 name = "serial_probe"
 
 [[example]]

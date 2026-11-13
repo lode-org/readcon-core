@@ -104,24 +104,15 @@ pub(crate) fn positions_parallel(
     let mut out = parse_con(bytes, rich, false, false, workers)?;
     let n_atoms: usize = out.counts.iter().sum();
     let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
-    // The workers write every lane. A zeroed allocation would fault the
-    // slab on this thread before they start.
-    if n_atoms > 0 {
-        // SAFETY: every index is overwritten before the buffer is read,
-        // and `f64` has no destructor.
-        unsafe { positions.set_len(n_atoms * 3) };
-    }
     let mut ids = Vec::<u64>::new();
     let mut flags = Vec::<u8>::new();
     if rich && n_atoms > 0 {
         ids = Vec::with_capacity(n_atoms);
         flags = Vec::with_capacity(n_atoms);
-        // SAFETY: same as the position slab.
-        unsafe {
-            ids.set_len(n_atoms);
-            flags.set_len(n_atoms);
-        }
     }
+    let positions_ptr = positions.as_mut_ptr() as usize;
+    let ids_ptr = ids.as_mut_ptr() as usize;
+    let flags_ptr = flags.as_mut_ptr() as usize;
     let mut jobs = Vec::with_capacity(out.n_frames);
     let mut dest_at = 0usize;
     for frame in 0..out.n_frames {
@@ -140,37 +131,41 @@ pub(crate) fn positions_parallel(
             dest,
             workers,
             rich,
-            positions.as_mut_ptr(),
-            ids.as_mut_ptr(),
-            flags.as_mut_ptr(),
-        )?;
-        out.positions = positions;
-        if rich {
-            out.ids = ids;
-            out.flags = flags;
-        }
-        return Ok(out);
-    }
-    let positions_ptr = positions.as_mut_ptr() as usize;
-    let ids_ptr = ids.as_mut_ptr() as usize;
-    let flags_ptr = flags.as_mut_ptr() as usize;
-    use rayon::prelude::*;
-    let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
-        fill_frame_rows(
-            bytes,
-            &out,
-            frame,
-            dest,
-            workers,
-            rich,
             positions_ptr as *mut f64,
             ids_ptr as *mut u64,
             flags_ptr as *mut u8,
-        )
-        .err()
-    });
-    if let Some(err) = failed {
-        return Err(err);
+        )?;
+    } else if !jobs.is_empty() {
+        use rayon::prelude::*;
+        let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
+            fill_frame_rows(
+                bytes,
+                &out,
+                frame,
+                dest,
+                workers,
+                rich,
+                positions_ptr as *mut f64,
+                ids_ptr as *mut u64,
+                flags_ptr as *mut u8,
+            )
+            .err()
+        });
+        if let Some(err) = failed {
+            return Err(err);
+        }
+    }
+    if n_atoms > 0 {
+        // SAFETY: fill_frame_rows wrote every coordinate before this.
+        // The length stays 0 if a fill returns an error, so the drop
+        // does not read an uninitialised lane.
+        unsafe {
+            positions.set_len(n_atoms * 3);
+            if rich {
+                ids.set_len(n_atoms);
+                flags.set_len(n_atoms);
+            }
+        }
     }
     out.positions = positions;
     if rich {

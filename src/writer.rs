@@ -1361,25 +1361,31 @@ fn append_coord_rows(
         let vel_len: usize = parts.iter().map(|(_, rows)| rows.len()).sum();
         let coord_at = buf.len();
         buf.reserve(coord_len);
-        // Every byte is overwritten by the copies below. Zeroing it first
-        // was a serial pass over the whole block.
-        unsafe { buf.set_len(coord_at + coord_len) };
         if let Some(dest) = vel.as_deref_mut() {
             dest.reserve(vel_len);
         }
-        let coord_ptr = buf.as_mut_ptr() as usize;
-        std::thread::scope(|scope| {
-            let mut at = coord_at;
-            for (coord, _) in &parts {
-                let dest = coord_ptr + at;
-                let src = coord.as_ptr() as usize;
-                let n = coord.len();
-                scope.spawn(move || unsafe {
-                    std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, n);
-                });
-                at += n;
-            }
-        });
+        if coord_len > 0 {
+            let coord_ptr = buf.as_mut_ptr() as usize;
+            std::thread::scope(|scope| {
+                let mut at = coord_at;
+                for (coord, _) in &parts {
+                    let n = coord.len();
+                    if n == 0 {
+                        continue;
+                    }
+                    let dest = coord_ptr + at;
+                    let src = coord.as_ptr() as usize;
+                    scope.spawn(move || unsafe {
+                        std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, n);
+                    });
+                    at += n;
+                }
+            });
+            // SAFETY: the copies covered coord_len bytes past coord_at.
+            // The length stays put until then, so a panic drops only the
+            // bytes that were already initialised.
+            unsafe { buf.set_len(coord_at + coord_len) };
+        }
         if let Some(dest) = vel.as_deref_mut() {
             for (_, rows) in &parts {
                 dest.extend_from_slice(rows);
@@ -2339,5 +2345,86 @@ mod parallel_write_tests {
         let got = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(got, serial);
+    }
+
+    #[test]
+    fn a_wide_file_write_matches_the_serial_bytes_when_ids_are_not_dense() {
+        let n = 4096usize;
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125 0.25 0.5 0 {}\n", i + 10));
+        }
+        text.push_str("\nCu\nVelocities of Component 1\n");
+        for i in 0..n {
+            text.push_str(&format!("{}.0001 0.0002 -0.0001 0 {}\n", i % 7, i + 10));
+        }
+        let frames = frames_from_text(&text, Some(1)).unwrap();
+        let serial = write_frames_to_vec(&frames).unwrap();
+        let parallel = write_frames_to_vec_with_threads(&frames, 8, None, false).unwrap();
+        assert_eq!(parallel, serial);
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let path = std::env::temp_dir().join(format!(
+            "readcon-wide-stream-{}-{n}.con",
+            std::process::id()
+        ));
+        super::write_frame_refs_to_path(&path, &refs, 8, None, false, false).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
+    }
+
+    #[test]
+    fn a_mixed_wide_frame_matches_the_serial_parse() {
+        let n = 7000usize;
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n2\n",
+        );
+        text.push_str(&format!("{n} {n}\n63.546 1.008\n"));
+        text.push_str("Cu\nCoordinates of Component 1\n");
+        for i in 0..n {
+            text.push_str(&format!("{i}.125 0.25 0.5 0 {i}\n"));
+        }
+        text.push_str("H\nCoordinates of Component 2\n");
+        for i in 0..n {
+            let id = n + i;
+            text.push_str(&format!("1.5 2.25 {i}.5 0 {id}\n"));
+        }
+        assert!(text.len() >= (256 << 10), "frame is {} bytes", text.len());
+        let serial = frames_from_text(&text, Some(1)).unwrap();
+        let parallel = frames_from_text(&text, Some(8)).unwrap();
+        assert_eq!(parallel.len(), 1);
+        assert_eq!(parallel[0].atom_data.len(), n * 2);
+        assert_eq!(parallel[0].atom_data[0].symbol.as_ref(), "Cu");
+        assert_eq!(parallel[0].atom_data[n].symbol.as_ref(), "H");
+        assert_eq!(
+            parallel[0].atom_data[n].atom_id,
+            serial[0].atom_data[n].atom_id
+        );
+        assert_eq!(parallel, serial);
+    }
+
+    #[test]
+    fn coordinate_lines_match_the_serial_frame_body() {
+        let frames = frames_from_text(&wide_text(32), Some(1)).unwrap();
+        let lines = super::format_coordinate_lines(&frames[0].atom_data).unwrap();
+        let serial = write_frames_to_vec(&frames).unwrap();
+        let text = std::str::from_utf8(&serial).unwrap();
+        let marker = "Coordinates of Component 1\n";
+        let start = text.find(marker).unwrap() + marker.len();
+        assert_eq!(lines, text.as_bytes()[start..]);
+    }
+
+    #[test]
+    fn pwrite_offsets_follow_an_exclusive_scan() {
+        let path =
+            std::env::temp_dir().join(format!("readcon-pwrite-scan-{}.bin", std::process::id()));
+        let parts: [&[u8]; 4] = [b"abc", b"", b"def\n", b"g"];
+        super::pwrite_borrowed(&path, &parts).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, b"abcdef\ng");
     }
 }

@@ -161,13 +161,6 @@ pub(crate) fn parallel_coord_rows(
     let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
     let mut ids = Vec::<u64>::with_capacity(n);
     let mut flags = Vec::<[bool; 3]>::with_capacity(n);
-    // Every lane is overwritten before a read. `f64` and `bool` have no
-    // destructor, so a short write still drops cleanly.
-    unsafe {
-        xyz.set_len(n * 3);
-        ids.set_len(n);
-        flags.set_len(n);
-    }
     let mut atoms_raw: Vec<std::mem::MaybeUninit<crate::types::AtomDatum>> = Vec::new();
     if symbol.is_some() {
         atoms_raw = Vec::with_capacity(n);
@@ -201,6 +194,13 @@ pub(crate) fn parallel_coord_rows(
     if let Err(err) = built {
         std::mem::forget(atoms_raw);
         return Err(err);
+    }
+    // SAFETY: every row was written before `built` returned Ok. The
+    // length stays 0 on the error path above.
+    unsafe {
+        xyz.set_len(n * 3);
+        ids.set_len(n);
+        flags.set_len(n);
     }
     let atoms = if symbol.is_some() {
         let mut raw = std::mem::ManuallyDrop::new(atoms_raw);
