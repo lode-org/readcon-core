@@ -3808,9 +3808,12 @@ fn piped_stock_frames(
                                         ready.store(true, Ordering::Release);
                                     }
                                     None => {
-                                        return Err(
-                                            "indexed member is not one coordinate block".into()
-                                        );
+                                        // More than one species, or a header this
+                                        // fast path does not own. Stop the other
+                                        // workers and let the full parser read
+                                        // the concatenated members.
+                                        failed.store(true, Ordering::Release);
+                                        return Ok(());
                                     }
                                 }
                             }

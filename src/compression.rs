@@ -695,8 +695,9 @@ fn write_fused_frame(
     }
     let header = crate::writer::binding_header_bytes(frame)
         .map_err(|err| io::Error::other(err.to_string()))?;
-    let slots: Vec<std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>> =
-        (0..ranges.len()).map(|_| std::sync::Mutex::new(None)).collect();
+    let slots: Vec<std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>> = (0..ranges.len())
+        .map(|_| std::sync::Mutex::new(None))
+        .collect();
     let threads = threads.max(1).min(ranges.len());
     let ranges_ref = &ranges;
     let rows_ref = &rows;
@@ -2046,5 +2047,72 @@ mod tests {
             );
             assert_eq!(out.stdout, expect);
         }
+    }
+
+    fn copper_frame(n: usize) -> crate::types::ConFrame {
+        let mut builder =
+            crate::types::ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for i in 0..n {
+            builder.add_atom(
+                "Cu",
+                i as f64,
+                0.25,
+                0.5,
+                [false, false, false],
+                i as u64,
+                63.546,
+            );
+        }
+        builder.build().unwrap()
+    }
+
+    fn coords(frame: &crate::types::ConFrame) -> Vec<f64> {
+        frame
+            .atom_data
+            .iter()
+            .flat_map(|atom| [atom.x(), atom.y(), atom.z()])
+            .collect()
+    }
+
+    #[test]
+    fn fused_gzip_round_trips_an_odd_atom_count_on_one_and_many_threads() {
+        let frame = copper_frame(5);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("odd.con.gz");
+        let members = write_fused_gzip_frame(&path, &frame, 3, 2).unwrap();
+        assert!(members >= 2);
+        let one = crate::iterators::read_all_frames_phased(&path, Some(1)).unwrap();
+        let many = crate::iterators::read_all_frames_phased(&path, Some(4)).unwrap();
+        assert_eq!(one.frames.len(), 1);
+        assert_eq!(coords(&one.frames[0]), coords(&frame));
+        assert_eq!(coords(&many.frames[0]), coords(&frame));
+    }
+
+    #[test]
+    fn fused_gzip_round_trips_two_species_on_many_threads() {
+        let mut builder =
+            crate::types::ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for i in 0..4 {
+            builder.add_atom("Cu", i as f64, 0.0, 0.0, [false; 3], i as u64, 63.546);
+        }
+        for i in 0..3 {
+            builder.add_atom("H", i as f64, 1.0, 0.0, [false; 3], 4 + i as u64, 1.008);
+        }
+        let frame = builder.build().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("alloy.con.gz");
+        write_fused_gzip_frame(&path, &frame, 2, 2).unwrap();
+        let one = crate::iterators::read_all_frames_phased(&path, Some(1)).unwrap();
+        let many = crate::iterators::read_all_frames_phased(&path, Some(4)).unwrap();
+        assert_eq!(coords(&one.frames[0]), coords(&frame));
+        assert_eq!(coords(&many.frames[0]), coords(&frame));
+        assert_eq!(
+            many.frames[0].atom_data[0].symbol.as_ref(),
+            frame.atom_data[0].symbol.as_ref()
+        );
+        assert_eq!(
+            many.frames[0].atom_data[4].symbol.as_ref(),
+            frame.atom_data[4].symbol.as_ref()
+        );
     }
 }
