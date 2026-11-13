@@ -136,3 +136,49 @@ def test_write_columns_round_trip(tmp_path: Path) -> None:
     again = readcon.read_con(str(dst), n_threads=1).columns()
     for key in ("positions", "masses", "fixed", "cell", "velocities"):
         assert np.asarray(again[key]).tobytes() == np.asarray(cols[key]).tobytes()
+
+
+def test_write_columns_matches_the_frame_writer(tmp_path: Path) -> None:
+    """Column bytes match a binding rewrite, on one thread and on several."""
+    import readcon
+
+    src = tmp_path / "in.convel"
+    columns_path = tmp_path / "columns.con"
+    frames_path = tmp_path / "frames.con"
+    _write_convel(src)
+    cols = readcon.read_con(str(src), n_threads=1).columns()
+    readcon.write_columns(str(columns_path), cols, n_threads=1)
+    frames = readcon.read_con(str(columns_path), n_threads=1)
+    readcon.write_con(str(frames_path), frames, n_threads=1)
+    assert columns_path.read_bytes() == frames_path.read_bytes()
+    readcon.write_columns(str(columns_path), cols, n_threads=4)
+    assert columns_path.read_bytes() == frames_path.read_bytes()
+
+
+def test_conbin_round_trip_keeps_masses_constraints_and_cell(tmp_path: Path) -> None:
+    import readcon
+
+    src = tmp_path / "in.convel"
+    binary = tmp_path / "in.conbin"
+    _write_convel(src)
+    frames = readcon.read_con(str(src), n_threads=1)
+    cols = frames.columns()
+    readcon.write_conbin(str(src), str(binary))
+    got = readcon.read_conbin_columns(str(binary), n_threads=1)
+    n_frames = int(got["n_frames"])
+    n_atoms = int(got["n_atoms"])
+    assert np.allclose(
+        np.asarray(got["positions"]).reshape(n_frames, n_atoms, 3), cols["positions"]
+    )
+    assert np.allclose(
+        np.asarray(got["velocities"]).reshape(n_frames, n_atoms, 3), cols["velocities"]
+    )
+    assert np.allclose(
+        np.asarray(got["masses"]).reshape(n_frames, n_atoms), cols["masses"]
+    )
+    assert np.allclose(np.asarray(got["cell"]).reshape(n_frames, 6), cols["cell"])
+    masks = np.asarray(got["fixed_mask"], dtype=np.uint8).reshape(n_frames, n_atoms)
+    fixed = np.stack(
+        [(masks & 1) > 0, (masks >> 1) & 1 > 0, (masks >> 2) & 1 > 0], axis=-1
+    )
+    assert np.array_equal(fixed, np.asarray(cols["fixed"]) != 0)
