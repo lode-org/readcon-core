@@ -713,6 +713,35 @@ fn chemfiles_uniform_frame_uses_the_parallel_scan() {
 
 #[cfg(feature = "chemfiles")]
 #[test]
+fn chemfiles_mixed_frame_uses_the_parallel_scan() {
+    use readcon_core::chemfiles_import::con_frames_from_memory;
+    let n = 65_536usize;
+    let mut xyz = format!("{n}\nmixed Cu H\n");
+    xyz.reserve(n.saturating_mul(16));
+    for index in 0..n {
+        if index % 2 == 0 {
+            xyz.push_str("Cu 0.0 0.0 0.0\n");
+        } else {
+            xyz.push_str("H 1.0 0.0 0.0\n");
+        }
+    }
+    let frames = con_frames_from_memory(&xyz, "XYZ").expect("mixed xyz");
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].atom_data.len(), n);
+    let mut saw_cu = false;
+    let mut saw_h = false;
+    for atom in &frames[0].atom_data {
+        match atom.symbol.as_ref() {
+            "Cu" => saw_cu = true,
+            "H" => saw_h = true,
+            other => panic!("unexpected symbol {other}"),
+        }
+    }
+    assert!(saw_cu && saw_h);
+}
+
+#[cfg(feature = "chemfiles")]
+#[test]
 fn chemfiles_import_surface() {
     use readcon_core::chemfiles_import::{
         chemfiles_enabled, con_frames_from_memory, con_frames_from_trajectory_path,
