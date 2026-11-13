@@ -11,12 +11,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
+use std::sync::Arc;
 
 use chemfiles::{BondOrder, CellShape, Frame, Property, Trajectory, UnitCell};
 use serde_json::{Value, json};
 
 use super::{ChemfilesReadOpts, chemfiles_internal_units_json};
-use crate::types::{Bond, ConFrame, ConFrameBuilder, meta};
+use crate::storage_dtype::FloatArray2;
+use crate::types::{AtomDatum, Bond, ConFrame, FrameHeader, FrameMeta, PreboxHeader, meta};
 
 /// Map chemfiles bond order to optional integer stored in CON `bonds` metadata.
 fn bond_order_to_i32(order: BondOrder) -> Option<i32> {
@@ -333,7 +335,11 @@ fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
 
 /// Convert one chemfiles frame into a writer-ready [`ConFrame`].
 ///
-/// - Positions always come from the frame.
+/// Positions always come from the frame. A repeated symbol is one `Arc<str>`,
+/// not a `String` per atom. Name and type sidecars are stored only when a
+/// display name or atomic type differs from that CON symbol. Per-atom property
+/// maps are built only for atoms that actually have properties.
+///
 /// - Velocities are copied when `frame.has_velocities()` is true.
 /// - Chemfiles has no standard per-atom forces API; if a frame property
 ///   `forces` is present as a string it is ignored (cannot map safely).
@@ -359,101 +365,13 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
 
     let cell_ref = frame.cell();
     let (boxl, angles, has_pbc) = cell_to_box_and_angles(&cell_ref);
-    let mut builder = ConFrameBuilder::new(boxl, angles);
-    builder.prebox_header(format!("imported via chemfiles {}", chemfiles::version()));
-
     let velocities = if frame.has_velocities() {
         frame.velocities()
     } else {
         None
     };
 
-    let mut atom_props_all: Vec<BTreeMap<String, Value>> = Vec::with_capacity(n);
-    // Parallel arrays in chemfiles index order (= atom_id); survive type-grouped build.
-    let mut chfl_names: Vec<String> = Vec::with_capacity(n);
-    let mut chfl_types: Vec<String> = Vec::with_capacity(n);
-    let mut symbols: Vec<String> = Vec::with_capacity(n);
-    let mut any_name_type_extra = false;
-
-    for i in 0..n {
-        let atom = frame.atom(i);
-        let chfl_name = atom.name();
-        let chfl_type = atom.atomic_type();
-        let symbol = {
-            if !chfl_type.is_empty() {
-                chfl_type.clone()
-            } else if !chfl_name.is_empty() {
-                chfl_name.clone()
-            } else {
-                "X".to_string()
-            }
-        };
-        let display_name = if !chfl_name.is_empty() {
-            chfl_name.clone()
-        } else {
-            symbol.clone()
-        };
-        let atomic_type_str = if !chfl_type.is_empty() {
-            chfl_type.clone()
-        } else {
-            symbol.clone()
-        };
-        if display_name != symbol || atomic_type_str != symbol {
-            any_name_type_extra = true;
-        }
-        chfl_names.push(display_name);
-        chfl_types.push(atomic_type_str);
-        symbols.push(symbol);
-    }
-
-    // CON stores one mass per type. Chemfiles carries per-atom masses; a
-    // display name like H1 often has mass 0 while type H has 1.008. Collapse
-    // to one mass per CON symbol: prefer an atom whose name matches the type.
-    let mut type_mass: BTreeMap<String, f64> = BTreeMap::new();
-    let mut type_mass_canonical: BTreeMap<String, bool> = BTreeMap::new();
-    for i in 0..n {
-        let raw = frame.atom(i).mass();
-        if raw <= 0.0 {
-            continue;
-        }
-        let symbol = &symbols[i];
-        let canonical = chfl_names[i] == chfl_types[i];
-        let replace = match type_mass_canonical.get(symbol) {
-            None => true,
-            Some(false) if canonical => true,
-            _ => false,
-        };
-        if replace {
-            type_mass.insert(symbol.clone(), raw);
-            type_mass_canonical.insert(symbol.clone(), canonical);
-        }
-    }
-
-    for i in 0..n {
-        let atom = frame.atom(i);
-        let symbol = &symbols[i];
-        let mass = type_mass.get(symbol).copied().unwrap_or(1.0);
-        let pos = positions[i];
-        // chemfiles has no fix/constraint flags; default all mobile.
-        let fixed = [false, false, false];
-        builder.add_atom(symbol, pos[0], pos[1], pos[2], fixed, i as u64, mass);
-        if let Some(vels) = velocities
-            && let Some(v) = vels.get(i)
-        {
-            builder.with_velocity(*v);
-        }
-
-        let mut atom_props = BTreeMap::new();
-        for (key, prop) in atom.properties() {
-            atom_props.insert(key, property_to_json(&prop));
-        }
-        if atom.charge() != 0.0 {
-            atom_props
-                .entry("charge".into())
-                .or_insert_with(|| json!(atom.charge()));
-        }
-        atom_props_all.push(atom_props);
-    }
+    let geometry = import_geometry(frame, positions, velocities.as_deref())?;
 
     let mut metadata = BTreeMap::new();
     for (key, prop) in frame.properties() {
@@ -485,43 +403,48 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         metadata.insert(meta::LATTICE_VECTORS.into(), lv);
     }
 
-    let any_atom_props = atom_props_all.iter().any(|m| !m.is_empty());
-    if any_atom_props {
-        let arr: Vec<Value> = atom_props_all
-            .into_iter()
-            .map(|m| Value::Object(m.into_iter().collect()))
-            .collect();
-        metadata.insert(CHEMFILES_ATOM_PROPS_KEY.into(), Value::Array(arr));
+    if let Some(props) = geometry.atom_props {
+        metadata.insert(CHEMFILES_ATOM_PROPS_KEY.into(), Value::Array(props));
+    }
+    if let Some((names, types)) = geometry.sidecars {
+        metadata.insert(CHEMFILES_ATOM_NAMES_KEY.into(), Value::Array(names));
+        metadata.insert(CHEMFILES_ATOM_TYPES_KEY.into(), Value::Array(types));
     }
 
-    // Always store name/type sidecars on chemfiles import so selection can restore
-    // display names (H1) distinct from CON symbol/type (H) without CON v3.
-    if any_name_type_extra || n > 0 {
-        let names_json: Vec<Value> = chfl_names.into_iter().map(Value::String).collect();
-        let types_json: Vec<Value> = chfl_types.into_iter().map(Value::String).collect();
-        metadata.insert(CHEMFILES_ATOM_NAMES_KEY.into(), Value::Array(names_json));
-        metadata.insert(CHEMFILES_ATOM_TYPES_KEY.into(), Value::Array(types_json));
-    }
-
-    // Record chemfiles library version as an extra for provenance.
     metadata.insert(
         format!("{CHEMFILES_EXTRA_PREFIX}library_version"),
         Value::String(chemfiles::version()),
     );
-
-    // Numbers are already in chemfiles internal units (Å, Å/ps, amu).
-    // Stamp those onto line 2 so CON default time=fs cannot relabel velocities.
     stamp_chemfiles_units(&mut metadata);
 
-    builder.metadata(metadata);
-    let mut con = builder
-        .build()
-        .map_err(|e| ChemfilesImportError::InvalidFrame(e.to_string()))?;
+    let mut sections = Vec::new();
+    if velocities.is_some() {
+        sections.push(crate::types::SECTION_VELOCITIES.into());
+    }
+    let header = FrameHeader {
+        prebox_header: PreboxHeader::new(format!(
+            "imported via chemfiles {}",
+            chemfiles::version()
+        )),
+        boxl,
+        angles,
+        postbox_header: [String::new(), String::new()],
+        natm_types: geometry.kinds.len(),
+        natms_per_type: geometry.counts,
+        masses_per_type: geometry.masses,
+        spec_version: crate::CON_SPEC_VERSION,
+        metadata: FrameMeta::from_map(metadata),
+        sections,
+        strict_validation: false,
+        sections_declared: velocities.is_some(),
+    };
+    let mut con = crate::types::con_frame_coords_only_with_ids(
+        header,
+        geometry.atoms,
+        geometry.positions,
+        geometry.ids,
+    );
 
-    // Optional topology: chemfiles bonds -> CON metadata["bonds"].
-    // Chemfiles indices are 0..n in trajectory order. `ConFrameBuilder::build`
-    // groups atoms by symbol for CON layout, so bond endpoints must be remapped
-    // via `atom_id` (set to the chemfiles index above) into `atom_data` order.
     let chfl_bonds = bonds_from_chemfiles_frame(frame);
     if !chfl_bonds.is_empty() {
         let mut id_to_data_idx: BTreeMap<u64, u32> = BTreeMap::new();
@@ -560,6 +483,602 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
     }
 
     Ok(con)
+}
+
+struct ImportedKind {
+    symbol: Arc<str>,
+    mass: f64,
+    mass_set: bool,
+    canonical: bool,
+}
+
+struct ImportedGeometry {
+    kinds: Vec<ImportedKind>,
+    counts: Vec<usize>,
+    masses: Vec<f64>,
+    atoms: Vec<AtomDatum>,
+    positions: FloatArray2,
+    ids: Vec<u64>,
+    sidecars: Option<(Vec<Value>, Vec<Value>)>,
+    atom_props: Option<Vec<Value>>,
+}
+
+/// `chemfiles::Frame` is one pointer to `CHFL_FRAME` in 0.10. The safe
+/// `atom().name()` builds a fresh `String` on every call.
+fn frame_c_handle(frame: &Frame) -> *mut chemfiles_sys::CHFL_FRAME {
+    debug_assert_eq!(
+        std::mem::size_of_val(frame),
+        std::mem::size_of::<*mut chemfiles_sys::CHFL_FRAME>()
+    );
+    unsafe { std::mem::transmute_copy(frame) }
+}
+
+unsafe extern "C" {
+    fn rc_chemfiles_scan(
+        frame: *mut chemfiles_sys::CHFL_FRAME,
+        sym_of: *mut u32,
+        names: *mut [u8; 16],
+        masses: *mut f64,
+        max_kinds: u32,
+        n_kinds: *mut u32,
+        any_extra: *mut u32,
+        any_props: *mut u32,
+    ) -> i32;
+    fn rc_chemfiles_matches(
+        frame: *mut chemfiles_sys::CHFL_FRAME,
+        begin: u64,
+        end: u64,
+        symbol: *const std::os::raw::c_char,
+        mass: f64,
+        bad: *mut u32,
+    ) -> i32;
+    fn rc_chemfiles_atom_view(
+        frame: *mut chemfiles_sys::CHFL_FRAME,
+        index: u64,
+        name: *mut std::os::raw::c_char,
+        name_cap: u64,
+        type_name: *mut std::os::raw::c_char,
+        type_cap: u64,
+        mass: *mut f64,
+        charge: *mut f64,
+        nprops: *mut u64,
+    ) -> i32;
+}
+
+fn c_view(
+    frame: *mut chemfiles_sys::CHFL_FRAME,
+    index: usize,
+    name_buf: &mut Vec<u8>,
+    type_buf: &mut Vec<u8>,
+) -> Result<(usize, usize, f64, f64, u64), ChemfilesImportError> {
+    loop {
+        name_buf.fill(0);
+        type_buf.fill(0);
+        let mut mass = 0.0;
+        let mut charge = 0.0;
+        let mut nprops = 0u64;
+        let status = unsafe {
+            rc_chemfiles_atom_view(
+                frame,
+                index as u64,
+                name_buf.as_mut_ptr().cast(),
+                name_buf.len() as u64,
+                type_buf.as_mut_ptr().cast(),
+                type_buf.len() as u64,
+                &mut mass,
+                &mut charge,
+                &mut nprops,
+            )
+        };
+        if status != 0 {
+            return Err(ChemfilesImportError::InvalidFrame(format!(
+                "chemfiles atom {index} is missing"
+            )));
+        }
+        let name_end = name_buf.iter().position(|&byte| byte == 0).unwrap_or(0);
+        let type_end = type_buf.iter().position(|&byte| byte == 0).unwrap_or(0);
+        let name_full = name_end + 1 < name_buf.len();
+        let type_full = type_end + 1 < type_buf.len();
+        if (name_full && type_full) || name_buf.len() >= 4096 {
+            return Ok((name_end, type_end, mass, charge, nprops));
+        }
+        if !name_full {
+            name_buf.resize(name_buf.len() * 2, 0);
+        }
+        if !type_full {
+            type_buf.resize(type_buf.len() * 2, 0);
+        }
+    }
+}
+
+fn intern_symbol(kinds: &mut Vec<ImportedKind>, bytes: &[u8]) -> usize {
+    for (index, kind) in kinds.iter().enumerate() {
+        if kind.symbol.as_bytes() == bytes {
+            return index;
+        }
+    }
+    let text = std::str::from_utf8(bytes).unwrap_or("X");
+    kinds.push(ImportedKind {
+        symbol: Arc::from(text),
+        mass: 1.0,
+        mass_set: false,
+        canonical: false,
+    });
+    kinds.len() - 1
+}
+
+fn parallel_uniform(
+    handle: *mut chemfiles_sys::CHFL_FRAME,
+    positions: &[[f64; 3]],
+) -> Result<Option<ImportedGeometry>, ChemfilesImportError> {
+    let n = positions.len();
+    let mut name_buf = vec![0u8; 32];
+    let mut type_buf = vec![0u8; 32];
+    let (name_end, type_end, mass, charge, nprops) =
+        c_view(handle, 0, &mut name_buf, &mut type_buf)?;
+    if charge != 0.0 || nprops != 0 {
+        return Ok(None);
+    }
+    let name = &name_buf[..name_end];
+    let atomic_type = &type_buf[..type_end];
+    if !atomic_type.is_empty() && name != atomic_type {
+        return Ok(None);
+    }
+    let symbol_bytes = if !atomic_type.is_empty() {
+        atomic_type
+    } else if !name.is_empty() {
+        name
+    } else {
+        b"X".as_slice()
+    };
+    if symbol_bytes.len() >= 15 {
+        return Ok(None);
+    }
+    let stored_mass = if mass > 0.0 { mass } else { 1.0 };
+    let mut symbol_c = vec![0u8; symbol_bytes.len() + 1];
+    symbol_c[..symbol_bytes.len()].copy_from_slice(symbol_bytes);
+    let threads = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1)
+        .clamp(1, 8);
+    let mut flags = vec![0u32; threads];
+    let chunk = n.div_ceil(threads);
+    let handle_bits = handle as usize;
+    let symbol_bits = symbol_c.as_ptr() as usize;
+    std::thread::scope(|scope| {
+        for (thread, flag) in flags.iter_mut().enumerate() {
+            let begin = thread * chunk;
+            let end = (begin + chunk).min(n);
+            if begin >= end {
+                continue;
+            }
+            scope.spawn(move || {
+                let status = unsafe {
+                    rc_chemfiles_matches(
+                        handle_bits as *mut chemfiles_sys::CHFL_FRAME,
+                        begin as u64,
+                        end as u64,
+                        symbol_bits as *const std::os::raw::c_char,
+                        stored_mass,
+                        flag,
+                    )
+                };
+                if status != 0 {
+                    *flag = 1;
+                }
+            });
+        }
+    });
+    if flags.iter().any(|flag| *flag != 0) {
+        return Ok(None);
+    }
+    let text = std::str::from_utf8(symbol_bytes).unwrap_or("X");
+    let symbol: Arc<str> = Arc::from(text);
+    let mut flat = Vec::with_capacity(n * 3);
+    let src = unsafe { std::slice::from_raw_parts(positions.as_ptr().cast::<f64>(), n * 3) };
+    flat.extend_from_slice(src);
+    let xyz = flat.as_mut_ptr();
+    crate::types::bump_arc_str(&symbol, n);
+    let mut slots: Vec<std::mem::MaybeUninit<AtomDatum>> = Vec::with_capacity(n);
+    // Every index is written before this buffer is read as `AtomDatum`.
+    unsafe { slots.set_len(n) };
+    let slot_bits = slots.as_mut_ptr() as usize;
+    let xyz_bits = xyz as usize;
+    let symbol_ref = &symbol;
+    std::thread::scope(|scope| {
+        for thread in 0..threads {
+            let begin = thread * chunk;
+            let end = (begin + chunk).min(n);
+            if begin >= end {
+                continue;
+            }
+            scope.spawn(move || {
+                let slot_ptr = slot_bits as *mut std::mem::MaybeUninit<AtomDatum>;
+                let xyz = xyz_bits as *mut f64;
+                for index in begin..end {
+                    let arc = crate::types::share_arc_str(symbol_ref);
+                    let coord = unsafe { xyz.add(index * 3) };
+                    unsafe {
+                        (*slot_ptr.add(index)).write(AtomDatum::at_slot(
+                            arc,
+                            coord,
+                            [false, false, false],
+                            index as u64,
+                        ));
+                    }
+                }
+            });
+        }
+    });
+    let slot_ptr = slot_bits as *mut std::mem::MaybeUninit<AtomDatum>;
+    let capacity = slots.capacity();
+    let atoms = unsafe { Vec::from_raw_parts(slot_ptr.cast::<AtomDatum>(), n, capacity) };
+    std::mem::forget(slots);
+    crate::types::mark_uniform_symbol_drop(&atoms);
+    let ids: Vec<u64> = (0..n as u64).collect();
+    Ok(Some(ImportedGeometry {
+        kinds: vec![ImportedKind {
+            symbol,
+            mass: stored_mass,
+            mass_set: true,
+            canonical: true,
+        }],
+        counts: vec![n],
+        masses: vec![stored_mass],
+        atoms,
+        positions: FloatArray2::from_f64_row_major(n, 3, flat),
+        ids,
+        sidecars: None,
+        atom_props: None,
+    }))
+}
+
+fn scan_uniform(
+    handle: *mut chemfiles_sys::CHFL_FRAME,
+    positions: &[[f64; 3]],
+    velocities: Option<&[[f64; 3]]>,
+) -> Result<Option<ImportedGeometry>, ChemfilesImportError> {
+    let n = positions.len();
+    if n == 0 {
+        return Ok(None);
+    }
+    // The allocation bound is measured on a few thousand atoms, on one thread.
+    // A million-atom frame is checked in disjoint ranges.
+    if velocities.is_none() && n >= 65_536 {
+        if let Some(geometry) = parallel_uniform(handle, positions)? {
+            return Ok(Some(geometry));
+        }
+    }
+    const MAX_KINDS: usize = 64;
+    let mut sym_of = vec![0u32; n];
+    let mut names = [[0u8; 16]; MAX_KINDS];
+    let mut mass_of = [0.0f64; MAX_KINDS];
+    let mut n_kinds = 0u32;
+    let mut any_extra = 0u32;
+    let mut any_props = 0u32;
+    let status = unsafe {
+        rc_chemfiles_scan(
+            handle,
+            sym_of.as_mut_ptr(),
+            names.as_mut_ptr(),
+            mass_of.as_mut_ptr(),
+            MAX_KINDS as u32,
+            &mut n_kinds,
+            &mut any_extra,
+            &mut any_props,
+        )
+    };
+    if status == 3 || any_extra != 0 || any_props != 0 {
+        return Ok(None);
+    }
+    if status != 0 {
+        return Err(ChemfilesImportError::InvalidFrame(
+            "chemfiles frame scan failed".into(),
+        ));
+    }
+    let n_kinds = n_kinds as usize;
+    let mut kinds = Vec::with_capacity(n_kinds);
+    for index in 0..n_kinds {
+        let end = names[index].iter().position(|&byte| byte == 0).unwrap_or(0);
+        let text = std::str::from_utf8(&names[index][..end]).unwrap_or("X");
+        kinds.push(ImportedKind {
+            symbol: Arc::from(text),
+            mass: mass_of[index],
+            mass_set: true,
+            canonical: true,
+        });
+    }
+    if n_kinds == 1 && velocities.is_none() {
+        let symbol = Arc::clone(&kinds[0].symbol);
+        let mut flat = Vec::with_capacity(n * 3);
+        let src = unsafe { std::slice::from_raw_parts(positions.as_ptr().cast::<f64>(), n * 3) };
+        flat.extend_from_slice(src);
+        let mut atoms = Vec::with_capacity(n);
+        let mut ids = Vec::with_capacity(n);
+        let ptr = flat.as_mut_ptr();
+        crate::types::bump_arc_str(&symbol, n);
+        for grouped in 0..n {
+            let slot = unsafe { ptr.add(grouped * 3) };
+            atoms.push(AtomDatum::at_slot(
+                crate::types::share_arc_str(&symbol),
+                slot,
+                [false, false, false],
+                grouped as u64,
+            ));
+            ids.push(grouped as u64);
+        }
+        crate::types::mark_uniform_symbol_drop(&atoms);
+        let positions_soa = FloatArray2::from_f64_row_major(n, 3, flat);
+        let masses = vec![kinds[0].mass];
+        return Ok(Some(ImportedGeometry {
+            kinds,
+            counts: vec![n],
+            masses,
+            atoms,
+            positions: positions_soa,
+            ids,
+            sidecars: None,
+            atom_props: None,
+        }));
+    }
+    let mut counts = vec![0usize; n_kinds];
+    for &kind in &sym_of {
+        counts[kind as usize] += 1;
+    }
+    let mut cursor = Vec::with_capacity(n_kinds);
+    let mut start = 0usize;
+    for &count in &counts {
+        cursor.push(start);
+        start += count;
+    }
+    let mut chem_at = vec![0usize; n];
+    let mut next = cursor;
+    for (index, &kind) in sym_of.iter().enumerate() {
+        let slot = next[kind as usize];
+        next[kind as usize] = slot + 1;
+        chem_at[slot] = index;
+    }
+    let mut flat = vec![0.0f64; n * 3];
+    for grouped in 0..n {
+        let chem = chem_at[grouped];
+        let row = positions[chem];
+        flat[grouped * 3..grouped * 3 + 3].copy_from_slice(&row);
+    }
+    let mut atoms = Vec::with_capacity(n);
+    let mut ids = Vec::with_capacity(n);
+    let ptr = flat.as_mut_ptr();
+    for grouped in 0..n {
+        let chem = chem_at[grouped];
+        let kind = sym_of[chem] as usize;
+        let symbol = Arc::clone(&kinds[kind].symbol);
+        let atom_id = chem as u64;
+        if let Some(vels) = velocities {
+            let row = positions[chem];
+            atoms.push(AtomDatum::with_sections(
+                symbol,
+                row[0],
+                row[1],
+                row[2],
+                [false, false, false],
+                atom_id,
+                Some(vels[chem]),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ));
+        } else {
+            let slot = unsafe { ptr.add(grouped * 3) };
+            atoms.push(AtomDatum::at_slot(
+                symbol,
+                slot,
+                [false, false, false],
+                atom_id,
+            ));
+        }
+        ids.push(atom_id);
+    }
+    let positions_soa = FloatArray2::from_f64_row_major(n, 3, flat);
+    let masses = kinds.iter().map(|kind| kind.mass).collect();
+    Ok(Some(ImportedGeometry {
+        kinds,
+        counts,
+        masses,
+        atoms,
+        positions: positions_soa,
+        ids,
+        sidecars: None,
+        atom_props: None,
+    }))
+}
+
+fn import_geometry(
+    frame: &Frame,
+    positions: &[[f64; 3]],
+    velocities: Option<&[[f64; 3]]>,
+) -> Result<ImportedGeometry, ChemfilesImportError> {
+    let n = positions.len();
+    let handle = frame_c_handle(frame);
+    if let Some(geometry) = scan_uniform(handle, positions, velocities)? {
+        return Ok(geometry);
+    }
+    let mut kinds: Vec<ImportedKind> = Vec::new();
+    let mut sym_of = Vec::with_capacity(n);
+    let mut name_buf = vec![0u8; 32];
+    let mut type_buf = vec![0u8; 32];
+    let mut extras: Vec<(usize, String, String)> = Vec::new();
+    let mut props: Vec<BTreeMap<String, Value>> = Vec::new();
+    let mut any_props = false;
+
+    for index in 0..n {
+        let (name_end, type_end, mass, charge, prop_count) =
+            c_view(handle, index, &mut name_buf, &mut type_buf)?;
+        let name = &name_buf[..name_end];
+        let atomic_type = &type_buf[..type_end];
+        let symbol = if !atomic_type.is_empty() {
+            atomic_type
+        } else if !name.is_empty() {
+            name
+        } else {
+            b"X".as_slice()
+        };
+        let kind = intern_symbol(&mut kinds, symbol);
+        let canonical = name == atomic_type;
+        if mass > 0.0 {
+            let slot = &mut kinds[kind];
+            let replace = !slot.mass_set || (canonical && !slot.canonical);
+            if replace {
+                slot.mass = mass;
+                slot.mass_set = true;
+                slot.canonical = canonical;
+            }
+        }
+        let display_differs = !name.is_empty() && name != symbol;
+        let type_differs = !atomic_type.is_empty() && atomic_type != symbol;
+        if display_differs || type_differs {
+            let display = if name.is_empty() {
+                std::str::from_utf8(symbol).unwrap_or("X").to_string()
+            } else {
+                std::str::from_utf8(name).unwrap_or("X").to_string()
+            };
+            let type_text = if atomic_type.is_empty() {
+                std::str::from_utf8(symbol).unwrap_or("X").to_string()
+            } else {
+                std::str::from_utf8(atomic_type).unwrap_or("X").to_string()
+            };
+            extras.push((index, display, type_text));
+        }
+        if prop_count > 0 || charge != 0.0 {
+            if !any_props {
+                props.resize_with(index, BTreeMap::new);
+                any_props = true;
+            }
+            let mut bag = BTreeMap::new();
+            for (key, prop) in frame.atom(index).properties() {
+                bag.insert(key, property_to_json(&prop));
+            }
+            if charge != 0.0 {
+                bag.entry("charge".into()).or_insert_with(|| json!(charge));
+            }
+            props.push(bag);
+        } else if any_props {
+            props.push(BTreeMap::new());
+        }
+        sym_of.push(kind as u32);
+    }
+
+    let n_kinds = kinds.len();
+    let mut counts = vec![0usize; n_kinds];
+    for &kind in &sym_of {
+        counts[kind as usize] += 1;
+    }
+    let mut cursor = Vec::with_capacity(n_kinds);
+    let mut start = 0usize;
+    for &count in &counts {
+        cursor.push(start);
+        start += count;
+    }
+    let mut place = vec![0usize; n];
+    let mut chem_at = vec![0usize; n];
+    let mut next = cursor;
+    for (index, &kind) in sym_of.iter().enumerate() {
+        let slot = next[kind as usize];
+        next[kind as usize] = slot + 1;
+        place[index] = slot;
+        chem_at[slot] = index;
+    }
+
+    let mut flat = vec![0.0f64; n.saturating_mul(3)];
+    for (index, row) in positions.iter().enumerate() {
+        let slot = place[index] * 3;
+        flat[slot..slot + 3].copy_from_slice(row);
+    }
+    let mut atoms = Vec::with_capacity(n);
+    let mut ids = Vec::with_capacity(n);
+    let ptr = flat.as_mut_ptr();
+    for grouped in 0..n {
+        let chem = chem_at[grouped];
+        let kind = sym_of[chem] as usize;
+        let symbol = Arc::clone(&kinds[kind].symbol);
+        let atom_id = chem as u64;
+        if let Some(vels) = velocities {
+            let row = positions[chem];
+            atoms.push(AtomDatum::with_sections(
+                symbol,
+                row[0],
+                row[1],
+                row[2],
+                [false, false, false],
+                atom_id,
+                Some(vels[chem]),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ));
+        } else {
+            let slot = unsafe { ptr.add(grouped * 3) };
+            atoms.push(AtomDatum::at_slot(
+                symbol,
+                slot,
+                [false, false, false],
+                atom_id,
+            ));
+        }
+        ids.push(atom_id);
+    }
+    let positions_soa = FloatArray2::from_f64_row_major(n, 3, flat);
+    // `from_f64_row_major` keeps the `Vec` allocation. Slots already point at it.
+
+    let sidecars = if extras.is_empty() {
+        None
+    } else {
+        let mut names = Vec::with_capacity(n);
+        let mut types = Vec::with_capacity(n);
+        let mut extra_at = vec![None; n];
+        for (index, display, atomic_type) in extras {
+            extra_at[index] = Some((display, atomic_type));
+        }
+        for index in 0..n {
+            let kind = &kinds[sym_of[index] as usize];
+            let symbol = kind.symbol.as_ref().to_string();
+            if let Some((display, atomic_type)) = extra_at[index].take() {
+                names.push(Value::String(display));
+                types.push(Value::String(atomic_type));
+            } else {
+                names.push(Value::String(symbol.clone()));
+                types.push(Value::String(symbol));
+            }
+        }
+        Some((names, types))
+    };
+    let atom_props = if any_props {
+        Some(
+            props
+                .into_iter()
+                .map(|bag| Value::Object(bag.into_iter().collect()))
+                .collect(),
+        )
+    } else {
+        None
+    };
+    let masses = kinds.iter().map(|kind| kind.mass).collect();
+    Ok(ImportedGeometry {
+        kinds,
+        counts,
+        masses,
+        atoms,
+        positions: positions_soa,
+        ids,
+        sidecars,
+        atom_props,
+    })
 }
 
 /// Open a trajectory with chemfiles and convert every step to [`ConFrame`].
@@ -847,7 +1366,10 @@ H -0.240  0.927  0.000
         assert_eq!(con.atom_data.len(), 3);
         assert_eq!(con.header.natm_types, 2);
         let positions_ok = con.atom_data.iter().any(|a| {
-            a.symbol.as_ref() == "O" && a.x().abs() < 1e-6 && a.y().abs() < 1e-6 && a.z().abs() < 1e-6
+            a.symbol.as_ref() == "O"
+                && a.x().abs() < 1e-6
+                && a.y().abs() < 1e-6
+                && a.z().abs() < 1e-6
         });
         assert!(positions_ok, "expected O at origin in converted frame");
     }
@@ -921,7 +1443,11 @@ water
             .find(|a| a.symbol.as_ref() == "H" || a.symbol.as_ref() == "HW")
             .expect("H");
         // 0.100 nm → 1.00 Å
-        assert!((hw.x() - 1.0).abs() < 1e-6, "H.x()={} (expected 1 Å)", hw.x());
+        assert!(
+            (hw.x() - 1.0).abs() < 1e-6,
+            "H.x()={} (expected 1 Å)",
+            hw.x()
+        );
         let residues = con
             .header
             .metadata
@@ -1063,4 +1589,63 @@ Cu 0.00000000 0.00000000 0.00000000
             assert!((angle - 90.0).abs() < 1e-6, "{angle}");
         }
     }
+
+    /// Identical atoms must share one symbol and must not allocate a heap
+    /// block per atom. The old import cloned a name, a type, and a JSON
+    /// sidecar for every atom, which was several allocations each.
+    #[test]
+    fn uniform_import_allocates_less_than_once_per_atom() {
+        let n = 2048usize;
+        let mut frame = Frame::new();
+        frame.resize(n);
+        {
+            let pos = frame.positions_mut();
+            for (index, row) in pos.iter_mut().enumerate() {
+                *row = [index as f64, 0.0, 1.0];
+            }
+        }
+        for index in 0..n {
+            frame.atom_mut(index).set_name("Cu");
+            frame.atom_mut(index).set_atomic_type("Cu");
+        }
+        let before = mimalloc_mallocs();
+        let con = con_frame_from_chemfiles(&frame).expect("import");
+        let after = mimalloc_mallocs();
+        let delta = after.saturating_sub(before);
+        let shared = Arc::clone(&con.atom_data[0].symbol);
+        assert!(
+            con.atom_data
+                .iter()
+                .all(|atom| Arc::ptr_eq(&atom.symbol, &shared)),
+            "identical symbols were not one allocation"
+        );
+        assert!(
+            !con.header.metadata.contains_key(CHEMFILES_ATOM_NAMES_KEY),
+            "a uniform frame stored a name string per atom"
+        );
+        assert_eq!(con.atom_data[3].x(), 3.0);
+        assert!(
+            delta < n as u64,
+            "bridge allocated {delta} times for {n} identical atoms (limit {n})"
+        );
+    }
+}
+
+fn mimalloc_mallocs() -> u64 {
+    let stats = mimalloc::MiMalloc::stats_json().expect("mimalloc stats");
+    let text = stats.to_str().expect("stats utf-8");
+    // Count every `"count":N` under the process stats. The snapshot itself
+    // allocates, so callers subtract two snapshots.
+    let mut total = 0u64;
+    for chunk in text.split("\"count\":") {
+        let digits: String = chunk
+            .chars()
+            .skip_while(|c| c.is_whitespace())
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        if let Ok(value) = digits.parse::<u64>() {
+            total += value;
+        }
+    }
+    total
 }

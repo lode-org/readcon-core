@@ -910,7 +910,10 @@ impl PartialEq for HeapTail {
                     vel: right_vel,
                     force: right_force,
                 },
-            ) => column_values_eq(*left_vel, *right_vel) && column_values_eq(*left_force, *right_force),
+            ) => {
+                column_values_eq(*left_vel, *right_vel)
+                    && column_values_eq(*left_force, *right_force)
+            }
             _ => false,
         }
     }
@@ -1201,7 +1204,10 @@ fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
             n: 0,
         });
     });
-    if !std::ptr::eq(std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8, hint.symbol) {
+    if !std::ptr::eq(
+        std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8,
+        hint.symbol,
+    ) {
         return;
     }
     release_arc_str_count(&atoms[0].symbol, n);
@@ -1239,7 +1245,7 @@ fn stash_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
     });
 }
 
-fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
+fn arc_str_strong(symbol: &std::sync::Arc<str>) -> *const std::sync::atomic::AtomicUsize {
     let header = 2 * std::mem::size_of::<usize>();
     let align = std::mem::align_of_val(symbol.as_ref());
     let rem = header % align;
@@ -1249,10 +1255,31 @@ fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
         header + (align - rem)
     };
     let bytes = std::sync::Arc::as_ptr(symbol) as *const u8;
-    let strong = unsafe { bytes.sub(offset) as *const std::sync::atomic::AtomicUsize };
+    unsafe { bytes.sub(offset) as *const std::sync::atomic::AtomicUsize }
+}
+
+fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
     unsafe {
-        (*strong).fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
+        (*arc_str_strong(symbol)).fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
     }
+}
+
+/// Add `extra` strong references to `symbol` in one atomic add.
+///
+/// Pair each added count with [`share_arc_str`]. The source `Arc` must stay
+/// alive until those shares exist, or the allocation can be freed early.
+pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
+    if extra == 0 {
+        return;
+    }
+    unsafe {
+        (*arc_str_strong(symbol)).fetch_add(extra, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// One strong reference already counted by [`bump_arc_str`].
+pub(crate) fn share_arc_str(symbol: &std::sync::Arc<str>) -> std::sync::Arc<str> {
+    unsafe { std::sync::Arc::from_raw(std::sync::Arc::as_ptr(symbol)) }
 }
 
 impl Drop for ConFrame {

@@ -594,9 +594,13 @@ def read_chemfiles_as_con(path: str) -> dict:
         else:
             cell = box[:6]
         cells.append(cell)
-        masses.append(
-            np.array([float(atom.mass) for atom in frame.atoms], dtype=np.float64)
-        )
+        column = frame.mass_column
+        if column is None:
+            masses.append(
+                np.array([float(atom.mass) for atom in frame.atoms], dtype=np.float64)
+            )
+        else:
+            masses.append(np.asarray(column, dtype=np.float64))
     return {
         "positions": np.stack(positions),
         "cell": np.stack(cells),
@@ -665,13 +669,17 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             arms.append(
                 {
                     "id": "readcon-chemfiles",
-                    "tool": "readcon-chemfiles",
-                    "format": "con-via-xyz",
+                    "tool": "readcon",
+                    "format": "xyz",
                     "precision": PRECISION["xyz"],
+                    "notes": (
+                        "readcon.read_chemfiles imports this extended XYZ through "
+                        "libchemfiles; the write is write_con of those frames"
+                    ),
                 }
             )
             try:
-                import chemfiles  # noqa: F401
+                import chemfiles
             except ImportError:
                 notes.append(
                     "chemfiles-con omitted; the chemfiles Python package "
@@ -681,9 +689,14 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 arms.append(
                     {
                         "id": "chemfiles-con",
-                        "tool": "chemfiles",
-                        "format": "con",
+                        "tool": "readcon",
+                        "format": "chemfiles.Frame",
                         "precision": PRECISION["con"],
+                        "notes": (
+                            "readcon parses CON and copies positions and the cell "
+                            "into a chemfiles.Frame; the write fills that Frame from "
+                            "coordinates already in memory"
+                        ),
                     }
                 )
         else:
@@ -1002,6 +1015,7 @@ def _read_chemfiles_format(path: str, fmt: str) -> dict:
 
     positions = []
     cells = []
+    velocities = []
     with chemfiles.Trajectory(path, "r", fmt) as traj:
         for _step in range(traj.nsteps):
             frame = traj.read()
@@ -1009,11 +1023,25 @@ def _read_chemfiles_format(path: str, fmt: str) -> dict:
             lengths = np.asarray(list(frame.cell.lengths), dtype=np.float64)
             angles = np.asarray(list(frame.cell.angles), dtype=np.float64)
             cells.append(np.concatenate([lengths, angles]))
+            # TRR stores velocities. chemfiles 0.10.4 reads them when the
+            # frame header's v_size is non-zero (TRR.cpp, the has_velocities
+            # branch of TRRFormat::read). Leaving this None marked the row
+            # as dropping velocities the file and the reader both have.
+            if frame.has_velocities():
+                velocities.append(
+                    np.array(frame.velocities, dtype=np.float64, copy=True)
+                )
+            else:
+                velocities.append(None)
+    if velocities and all(block is not None for block in velocities):
+        velocity_block = np.stack(velocities)
+    else:
+        velocity_block = None
     return {
         "positions": np.stack(positions),
         "cell": np.stack(cells),
         "masses": None,
-        "velocities": None,
+        "velocities": velocity_block,
         "fixed": None,
     }
 
@@ -1180,13 +1208,25 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
         "warm reads the file once before the clock; cold drops the page cache after warmup",
         "every timed read copies positions and the cell into numpy and checks the sum",
     ]
+    only_arms = {
+        item for item in os.environ.get("READCON_CROSS_ARMS", "").split(",") if item
+    }
+    only_structures = {
+        item
+        for item in os.environ.get("READCON_CROSS_STRUCTURES", "").split(",")
+        if item
+    }
     for label, n_atoms, n_frames in structures:
+        if only_structures and label not in only_structures:
+            continue
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = make_spec(n_atoms, n_frames)
         spec_path = directory / "spec.npz"
         save_spec(spec_path, spec)
         arms, structure_notes = arm_table(n_atoms)
+        if only_arms:
+            arms = [arm for arm in arms if arm["id"] in only_arms]
         for note in structure_notes:
             if note not in notes:
                 notes.append(note)
@@ -1202,6 +1242,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                         "tool": arm["tool"],
                         "format": arm["format"],
                         "arm": arm["id"],
+                        "notes": arm.get("notes", ""),
                         "op": "read",
                         "cache": "unsupported",
                         "median_s": None,
@@ -1319,6 +1360,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                     "tool": arm["tool"],
                     "format": arm["format"],
                     "arm": arm["id"],
+                    "notes": arm.get("notes", ""),
                     "op": "read",
                     "cache": cache,
                     "median_s": median,
@@ -1353,6 +1395,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 "tool": arm["tool"],
                 "format": arm["format"],
                 "arm": arm["id"],
+                "notes": arm.get("notes", ""),
                 "op": "write",
                 "cache": "create",
                 "median_s": median,
@@ -1398,7 +1441,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
     header = (
         "structure\ttool\tformat\top\tmedian_s\tiqr_s\tn\t"
         "rss_bytes\tfile_bytes\tloses\tposition_error\tcell_error\tprecision\t"
-        "cold_median_s\tcold_iqr_s\tcold_n\tchecksum_ok"
+        "cold_median_s\tcold_iqr_s\tcold_n\tchecksum_ok\tnotes"
     )
     table = [header]
     grouped: dict[tuple, dict] = {}
@@ -1443,8 +1486,9 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                     cell(cold, "iqr_s"),
                     cell(cold, "n"),
                     cell(part, "checksum_ok"),
+                    str(part.get("notes") or ""),
                 ]
-            )
+            ).rstrip()
         )
     (out / "cross-format.tsv").write_text(f"commit {sha}\n" + "\n".join(table) + "\n")
     print("wrote", out / "cross-format.tsv", flush=True)

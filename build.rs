@@ -68,6 +68,83 @@ fn main() {
     {
         emit_metatensor_sys_metadata();
     }
+
+    #[cfg(feature = "chemfiles")]
+    compile_chemfiles_atom_view();
+}
+
+#[cfg(feature = "chemfiles")]
+fn compile_chemfiles_atom_view() {
+    let headers = chemfiles_include_dir();
+    let generated = chemfiles_generated_include();
+    println!("cargo:rerun-if-changed=src/chemfiles_atom_view.cpp");
+    println!("cargo:rerun-if-changed={}", headers.display());
+    let mut build = cc::Build::new();
+    build
+        .cpp(true)
+        .file("src/chemfiles_atom_view.cpp")
+        .include(&generated)
+        .include(&headers)
+        .flag_if_supported("-std=c++17")
+        .warnings(false);
+    build.compile("readcon_chemfiles_atom_view");
+}
+
+#[cfg(feature = "chemfiles")]
+fn chemfiles_generated_include() -> PathBuf {
+    let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let build_dir = out
+        .parent()
+        .and_then(|path| path.parent())
+        .expect("OUT_DIR should sit in target/<profile>/build/<crate>/out");
+    let mut found = None;
+    if let Ok(entries) = fs::read_dir(build_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !name.starts_with("chemfiles-sys-") {
+                continue;
+            }
+            let include = entry.path().join("out/include");
+            if include.join("chemfiles/exports.h").is_file() {
+                found = Some(include);
+            }
+        }
+    }
+    found.expect("chemfiles-sys did not generate include/chemfiles/exports.h")
+}
+
+#[cfg(feature = "chemfiles")]
+fn chemfiles_include_dir() -> PathBuf {
+    let mut roots = Vec::new();
+    if let Ok(home) = env::var("CARGO_HOME") {
+        roots.push(PathBuf::from(home).join("registry/src"));
+    }
+    if let Ok(home) = env::var("HOME") {
+        roots.push(PathBuf::from(home).join(".cargo/registry/src"));
+    }
+    for root in roots {
+        let Ok(indexes) = fs::read_dir(&root) else {
+            continue;
+        };
+        for index in indexes.flatten() {
+            let Ok(crates) = fs::read_dir(index.path()) else {
+                continue;
+            };
+            for crate_dir in crates.flatten() {
+                let name = crate_dir.file_name();
+                let name = name.to_string_lossy();
+                if !name.starts_with("chemfiles-sys-") {
+                    continue;
+                }
+                let include = crate_dir.path().join("chemfiles/include");
+                if include.join("chemfiles/Frame.hpp").is_file() {
+                    return include;
+                }
+            }
+        }
+    }
+    panic!("chemfiles headers were not found in the cargo registry");
 }
 
 #[cfg(feature = "metatensor")]

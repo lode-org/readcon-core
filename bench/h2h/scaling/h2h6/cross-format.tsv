@@ -1,0 +1,12 @@
+commit 35613567136649084147f8b00b93c9e89f94f1ba
+structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_error	cell_error	precision	cold_median_s	cold_iqr_s	cold_n	checksum_ok	notes
+1M	readcon	con	read	0.156871	0.0319479	6	286959616	45378064	none	0	0	1e-05	0.152276	0.0340261	6	True
+1M	readcon	con	write	0.224224	0.0283376	6	535799808	45378064	none	0	0	1e-05
+1M	readcon	xyz	read	0.318561	0.0528458	6	318685184	38700075	velocities,constraints	0	0	0.0001	0.376273	0.0599196	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	readcon	xyz	write	0.677526	0.0524025	6	1460099072	38700075	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	readcon	chemfiles.Frame	read	0.251945	0.0388722	6	384894976	45378064	masses,velocities,constraints	0	0	1e-05	0.277334	0.0376985	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	readcon	chemfiles.Frame	write	0.115579	0.0147755	6	346716160	45378064	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	chemfiles	xyz	read	0.252449	0.058825	6	234299392	11700075	masses,velocities,constraints	0	0	0.0001	0.280495	0.0119896	6	True
+1M	chemfiles	xyz	write	11.2094	0.993416	6	323497984	11700075	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	trr	read	0.193128	0.00769828	6	318926848	24000120	masses,constraints	3.8147e-06	3.8147e-06	0.001	0.250627	0.0324437	6	True
+1M	chemfiles	trr	write	10.7247	1.61856	6	431286272	24000120	masses,constraints	3.8147e-06	3.8147e-06	0.001

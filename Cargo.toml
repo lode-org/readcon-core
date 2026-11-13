@@ -61,8 +61,8 @@ metatensor = ["dep:metatensor", "dep:metatensor-sys"]
 # macOS and Windows wheels use the prebuilt (vendored zlib does not
 # compile on the current MacOSX SDK; Windows from-source is the same
 # CMake/zlib fight). rust-lld .ctors is Linux-only.
-chemfiles = ["dep:chemfiles"]
-chemfiles-from-sources = ["chemfiles", "chemfiles/build-from-sources"]
+chemfiles = ["dep:chemfiles", "dep:chemfiles-sys", "dep:cc"]
+chemfiles-from-sources = ["chemfiles", "chemfiles/build-from-sources", "chemfiles-sys/build-from-sources"]
 # Real CUDA allocate/export for DLPack device buffers (cudarc links the driver
 # at runtime). Default builds stay CPU-only; enable with `--features cuda`.
 # Requires NVIDIA driver + libcudart (e.g. Arch `cuda` package / /opt/cuda).
@@ -90,7 +90,7 @@ memmap2 = "0.9"
 libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
-mimalloc = "0.1.43"
+mimalloc = { version = "0.1.43", features = ["extended"] }
 mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
@@ -108,6 +108,7 @@ numpy = { version = "0.28", optional = true }
 metatensor = { version = "0.3.0-rc2", optional = true }
 zstd = { version = "0.13", optional = true }
 chemfiles = { version = "0.10", optional = true }
+chemfiles-sys = { version = "0.10.41", optional = true }
 # Driver API for cudaMalloc/cudaMemcpy; versions track CUDA major loosely.
 cudarc = { version = "0.13", optional = true, default-features = false, features = [
   "cuda-12040",
@@ -201,6 +202,7 @@ harness = false
 inherits = "release"
 
 [build-dependencies]
+cc = { version = "1", optional = true }
 capnpc = { version = "0.20", optional = true }
 metatensor-sys = { version = "0.2.0-rc4", optional = true }
 

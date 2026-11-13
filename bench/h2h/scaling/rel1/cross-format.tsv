@@ -1,4 +1,4 @@
-structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_error	cell_error	precision	cold_median_s	cold_iqr_s	cold_n	checksum_ok
+structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_error	cell_error	precision	cold_median_s	cold_iqr_s	cold_n	checksum_ok	notes
 1k	readcon	con	read	0.000131628	1.68075e-06	6	41709568	36958	none	0	0	1e-05	0.00213819	0.000780718	6	True
 1k	readcon	con	write	0.00019715	4.26625e-06	6	44720128	36958	none	0	0	1e-05
 1k	readcon	con.gz	read	0.000175436	1.57335e-05	6	41822208	5677	none	0	0	1e-05	0.00338881	0.00130668	6	True
@@ -67,26 +67,26 @@ structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_er
 100k	ovito	xyz	read	0.00888569	0.000139937	6	103929856	1735109	masses,velocities,constraints	0	0	0.0001	0.0131869	0.000270139	6	True
 100k	ovito	xyz	write	0.0217448	0.000513752	6	106381312	1735109	masses,velocities,constraints	0	0	0.0001
 1M	mdanalysis	pdb	read			0			unsupported: PDB atom serial is five digits (max 99999 atoms)			0.001
-1M	readcon	con	read	0.099165	0.00215165	6	286257152	45378064	none	0	0	1e-05	0.121178	0.00430101	6	True
-1M	readcon	con	write	0.181024	0.00432111	6	535476224	45378064	none	0	0	1e-05
+1M	readcon	con	read	0.156871	0.0319479	6	286959616	45378064	none	0	0	1e-05	0.152276	0.0340261	6	True
+1M	readcon	con	write	0.224224	0.0283376	6	535799808	45378064	none	0	0	1e-05
 1M	readcon	con.gz	read	0.123277	0.0141416	6	381157376	5419616	none	0	0	1e-05	0.122886	0.024032	6	True
 1M	readcon	con.gz	write	0.448363	0.00275289	6	445970432	5419616	none	0	0	1e-05
 1M	readcon	con.zst	read	0.0982282	0.00434448	6	319393792	1414782	none	0	0	1e-05	0.101504	0.00258127	6	True
 1M	readcon	con.zst	write	0.129725	0.00260824	6	444936192	1414782	none	0	0	1e-05
-1M	chemfiles	con	read	0.1638	0.00243715	6	384417792	45378064	masses,velocities,constraints	0	0	1e-05	0.186393	0.010635	6	True
-1M	chemfiles	con	write	0.0826193	0.00188567	6	346685440	45378064	masses,velocities,constraints	0	0	1e-05
-1M	readcon-chemfiles	con-via-xyz	read	1.24145	0.0108074	6	1124823040	38700075	velocities,constraints	0	0	0.0001	1.2945	0.0428057	6	True
-1M	readcon-chemfiles	con-via-xyz	write	1.64841	0.0114894	6	1845481472	38700075	velocities,constraints	0	0	0.0001
-1M	chemfiles	xyz	read	0.187032	0.00614704	6	234186752	11700075	masses,velocities,constraints	0	0	0.0001	0.201885	0.00448899	6	True
-1M	chemfiles	xyz	write	8.3064	0.180008	6	323428352	11700075	masses,velocities,constraints	0	0	0.0001
+1M	readcon	chemfiles.Frame	read	0.251945	0.0388722	6	384894976	45378064	masses,velocities,constraints	0	0	1e-05	0.277334	0.0376985	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	readcon	chemfiles.Frame	write	0.115579	0.0147755	6	346716160	45378064	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	readcon	xyz	read	0.318561	0.0528458	6	318685184	38700075	velocities,constraints	0	0	0.0001	0.376273	0.0599196	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	readcon	xyz	write	0.677526	0.0524025	6	1460099072	38700075	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	chemfiles	xyz	read	0.252449	0.058825	6	234299392	11700075	masses,velocities,constraints	0	0	0.0001	0.280495	0.0119896	6	True
+1M	chemfiles	xyz	write	11.2094	0.993416	6	323497984	11700075	masses,velocities,constraints	0	0	0.0001
 1M	chemfiles	xyz.gz	read	0.207468	0.00642341	6	234442752	1675339	masses,velocities,constraints	0	0	0.0001	0.210369	0.00146516	6	True
 1M	chemfiles	xyz.gz	write	8.76314	0.129929	6	323854336	1675339	masses,velocities,constraints	0	0	0.0001
 1M	chemfiles	xyz.xz	read	0.259301	0.0100006	6	242829312	104764	masses,velocities,constraints	0	0	0.0001	0.256667	0.00750758	6	True
 1M	chemfiles	xyz.xz	write	12.2571	0.502889	6	405321728	104764	masses,velocities,constraints	0	0	0.0001
 1M	chemfiles	xyz.bz2	read	0.435504	0.00798406	6	236806144	894507	masses,velocities,constraints	0	0	0.0001	0.437538	0.0100894	6	True
 1M	chemfiles	xyz.bz2	write	8.75058	0.061774	6	327995392	894507	masses,velocities,constraints	0	0	0.0001
-1M	chemfiles	trr	read	0.120915	0.00499737	6	270786560	24000120	masses,velocities,constraints	3.8147e-06	3.8147e-06	0.001	0.159003	0.0280665	6	True
-1M	chemfiles	trr	write	8.17871	0.132806	6	431245312	24000120	masses,velocities,constraints	3.8147e-06	3.8147e-06	0.001
+1M	chemfiles	trr	read	0.193128	0.00769828	6	318926848	24000120	masses,constraints	3.8147e-06	3.8147e-06	0.001	0.250627	0.0324437	6	True
+1M	chemfiles	trr	write	10.7247	1.61856	6	431286272	24000120	masses,constraints	3.8147e-06	3.8147e-06	0.001
 1M	ase	extxyz	read	2.05303	0.0318986	6	669603840	125000140	none	0	0	1e-06	2.14342	0.0725459	6	True
 1M	ase	extxyz	write	4.24294	0.0530565	6	431257600	125000140	none	0	0	1e-06
 1M	ase	extxyz.gz	read	2.32163	0.0400959	6	670042112	2775716	none	0	0	1e-06	2.36775	0.0432944	6	True

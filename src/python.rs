@@ -1,4 +1,4 @@
-use ndarray::{Array2, Array3, ArrayView2};
+use ndarray::{Array1, Array2, Array3, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
 };
@@ -515,6 +515,23 @@ impl PyConFrame {
             return Ok(owned.bind(py).clone());
         }
         self.coords_array(py)
+    }
+
+    /// Per-atom masses as a numpy `[N] float64` copy of the column.
+    ///
+    /// This does not build the Python atom list.
+    #[getter]
+    fn mass_column<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        let Some(frame) = self.inner.as_ref() else {
+            return Ok(None);
+        };
+        let Some(src) = frame.masses.f64_slice() else {
+            return Ok(None);
+        };
+        if src.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Array1::from_vec(src.to_vec()).into_pyarray(py)))
     }
 
     #[getter]
@@ -1083,14 +1100,20 @@ impl PyConFrame {
         // A read that only writes the frames back keeps the parser's
         // coordinates on the frame instead.
         let xyz_owned = if py.import("numpy").is_ok() {
-            let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
-            if let Some(src) = frame.positions.f64_slice() {
-                data.extend_from_slice(src);
-            } else {
-                for i in 0..n_atoms {
-                    data.extend_from_slice(&frame.positions.as_f64_row(i));
+            let data = match frame.positions.take_contiguous_f64() {
+                Some(buf) => buf,
+                None => {
+                    let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
+                    if let Some(src) = frame.positions.f64_slice() {
+                        data.extend_from_slice(src);
+                    } else {
+                        for i in 0..n_atoms {
+                            data.extend_from_slice(&frame.positions.as_f64_row(i));
+                        }
+                    }
+                    data
                 }
-            }
+            };
             let xyz = Array2::from_shape_vec((n_atoms, 3), data)
                 .map_err(|e| PyValueError::new_err(format!("xyz shape error: {e}")))?
                 .into_pyarray(py);
@@ -1107,7 +1130,13 @@ impl PyConFrame {
                     })?;
                     contiguous.as_ptr() as *mut f64
                 };
-                retarget_frames_to_slab(std::slice::from_mut(&mut frame), base, n_atoms);
+                let already = frame
+                    .atom_data
+                    .first()
+                    .is_some_and(|atom| atom.coord_ptr() == base);
+                if !already {
+                    retarget_frames_to_slab(std::slice::from_mut(&mut frame), base, n_atoms);
+                }
             }
             frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
             Some(xyz.unbind())
@@ -3758,7 +3787,8 @@ fn try_fused_members(
             return Ok(false);
         }
     };
-    write.map_err(|err| PyIOError::new_err(format!("failed to create compressed writer: {err}")))?;
+    write
+        .map_err(|err| PyIOError::new_err(format!("failed to create compressed writer: {err}")))?;
     Ok(true)
 }
 
@@ -3835,9 +3865,9 @@ fn write_con(
                 // An explicit count is the worker count. The default keeps
                 // the wide member split and caps deflate at one thread per
                 // logical CPU.
-                let threads = n_threads.filter(|count| *count >= 1).unwrap_or_else(|| {
-                    crate::compression::default_deflate_threads(members)
-                });
+                let threads = n_threads
+                    .filter(|count| *count >= 1)
+                    .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
                 crate::compression::write_gzip_members_limited(
                     Path::new(path),
                     &plain,
@@ -3880,9 +3910,9 @@ fn write_con(
                     }
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                    let threads = n_threads.filter(|count| *count >= 1).unwrap_or_else(|| {
-                        crate::compression::default_deflate_threads(members)
-                    });
+                    let threads = n_threads
+                        .filter(|count| *count >= 1)
+                        .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
                     crate::compression::write_zstd_members_limited(
                         Path::new(path),
                         &plain,
@@ -6670,9 +6700,10 @@ fn read_chemfiles(
     let opts = chemfiles_opts_from_kwargs(skip, step, stop, topology, format, guess_bonds);
     let frames = con_frames_from_trajectory_path_with(Path::new(path), &opts)
         .map_err(chemfiles_err_to_py)?;
+    // Move the frames. Cloning would box a coordinate triple per atom.
     frames
-        .iter()
-        .map(|f| PyConFrame::from_con_frame(py, f))
+        .into_iter()
+        .map(|frame| PyConFrame::from_owned(py, frame))
         .collect()
 }
 
@@ -6683,7 +6714,7 @@ fn read_chemfiles(
 fn read_chemfiles_first(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     use crate::chemfiles_import::con_frame_from_trajectory_path;
     let frame = con_frame_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)?;
-    PyConFrame::from_con_frame(py, &frame)
+    PyConFrame::from_owned(py, frame)
 }
 
 /// Read step ``index`` via chemfiles ``Trajectory.read_step``.
@@ -6692,7 +6723,7 @@ fn read_chemfiles_nth(py: Python<'_>, path: &str, index: usize) -> PyResult<PyCo
     use crate::chemfiles_import::con_frame_from_trajectory_path_nth;
     let frame =
         con_frame_from_trajectory_path_nth(Path::new(path), index).map_err(chemfiles_err_to_py)?;
-    PyConFrame::from_con_frame(py, &frame)
+    PyConFrame::from_owned(py, frame)
 }
 
 /// Number of steps in a chemfiles trajectory (``Trajectory.nsteps``).
@@ -6720,8 +6751,8 @@ fn read_chemfiles_memory(
     let opts = chemfiles_opts_from_kwargs(skip, step, stop, None, None, guess_bonds);
     let frames = con_frames_from_memory_with(data, format, &opts).map_err(chemfiles_err_to_py)?;
     frames
-        .iter()
-        .map(|f| PyConFrame::from_con_frame(py, f))
+        .into_iter()
+        .map(|frame| PyConFrame::from_owned(py, frame))
         .collect()
 }
 
