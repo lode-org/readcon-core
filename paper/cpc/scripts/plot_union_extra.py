@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import base64
 import csv
+import json
+import os
 import shutil
 from pathlib import Path
 
@@ -160,12 +162,34 @@ def _type7(samples: list[float]) -> tuple[float, float, float]:
 
 
 READER_LOG = ROOT / "logs" / "reader-exchange.log"
+READER_JSON = Path(
+    os.environ.get("READER_EXCHANGE_JSON", str(ROOT / "logs" / "reader-exchange.json"))
+)
+
+
+def _reader_document() -> dict | None:
+    """The campaign JSON. The historical log remains the fallback."""
+    if READER_JSON.is_file():
+        return json.loads(READER_JSON.read_text(encoding="utf-8"))
+    return None
 
 
 def _reader_samples() -> dict[str, list[float]]:
-    """Wall times from the large-file log. One list per arm."""
+    """Wall times, one list per arm. Prefer reader-exchange.json."""
+    doc = _reader_document()
+    if doc is not None:
+        arms = {}
+        for name, row in doc["arms"].items():
+            seconds = [float(value) for value in row.get("seconds", []) if value is not None]
+            if seconds and not row.get("error"):
+                arms[name] = seconds
+        if "readcon_tip" not in arms or len(arms["readcon_tip"]) < 6:
+            raise SystemExit("The tip readcon row needs at least six samples.")
+        return arms
     if not READER_LOG.is_file():
-        raise SystemExit("reader-exchange.log is missing. Run bench_readers.py first.")
+        raise SystemExit(
+            "reader-exchange.json is missing. Run the reader_exchange campaign first."
+        )
     arms: dict[str, list[float]] = {}
     for line in READER_LOG.read_text(encoding="utf-8").splitlines():
         if not line.startswith("sample "):
@@ -181,6 +205,13 @@ def _reader_samples() -> dict[str, list[float]]:
 
 
 def _summary_rows() -> list[dict[str, str]]:
+    doc = _reader_document()
+    if doc is not None:
+        return [
+            {"arm": name, "mib_median": str(row["mib_median"])}
+            for name, row in doc["arms"].items()
+            if "mib_median" in row
+        ]
     rows = []
     for line in READER_LOG.read_text(encoding="utf-8").splitlines():
         if not line.startswith("summary "):

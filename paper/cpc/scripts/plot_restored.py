@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -128,10 +129,16 @@ def toc() -> None:
     save(fig, "toc")
 
 
+def _reads_path() -> Path:
+    """``reads.json`` from the roofline rule, or the historical r0174 record."""
+    override = os.environ.get("READS_JSON")
+    if override:
+        return Path(override)
+    return ROOT / "bench" / "results" / "r0174" / "reads.json"
+
+
 def timing_and_fairness() -> None:
-    cells = json.loads(
-        (ROOT / "bench" / "results" / "r0174" / "reads.json").read_text()
-    )["cells"]
+    cells = json.loads(_reads_path().read_text())["cells"]
 
     def med(reader: str, threads: int = 1) -> float:
         for cell in cells.values():

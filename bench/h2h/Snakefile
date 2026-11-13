@@ -372,6 +372,36 @@ rule eon_loadcons:
         "python3 bench/h2h/paper_rows.py eon-loadcons --out {params.out} --repeats {params.repeats}"
 
 
+# The paper's reader-exchange figures: 100000 frames of 32 atoms, six
+# repeats, time and the resident-set increase. The JSON is what
+# plot_union_extra.py reads.
+rule reader_exchange:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/reader-exchange.json",
+        f"{FINAL_OUT}/reader-exchange.log",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/reader_exchange.py --out {params.out} --frames 100000 --repeats {params.repeats}"
+
+
+# The roofline figure reads cells of reads.json. The payload is the
+# seeded Langevin trajectory of resources/test/cuh2.con.
+rule roofline:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/reads.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/roofline_reads.py --out {params.out} --frames 10000 --repeats {params.repeats}"
+
+
 rule final_check:
     input:
         f"{FINAL_OUT}/bindings.json",
@@ -407,6 +437,9 @@ rule final_check:
         f"{FINAL_OUT}/mw-persistence.json",
         f"{FINAL_OUT}/hop-barrier.json",
         f"{FINAL_OUT}/eon-loadcons.json",
+        f"{FINAL_OUT}/reader-exchange.json",
+        f"{FINAL_OUT}/reader-exchange.log",
+        f"{FINAL_OUT}/reads.json",
         f"{FINAL_OUT}/db.log",
         f"{FINAL_OUT}/fidelity.json",
         f"{FINAL_OUT}/fidelity-timing.json",
