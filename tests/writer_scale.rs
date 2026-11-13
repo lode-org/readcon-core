@@ -5,7 +5,11 @@
 //! reproduce those bytes or the same serial binding write.
 
 use readcon_core::iterators::ConFrameIterator;
-use readcon_core::writer::{ConFrameWriter, write_frames_to_vec, write_frames_to_vec_with_threads};
+use readcon_core::types::ConFrameBuilder;
+use readcon_core::writer::{
+    ConFrameWriter, format_coordinate_lines, recycle_format_buffer, write_frame_refs_to_path,
+    write_frame_refs_with_threads, write_frames_to_vec, write_frames_to_vec_with_threads,
+};
 use std::fs;
 use std::path::PathBuf;
 
@@ -149,4 +153,144 @@ fn rank_child() {
         assert_eq!(got, serial, "ranks {}", comm.size());
         let _ = fs::remove_file(&out);
     }
+}
+
+fn wide_frame(
+    n: usize,
+    velocities: bool,
+    id_of: impl Fn(usize) -> u64,
+) -> readcon_core::types::ConFrame {
+    let mut builder = ConFrameBuilder::new([20.0, 20.0, 20.0], [90.0, 90.0, 90.0]);
+    if velocities {
+        builder
+            .set_units(serde_json::json!({
+                "length": "angstrom",
+                "energy": "eV",
+                "mass": "amu",
+                "time": "(amu*angstrom^2/eV)^0.5"
+            }))
+            .expect("units");
+    }
+    for i in 0..n {
+        let x = (i % 100) as f64 * 0.2;
+        let y = ((i / 100) % 50) as f64 * 0.4;
+        let z = (i / 5000) as f64 + if i % 2 == 0 { 0.125 } else { -0.5 };
+        builder.add_atom("Cu", x, y, z, [false, i % 7 == 0, false], id_of(i), 63.546);
+        if velocities {
+            builder.with_velocity([0.01 * (i % 11) as f64, -0.02, (i % 3) as f64]);
+        }
+    }
+    builder.build().expect("wide frame")
+}
+
+fn mapped_bytes(frame: &readcon_core::types::ConFrame, workers: usize) -> Vec<u8> {
+    let path = std::env::temp_dir().join(format!(
+        "readcon-wide-map-{}-{}-{}.con",
+        workers,
+        std::process::id(),
+        frame.atom_data.len()
+    ));
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&path)
+        .expect("create");
+    let mut writer = ConFrameWriter::new(Vec::<u8>::new())
+        .parallel_atoms(workers)
+        .map_rows(true)
+        .mapped_file(file);
+    writer
+        .write_frame(frame)
+        .unwrap_or_else(|err| panic!("mapped write workers {workers}: {err}"));
+    drop(writer);
+    let got = fs::read(&path).expect("read back");
+    let _ = fs::remove_file(&path);
+    got
+}
+
+/// Wide rows with velocities, and with ids that are not `0..n`, match the
+/// serial writer when the caller forces the shared mapping. That is the
+/// path a runner with no spare physical core would otherwise skip.
+#[test]
+fn wide_mapping_matches_serial_for_velocities_and_gapped_ids() {
+    let cases = [
+        wide_frame(4096, true, |i| i as u64),
+        wide_frame(4096, true, |i| (i as u64) + 3),
+        wide_frame(5000, false, |i| i as u64),
+    ];
+    for (case, frame) in cases.into_iter().enumerate() {
+        let serial = write_frames_to_vec(std::slice::from_ref(&frame)).expect("serial");
+        for workers in [2usize, 8] {
+            let got = mapped_bytes(&frame, workers);
+            assert_eq!(got, serial, "case {case} workers {workers}");
+        }
+        if case == 0 {
+            // A fixed number of decimal places still matches the serial
+            // writer, and it takes the wide-file branch that passes precision
+            // through.
+            let refs = [&frame];
+            let fixed = write_frame_refs_with_threads(&refs, 1, Some(6), false).expect("decimals");
+            let path = std::env::temp_dir()
+                .join(format!("readcon-wide-decimals-{}.con", std::process::id()));
+            write_frame_refs_to_path(&path, &refs, 8, Some(6), false, false).expect("decimals");
+            let got = fs::read(&path).expect("read back");
+            let _ = fs::remove_file(&path);
+            assert_eq!(got, fixed, "decimal places");
+        }
+        // A short buffer goes back to the pool, then a wide format has to
+        // grow it. The bytes stay the coordinate block of the serial frame.
+        let short = format_coordinate_lines(&frame.atom_data[..2]).expect("short");
+        recycle_format_buffer(short);
+        let lines = format_coordinate_lines(&frame.atom_data).expect("grown");
+        let text = std::str::from_utf8(&serial).expect("utf8");
+        let marker = "Coordinates of Component 1\n";
+        let start = text.find(marker).expect("coords") + marker.len();
+        let end = text[start..]
+            .find("\n\n")
+            .map(|at| start + at + 1)
+            .unwrap_or(text.len());
+        assert_eq!(lines, text.as_bytes()[start..end], "case {case}");
+        recycle_format_buffer(lines);
+    }
+    let duplicated = wide_frame(4096, false, |i| if i == 10 { 0 } else { i as u64 });
+    let path = std::env::temp_dir().join(format!("readcon-wide-dup-{}.con", std::process::id()));
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&path)
+        .expect("create");
+    let err = ConFrameWriter::new(Vec::<u8>::new())
+        .parallel_atoms(8)
+        .map_rows(true)
+        .mapped_file(file)
+        .write_frame(&duplicated);
+    let _ = fs::remove_file(&path);
+    assert!(
+        err.is_err(),
+        "a repeated atom id is rejected on the mapped path"
+    );
+}
+
+#[test]
+fn a_zero_atom_frame_cannot_declare_sections() {
+    let mut frame = wide_frame(1, false, |i| i as u64);
+    frame.header.natm_types = 0;
+    frame.atom_data.clear();
+    frame.header.natms_per_type.clear();
+    frame.header.masses_per_type.clear();
+    frame.header.sections.push("velocities".into());
+    let err = ConFrameWriter::new(Vec::<u8>::new()).write_frame(&frame);
+    assert!(err.is_err(), "a zero-atom frame cannot declare sections");
+}
+
+#[test]
+fn a_per_type_count_of_zero_is_rejected() {
+    let mut frame = wide_frame(1, false, |i| i as u64);
+    frame.header.natms_per_type = vec![0];
+    let err = ConFrameWriter::new(Vec::<u8>::new()).write_frame(&frame);
+    assert!(err.is_err(), "each per-type count must be >= 1");
 }

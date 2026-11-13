@@ -305,10 +305,18 @@ impl<W: Write> ConFrameWriter<W> {
 
     /// Copy formatted rows into a shared mapping of `stream_file`.
     ///
-    /// The wide path does this on its own. Tests turn it on for short frames
-    /// so an odd atom count still takes the mapping.
+    /// The wide path does this on its own when a spare physical core is
+    /// free. Tests turn it on for short frames so an odd atom count still
+    /// takes the mapping, including on a runner with no spare core.
     pub fn map_rows(mut self, on: bool) -> Self {
         self.force_map = on;
+        self
+    }
+
+    /// File the mapping copies into. Open it read/write; `map_rows` selects
+    /// the mapping even when [`Self::parallel_atoms`] would otherwise `pwrite`.
+    pub fn mapped_file(mut self, file: File) -> Self {
+        self.stream_file = Some(file);
         self
     }
 
@@ -657,6 +665,7 @@ impl<W: Write> ConFrameWriter<W> {
                     spec_version,
                     self.atom_workers,
                     mapped,
+                    self.force_map,
                     stream_file.as_mut(),
                     if save_velocity {
                         Some(&mut vel_buf)
@@ -1341,6 +1350,7 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
         2,
         1,
         false,
+        false,
         None,
         None,
     )?;
@@ -1362,6 +1372,7 @@ fn append_coord_rows(
     spec_version: u32,
     workers: usize,
     mapped: bool,
+    force_map: bool,
     stream: Option<&mut File>,
     mut vel: Option<&mut Vec<u8>>,
 ) -> Result<(), WriteError> {
@@ -1370,7 +1381,8 @@ fn append_coord_rows(
         if mapped && !atoms.is_empty() {
             file.write_all(buf).map_err(WriteError::Io)?;
             buf.clear();
-            let vel_bytes = stream_coord_rows(file, atoms, workers, prec, spec_version, want_vel)?;
+            let vel_bytes =
+                stream_coord_rows(file, atoms, workers, prec, spec_version, want_vel, force_map)?;
             if let Some(dest) = vel.as_mut() {
                 dest.extend_from_slice(&vel_bytes);
             }
@@ -1650,6 +1662,7 @@ fn stream_coord_rows(
     prec: FloatFormat,
     spec_version: u32,
     want_vel: bool,
+    force_map: bool,
 ) -> Result<Vec<u8>, WriteError> {
     // Format each range into a reused buffer. The exact byte length is the
     // formatted size; a second counting pass would repeat the float
@@ -1657,7 +1670,10 @@ fn stream_coord_rows(
     // The file is then truncated to the prefix sum and each range is copied
     // into its slice of a shared mapping. Same-inode `pwrite` does not scale.
     let workers = workers.max(1).min(atoms.len().max(1));
-    let side_copies = side_copy_workers(workers);
+    // `map_rows` asks for the mapping even when this host has no spare
+    // physical core. CI runners are in that set, so the copy path would
+    // otherwise stay on `pwrite`.
+    let side_copies = force_map || side_copy_workers(workers);
     if !side_copies {
         return stream_coord_pwrite(file, atoms, workers, prec, spec_version, want_vel);
     }
