@@ -61,7 +61,7 @@ impl ConPositions {
 
 /// Positions from a CON or convel buffer, in file order.
 pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, false, false)
+    parse_con(bytes, false, false, true)
 }
 
 /// Coordinates plus column 5, the fixed mask, and the per-type symbol runs.
@@ -70,7 +70,7 @@ pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError
 /// `flags`, and `components` are filled so a later frame can keep an element
 /// order that is not the first frame's.
 pub fn positions_with_identity(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, true, false)
+    parse_con(bytes, true, false, true)
 }
 
 /// Like [`positions_from_con_bytes`], also keeping ids, flags, and symbols
@@ -80,10 +80,185 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
     // A vector section means the frame objects cannot be rebuilt from the
     // coordinate column. Stop at the first one so the caller can fall back
     // to the frame parser without a second full walk.
-    parse_con(bytes, true, true)
+    parse_con(bytes, true, true, true)
 }
 
-fn parse_con(bytes: &[u8], rich: bool, stop_on_section: bool) -> Result<ConPositions, ParseError> {
+/// Header walk plus a parallel fill of the coordinate rows.
+///
+/// The serial walker parses every float on the calling thread and the
+/// old parallel path parsed them again. This walk only counts lines,
+/// then the rows are parsed into one buffer. `workers < 2` is the
+/// serial walker.
+#[cfg(feature = "parallel")]
+pub(crate) fn positions_parallel(
+    bytes: &[u8],
+    workers: usize,
+    rich: bool,
+) -> Result<ConPositions, ParseError> {
+    if workers < 2 {
+        return parse_con(bytes, rich, false, true);
+    }
+    let mut out = parse_con(bytes, rich, false, false)?;
+    let n_atoms: usize = out.counts.iter().sum();
+    let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
+    // The workers write every lane. A zeroed allocation would fault the
+    // slab on this thread before they start.
+    if n_atoms > 0 {
+        // SAFETY: every index is overwritten before the buffer is read,
+        // and `f64` has no destructor.
+        unsafe { positions.set_len(n_atoms * 3) };
+    }
+    let mut ids = Vec::<u64>::new();
+    let mut flags = Vec::<u8>::new();
+    if rich && n_atoms > 0 {
+        ids = Vec::with_capacity(n_atoms);
+        flags = Vec::with_capacity(n_atoms);
+        // SAFETY: same as the position slab.
+        unsafe {
+            ids.set_len(n_atoms);
+            flags.set_len(n_atoms);
+        }
+    }
+    let mut jobs = Vec::with_capacity(out.n_frames);
+    let mut dest_at = 0usize;
+    for frame in 0..out.n_frames {
+        jobs.push((frame, dest_at));
+        dest_at += out.counts[frame];
+    }
+    // One wide frame must start the row split on this thread. An outer
+    // parallel iterator of a single job would run the split inside a
+    // worker that already holds the pool.
+    if jobs.len() == 1 {
+        let (frame, dest) = jobs[0];
+        fill_frame_rows(
+            bytes,
+            &out,
+            frame,
+            dest,
+            workers,
+            rich,
+            positions.as_mut_ptr(),
+            ids.as_mut_ptr(),
+            flags.as_mut_ptr(),
+        )?;
+        out.positions = positions;
+        if rich {
+            out.ids = ids;
+            out.flags = flags;
+        }
+        return Ok(out);
+    }
+    let positions_ptr = positions.as_mut_ptr() as usize;
+    let ids_ptr = ids.as_mut_ptr() as usize;
+    let flags_ptr = flags.as_mut_ptr() as usize;
+    use rayon::prelude::*;
+    let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
+        fill_frame_rows(
+            bytes,
+            &out,
+            frame,
+            dest,
+            workers,
+            rich,
+            positions_ptr as *mut f64,
+            ids_ptr as *mut u64,
+            flags_ptr as *mut u8,
+        )
+        .err()
+    });
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    out.positions = positions;
+    if rich {
+        out.ids = ids;
+        out.flags = flags;
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "parallel")]
+fn fill_frame_rows(
+    bytes: &[u8],
+    out: &ConPositions,
+    frame: usize,
+    dest: usize,
+    workers: usize,
+    rich: bool,
+    positions: *mut f64,
+    ids: *mut u64,
+    flags: *mut u8,
+) -> Result<(), ParseError> {
+    let count = out.counts[frame];
+    if count == 0 {
+        return Ok(());
+    }
+    let head = out.head_ends[frame];
+    let spec = frame_spec(bytes, out.spans[frame].start)?;
+    let rows = if count >= 4096 {
+        crate::parser::parallel_coord_rows(&bytes[head..], count, spec, 0, workers, None)?
+    } else {
+        serial_coord_rows(&bytes[head..], count, spec)?
+    };
+    if rows.xyz.len() != count * 3 {
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(rows.xyz.as_ptr(), positions.add(dest * 3), count * 3);
+        if rich {
+            std::ptr::copy_nonoverlapping(rows.ids.as_ptr(), ids.add(dest), count);
+            for (index, flag) in rows.flags.iter().enumerate() {
+                *flags.add(dest + index) = flag_bits(*flag);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "parallel")]
+fn frame_spec(bytes: &[u8], frame_start: usize) -> Result<u32, ParseError> {
+    let mut pos = frame_start;
+    skip_line(bytes, &mut pos)?;
+    let meta = read_line(bytes, &mut pos)?;
+    spec_version(meta)
+}
+
+#[cfg(feature = "parallel")]
+fn serial_coord_rows(
+    bytes: &[u8],
+    n: usize,
+    spec: u32,
+) -> Result<crate::parser::CoordRows, ParseError> {
+    let mut xyz = Vec::with_capacity(n * 3);
+    let mut ids = Vec::with_capacity(n);
+    let mut flags = Vec::with_capacity(n);
+    let mut pos = 0usize;
+    let mut default_id = 0u64;
+    for _ in 0..n {
+        let ((row, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, default_id)?;
+        xyz.extend_from_slice(&row);
+        ids.push(atom_id);
+        flags.push(fixed);
+        pos = next;
+        default_id = default_id.saturating_add(1);
+    }
+    Ok(crate::parser::CoordRows {
+        xyz,
+        ids,
+        flags,
+        atoms: Vec::new(),
+        consumed: pos,
+    })
+}
+
+fn parse_con(
+    bytes: &[u8],
+    rich: bool,
+    stop_on_section: bool,
+    store_rows: bool,
+) -> Result<ConPositions, ParseError> {
     let mut pos = 0usize;
     let mut out = ConPositions {
         n_frames: 0,
@@ -104,7 +279,7 @@ fn parse_con(bytes: &[u8], rich: bool, stop_on_section: bool) -> Result<ConPosit
             break;
         }
         let start = pos;
-        let (n, stock) = parse_one_frame(bytes, &mut pos, &mut out, rich)?;
+        let (n, stock) = parse_one_frame(bytes, &mut pos, &mut out, rich, store_rows)?;
         out.stock &= stock;
         out.counts.push(n);
         out.spans.push(start..pos);
@@ -121,6 +296,7 @@ fn parse_one_frame(
     pos: &mut usize,
     out: &mut ConPositions,
     rich: bool,
+    store_rows: bool,
 ) -> Result<(usize, bool), ParseError> {
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
@@ -161,16 +337,22 @@ fn parse_one_frame(
         if n == 0 {
             head_end = *pos;
         }
-        for atom in 0..*count {
-            let (row, next) = parse_coord_row_at(bytes, *pos, spec, atom as u64)?;
-            out.positions.extend_from_slice(&row.0);
-            if rich {
-                out.ids.push(row.2);
-                out.flags.push(flag_bits(row.1));
+        if store_rows {
+            for atom in 0..*count {
+                let (row, next) = parse_coord_row_at(bytes, *pos, spec, atom as u64)?;
+                out.positions.extend_from_slice(&row.0);
+                if rich {
+                    out.ids.push(row.2);
+                    out.flags.push(flag_bits(row.1));
+                }
+                out.masses.push(*mass);
+                *pos = next;
+                n += 1;
             }
-            out.masses.push(*mass);
-            *pos = next;
-            n += 1;
+        } else {
+            skip_count_lines(bytes, pos, *count)?;
+            out.masses.extend(std::iter::repeat_n(*mass, *count));
+            n += *count;
         }
     }
     let block_lines = n + natm_types * 2;
@@ -372,6 +554,32 @@ fn skip_line(bytes: &[u8], pos: &mut usize) -> Result<(), ParseError> {
     Ok(())
 }
 
+fn skip_count_lines(bytes: &[u8], pos: &mut usize, n: usize) -> Result<(), ParseError> {
+    let rest = &bytes[*pos..];
+    let mut seen = 0usize;
+    let mut at = 0usize;
+    while seen < n {
+        if at >= rest.len() {
+            return Err(ParseError::IncompleteFrame);
+        }
+        match memchr::memchr(b'\n', &rest[at..]) {
+            Some(hit) => {
+                at += hit + 1;
+                seen += 1;
+            }
+            None => {
+                at = rest.len();
+                seen += 1;
+                if seen < n {
+                    return Err(ParseError::IncompleteFrame);
+                }
+            }
+        }
+    }
+    *pos += at;
+    Ok(())
+}
+
 fn line_at(bytes: &[u8], pos: usize) -> Option<&[u8]> {
     if pos >= bytes.len() {
         return None;
@@ -437,6 +645,54 @@ mod tests {
             "{rel} left {} non-whitespace bytes",
             bytes.len() - tail
         );
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn parallel_rows_match_the_serial_walker_on_a_wide_frame() {
+        let n = 5000usize;
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!(" {i}.000000 0.250000 0.500000 0 {i}\n"));
+        }
+        let bytes = text.as_bytes();
+        let serial = positions_with_identity(bytes).unwrap();
+        let parallel = positions_parallel(bytes, 4, true).unwrap();
+        assert_eq!(parallel.counts, serial.counts);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+        assert_eq!(parallel.ids, serial.ids);
+        assert_eq!(parallel.flags, serial.flags);
+        assert_eq!(parallel.masses, serial.masses);
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn parallel_newlines_match_serial_rows_past_one_mib() {
+        let n = 80_000usize;
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n100.0 100.0 100.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125000 1.250000 2.500000 0 {i}\n"));
+        }
+        assert!(text.len() > (1 << 20));
+        let bytes = text.as_bytes();
+        let serial = positions_with_identity(bytes).unwrap();
+        let parallel = positions_parallel(bytes, 4, true).unwrap();
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+        assert_eq!(parallel.ids, serial.ids);
     }
 
     #[test]

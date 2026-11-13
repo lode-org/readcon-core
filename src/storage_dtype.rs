@@ -239,15 +239,23 @@ impl PartialEq for Array2Storage {
 }
 
 fn empty_f64_rows() -> Array2Storage {
-    static EMPTY: std::sync::LazyLock<ndarray::ArcArray2<f64>> =
-        std::sync::LazyLock::new(|| ndarray::Array2::zeros((0, 3)).into_shared());
-    Array2Storage::F64(EMPTY.clone())
+    // A process-wide Arc made every worker's frame assembly increment the
+    // same atomic. That one cache line serialised an otherwise parallel
+    // parse. Each thread keeps its own empty matrix, so the increment
+    // stays on that thread's line. The bytes are still a zero-length
+    // `(0, 3)` f64 array.
+    thread_local! {
+        static EMPTY: ndarray::ArcArray2<f64> =
+            ndarray::Array2::<f64>::zeros((0, 3)).into_shared();
+    }
+    EMPTY.with(|empty| Array2Storage::F64(empty.clone()))
 }
 
 fn empty_f64_col() -> Array1Storage {
-    static EMPTY: std::sync::LazyLock<ndarray::ArcArray1<f64>> =
-        std::sync::LazyLock::new(|| ndarray::Array1::zeros(0).into_shared());
-    Array1Storage::F64(EMPTY.clone())
+    thread_local! {
+        static EMPTY: ndarray::ArcArray1<f64> = ndarray::Array1::<f64>::zeros(0).into_shared();
+    }
+    EMPTY.with(|empty| Array1Storage::F64(empty.clone()))
 }
 
 impl Array2Storage {

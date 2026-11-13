@@ -1,3 +1,9 @@
+// glibc's allocator serialises the per-frame shells of a parallel parse
+// on one arena lock. mimalloc keeps a serial read at the same speed and
+// lets those shells allocate on the thread that parses them.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 pub mod array;
 mod columns;
 pub mod compression;

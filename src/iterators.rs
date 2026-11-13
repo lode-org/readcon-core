@@ -235,6 +235,42 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         self.pos = pos;
         Ok(row)
     }
+    fn try_take_coord_block(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        start_id: u64,
+        symbol: &std::sync::Arc<str>,
+        workers: usize,
+    ) -> Option<crate::parser::CoordRows> {
+        if self.peeked.is_some() || self.utf8_bad {
+            return None;
+        }
+        #[cfg(feature = "parallel")]
+        {
+            let rest = &self.bytes[self.pos..];
+            let block = crate::parser::parallel_coord_rows(
+                rest,
+                n,
+                spec_version,
+                start_id,
+                workers,
+                Some(symbol),
+            )
+            .ok()?;
+            self.pos += block.consumed;
+            self.line_no = self.line_no.saturating_add(n as u32);
+            if self.newlines.is_some() {
+                self.index_line = self.index_line.saturating_add(n);
+            }
+            return Some(block);
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let _ = (n, spec_version, start_id, symbol, workers);
+            None
+        }
+    }
     #[inline]
     fn next_vector_row(
         &mut self,
@@ -1200,13 +1236,30 @@ fn certified_columns(
     num_threads: Option<usize>,
     identity: bool,
 ) -> Result<Option<CoordColumns>, error::LocatedParseError> {
-    let mut parsed = match if identity {
-        crate::columns::positions_with_identity(bytes)
-    } else {
-        crate::columns::positions_from_con_bytes(bytes)
-    } {
-        Ok(parsed) if parsed.stock => parsed,
-        _ => return Ok(None),
+    let mut parsed = {
+        let parsed = if parallel_column_threads(num_threads) {
+            #[cfg(feature = "parallel")]
+            {
+                crate::columns::positions_parallel(bytes, num_threads.unwrap_or(1), identity)
+            }
+            #[cfg(not(feature = "parallel"))]
+            {
+                let _ = num_threads;
+                if identity {
+                    crate::columns::positions_with_identity(bytes)
+                } else {
+                    crate::columns::positions_from_con_bytes(bytes)
+                }
+            }
+        } else if identity {
+            crate::columns::positions_with_identity(bytes)
+        } else {
+            crate::columns::positions_from_con_bytes(bytes)
+        };
+        match parsed {
+            Ok(parsed) if parsed.stock => parsed,
+            _ => return Ok(None),
+        }
     };
     if parsed.n_frames == 0 {
         return Ok(Some(CoordColumns {
@@ -1257,12 +1310,7 @@ fn certified_columns(
         ColumnIdentity::default()
     };
     let has_section = parsed.has_section;
-    let values = if parallel_column_threads(num_threads) {
-        parallel_column_values(bytes, &parsed, n_atoms, num_threads)
-            .map_err(|err| error::LocatedParseError::new(err, 0, 0))?
-    } else {
-        std::mem::take(&mut parsed.positions)
-    };
+    let values = std::mem::take(&mut parsed.positions);
     Ok(Some(CoordColumns {
         block: PositionBlock {
             n_frames: parsed.n_frames,
@@ -1338,58 +1386,6 @@ fn parallel_column_threads(num_threads: Option<usize>) -> bool {
     {
         let _ = num_threads;
         false
-    }
-}
-
-fn parallel_column_values(
-    bytes: &[u8],
-    parsed: &crate::columns::ConPositions,
-    n_atoms: usize,
-    num_threads: Option<usize>,
-) -> Result<Vec<f64>, error::ParseError> {
-    let stride = n_atoms * 3;
-    if stride == 0 {
-        return Ok(Vec::new());
-    }
-    #[cfg(not(feature = "parallel"))]
-    {
-        let _ = (bytes, num_threads);
-        Ok(parsed.positions.clone())
-    }
-    #[cfg(feature = "parallel")]
-    {
-        let mut values = vec![0.0_f64; parsed.n_frames * stride];
-        let fill_one = |index: usize, dest: &mut [f64]| {
-            let span = &parsed.spans[index];
-            let slice = crate::columns::positions_from_con_bytes(&bytes[span.start..span.end])?;
-            if slice.counts.first().copied() != Some(n_atoms) || slice.positions.len() != stride {
-                return Err(error::ParseError::InvalidCount(
-                    "frame atom count does not match the first frame".into(),
-                ));
-            }
-            dest.copy_from_slice(&slice.positions);
-            Ok(())
-        };
-        use rayon::prelude::*;
-        let mut run = || match values
-            .par_chunks_mut(stride)
-            .enumerate()
-            .find_map_first(|(index, dest)| fill_one(index, dest).err())
-        {
-            Some(err) => Err(err),
-            None => Ok(()),
-        };
-        match num_threads {
-            Some(n) if n >= 2 => {
-                let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(n)
-                    .build()
-                    .map_err(|err| error::ParseError::ValidationError(err.to_string()))?;
-                pool.install(run)?;
-            }
-            _ => run()?,
-        }
-        Ok(values)
     }
 }
 
@@ -2065,6 +2061,10 @@ where
             let t_chunk = std::time::Instant::now();
             let byte_start = boundaries[start];
             let byte_end = span_end(boundaries, end - 1, len);
+            let wide = end - start == 1 && byte_end.saturating_sub(byte_start) >= (256 << 10);
+            if wide {
+                crate::parser::set_wide_workers(workers);
+            }
             let mut iter = ConFrameIterator::from_bytes(&bytes[byte_start..byte_end]);
             for i in start..end {
                 let frame = match iter.next() {
@@ -2085,6 +2085,9 @@ where
                 unsafe {
                     slots_ptr.write_slot(i, frame);
                 }
+            }
+            if wide {
+                crate::parser::set_wide_workers(1);
             }
             chunk_ns[range_index].store(
                 t_chunk.elapsed().as_nanos() as u64,
@@ -2515,6 +2518,29 @@ fn parse_frames_parallel_bytes(
     parse_bytes_timed(bytes, num_threads).slots
 }
 
+/// Frame starts for a pool of `workers`.
+///
+/// Equal byte spans stay arithmetic. Anything else builds the newline
+/// index on the pool and walks headers by line count, so the walk does
+/// not reread atom rows. One worker keeps the serial byte walk.
+#[cfg(feature = "parallel")]
+fn parallel_boundaries(bytes: &[u8], workers: usize) -> (Vec<usize>, u8) {
+    if workers >= 2 {
+        if let Some(bounds) = equal_span_boundaries(bytes, workers) {
+            return (bounds, SCAN_EQUAL_SPAN);
+        }
+        let newlines = newline_positions(bytes, workers);
+        let mut scanner = ConFrameIterator::from_bytes(bytes);
+        scanner.lines.index_line = 0;
+        scanner.lines.newlines = Some(newlines);
+        return (collect_frame_starts(scanner, true), SCAN_INDEXED);
+    }
+    (
+        collect_frame_starts(ConFrameIterator::from_bytes(bytes), true),
+        SCAN_SERIAL,
+    )
+}
+
 /// Scan, slot allocation, and worker parse of `bytes`.
 ///
 /// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
@@ -2533,15 +2559,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
         // Equal-length frames skip the serial header walk. Anything else
         // still walks headers on this thread. Workers then parse the
         // spans in file order.
-        let (boundaries, scan_kind) =
-            if let Some(bounds) = equal_span_boundaries(bytes, parse_workers) {
-                (bounds, SCAN_EQUAL_SPAN)
-            } else {
-                (
-                    collect_frame_starts(ConFrameIterator::from_bytes(bytes), true),
-                    SCAN_SERIAL,
-                )
-            };
+        let (boundaries, scan_kind) = parallel_boundaries(bytes, parse_workers);
         let scan_s = t_scan.elapsed().as_secs_f64();
         let scan_minflt = process_minflt().saturating_sub(fault0);
         let parsed = parse_into_slots_timed(
@@ -3166,7 +3184,7 @@ pub fn parse_frames_parallel_with_threads(
         // A whitespace tail is not a frame. The serial iterator stops
         // there. The offset scan used by callers still records that byte
         // when a skip error includes it.
-        let boundaries = collect_frame_starts(ConFrameIterator::new(file_contents), true);
+        let (boundaries, _kind) = parallel_boundaries(file_contents.as_bytes(), parse_workers);
         parse_into_slots(
             file_contents.as_bytes(),
             file_contents.len(),
@@ -3176,9 +3194,9 @@ pub fn parse_frames_parallel_with_threads(
         )
     };
     match num_threads {
-        Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => run(),
+        Some(n) if n >= 2 => match shared_pool(n) {
+            Some(pool) => pool.install(run),
+            None => run(),
         },
         _ => run(),
     }
@@ -4396,6 +4414,35 @@ mod phased_read_tests {
             tail_phased.frames,
             frames_from_text(&tailed, Some(1)).expect("tail serial")
         );
+    }
+
+    #[test]
+    fn a_wide_frame_matches_the_serial_parse() {
+        let n = 5000usize;
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125000 0.250000 0.500000 0 {i}\n"));
+        }
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("parallel");
+        assert_eq!(parallel.frames, serial);
+    }
+
+    #[test]
+    fn unequal_byte_spans_use_the_indexed_header_walk() {
+        let one = fixture("cuh2.con");
+        let mut longer = one.clone();
+        longer.insert_str(0, "pad ");
+        let text = format!("{one}{longer}{one}");
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let phased = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("phased");
+        assert_eq!(phased.scan_kind, SCAN_INDEXED);
+        assert_eq!(phased.frames, serial);
+        assert!(equal_span_boundaries(text.as_bytes(), 4).is_none());
     }
 
     #[test]

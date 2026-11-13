@@ -2983,7 +2983,7 @@ fn con_frame_list_stored(
 /// `comm=` are refused.
 /// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None))]
 #[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
@@ -2995,6 +2995,7 @@ fn write_con(
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
     append: bool,
+    n_threads: Option<usize>,
 ) -> PyResult<()> {
     if append && comm.is_some() {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -3069,6 +3070,35 @@ fn write_con(
             }
         }
         OutputCodec::Plain => {
+            let workers = n_threads.unwrap_or(1);
+            if !append && workers >= 2 {
+                let bytes = if let Ok(list) = frames.cast::<ConFrameList>() {
+                    let borrowed = list.borrow();
+                    let slots = borrowed.frames.lock().expect("frames");
+                    let refs: Vec<&ConFrame> = slots
+                        .iter()
+                        .map(|slot| slot.as_ref().expect("stored frame"))
+                        .collect();
+                    crate::writer::write_frame_refs_with_threads(
+                        &refs, workers, precision, canonical,
+                    )
+                    .map_err(|err| write_err_to_py(py, err))?
+                } else {
+                    let rust_frames = py_frames_to_rust(py, frames)?;
+                    py.detach(|| {
+                        crate::writer::write_frames_to_vec_with_threads(
+                            &rust_frames,
+                            workers,
+                            precision,
+                            canonical,
+                        )
+                    })
+                    .map_err(|err| write_err_to_py(py, err))?
+                };
+                std::fs::write(path, bytes)
+                    .map_err(|err| PyIOError::new_err(format!("failed to create writer: {err}")))?;
+                return Ok(());
+            }
             let mut writer = if append {
                 match precision {
                     Some(precision) => {
@@ -4476,12 +4506,20 @@ fn py_text_frames<'py>(
 /// object, and a frame whose symbols match the previous frame is that
 /// same tuple. ``arrays['species']`` is ``species``. ``arrays['pos']``
 /// and ``arrays['masses']`` are the top-level slabs.
+/// `n_threads` of `None` or `1` is the serial scan. `n >= 2` splits frames.
 #[pyfunction]
-fn read_extxyz<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, PyDict>> {
+#[pyo3(signature = (path, n_threads=None))]
+fn read_extxyz<'py>(
+    py: Python<'py>,
+    path: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Bound<'py, PyDict>> {
     let path_owned = path.to_string();
+    let workers = n_threads.unwrap_or(1);
     let mut tables = py
         .detach(move || {
-            crate::extxyz_scan::tables_from_extxyz_path(std::path::Path::new(&path_owned))
+            let bytes = std::fs::read(&path_owned).map_err(|_| "read".to_string())?;
+            crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
         })
         .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let n_frames = tables.n_frames;

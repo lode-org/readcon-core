@@ -15,9 +15,234 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 ///
 /// Implemented by the memchr cursor on the hot iterator path and by
 /// `Peekable<I>` for tests / ad-hoc callers.
+/// Rows of one coordinate block, in file order.
+///
+/// `atoms` is empty unless the caller asked for per-atom shells. The
+/// numeric columns are the bytes a serial `next_coord_row` loop would
+/// have stored.
+#[doc(hidden)]
+pub struct CoordRows {
+    pub xyz: Vec<f64>,
+    pub ids: Vec<u64>,
+    pub flags: Vec<[bool; 3]>,
+    pub atoms: Vec<crate::types::AtomDatum>,
+    pub consumed: usize,
+}
+
+/// Worker count for a coordinate block that is too wide to hand to one task.
+///
+/// One means the calling thread parses the block. The frame iterator sets
+/// this only for a single wide frame, then puts it back.
+pub(crate) fn wide_workers() -> usize {
+    WIDE_WORKERS.with(|slot| slot.get())
+}
+
+pub(crate) fn set_wide_workers(n: usize) {
+    WIDE_WORKERS.with(|slot| slot.set(n.max(1)));
+}
+
+std::thread_local! {
+    static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
+}
+
+/// Coordinate rows in `bytes`, which begins at the first row.
+///
+/// `n` rows are required. The returned `consumed` count is the number of
+/// bytes those rows occupy, including their newlines. `symbol` builds the
+/// per-atom shells; `None` leaves `atoms` empty. A structural miss returns
+/// `Err` and the caller keeps the serial loop.
+#[cfg(feature = "parallel")]
+pub(crate) fn parallel_coord_rows(
+    bytes: &[u8],
+    n: usize,
+    spec_version: u32,
+    start_id: u64,
+    workers: usize,
+    symbol: Option<&std::sync::Arc<str>>,
+) -> Result<CoordRows, ParseError> {
+    let ranges = coord_line_ranges(bytes, n, workers)?;
+    let consumed = ranges.last().map(|(_, end)| *end).unwrap_or(0);
+    let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
+    let mut ids = Vec::<u64>::with_capacity(n);
+    let mut flags = Vec::<[bool; 3]>::with_capacity(n);
+    // Every lane is overwritten before a read. `f64` and `bool` have no
+    // destructor, so a short write still drops cleanly.
+    unsafe {
+        xyz.set_len(n * 3);
+        ids.set_len(n);
+        flags.set_len(n);
+    }
+    let mut atoms_raw: Vec<std::mem::MaybeUninit<crate::types::AtomDatum>> = Vec::new();
+    if symbol.is_some() {
+        atoms_raw = Vec::with_capacity(n);
+        unsafe { atoms_raw.set_len(n) };
+    }
+    let xyz_ptr = xyz.as_mut_ptr() as usize;
+    let ids_ptr = ids.as_mut_ptr() as usize;
+    let flags_ptr = flags.as_mut_ptr() as usize;
+    let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
+    let chunk = n.div_ceil(workers.max(1)).max(1);
+    use rayon::prelude::*;
+    let built = ranges
+        .par_chunks(chunk)
+        .enumerate()
+        .try_for_each(|(chunk_index, group)| {
+            write_coord_group(
+                bytes,
+                group,
+                chunk_index * chunk,
+                spec_version,
+                start_id,
+                symbol,
+                xyz_ptr,
+                ids_ptr,
+                flags_ptr,
+                atoms_ptr,
+            )
+        });
+    if let Err(err) = built {
+        std::mem::forget(atoms_raw);
+        return Err(err);
+    }
+    let atoms = if symbol.is_some() {
+        let mut raw = std::mem::ManuallyDrop::new(atoms_raw);
+        unsafe {
+            Vec::from_raw_parts(
+                raw.as_mut_ptr() as *mut crate::types::AtomDatum,
+                n,
+                raw.capacity(),
+            )
+        }
+    } else {
+        Vec::new()
+    };
+    Ok(CoordRows {
+        xyz,
+        ids,
+        flags,
+        atoms,
+        consumed,
+    })
+}
+
+#[cfg(feature = "parallel")]
+fn coord_line_ranges(
+    bytes: &[u8],
+    n: usize,
+    workers: usize,
+) -> Result<Vec<(usize, usize)>, ParseError> {
+    let newlines = if workers >= 2 && bytes.len() >= (1 << 20) {
+        parallel_newlines(bytes, workers)
+    } else {
+        memchr::memchr_iter(b'\n', bytes).collect()
+    };
+    let mut ranges = Vec::with_capacity(n);
+    let mut start = 0usize;
+    for index in 0..n {
+        if start > bytes.len() {
+            return Err(ParseError::IncompleteFrame);
+        }
+        let end = if index < newlines.len() {
+            newlines[index] + 1
+        } else if index == newlines.len() && start < bytes.len() {
+            bytes.len()
+        } else {
+            return Err(ParseError::IncompleteFrame);
+        };
+        if end < start {
+            return Err(ParseError::IncompleteFrame);
+        }
+        ranges.push((start, end));
+        start = end;
+    }
+    Ok(ranges)
+}
+
+#[cfg(feature = "parallel")]
+fn parallel_newlines(bytes: &[u8], workers: usize) -> Vec<usize> {
+    let workers = workers.max(1).min(bytes.len().max(1));
+    let cuts: Vec<usize> = (0..=workers)
+        .map(|index| (index * bytes.len()) / workers)
+        .collect();
+    use rayon::prelude::*;
+    let parts: Vec<Vec<usize>> = cuts
+        .windows(2)
+        .collect::<Vec<_>>()
+        .par_iter()
+        .map(|window| {
+            let (from, to) = (window[0], window[1]);
+            memchr::memchr_iter(b'\n', &bytes[from..to])
+                .map(|at| from + at)
+                .collect()
+        })
+        .collect();
+    let mut all = Vec::new();
+    for part in parts {
+        all.extend(part);
+    }
+    all
+}
+
+#[cfg(feature = "parallel")]
+fn write_coord_group(
+    bytes: &[u8],
+    group: &[(usize, usize)],
+    row0: usize,
+    spec_version: u32,
+    start_id: u64,
+    symbol: Option<&std::sync::Arc<str>>,
+    xyz_ptr: usize,
+    ids_ptr: usize,
+    flags_ptr: usize,
+    atoms_ptr: usize,
+) -> Result<(), ParseError> {
+    let mut shares = symbol.map(|symbol| symbol_shares(symbol, group.len()));
+    for (offset, &(start, end)) in group.iter().enumerate() {
+        let row_index = row0 + offset;
+        let default_id = start_id + row_index as u64;
+        let ((row, fixed, atom_id), _next) =
+            parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                row.as_ptr(),
+                (xyz_ptr as *mut f64).add(row_index * 3),
+                3,
+            );
+            *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+            *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
+            if let Some(shares) = shares.as_mut() {
+                let atom = crate::types::AtomDatum::coords(
+                    shares.take(),
+                    row[0],
+                    row[1],
+                    row[2],
+                    fixed,
+                    atom_id,
+                );
+                (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
+                    .add(row_index))
+                .write(atom);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub trait LineStream<'a> {
     fn next_line(&mut self) -> Option<&'a str>;
     fn peek_line(&mut self) -> Option<&'a str>;
+    /// Take `n` coordinate rows starting at the cursor, or `None` to keep
+    /// the one-row loop. The cursor moves only when this returns `Some`.
+    fn try_take_coord_block(
+        &mut self,
+        _n: usize,
+        _spec_version: u32,
+        _start_id: u64,
+        _symbol: &std::sync::Arc<str>,
+        _workers: usize,
+    ) -> Option<CoordRows> {
+        None
+    }
     /// True when every remaining line, including the current peek, is
     /// empty or whitespace. Default is false so a one-line peek cannot
     /// hide a following section.
@@ -1615,6 +1840,29 @@ fn ingest_coord_rows_f64<'a, L>(
 where
     L: LineStream<'a>,
 {
+    let workers = wide_workers();
+    if workers >= 2 && n >= 4096 {
+        if let Some(block) =
+            lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
+        {
+            if pos_flat.is_empty() {
+                *pos_flat = block.xyz;
+            } else {
+                pos_flat.extend_from_slice(&block.xyz);
+            }
+            if ids.is_empty() {
+                *ids = block.ids;
+            } else {
+                ids.extend_from_slice(&block.ids);
+            }
+            if atom_data.is_empty() {
+                *atom_data = block.atoms;
+            } else {
+                atom_data.extend(block.atoms);
+            }
+            return Ok(global_atom_idx + n as u64);
+        }
+    }
     let mut shares = symbol_shares(symbol, n);
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;

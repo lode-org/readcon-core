@@ -141,6 +141,8 @@ fn newlines_before(bytes: &[u8], at: usize) -> u32 {
 /// `Vec` of length `at` would sit beside the span the rank already
 /// parsed, and the last rank's prefix is almost the whole file.
 fn line_offset_before(comm: &Comm, path: &Path, at: usize) -> Result<u32, BoxErr> {
+    #[cfg(test)]
+    note_prefix_call();
     let counted = count_newlines_before(path, at);
     let ok = agree(comm, counted.is_ok());
     match (counted, ok) {
@@ -388,6 +390,21 @@ fn take_prefix_allocs() -> Vec<usize> {
     PREFIX_ALLOCS.with(|slot| std::mem::take(&mut *slot.borrow_mut()))
 }
 
+#[cfg(test)]
+thread_local! {
+    static PREFIX_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn note_prefix_call() {
+    PREFIX_CALLS.with(|slot| slot.set(slot.get() + 1));
+}
+
+#[cfg(test)]
+fn take_prefix_calls() -> usize {
+    PREFIX_CALLS.with(|slot| slot.replace(0))
+}
+
 /// Span and frame count when the first two frames share one length and
 /// that length tiles the file. Later frames are checked by the parse of
 /// each rank's own span, not by a walk of the whole file on rank 0.
@@ -467,13 +484,31 @@ fn read_tiled(
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
     let offs: Vec<usize> = (0..r.len()).map(|i| i * span).collect();
-    let line_offset = line_offset_before(comm, path, lo)?;
-    let frames = parse_local(comm, &bytes, &offs, line_offset, r.start, threads)?;
+    let frames = parse_ranked(comm, path, &bytes, &offs, r.start, threads, lo)?;
     Ok(Some(RankFrames {
         first: r.start,
         n_total: n,
         frames,
     }))
+}
+
+/// Parse the span. The prefix newline count runs only when a frame fails,
+/// because a successful read does not report a file line.
+fn parse_ranked(
+    comm: &Comm,
+    path: &Path,
+    bytes: &[u8],
+    offs: &[usize],
+    first: usize,
+    threads: Option<usize>,
+    lo: usize,
+) -> Result<Vec<ConFrame>, BoxErr> {
+    let attempt = parse_local(comm, bytes, offs, 0, first, threads);
+    if attempt.is_ok() {
+        return attempt;
+    }
+    let line_offset = line_offset_before(comm, path, lo)?;
+    parse_local(comm, bytes, offs, line_offset, first, threads)
 }
 
 fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankFrames, BoxErr> {
@@ -506,8 +541,7 @@ fn read_shared(comm: &Comm, path: &Path, threads: Option<usize>) -> Result<RankF
         (Err(e), _) => return Err(format!("rank {}: {e}", comm.rank()).into()),
         (Ok(_), false) => return Err("file open failed on another rank".into()),
     };
-    let line_offset = line_offset_before(comm, path, lo)?;
-    let frames = parse_local(comm, &bytes, &offs, line_offset, r.start, threads)?;
+    let frames = parse_ranked(comm, path, &bytes, &offs, r.start, threads, lo)?;
     Ok(RankFrames {
         first: r.start,
         n_total: idx.len(),
@@ -803,6 +837,32 @@ mod tests {
     fn mpi_test_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
         LOCK.lock().unwrap_or_else(|err| err.into_inner())
+    }
+
+    /// A successful shared read does not count newlines before the span.
+    ///
+    /// That count is the file line of a later error. The success path
+    /// used to read it on every rank, including a rank whose span starts
+    /// at byte 0.
+    #[test]
+    fn successful_shared_read_does_not_count_the_prefix() {
+        with_comm(|comm| {
+            let frame = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+            let path = std::env::temp_dir().join(format!(
+                "readcon-mpi-prefix-success-{}.con",
+                std::process::id()
+            ));
+            std::fs::write(&path, frame.repeat(4)).unwrap();
+            let _ = take_prefix_calls();
+            let got = read_block(comm, &path, ReadMode::Shared, Some(1)).expect("read");
+            let calls = take_prefix_calls();
+            let _ = std::fs::remove_file(&path);
+            assert_eq!(got.n_total, 4);
+            assert_eq!(
+                calls, 0,
+                "a successful read counted newlines before the span"
+            );
+        });
     }
 
     /// Collective read of the same file. The owning rank reports line 14.

@@ -98,6 +98,8 @@ pub struct ConFrameWriter<W: Write> {
     /// Last x/y/z spellings. A value is formatted on the second sight and
     /// copied after that, which is the common lattice column.
     fmt_slot: [FmtSlot; 3],
+    /// Workers for one wide coordinate block. One keeps the serial loop.
+    atom_workers: usize,
 }
 
 /// One column of the round-trip float cache.
@@ -260,7 +262,18 @@ impl<W: Write> ConFrameWriter<W> {
             scratch: Vec::with_capacity(16 * 1024),
             ryu: ryu::Buffer::new(),
             fmt_slot: [FmtSlot::new(); 3],
+            atom_workers: 1,
         }
+    }
+
+    /// Format a wide coordinate block on `n` workers.
+    ///
+    /// `n < 2` leaves the serial loop. The bytes match that loop: each
+    /// worker formats a contiguous run of atoms and the runs are joined
+    /// in file order.
+    pub fn parallel_atoms(mut self, n: usize) -> Self {
+        self.atom_workers = n.max(1);
+        self
     }
 
     /// Opt-in **canonical** serialization: BTree-ordered metadata keys in JSON,
@@ -549,18 +562,15 @@ impl<W: Write> ConFrameWriter<W> {
                 push_str_line(buf, symbol);
                 push_component_line(buf, "Coordinates of Component", type_idx);
 
-                for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[atom_idx_offset + i];
-                    push_xyz_line(
-                        buf,
-                        ryu,
-                        slots,
-                        [atom.x, atom.y, atom.z],
-                        prec,
-                        written_fixed_flag(atom.fixed, frame.header.spec_version),
-                        atom.atom_id,
-                    );
-                }
+                append_coord_rows(
+                    buf,
+                    ryu,
+                    slots,
+                    &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
+                    prec,
+                    frame.header.spec_version,
+                    self.atom_workers,
+                );
                 atom_idx_offset += num_atoms_in_type;
             }
 
@@ -988,6 +998,77 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
     buf.extend_from_slice(&tmp[..prec]);
 }
 
+const WIDE_ATOM_GRAIN: usize = 4096;
+
+fn append_coord_rows(
+    buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
+    slots: &mut [FmtSlot; 3],
+    atoms: &[crate::types::AtomDatum],
+    prec: FloatFormat,
+    spec_version: u32,
+    workers: usize,
+) {
+    if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
+        for atom in atoms {
+            push_xyz_line(
+                buf,
+                ryu,
+                slots,
+                [atom.x, atom.y, atom.z],
+                prec,
+                written_fixed_flag(atom.fixed, spec_version),
+                atom.atom_id,
+            );
+        }
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    {
+        let chunk = atoms.len().div_ceil(workers).max(1);
+        use rayon::prelude::*;
+        let parts: Vec<Vec<u8>> = atoms
+            .par_chunks(chunk)
+            .map(|group| {
+                let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                let mut ryu = ryu::Buffer::new();
+                let mut slots = [FmtSlot::new(); 3];
+                for atom in group {
+                    push_xyz_line(
+                        &mut local,
+                        &mut ryu,
+                        &mut slots,
+                        [atom.x, atom.y, atom.z],
+                        prec,
+                        written_fixed_flag(atom.fixed, spec_version),
+                        atom.atom_id,
+                    );
+                }
+                local
+            })
+            .collect();
+        for part in parts {
+            buf.extend_from_slice(&part);
+        }
+        return;
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = workers;
+        for atom in atoms {
+            push_xyz_line(
+                buf,
+                ryu,
+                slots,
+                [atom.x, atom.y, atom.z],
+                prec,
+                written_fixed_flag(atom.fixed, spec_version),
+                atom.atom_id,
+            );
+        }
+    }
+}
+
 fn push_xyz_line(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
@@ -1222,12 +1303,98 @@ pub(crate) fn open_uncompressed_append(path: &Path) -> io::Result<File> {
 ///
 /// The bytes match [`ConFrameWriter::from_path`] writing the same frames.
 pub fn write_frames_to_vec(frames: &[ConFrame]) -> Result<Vec<u8>, WriteError> {
-    let mut buffer = Vec::new();
-    {
-        let mut writer = ConFrameWriter::new(&mut buffer);
-        writer.extend(frames.iter())?;
+    write_frames_to_vec_with_threads(frames, 1, None, false)
+}
+
+/// Serializes `frames` to CON bytes.
+///
+/// `workers < 2` is [`write_frames_to_vec`]. Two or more workers format
+/// disjoint frame runs into private buffers and concatenate those buffers
+/// in file order. One wide frame formats its coordinate rows the same way.
+/// The bytes match a serial write.
+pub fn write_frames_to_vec_with_threads(
+    frames: &[ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+) -> Result<Vec<u8>, WriteError> {
+    let refs: Vec<&ConFrame> = frames.iter().collect();
+    write_frame_refs_with_threads(&refs, workers, precision, canonical)
+}
+
+/// [`write_frames_to_vec_with_threads`] over borrowed frames.
+///
+/// A `read_con` result can be written without cloning the trajectory.
+pub fn write_frame_refs_with_threads(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+) -> Result<Vec<u8>, WriteError> {
+    let wide = frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN;
+    if workers < 2 || (frames.len() < 2 && !wide) {
+        let mut buffer = Vec::new();
+        {
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                None => ConFrameWriter::new(&mut buffer),
+            }
+            .canonical(canonical);
+            writer.extend(frames.iter().copied())?;
+        }
+        return Ok(buffer);
     }
-    Ok(buffer)
+    if wide {
+        let mut buffer = Vec::new();
+        {
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                None => ConFrameWriter::new(&mut buffer),
+            }
+            .canonical(canonical)
+            .parallel_atoms(workers);
+            writer.write_frame(&frames[0])?;
+        }
+        return Ok(buffer);
+    }
+    #[cfg(feature = "parallel")]
+    {
+        let chunk = frames.len().div_ceil(workers).max(1);
+        use rayon::prelude::*;
+        let parts: Result<Vec<Vec<u8>>, WriteError> = frames
+            .par_chunks(chunk)
+            .map(|group| {
+                let mut buffer = Vec::new();
+                let mut writer = match precision {
+                    Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                    None => ConFrameWriter::new(&mut buffer),
+                }
+                .canonical(canonical);
+                writer.extend(group.iter().copied())?;
+                drop(writer);
+                Ok(buffer)
+            })
+            .collect();
+        let mut out = Vec::new();
+        for part in parts? {
+            out.extend_from_slice(&part);
+        }
+        return Ok(out);
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = workers;
+        let mut buffer = Vec::new();
+        {
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                None => ConFrameWriter::new(&mut buffer),
+            }
+            .canonical(canonical);
+            writer.extend(frames.iter().copied())?;
+        }
+        Ok(buffer)
+    }
 }
 
 /// Serializes `frames` to a CON string. No file is created.
@@ -1414,5 +1581,44 @@ mod section_arity_tests {
         let reserved = vec![json!("velocities"), json!("energies")];
         require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
         require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_write_tests {
+    use super::{write_frames_to_vec, write_frames_to_vec_with_threads};
+    use crate::iterators::frames_from_text;
+
+    fn wide_text(n: usize) -> String {
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125 0.25 0.5 0 {i}\n"));
+        }
+        text
+    }
+
+    #[test]
+    fn parallel_bytes_match_the_serial_writer() {
+        let wide = frames_from_text(&wide_text(5000), Some(1)).unwrap();
+        let serial = write_frames_to_vec(&wide).unwrap();
+        let parallel = write_frames_to_vec_with_threads(&wide, 4, None, false).unwrap();
+        assert_eq!(parallel, serial);
+        let one = frames_from_text(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/resources/test/cuh2.con"
+            ))
+            .unwrap()
+            .repeat(8),
+            Some(1),
+        )
+        .unwrap();
+        let serial = write_frames_to_vec(&one).unwrap();
+        let parallel = write_frames_to_vec_with_threads(&one, 4, None, false).unwrap();
+        assert_eq!(parallel, serial);
     }
 }

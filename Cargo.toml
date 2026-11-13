@@ -91,6 +91,7 @@ memmap2 = "0.9"
 libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
+mimalloc = "0.1.43"
 mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }

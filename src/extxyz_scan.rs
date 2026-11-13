@@ -224,6 +224,210 @@ fn push_atom(line: &[u8], specs: &[ColumnSpec], columns: &mut [XyzColumn]) -> Re
 }
 
 pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
+    tables_from_extxyz_bytes_with_threads(bytes, 1)
+}
+
+/// [`tables_from_extxyz_bytes`] using `workers` for the atom rows.
+///
+/// `workers < 2` is the serial scan. Two or more workers split frames
+/// after the line index. The tables match the serial scan.
+pub fn tables_from_extxyz_bytes_with_threads(
+    bytes: &[u8],
+    workers: usize,
+) -> Result<XyzTables, String> {
+    if workers < 2 {
+        return tables_serial(bytes);
+    }
+    let lines = split_lines(bytes);
+    let mut specs: Vec<ColumnSpec> = Vec::new();
+    let mut cell = Vec::new();
+    let mut starts = Vec::new();
+    let mut mark = 0usize;
+    let mut n_atoms = 0usize;
+    while mark < lines.len() {
+        let count_line = trim(lines[mark]);
+        if count_line.is_empty() {
+            mark += 1;
+            continue;
+        }
+        let count = parse_f64(count_line)? as usize;
+        if mark + 1 >= lines.len() {
+            return Err("comment".to_string());
+        }
+        let comment = lines[mark + 1];
+        let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
+        let properties = quoted_after(comment, b"Properties=").ok_or("properties")?;
+        let frame_specs = property_columns(properties)?;
+        let frame_cell = lattice_cell(lattice)?;
+        if starts.is_empty() {
+            specs = frame_specs;
+            n_atoms = count;
+        } else if count != n_atoms
+            || frame_specs.len() != specs.len()
+            || frame_specs.iter().zip(specs.iter()).any(|(left, right)| {
+                left.name != right.name || left.kind != right.kind || left.width != right.width
+            })
+        {
+            return Err("properties".to_string());
+        }
+        cell.extend_from_slice(&frame_cell);
+        mark += 2;
+        if mark + count > lines.len() {
+            return Err("atoms".to_string());
+        }
+        starts.push(mark);
+        mark += count;
+    }
+    let n_frames = starts.len();
+    if n_frames == 0 {
+        return Err("no frames".to_string());
+    }
+    let mut columns: Vec<XyzColumn> = specs
+        .iter()
+        .map(|spec| {
+            let n = n_frames * n_atoms * spec.width;
+            XyzColumn {
+                name: spec.name.clone(),
+                kind: spec.kind,
+                width: spec.width,
+                text: if spec.kind == b'S' {
+                    vec![String::new(); n]
+                } else {
+                    Vec::new()
+                },
+                real: if spec.kind == b'S' {
+                    Vec::new()
+                } else {
+                    vec![0.0; n]
+                },
+            }
+        })
+        .collect();
+    let chunk = n_frames.div_ceil(workers).max(1);
+    // The columns are disjoint by frame. Each worker writes its frames.
+    let column_ptrs: Vec<(usize, usize, u8, usize)> = columns
+        .iter_mut()
+        .map(|column| {
+            (
+                column.text.as_mut_ptr() as usize,
+                column.real.as_mut_ptr() as usize,
+                column.kind,
+                column.width,
+            )
+        })
+        .collect();
+    let spec_ref = &specs;
+    let line_ref = &lines;
+    let failed = std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for worker in 0..workers {
+            let from = worker * chunk;
+            if from >= n_frames {
+                break;
+            }
+            let to = (from + chunk).min(n_frames);
+            let column_ptrs = &column_ptrs;
+            let starts = &starts;
+            handles.push(scope.spawn(move || -> Result<(), String> {
+                for frame in from..to {
+                    let base_atom = frame * n_atoms;
+                    for (atom, line) in line_ref[starts[frame]..starts[frame] + n_atoms]
+                        .iter()
+                        .enumerate()
+                    {
+                        let words = tokens(line);
+                        for (col, spec) in spec_ref.iter().enumerate() {
+                            let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
+                            for slot in 0..width {
+                                let token = words.get(spec.offset + slot).copied().ok_or("atom")?;
+                                let index = (base_atom + atom) * width + slot;
+                                if kind == b'S' {
+                                    let text = String::from_utf8_lossy(token).into_owned();
+                                    unsafe {
+                                        *((text_ptr as *mut String).add(index)) = text;
+                                    }
+                                } else {
+                                    let value = if kind == b'L' {
+                                        logical_value(token)
+                                    } else {
+                                        parse_f64(token)?
+                                    };
+                                    unsafe {
+                                        *((real_ptr as *mut f64).add(index)) = value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            }));
+        }
+        handles
+            .into_iter()
+            .find_map(|handle| handle.join().ok().and_then(|result| result.err()))
+    });
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    assemble_tables(n_frames, n_atoms, cell, columns)
+}
+
+fn split_lines(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut lines = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        let start = index;
+        while index < bytes.len() && bytes[index] != b'\n' {
+            index += 1;
+        }
+        let mut line = &bytes[start..index];
+        if line.last() == Some(&b'\r') {
+            line = &line[..line.len() - 1];
+        }
+        lines.push(line);
+        if index < bytes.len() {
+            index += 1;
+        }
+    }
+    lines
+}
+
+fn assemble_tables(
+    n_frames: usize,
+    n_atoms: usize,
+    cell: Vec<f64>,
+    columns: Vec<XyzColumn>,
+) -> Result<XyzTables, String> {
+    let mut positions = Vec::new();
+    let mut masses = vec![f64::NAN; n_frames * n_atoms];
+    let mut species = vec![String::new(); n_frames * n_atoms];
+    for column in &columns {
+        if column.name == "pos" {
+            positions.clone_from(&column.real);
+        } else if column.name == "masses" || column.name == "mass" {
+            if column.width == 1 {
+                masses.clone_from(&column.real);
+            }
+        } else if column.name == "species" && column.width == 1 {
+            species.clone_from(&column.text);
+        }
+    }
+    if positions.len() != n_frames * n_atoms * 3 {
+        return Err("pos".to_string());
+    }
+    Ok(XyzTables {
+        n_frames,
+        n_atoms,
+        positions,
+        masses,
+        cell,
+        species,
+        columns,
+    })
+}
+
+fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
     let mut lines = Vec::new();
     let mut index = 0;
     while index < bytes.len() {
@@ -417,6 +621,19 @@ pub fn extxyz_bytes(
     cell: &[f64],
     columns: &[&dyn ExtxyzSource],
 ) -> Result<Vec<u8>, String> {
+    extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, 1)
+}
+
+/// [`extxyz_bytes`]. `workers` is ignored: the text is formatted on the
+/// calling thread, so it stays byte-identical to that call.
+pub fn extxyz_bytes_with_threads(
+    n_frames: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&dyn ExtxyzSource],
+    workers: usize,
+) -> Result<Vec<u8>, String> {
+    let _ = workers;
     if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
         return Err("frames".to_string());
     }
@@ -482,6 +699,21 @@ pub fn write_extxyz_path(path: &Path, tables: &XyzTables) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn threaded_tables_match_the_serial_scan() {
+        let mut text = String::new();
+        for frame in 0..6 {
+            text.push_str("2\nLattice=\"4.0 0.0 0.0 0.0 4.0 0.0 0.0 0.0 4.0\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n");
+            text.push_str(&format!("Cu {frame}.125 0.25 0.5\nH 1.0 1.0 1.0\n"));
+        }
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 4).unwrap();
+        assert_eq!(parallel.n_frames, serial.n_frames);
+        assert_eq!(parallel.positions, serial.positions);
+        assert_eq!(parallel.species, serial.species);
+        assert_eq!(parallel.cell, serial.cell);
+    }
 
     #[test]
     fn a_quoted_value_and_a_bare_value_both_return_the_bytes() {
