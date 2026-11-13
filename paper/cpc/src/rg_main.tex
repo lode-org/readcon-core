@@ -133,6 +133,7 @@ eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
 \mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
+% UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
 Losing the identifier changes the hop from 0.04~eV to 15.6~eV on an EMT model (Section~\ref{sec:claisen}).
 readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
 readcon-core is available under the MIT licence at
@@ -476,6 +477,7 @@ The seven images are the CON file named in the data availability statement, read
 The slab is three layers of a \(2\times 2\) cell with the bottom layer held.
 In each hollow the hydrogen is 1.399~\text{\AA} above the top layer and the four Cu--H contacts are 2.318~\text{\AA}.
 
+% UNSOURCED: needs the id-matched EMT NEB barrier (highest image above the hollow, in eV) and the peak after the copper rows are exchanged, recorded in the campaign JSON.
 Paired by atom id, the highest image is the bridge.
 It lies 0.0399~eV above the hollow, the force is \(0.048\,\mathrm{eV}/\text{\AA}\), and the hydrogen is 1.608~\text{\AA} above the top layer with two Cu--H contacts of 2.113~\text{\AA} (Figure~\ref{fig:claisen-land}).
 The mode is \(147\mathrm{i}\,\mathrm{cm}^{-1}\), along the hop.
@@ -484,6 +486,7 @@ Exchanging the CON rows of two copper atoms and pairing by file row moves the hi
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
+% UNSOURCED: needs the same two EMT barriers, id-matched and row-exchanged, recorded in the campaign JSON.
 \caption{Losing the identifier on the EMT model.
 Left, paired by atom id, 0.0399~eV at the bridge.
 Right, the CON rows of two copper atoms exchanged and paired by file row, 15.6~eV.}
@@ -515,11 +518,13 @@ The written cell stays inside the tolerance of six printed decimals.
 The eOn loader keeps the identifiers, and a three-image band stays in file order.
 Velocities come back as the numbers in the file, under the natural time unit even when an older header names femtoseconds.
 
+% UNSOURCED: needs eon-python loadcons medians, interquartile ranges and n on the fidelity fixtures. timing.json marks eon-python unavailable, and the fixtures are claisen.con, neb_band_3.con, pt100_slab.con, tiny_multi_cuh2.convel and v30_fs_label.convel, not hop.con.
 \input{campaign/final/fidelity}
 
 \subsection{Connectivity in d-SEAMS}\label{sec:connectivity}
 A LAMMPS dump sorted by id already carries an atom id and a box, and H5MD carries an id and a velocity unit.
 Neither is the checkpoint eOn writes: this grammar carries the per-component mask, the id and the time unit in one file that eOn, ASE and d-SEAMS read \cite{goswamiDseamsDeferredStructural2020}.
+% UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
 On 4096 molecules of mW water, neighbour pairs persist at 0.955 when the id is kept and at 0.001 when the file order is not that id (Figure~\ref{fig:water}).
 Section~\ref{sec:supp-applications} defines the quench and gives the persistence at lags of 1, 5, 10 and 25 frames.
 
@@ -595,8 +600,10 @@ The file stores the coordinates, the mask and the identifier, and optimiser stat
 A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different path after a restart even when every coordinate matches.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
+% UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
 readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
+% UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
 On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The next steps are a declared section for that optimiser state and a patch to ASE's eon reader that carries the per-axis mask and the column-5 identifier.
 
@@ -611,6 +618,7 @@ Its inputs are \texttt{frames-32x100000.con}, \texttt{frames-32x100000.convel} a
 The configuration file is \texttt{bench/h2h/Snakefile}.
 
 The hop files of Section~\ref{sec:claisen} are \texttt{reactant.con} and \texttt{product.con}, in identifier order, and \texttt{product\_swapped.con}, in \texttt{paper/data/hop}.
+% UNSOURCED: needs the fidelity fixture name and the loadcons median on that file. The campaign timing file has no hop.con row.
 \texttt{hop.con} in \texttt{tests/data/hop} is the fidelity file of Table~\ref{tab:fidelity-time}.
 The command is \texttt{python paper/cpc/scripts/hop\_emt.py}.
 The comparison in Section~\ref{sec:fidelity} uses readcon 0.22.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.2.6 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of that Xeon.

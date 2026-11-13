@@ -989,12 +989,14 @@ Coordinate loop & 8.789, 8.827, 8.859 & 52.17, 52.30, 52.36 \\
 The head-to-head is the one-core read on an Intel Xeon processor with eight cores.
 Tables~\ref{tab:serial} and~\ref{tab:serial-xyz} give that read: one core, one warmup and six repeats.
 The one-core read returns arrays.
+% UNSOURCED: needs the peak resident set of the ASE eon plugin and the readcon-con plugin, read and write, on the 100000-frame CON file. The 1.72 s and 10.7 s medians are also absent from the campaign JSON.
 ASE's eon reader builds \texttt{Atoms} objects, so the like-for-like row is Table~\ref{tab:plugin}: readcon-con takes 1.72~s and ASE takes 10.7~s.
 Section~\ref{sec:host} times \texttt{eon.fileio.loadcons} on every frame at 1 thread.
 It times \texttt{Matter.con2matter} on the first frame only, and that row is not a ratio against a full read.
 The C++ row calls \texttt{readcon::read\_all\_frames} and then \texttt{con2matter} on every frame that call returns.
 ASE ase.io (format eon) is the independent CON reader timed beside \texttt{loadcons}, both on every frame at 1 thread.
 Each entry is the type-7 median, with the interquartile range in parentheses.
+% UNSOURCED: needs eon.fileio.loadcons medians and interquartile ranges on the 100000-frame CON file, the convel file and the million-atom CON frame, six repeats after one warmup, one thread.
 On the \num{100000}-frame CON file Rust and Python both take \SI{0.179}{\second}.
 \texttt{rkr\_read\_all\_frames} builds a frame object for each frame and takes \SI{0.345}{\second}.
 ASE's eon reader takes \SI{10.8}{\second} and \texttt{loadcons}, eOn's own Python reader, takes \SI{10.3}{\second}.
@@ -1019,6 +1021,7 @@ The read returns coordinate arrays.
 The C column is \texttt{rkr\_read\_all\_frames}, which builds a frame object for each frame.
 One warmup and six repeats.
 Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
+% UNSOURCED: needs the loadcons column from a recorded one-thread timing of those three files.
 \label{tab:serial}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrrr@{}}
@@ -1439,6 +1442,7 @@ Table~\ref{tab:convel-one} is one convel frame, the survey frame, read on one co
 One warmup precedes six repeats, and the median is the type-7 median.
 The Python binding takes $\num{2.87e-5}$\,s and \SI{34}{\mebi\byte}.
 The Rust reader takes $\num{1.83e-5}$\,s and the C binding $\num{1.66e-5}$\,s.
+% UNSOURCED: needs the loadcons median on one convel frame, six repeats after one warmup.
 eOn's \texttt{loadcons} takes $\num{3.15e-4}$\,s, the development-build C++ client $\num{2.62e-5}$\,s and the eOn 3.6.0 C++ client $\num{2.32e-5}$\,s.
 ASE's eon reader stops at line 23, the velocity title.
 
@@ -1447,6 +1451,7 @@ ASE's eon reader stops at line 23, the velocity title.
 \caption{Median read of one convel frame, in seconds.
 The Python resident set is \SI{34}{\mebi\byte}.
 ASE stops at line 23.}
+% UNSOURCED: needs the loadcons median on that one convel frame.
 \label{tab:convel-one}
 \begin{tabular}{@{}lr@{}}
 \toprule
@@ -1480,6 +1485,7 @@ eOn streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 
 Table~\ref{tab:conwrite} gives that row and the final resident set above the Matter.
 ASE's eon writer fails on a frame held in one component, and its reader stops at the velocity title.
 
+% UNSOURCED: needs the peak resident set of ASE eon and readcon-con, read and write, on the 100000-frame CON file, six repeats after one warmup. The times below are also absent from the campaign JSON.
 Table~\ref{tab:plugin} compares the ASE eon format with the readcon-con ASE plugin on the same \num{100000}-frame coordinate file.
 The readcon-con read takes \SI{1.72}{\second}.
 Of that time, the parse is \SI{0.432}{\second} and building the ASE \texttt{Atoms} objects is \SI{1.07}{\second}.
@@ -1491,6 +1497,7 @@ The readcon-con write takes \SI{1.15}{\second} and the ASE eon write takes \SI{1
 \caption{ASE plugins on the \num{100000}-frame CON file.
 Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
 Six repeats follow one warmup, on one core.}
+% UNSOURCED: needs that plugin resident set, read and write, for ASE eon and readcon-con.
 \label{tab:plugin}
 \begin{tabular}{@{}lcc@{}}
 \toprule
@@ -1513,9 +1520,11 @@ The compressed CON and extended XYZ medians against readcon, ASE and eOn follow.
 Table~\ref{tab:pywrite} and Figure~\ref{fig:pywrite} are the Python compressed writes.
 Each row is a type-7 median of six repeats after one warmup, on one core.
 The resident set and the massif heap are the increase above the loaded input.
+% UNSOURCED: needs the Python gzip and zstd write of the trajectory: type-7 median time, peak resident-set increase and massif heap increase, six repeats after one warmup.
 The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
 The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
 The readcon gzip write of the million-atom CON frame takes 0.09085~s, and ASE takes 2.861~s (Table~\ref{tab:cmp8}).
+% UNSOURCED: needs the Python gzip and zstd write of one frame of 10^6 atoms: type-7 median time, peak resident-set increase and massif heap increase. The campaign JSON has the readcon and ASE times and no resident set.
 The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
 The heap of that zstd write matches the Rust writer.
 
@@ -1525,6 +1534,7 @@ The heap of that zstd write matches the Rust writer.
 \caption{Python compressed writes.
 Time is the type-7 median in seconds.
 RSS and massif are the increase above the loaded input, in mebibytes.}
+% UNSOURCED: needs those four Python compressed writes, each with median time, resident-set increase and massif heap increase.
 \label{tab:pywrite}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
