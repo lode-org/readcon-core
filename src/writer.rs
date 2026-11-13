@@ -1739,7 +1739,7 @@ fn side_copy_workers(workers: usize) -> bool {
 
 /// tmpfs wants many small ranges so the writer starts early. The page
 /// cache wants fewer writes.
-fn file_is_tmpfs(file: &File) -> bool {
+pub(crate) fn file_is_tmpfs(file: &File) -> bool {
     // tmpfs is a Linux filesystem. Miri has no `fstatfs`. Treating the
     // file as a normal one only changes how many ranges the pipeline formats.
     #[cfg(all(not(miri), target_os = "linux"))]
@@ -2534,9 +2534,19 @@ pub fn write_frame_refs_with_threads(
     Ok(out)
 }
 
-/// Format frame groups on `workers - 1` threads and write each group as
-/// it finishes, in file order. Formatting the next group overlaps the
-/// disk write of the one before it.
+/// How many threads format frame groups.
+///
+/// The caller writes a finished group and then blocks on the channel.
+/// That wait does not use a core, so every worker formats. Keeping one
+/// worker back for the write left a 32-frame file with a single
+/// formatter at two threads, and the pair was barely faster than one.
+pub(crate) fn pipeline_format_threads(workers: usize) -> usize {
+    workers.max(1)
+}
+
+/// Format frame groups on [`pipeline_format_threads`] threads and write
+/// each group as it finishes, in file order. Formatting the next group
+/// overlaps the disk write of the one before it.
 fn pipeline_frame_groups(
     path: &std::path::Path,
     frames: &[&ConFrame],
@@ -2594,7 +2604,7 @@ fn pipeline_frame_groups(
     let chunk = frames.len().div_ceil(groups).max(1);
     let pieces: Vec<&[&ConFrame]> = frames.chunks(chunk).collect();
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
-    let format_threads = workers.saturating_sub(1).max(1);
+    let format_threads = pipeline_format_threads(workers);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
     let result = std::thread::scope(|scope| {
@@ -3097,6 +3107,20 @@ mod section_arity_tests {
 
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_write_tests {
+    use super::pipeline_format_threads;
+
+    /// Two workers used to format on one thread. The caller only writes
+    /// a group it has already received, so both workers have to format.
+    #[test]
+    fn two_workers_both_format_frame_groups() {
+        assert_eq!(pipeline_format_threads(1), 1);
+        assert_eq!(pipeline_format_threads(2), 2);
+        assert_eq!(pipeline_format_threads(8), 8);
+    }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod parallel_write_bytes {
     use super::{write_frames_to_vec, write_frames_to_vec_with_threads};
     use crate::iterators::frames_from_text;
 

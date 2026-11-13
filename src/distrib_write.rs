@@ -173,13 +173,37 @@ fn write_pwrite(
     };
     collective(comm, created, "create")?;
     comm.raw().barrier();
+    // Read is required for the tmpfs shared mapping. A write-only
+    // descriptor returns EACCES from mmap.
     let opened = std::fs::OpenOptions::new()
+        .read(true)
         .write(true)
         .open(path)
         .map_err(BoxErr::from);
     let file = collective(comm, opened, "open")?;
-    let wrote = pwrite_all(&file, bytes, offset).map_err(BoxErr::from);
+    // tmpfs page faults dominate a ranked pwrite. A shared mapping of
+    // this rank's slice is the same sink the single-frame path uses.
+    let wrote = if !bytes.is_empty() && crate::writer::file_is_tmpfs(&file) {
+        copy_mapped(&file, bytes, offset).map_err(BoxErr::from)
+    } else {
+        pwrite_all(&file, bytes, offset).map_err(BoxErr::from)
+    };
     collective(comm, wrote, "pwrite")?;
+    Ok(())
+}
+
+/// Copy `body` into the file at `offset` through a shared mapping.
+fn copy_mapped(file: &std::fs::File, body: &[u8], offset: u64) -> std::io::Result<()> {
+    let page = 4096u64;
+    let aligned = offset & !(page - 1);
+    let delta = (offset - aligned) as usize;
+    let mut map = unsafe {
+        memmap2::MmapOptions::new()
+            .offset(aligned)
+            .len(delta + body.len())
+            .map_mut(file)?
+    };
+    map[delta..delta + body.len()].copy_from_slice(body);
     Ok(())
 }
 
@@ -494,5 +518,34 @@ pub unsafe extern "C" fn rkr_mpi_write_block_f(
             0
         }
         Err(_) => -1,
+    }
+}
+
+#[cfg(test)]
+mod ranked_sink_tests {
+    use super::copy_mapped;
+
+    #[test]
+    fn a_tmpfs_ranked_slice_lands_at_its_offset() {
+        let path =
+            std::path::PathBuf::from(format!("/dev/shm/readcon-rank-map-{}", std::process::id()));
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(16).unwrap();
+        assert!(
+            crate::writer::file_is_tmpfs(&file),
+            "a shm file is the mapped ranked sink"
+        );
+        copy_mapped(&file, b"abcd", 0).unwrap();
+        copy_mapped(&file, b"WXYZ", 8).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        assert_eq!(&got[..4], b"abcd");
+        assert_eq!(&got[8..12], b"WXYZ");
+        let _ = std::fs::remove_file(&path);
     }
 }
