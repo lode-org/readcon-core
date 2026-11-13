@@ -117,3 +117,31 @@ path = "fuzz_targets/round_trip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "py-chemfiles-import"
+path = "fuzz_targets/py_chemfiles_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write-con"
+path = "fuzz_targets/write_con.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write-gz"
+path = "fuzz_targets/write_gz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write-zst"
+path = "fuzz_targets/write_zst.rs"
+test = false
+doc = false
+bench = false
