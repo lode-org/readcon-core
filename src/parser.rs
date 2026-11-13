@@ -172,18 +172,17 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
 }
 
 pub(crate) fn pin_worker(core: usize) {
-    // Miri has no `sched_setaffinity`. Pinning is a performance hint.
-    #[cfg(miri)]
-    {
-        let _ = core;
-        return;
-    }
-    #[cfg(not(miri))]
+    // `sched_setaffinity` is Linux. Pinning is a performance hint.
+    #[cfg(all(not(miri), target_os = "linux"))]
     unsafe {
         let mut set: libc::cpu_set_t = std::mem::zeroed();
         libc::CPU_ZERO(&mut set);
         libc::CPU_SET(core, &mut set);
         libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set);
+    }
+    #[cfg(any(miri, not(target_os = "linux")))]
+    {
+        let _ = core;
     }
 }
 

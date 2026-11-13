@@ -6575,10 +6575,13 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
 }
 
 fn write_bytes_parallel(path: &str, bytes: &[u8], workers: usize) -> std::io::Result<()> {
-    use std::os::unix::fs::OpenOptionsExt;
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
-    let _ = OpenOptionsExt::mode(&mut opts, 0o644);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let _ = OpenOptionsExt::mode(&mut opts, 0o644);
+    }
     let file = opts.open(path)?;
     file.set_len(bytes.len() as u64)?;
     if workers < 2 || bytes.len() < (1 << 20) {
@@ -6608,35 +6611,44 @@ fn write_bytes_parallel(path: &str, bytes: &[u8], workers: usize) -> std::io::Re
 }
 
 fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Result<()> {
-    use std::os::unix::io::AsRawFd;
     if buf.is_empty() {
         return Ok(());
     }
-    let fd = file.as_raw_fd();
-    let mut written = 0usize;
-    while written < buf.len() {
-        let n = unsafe {
-            libc::pwrite(
-                fd,
-                buf[written..].as_ptr() as *const libc::c_void,
-                buf.len() - written,
-                offset as libc::off_t,
-            )
-        };
-        if n < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() == std::io::ErrorKind::Interrupted {
-                continue;
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = file.as_raw_fd();
+        let mut written = 0usize;
+        while written < buf.len() {
+            let n = unsafe {
+                libc::pwrite(
+                    fd,
+                    buf[written..].as_ptr() as *const libc::c_void,
+                    buf.len() - written,
+                    offset as libc::off_t,
+                )
+            };
+            if n < 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(err);
             }
-            return Err(err);
+            if n == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
+            }
+            written += n as usize;
+            offset += n as u64;
         }
-        if n == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
-        }
-        written += n as usize;
-        offset += n as u64;
+        return Ok(());
     }
-    Ok(())
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        file.seek_write(buf, offset)?;
+        Ok(())
+    }
 }
 
 /// Read a PDB file into positions, masses and the cell.

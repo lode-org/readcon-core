@@ -1740,19 +1740,19 @@ fn side_copy_workers(workers: usize) -> bool {
 /// tmpfs wants many small ranges so the writer starts early. The page
 /// cache wants fewer writes.
 fn file_is_tmpfs(file: &File) -> bool {
-    // Miri has no `fstatfs`. Treating the file as a normal one only
-    // changes how many ranges the pipeline formats.
-    #[cfg(miri)]
-    {
-        let _ = file;
-        return false;
-    }
-    #[cfg(not(miri))]
+    // tmpfs is a Linux filesystem. Miri has no `fstatfs`. Treating the
+    // file as a normal one only changes how many ranges the pipeline formats.
+    #[cfg(all(not(miri), target_os = "linux"))]
     {
         use std::os::fd::AsRawFd;
         let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
         let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
-        rc == 0 && stat.f_type == 0x01021994
+        return rc == 0 && stat.f_type == 0x01021994;
+    }
+    #[cfg(any(miri, not(target_os = "linux")))]
+    {
+        let _ = file;
+        false
     }
 }
 
@@ -1842,9 +1842,9 @@ fn stream_coord_pipeline(
         // The writer owns core 0. Leaving it free to wander put it on
         // a formatter's core and stretched the copy. The caller's mask
         // is restored even when a write fails.
-        #[cfg(not(miri))]
+        #[cfg(all(not(miri), target_os = "linux"))]
         let mut old_affinity = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
-        #[cfg(not(miri))]
+        #[cfg(all(not(miri), target_os = "linux"))]
         unsafe {
             libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut old_affinity);
         }
@@ -1870,7 +1870,7 @@ fn stream_coord_pipeline(
             }
             Ok(())
         })();
-        #[cfg(not(miri))]
+        #[cfg(all(not(miri), target_os = "linux"))]
         unsafe {
             libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &old_affinity);
         }
@@ -2572,14 +2572,13 @@ fn pipeline_frame_groups(
         }
         let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
         let result = (|| -> Result<(), WriteError> {
-            use std::os::unix::fs::FileExt;
             let total: u64 = formatted.iter().map(|part| part.len() as u64).sum();
             file.set_len(total).map_err(WriteError::Io)?;
             let mut at = 0u64;
             for part in &formatted {
                 let mut wrote = 0usize;
                 while wrote < part.len() {
-                    let n = file.write_at(&part[wrote..], at).map_err(WriteError::Io)?;
+                    let n = write_at_offset(&file, &part[wrote..], at).map_err(WriteError::Io)?;
                     if n == 0 {
                         return Err(WriteError::Io(io::Error::other("short pwrite")));
                     }
@@ -2756,7 +2755,7 @@ fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
         out.write_all(buf)?;
         return Ok(());
     }
-    #[cfg(not(miri))]
+    #[cfg(all(not(miri), unix))]
     {
         use std::os::unix::io::AsRawFd;
         let fd = file.as_raw_fd();
@@ -2784,6 +2783,25 @@ fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
             offset += n as u64;
         }
         Ok(())
+    }
+    #[cfg(all(not(miri), windows))]
+    {
+        use std::os::windows::fs::FileExt;
+        file.seek_write(buf, offset)?;
+        Ok(())
+    }
+}
+
+fn write_at_offset(file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        return file.write_at(buf, offset);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        file.seek_write(buf, offset)
     }
 }
 
