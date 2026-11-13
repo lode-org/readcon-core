@@ -552,6 +552,46 @@ def cross_median(rows: list[dict], structure: str, tool: str, fmt: str, op: str)
     raise SystemExit(f"cross-format.tsv has no {structure} {tool} {fmt} {op}")
 
 
+def shown(value: float) -> float:
+    """The number a table prints, so a ratio uses those digits."""
+    return float(sig(value))
+
+
+def ratio_text(numerator: float, denominator: float, spelling: str) -> str:
+    """Three-significant-figure ratio of two displayed table numbers.
+
+    ``spelling`` is the form already in the prose. It has to be that ratio.
+    """
+    got = shown(numerator) / shown(denominator)
+    if abs(got - float(spelling)) > 0.006 * max(1.0, abs(float(spelling))):
+        raise SystemExit(f"ratio {got} is not the prose value {spelling}")
+    return spelling
+
+
+def strong_median(store: Store, name: str, workers: int) -> float:
+    for row in store.json(f"{REL1}/strong-threads.json")["rows"]:
+        if (
+            row["file"] == name
+            and row["op"] == "read"
+            and row["sink"] == "memory"
+            and int(row["workers"]) == workers
+        ):
+            return float(row["median_s"])
+    raise SystemExit(f"strong-threads.json has no {name} read at {workers} threads")
+
+
+def strong_iqr(store: Store, name: str, workers: int) -> float:
+    for row in store.json(f"{REL1}/strong-threads.json")["rows"]:
+        if (
+            row["file"] == name
+            and row["op"] == "read"
+            and row["sink"] == "memory"
+            and int(row["workers"]) == workers
+        ):
+            return float(row["iqr_s"])
+    raise SystemExit(f"strong-threads.json has no {name} read at {workers} threads")
+
+
 def cited_macros(store: Store, cross: Store) -> str:
     """Numbers the prose quotes from the generated tables, so a rerun keeps them."""
     ext = store.json(f"{REL1}/h2h.json")
@@ -564,23 +604,208 @@ def cited_macros(store: Store, cross: Store) -> str:
         if row["file"] == "con-1e6" and row["op"] == "read" and row["cache"] == "warm":
             con_warm[row["reader"]] = float(row["median_s"])
     rows = cross_rows(cross)
-    xtc = float(sig(cross_median(rows, "1M", "mdanalysis", "xtc", "write"))) / float(
-        sig(cross_median(rows, "1M", "readcon", "con.zst", "write"))
+
+    def write(structure: str, tool: str, fmt: str) -> float:
+        return cross_median(rows, structure, tool, fmt, "write")
+
+    def read(structure: str, tool: str, fmt: str) -> float:
+        return cross_median(rows, structure, tool, fmt, "read")
+
+    def file_mib(structure: str, tool: str, fmt: str) -> float:
+        for row in rows:
+            if (row["structure"], row["tool"], row["format"], row["op"]) == (
+                structure, tool, fmt, "write",
+            ):
+                return float(mib(row["file_bytes"]))
+        raise SystemExit(f"cross-format.tsv has no {structure} {tool} {fmt} size")
+
+    def file_mb(structure: str, tool: str, fmt: str, spelling: str) -> str:
+        mebi = file_mib(structure, tool, fmt)
+        got = mebi * (1024 * 1024) / 1e6
+        if abs(got - float(spelling)) > 0.01:
+            raise SystemExit(f"{mebi} MiB is {got} MB, not {spelling}")
+        return spelling
+
+    zst = write("1M", "readcon", "con.zst")
+    plain = write("1M", "readcon", "con")
+    zst_t = write("traj", "readcon", "con.zst")
+    plain_t = write("traj", "readcon", "con")
+    million_writes = (
+        ("ovito", "xyz"),
+        ("mdanalysis", "dcd"),
+        ("mdanalysis", "xtc"),
+        ("mdanalysis", "ncdf"),
+        ("readcon", "con.gz"),
+        ("ase", "extxyz"),
+        ("chemfiles", "trr"),
+        ("chemfiles", "xyz"),
+        ("chemfiles", "xyz.bz2"),
+        ("chemfiles", "xyz.gz"),
+        ("ase", "extxyz.gz"),
+        ("chemfiles", "xyz.xz"),
     )
-    ovito_traj = float(sig(cross_median(rows, "traj", "ovito", "xyz", "write"))) / float(
-        sig(cross_median(rows, "traj", "readcon", "con.zst", "write"))
+    million_over_zst = (
+        "1.64", "1.69", "1.82", "1.91", "3.46", "32.7",
+        "63.1", "64.0", "67.5", "67.6", "69.4", "94.5",
     )
+    million_over_plain = (
+        "1.18", "1.21", "1.31", "1.37", "2.48", "23.4",
+        "45.2", "45.9", "48.3", "48.4", "49.7", "67.7",
+    )
+    traj_writes = (
+        ("mdanalysis", "dcd"),
+        ("mdanalysis", "xtc"),
+        ("mdanalysis", "ncdf"),
+        ("readcon", "con.gz"),
+        ("ovito", "xyz"),
+        ("ase", "extxyz"),
+        ("mdanalysis", "pdb"),
+        ("chemfiles", "xyz"),
+        ("chemfiles", "trr"),
+        ("chemfiles", "xyz.bz2"),
+        ("chemfiles", "xyz.gz"),
+        ("ase", "extxyz.gz"),
+        ("chemfiles", "xyz.xz"),
+    )
+    traj_over_zst = (
+        "1.49", "1.62", "2.10", "4.24", "4.27", "25.6", "39.5",
+        "49.4", "49.9", "51.6", "52.4", "59.1", "63.6",
+    )
+    recorded = store.json("bench/h2h/scaling/perf17/rows.json")
+    sink = store.json("bench/h2h/scaling/perf17/sink-ceiling.json")
+    ceiling = {}
+    for item in recorded["table"]:
+        if str(item["workers"]) != "8":
+            continue
+        medium = item["medium"]
+        sink_median = sink["sink"][medium]["8"]["concurrent"]["median_s"]
+        ceiling[medium] = (
+            sig(item["ideal"]),
+            sig(max(float(item["format_alone_s"]), float(sink_median)) / float(item["median_s"])),
+        )
+    hardware = store.json(f"{REL1}/hardware.json")
+    fields = {}
+    for line in hardware["lscpu"].splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip()] = value.strip()
+    mem_kib = int(hardware["mem_total"].split()[1])
+    mem_gib = mem_kib / (1024 * 1024)
+    if abs(mem_gib - 47) > 0.5:
+        raise SystemExit(f"MemTotal is {mem_gib} GiB, not 47")
+    bogo = float(fields["BogoMIPS"])
+    ghz = bogo / 2000
+    if abs(ghz - 2.40) > 0.005:
+        raise SystemExit(f"BogoMIPS {bogo} is not 2.40 GHz")
+    versions = ext["versions"]
+    db_header = {}
+    for line in store.text(f"{REL1}/db.log").splitlines():
+        if line.startswith("repeat ") or line.startswith("sample "):
+            break
+        parts = line.split(" ", 1)
+        if len(parts) == 2:
+            db_header[parts[0]] = parts[1].strip()
+    md_one = shown(strong_median(store, "extxyz-md", 1))
+    md_two = shown(strong_median(store, "extxyz-md", 2))
+    md_eff = md_one / (2 * md_two)
+    if abs(md_eff - 1.003) > 5e-4:
+        raise SystemExit(f"extxyz-md two-thread efficiency is {md_eff}")
     samples = db_samples(store)
     commands = {
         "extxyzReadconMedian": sig(warm["readcon"]),
         "extxyzOvitoMedian": sig(warm["ovito"]),
+        "extxyzAseMedian": sig(warm["ase-extxyz"]),
+        "extxyzChemfilesMedian": sig(warm["chemfiles"]),
         "conReadconMedian": sig(con_warm["readcon"]),
         "conAseMedian": sig(con_warm["ase"]),
-        "xtcWriteOverZst": f"{xtc:.3g}",
-        "ovitoTrajWriteOverZst": f"{ovito_traj:.3g}",
+        "conEonMedian": sig(con_warm["eon"]),
+        "conHundredKOne": sig(strong_median(store, "con-100k", 1)),
+        "conHundredKEight": sig(strong_median(store, "con-100k", 8)),
+        "alloyOne": sig(strong_median(store, "extxyz-alloy", 1)),
+        "alloyEight": sig(strong_median(store, "extxyz-alloy", 8)),
+        "mdOne": sig(strong_median(store, "extxyz-md", 1)),
+        "mdEight": sig(strong_median(store, "extxyz-md", 8)),
+        "mdTwoEfficiency": "1.003",
+        "convelOne": sig(strong_median(store, "convel", 1)),
+        "convelOneIqr": sig(strong_iqr(store, "convel", 1)),
+        "weakPageIdeal": ceiling["pagecache"][0],
+        "weakPageCeiling": ceiling["pagecache"][1],
+        "weakTmpIdeal": ceiling["tmpfs"][0],
+        "weakTmpCeiling": ceiling["tmpfs"][1],
+        "zstWriteMillion": sig(zst),
+        "zstWriteTraj": sig(zst_t),
+        "conWriteMillion": sig(plain),
+        "conWriteTraj": sig(plain_t),
+        "conOverZstMillion": ratio_text(plain, zst, "1.40"),
+        "conOverZstTraj": ratio_text(plain_t, zst_t, "1.96"),
+        "zstMib": sig(file_mib("1M", "readcon", "con.zst")),
+        "zstMb": file_mb("1M", "readcon", "con.zst", "1.41"),
+        "extxyzGzMib": sig(file_mib("1M", "ase", "extxyz.gz")),
+        "extxyzGzMb": file_mb("1M", "ase", "extxyz.gz", "2.78"),
+        "extxyzGzOverZst": ratio_text(file_mib("1M", "ase", "extxyz.gz"), file_mib("1M", "readcon", "con.zst"), "1.96"),
+        "dcdMib": sig(file_mib("1M", "mdanalysis", "dcd")),
+        "dcdMb": file_mb("1M", "mdanalysis", "dcd", "12.0"),
+        "dcdOverZst": ratio_text(file_mib("1M", "mdanalysis", "dcd"), file_mib("1M", "readcon", "con.zst"), "8.48"),
+        "xtcMib": sig(file_mib("1M", "mdanalysis", "xtc")),
+        "xtcMb": file_mb("1M", "mdanalysis", "xtc", "3.72"),
+        "xtcOverZstSize": ratio_text(file_mib("1M", "mdanalysis", "xtc"), file_mib("1M", "readcon", "con.zst"), "2.63"),
+        "xtcWriteOverZst": ratio_text(write("1M", "mdanalysis", "xtc"), zst, "1.82"),
+        "ovitoTrajWriteOverZst": ratio_text(write("traj", "ovito", "xyz"), zst_t, "4.27"),
         "dbReadconMedian": sig(type7(samples["readcon-db"])),
         "dbAseMedian": sig(type7(samples["ase.db"])),
+        "campaignFamily": fields["CPU family"],
+        "campaignModel": fields["Model"],
+        "campaignCpus": fields["CPU(s)"],
+        "campaignMemGiB": "47",
+        "campaignGHz": "2.40",
+        "benchReadcon": versions["readcon"],
+        "benchAse": versions["ase"],
+        "benchNumpy": versions["numpy"],
+        "benchChemfiles": versions["chemfiles"],
+        "benchMda": versions["MDAnalysis"],
+        "benchExtxyz": versions["extxyz"],
+        "benchOvito": versions["ovito"],
+        "benchEon": versions["eon"],
+        "benchReadconDb": db_header["readcon_db_version"],
     }
+    names = (
+        "OvitoXyz", "Dcd", "Xtc", "Ncdf", "ConGz", "Extxyz", "Trr", "Xyz",
+        "XyzBz", "XyzGz", "ExtxyzGz", "XyzXz",
+    )
+    for (tool, fmt), spelling in zip(million_writes, million_over_zst):
+        commands["wMillion" + names[million_writes.index((tool, fmt))] + "OverZst"] = ratio_text(
+            write("1M", tool, fmt), zst, spelling
+        )
+    for (tool, fmt), spelling in zip(million_writes, million_over_plain):
+        commands["wMillion" + names[million_writes.index((tool, fmt))] + "OverCon"] = ratio_text(
+            write("1M", tool, fmt), plain, spelling
+        )
+    tnames = (
+        "Dcd", "Xtc", "Ncdf", "ConGz", "OvitoXyz", "Extxyz", "Pdb", "Xyz",
+        "Trr", "XyzBz", "XyzGz", "ExtxyzGz", "XyzXz",
+    )
+    for (tool, fmt), spelling in zip(traj_writes, traj_over_zst):
+        commands["wTraj" + tnames[traj_writes.index((tool, fmt))] + "OverZst"] = ratio_text(
+            write("traj", tool, fmt), zst_t, spelling
+        )
+    commands["wTrajDcdOverCon"] = ratio_text(write("traj", "mdanalysis", "dcd"), plain_t, "0.758")
+    commands["wTrajXtcOverCon"] = ratio_text(write("traj", "mdanalysis", "xtc"), plain_t, "0.828")
+    traj_over_plain = (
+        "1.07", "2.16", "2.18", "13.1", "20.2", "25.2", "25.4", "26.3", "26.7", "30.2", "32.4",
+    )
+    for (tool, fmt), spelling in zip(traj_writes[2:], traj_over_plain):
+        commands["wTraj" + tnames[traj_writes.index((tool, fmt))] + "OverCon"] = ratio_text(
+            write("traj", tool, fmt), plain_t, spelling
+        )
+    commands["rMillionExtxyzOverCon"] = ratio_text(read("1M", "ase", "extxyz"), read("1M", "readcon", "con"), "20.7")
+    commands["rTrajExtxyzOverCon"] = ratio_text(read("traj", "ase", "extxyz"), read("traj", "readcon", "con"), "19.3")
+    commands["rMillionExtxyzGzOverZst"] = ratio_text(read("1M", "ase", "extxyz.gz"), read("1M", "readcon", "con.zst"), "23.6")
+    commands["rTrajExtxyzGzOverZst"] = ratio_text(read("traj", "ase", "extxyz.gz"), read("traj", "readcon", "con.zst"), "15.5")
+    commands["wMillionExtxyzOverConWrite"] = ratio_text(write("1M", "ase", "extxyz"), plain, "23.4")
+    commands["wTrajExtxyzOverConWrite"] = ratio_text(write("traj", "ase", "extxyz"), plain_t, "13.1")
+    commands["wMillionExtxyzGzOverZstWrite"] = ratio_text(write("1M", "ase", "extxyz.gz"), zst, "69.4")
+    commands["wTrajExtxyzGzOverZstWrite"] = ratio_text(write("traj", "ase", "extxyz.gz"), zst_t, "59.1")
     lines = ["% Written by paper/cpc/scripts/make_tables.py from the pinned campaign."]
     for name, value in commands.items():
         lines.append(f"\\newcommand{{\\{name}}}{{{value}}}")

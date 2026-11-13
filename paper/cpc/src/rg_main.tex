@@ -163,7 +163,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 % proseguard off rgoswami.Acronyms.
 \noindent\textbf{PROGRAM SUMMARY}
 
-\begin{small} \noindent\textit{Program Title:} readcon-core 0.23.0
+\begin{small} \noindent\textit{Program Title:} readcon-core \benchReadcon
 
 \noindent\textit{CPC Library link to program files:} (to be added by
 Technical Editor)
@@ -219,8 +219,8 @@ A path writer opens the destination and truncates it, then writes the
 frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
-The library is readcon-core 0.23.0.
-The companion programs are readcon-db 0.2.1, under the MIT licence, at
+The library is readcon-core \benchReadcon.
+The companion programs are readcon-db \benchReadconDb, under the MIT licence, at
 \url{https://github.com/lode-org/readcon-db}, and readcon-ops 0.1.1,
 under the BSD 3-clause licence, at
 \url{https://github.com/lode-org/readcon-ops}.
@@ -234,7 +234,7 @@ The velocities of a file of an earlier version are read in the natural
 unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file
 (Listing~\ref{lst:py}).
-Atom-id correspondence is part of readcon-core 0.23.0:
+Atom-id correspondence is part of readcon-core \benchReadcon:
 \texttt{atom\_id\_permutation}, \texttt{reorder\_like},
 \texttt{check\_atom\_id\_consistency} and
 \texttt{minimum\_image\_displacements}.
@@ -472,7 +472,7 @@ A permutation of one image makes those differences connect different atoms, so t
 That pairing is the chemical map.
 EMT is a cheap model surface for that pairing, not a copper barrier.
 
-ASE 3.29.0 builds the band with its nudged elastic band, spring constant \SI{0.8}{\electronvolt\per\angstrom\squared}, the improved tangent and the FIRE optimiser.
+ASE \benchAse\ builds the band with its nudged elastic band, spring constant \SI{0.8}{\electronvolt\per\angstrom\squared}, the improved tangent and the FIRE optimiser.
 The seven images are the CON file named in the data availability statement, read through readcon.
 The slab is three layers of a \(2\times 2\) cell with the bottom layer held.
 In each hollow the hydrogen is 1.399~\text{\AA} above the top layer and the four Cu--H contacts are 2.318~\text{\AA}.
@@ -544,17 +544,17 @@ Squares are the permuted XYZ.}
 \subsection{Resumed saddle searches}\label{sec:cases}
 \label{sec:requirements}
 The failures that change the physics are the lost \(z\) hold and a misread velocity unit (Figure~\ref{fig:restartfmt}).
-Dropping the hold moves the barrier from 0.6446~eV to 0.6815~eV, 36.9~meV, and multiplies the prefactor by 37.
-Reading the natural unit as \(\text{\AA}/\mathrm{fs}\) multiplies the kinetic energy by 103.64.
+Dropping the hold moves the barrier from \eFiveBarrierHeld~eV to \eFiveBarrierFree~eV, \eFiveBarrierDeltaMeV~meV, and multiplies the prefactor by \eFivePrefactorRatioFree.
+Reading the natural unit as \(\text{\AA}/\mathrm{fs}\) multiplies the kinetic energy by \velFactorSq.
 Six decimals, extended XYZ and POSCAR shift the barrier by \(\num{\rfDeSixNum}\), \(\num{\rfDeXyzNum}\) and at most \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\), and Table~\ref{tab:restartfmt} gives the coordinate shift beside each of those barriers.
-The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
+The Morse barrier stays \eOneBarrierLbfgs~eV on the round trip, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
 \caption{The two restart failures that change the result, with EMT.
-Left: the barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
-The difference is 36.9~meV and the prefactor grows by a factor of 37.
-Right: kinetic energy when the file's time unit is kept, and when the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of 103.64.}
+Left: the barrier with the adatom height held, \eFiveBarrierHeld~eV, and freed, \eFiveBarrierFree~eV.
+The difference is \eFiveBarrierDeltaMeV~meV and the prefactor grows by a factor of \eFivePrefactorRatioFree.
+Right: kinetic energy when the file's time unit is kept, and when the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of \velFactorSq.}
 \label{fig:restartfmt} \end{figure}
 
 \label{sec:prefactor}
@@ -563,10 +563,10 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \section{Performance}\label{sec:performance}
 
 \subsection{Computational details}\label{sec:compute}
-We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 47~GiB of memory.
+We time every read on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
-The reads use readcon-core 0.23.0 and Python 3.12.3.
-The libraries beside those reads are NumPy 2.5.4 \cite{harrisArrayProgrammingNumpy2020}, ASE 3.29.0 \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz 0.4.6 \cite{kermodeLibatomsExtxyzV0462026}, chemfiles 0.10.4 \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis 2.11.0 \cite{gowersMdanalysis21102026} and OVITO 3.17.2 \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, after the v3.6.0 release \cite{rohitgoswamiTheochemuieonV3602026}.
+The reads use readcon-core \benchReadcon\ and Python 3.12.3.
+The libraries beside those reads are NumPy \benchNumpy\ \cite{harrisArrayProgrammingNumpy2020}, ASE \benchAse\ \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz \benchExtxyz\ \cite{kermodeLibatomsExtxyzV0462026}, chemfiles \benchChemfiles\ \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \benchMda\ \cite{gowersMdanalysis21102026} and OVITO \benchOvito\ \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{\benchEon}, after the \eOneEonTag\ release \cite{rohitgoswamiTheochemuieonV3602026}.
 Each was run with one thread where that library was timed.
 Each median is the type-7 median of six repeats after one warmup, on a warm page cache.
 The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
@@ -574,8 +574,8 @@ The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h
 Table~\ref{tab:c-positions} is the C and Rust coordinate read (Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}).
 The \num{100000}-frame medians differ by more than 1\%.
 The convel file and the million-atom frame differ by less than 1\%.
-On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} 2.011~s, chemfiles 0.6672~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
-On the million-atom CON frame, readcon takes 0.07444~s, ASE takes 1.876~s and eOn takes 0.3323~s (Table~\ref{tab:conread}).
+On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} \extxyzAseMedian~s, chemfiles \extxyzChemfilesMedian~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
+On the million-atom CON frame, readcon takes \conReadconMedian~s, ASE takes \conAseMedian~s and eOn takes \conEonMedian~s (Table~\ref{tab:conread}).
 Table~\ref{tab:weak-write} is the weak write, and Figure~\ref{fig:memory} plots its ideal efficiency.
 
 \input{campaign/final/h2h_extxyz}
@@ -583,10 +583,10 @@ Table~\ref{tab:weak-write} is the weak write, and Figure~\ref{fig:memory} plots 
 \input{campaign/final/million}
 \input{campaign/final/fig7}
 
-On one thread the \num{100000}-frame CON read takes 0.3703~s, and at eight threads it takes 0.07303~s (Table~\ref{tab:strong-threads-read-memory}).
-The mixed-alloy extended XYZ read takes 0.02990~s and 0.004702~s at those two thread counts, and the extxyz-md trajectory takes 0.05597~s and 0.008521~s.
-At two threads that trajectory has efficiency 1.003.
-The convel read at one thread has median 0.5949~s and interquartile range 0.09703~s ($n{=}6$).
+On one thread the \num{100000}-frame CON read takes \conHundredKOne~s, and at eight threads it takes \conHundredKEight~s (Table~\ref{tab:strong-threads-read-memory}).
+The mixed-alloy extended XYZ read takes \alloyOne~s and \alloyEight~s at those two thread counts, and the extxyz-md trajectory takes \mdOne~s and \mdEight~s.
+At two threads that trajectory has efficiency \mdTwoEfficiency.
+The convel read at one thread has median \convelOne~s and interquartile range \convelOneIqr~s ($n{=}6$).
 The recorded readcon-db read is faster than the ASE database (Table~\ref{tab:rcdb}).
 That log is 40 frames.
 It does not time a composition query, and it does not time a directory of files.
@@ -596,8 +596,8 @@ It does not time a composition query, and it does not time a directory of files.
 At eight threads the weak-write time is the formatting plus one serial commit of the bytes that write produced.
 perf17 takes the formatting as that time minus one thread's pwrite of those bytes, and the sink-ceiling table records the same bytes written by one thread and by eight threads at disjoint offsets.
 The ceiling in Table~\ref{tab:weak-write} is the larger of the formatting and the concurrent sink, divided into the wall time.
-On the page cache the eight-thread ideal efficiency is 0.3648 and the ceiling fraction is 0.6578.
-On tmpfs the ideal efficiency is 0.3938 and the ceiling fraction is 0.6154.
+On the page cache the eight-thread ideal efficiency is \weakPageIdeal\ and the ceiling fraction is \weakPageCeiling.
+On tmpfs the ideal efficiency is \weakTmpIdeal\ and the ceiling fraction is \weakTmpCeiling.
 \input{campaign/final/fig8}
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
@@ -606,22 +606,22 @@ Each tool reads and writes the format named in its row.
 Warm is the timed run and Cold is the cold-cache read.
 The Drops column is what that format does not keep.
 The chemfiles CON and readcon-chemfiles rows are in the tables and are not used in the comparisons below.
-On the million-atom frame, CON.zst is the smallest file that drops nothing: 1.349~MiB, which is 1.41~MB.
-ASE extxyz.gz is 2.647~MiB (2.78~MB), 1.96 times that file.
-DCD and NetCDF are 11.44~MiB (12.0~MB), 8.48 times CON.zst.
-XTC is 3.548~MiB (3.72~MB), 2.63 times CON.zst.
+On the million-atom frame, CON.zst is the smallest file that drops nothing: \zstMib~MiB, which is \zstMb~MB.
+ASE extxyz.gz is \extxyzGzMib~MiB (\extxyzGzMb~MB), \extxyzGzOverZst\ times that file.
+DCD and NetCDF are \dcdMib~MiB (\dcdMb~MB), \dcdOverZst\ times CON.zst.
+XTC is \xtcMib~MiB (\xtcMb~MB), \xtcOverZstSize\ times CON.zst.
 The million-atom PDB read is unsupported: the atom serial is five digits.
-Leaving out the two unused rows, the CON.zst write is the lowest write median on both tables: 0.1297~s on the million-atom frame and 0.001335~s on the trajectory.
-Plain CON is 0.181~s and 0.002616~s, 1.40 and 1.96 times those writes.
-On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.64, DCD 1.69, XTC \xtcWriteOverZst, NetCDF 1.91, CON.gz 3.46, extended XYZ 32.7, TRR 63.1, XYZ 64.0, bzip2 XYZ 67.5, gzip XYZ 67.6, gzipped extended XYZ 69.4 and xz XYZ 94.5.
-As a multiple of the plain CON write those rows are 1.18, 1.21, 1.31, 1.37, 2.48, 23.4, 45.2, 45.9, 48.3, 48.4, 49.7 and 67.7.
-On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.49, XTC 1.62, NetCDF 2.10, CON.gz 4.24, OVITO XYZ \ovitoTrajWriteOverZst, extended XYZ 25.6, PDB 39.5, XYZ 49.4, TRR 49.9, bzip2 XYZ 51.6, gzip XYZ 52.4, gzipped extended XYZ 59.1 and xz XYZ 63.6.
-DCD and XTC writes on the trajectory are below the plain CON write, at 0.758 and 0.828 times it.
-The other trajectory writes, as a multiple of the plain CON write, are NetCDF 1.07, CON.gz 2.16, OVITO XYZ 2.18, extended XYZ 13.1, PDB 20.2, XYZ 25.2, TRR 25.4, bzip2 XYZ 26.3, gzip XYZ 26.7, gzipped extended XYZ 30.2 and xz XYZ 32.4.
-Among the rows that drop nothing, the plain extended XYZ read is 20.7 times the plain CON read on the million-atom frame and 19.3 times on the trajectory.
-The gzipped extended XYZ read is 23.6 times the CON.zst read on the million-atom frame and 15.5 times on the trajectory.
-The plain extended XYZ write is 23.4 times the plain CON write on the million-atom frame and 13.1 times on the trajectory.
-The gzipped extended XYZ write is 69.4 times the CON.zst write on the million-atom frame and 59.1 times on the trajectory.
+Leaving out the two unused rows, the CON.zst write is the lowest write median on both tables: \zstWriteMillion~s on the million-atom frame and \zstWriteTraj~s on the trajectory.
+Plain CON is \conWriteMillion~s and \conWriteTraj~s, \conOverZstMillion\ and \conOverZstTraj\ times those writes.
+On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ \wMillionOvitoXyzOverZst, DCD \wMillionDcdOverZst, XTC \xtcWriteOverZst, NetCDF \wMillionNcdfOverZst, CON.gz \wMillionConGzOverZst, extended XYZ \wMillionExtxyzOverZst, TRR \wMillionTrrOverZst, XYZ \wMillionXyzOverZst, bzip2 XYZ \wMillionXyzBzOverZst, gzip XYZ \wMillionXyzGzOverZst, gzipped extended XYZ \wMillionExtxyzGzOverZst\ and xz XYZ \wMillionXyzXzOverZst.
+As a multiple of the plain CON write those rows are \wMillionOvitoXyzOverCon, \wMillionDcdOverCon, \wMillionXtcOverCon, \wMillionNcdfOverCon, \wMillionConGzOverCon, \wMillionExtxyzOverCon, \wMillionTrrOverCon, \wMillionXyzOverCon, \wMillionXyzBzOverCon, \wMillionXyzGzOverCon, \wMillionExtxyzGzOverCon\ and \wMillionXyzXzOverCon.
+On the trajectory the other writes, as a multiple of the CON.zst write, are DCD \wTrajDcdOverZst, XTC \wTrajXtcOverZst, NetCDF \wTrajNcdfOverZst, CON.gz \wTrajConGzOverZst, OVITO XYZ \ovitoTrajWriteOverZst, extended XYZ \wTrajExtxyzOverZst, PDB \wTrajPdbOverZst, XYZ \wTrajXyzOverZst, TRR \wTrajTrrOverZst, bzip2 XYZ \wTrajXyzBzOverZst, gzip XYZ \wTrajXyzGzOverZst, gzipped extended XYZ \wTrajExtxyzGzOverZst\ and xz XYZ \wTrajXyzXzOverZst.
+DCD and XTC writes on the trajectory are below the plain CON write, at \wTrajDcdOverCon\ and \wTrajXtcOverCon\ times it.
+The other trajectory writes, as a multiple of the plain CON write, are NetCDF \wTrajNcdfOverCon, CON.gz \wTrajConGzOverCon, OVITO XYZ \wTrajOvitoXyzOverCon, extended XYZ \wTrajExtxyzOverCon, PDB \wTrajPdbOverCon, XYZ \wTrajXyzOverCon, TRR \wTrajTrrOverCon, bzip2 XYZ \wTrajXyzBzOverCon, gzip XYZ \wTrajXyzGzOverCon, gzipped extended XYZ \wTrajExtxyzGzOverCon\ and xz XYZ \wTrajXyzXzOverCon.
+Among the rows that drop nothing, the plain extended XYZ read is \rMillionExtxyzOverCon\ times the plain CON read on the million-atom frame and \rTrajExtxyzOverCon\ times on the trajectory.
+The gzipped extended XYZ read is \rMillionExtxyzGzOverZst\ times the CON.zst read on the million-atom frame and \rTrajExtxyzGzOverZst\ times on the trajectory.
+The plain extended XYZ write is \wMillionExtxyzOverConWrite\ times the plain CON write on the million-atom frame and \wTrajExtxyzOverConWrite\ times on the trajectory.
+The gzipped extended XYZ write is \wMillionExtxyzGzOverZstWrite\ times the CON.zst write on the million-atom frame and \wTrajExtxyzGzOverZstWrite\ times on the trajectory.
 On the million-atom frame the NetCDF, DCD, XTC and OVITO XYZ read medians are lower than the plain CON read.
 On the trajectory the NetCDF, DCD and TRR read medians are lower, and the XTC read is not.
 XTC stores coordinates only, and TRR stores coordinates, velocities and forces \cite{abrahamGromacsHighPerformance2015,krylovLibxtcEfficientLibrary2021,gromacsTrajectoryFormats2026}.
@@ -651,16 +651,16 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 % UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
-readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
+readcon takes \conReadconMedian~s on the million-atom CON frame, against \conAseMedian~s for ASE.
 % UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
 On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The next steps are a declared section for that optimiser state and a patch to ASE's eon reader that carries the per-axis mask and the column-5 identifier.
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
-readcon-core 0.23.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
-The Zenodo record for readcon-core 0.23.0 is \readconZenodoDOI.
-The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.23.0.
+readcon-core \benchReadcon\ is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
+The Zenodo record for readcon-core \benchReadcon\ is \readconZenodoDOI.
+The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 Its inputs are \texttt{frames-32x100000.con}, \texttt{frames-32x100000.convel} and \texttt{copper-32x100000.extxyz} in \texttt{bench/h2h/work/parallel-frames}, \texttt{con-1000000x1.con} in \texttt{bench/h2h/work/inputs}, and \texttt{alloy-1e6.extxyz} and \texttt{md-10k.extxyz} in \texttt{bench/h2h/work/thread-reads}.
@@ -670,7 +670,7 @@ The hop files of Section~\ref{sec:claisen} are \texttt{reactant.con} and \texttt
 % UNSOURCED: needs the fidelity fixture name and the loadcons median on that file. The campaign timing file has no hop.con row.
 \texttt{hop.con} in \texttt{tests/data/hop} is the fidelity file of Table~\ref{tab:fidelity-time}.
 The command is \texttt{python paper/cpc/scripts/hop\_emt.py}.
-The comparison in Section~\ref{sec:fidelity} uses readcon 0.23.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.5.4 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of that Xeon.
+The comparison in Section~\ref{sec:fidelity} uses readcon \benchReadcon, ASE \benchAse, chemfiles \benchChemfiles, NumPy \benchNumpy\ and eOn's Python loader at commit \texttt{\benchEon}, on one core of that Xeon.
 It is the Snakemake target \texttt{fidelity} in \texttt{benchmarks/workflow/Snakefile}, and \texttt{asv.fidelity.conf.json} times one call of the same reads.
 Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents, and the supplementary material states the grammar, the corpora and the commands behind the tables.
 The CON reader shipped with eOn is under the BSD 3-clause licence of the eOn Development Team.

@@ -562,8 +562,8 @@ extxyz-ng 0.0.2 & \(8.46\times 10^{-5}\) & \(4.67\times 10^{-4}\) & --- & --- \\
 
 \input{figures/generated/format_context}
 
-\section{Measured versions}\label{sec:supp-versions} The timed reads use ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2.
-chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
+\section{Measured versions}\label{sec:supp-versions} The timed reads use ASE \benchAse, chemfiles \benchChemfiles, MDAnalysis \benchMda\ and OVITO \benchOvito.
+chemfiles \benchChemfiles, MDAnalysis \benchMda\ and OVITO \benchOvito\ open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE \benchAse\ opens both.
 The format lists of those three libraries name no CON reader \cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfilesConIssue2025}.
 The input-format table of the OVITO 3.17.2 manual names XYZ, extended XYZ, POSCAR and PDBx/mmCIF, and it names neither CON nor convel nor H5MD \cite{ovitoManual3172}.
 OVITO 3.17.2 \texttt{import\_file} on the 32-atom, 100000-frame CON file
@@ -583,7 +583,7 @@ On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
-The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.23.0.
+The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core \benchReadcon.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 The provenance step writes the digests of the readcon module and of the library sources into each record.
 The version history of Table~\ref{tab:versions} is read from the specification at each release tag and runs no readcon-core code, so the table does not list it.

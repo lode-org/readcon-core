@@ -666,6 +666,12 @@ def write_tex(summary: dict) -> None:
             lines.append(
                 rf"\newcommand{{\eFivePrefactorRatio{tag}}}{{{sig(item['prefactor_over_held'], 3)}}}"
             )
+        if name == "free" and item["barrier_eV"] is not None:
+            held_barrier = summary["prefactor_by_reading"]["correct"]["barrier_eV"]
+            delta_meV = (item["barrier_eV"] - held_barrier) * 1000
+            lines.append(
+                rf"\newcommand{{\eFiveBarrierDeltaMeV}}{{{sig(delta_meV, 3)}}}"
+            )
         axes = " ".join(item["adatom_free_axes"]) or "none"
         cell = (
             "undefined"
