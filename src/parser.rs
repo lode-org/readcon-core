@@ -1754,14 +1754,35 @@ where
     L: LineStream<'a>,
 {
     let mut shares = symbol_shares(symbol, n);
-    for _ in 0..n {
+    let pos0 = pos_flat.len();
+    let id0 = ids.len();
+    let atom0 = atom_data.len();
+    pos_flat.reserve(n.saturating_mul(3));
+    ids.reserve(n);
+    atom_data.reserve(n);
+    for i in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         let sym = shares.take();
-        pos_flat.extend_from_slice(&xyz);
-        ids.push(atom_id);
-        atom_data.push(AtomDatum::coords(
-            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
-        ));
+        // Header counts reserved these slots. Store the coordinate straight
+        // into the SoA buffer and the atom record, then publish that element.
+        // Safety: `reserve` made these indexes fit, and each slot is written
+        // before its length includes it.
+        unsafe {
+            let p = pos_flat.as_mut_ptr().add(pos0 + i * 3);
+            p.write(xyz[0]);
+            p.add(1).write(xyz[1]);
+            p.add(2).write(xyz[2]);
+            ids.as_mut_ptr().add(id0 + i).write(atom_id);
+            atom_data
+                .as_mut_ptr()
+                .add(atom0 + i)
+                .write(AtomDatum::coords(
+                    sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+                ));
+            pos_flat.set_len(pos0 + (i + 1) * 3);
+            ids.set_len(id0 + i + 1);
+            atom_data.set_len(atom0 + i + 1);
+        }
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)

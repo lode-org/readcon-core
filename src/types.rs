@@ -595,13 +595,12 @@ fn bond_from_json_value(item: &serde_json::Value) -> Option<Bond> {
 
 /// Where a parsed section lives.
 ///
-/// A velocity-only atom, the `.convel` case, keeps the three components
-/// inline. Any other section still uses one boxed tail. Coordinate-only
-/// atoms stay empty.
+/// Coordinate-only atoms stay empty, and that state is a null pointer so the
+/// atom is one cache line. Any section, including a velocity-only tail, is
+/// one boxed record.
 #[derive(Debug, Clone, PartialEq)]
 enum AtomSections {
     Empty,
-    Velocity([f64; 3]),
     Full(Box<AtomTail>),
 }
 
@@ -736,68 +735,35 @@ impl AtomDatum {
             || displacement.is_some()
             || spread.is_some()
         {
-            let only_velocity = velocity.is_some()
-                && force.is_none()
-                && energy.is_none()
-                && charge.is_none()
-                && spin.is_none()
-                && magmom.is_none()
-                && displacement.is_none()
-                && spread.is_none();
-            atom.tail = if only_velocity {
-                AtomSections::Velocity(velocity.unwrap())
-            } else {
-                AtomSections::Full(Box::new(AtomTail {
-                    velocity,
-                    force,
-                    energy,
-                    charge,
-                    spin,
-                    magmom,
-                    displacement,
-                    spread,
-                }))
-            };
+            atom.tail = AtomSections::Full(Box::new(AtomTail {
+                velocity,
+                force,
+                energy,
+                charge,
+                spin,
+                magmom,
+                displacement,
+                spread,
+            }));
         }
         atom
     }
 
     fn ensure_tail(&mut self) -> &mut AtomTail {
-        if !matches!(self.tail, AtomSections::Full(_)) {
-            let velocity = match self.tail {
-                AtomSections::Velocity(v) => Some(v),
-                AtomSections::Empty | AtomSections::Full(_) => None,
-            };
-            self.tail = AtomSections::Full(Box::new(AtomTail {
-                velocity,
-                ..AtomTail::default()
-            }));
+        if matches!(self.tail, AtomSections::Empty) {
+            self.tail = AtomSections::Full(Box::new(AtomTail::default()));
         }
         match &mut self.tail {
             AtomSections::Full(tail) => tail,
-            AtomSections::Empty | AtomSections::Velocity(_) => unreachable!(),
+            AtomSections::Empty => unreachable!(),
         }
     }
 
     fn shrink_tail(&mut self) {
-        let next = match &self.tail {
-            AtomSections::Full(tail) if tail.is_empty() => Some(AtomSections::Empty),
-            AtomSections::Full(tail)
-                if tail.force.is_none()
-                    && tail.energy.is_none()
-                    && tail.charge.is_none()
-                    && tail.spin.is_none()
-                    && tail.magmom.is_none()
-                    && tail.displacement.is_none()
-                    && tail.spread.is_none()
-                    && tail.velocity.is_some() =>
-            {
-                Some(AtomSections::Velocity(tail.velocity.unwrap()))
-            }
-            _ => None,
-        };
-        if let Some(next) = next {
-            self.tail = next;
+        if let AtomSections::Full(tail) = &self.tail
+            && tail.is_empty()
+        {
+            self.tail = AtomSections::Empty;
         }
     }
 
@@ -805,7 +771,6 @@ impl AtomDatum {
     #[inline]
     pub fn velocity(&self) -> Option<[f64; 3]> {
         match &self.tail {
-            AtomSections::Velocity(v) => Some(*v),
             AtomSections::Full(tail) => tail.velocity,
             AtomSections::Empty => None,
         }
@@ -868,17 +833,11 @@ impl AtomDatum {
     }
 
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
-        match (&self.tail, value) {
-            (AtomSections::Empty, None) => {}
-            (AtomSections::Empty, Some(v)) | (AtomSections::Velocity(_), Some(v)) => {
-                self.tail = AtomSections::Velocity(v);
-            }
-            (AtomSections::Velocity(_), None) => self.tail = AtomSections::Empty,
-            (AtomSections::Full(_), value) => {
-                self.ensure_tail().velocity = value;
-                self.shrink_tail();
-            }
+        if value.is_none() && matches!(self.tail, AtomSections::Empty) {
+            return;
         }
+        self.ensure_tail().velocity = value;
+        self.shrink_tail();
     }
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
         if value.is_none() && matches!(self.tail, AtomSections::Empty) {
