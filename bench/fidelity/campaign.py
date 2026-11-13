@@ -773,6 +773,7 @@ def _write_ase(path: Path, images, fmt: str) -> list[str]:
         raise ToolError(f"ase did not import: {exc}") from exc
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         ase.io.write(os.fspath(path), images, format=fmt)
@@ -941,6 +942,9 @@ class Arms:
 
     def write_object(self, tool: str, name: str, obj, dest: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # Same open as a readcon write: drop the previous inode so create
+        # does not wait on its writeback.
+        dest.unlink(missing_ok=True)
         if tool == "readcon":
             import readcon
 

@@ -234,6 +234,7 @@ def write_other_files(spec_id: str, packed) -> dict[str, Path]:
         (".pdb", "proteindatabank"),
     ):
         path = folder / f"{spec_id}{suffix}"
+        path.unlink(missing_ok=True)
         write(os.fspath(path), images, format=fmt)
         written[suffix] = path
     return written

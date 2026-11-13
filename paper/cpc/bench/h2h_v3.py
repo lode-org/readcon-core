@@ -129,6 +129,7 @@ print(json.dumps({"reader": reader, "seconds": dt, "rss_bytes": rss, "n": len(go
 
 
 def write_con(path: Path, frames: np.ndarray) -> None:
+    path.unlink(missing_ok=True)
     lines = [""]
     for frame in frames:
         lines.append(
@@ -150,6 +151,7 @@ def write_con(path: Path, frames: np.ndarray) -> None:
 
 
 def write_xyz(path: Path, frames: np.ndarray) -> None:
+    path.unlink(missing_ok=True)
     chunks = []
     for frame in frames:
         chunks.append(str(len(frame)))

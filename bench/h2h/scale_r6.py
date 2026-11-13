@@ -709,49 +709,86 @@ def compressed(paths: dict[str, Path]) -> None:
     frames = readcon.read_con(os.fspath(paths["con-1e6"]), n_threads=1)
     rows = []
     plain_bytes = 0
-    members = min(os.cpu_count() or 1, 8)
-    for codec, suffix in (("gzip", ".con.gz"), ("zstd", ".con.zst")):
-        dest = dest_dir / f"con-1e6{suffix}"
+    for codec, suffix, level in (("gzip", ".con.gz", 6), ("zstd", ".con.zst", 3)):
+        for members in (1, 8):
+            dest = dest_dir / f"con-1e6-m{members}{suffix}"
 
-        def write(dest=dest, codec=codec):
-            drop_file(dest)
-            readcon.write_con(os.fspath(dest), frames, compression=codec, n_threads=1)
+            def write(dest=dest, codec=codec, members=members):
+                drop_file(dest)
+                readcon.write_con(
+                    os.fspath(dest),
+                    frames,
+                    compression=codec,
+                    n_threads=1,
+                    compression_members=members,
+                )
 
-        def read(dest=dest):
-            readcon.read_con(os.fspath(dest), n_threads=1)
-
-        for op, go in (("write", write), ("read", read)):
-            go()
-            samples = []
-            for _ in range(REPEATS):
-                started = time.perf_counter()
+            def time_call(go):
                 go()
-                samples.append(time.perf_counter() - started)
-            median, iqr = type7(samples)
-            record_row = {
-                "op": op,
+                samples = []
+                for _ in range(REPEATS):
+                    started = time.perf_counter()
+                    go()
+                    samples.append(time.perf_counter() - started)
+                return type7(samples), samples
+
+            (median, iqr), samples = time_call(write)
+            row = {
+                "op": "write",
                 "codec": codec,
                 "file": "con-1e6",
+                "level": level,
+                "members": members,
+                "threads": members,
                 "median_s": median,
                 "iqr_s": iqr,
                 "samples_s": samples,
                 "bytes": dest.stat().st_size,
-                # gzip level 6 is flate2's default. zstd level 3 is the CLI
-                # default. Wide files are one member per core, capped at 8.
-                "level": 6 if codec == "gzip" else 3,
-                "members": members,
             }
-            if op == "write" and dest.stat().st_size:
-                if codec == "gzip":
-                    import gzip
+            if codec == "gzip":
+                import gzip
 
-                    with gzip.GzipFile(filename=str(dest)) as handle:
-                        plain_bytes = len(handle.read())
-                if plain_bytes:
-                    record_row["plain_bytes"] = plain_bytes
-                    record_row["ratio"] = plain_bytes / dest.stat().st_size
-            rows.append(record_row)
-            print(f"compressed {codec} {op} {median:.4f}", flush=True)
+                with gzip.GzipFile(filename=str(dest)) as handle:
+                    plain_bytes = len(handle.read())
+            if plain_bytes and dest.stat().st_size:
+                row["plain_bytes"] = plain_bytes
+                row["ratio"] = plain_bytes / dest.stat().st_size
+            rows.append(row)
+            print(
+                f"compressed {codec} write members={members} {median:.4f}",
+                flush=True,
+            )
+            decode_threads = (1,) if members == 1 else (1, 8)
+            for threads in decode_threads:
+
+                def read(dest=dest, threads=threads):
+                    readcon.read_con(
+                        os.fspath(dest), n_threads=1, decode_threads=threads
+                    )
+
+                (median, iqr), samples = time_call(read)
+                rows.append(
+                    {
+                        "op": "read",
+                        "codec": codec,
+                        "file": "con-1e6",
+                        "level": level,
+                        "members": members,
+                        "threads": threads,
+                        "median_s": median,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "bytes": dest.stat().st_size,
+                        "plain_bytes": plain_bytes,
+                        "ratio": (plain_bytes / dest.stat().st_size)
+                        if plain_bytes
+                        else None,
+                    }
+                )
+                print(
+                    f"compressed {codec} read members={members} threads={threads} {median:.4f}",
+                    flush=True,
+                )
     log.write_text(json.dumps(rows, indent=2) + "\n")
 
 

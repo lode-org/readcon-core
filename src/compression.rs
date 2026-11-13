@@ -161,19 +161,11 @@ pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error
     let magic = &bytes[..bytes.len().min(4)];
     match detect_compression(magic) {
         Compression::None => Ok(bytes),
-        Compression::Gzip => {
-            let mut decoder = flate2::read::MultiGzDecoder::new(std::io::Cursor::new(bytes));
-            let mut out = Vec::new();
-            decoder.read_to_end(&mut out)?;
-            Ok(out)
-        }
+        Compression::Gzip => gunzip_all(&bytes).map_err(Into::into),
         Compression::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                let mut decoder = zstd::stream::read::Decoder::new(std::io::Cursor::new(bytes))?;
-                let mut out = Vec::new();
-                decoder.read_to_end(&mut out)?;
-                Ok(out)
+                zstd_decode_all(&bytes).map_err(Into::into)
             }
             #[cfg(not(feature = "zstd"))]
             {
@@ -182,20 +174,6 @@ pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error
             }
         }
     }
-}
-
-/// Uncompressed size in the last four bytes of one gzip member, when it fits.
-fn gzip_member_isize(path: &Path) -> Option<usize> {
-    use std::io::{Seek, SeekFrom};
-    let mut file = std::fs::File::open(path).ok()?;
-    let len = file.metadata().ok()?.len();
-    if len < 8 {
-        return None;
-    }
-    file.seek(SeekFrom::End(-4)).ok()?;
-    let mut buf = [0u8; 4];
-    file.read_exact(&mut buf).ok()?;
-    Some(u32::from_le_bytes(buf) as usize)
 }
 
 fn read_contents(
@@ -214,25 +192,28 @@ fn read_contents(
 
     let contents = match compression {
         Compression::Gzip => {
-            // Every gzip member, in order (CON-compress.1, D16).
-            // A large input buffer keeps zlib-ng from refilling a few
-            // kilobytes at a time. The gzip ISIZE, when it fits in 32 bits,
-            // is the uncompressed length of one member and only a reserve.
-            let reader = io::BufReader::with_capacity(8 << 20, stream);
-            let mut decoder = flate2::bufread::MultiGzDecoder::new(reader);
-            let mut contents = String::new();
-            if let Some(hint) = gzip_member_isize(path) {
-                contents.reserve(hint);
-            }
-            decoder.read_to_string(&mut contents)?;
+            // Every gzip member, in order (CON-compress.1, D16). A file
+            // this crate wrote stores member starts in the first extra
+            // field and those slices are inflated together. Any other
+            // gzip stream, including one member and a foreign multi-member
+            // file, stays on the serial decoder.
+            let mut bytes = Vec::new();
+            stream.read_to_end(&mut bytes)?;
+            let plain = gunzip_all(&bytes)?;
+            let contents = String::from_utf8(plain).map_err(|err| {
+                io::Error::new(io::ErrorKind::InvalidData, err.utf8_error().to_string())
+            })?;
             FileContents::Owned(contents)
         }
         Compression::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                let mut decoder = zstd::stream::read::Decoder::new(stream)?;
-                let mut contents = String::new();
-                decoder.read_to_string(&mut contents)?;
+                let mut bytes = Vec::new();
+                stream.read_to_end(&mut bytes)?;
+                let plain = zstd_decode_all(&bytes)?;
+                let contents = String::from_utf8(plain).map_err(|err| {
+                    io::Error::new(io::ErrorKind::InvalidData, err.utf8_error().to_string())
+                })?;
                 FileContents::Owned(contents)
             }
             #[cfg(not(feature = "zstd"))]
@@ -496,14 +477,155 @@ fn gzip_member(data: &[u8]) -> io::Result<Vec<u8>> {
 /// Writes `data` as gzip members at [`GZIP_LEVEL`].
 ///
 /// One member when the payload is small. Otherwise each core compresses a
-/// slice and the members are concatenated. [`read_file_contents`] reads
-/// every member, and the level matches a single-stream gzip of the same
-/// bytes.
+/// slice. A wide file stores the member starts in the first member's extra
+/// field so the reader can inflate those slices together. A one-member file
+/// is an ordinary gzip stream.
 pub fn write_gzip_members(path: &Path, data: &[u8]) -> io::Result<usize> {
-    let parts = split_chunks(data, compression_workers(data.len()));
-    let encoded = encode_parts(&parts, gzip_member)?;
+    write_gzip_members_n(path, data, compression_workers(data.len()))
+}
+
+/// [`write_gzip_members`] with an explicit member count.
+///
+/// `members == 1` is one gzip stream and does not use another core.
+pub fn write_gzip_members_n(path: &Path, data: &[u8], members: usize) -> io::Result<usize> {
+    let parts = split_chunks(data, members.max(1));
+    let mut encoded = encode_parts(&parts, gzip_member)?;
+    if encoded.len() > 1 {
+        stamp_gzip_index(&mut encoded);
+    }
+    let count = encoded.len();
     write_members(path, &encoded)?;
-    Ok(encoded.len())
+    Ok(count)
+}
+
+/// `RC` extra-field payload: `RCZ1`, member count, then each member's start.
+fn stamp_gzip_index(members: &mut [Vec<u8>]) {
+    let extra_len = 4 + 2 + 8 * members.len();
+    let inserted = 2 + 4 + extra_len;
+    let mut starts = Vec::with_capacity(members.len());
+    let mut offset = inserted;
+    for member in members.iter() {
+        starts.push(offset as u64);
+        offset += member.len();
+    }
+    starts[0] = 0;
+    let mut payload = Vec::with_capacity(extra_len);
+    payload.extend_from_slice(b"RCZ1");
+    payload.extend_from_slice(&(members.len() as u16).to_le_bytes());
+    for start in &starts {
+        payload.extend_from_slice(&start.to_le_bytes());
+    }
+    let mut extra = Vec::with_capacity(inserted);
+    extra.extend_from_slice(&((4 + payload.len()) as u16).to_le_bytes());
+    extra.extend_from_slice(b"RC");
+    extra.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+    extra.extend_from_slice(&payload);
+    let first = &mut members[0];
+    debug_assert_eq!(&first[0..2], b"\x1f\x8b");
+    first[3] |= 0x04;
+    first.splice(10..10, extra);
+}
+
+fn gzip_member_starts(bytes: &[u8]) -> Option<Vec<usize>> {
+    if bytes.len() < 16 || bytes[0] != 0x1f || bytes[1] != 0x8b || bytes[3] & 0x04 == 0 {
+        return None;
+    }
+    let xlen = u16::from_le_bytes([bytes[10], bytes[11]]) as usize;
+    let extra = bytes.get(12..12 + xlen)?;
+    let mut cursor = 0;
+    while cursor + 4 <= extra.len() {
+        let len = u16::from_le_bytes([extra[cursor + 2], extra[cursor + 3]]) as usize;
+        let data = extra.get(cursor + 4..cursor + 4 + len)?;
+        if &extra[cursor..cursor + 2] == b"RC" && data.starts_with(b"RCZ1") && data.len() >= 6 {
+            let count = u16::from_le_bytes([data[4], data[5]]) as usize;
+            if data.len() < 6 + 8 * count || count == 0 {
+                return None;
+            }
+            let mut starts = Vec::with_capacity(count);
+            for index in 0..count {
+                let at = 6 + 8 * index;
+                let start = u64::from_le_bytes(data[at..at + 8].try_into().ok()?) as usize;
+                if start > bytes.len() || (index > 0 && start <= starts[index - 1]) {
+                    return None;
+                }
+                starts.push(start);
+            }
+            return Some(starts);
+        }
+        cursor += 4 + len;
+    }
+    None
+}
+
+fn serial_decode() -> bool {
+    SERIAL_DECODE.with(|flag| flag.get())
+}
+
+std::thread_local! {
+    static SERIAL_DECODE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `body` with multi-member inflation forced onto one thread.
+pub fn with_serial_decode<T>(body: impl FnOnce() -> T) -> T {
+    SERIAL_DECODE.with(|flag| flag.set(true));
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SERIAL_DECODE.with(|flag| flag.set(false));
+        }
+    }
+    let _reset = Reset;
+    body()
+}
+
+fn gunzip_member(bytes: &[u8]) -> io::Result<Vec<u8>> {
+    let mut decoder = flate2::read::GzDecoder::new(bytes);
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    Ok(out)
+}
+
+fn gunzip_all(bytes: &[u8]) -> io::Result<Vec<u8>> {
+    if !serial_decode() {
+        if let Some(starts) = gzip_member_starts(bytes) {
+            if starts.len() > 1 {
+                return gunzip_parallel(bytes, &starts);
+            }
+        }
+    }
+    let mut decoder = flate2::read::MultiGzDecoder::new(bytes);
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    Ok(out)
+}
+
+fn gunzip_parallel(bytes: &[u8], starts: &[usize]) -> io::Result<Vec<u8>> {
+    let mut ends = starts[1..].to_vec();
+    ends.push(bytes.len());
+    let parts: Vec<&[u8]> = starts
+        .iter()
+        .zip(ends)
+        .map(|(start, end)| &bytes[*start..end])
+        .collect();
+    let decoded = std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(parts.len());
+        for part in parts {
+            handles.push(scope.spawn(move || gunzip_member(part)));
+        }
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err(io::Error::other("gzip")))
+            })
+            .collect::<io::Result<Vec<_>>>()
+    })?;
+    let mut out = Vec::new();
+    for part in decoded {
+        out.extend(part);
+    }
+    Ok(out)
 }
 
 fn encode_parts<F>(parts: &[&[u8]], encode: F) -> io::Result<Vec<Vec<u8>>>
@@ -554,16 +676,125 @@ pub fn zstd_writer(
 
 /// Writes `data` as concatenated zstd frames at [`ZSTD_LEVEL`].
 ///
-/// The same chunking as [`write_gzip_members`]. The reader already accepts
-/// concatenated frames.
+/// One frame when the payload is small. A wide file leads with a skippable
+/// frame that lists the data-frame starts, which the serial decoder ignores.
 #[cfg(feature = "zstd")]
 pub fn write_zstd_members(path: &Path, data: &[u8]) -> io::Result<usize> {
-    let parts = split_chunks(data, compression_workers(data.len()));
+    write_zstd_members_n(path, data, compression_workers(data.len()))
+}
+
+/// [`write_zstd_members`] with an explicit frame count.
+#[cfg(feature = "zstd")]
+pub fn write_zstd_members_n(path: &Path, data: &[u8], members: usize) -> io::Result<usize> {
+    let parts = split_chunks(data, members.max(1));
     let encoded = encode_parts(&parts, |part| {
         zstd::bulk::compress(part, ZSTD_LEVEL).map_err(|err| io::Error::other(err.to_string()))
     })?;
-    write_members(path, &encoded)?;
-    Ok(encoded.len())
+    let count = encoded.len();
+    let mut file = std::fs::File::create(path)?;
+    if count > 1 {
+        file.write_all(&zstd_index_frame(&encoded))?;
+    }
+    for frame in &encoded {
+        file.write_all(frame)?;
+    }
+    file.flush()?;
+    Ok(count)
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_index_frame(frames: &[Vec<u8>]) -> Vec<u8> {
+    let payload_len = 4 + 2 + 8 * frames.len();
+    let mut starts = Vec::with_capacity(frames.len());
+    let mut offset = 8 + payload_len;
+    for frame in frames {
+        starts.push(offset as u64);
+        offset += frame.len();
+    }
+    let mut payload = Vec::with_capacity(payload_len);
+    payload.extend_from_slice(b"RCZ1");
+    payload.extend_from_slice(&(frames.len() as u16).to_le_bytes());
+    for start in starts {
+        payload.extend_from_slice(&start.to_le_bytes());
+    }
+    let mut bytes = Vec::with_capacity(8 + payload.len());
+    bytes.extend_from_slice(&0x184D_2A50u32.to_le_bytes());
+    bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&payload);
+    bytes
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_frame_starts(bytes: &[u8]) -> Option<Vec<usize>> {
+    if bytes.len() < 12 || bytes[0..4] != [0x50, 0x2a, 0x4d, 0x18] {
+        return None;
+    }
+    let size = u32::from_le_bytes(bytes[4..8].try_into().ok()?) as usize;
+    let payload = bytes.get(8..8 + size)?;
+    if !payload.starts_with(b"RCZ1") || payload.len() < 6 {
+        return None;
+    }
+    let count = u16::from_le_bytes([payload[4], payload[5]]) as usize;
+    if payload.len() < 6 + 8 * count || count == 0 {
+        return None;
+    }
+    let mut starts = Vec::with_capacity(count);
+    for index in 0..count {
+        let at = 6 + 8 * index;
+        let start = u64::from_le_bytes(payload[at..at + 8].try_into().ok()?) as usize;
+        if start > bytes.len() || (index > 0 && start <= starts[index - 1]) {
+            return None;
+        }
+        starts.push(start);
+    }
+    Some(starts)
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_decode_all(bytes: &[u8]) -> io::Result<Vec<u8>> {
+    if !serial_decode() {
+        if let Some(starts) = zstd_frame_starts(bytes) {
+            if starts.len() > 1 {
+                return zstd_parallel(bytes, &starts);
+            }
+        }
+    }
+    let mut decoder = zstd::stream::read::Decoder::new(bytes)?;
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    Ok(out)
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_parallel(bytes: &[u8], starts: &[usize]) -> io::Result<Vec<u8>> {
+    let mut ends = starts[1..].to_vec();
+    ends.push(bytes.len());
+    let parts: Vec<&[u8]> = starts
+        .iter()
+        .zip(ends)
+        .map(|(start, end)| &bytes[*start..end])
+        .collect();
+    let decoded = std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(parts.len());
+        for part in parts {
+            handles.push(scope.spawn(move || {
+                zstd::stream::decode_all(part).map_err(|err| io::Error::other(err.to_string()))
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err(io::Error::other("zstd")))
+            })
+            .collect::<io::Result<Vec<_>>>()
+    })?;
+    let mut out = Vec::new();
+    for part in decoded {
+        out.extend(part);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -857,5 +1088,48 @@ mod tests {
         let members = write_zstd_members(&path, &data).unwrap();
         assert!(members > 1);
         assert_eq!(read_file_bytes(&path).unwrap(), data);
+        assert_eq!(
+            with_serial_decode(|| read_file_bytes(&path).unwrap()),
+            data,
+            "serial decode of an indexed file matches the parallel decode"
+        );
+    }
+
+    #[test]
+    fn a_single_gzip_stream_without_an_index_still_reads() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("one.con.gz");
+        {
+            let mut writer = gzip_writer(&path).unwrap();
+            writer.write_all(text.as_bytes()).unwrap();
+            writer.finish().unwrap();
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(gzip_member_starts(&bytes).is_none());
+        assert_eq!(read_file_text(&path).unwrap(), text);
+        assert_eq!(read_file_bytes(&path).unwrap(), text.as_bytes());
+    }
+
+    #[test]
+    fn a_foreign_multi_member_gzip_without_our_index_still_reads() {
+        let mut bytes = gzip_member(b"alpha\n").unwrap();
+        bytes.extend(gzip_member(b"beta\n").unwrap());
+        assert!(gzip_member_starts(&bytes).is_none());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("foreign.con.gz");
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(read_file_bytes(&path).unwrap(), b"alpha\nbeta\n");
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn a_single_zstd_frame_without_an_index_still_reads() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("one.con.zst");
+        std::fs::write(&path, zstd::stream::encode_all(text.as_bytes(), 3).unwrap()).unwrap();
+        assert!(zstd_frame_starts(&std::fs::read(&path).unwrap()).is_none());
+        assert_eq!(read_file_text(&path).unwrap(), text);
     }
 }

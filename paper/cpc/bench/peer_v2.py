@@ -64,6 +64,7 @@ def trajectory() -> np.ndarray:
 
 
 def write_con(path: Path, frames: np.ndarray) -> None:
+    path.unlink(missing_ok=True)
     lines = [""]
     for frame in frames:
         lines.append(
@@ -86,6 +87,7 @@ def write_con(path: Path, frames: np.ndarray) -> None:
 
 
 def write_xyz(path: Path, frames: np.ndarray) -> None:
+    path.unlink(missing_ok=True)
     chunks = []
     for frame in frames:
         chunks.append(str(len(frame)))
@@ -96,6 +98,7 @@ def write_xyz(path: Path, frames: np.ndarray) -> None:
 
 
 def write_extxyz(path: Path, frames: np.ndarray) -> None:
+    path.unlink(missing_ok=True)
     chunks = []
     for frame in frames:
         chunks.append(str(len(frame)))
@@ -107,6 +110,7 @@ def write_extxyz(path: Path, frames: np.ndarray) -> None:
 
 def write_poscar_stack(path: Path, frames: np.ndarray) -> None:
     """One extended XYZ is the multi-frame file. POSCAR holds frame 0 for pymatgen."""
+    path.unlink(missing_ok=True)
     frame = frames[0]
     lines = [
         "Cu",

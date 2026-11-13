@@ -241,6 +241,7 @@ def con_frames(traj: dict[str, np.ndarray], sl: slice, velocities: bool):
 def write_con(path: Path, traj, sl: slice, velocities: bool) -> None:
     import readcon
 
+    path.unlink(missing_ok=True)
     readcon.write_con(str(path), con_frames(traj, sl, velocities))
 
 
@@ -253,6 +254,7 @@ def write_extxyz(path: Path, traj, sl: slice, velocities: bool = True) -> None:
     movable = np.where(traj["held"], "F", "T")
     symbols, ids = traj["symbols"], traj["ids"].tolist()
     n = len(symbols)
+    path.unlink(missing_ok=True)
     with path.open("w") as out:
         for i in frame_indices(traj, sl):
             out.write(f"{n}\n{head}\n")
@@ -273,6 +275,7 @@ def write_extxyz(path: Path, traj, sl: slice, velocities: bool = True) -> None:
 
 def write_xyz(path: Path, traj, sl: slice) -> None:
     n = len(traj["symbols"])
+    path.unlink(missing_ok=True)
     with path.open("w") as out:
         for i in frame_indices(traj, sl):
             out.write(f"{n}\nframe {i}\n")
@@ -286,6 +289,7 @@ def write_traj(path: Path, traj, sl: slice, velocities: bool = True) -> None:
     from ase.constraints import FixAtoms
     from ase.io.trajectory import Trajectory
 
+    path.unlink(missing_ok=True)
     with Trajectory(str(path), "w") as out:
         for i in frame_indices(traj, sl):
             atoms = Atoms(

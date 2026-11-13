@@ -2274,7 +2274,7 @@ fn read_all_frames(
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
 ) -> PyResult<Py<ConFrameList>> {
-    read_con(py, path, n_threads, comm, mode)
+    read_con(py, path, n_threads, comm, mode, None)
 }
 
 /// Read frames from a .con or .convel file path.
@@ -2290,20 +2290,27 @@ fn read_all_frames(
 /// concatenating the blocks of ranks `0..size` in rank order gives the
 /// serial result. `mode` is `"auto"`, `"shared"` or `"scatter"`.
 #[pyfunction]
-#[pyo3(signature = (path, n_threads=None, *, comm=None, mode="auto"))]
+#[pyo3(signature = (path, n_threads=None, *, comm=None, mode="auto", decode_threads=None))]
 fn read_con(
     py: Python<'_>,
     path: &str,
     n_threads: Option<usize>,
     comm: Option<&Bound<'_, PyAny>>,
     mode: &str,
+    decode_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
     if let Some(comm) = comm {
         return read_con_mpi(py, path, n_threads, comm, mode);
     }
     // The GIL stays released across the map, the scan, and the parse.
     // Python frame objects are built on first use.
-    read_con_lazy(py, path, n_threads)
+    // `decode_threads=1` inflates a multi-member file on this thread.
+    // Absent, or two or more, inflates indexed members together.
+    if matches!(decode_threads, Some(1)) {
+        crate::compression::with_serial_decode(|| read_con_lazy(py, path, n_threads))
+    } else {
+        read_con_lazy(py, path, n_threads)
+    }
 }
 
 /// One `[frames, atoms, 3]` float64 array of coordinates.
@@ -3115,7 +3122,7 @@ fn plain_binding_bytes(
 /// `comm=` are refused.
 /// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None, compression_members=None))]
 #[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
@@ -3128,6 +3135,7 @@ fn write_con(
     mode: &str,
     append: bool,
     n_threads: Option<usize>,
+    compression_members: Option<usize>,
 ) -> PyResult<()> {
     if append && comm.is_some() {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -3160,23 +3168,35 @@ fn write_con(
     match codec {
         OutputCodec::Gzip => {
             let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-            crate::compression::write_gzip_members(Path::new(path), &plain).map_err(|err| {
-                PyIOError::new_err(format!("failed to create gzip writer: {err}"))
-            })?;
+            let members = compression_members
+                .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
+            crate::compression::write_gzip_members_n(Path::new(path), &plain, members).map_err(
+                |err| PyIOError::new_err(format!("failed to create gzip writer: {err}")),
+            )?;
             Ok(())
         }
         OutputCodec::Zstd => {
             #[cfg(feature = "zstd")]
             {
                 let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-                crate::compression::write_zstd_members(Path::new(path), &plain).map_err(|err| {
-                    PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                })?;
+                let members = compression_members
+                    .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
+                crate::compression::write_zstd_members_n(Path::new(path), &plain, members)
+                    .map_err(|err| {
+                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
+                    })?;
                 Ok(())
             }
             #[cfg(not(feature = "zstd"))]
             {
-                let _ = (precision, canonical, frames, py, n_threads);
+                let _ = (
+                    precision,
+                    canonical,
+                    frames,
+                    py,
+                    n_threads,
+                    compression_members,
+                );
                 Err(PyIOError::new_err(
                     "zstd compression requires readcon built with the zstd feature",
                 ))
@@ -3344,7 +3364,7 @@ fn write_con_string(
 /// Requires the ase package.
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
-    let frames = read_con(py, path, None, None, "auto")?;
+    let frames = read_con(py, path, None, None, "auto", None)?;
     let n = frames.borrow(py).len_frames();
     let mut out = Vec::with_capacity(n);
     for index in 0..n {

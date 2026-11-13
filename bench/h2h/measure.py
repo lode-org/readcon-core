@@ -97,6 +97,7 @@ def run_readcon_python() -> None:
             last_write = None
             for _ in range(REPEATS):
                 started = time.perf_counter()
+                out.unlink(missing_ok=True)
                 last_write = readcon.write_coords(
                     os.fspath(out),
                     last["positions"],
@@ -778,6 +779,7 @@ def run_native(kind: str) -> None:
         if not ext.exists():
             from ase.io import write as ase_write
 
+            ext.unlink(missing_ok=True)
             ase_write(os.fspath(ext), ensure_images())
         from ovito.io import import_file
 
@@ -915,5 +917,6 @@ def _ensure_xyz(folder: Path, ensure_images) -> Path:
     if not xyz.exists():
         from ase.io import write as ase_write
 
+        xyz.unlink(missing_ok=True)
         ase_write(os.fspath(xyz), ensure_images(), format="xyz")
     return xyz
