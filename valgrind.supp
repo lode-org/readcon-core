@@ -44,3 +44,14 @@
    fun:catch_unwind<std::rt::lang_start_internal::{closure_env#0}, isize>
    fun:_ZN3std2rt19lang_start_internal17ha8ef919ae4984948E
 }
+
+# mimalloc reads /sys/kernel/mm/transparent_hugepage/enabled into a
+# 32-byte stack buffer and then scans all 32 bytes. A short read leaves
+# the tail uninitialised. The probe only decides whether huge pages are
+# enabled; it does not use the unread bytes as data.
+{
+   mimalloc_thp_probe_scans_past_the_bytes_read
+   Memcheck:Cond
+   fun:_mi_strnlen
+   fun:_mi_strnstr
+}
