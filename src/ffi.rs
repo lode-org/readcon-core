@@ -1510,7 +1510,7 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         .zip(frame.header.masses_per_type.iter())
         .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
     let has_velocities = frame.has_velocities();
-    let mut c_atoms: Vec<CAtom> = frame
+    let c_atoms: Vec<CAtom> = frame
         .atom_data
         .iter()
         .zip(masses_iter)
@@ -1541,9 +1541,12 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             }
         })
         .collect();
-    let atoms_ptr = c_atoms.as_mut_ptr();
-    let num_atoms = c_atoms.len();
-    std::mem::forget(c_atoms);
+    // `into_boxed_slice` owns an allocation whose size is the length.
+    // Freeing that pointer with `Vec`'s capacity guessed as `num_atoms`
+    // is wrong whenever the `Vec` grew past its length.
+    let boxed = c_atoms.into_boxed_slice();
+    let num_atoms = boxed.len();
+    let atoms_ptr = Box::into_raw(boxed).cast::<CAtom>();
     let has_forces = frame.has_forces();
     let has_energies = frame.has_energies();
     let c_frame = Box::new(CFrame {
@@ -1568,7 +1571,12 @@ pub unsafe extern "C" fn free_c_frame(frame: *mut CFrame) {
     }
     unsafe {
         let frame_box = Box::from_raw(frame);
-        let _ = Vec::from_raw_parts(frame_box.atoms, frame_box.num_atoms, frame_box.num_atoms);
+        if frame_box.num_atoms > 0 {
+            drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                frame_box.atoms,
+                frame_box.num_atoms,
+            )));
+        }
     }
 }
 /// Copies a header string line into a caller-provided buffer.
@@ -4715,14 +4723,12 @@ pub(crate) fn pack_frame_handles(
     num_frames: *mut usize,
 ) -> *mut *mut RKRConFrame {
     let count = frames.len();
-    let mut handles: Vec<*mut RKRConFrame> = frames
+    let handles: Vec<*mut RKRConFrame> = frames
         .into_iter()
         .map(|f| Box::into_raw(Box::new(f)) as *mut RKRConFrame)
         .collect();
-    handles.shrink_to_fit();
-    debug_assert_eq!(handles.len(), handles.capacity());
-    let ptr = handles.as_mut_ptr();
-    std::mem::forget(handles);
+    let boxed = handles.into_boxed_slice();
+    let ptr = Box::into_raw(boxed).cast::<*mut RKRConFrame>();
     unsafe { *num_frames = count };
     ptr
 }
@@ -4737,8 +4743,8 @@ pub unsafe extern "C" fn free_rkr_frame_array(frames: *mut *mut RKRConFrame, num
         return;
     }
     unsafe {
-        let handles = Vec::from_raw_parts(frames, num_frames, num_frames);
-        for handle in handles {
+        let handles = Box::from_raw(std::ptr::slice_from_raw_parts_mut(frames, num_frames));
+        for handle in handles.iter().copied() {
             if !handle.is_null() {
                 let _ = Box::from_raw(handle as *mut ConFrame);
             }
@@ -4759,7 +4765,9 @@ pub unsafe extern "C" fn free_rkr_frame_ptr_array(
         return;
     }
     unsafe {
-        let _ptrs = Vec::from_raw_parts(frames, num_frames, num_frames);
+        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+            frames, num_frames,
+        )));
     }
 }
 

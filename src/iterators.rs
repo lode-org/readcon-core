@@ -3745,13 +3745,10 @@ fn piped_stock_frames(
     let row_origin = std::sync::atomic::AtomicUsize::new(0);
     let mut xyz = Vec::<f64>::new();
     xyz.reserve(n.saturating_mul(3));
-    unsafe { xyz.set_len(n.saturating_mul(3)) };
     let mut ids = Vec::<u64>::new();
     ids.reserve(n);
-    unsafe { ids.set_len(n) };
     let mut flags = Vec::<[bool; 3]>::new();
     flags.reserve(n);
-    unsafe { flags.set_len(n) };
     let mut atoms = crate::types::take_atom_spare(n);
     unsafe { atoms.set_len(n) };
     let error: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
@@ -3793,8 +3790,9 @@ fn piped_stock_frames(
                         let plain_len = index.plain[member];
                         let parsed = INFLATE_BUF.with(|cell| {
                             let mut buf = cell.borrow_mut();
+                            buf.clear();
                             if buf.capacity() < plain_len {
-                                let extra = plain_len - buf.capacity();
+                                let extra = plain_len - buf.len();
                                 buf.reserve(extra);
                             }
                             unsafe { buf.set_len(plain_len) };
@@ -3886,25 +3884,22 @@ fn piped_stock_frames(
     let scope_s = t_scope.elapsed().as_secs_f64();
     if let Some(err) = error.into_inner().unwrap_or(None) {
         std::mem::forget(atoms);
-        unsafe {
-            xyz.set_len(0);
-            ids.set_len(0);
-        }
         return Err(err.into());
     }
     let Some(header) = header.into_inner().unwrap_or(None) else {
         std::mem::forget(atoms);
-        unsafe {
-            xyz.set_len(0);
-            ids.set_len(0);
-        }
         return Ok(None);
     };
+    // Every coordinate, id, and flag was written. The length stayed 0
+    // until here, so an error does not drop an uninitialised bool.
+    unsafe {
+        xyz.set_len(n.saturating_mul(3));
+        ids.set_len(n);
+        flags.set_len(n);
+    }
     let old = xyz.as_ptr();
     let positions = crate::storage_dtype::FloatArray2::from_f64_row_major(n, 3, xyz);
-    let atoms_raw = atoms.as_mut_ptr() as *mut types::AtomDatum;
-    std::mem::forget(atoms);
-    let mut atoms = unsafe { Vec::from_raw_parts(atoms_raw, n, n) };
+    let mut atoms = owned_initialized_atoms(atoms, n);
     crate::types::mark_uniform_symbol_drop(&atoms);
     if let Some(slice) = positions.f64_slice() {
         let new_ptr = slice.as_ptr() as *mut f64;
@@ -3916,6 +3911,45 @@ fn piped_stock_frames(
     }
     let frame = crate::types::con_frame_coords_only_with_ids(header, atoms, positions, ids);
     Ok(Some((vec![frame], alloc_s, scope_s)))
+}
+
+/// `raw` is `n` initialized atoms in a buffer that may be larger than `n`.
+///
+/// The spare reused across frames keeps its real capacity. Passing `n` as
+/// the capacity frees that allocation with the wrong layout.
+#[cfg(feature = "parallel")]
+fn owned_initialized_atoms(
+    mut raw: Vec<std::mem::MaybeUninit<types::AtomDatum>>,
+    n: usize,
+) -> Vec<types::AtomDatum> {
+    let cap = raw.capacity();
+    debug_assert!(cap >= n);
+    let ptr = raw.as_mut_ptr() as *mut types::AtomDatum;
+    std::mem::forget(raw);
+    unsafe { Vec::from_raw_parts(ptr, n, cap) }
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod spare_capacity {
+    #[test]
+    fn a_reused_spare_keeps_its_capacity() {
+        let mut raw = crate::types::take_atom_spare(32);
+        let cap = raw.capacity();
+        assert!(cap >= 32);
+        unsafe { raw.set_len(4) };
+        for index in 0..4 {
+            raw[index].write(crate::types::AtomDatum::coords(
+                "Cu",
+                0.0,
+                0.0,
+                0.0,
+                [false, false, false],
+                index as u64,
+            ));
+        }
+        let atoms = super::owned_initialized_atoms(raw, 4);
+        assert_eq!(atoms.capacity(), cap);
+    }
 }
 
 #[cfg(feature = "parallel")]

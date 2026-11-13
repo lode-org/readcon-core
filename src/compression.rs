@@ -1120,8 +1120,14 @@ fn inflate_sized(
             "member plain length exceeds the compressed file",
         ));
     };
+    // `reserve(n)` grows until `capacity >= len + n`, not `capacity >= old + n`.
+    // A reused buffer whose length was cleared still has its old capacity, so
+    // reserving only the shortfall against that capacity leaves `set_len` past
+    // the end.
+    out.clear();
     if out.capacity() < total {
-        out.reserve(total - out.capacity());
+        let extra = total - out.len();
+        out.reserve(extra);
     }
     // `u8` has no destructor. `set_len(0)` on the error path drops nothing
     // unread. Every successful return overwrites `0..total`.

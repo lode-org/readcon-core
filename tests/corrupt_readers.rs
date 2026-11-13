@@ -210,6 +210,50 @@ fn index_end(bytes: &[u8], at: usize, count: usize) -> usize {
     end.min(bytes.len())
 }
 
+fn copper(n: usize) -> ConFrame {
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    for index in 0..n {
+        builder.add_atom(
+            "Cu",
+            index as f64,
+            0.25,
+            0.125,
+            [false, false, false],
+            index as u64 + 1,
+            64.0,
+        );
+    }
+    builder.build().unwrap()
+}
+
+fn indexed(dir: &Path, name: &str, frame: &ConFrame) -> PathBuf {
+    let bytes = readcon_core::writer::write_frames_to_vec(std::slice::from_ref(frame)).unwrap();
+    let path = dir.join(name);
+    readcon_core::compression::write_gzip_members_limited(&path, &bytes, 2, 2).unwrap();
+    path
+}
+
+#[test]
+fn a_smaller_indexed_frame_reuses_the_atom_spare() {
+    let dir = tempfile::tempdir().unwrap();
+    let wide = indexed(dir.path(), "wide.con.gz", &copper(1200));
+    let small = indexed(dir.path(), "small.con.gz", &copper(8));
+    let loaded = read_con(&wide, 8).expect("wide");
+    assert_eq!(loaded[0].atom_data.len(), 1200);
+    let c_frame = unsafe {
+        readcon_core::ffi::rkr_frame_to_c_frame(
+            &loaded[0] as *const ConFrame as *const readcon_core::ffi::RKRConFrame,
+        )
+    };
+    assert!(!c_frame.is_null());
+    unsafe { readcon_core::ffi::free_c_frame(c_frame) };
+    drop(loaded);
+    let loaded = read_con(&small, 8).expect("small");
+    assert_eq!(loaded[0].atom_data.len(), 8);
+    assert_eq!(loaded[0].atom_data[7].atom_id, 8);
+    drop(loaded);
+}
+
 #[test]
 fn a_flipped_member_length_does_not_panic() {
     let dir = tempfile::tempdir().unwrap();
