@@ -437,9 +437,11 @@ def drops(text: str) -> str:
 
 
 def cross_format(store: Store, host: str) -> str:
-    """1M-atom frame and trajectory from cross-format.tsv. No sample count is recorded."""
+    """1M-atom frame and trajectory from cross-format.tsv. Every row must carry n."""
     raw = store.text(f"{REL1}/cross-format.tsv")
     rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
+    if not rows or "n" not in rows[0]:
+        raise SystemExit("cross-format.tsv has no n column")
     chunks = []
     specs = (
         ("1M", r"One frame of \(10^{6}\) atoms.", "tab:cross-1m"),
@@ -464,9 +466,15 @@ def cross_format(store: Store, host: str) -> str:
             elif seen_chem and not marked_chem:
                 body.append("% PENDING h2h5 compressed chemfiles")
                 marked_chem = True
+            count = str(row.get("n", "")).strip()
+            if not count:
+                raise SystemExit(
+                    "cross-format.tsv has no n for "
+                    f"{row['structure']} {row['tool']} {row['format']} {row['op']}"
+                )
             body.append(
                 f"{esc(row['tool'])} & {esc(row['format'])} & {esc(row['op'])} "
-                f"& {sig(row['median_s'])} ({sig(row['iqr_s'])}) "
+                f"& {sig(row['median_s'])} ({sig(row['iqr_s'])}, $n{{=}}{count}$) "
                 f"& {mib(row['rss_bytes'])} & {mib(row['file_bytes'])} "
                 f"& {drops(row['loses'])} \\\\"
             )
@@ -476,13 +484,12 @@ def cross_format(store: Store, host: str) -> str:
             body.append("% PENDING h2h5 compressed chemfiles")
         chunks.append(table(
             title + " Each tool uses the format in its row. "
-            "Time is the median in seconds, with the interquartile range in parentheses. "
+            "Time is the median in seconds, the interquartile range, and $n$. "
             "RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. "
-            "Drops names the fields that format does not keep. "
-            "The file does not record the sample count.",
+            "Drops names the fields that format does not keep.",
             label,
             "@{}lllrrrl@{}",
-            r"Tool & Format & Op & Time (IQR) & RSS & File & Drops",
+            r"Tool & Format & Op & Time (IQR, $n$) & RSS & File & Drops",
             body,
             host,
         ))

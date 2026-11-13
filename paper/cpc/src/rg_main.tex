@@ -603,11 +603,25 @@ On tmpfs the ideal efficiency is 0.3938 and the ceiling fraction is 0.6154.
 Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are one frame of \(10^{6}\) atoms and one trajectory.
 Each tool reads and writes the format named in its row.
 The Drops column is what that format does not keep.
+On the million-atom frame, CON.zst is the smallest file that drops nothing: 1.349~MiB, which is 1.41~MB.
+ASE extxyz.gz is 2.647~MiB (2.78~MB), 1.96 times that file.
+DCD and NetCDF are 11.44~MiB (12.0~MB), 8.48 times CON.zst.
+XTC is 3.548~MiB (3.72~MB), 2.63 times CON.zst.
+The CON.zst write is the lowest write median on both tables, 0.1316~s on the million-atom frame and 0.001304~s on the trajectory.
+Plain CON is next, 0.1788~s and 0.001531~s, 1.36 and 1.17 times the CON.zst write.
+On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.56, DCD 1.63, XTC 1.77, NetCDF 1.83, CON.gz 3.41, extended XYZ 31.7, chemfiles XYZ 62.9 and gzipped extended XYZ 68.2.
+As a multiple of the plain CON write those rows are 1.15, 1.20, 1.30, 1.35, 2.51, 23.4, 46.3 and 50.2.
+On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.52, XTC 1.61, NetCDF 2.10, OVITO XYZ 4.07, CON.gz 4.34, extended XYZ 26.0, PDB 40.8, chemfiles XYZ 50.6 and gzipped extended XYZ 60.6.
+As a multiple of the plain CON write those rows are 1.29, 1.37, 1.79, 3.47, 3.70, 22.1, 34.7, 43.1 and 51.7.
+Among the rows that drop nothing, the plain extended XYZ read is 22.9 times the plain CON read on the million-atom frame and 20.4 times on the trajectory.
+The gzipped extended XYZ read is 25.1 times the CON.zst read on the million-atom frame and 9.88 times on the trajectory.
+The plain extended XYZ write is 23.4 times the plain CON write on the million-atom frame and 22.1 times on the trajectory.
+The gzipped extended XYZ write is 68.2 times the CON.zst write on the million-atom frame and 60.6 times on the trajectory.
 On the million-atom frame the NetCDF, DCD, XTC and OVITO XYZ read medians are lower than the plain CON read.
 On the trajectory only the NetCDF and DCD read medians are lower.
 NetCDF, DCD and XTC drop masses, velocities and constraints.
 OVITO XYZ and chemfiles XYZ drop those three as well.
-Plain CON and extended XYZ drop none.
+A file that drops those fields cannot stand in for a CON file, which drops none, as does extended XYZ.
 \input{campaign/final/cross_format}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
