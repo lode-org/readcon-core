@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -96,24 +97,153 @@ def ensure_pinned(commit: str, dest: Path) -> str | None:
     return None
 
 
-def _pin_subprocess() -> None:
-    """The reader script starts one interpreter. Pin that process."""
-    cores = core_list()
-    real = br.subprocess.run
+def _install_worker() -> None:
+    """Time the parse only, with the collector off.
 
-    def pinned(argv, *args, **kwargs):
-        if isinstance(argv, (list, tuple)) and argv and argv[0] == sys.executable:
-            argv = ["taskset", "-c", cores, *argv]
-        return real(argv, *args, **kwargs)
+    The stock worker starts the clock, parses, then builds a reference
+    array and compares every frame before stopping the clock. That check
+    is a second pass over the coordinates. On the short readers it is a
+    large fraction of the sample, and on the 0.17.3 readers a collection
+    during the object build moves the sample by hundreds of milliseconds.
+    The check still runs. It is no longer inside the clock. ``gc.disable``
+    is after a collection and before ``READY``, so the clock does not
+    include it.
+    """
+    ready = 'print(f"READY {before}", flush=True)\nsys.stdin.readline()\n'
+    ready_new = (
+        "import gc\n"
+        "gc.collect()\n"
+        "gc.disable()\n"
+        'print(f"READY {before}", flush=True)\n'
+        "sys.stdin.readline()\n"
+    )
+    timed = (
+        "import time\n"
+        "t0 = time.perf_counter()\n"
+        'error = ""\n'
+        "try:\n"
+        "    got = parse()\n"
+        "    arr = np.asarray(got, dtype=float)\n"
+        "    if arr.ndim == 2:\n"
+        "        arr = arr.reshape(1, *arr.shape)\n"
+        "except Exception as exc:\n"
+        "    arr = None\n"
+        '    error = f"{type(exc).__name__}: {exc}"[:240]\n'
+        "dt = time.perf_counter() - t0\n"
+    )
+    timed_new = (
+        "import time\n"
+        "t0 = time.perf_counter()\n"
+        'error = ""\n'
+        "try:\n"
+        "    got = parse()\n"
+        "except Exception as exc:\n"
+        "    got = None\n"
+        '    error = f"{type(exc).__name__}: {exc}"[:240]\n'
+        "dt = time.perf_counter() - t0\n"
+        "arr = None\n"
+        "if got is not None and not error:\n"
+        "    try:\n"
+        "        arr = np.asarray(got, dtype=float)\n"
+        "        if arr.ndim == 2:\n"
+        "            arr = arr.reshape(1, *arr.shape)\n"
+        "    except Exception as exc:\n"
+        '        error = f"{type(exc).__name__}: {exc}"[:240]\n'
+        "        arr = None\n"
+    )
+    worker = br.WORKER
+    if ready not in worker or timed not in worker:
+        raise SystemExit("bench_readers worker no longer has the expected timer")
+    br.WORKER = worker.replace(ready, ready_new, 1).replace(timed, timed_new, 1)
 
-    br.subprocess.run = pinned
+
+def _prime(path: Path) -> None:
+    """Fault every byte of ``path`` into the page cache."""
+    if not path.is_file():
+        return
+    with path.open("rb") as handle:
+        while handle.read(1 << 20):
+            pass
+
+
+def sample_arm(arm: str, path: Path) -> dict:
+    """One fresh pinned process. The file is cached before the clock starts."""
+    env = os.environ.copy()
+    env["READCON_BASE"] = str(br.BASE_DIR)
+    env["READCON_V0173"] = str(br.RELEASE_DIR)
+    env.pop("TMPDIR", None)
+    env.pop("PYTHONPATH", None)
+    if arm == "eon":
+        env["PYTHONPATH"] = str(br.EON_PY)
+        env["LD_LIBRARY_PATH"] = str(br.EON_LIB) + os.pathsep + env.get(
+            "LD_LIBRARY_PATH", ""
+        )
+    if arm == "eon_py":
+        env["EON_PKG"] = str(br.EON_PKG)
+        env["PYTHONPATH"] = str(br.EON_PKG)
+    if arm == "readcon_eon_api":
+        env["EON_ALLFRAMES"] = str(br.EON_BIN)
+    proc = subprocess.Popen(
+        [
+            "taskset",
+            "-c",
+            core_list(),
+            sys.executable,
+            "-c",
+            br.WORKER,
+            arm,
+            str(path),
+            str(br.N_FRAMES),
+            str(br.N_ATOMS),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    assert proc.stdin is not None and proc.stdout is not None
+    ready = proc.stdout.readline()
+    if not ready.startswith("READY"):
+        proc.kill()
+        out, err = proc.communicate()
+        text = (err or out or ready)[-300:].replace("\n", " ")
+        return {
+            "error": text or f"no READY ({ready!r})",
+            "seconds": None,
+            "matched": 0,
+            "got": 0,
+            "requested": br.N_FRAMES,
+            "mib": None,
+            "exit": proc.returncode,
+        }
+    _prime(path)
+    proc.stdin.write("\n")
+    proc.stdin.close()
+    out, err = proc.communicate()
+    lines = [ln for ln in out.splitlines() if ln.startswith("{") or ln.startswith("READY")]
+    if proc.returncode != 0 or not lines or not lines[-1].startswith("{"):
+        text = (err or out)[-300:].replace("\n", " ")
+        return {
+            "error": text,
+            "seconds": None,
+            "matched": 0,
+            "got": 0,
+            "requested": br.N_FRAMES,
+            "mib": None,
+            "exit": proc.returncode,
+        }
+    doc = json.loads(lines[-1])
+    doc["mib"] = max(0, int(doc["hwm_after"]) - int(doc["hwm_before"])) / 1024.0
+    doc["exit"] = proc.returncode
+    return doc
 
 
 def run(out: Path, frames: int, repeats: int) -> None:
     if frames < 1 or repeats < 1:
         raise SystemExit("frames and repeats must be positive")
     pin_cores()
-    _pin_subprocess()
+    _install_worker()
     br.N_FRAMES = frames
     br.REPEATS = repeats
     br.WORK = WORK
@@ -136,6 +266,9 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "process fresh",
         f"affinity taskset -c {core_list()}",
         "serial 1",
+        "page_cache primed after READY, before the clock",
+        "clock parse only; the coordinate check is outside the clock",
+        "gc collect then disable before READY",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
         "numpy_percentile method=linear type=7",
         "git_status_begin",
@@ -185,7 +318,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
                 "exit": 1,
             }
         else:
-            doc = br.one(name, paths[name])
+            doc = sample_arm(name, paths[name])
         lines.append(
             f"warmup arm={name} seconds={doc.get('seconds')} mib={doc.get('mib')} "
             f"exit={doc.get('exit')} error={doc.get('error', '')}"
@@ -206,7 +339,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
                     "exit": 1,
                 }
             else:
-                doc = br.one(name, paths[name])
+                doc = sample_arm(name, paths[name])
             samples[name].append(doc)
             lines.append(
                 f"sample arm={name} rep={rep} seconds={doc.get('seconds')} "
