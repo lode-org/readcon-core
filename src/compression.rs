@@ -976,7 +976,7 @@ fn worker_ranges(jobs: usize, threads: usize) -> Vec<(usize, usize)> {
     ranges
 }
 
-fn par_ranges(jobs: usize, threads: usize, work: impl Fn(usize, usize) + Sync) {
+fn par_ranges(jobs: usize, threads: usize, work: impl Fn(usize, usize) + Sync + Send) {
     let ranges = worker_ranges(jobs, threads);
     if ranges.len() < 2 {
         for (begin, end) in ranges {
@@ -997,6 +997,7 @@ fn par_ranges(jobs: usize, threads: usize, work: impl Fn(usize, usize) + Sync) {
     {
         std::thread::scope(|scope| {
             for (worker, (begin, end)) in ranges.into_iter().enumerate() {
+                let work = &work;
                 scope.spawn(move || {
                     crate::parser::pin_worker(worker);
                     work(begin, end);
@@ -1009,6 +1010,13 @@ fn par_ranges(jobs: usize, threads: usize, work: impl Fn(usize, usize) + Sync) {
 fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
     let mut decoder = flate2::read::GzDecoder::new(src);
     decoder.read_exact(dst)?;
+    let mut extra = [0u8; 1];
+    if decoder.read(&mut extra)? != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "gzip member is longer than the index",
+        ));
+    }
     Ok(())
 }
 
@@ -1042,7 +1050,7 @@ fn inflate_sized(
     starts: &[usize],
     plain: &[usize],
     threads: usize,
-    decode: impl Fn(&[u8], &mut [u8]) -> io::Result<()> + Sync,
+    decode: impl Fn(&[u8], &mut [u8]) -> io::Result<()> + Sync + Send,
     out: &mut Vec<u8>,
 ) -> io::Result<()> {
     let total: usize = plain.iter().sum();
@@ -1093,7 +1101,7 @@ fn inflate_unknown(
     bytes: &[u8],
     starts: &[usize],
     threads: usize,
-    decode: impl Fn(&[u8]) -> io::Result<Vec<u8>> + Sync,
+    decode: impl Fn(&[u8]) -> io::Result<Vec<u8>> + Sync + Send,
 ) -> io::Result<Vec<Vec<u8>>> {
     let mut ends = Vec::with_capacity(starts.len());
     ends.extend_from_slice(&starts[1..]);
@@ -1864,6 +1872,26 @@ mod tests {
             plain.extend_from_slice(&part);
         }
         assert_eq!(plain, data);
+    }
+
+    #[test]
+    fn a_short_indexed_plain_length_is_rejected() {
+        let data = b"Cu 1.0 2.0 3.0 0 1\nH 4.0 5.0 6.0 0 2\n".repeat(8);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short-index.con.gz");
+        assert!(write_gzip_members_n(&path, &data, 2).unwrap() > 1);
+        let mut bytes = std::fs::read(&path).unwrap();
+        assert_eq!(gunzip_all(&bytes).unwrap(), data);
+        let at = bytes
+            .windows(4)
+            .position(|window| window == b"RCZ1")
+            .expect("index");
+        let count = u16::from_le_bytes([bytes[at + 4], bytes[at + 5]]) as usize;
+        let len_at = at + 6 + 8 * count;
+        let len = u64::from_le_bytes(bytes[len_at..len_at + 8].try_into().unwrap());
+        assert!(len > 1);
+        bytes[len_at..len_at + 8].copy_from_slice(&(len - 1).to_le_bytes());
+        assert!(gunzip_all(&bytes).is_err());
     }
 
     #[test]
