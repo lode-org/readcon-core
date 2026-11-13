@@ -1579,8 +1579,8 @@ fn side_copy_workers(workers: usize) -> bool {
     workers >= 2 && workers.saturating_mul(2) <= physical_cores()
 }
 
-/// tmpfs pays for a shared mapping. Page cache does not: the fault-in is
-/// slower than one `pwrite` of the same bytes.
+/// tmpfs wants many small ranges so the writer starts early. The page
+/// cache wants fewer writes.
 fn file_is_tmpfs(file: &File) -> bool {
     use std::os::fd::AsRawFd;
     let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
@@ -1588,10 +1588,13 @@ fn file_is_tmpfs(file: &File) -> bool {
     rc == 0 && stat.f_type == 0x01021994
 }
 
-/// The perf7 wide write: each worker formats a few ranges and `pwrite`s
-/// them at the prefix-sum offset. Used when there is no spare physical
-/// core for a copy thread.
-fn stream_coord_pwrite(
+/// One ordered `pwrite` overlapping the format.
+///
+/// The caller thread writes finished ranges in file order. The other
+/// `workers - 1` threads format. A fresh file's page faults are about
+/// 0.006 s for these bytes, which is the whole sink; doing that copy at
+/// the same time as the format is what removes it from the wall clock.
+fn stream_coord_pipeline(
     file: &mut File,
     atoms: &[crate::types::AtomDatum],
     workers: usize,
@@ -1599,32 +1602,40 @@ fn stream_coord_pwrite(
     spec_version: u32,
     want_vel: bool,
 ) -> Result<Vec<u8>, WriteError> {
-    let workers = workers.max(1).min(atoms.len().max(1));
-    let groups = workers.saturating_mul(4).max(workers);
+    let workers = workers.max(2).min(atoms.len().max(1));
+    let formatters = workers - 1;
+    // Smaller ranges on tmpfs: the first range is one core's worth of
+    // work, and the single writer starts while the rest are formatted.
+    // The page cache wants fewer, larger writes; a syscall per 90 KB lost
+    // to the one-shot `pwrite` of the same bytes.
+    let groups = if file_is_tmpfs(file) {
+        workers.saturating_mul(32)
+    } else {
+        workers.saturating_mul(8)
+    }
+    .max(workers);
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
     let base = file.stream_position().map_err(WriteError::Io)?;
-    let lengths: Vec<std::sync::atomic::AtomicU64> = (0..nparts)
-        .map(|_| std::sync::atomic::AtomicU64::new(0))
-        .collect();
+    let out = file.try_clone().map_err(WriteError::Io)?;
+    let next = std::sync::atomic::AtomicUsize::new(0);
     let bad_ids = std::sync::atomic::AtomicBool::new(false);
-    let next_job = std::sync::atomic::AtomicUsize::new(0);
-    let vel_parts: Vec<std::sync::Mutex<Option<Vec<u8>>>> =
+    let slots: Vec<std::sync::Mutex<Option<(Vec<u8>, Vec<u8>)>>> =
         (0..nparts).map(|_| std::sync::Mutex::new(None)).collect();
     let flag = &bad_ids;
-    std::thread::scope(|scope| -> Result<(), WriteError> {
-        let mut handles = Vec::with_capacity(workers);
-        for _worker in 0..workers {
-            let cloned = file.try_clone().map_err(WriteError::Io)?;
-            let lengths = &lengths;
-            let next_job = &next_job;
-            let vel_parts = &vel_parts;
-            handles.push(scope.spawn(move || -> Result<(), WriteError> {
+    let (end, mut vel_bytes) = std::thread::scope(|scope| -> Result<_, WriteError> {
+        let mut handles = Vec::with_capacity(formatters);
+        for worker in 0..formatters {
+            let next = &next;
+            let slots = &slots;
+            handles.push(scope.spawn(move || {
+                // Core 0 stays free for the writer.
+                crate::parser::pin_worker(worker + 1);
                 let mut ryu = ryu::Buffer::new();
-                let mut slots = [FmtSlot::new(); 3];
+                let mut slots_fmt = [FmtSlot::new(); 3];
                 let mut vel_slots = [FmtSlot::new(); 3];
                 loop {
-                    let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if index >= nparts {
                         break;
                     }
@@ -1646,7 +1657,7 @@ fn stream_coord_pwrite(
                             &mut coord,
                             if want_vel { Some(&mut vel) } else { None },
                             &mut ryu,
-                            &mut slots,
+                            &mut slots_fmt,
                             &mut vel_slots,
                             load_xyz(atom, slab, offset),
                             atom,
@@ -1654,53 +1665,54 @@ fn stream_coord_pwrite(
                             spec_version,
                         );
                     }
-                    lengths[index]
-                        .store(coord.len() as u64 + 1, std::sync::atomic::Ordering::Release);
-                    let mut offset = base;
-                    for prev in 0..index {
-                        loop {
-                            let known = lengths[prev].load(std::sync::atomic::Ordering::Acquire);
-                            if known != 0 {
-                                offset += known - 1;
-                                break;
-                            }
-                            std::hint::spin_loop();
-                        }
-                    }
-                    pwrite_full(&cloned, &coord, offset)?;
-                    if want_vel {
-                        *vel_parts[index].lock().expect("vel part") = Some(vel);
-                    }
+                    *slots[index].lock().expect("format slot") = Some((coord, vel));
                 }
-                Ok(())
             }));
         }
-        for handle in handles {
-            handle
-                .join()
-                .unwrap_or_else(|_| Err(WriteError::Io(io::Error::other("formatter panicked"))))?;
+        let mut offset = base;
+        let mut vel_bytes = Vec::new();
+        // The writer owns core 0. Leaving it free to wander put it on
+        // a formatter's core and stretched the copy. The caller's mask
+        // is restored even when a write fails.
+        let mut old_affinity = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
+        unsafe {
+            libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut old_affinity);
         }
-        Ok(())
+        crate::parser::pin_worker(0);
+        let written = (|| -> Result<_, WriteError> {
+            for index in 0..nparts {
+                let (coord, vel) = loop {
+                    if let Some(part) = slots[index].lock().expect("format slot").take() {
+                        break part;
+                    }
+                    std::hint::spin_loop();
+                };
+                pwrite_full(&out, &coord, offset).map_err(WriteError::Io)?;
+                offset += coord.len() as u64;
+                if want_vel {
+                    vel_bytes.extend_from_slice(&vel);
+                }
+            }
+            Ok(())
+        })();
+        unsafe {
+            libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &old_affinity);
+        }
+        written?;
+        for handle in handles {
+            if handle.join().is_err() {
+                return Err(WriteError::Io(io::Error::other("formatter panicked")));
+            }
+        }
+        Ok((offset, vel_bytes))
     })?;
-    let mut end = base;
-    for length in &lengths {
-        end += length
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .saturating_sub(1);
-    }
     file.seek(SeekFrom::Start(end)).map_err(WriteError::Io)?;
     if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
         ensure_unique_ids(atoms, 1)?;
     }
-    let mut vel_bytes = Vec::new();
-    if want_vel {
-        for part in &vel_parts {
-            if let Some(vel) = part.lock().expect("vel part").as_ref() {
-                vel_bytes.extend_from_slice(vel);
-            }
-        }
+    if !want_vel {
+        vel_bytes.clear();
     }
-    drop(vel_parts);
     Ok(vel_bytes)
 }
 
@@ -1713,19 +1725,13 @@ fn stream_coord_rows(
     want_vel: bool,
     force_map: bool,
 ) -> Result<Vec<u8>, WriteError> {
-    // Format each range into a reused buffer. The exact byte length is the
-    // formatted size; a second counting pass would repeat the float
-    // conversion, and a memcpy of those bytes is cheaper than `pwrite`.
-    // The file is then truncated to the prefix sum and each range is copied
-    // into its slice of a shared mapping. Same-inode `pwrite` does not scale.
+    // Spare cores copy into a shared mapping while later ranges format.
+    // With no spare core, one thread `pwrite`s finished ranges in order
+    // and the others keep formatting. `map_rows` still forces the mapping.
     let workers = workers.max(1).min(atoms.len().max(1));
-    // Extra copier threads only when a physical core is free. `map_rows`
-    // still selects the mapping on a full core set, and so does tmpfs:
-    // the formatter copies into the mapping itself. A page cache with no
-    // spare core stays on the `pwrite` loop.
     let side_copies = side_copy_workers(workers);
-    if !side_copies && !force_map && !file_is_tmpfs(file) {
-        return stream_coord_pwrite(file, atoms, workers, prec, spec_version, want_vel);
+    if !side_copies && !force_map {
+        return stream_coord_pipeline(file, atoms, workers, prec, spec_version, want_vel);
     }
     let groups = if side_copies {
         workers.saturating_mul(8).max(workers)
