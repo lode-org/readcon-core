@@ -1228,6 +1228,31 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
 
 const WIDE_ATOM_GRAIN: usize = 4096;
 
+/// Formatting buffers survive from one wide write to the next. Dropping
+/// them every call faulted a fresh 20 MB and showed up between the format
+/// time and the campaign sample.
+fn take_format_buf(cap: usize) -> Vec<u8> {
+    let mut pool = FORMAT_BUFS.lock().unwrap_or_else(|err| err.into_inner());
+    if let Some(mut buf) = pool.pop() {
+        if buf.capacity() < cap {
+            buf.reserve(cap);
+        }
+        buf.clear();
+        return buf;
+    }
+    drop(pool);
+    Vec::with_capacity(cap)
+}
+
+fn give_format_buf(buf: Vec<u8>) {
+    let mut pool = FORMAT_BUFS.lock().unwrap_or_else(|err| err.into_inner());
+    if pool.len() < 128 {
+        pool.push(buf);
+    }
+}
+
+static FORMAT_BUFS: std::sync::Mutex<Vec<Vec<u8>>> = std::sync::Mutex::new(Vec::new());
+
 /// Base of a contiguous `xyz` slab, three `f64`s per atom in order.
 ///
 /// Parsed frames and the binding slab store coordinates that way. Owned
@@ -1288,7 +1313,7 @@ fn push_atom_motion(
 /// One pass, private buffer. Callers that split a frame across ranks write
 /// these bytes at the offset from an exclusive scan of the lengths.
 pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<u8>, WriteError> {
-    let mut buf = Vec::with_capacity(atoms.len().saturating_mul(48));
+    let mut buf = take_format_buf(atoms.len().saturating_mul(48));
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
     append_coord_rows(
@@ -1303,6 +1328,12 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
         None,
     )?;
     Ok(buf)
+}
+
+/// Return a buffer from [`format_coordinate_lines`] so the next format
+/// reuses the pages instead of faulting a fresh allocation.
+pub fn recycle_format_buffer(buf: Vec<u8>) {
+    give_format_buf(buf);
 }
 
 fn append_coord_rows(
@@ -1463,7 +1494,9 @@ fn stream_coord_rows(
     // there is no writer thread. Two workers used to be one formatter and
     // that writer.
     let workers = workers.max(1).min(atoms.len().max(1));
-    let groups = workers.saturating_mul(4).max(workers);
+    // Eight ranges per worker. A finished range is on the file while the
+    // worker formats the next one, including at two workers.
+    let groups = workers.saturating_mul(8).max(workers);
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
     let base = file.stream_position().map_err(WriteError::Io)?;
@@ -1494,7 +1527,7 @@ fn stream_coord_rows(
                     let start = index * chunk;
                     let end = (start + chunk).min(atoms.len());
                     let group = &atoms[start..end];
-                    let mut coord = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut coord = take_format_buf(group.len().saturating_mul(48));
                     let mut vel = if want_vel {
                         Vec::with_capacity(group.len().saturating_mul(48))
                     } else {
@@ -1531,6 +1564,7 @@ fn stream_coord_rows(
                         }
                     }
                     pwrite_full(&cloned, &coord, offset)?;
+                    give_format_buf(coord);
                     if want_vel {
                         *vel_parts[index].lock().expect("vel part") = Some(vel);
                     }
@@ -1563,6 +1597,7 @@ fn stream_coord_rows(
             }
         }
     }
+    drop(vel_parts);
     Ok(vel_bytes)
 }
 

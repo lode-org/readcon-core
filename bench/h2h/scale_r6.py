@@ -302,58 +302,78 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
                     "samples_s": samples,
                 },
             )
-        for sink, dest_root in (
-            ("disk", WORK / "r6" / "disk"),
-            ("memory", Path("/dev/shm/r6")),
-        ):
-            dest_root.mkdir(parents=True, exist_ok=True)
-            for workers in THREADS:
-                if have(
-                    rows,
-                    op="write",
-                    file=name,
-                    workers=workers,
-                    kind="threads",
-                    sink=sink,
-                ):
-                    continue
-                if name.startswith("extxyz"):
-                    data = readcon.read_extxyz(os.fspath(path), n_threads=1)
-                    dest = dest_root / f"{name}.extxyz"
+    # Page-cache and tmpfs writes finish before any fdatasync. A sync in
+    # the middle of the page-cache pass leaves the next file waiting on
+    # writeback.
+    for sinks in (
+        (
+            ("disk", WORK / "r6" / "disk", False),
+            ("memory", Path("/dev/shm/r6"), False),
+        ),
+        (("disk_sync", WORK / "r6" / "disk-sync", True),),
+    ):
+        for name, path in paths.items():
+            for sink, dest_root, sync in sinks:
+                dest_root.mkdir(parents=True, exist_ok=True)
+                for workers in THREADS:
+                    if have(
+                        rows,
+                        op="write",
+                        file=name,
+                        workers=workers,
+                        kind="threads",
+                        sink=sink,
+                    ):
+                        continue
+                    if name.startswith("extxyz"):
+                        data = readcon.read_extxyz(os.fspath(path), n_threads=1)
+                        dest = dest_root / f"{name}.extxyz"
 
-                    def go(data=data, dest=dest, workers=workers):
-                        drop_file(dest)
-                        readcon.write_extxyz(os.fspath(dest), data, n_threads=workers)
-                else:
-                    frames = readcon.read_con(os.fspath(path), n_threads=1)
-                    dest = dest_root / f"{name}.con"
+                        def go(data=data, dest=dest, workers=workers, sync=sync):
+                            drop_file(dest)
+                            readcon.write_extxyz(os.fspath(dest), data, n_threads=workers)
+                            if sync:
+                                fd = os.open(dest, os.O_RDONLY)
+                                try:
+                                    os.fdatasync(fd)
+                                finally:
+                                    os.close(fd)
+                    else:
+                        frames = readcon.read_con(os.fspath(path), n_threads=1)
+                        dest = dest_root / f"{name}.con"
 
-                    def go(frames=frames, dest=dest, workers=workers):
-                        drop_file(dest)
-                        readcon.write_con(os.fspath(dest), frames, n_threads=workers)
+                        def go(frames=frames, dest=dest, workers=workers, sync=sync):
+                            drop_file(dest)
+                            readcon.write_con(os.fspath(dest), frames, n_threads=workers)
+                            if sync:
+                                fd = os.open(dest, os.O_RDONLY)
+                                try:
+                                    os.fdatasync(fd)
+                                finally:
+                                    os.close(fd)
 
-                go()
-                samples = []
-                for _ in range(REPEATS):
-                    started = time.perf_counter()
                     go()
-                    samples.append(time.perf_counter() - started)
-                median, iqr = type7(samples)
-                nbytes = dest.stat().st_size if dest.exists() else 0
-                record(
-                    rows,
-                    {
-                        "op": "write",
-                        "file": name,
-                        "workers": workers,
-                        "kind": "threads",
-                        "sink": sink,
-                        "median_s": median,
-                        "iqr_s": iqr,
-                        "samples_s": samples,
-                        "bytes": nbytes,
-                    },
-                )
+                    samples = []
+                    for _ in range(REPEATS):
+                        started = time.perf_counter()
+                        go()
+                        samples.append(time.perf_counter() - started)
+                    median, iqr = type7(samples)
+                    nbytes = dest.stat().st_size if dest.exists() else 0
+                    record(
+                        rows,
+                        {
+                            "op": "write",
+                            "file": name,
+                            "workers": workers,
+                            "kind": "threads",
+                            "sink": sink,
+                            "median_s": median,
+                            "iqr_s": iqr,
+                            "samples_s": samples,
+                            "bytes": nbytes,
+                        },
+                    )
 
 
 def h2h(paths: dict[str, Path]) -> None:
@@ -616,43 +636,68 @@ def mpi_strong(paths: dict[str, Path], rows: list[dict]) -> None:
     binary = ROOT / "target" / "release" / "examples" / "strong_scale_mpi"
     if not binary.exists():
         return
-    for name in ("con-100k", "convel", "con-1e6"):
-        for ranks in THREADS:
-            for op in ("read", "write"):
-                if have(rows, op=op, file=name, workers=ranks, kind="mpi"):
-                    continue
-                text = run(
-                    [
-                        "mpirun",
-                        "--bind-to",
-                        "core",
-                        "-n",
-                        str(ranks),
-                        str(binary),
-                        op,
-                        str(paths[name]),
-                        str(REPEATS),
-                    ]
-                )
-                samples = [
-                    float(piece)
-                    for piece in text.strip().split("samples=")[1].split(",")
-                ]
-                median, iqr = type7(samples)
-                record(
-                    rows,
-                    {
-                        "op": op,
-                        "file": name,
-                        "workers": ranks,
-                        "kind": "mpi",
-                        "sink": "disk" if op == "write" else "memory",
-                        "median_s": median,
-                        "iqr_s": iqr,
-                        "samples_s": samples,
-                        "raw": text.strip(),
-                    },
-                )
+    sync_root = WORK / "r6" / "disk-sync"
+    sync_root.mkdir(parents=True, exist_ok=True)
+    shm_root = Path("/dev/shm/r6")
+    shm_root.mkdir(parents=True, exist_ok=True)
+    # Same split as the thread writes: fdatasync runs after the page-cache
+    # and tmpfs samples, so it does not land on the next rank's timer.
+    for sync_only in (False, True):
+        for name in ("con-100k", "convel", "con-1e6"):
+            for ranks in THREADS:
+                for op in ("read", "write"):
+                    if op == "read":
+                        if sync_only:
+                            continue
+                        sinks = (("memory", None, False),)
+                    elif sync_only:
+                        sinks = (("disk_sync", sync_root / f"mpi-{name}.con", True),)
+                    else:
+                        sinks = (
+                            ("disk", None, False),
+                            ("memory", shm_root / f"mpi-{name}.con", False),
+                        )
+                    for sink, dest, sync in sinks:
+                        if have(rows, op=op, file=name, workers=ranks, kind="mpi", sink=sink):
+                            continue
+                        extra = {}
+                        if dest is not None:
+                            extra["READCON_MPI_OUT"] = os.fspath(dest)
+                        if sync:
+                            extra["READCON_MPI_SYNC"] = "1"
+                        text = run(
+                            [
+                                "mpirun",
+                                "--bind-to",
+                                "core",
+                                "-n",
+                                str(ranks),
+                                str(binary),
+                                op,
+                                str(paths[name]),
+                                str(REPEATS),
+                            ],
+                            env=extra or None,
+                        )
+                        samples = [
+                            float(piece)
+                            for piece in text.strip().split("samples=")[1].split(",")
+                        ]
+                        median, iqr = type7(samples)
+                        record(
+                            rows,
+                            {
+                                "op": op,
+                                "file": name,
+                                "workers": ranks,
+                                "kind": "mpi",
+                                "sink": sink,
+                                "median_s": median,
+                                "iqr_s": iqr,
+                                "samples_s": samples,
+                                "raw": text.strip(),
+                            },
+                        )
 
 
 def weak(paths: dict[str, Path]) -> None:
