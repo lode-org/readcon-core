@@ -408,7 +408,7 @@ A path writer opens the destination and truncates it before writing the frames.
 A failure during the write leaves a partial file.
 A writer to a string or to a stream the caller opened writes into that stream.
 The Python round trip reads a band and writes it back to the same path, which the writer truncates when the write opens (Listing~\ref{lst:py}, Section~\ref{sec:supp-parser}).
-A DLPack view of the positions costs 0.12 times an explicit copy (Figure~\ref{fig:dlpack}).
+A DLPack view of the positions costs \dlpackRatio{} times an explicit copy (Figure~\ref{fig:dlpack}).
 \label{sec:dlpack}
 
 
@@ -612,9 +612,9 @@ XTC is 3.548~MiB (3.72~MB), 2.63 times CON.zst.
 The million-atom PDB read is unsupported: the atom serial is five digits.
 Leaving out the two unused rows, the CON.zst write is the lowest write median on both tables: 0.1297~s on the million-atom frame and 0.001335~s on the trajectory.
 Plain CON is 0.181~s and 0.002616~s, 1.40 and 1.96 times those writes.
-On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.64, DCD 1.69, XTC 1.83, NetCDF 1.91, CON.gz 3.46, extended XYZ 32.7, TRR 63.1, XYZ 64.0, bzip2 XYZ 67.5, gzip XYZ 67.6, gzipped extended XYZ 69.4 and xz XYZ 94.5.
+On the million-atom frame the other writes, as a multiple of the CON.zst write, are OVITO XYZ 1.64, DCD 1.69, XTC 1.82, NetCDF 1.91, CON.gz 3.46, extended XYZ 32.7, TRR 63.1, XYZ 64.0, bzip2 XYZ 67.5, gzip XYZ 67.6, gzipped extended XYZ 69.4 and xz XYZ 94.5.
 As a multiple of the plain CON write those rows are 1.18, 1.21, 1.31, 1.37, 2.48, 23.4, 45.2, 45.9, 48.3, 48.4, 49.7 and 67.7.
-On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.49, XTC 1.62, NetCDF 2.10, CON.gz 4.24, OVITO XYZ 4.28, extended XYZ 25.6, PDB 39.5, XYZ 49.4, TRR 49.9, bzip2 XYZ 51.6, gzip XYZ 52.4, gzipped extended XYZ 59.1 and xz XYZ 63.6.
+On the trajectory the other writes, as a multiple of the CON.zst write, are DCD 1.49, XTC 1.62, NetCDF 2.10, CON.gz 4.24, OVITO XYZ 4.27, extended XYZ 25.6, PDB 39.5, XYZ 49.4, TRR 49.9, bzip2 XYZ 51.6, gzip XYZ 52.4, gzipped extended XYZ 59.1 and xz XYZ 63.6.
 DCD and XTC writes on the trajectory are below the plain CON write, at 0.758 and 0.828 times it.
 The other trajectory writes, as a multiple of the plain CON write, are NetCDF 1.07, CON.gz 2.16, OVITO XYZ 2.18, extended XYZ 13.1, PDB 20.2, XYZ 25.2, TRR 25.4, bzip2 XYZ 26.3, gzip XYZ 26.7, gzipped extended XYZ 30.2 and xz XYZ 32.4.
 Among the rows that drop nothing, the plain extended XYZ read is 20.7 times the plain CON read on the million-atom frame and 19.3 times on the trajectory.
