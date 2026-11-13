@@ -2753,11 +2753,17 @@ fn read_con(
     // The GIL stays released across the map, the scan, and the parse.
     // Python frame objects are built on first use.
     // `decode_threads=1` inflates a multi-member file on this thread.
-    // Absent, or two or more, inflates indexed members together.
-    if matches!(decode_threads, Some(1)) {
-        crate::compression::with_serial_decode(|| read_con_lazy(py, path, n_threads))
-    } else {
-        read_con_lazy(py, path, n_threads)
+    // A larger count inflates that many members at once and, when it
+    // exceeds `n_threads`, parses the wide frame on the same workers.
+    let parse_threads = match (n_threads, decode_threads) {
+        (Some(parse), Some(decode)) if decode >= 2 => Some(parse.max(decode)),
+        (parse, _) => parse,
+    };
+    let run = || read_con_lazy(py, path, parse_threads);
+    match decode_threads {
+        Some(1) => crate::compression::with_serial_decode(run),
+        Some(threads) if threads >= 2 => crate::compression::with_decode_threads(threads, run),
+        _ => run(),
     }
 }
 
@@ -3679,10 +3685,16 @@ fn write_con(
                 let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
                 let members = compression_members
                     .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                crate::compression::write_gzip_members_n(Path::new(path), &plain, members)
-                    .map_err(|err| {
-                        PyIOError::new_err(format!("failed to create gzip writer: {err}"))
-                    })?;
+                let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
+                crate::compression::write_gzip_members_limited(
+                    Path::new(path),
+                    &plain,
+                    members,
+                    threads,
+                )
+                .map_err(|err| {
+                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
+                })?;
                 return Ok(());
             }
             let mut writer = match precision {
@@ -3705,10 +3717,16 @@ fn write_con(
                     let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                    crate::compression::write_zstd_members_n(Path::new(path), &plain, members)
-                        .map_err(|err| {
-                            PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                        })?;
+                    let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
+                    crate::compression::write_zstd_members_limited(
+                        Path::new(path),
+                        &plain,
+                        members,
+                        threads,
+                    )
+                    .map_err(|err| {
+                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
+                    })?;
                     return Ok(());
                 }
                 let mut writer = match precision {

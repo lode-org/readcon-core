@@ -1227,12 +1227,12 @@ fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
         return stream_reader(&mut file, &magic[..n], file_len);
     }
     drop(file);
-    // Inflate into one string and parse it. A windowed inflate was slower:
-    // the decoder and the parser no longer shared a hot buffer, and the
-    // pure-Rust inflater was the part that missed the old gzip time.
-    let contents = crate::compression::read_file_contents(path).map_err(load_error_from_box)?;
-    let text = utf8_text(contents.as_bytes(), true)?;
-    frames_from_text_located(text, Some(1)).map_err(LoadError::Parse)
+    // Indexed members inflate straight into one buffer. The plain bytes
+    // are parsed in place, so a gzip file is not copied into a `String`.
+    let bytes = crate::compression::read_file_bytes(path).map_err(load_error_from_box)?;
+    let budget = crate::compression::decode_thread_budget();
+    let threads = if budget >= 2 { Some(budget) } else { Some(1) };
+    frames_from_bytes_located(&bytes, threads).map_err(LoadError::Parse)
 }
 
 /// Decode `bytes`. At end of input, a hard parse error in the valid prefix
@@ -3668,10 +3668,77 @@ pub struct PhasedFrames {
 ///
 /// A parse failure is the [`error::LocatedParseError`] from the parse
 /// that failed. The path is not opened again.
+fn read_compressed_phased(
+    path: &Path,
+    num_threads: Option<usize>,
+) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    let file = std::fs::read(path)?;
+    let t_all = std::time::Instant::now();
+    crate::compression::with_inflated_plain(&file, |plain| {
+        let open_mmap_s = t_all.elapsed().as_secs_f64();
+        let n_bytes = plain.len();
+        let phased = frames_from_bytes_phased_located(plain, num_threads)
+            .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)?;
+        let elapsed = t_all.elapsed().as_secs_f64();
+        let parse = phased.worker_parse_s
+            + phased.scan_s
+            + phased.slot_alloc_s
+            + phased.finish_s
+            + phased.pool_s
+            + phased.pool_join_s;
+        let schedule_s = (elapsed - open_mmap_s - parse).max(0.0);
+        let parse_minflt = phased.worker_minflt.iter().sum();
+        Ok(PhasedFrames {
+            frames: phased.frames,
+            n_bytes,
+            chunk_s: phased.chunk_s,
+            scan_kind: phased.scan_kind,
+            worker_minflt: phased.worker_minflt,
+            share_frames: phased.share_frames,
+            share_bytes: phased.share_bytes,
+            phases: ReadPhaseTimes {
+                open_mmap_s,
+                pool_s: phased.pool_s,
+                pool_join_s: phased.pool_join_s,
+                scan_s: phased.scan_s,
+                slot_alloc_s: phased.slot_alloc_s,
+                worker_parse_s: phased.worker_parse_s,
+                finish_s: phased.finish_s,
+                worker_sum_s: phased.worker_sum_s,
+                worker_max_s: phased.worker_max_s,
+                schedule_s,
+                scan_minflt: phased.scan_minflt,
+                parse_minflt,
+                llc_misses: phased.llc_misses,
+                numa_remote: phased.numa_remote,
+                ..ReadPhaseTimes::default()
+            },
+            #[cfg(feature = "parallel")]
+            pool: phased.pool,
+        })
+    })
+}
+
+fn path_is_compressed(path: &Path) -> bool {
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return false,
+    };
+    let mut magic = [0u8; 4];
+    let n = std::io::Read::read(&mut file, &mut magic).unwrap_or(0);
+    !matches!(
+        crate::compression::detect_compression(&magic[..n]),
+        crate::compression::Compression::None
+    )
+}
+
 pub fn read_all_frames_phased(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    if path_is_compressed(path) {
+        return read_compressed_phased(path, num_threads);
+    }
     if !matches!(num_threads, Some(n) if n >= 2) {
         let t_all = std::time::Instant::now();
         let frames = stream_frames(path).map_err(public_load_error)?;
@@ -3814,6 +3881,103 @@ pub struct PhasedByteTimes {
     pub pool: Option<std::sync::Arc<rayon::ThreadPool>>,
 }
 
+/// The first frame declares at least 4096 atoms and the file is too
+/// small to hold a second copy of that frame.
+///
+/// The row parser then owns the threads. A frame split would walk the
+/// same lines and leave every atom on one worker.
+#[cfg(feature = "parallel")]
+fn declared_wide_frame(bytes: &[u8]) -> bool {
+    let mut pos = 0usize;
+    let mut natypes = 0usize;
+    for line_no in 0..8 {
+        if pos >= bytes.len() {
+            return false;
+        }
+        let end = memchr::memchr(b'\n', &bytes[pos..])
+            .map(|rel| pos + rel)
+            .unwrap_or(bytes.len());
+        let line = &bytes[pos..end];
+        if line_no == 6 {
+            natypes = match first_header_usize(line) {
+                Some(n) if (1..=64).contains(&n) => n,
+                _ => return false,
+            };
+        } else if line_no == 7 {
+            let mut sum = 0usize;
+            let mut seen = 0usize;
+            for field in line
+                .split(|byte| byte.is_ascii_whitespace())
+                .filter(|field| !field.is_empty())
+            {
+                let Some(n) = first_header_usize(field) else {
+                    return false;
+                };
+                if n == 0 {
+                    return false;
+                }
+                sum = sum.saturating_add(n);
+                seen += 1;
+            }
+            if seen != natypes || sum < 4096 {
+                return false;
+            }
+            return bytes.len() <= sum.saturating_mul(64).saturating_add(4096);
+        }
+        pos = end.saturating_add(1);
+    }
+    false
+}
+
+#[cfg(feature = "parallel")]
+fn first_header_usize(line: &[u8]) -> Option<usize> {
+    let field = line
+        .split(|byte| byte.is_ascii_whitespace())
+        .find(|field| !field.is_empty())?;
+    std::str::from_utf8(field).ok()?.parse().ok()
+}
+
+#[cfg(feature = "parallel")]
+fn wide_frame_phased(
+    bytes: &[u8],
+    workers: usize,
+) -> Result<PhasedByteTimes, error::LocatedParseError> {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            crate::parser::set_wide_workers(1);
+        }
+    }
+    crate::parser::set_wide_workers(workers);
+    let _reset = Reset;
+    let flt0 = thread_minflt();
+    let t_work = std::time::Instant::now();
+    let frames = collect_bytes_located(bytes)?;
+    let worker_parse_s = t_work.elapsed().as_secs_f64();
+    let worker_flt = thread_minflt().saturating_sub(flt0);
+    let n_frames = frames.len() as u64;
+    Ok(PhasedByteTimes {
+        frames,
+        pool_s: 0.0,
+        pool_join_s: 0.0,
+        scan_s: 0.0,
+        slot_alloc_s: 0.0,
+        worker_parse_s,
+        finish_s: 0.0,
+        worker_sum_s: worker_parse_s,
+        worker_max_s: worker_parse_s,
+        chunk_s: vec![worker_parse_s],
+        scan_kind: SCAN_SERIAL,
+        scan_minflt: 0,
+        worker_minflt: vec![worker_flt],
+        share_frames: vec![n_frames],
+        share_bytes: vec![bytes.len() as u64],
+        llc_misses: sample_llc_misses(),
+        numa_remote: numa_remote_pages(),
+        pool: None,
+    })
+}
+
 pub fn frames_from_bytes_phased(
     bytes: &[u8],
     num_threads: Option<usize>,
@@ -3856,6 +4020,13 @@ fn frames_from_bytes_phased_located(
                 numa_remote: numa_remote_pages(),
                 pool: None,
             });
+        }
+        // One wide frame has nothing for a frame split to divide. The
+        // boundary walk would read every atom line and then the parse
+        // would read them again, on a second pool. Parse it once, with
+        // the row workers on the pinned pool.
+        if let Some(workers) = num_threads.filter(|n| *n >= 2 && declared_wide_frame(bytes)) {
+            return wide_frame_phased(bytes, workers);
         }
         let requested = Some(num_threads.expect("workers"));
         let timed = parse_bytes_timed(bytes, requested);

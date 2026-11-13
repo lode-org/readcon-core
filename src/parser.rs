@@ -179,8 +179,19 @@ pub(crate) fn parallel_coord_rows(
     workers: usize,
     symbol: Option<&std::sync::Arc<str>>,
 ) -> Result<CoordRows, ParseError> {
-    let ranges = coord_line_ranges(bytes, n, workers)?;
-    let consumed = ranges.last().map(|(_, end)| *end).unwrap_or(0);
+    let newlines = newline_index(bytes, workers);
+    if n > 0 && newlines.len() < n.saturating_sub(1) {
+        return Err(ParseError::IncompleteFrame);
+    }
+    let consumed = if n == 0 {
+        0
+    } else if n - 1 < newlines.len() {
+        newlines[n - 1] + 1
+    } else if newlines.last().copied().unwrap_or(0) < bytes.len() {
+        bytes.len()
+    } else {
+        return Err(ParseError::IncompleteFrame);
+    };
     let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
     let mut ids = Vec::<u64>::with_capacity(n);
     let mut flags = Vec::<[bool; 3]>::with_capacity(n);
@@ -194,34 +205,59 @@ pub(crate) fn parallel_coord_rows(
     let flags_ptr = flags.as_mut_ptr() as usize;
     let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
     let chunk = n.div_ceil(workers.max(1)).max(1);
-    let fill_group = |chunk_index: usize, group: &[(usize, usize)]| {
-        write_coord_group(
-            bytes,
-            group,
-            chunk_index * chunk,
-            spec_version,
-            start_id,
-            symbol,
-            xyz_ptr,
-            ids_ptr,
-            flags_ptr,
-            atoms_ptr,
-        )
+    let fill_worker = |worker: usize| -> Result<(), ParseError> {
+        let first = worker.saturating_mul(chunk);
+        if first >= n {
+            return Ok(());
+        }
+        let last = (first + chunk).min(n);
+        let mut shares = symbol.map(|symbol| symbol_shares(symbol, last - first));
+        for row_index in first..last {
+            let start = if row_index == 0 {
+                0
+            } else {
+                newlines[row_index - 1] + 1
+            };
+            let end = if row_index < newlines.len() {
+                newlines[row_index] + 1
+            } else {
+                bytes.len()
+            };
+            if end < start || end > bytes.len() {
+                return Err(ParseError::IncompleteFrame);
+            }
+            let default_id = start_id + row_index as u64;
+            let ((row, fixed, atom_id), _) =
+                parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    row.as_ptr(),
+                    (xyz_ptr as *mut f64).add(row_index * 3),
+                    3,
+                );
+                *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+                *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
+                if let Some(shares) = shares.as_mut() {
+                    let slot = (xyz_ptr as *mut f64).add(row_index * 3);
+                    let atom =
+                        crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
+                    (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
+                        .add(row_index))
+                    .write(atom);
+                }
+            }
+        }
+        Ok(())
     };
-    // `workers < 2` stays on this thread. `par_chunks` would otherwise
-    // use the process pool even when the caller asked for one worker.
+    let groups = n.div_ceil(chunk.max(1));
+    // `workers < 2` stays on this thread. A pool would otherwise run
+    // even when the caller asked for one worker.
     let built = if workers < 2 {
-        ranges
-            .chunks(chunk)
-            .enumerate()
-            .try_for_each(|(chunk_index, group)| fill_group(chunk_index, group))
+        fill_worker(0)
     } else {
         on_pool(workers, || {
             use rayon::prelude::*;
-            ranges
-                .par_chunks(chunk)
-                .enumerate()
-                .try_for_each(|(chunk_index, group)| fill_group(chunk_index, group))
+            (0..groups).into_par_iter().try_for_each(fill_worker)
         })
     };
     if let Err(err) = built {
@@ -257,6 +293,7 @@ pub(crate) fn parallel_coord_rows(
 }
 
 #[cfg(feature = "parallel")]
+#[allow(dead_code)]
 fn coord_line_ranges(
     bytes: &[u8],
     n: usize,
@@ -555,6 +592,7 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
 }
 
 #[cfg(feature = "parallel")]
+#[allow(dead_code)]
 fn write_coord_group(
     bytes: &[u8],
     group: &[(usize, usize)],
