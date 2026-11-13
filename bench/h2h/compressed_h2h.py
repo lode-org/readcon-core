@@ -122,14 +122,29 @@ def read_readcon_con(path: str) -> dict:
 
     frames = readcon.read_con(path)
     view = view_from_columns(frames.columns())
-    symbols: list[str] = []
-    # ``Cu:1000`` is the frame formula. It avoids building one Python atom
-    # per site, which the column slab does not store.
-    for part in str(frames[0].composition_formula).split():
-        name, count = part.split(":")
-        symbols.extend([name] * int(count))
-    view["symbols"] = symbols
+    # Checked before the clock. The timed read does not build this string.
+    view["formula"] = str(frames[0].composition_formula)
+    view["symbols"] = []
     return view
+
+
+def touch_readcon_con(path: str) -> None:
+    """Read and copy positions, masses, and cell. No formula."""
+    import readcon
+
+    cols = readcon.read_con(path).columns()
+    np.asarray(cols["positions"])
+    np.asarray(cols["masses"])
+    np.asarray(cols["cell"])
+
+
+def touch_readcon_extxyz(path: str) -> None:
+    import readcon
+
+    data = readcon.read_extxyz(path)
+    np.asarray(data["positions"])
+    np.asarray(data["masses"])
+    np.asarray(data["cell"])
 
 
 def read_readcon_extxyz(path: str) -> dict:
@@ -139,7 +154,7 @@ def read_readcon_extxyz(path: str) -> dict:
     return view_from_columns(data)
 
 
-def read_ase(path: str, kind: str) -> dict:
+def ase_images(path: str, kind: str):
     import gzip
 
     import zstandard
@@ -160,7 +175,21 @@ def read_ase(path: str, kind: str) -> dict:
         else:
             raise
     if not isinstance(images, list):
-        images = [images]
+        return [images]
+    return images
+
+
+def touch_ase(path: str, kind: str) -> None:
+    """Same geometry copy as readcon. No chemical formula."""
+    for image in ase_images(path, kind):
+        np.asarray(image.positions, dtype=np.float64)
+        np.asarray(image.get_masses(), dtype=np.float64)
+        np.asarray(image.cell.lengths(), dtype=np.float64)
+        np.asarray(image.cell.angles(), dtype=np.float64)
+
+
+def read_ase(path: str, kind: str) -> dict:
+    images = ase_images(path, kind)
     positions, masses, cells, symbols = [], [], [], []
     for image in images:
         positions.append(np.array(image.positions, dtype=np.float64, copy=True))
@@ -183,12 +212,24 @@ def read_ase(path: str, kind: str) -> dict:
     }
 
 
-def read_eon(path: str) -> dict:
+def eon_frames(path: str):
     ensure_eon()
     sys.path.insert(0, str(EON_SRC))
     from eon.fileio import loadcons
 
-    frames = loadcons(path)
+    return loadcons(path)
+
+
+def touch_eon(path: str) -> None:
+    """Same geometry copy as readcon. No chemical formula."""
+    for frame in eon_frames(path):
+        np.asarray(frame.r, dtype=np.float64)
+        np.asarray(frame.mass, dtype=np.float64)
+        np.asarray(frame.box, dtype=np.float64)
+
+
+def read_eon(path: str) -> dict:
+    frames = eon_frames(path)
     positions, masses, cells, symbols = [], [], [], []
     for frame in frames:
         positions.append(np.array(frame.r, dtype=np.float64, copy=True))
@@ -205,9 +246,18 @@ def read_eon(path: str) -> dict:
     }
 
 
+def formula_of(view: dict) -> str:
+    if view.get("formula"):
+        return str(view["formula"])
+    counts: dict[str, int] = {}
+    for symbol in view["symbols"]:
+        counts[symbol] = counts.get(symbol, 0) + 1
+    return "|".join(f"{name}:{counts[name]}" for name in sorted(counts))
+
+
 def same(left: dict, right: dict, label: str) -> None:
-    if left["symbols"] != right["symbols"]:
-        raise SystemExit(f"{label} symbols")
+    if formula_of(left) != formula_of(right):
+        raise SystemExit(f"{label} symbols {formula_of(left)} != {formula_of(right)}")
     for key in ("positions", "masses", "cell"):
         delta = float(np.max(np.abs(left[key] - right[key])))
         if delta > ABS_TOL:
@@ -329,6 +379,7 @@ def main() -> None:
         f"warmup 1 samples {args.repeats} percentile type7 serial 1",
         "levels gzip 6 zstd 3",
         "shared files are readcon's default compressed write",
+        "timed read copies positions, masses, and cell; no reader builds a formula",
     ]
 
     def add(row: dict) -> None:
@@ -345,16 +396,23 @@ def main() -> None:
             for codec in ("gzip", "zstd"):
                 path = case["files"][f"{kind}-{codec}"]
                 file_id = f"{label}-{kind}-{codec}"
-                readers = {
+                checkers = {
                     "readcon": (
                         read_readcon_con if kind == "con" else read_readcon_extxyz
                     ),
                     "ase": lambda path, kind=kind: read_ase(path, kind),
                 }
+                timers = {
+                    "readcon": (
+                        touch_readcon_con if kind == "con" else touch_readcon_extxyz
+                    ),
+                    "ase": lambda path, kind=kind: touch_ase(path, kind),
+                }
                 if kind == "con":
-                    readers["eon"] = read_eon
+                    checkers["eon"] = read_eon
+                    timers["eon"] = touch_eon
                 views = {}
-                for name, fn in readers.items():
+                for name, fn in checkers.items():
                     views[name] = fn(os.fspath(path))
                     same(
                         reference if kind == "con" else views["readcon"],
@@ -364,7 +422,7 @@ def main() -> None:
                 ext_ref = views["readcon"] if kind == "extxyz" else reference
                 if kind == "extxyz":
                     same(ext_ref, views["ase"], f"check {file_id} ase")
-                for name, fn in readers.items():
+                for name, fn in timers.items():
 
                     def once(fn=fn, path=path):
                         fn(os.fspath(path))

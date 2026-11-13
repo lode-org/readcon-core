@@ -46,15 +46,29 @@ pub fn composition_formula(counts: &[(String, u32)]) -> String {
 pub fn species_counts_from_symbols(
     symbols: impl Iterator<Item = impl AsRef<str>>,
 ) -> Vec<(String, u32)> {
-    let mut m = BTreeMap::new();
-    for s in symbols {
-        let s = s.as_ref();
-        if s.is_empty() {
+    // One owned symbol per distinct name. A million atoms that share one
+    // `Arc<str>` used to allocate a `String` on every atom, and that
+    // allocator noise was the whole spread of a compressed million-atom read.
+    let mut order: Vec<(String, u32)> = Vec::new();
+    for symbol in symbols {
+        let symbol = symbol.as_ref();
+        if symbol.is_empty() {
             continue;
         }
-        *m.entry(s.to_string()).or_insert(0u32) += 1;
+        if let Some(last) = order.last_mut() {
+            if last.0 == symbol {
+                last.1 = last.1.saturating_add(1);
+                continue;
+            }
+        }
+        if let Some(slot) = order.iter_mut().find(|(name, _)| name == symbol) {
+            slot.1 = slot.1.saturating_add(1);
+        } else {
+            order.push((symbol.to_string(), 1));
+        }
     }
-    m.into_iter().collect()
+    order.sort_by(|left, right| left.0.cmp(&right.0));
+    order
 }
 
 /// Species multiset from a frame's `atom_data` symbols.
@@ -533,6 +547,28 @@ mod tests {
         let n_acc = ConFrameIterator::new(&acc).count();
         assert_eq!(n_orig, n_acc);
         assert!(spans_cover_buffer(&text).unwrap());
+    }
+
+    #[test]
+    fn repeated_symbol_formula_counts_without_a_string_per_atom() {
+        let mut builder =
+            crate::types::ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        let n = 20_000u32;
+        for i in 0..n {
+            builder.add_atom("Cu", i as f64, 0.0, 0.0, [false; 3], i as u64, 63.546);
+        }
+        for i in 0..10 {
+            builder.add_atom("H", i as f64, 1.0, 0.0, [false; 3], n as u64 + i, 1.008);
+        }
+        let frame = builder.build().unwrap();
+        let started = std::time::Instant::now();
+        let formula = frame_composition_formula(&frame);
+        let elapsed = started.elapsed();
+        assert_eq!(formula, format!("Cu:{n}|H:10"));
+        assert!(
+            elapsed.as_millis() < 25,
+            "formula took {elapsed:?}; a per-atom String copy is back"
+        );
     }
 
     #[test]

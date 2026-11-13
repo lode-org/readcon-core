@@ -762,8 +762,15 @@ impl PyConFrame {
     }
 
     /// Canonical multiset formula (`Cu:2|H:2`) for campaign composition index.
+    ///
+    /// A frame that still holds the parser's atoms is counted in place.
+    /// Rebuilding it through Python atom objects allocated one string per
+    /// atom and made a million-atom read look noisy.
     #[getter]
     fn composition_formula(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(frame) = self.inner.as_ref() {
+            return Ok(crate::index_proj::frame_composition_formula(frame));
+        }
         let frame = self.to_con_frame(py)?;
         Ok(crate::index_proj::frame_composition_formula(&frame))
     }
