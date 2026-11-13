@@ -39,5 +39,3 @@
         2    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:437(__str__)
         1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:429(_format_parsed_parts)
         8    0.000    0.000    0.000    0.000 /tmp/h2h-venv/lib/python3.12/site-packages/chemfiles/utils.py:32(__setattr__)
-
-
