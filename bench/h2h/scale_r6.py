@@ -18,8 +18,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = ROOT / "bench" / "h2h"
 WORK = BENCH / "work"
-OUT = BENCH / "scaling" / "r8"
-LOG = BENCH / "logs" / "scale-r8"
+OUT = Path(os.environ.get("READCON_SCALE_OUT", str(BENCH / "scaling" / "r8")))
+LOG = Path(os.environ.get("READCON_SCALE_LOG", str(BENCH / "logs" / "scale-r8")))
 THREADS = (1, 2, 4, 8)
 REPEATS = 6
 
@@ -192,7 +192,15 @@ def h2h(paths: dict[str, Path]) -> None:
 
     out = []
     targets = ("extxyz-alloy", "extxyz-md")
-    readers = ("readcon", "ovito", "chemfiles", "ase-extxyz", "cextxyz")
+    readers = (
+        "readcon",
+        "ovito",
+        "chemfiles",
+        "ase-extxyz",
+        "cextxyz",
+        "extxyz",
+        "mdanalysis",
+    )
     for name in targets:
         path = os.fspath(paths[name])
         for reader in readers:
@@ -203,6 +211,15 @@ def h2h(paths: dict[str, Path]) -> None:
                 elif reader == "cextxyz":
                     for frame in extxyz.iread_dicts(path, use_cextxyz=True):
                         frame.arrays["pos"]
+                elif reader == "extxyz":
+                    for frame in extxyz.iread_dicts(path, use_cextxyz=False):
+                        frame.arrays["pos"]
+                elif reader == "mdanalysis":
+                    import MDAnalysis as mda
+
+                    universe = mda.Universe(path, format="XYZ")
+                    for _ts in universe.trajectory:
+                        universe.atoms.positions
                 elif reader == "ase-extxyz":
                     ase_read(path, index=":", format="extxyz")
                 elif reader == "chemfiles":
@@ -491,6 +508,48 @@ def weak(paths: dict[str, Path]) -> None:
         )
 
 
+def compressed(paths: dict[str, Path]) -> None:
+    import readcon
+
+    dest_dir = OUT / "compressed"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    log = OUT / "compressed.json"
+    if log.exists():
+        return
+    frames = readcon.read_con(os.fspath(paths["con-1e6"]), n_threads=1)
+    rows = []
+    for codec, suffix in (("gzip", ".con.gz"), ("zstd", ".con.zst")):
+        dest = dest_dir / f"con-1e6{suffix}"
+
+        def write(dest=dest, codec=codec):
+            readcon.write_con(os.fspath(dest), frames, compression=codec, n_threads=1)
+
+        def read(dest=dest):
+            readcon.read_con(os.fspath(dest), n_threads=1)
+
+        for op, go in (("write", write), ("read", read)):
+            go()
+            samples = []
+            for _ in range(REPEATS):
+                started = time.perf_counter()
+                go()
+                samples.append(time.perf_counter() - started)
+            median, iqr = type7(samples)
+            rows.append(
+                {
+                    "op": op,
+                    "codec": codec,
+                    "file": "con-1e6",
+                    "median_s": median,
+                    "iqr_s": iqr,
+                    "samples_s": samples,
+                    "bytes": dest.stat().st_size,
+                }
+            )
+            print(f"compressed {codec} {op} {median:.4f}", flush=True)
+    log.write_text(json.dumps(rows, indent=2) + "\n")
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     LOG.mkdir(parents=True, exist_ok=True)
@@ -505,6 +564,7 @@ def main() -> None:
     langs(paths)
     mpi_strong(paths, rows)
     weak(paths)
+    compressed(paths)
     print("wrote", OUT, flush=True)
 
 

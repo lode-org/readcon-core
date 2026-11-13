@@ -469,6 +469,10 @@ A repeated symbol is one string, and a frame whose symbols match the
 previous frame is that same tuple. =arrays["pos"]= is =positions=.
 =write_extxyz= writes that dict back. A caller that unpacked a tuple
 from an older =read_extxyz= should index the dict.
+=n_threads= of 2 or more splits frames, or the atoms of one wide frame.
+A file whose symbols differ, or whose header changes from frame to frame,
+uses the general scan. The uniform scan is only for one species and one
+column layout repeated in every frame.
 
 ** ASE plugin
 

@@ -11,9 +11,9 @@
 //!
 //! Modes:
 //!
-//! - [`WriteMode::MpiIo`]: `MPI_File_open`, `MPI_File_set_size` to the
-//!   exact total (so rewriting a longer file leaves no tail) and
-//!   `MPI_File_write_at_all` in rounds of at most 1 GiB per rank.
+//! - [`WriteMode::MpiIo`]: rank 0 creates the file and sets its length to
+//!   the exclusive-scan total. Every rank then `pwrite`s its own bytes at
+//!   that offset. Rewriting a longer file leaves no tail.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
 //!   collects every block (`MPI_Gatherv` up to 2 GiB in total,
 //!   point-to-point chunks above that) and writes the file itself.

@@ -8,6 +8,7 @@ carried onto the speedup as median(1) * IQR(N) / median(N)^2.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -15,7 +16,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-OUT = Path(__file__).resolve().parents[0] / "scaling" / "r8"
+OUT = Path(
+    os.environ.get(
+        "READCON_SCALE_OUT",
+        str(Path(__file__).resolve().parents[0] / "scaling" / "r8"),
+    )
+)
 WORKERS = (1, 2, 4, 8)
 
 
@@ -120,6 +126,47 @@ def main() -> None:
     dest = OUT / "scaling.pdf"
     fig.savefig(dest)
     fig.savefig(OUT / "scaling.png", dpi=160)
+    # Fig 7 is the thread ladder. Fig 8 is the MPI ladder.
+    fig7, axes7 = plt.subplots(2, 2, figsize=(11, 7))
+    draw(
+        axes7[0, 0],
+        series(rows, "read", "memory", "threads"),
+        "thread read speedup",
+        False,
+    )
+    draw(
+        axes7[0, 1],
+        series(rows, "read", "memory", "threads"),
+        "thread read efficiency",
+        True,
+    )
+    draw(
+        axes7[1, 0],
+        series(rows, "write", "memory", "threads"),
+        "format-only speedup",
+        False,
+    )
+    draw(
+        axes7[1, 1],
+        series(rows, "write", "memory", "threads"),
+        "format-only efficiency",
+        True,
+    )
+    fig7.tight_layout()
+    fig7.savefig(OUT / "fig7-threads.pdf")
+    fig8, axes8 = plt.subplots(2, 2, figsize=(11, 7))
+    draw(axes8[0, 0], series(rows, "read", "memory", "mpi"), "rank read speedup", False)
+    draw(
+        axes8[0, 1], series(rows, "read", "memory", "mpi"), "rank read efficiency", True
+    )
+    draw(axes8[1, 0], series(rows, "write", "disk", "mpi"), "rank write speedup", False)
+    draw(
+        axes8[1, 1], series(rows, "write", "disk", "mpi"), "rank write efficiency", True
+    )
+    for ax in axes8.ravel():
+        ax.set_xlabel("ranks")
+    fig8.tight_layout()
+    fig8.savefig(OUT / "fig8-mpi.pdf")
     print(dest)
 
 

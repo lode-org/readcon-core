@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.23.0 - 2026-11-12
+
+### Features
+
+- An MPI read tiles equal frames even when the file ends in whitespace, and
+  splits one frame by atom lines. Each rank writes its formatted bytes with
+  pwrite at the offset from an exclusive scan of the lengths. The file matches
+  the serial writer.
+- Threaded CON and extended XYZ reads and writes split frames, or the atoms of
+  one wide frame, across the requested workers. A uniform extended XYZ file is
+  one scan. Mixed symbols, or a header that changes from frame to frame, stay
+  on the general scan.
+
+
 ## v0.22.0 - 2026-11-12
 
 ### Bugfixes
@@ -1391,6 +1405,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.23.0]: https://github.com/lode-org/readcon-core/compare/v0.22.0...v0.23.0
 [v0.22.0]: https://github.com/lode-org/readcon-core/compare/v0.21.0...v0.22.0
 [v0.21.0]: https://github.com/lode-org/readcon-core/compare/v0.20.0...v0.21.0
 [v0.20.0]: https://github.com/lode-org/readcon-core/compare/v0.19.0...v0.20.0

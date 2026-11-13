@@ -47,16 +47,19 @@ MPI.
 | =auto= | default | =scatter= for compressed input, =shared= otherwise |
 
 Within a rank the parse runs on rayon (=n_threads=, 0 for the global pool).
+Equal frames still tile when the file ends in whitespace.
+One frame is split by atom lines, so a million-atom frame uses every rank.
 
 * Writing
 
 | Mode | When | Path |
 |------+------+------|
-| =mpiio= | parallel file system with MPI-IO | =MPI_Exscan= offsets, =MPI_File_set_size=, =MPI_File_write_at_all= in rounds of at most 1 GiB per rank |
+| =mpiio= | the default collective write | =MPI_Exscan= of the formatted lengths, then each rank =pwrite=s its bytes at that offset |
 | =gather= | no MPI-IO | rank 0 collects the blocks (=MPI_Gatherv=, point-to-point above 2 GiB) and writes |
 | =auto= | default | =mpiio= |
 
-Every rank formats its frames with the serial writer.
+Every rank formats its frames with the same writer as a serial file.
+A one-frame file formats that rank's atom range.
 Rank 0 also writes the =.rcidx= sidecar, so the next read skips the scan.
 Output is uncompressed.
 

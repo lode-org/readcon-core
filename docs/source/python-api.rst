@@ -131,6 +131,10 @@ string object, and a frame whose symbols match the previous frame is that
 same tuple. ``tables["arrays"]["pos"]`` is ``tables["positions"]``.
 ``tables["arrays"]["masses"]`` is ``tables["masses"]``.
 ``tables["arrays"]["species"]`` is ``tables["species"]``.
+``n_threads`` of 2 or more splits frames, or the atoms of one wide frame.
+A file whose symbols differ, or whose header changes from frame to frame,
+uses the general scan. The uniform scan is only for one species and one
+column layout repeated in every frame.
 
 ``iter_con``
 ------------

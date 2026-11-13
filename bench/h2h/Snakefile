@@ -35,3 +35,24 @@ rule mem_r1:
         "bench/h2h/scaling/mem-r1/hardware.json",
     shell:
         "python3 bench/h2h/mem_r1.py"
+
+
+# One rerun of the paper campaigns on this commit. Raw logs stay under
+# bench/h2h/scaling/rel1. h2h6 is still outstanding.
+rule release:
+    output:
+        "bench/h2h/scaling/rel1/rows.json",
+        "bench/h2h/scaling/rel1/hardware.json",
+        "bench/h2h/scaling/rel1/h2h.json",
+        "bench/h2h/scaling/rel1/langs.json",
+        "bench/h2h/scaling/rel1/compressed.json",
+        "bench/h2h/scaling/rel1/table2-h2h.tsv",
+        "bench/h2h/scaling/rel1/table3-bindings.tsv",
+        "bench/h2h/scaling/rel1/s61-strong.tsv",
+        "bench/h2h/scaling/rel1/fig7-threads.pdf",
+        "bench/h2h/scaling/rel1/fig8-mpi.pdf",
+        "bench/h2h/scaling/rel1/fidelity.log",
+        "bench/h2h/scaling/rel1/db.log",
+        "bench/h2h/scaling/rel1/DONE",
+    shell:
+        "python3 bench/h2h/release_campaign.py"
