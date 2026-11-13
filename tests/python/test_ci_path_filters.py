@@ -110,3 +110,7 @@ def test_release_branch_pushes_build_wheels_before_the_tag():
     assert "- 'feat/release-*'" in push
     assert "tags:" in push
     assert "branches:" in push
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in text
+    assert (
+        "cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}" not in text
+    )

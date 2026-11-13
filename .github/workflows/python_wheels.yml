@@ -20,8 +20,10 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # A feat/release-* push must finish the wheels it started. A newer
+  # commit waits. Pull requests still replace the run in progress.
   group: python-wheels-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
