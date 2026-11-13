@@ -294,6 +294,10 @@ H5MD stores an identifier, velocities with a unit and the box \cite{buylH5mdStru
 but defines no element for a per-component constraint, and MDAnalysis, pyh5md, ZnH5MD and zarrtraj write that kind of trajectory \cite{mdanalysisH5mdWriter211,debuylPyh5md,znh5md2025,woodsZarrtrajPythonPackage2026}.
 
 XTC, TRR, DCD and TNG store molecular-dynamics output with neither a mask nor a velocity unit, and the GROMACS trajectory that replaces TNG is still an H5MD file with no per-component constraint (Section~\ref{sec:supp-formats}).
+MDCompress (MDC) stores metadata and atomic coordinates, the same contents as XTC, and the archive has no container for velocities, forces or energies \cite{kokotMdcompressBetterFaster2026,kokotMdcompress1002026}.
+A restart from an MDC file loses the velocities, the forces and the energies.
+The coordinates are stored at a chosen precision, so they do not come back as the written values.
+MDC reports smaller files than XTC and TNG, compresses and decompresses on several threads, and gives random access to each part of each stream.
 The ASE trajectory keeps the fields in the layout of its own Python code, while POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}.
 
 chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats but not CON at the versions tested in Section~\ref{sec:performance} \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}.
