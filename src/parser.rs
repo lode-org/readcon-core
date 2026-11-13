@@ -1867,13 +1867,21 @@ where
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
-    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
+    let mut pos_flat = if total_atoms >= crate::frame_pool::SOA_MIN {
+        crate::frame_pool::take_pos(total_atoms)
+    } else {
+        Vec::with_capacity(total_atoms.saturating_mul(3))
+    };
     let mut positions_other = if f64_positions {
         None
     } else {
         Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
-    let mut ids = Vec::with_capacity(total_atoms);
+    let mut ids = if total_atoms >= crate::frame_pool::SOA_MIN {
+        crate::frame_pool::take_ids(total_atoms)
+    } else {
+        Vec::with_capacity(total_atoms)
+    };
     let mut atom_data = crate::types::take_atom_buf(total_atoms);
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {

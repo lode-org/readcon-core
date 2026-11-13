@@ -13,6 +13,7 @@ pub mod distrib_write;
 pub mod error;
 pub mod extxyz_scan;
 mod fast_dec;
+mod frame_pool;
 pub mod ffi;
 pub mod frame_index;
 #[cfg(feature = "grammar")]

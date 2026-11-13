@@ -1123,8 +1123,12 @@ impl Drop for ConFrame {
     fn drop(&mut self) {
         // Only a large frame is worth keeping. A short frame drops its atoms
         // in place, with no pool lookup.
-        if self.atom_data.len() >= ATOM_REUSE_MIN {
+        let n_atoms = self.atom_data.len();
+        if n_atoms >= ATOM_REUSE_MIN {
             stash_atom_buf(std::mem::take(&mut self.atom_data));
+        }
+        if n_atoms >= crate::frame_pool::SOA_MIN {
+            crate::frame_pool::recycle_large(self);
         }
     }
 }
@@ -3352,14 +3356,19 @@ pub(crate) fn con_frame_coords_only_with_ids(
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
 
-    let mut mass_flat = vec![0.0f64; n];
-    let mut off = 0usize;
-    for (ti, &count) in header.natms_per_type.iter().enumerate() {
-        let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
-        let end = (off + count).min(n);
-        mass_flat[off..end].fill(m);
-        off = end;
-    }
+    let mass_flat = if n >= crate::frame_pool::SOA_MIN {
+        crate::frame_pool::fill_masses(&header, n)
+    } else {
+        let mut mass_flat = vec![0.0f64; n];
+        let mut off = 0usize;
+        for (ti, &count) in header.natms_per_type.iter().enumerate() {
+            let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
+            let end = (off + count).min(n);
+            mass_flat[off..end].fill(m);
+            off = end;
+        }
+        mass_flat
+    };
     let masses_arr = if dt.masses == crate::storage_dtype::ElementKind::Float64 {
         FloatArray1::from_f64_vec(mass_flat)
     } else {
