@@ -9,18 +9,28 @@ on:
       - "ci/**"
     paths:
       - 'julia/**'
-      - 'src/ffi.rs'
+      - 'src/**'
+      - 'build.rs'
+      - '.cargo/config.toml'
       - 'include/readcon-core.h'
       - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'VERSION'
+      - 'resources/test/**'
       - 'resources/conformance/**'
       - '.github/workflows/ci_julia.yml'
   pull_request:
     branches: [main]
     paths:
       - 'julia/**'
-      - 'src/ffi.rs'
+      - 'src/**'
+      - 'build.rs'
+      - '.cargo/config.toml'
       - 'include/readcon-core.h'
       - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'VERSION'
+      - 'resources/test/**'
       - 'resources/conformance/**'
       - '.github/workflows/ci_julia.yml'
   workflow_dispatch:
