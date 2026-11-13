@@ -55,6 +55,7 @@ Elsevier%
 \input{commit}
 \input{cargo_version}
 \input{release}
+\input{placeholders}
 \input{figures/generated/sizes_macros}
 \input{figures/generated/case_macros}
 \input{figures/generated/corpus_recount_macros}
@@ -118,10 +119,10 @@ adaptive kinetic Monte Carlo},
 \input{authors.tex}
 
 \begin{abstract}
-Rare-event methods resume a saddle search from a stored geometry and
-match atoms across frames by an identifier on each row.
-CON is the geometry file those methods exchange, and it had no
-specification.
+Rare-event methods, the nudged elastic band, the dimer and adaptive
+kinetic Monte Carlo, restart from saved geometries and must pair atoms
+across frames, so the file has to carry identity and constraints exactly.
+CON is the format they exchange, and it had no specification.
 Here, we introduce readcon-core, the reference reader and writer of
 CON 3.1, a versioned grammar for that text.
 Two conformance corpora, 165 files in all, define which files a
@@ -134,9 +135,8 @@ eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
 readcon-db stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
-On allyl vinyl ether the stored ids converge to 0.607~eV, and the renumbered product does not.
-A Rust read of \num{100000} CON frames takes 0.179~s, against 10.8~s for
-ASE's eon reader and 10.3~s for eOn's Python reader \texttt{loadcons}.
+On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids converges to a 0.607~eV barrier, while the same band after renumbering the product does not.
+A readcon read of \num{100000} CON frames of 32 atoms takes 0.184~s, against 11.3~s for ASE's eon reader.
 readcon-core is available under the MIT licence at
 \url{https://github.com/lode-org/readcon-core}.
 \end{abstract}
@@ -227,7 +227,7 @@ frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
 The library is readcon-core 0.22.0.
-The timings are readcon-core 0.18.0, except the one-core coordinate reads, which are 0.18.1.
+The timings in this session are readcon-core 0.22.0.
 The companion programs are readcon-db 0.2.1, under the MIT licence, at
 \url{https://github.com/lode-org/readcon-db}, and readcon-ops 0.1.1,
 under the BSD 3-clause licence, at
@@ -297,8 +297,7 @@ same double
 the reader rounds each decimal to the nearest double \cite{clingerHowReadFloating1990}.
 Two readers given the same bytes must then return the same fields, and
 that takes a versioned grammar rather than the convention of one reader.
-On the Claisen rearrangement the stored ids select a converged 0.607~eV
-chair, and a geometric renumbering of the same product does not converge
+On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids converges to a 0.607~eV chair, while the same band after renumbering the product does not
 (Section~\ref{sec:claisen}).
 The same reader carries a 4096-molecule water trajectory into d-SEAMS \cite{goswamiDseamsDeferredStructural2020}
 (Section~\ref{sec:connectivity}) and resumes a saddle search from the
@@ -349,7 +348,7 @@ Of the readers in Section~\ref{sec:fidelity}, readcon is the one that returns th
 
 \section{The CON 3.1 format}
 \subsection{Stored fields}\label{sec:fields}
-CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit, and that identifier is what a band, a dimer and an AKMC comparison need after a file reorders the rows.
+CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit. A band, a dimer and an AKMC comparison use that identifier after a file reorders the rows.
 The mask is an integer from 0 to 7, Eq.~\eqref{eq:mask}, and dropping the hold on the Pt(100) adatom selects another saddle, \(0.68\,\mathrm{eV}\) with a prefactor 37 times larger (Section~\ref{sec:prefactor}).
 The mass enters the Lagrangian, Eq.~\eqref{eq:lagrangian}, and because the velocity section names its time unit, the same digits read as \(\text{\AA}/\mathrm{fs}\) scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
 On one restarted band a round trip through this grammar returns the uninterrupted barrier, while a file that moves a coordinate or drops the mask returns a different barrier (Section~\ref{sec:cases}), and Section~\ref{sec:supp-fields} compares what each other format keeps of these fields.
@@ -524,6 +523,7 @@ The identifier-matched vinyl-ether bond on these endpoints is 1.360~\text{\AA} a
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \caption{Serial reads of the five fidelity files on one core of the Xeon in Section~\ref{sec:compute}.
+readcon-core 0.22.0.
 Each entry is the median of six reads after one warmup, in seconds, with the interquartile range in parentheses.
 ASE's eon reader stops on a following force block and on a following velocity block.
 chemfiles 0.10.4 has no CON reader.
@@ -534,11 +534,11 @@ The files, the library versions and the command that repeats the comparison are 
 \toprule
 File & readcon & ASE eon & \texttt{loadcons} \\
 \midrule
-\texttt{claisen.con} & \num[round-mode=figures,round-precision=3]{2.0797500042135653e-05} (\num[round-mode=figures,round-precision=3]{2.5965001100303198e-06}) & \num[round-mode=figures,round-precision=3]{0.00026486449996809824} (\num[round-mode=figures,round-precision=3]{1.8504750016745675e-05}) & \num[round-mode=figures,round-precision=3]{0.00033362099998157646} (\num[round-mode=figures,round-precision=3]{1.3955500094198214e-05}) \\
-\texttt{neb\_band\_3.con} & \num[round-mode=figures,round-precision=3]{2.4480499973833503e-05} (\num[round-mode=figures,round-precision=3]{2.410499917004927e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.00030634150016339845} (\num[round-mode=figures,round-precision=3]{2.4829249980484747e-05}) \\
-\texttt{pt100\_slab.con} & \num[round-mode=figures,round-precision=3]{1.888650001546921e-05} (\num[round-mode=figures,round-precision=3]{5.895000072086987e-06}) & \num[round-mode=figures,round-precision=3]{0.0001563999999234511} (\num[round-mode=figures,round-precision=3]{2.6683249927828e-05}) & \num[round-mode=figures,round-precision=3]{0.0002528045000644852} (\num[round-mode=figures,round-precision=3]{1.7833000015343714e-05}) \\
-\texttt{tiny\_multi\_cuh2.convel} & \num[round-mode=figures,round-precision=3]{1.801949997570773e-05} (\num[round-mode=figures,round-precision=3]{2.3144999090618512e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.00025828100001490384} (\num[round-mode=figures,round-precision=3]{1.842349985281544e-05}) \\
-\texttt{v30\_fs\_label.convel} & \num[round-mode=figures,round-precision=3]{1.5950000033626566e-05} (\num[round-mode=figures,round-precision=3]{2.2309999962999427e-06}) & \num[round-mode=figures,round-precision=3]{0.00013660399997661443} (\num[round-mode=figures,round-precision=3]{1.626500005613707e-05}) & \num[round-mode=figures,round-precision=3]{0.0002035114999898724} (\num[round-mode=figures,round-precision=3]{2.6130750086394983e-05}) \\
+\texttt{claisen.con} & \num[round-mode=figures,round-precision=3]{2.0442500044737244e-05} (\num[round-mode=figures,round-precision=3]{3.2814995165608707e-06}) & \num[round-mode=figures,round-precision=3]{0.00024915649987633515} (\num[round-mode=figures,round-precision=3]{3.156524974201602e-05}) & \num[round-mode=figures,round-precision=3]{0.0003183655001066654} (\num[round-mode=figures,round-precision=3]{1.4538999948854325e-05}) \\
+\texttt{neb\_band\_3.con} & \num[round-mode=figures,round-precision=3]{2.4752499939495465e-05} (\num[round-mode=figures,round-precision=3]{3.070750153710833e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.00028445699990697904} (\num[round-mode=figures,round-precision=3]{2.340324988381326e-05}) \\
+\texttt{pt100\_slab.con} & \num[round-mode=figures,round-precision=3]{1.9455000256130006e-05} (\num[round-mode=figures,round-precision=3]{2.0862501060037175e-06}) & \num[round-mode=figures,round-precision=3]{0.00015356499989138683} (\num[round-mode=figures,round-precision=3]{2.0202000087010674e-05}) & \num[round-mode=figures,round-precision=3]{0.0002605030001632258} (\num[round-mode=figures,round-precision=3]{6.620725037009834e-05}) \\
+\texttt{tiny\_multi\_cuh2.convel} & \num[round-mode=figures,round-precision=3]{1.9027999996978906e-05} (\num[round-mode=figures,round-precision=3]{6.806000101278187e-06}) & stops & \num[round-mode=figures,round-precision=3]{0.0002502375000403845} (\num[round-mode=figures,round-precision=3]{2.0246250187483383e-05}) \\
+\texttt{v30\_fs\_label.convel} & \num[round-mode=figures,round-precision=3]{1.5827999959583394e-05} (\num[round-mode=figures,round-precision=3]{2.533000042603817e-06}) & \num[round-mode=figures,round-precision=3]{0.0001370275001590926} (\num[round-mode=figures,round-precision=3]{1.1501749554554408e-05}) & \num[round-mode=figures,round-precision=3]{0.0001879344999906607} (\num[round-mode=figures,round-precision=3]{1.6037749787756184e-05}) \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -558,7 +558,7 @@ Six decimals, extended XYZ and POSCAR shift the barrier by \(\num{\rfDeSixNum}\)
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
-\caption{The two restart failures that change the result, from the stored EMT records.
+\caption{The two restart failures that change the result, with EMT.
 Left: the barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
 The difference is 36.9~meV and the prefactor grows by a factor of 37.
 Right: kinetic energy when the file's time unit is kept, and when the same numbers are read as \(\text{\AA}/\mathrm{fs}\), a factor of 103.64.}
@@ -573,27 +573,28 @@ The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by 
 \section{Performance}\label{sec:performance}
 
 \subsection{Computational details}\label{sec:compute}
-We time every read on one core of an Intel Xeon processor with eight cores and 47 GiB of memory.
-The one-core coordinate reads use readcon-core 0.18.1 and Python 3.12.3, and the other measurements use readcon-core 0.18.0 with Python 3.12.16, except the memory-mapped notes, which use Python 3.12.3 and NumPy 1.26.4.
-The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, ase-extxyz 0.1.2, extxyz 0.4.6, chemfiles 0.10.4, the chemfiles 0.11.0 release candidate, MDAnalysis 2.10.0, MDTraj 1.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use a development build of eOn 3.6.0, separate from the chemfiles 0.11.0 release \cite{frauxChemfiles01102026}.
+We time every read in this session on one core of an Intel Xeon processor with eight cores and 47 GiB of memory.
+The reads use readcon-core 0.22.0 and Python 3.12.3.
+The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2, each run with one thread where that library was timed, and the loadcons timings use eOn at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}.
 Each median is the type-7 median of six repeats after one warmup.
 
 \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}).
 The per-file matrices, the quartile triples and the rank-by-rank tables are in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
 
 Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one copper extended XYZ file.
-On the \num{100000}-frame CON file the Rust reader takes 0.179~s, against 10.8~s for ASE's eon reader and 10.3~s for eOn \texttt{loadcons}.
-On the copper trajectory and on the million-atom frame the same ordering holds, except that OVITO is the fastest reader of the million-atom frame (Table~\ref{tab:h2h-main}).
+On the \num{100000}-frame CON file the coordinate read takes 0.184~s, against 11.3~s for ASE's eon reader, and \texttt{read\_con} of that file takes 0.513~s.
+On one million copper atoms the Python read takes 0.0553~s, the C reader 0.0898~s and ASE's eon reader 1.69~s, and OVITO is the fastest reader of the extended XYZ file of that frame, at 0.126~s (Table~\ref{tab:h2h-main}).
 Rust, Python and the C reader are the readcon-core bindings, ASE is the eon reader on CON and the extended XYZ reader on the copper file, and chemfiles, OVITO and pymatgen read that extended XYZ file, while MDAnalysis reads the plain XYZ sizes of Figure~\ref{fig:trajxyz}.
-The Fortran binding is the comparison in Table~\ref{tab:conread}, which returns every stored field rather than the coordinate arrays of the 0.18.1 reads, and the writes of the million-atom frame and of the 10000-frame file are Table~\ref{tab:xyzwrite}.
+The Fortran read of the million-atom frame takes 0.0877~s, and the C, Fortran and Python writes of that frame take 0.102~s, 0.108~s and 0.161~s.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \caption{Serial reads on one core of an Intel Xeon (eight cores, 47 GiB).
-readcon-core 0.18.1.
-Each CON entry is a coordinate read of the same file, the type-7 median in seconds, with the interquartile range in parentheses.
+readcon-core 0.22.0.
+Each CON entry is the type-7 median in seconds, with the interquartile range in parentheses.
+A dash is an arm this session did not run.
 ASE eon is ASE 3.29.0's eon reader.
 \texttt{loadcons} is eOn's Python reader, a development build of eOn 3.6.0, and not the C++ client of Table~\ref{tab:conread}.
 The C column is readcon's \texttt{rkr\_read\_all\_frames}.
@@ -605,9 +606,9 @@ The extended XYZ row is the copper trajectory, readcon against chemfiles 0.10.4,
 \toprule
 File & Rust & Python & C (\texttt{rkr\_read\_all\_frames}) & ASE eon & \texttt{loadcons} \\
 \midrule
-\(10^{5}\) frames & 0.179 (0.0024) & 0.179 (0.0017) & 0.345 (0.074) & 10.8 (0.026) & 10.3 (0.20) \\
-convel & 0.241 (0.0017) & 0.216 (0.00087) & 0.430 (0.00055) & --- & 11.0 (0.14) \\
-\(10^{6}\) atoms & 0.0518 (0.0012) & 0.0453 (0.00018) & 0.172 (0.0049) & 1.59 (0.096) & 3.15 (0.12) \\
+\(10^{5}\) frames & --- & 0.184 (0.00261) & --- & 11.3 (0.0693) & --- \\
+convel & --- & 0.582 (0.00742) & --- & --- & --- \\
+\(10^{6}\) atoms & --- & 0.0553 (0.00360) & 0.0898 (0.00106) & 1.69 (0.0460) & --- \\
 \bottomrule
 \end{tabular}}
 
@@ -616,7 +617,7 @@ convel & 0.241 (0.0017) & 0.216 (0.00087) & 0.430 (0.00055) & --- & 11.0 (0.14) 
 \toprule
 File & readcon & chemfiles & OVITO & ASE & pymatgen \\
 \midrule
-extended XYZ (s) & 0.301 & 1.52 & 3.32 & 9.97 & 23.6 \\
+extended XYZ (s) & 0.697 & 1.55 & --- & 10.2 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -643,15 +644,13 @@ eOn 3.6.0 C++ client & 1532.5 & 0.9797, 1.010, 1.039 \\
 \end{tabular}
 \end{table}
 
-Eight threads reach a median speedup of 1.28 on the ten-thousand-frame file, because one thread still walks the frame boundaries before the pool parses the frames, and that serial walk bounds the scaling (Figure~\ref{fig:threads}).
+Strong scaling across cores and across MPI ranks, and weak scaling, are omitted from this draft while a parallel read and write fix is in progress (Figure~\ref{fig:threads}, Figure~\ref{fig:mpi-host}, Section~\ref{sec:supp-mpi}).
 
 \begin{figure}[tbp]
 \centering
-\includegraphics[width=\textwidth]{figures/generated/threads.pdf}
-\caption{Thread scaling of the read that returns every stored field, on the ten-thousand-frame file.
-readcon-core 0.18.0, one Intel Xeon (eight cores, 47 GiB).
-Left: speedup.
-Right: parallel efficiency.
+\readconScalingPlaceholder{Strong scaling across cores for the read that returns every stored field.}
+\caption{Strong scaling across cores.
+This figure is omitted while a parallel read and write fix is in progress.
 The rank-by-rank tables are Section~\ref{sec:supp-mpi}.}
 \label{fig:threads}
 \end{figure}
@@ -662,7 +661,7 @@ The distributed read is Figure~\ref{fig:mpi-host}, with the remaining performanc
 \centering
 \includegraphics[width=\textwidth]{figures/generated/memory.pdf}
 \caption{Resident set added by the measured read, after the import.
-readcon-core 0.18.0, Intel Xeon (eight cores, 47 GiB).
+readcon-core 0.22.0, Intel Xeon (eight cores, 47 GiB).
 The per-file resident set and massif heap are Tables~\ref{tab:extxyz-h2h} and~\ref{tab:heap}.}
 \label{fig:memory}
 \end{figure}
@@ -670,19 +669,19 @@ The per-file resident set and massif heap are Tables~\ref{tab:extxyz-h2h} and~\r
 On a thousand frames, readcon-db ingests and answers a composition query faster than the ASE database and faster than a directory of the same files (Figures~\ref{fig:db-throughput} and~\ref{fig:db-query}).
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
-We find that the stored atom identifiers select a converged chair at 0.607~eV on the allyl vinyl ether rearrangement, while a geometric renumbering of the same product reaches 3.988~eV at two separated fragments and does not meet the force criterion.
+We find that a band restarted with the stored atom ids converges to a 0.607~eV chair on the Claisen rearrangement of allyl vinyl ether, while the same band after renumbering the product reaches 3.988~eV at two separated fragments and does not meet the force criterion.
 An oxygen-first copy of those endpoints gives an index-wise step of 15.8~\text{\AA} at the oxygen, and once the identifiers are sorted that step is 18~\text{\AA} and falls on C5.
-A Rust read of \num{100000} CON frames takes 0.179~s on one core, against 10.8~s for ASE's eon reader and 10.3~s for eOn's Python loader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
+A readcon read of \num{100000} CON frames of 32 atoms takes 0.184~s on one core, against 11.3~s for ASE's eon reader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The geometry file stores no optimiser history, so a search that keeps a Hessian or a set of previous steps takes a different path after a restart even when every coordinate matches.
 ASE's own eon reader still stores the per-axis mask as one Boolean and drops the column-5 identifier, and the next step is to carry both through that reader so a band resumed in ASE keeps the hold and the atom order that the CON file already stores.
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
 readcon-core 0.22.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
-The Zenodo concept record \url{https://doi.org/10.5281/zenodo.18753567} archives the readcon-core 0.18.0 and 0.18.1 builds whose timings are printed here.
-The Zenodo version DOI for readcon-core 0.22.0 is a placeholder, \texttt{10.5281/zenodo.PLACEHOLDER}, until that version is deposited.
-The measurements other than the one-core timings use readcon-core~\readconversion{}, and the one-core timings of Section~\ref{sec:performance} use readcon-core 0.18.1.
-The comparison in Section~\ref{sec:fidelity} uses readcon 0.20.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.5.4 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of an Intel Xeon processor with eight cores.
+The Zenodo concept record \url{https://doi.org/10.5281/zenodo.18753567} archives the readcon-core 0.18.0 and 0.18.1 builds.
+The Zenodo version DOI for readcon-core 0.22.0 is \readconZenodoDOI.
+The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.22.0.
+The comparison in Section~\ref{sec:fidelity} uses readcon 0.22.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.2.6 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of an Intel Xeon processor with eight cores and 47 GiB of memory.
 It is the Snakemake target \texttt{fidelity} in \texttt{benchmarks/workflow/Snakefile}, and \texttt{asv.fidelity.conf.json} times one call of the same reads.
 Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents, and the supplementary material states the grammar, the corpora and the commands behind the tables.
 The CON reader shipped with eOn is under the BSD 3-clause licence of the eOn Development Team, and no build of readcon-core links it.

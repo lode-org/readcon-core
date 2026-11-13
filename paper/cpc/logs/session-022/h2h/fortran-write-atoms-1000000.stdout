@@ -1,0 +1,36 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 bench/h2h/work/time_f write bench/h2h/work/inputs/con-1000000x1.con bench/h2h/work/outs/fortran-rewrite.con 6
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.087753296
+sample 0.120843419
+sample 0.114837260
+sample 0.109843598
+sample 0.105558499
+sample 0.103404288
+median_s 0.107701049
+q25_s 0.103942841
+q75_s 0.113588844
+iqr_s 0.009646004
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/inputs/con-1000000x1.con
+format con
+{"samples": [0.087753296, 0.120843419, 0.11483726, 0.109843598, 0.105558499, 0.103404288], "n": 6, "median_s": 0.10770104850000001, "q25_s": 0.10394284075, "q75_s": 0.1135888445, "iqr_s": 0.009646003749999993, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok"}
+exit 0

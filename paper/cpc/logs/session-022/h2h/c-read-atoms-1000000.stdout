@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py readcon_c
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.090240939
+sample 0.090498004
+sample 0.089364607
+sample 0.088813638
+sample 0.089401848
+sample 0.090686405
+median_s 0.089821394
+q25_s 0.089373917
+q75_s 0.090433738
+iqr_s 0.001059821
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/inputs/con-1000000x1.con
+format con
+hwm_mib 80.01953125
+{"samples": [0.09024093900006847, 0.09049800399998276, 0.08936460699987947, 0.08881363799991959, 0.08940184800030693, 0.09068640499981484], "n": 6, "median_s": 0.0898213935001877, "q25_s": 0.08937391724998633, "q75_s": 0.09043373775000418, "iqr_s": 0.0010598205000178496, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "hwm_mib": 80.01953125}
+exit 0

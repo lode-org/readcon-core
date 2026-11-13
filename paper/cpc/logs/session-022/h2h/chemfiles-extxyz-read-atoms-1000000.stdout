@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py chemfiles
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.319608372
+sample 0.403547223
+sample 0.313116307
+sample 0.414915746
+sample 0.326210067
+sample 0.319796954
+median_s 0.323003511
+q25_s 0.319655517
+q75_s 0.384212934
+iqr_s 0.064557416
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/native/grid.extxyz
+format extxyz
+panel nearest-native
+{"samples": [0.31960837199994785, 0.40354722299980494, 0.3131163069997456, 0.4149157459996786, 0.32621006699991995, 0.3197969540001395], "n": 6, "median_s": 0.32300351050002973, "q25_s": 0.31965551749999577, "q75_s": 0.3842129339998337, "iqr_s": 0.06455741649983793, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "panel": "nearest-native", "native_format": "extxyz", "note": "Chemfiles reads extended xyz. The lattice is in the comment line."}
+exit 0

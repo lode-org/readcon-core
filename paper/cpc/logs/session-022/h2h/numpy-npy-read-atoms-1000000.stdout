@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py numpy
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.016035637
+sample 0.015157234
+sample 0.005701171
+sample 0.004383150
+sample 0.002336437
+sample 0.002271638
+median_s 0.005042160
+q25_s 0.002848115
+q75_s 0.012793218
+iqr_s 0.009945103
+n_atoms 1000000
+n_frames 1
+cell missing
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 0
+coords_ok 1
+correct 0
+reason cell is missing
+file bench/h2h/work/native/coords.npy
+format npy
+panel nearest-native
+{"samples": [0.01603563699973165, 0.015157234000071185, 0.005701170999600436, 0.004383150000194291, 0.002336436999939906, 0.0022716380003657832], "n": 6, "median_s": 0.0050421604998973635, "q25_s": 0.0028481152500035023, "q75_s": 0.012793218249953497, "iqr_s": 0.009945102999949995, "n_atoms": 1000000, "n_frames": 1, "cell": null, "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": false, "coords_ok": true, "correct": false, "reason": "cell is missing", "panel": "nearest-native", "native_format": "npy", "note": "NumPy npy stores the coordinate array and has no cell. It is a different file, not the con file."}
+exit 1

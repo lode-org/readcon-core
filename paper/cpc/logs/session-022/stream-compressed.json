@@ -1,0 +1,271 @@
+{
+  "frames": 10000,
+  "atoms_per_frame": 218,
+  "plain_bytes": 137135455,
+  "gzip_bytes": 61078481,
+  "frames_sha256": "56a7d3fca91de348f156821465b5a2bc30b8cc50b0ba060e3dd7e091c579681d",
+  "seed": 20261102,
+  "repeats": 5,
+  "readcon": "0.22.0",
+  "python": "3.12.3",
+  "results": {
+    "plain/default": {
+      "wall_s_median": 0.29925865499990323,
+      "wall_s_min": 0.2976937180001187,
+      "peak_rss_mib_median": 165.19921875,
+      "peak_rss_mib_max": 165.26171875,
+      "runs": [
+        {
+          "wall_s": 0.30247004000011657,
+          "peak_rss_kib": 169228,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.29894318000060593,
+          "peak_rss_kib": 169156,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.29925865499990323,
+          "peak_rss_kib": 169164,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.30047716300032334,
+          "peak_rss_kib": 169140,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.2976937180001187,
+          "peak_rss_kib": 169176,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        }
+      ]
+    },
+    "plain/mmap": {
+      "wall_s_median": 0.24432930199964176,
+      "wall_s_min": 0.2430506040000182,
+      "peak_rss_mib_median": 165.13671875,
+      "peak_rss_mib_max": 165.22265625,
+      "runs": [
+        {
+          "wall_s": 0.24432930199964176,
+          "peak_rss_kib": 169100,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.2430506040000182,
+          "peak_rss_kib": 169172,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.24310358799993992,
+          "peak_rss_kib": 169096,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.29312179800035665,
+          "peak_rss_kib": 169188,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.2451408220003941,
+          "peak_rss_kib": 169084,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        }
+      ]
+    },
+    "plain/stream": {
+      "wall_s_median": 0.22583562999989226,
+      "wall_s_min": 0.2256752700004654,
+      "peak_rss_mib_median": 35.46484375,
+      "peak_rss_mib_max": 35.5,
+      "runs": [
+        {
+          "wall_s": 0.2256752700004654,
+          "peak_rss_kib": 36272,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.22576994500013825,
+          "peak_rss_kib": 36336,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.22583562999989226,
+          "peak_rss_kib": 36256,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.2278719510004521,
+          "peak_rss_kib": 36316,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.22659861000011006,
+          "peak_rss_kib": 36352,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        }
+      ]
+    },
+    "gzip/default": {
+      "wall_s_median": 0.7095604090000052,
+      "wall_s_min": 0.7062498949999281,
+      "peak_rss_mib_median": 165.3046875,
+      "peak_rss_mib_max": 165.38671875,
+      "runs": [
+        {
+          "wall_s": 0.7062498949999281,
+          "peak_rss_kib": 169236,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.706433623000521,
+          "peak_rss_kib": 169356,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.7095604090000052,
+          "peak_rss_kib": 169328,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.7205552390005323,
+          "peak_rss_kib": 169272,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.7120044980001694,
+          "peak_rss_kib": 169216,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        }
+      ]
+    },
+    "gzip/stream": {
+      "wall_s_median": 0.6378363180001543,
+      "wall_s_min": 0.633978439999737,
+      "peak_rss_mib_median": 35.5078125,
+      "peak_rss_mib_max": 35.5625,
+      "runs": [
+        {
+          "wall_s": 0.6366015809999226,
+          "peak_rss_kib": 36416,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.6413017059994672,
+          "peak_rss_kib": 36360,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.670734602000266,
+          "peak_rss_kib": 36324,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.6378363180001543,
+          "peak_rss_kib": 36384,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        },
+        {
+          "wall_s": 0.633978439999737,
+          "peak_rss_kib": 36232,
+          "frames": 10000,
+          "atoms": 2180000,
+          "sha256": null
+        }
+      ]
+    },
+    "plain/import_only": {
+      "wall_s_median": 1.0181999641645234e-05,
+      "wall_s_min": 8.938000064517837e-06,
+      "peak_rss_mib_median": 19.56640625,
+      "peak_rss_mib_max": 19.56640625,
+      "runs": [
+        {
+          "wall_s": 8.938000064517837e-06,
+          "peak_rss_kib": 20032,
+          "frames": 0,
+          "atoms": 0,
+          "sha256": null
+        },
+        {
+          "wall_s": 9.42799943004502e-06,
+          "peak_rss_kib": 20036,
+          "frames": 0,
+          "atoms": 0,
+          "sha256": null
+        },
+        {
+          "wall_s": 1.0181999641645234e-05,
+          "peak_rss_kib": 20036,
+          "frames": 0,
+          "atoms": 0,
+          "sha256": null
+        },
+        {
+          "wall_s": 1.0206999832007568e-05,
+          "peak_rss_kib": 20036,
+          "frames": 0,
+          "atoms": 0,
+          "sha256": null
+        },
+        {
+          "wall_s": 2.3392999537463766e-05,
+          "peak_rss_kib": 20028,
+          "frames": 0,
+          "atoms": 0,
+          "sha256": null
+        }
+      ]
+    }
+  }
+}

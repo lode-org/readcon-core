@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py mdanalysis
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 8.241057694
+sample 8.382022413
+sample 7.855658336
+sample 8.024863493
+sample 8.607644809
+sample 8.400846524
+median_s 8.311540054
+q25_s 8.078912043
+q75_s 8.396140496
+iqr_s 0.317228453
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/native/grid.pdb
+format pdb
+panel nearest-native
+{"samples": [8.24105769400012, 8.382022412999959, 7.855658336000033, 8.024863492999884, 8.607644808999794, 8.400846524000372], "n": 6, "median_s": 8.311540053500039, "q25_s": 8.078912043249943, "q75_s": 8.396140496250268, "iqr_s": 0.3172284530003253, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "panel": "nearest-native", "native_format": "pdb", "note": "MDAnalysis reads a PDB file whose CRYST1 record stores the cell."}
+exit 0

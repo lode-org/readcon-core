@@ -1,6 +1,6 @@
-rev_parse 5e1430ddf6da5d2b0d4652f47dce889e7895598f
-tree 7df8390b6ee7cfd73f0b849b02313a365121d4a2
-date_utc 2026-11-05T07:54:59Z
+rev_parse 5a302674c0dc391d69167ca276f1f829b7b6dba4
+tree fd73499904dceadf51adb04943c90c0d25e88839
+date_utc 2026-11-12T23:51:40Z
 uname_m x86_64
 nproc 8
 cpu_model Intel Xeon Processor
@@ -9,8 +9,13 @@ release_commit 12ca800bc2212c565941e04094cba6b4d99a62e0
 eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
 eon_version 3.6.0
 git_status_begin
-D paper/cpc/logs/reader-exchange.log
+M paper/cpc/logs/db.log
+ D paper/cpc/logs/reader-exchange.log
+ D paper/cpc/src/figures/generated/memory.pdf
+ D paper/cpc/src/figures/generated/ratios.pdf
+ D paper/cpc/src/figures/generated/timing.pdf
 ?? paper/cpc/.snakemake/
+?? paper/cpc/src/placeholders.tex
 git_status_end
 command python3 paper/cpc/scripts/bench_readers.py
 frames 100000
@@ -28,123 +33,123 @@ readcon_eon_api readcon through the eOn C++ API, all frames
 conbin mmap zero-copy positions
 eon_reader eon.fileio.loadcons
 readcon_first read_first_frame first frame
-sample arm=readcon_tip rep=0 seconds=0.270884796998871 mib=205.4296875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=0 seconds=3.022778869999456 mib=2531.0234375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_v0173 rep=0 seconds=2.1264497820011456 mib=2531.2109375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=0 seconds=0.032128579001437174 mib=131.05859375 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_db rep=0 seconds=11.830055695998453 mib=397.96484375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_eon rep=0 seconds=12.107804310002393 mib=383.9375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=0 seconds=0.3865140519992565 mib=263.23828125 matched=1 got=1 requested=1 exit=0 error=
-sample arm=eon_py rep=0 seconds=16.82605791899914 mib=3045.67578125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=0 seconds=1.70646 mib=1059.1953125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=0 seconds=0.006533612999191973 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=0 seconds=1.4721647380029026 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=0 seconds=1.4210665370010247 mib=166.8359375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=0 seconds=4.997778616998403 mib=172.24609375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=0 seconds=8.42829846800305 mib=345.83203125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=0 seconds=27.003202187999705 mib=2119.09765625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=0 seconds=0.6946391759993276 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=0 seconds=52.23941632899732 mib=139.234375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=1 seconds=51.863180739997915 mib=139.203125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=1 seconds=0.9347375559991633 mib=758.7578125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=1 seconds=28.213264960999368 mib=2118.97265625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=1 seconds=8.301889401998778 mib=345.81640625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=1 seconds=4.901059035000799 mib=172.2421875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=1 seconds=1.3904833669985237 mib=166.875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=1 seconds=1.364129782999953 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=1 seconds=0.010758820997580187 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=1 seconds=2.44167 mib=1059.25390625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon_py rep=1 seconds=15.915715489998547 mib=3045.859375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=1 seconds=0.29351020700050867 mib=263.18359375 matched=1 got=1 requested=1 exit=0 error=
-sample arm=ase_eon rep=1 seconds=11.476003267001943 mib=383.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_db rep=1 seconds=11.614733521000744 mib=398.1015625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=1 seconds=0.031864692999079125 mib=131.05859375 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_v0173 rep=1 seconds=2.4717854390000866 mib=2531.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=1 seconds=2.150987075998273 mib=2531.35546875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_tip rep=1 seconds=0.16023344700079178 mib=205.1875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_tip rep=2 seconds=0.1596561849983118 mib=205.43359375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=2 seconds=2.2279438710029353 mib=2531.24609375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_v0173 rep=2 seconds=2.1226585449985578 mib=2531.2421875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=2 seconds=0.034219031000247924 mib=131.0625 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_db rep=2 seconds=11.599084449000657 mib=398.02734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_eon rep=2 seconds=11.49759997199726 mib=383.9921875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=2 seconds=0.3414923150012328 mib=263.23828125 matched=1 got=1 requested=1 exit=0 error=
-sample arm=eon_py rep=2 seconds=15.30376581100063 mib=3045.8046875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=2 seconds=1.64448 mib=1059.00390625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=2 seconds=0.006196954000188271 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=2 seconds=1.3029736480020802 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=2 seconds=1.3463716480000585 mib=165.95703125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=2 seconds=4.8866642659995705 mib=172.10546875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=2 seconds=8.376687544998276 mib=345.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=2 seconds=26.705479953001486 mib=2118.9453125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=2 seconds=0.8763187379990995 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=2 seconds=53.694528829000774 mib=139.28125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=3 seconds=51.368916702002025 mib=139.34375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=3 seconds=0.7914728840005409 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=3 seconds=27.45350099999996 mib=2119.02734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=3 seconds=8.131162443998619 mib=345.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=3 seconds=4.930652840997936 mib=172.55859375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=3 seconds=1.4162020270014182 mib=165.9375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=3 seconds=1.3204432380007347 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=3 seconds=0.007437087999278447 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=3 seconds=1.86028 mib=1059.00390625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon_py rep=3 seconds=15.384804020002775 mib=3045.484375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=3 seconds=0.37625490500067826 mib=263.23046875 matched=1 got=1 requested=1 exit=0 error=
-sample arm=ase_eon rep=3 seconds=11.389595525000914 mib=383.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_db rep=3 seconds=11.578287967000506 mib=398.08984375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=3 seconds=0.03702809099922888 mib=131.0625 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_v0173 rep=3 seconds=2.5873021419974975 mib=2531.3515625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=3 seconds=2.137833796998166 mib=2531.140625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_tip rep=3 seconds=0.15554834300201037 mib=205.43359375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_tip rep=4 seconds=0.1969355609980994 mib=205.18359375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=4 seconds=2.3904269659979036 mib=2531.140625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_v0173 rep=4 seconds=2.321387636999134 mib=2531.48046875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=4 seconds=0.031530674001260195 mib=131.0625 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_db rep=4 seconds=11.502561096000136 mib=398.109375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_eon rep=4 seconds=11.72388511600002 mib=383.921875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=4 seconds=0.34099291100210394 mib=263.171875 matched=1 got=1 requested=1 exit=0 error=
-sample arm=eon_py rep=4 seconds=15.020565102000546 mib=3045.65234375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=4 seconds=1.53126 mib=1059.0078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=4 seconds=0.005626272999506909 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=4 seconds=1.35539747599978 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=4 seconds=1.42531054400024 mib=166.89453125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=4 seconds=4.897892128999956 mib=172.46484375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=4 seconds=8.421627882002213 mib=345.828125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=4 seconds=27.41418157699809 mib=2119.0625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=4 seconds=0.7226686470021377 mib=758.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=4 seconds=51.809935514000244 mib=139.546875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=mdanalysis rep=5 seconds=50.756677731998934 mib=139.2734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=h5py rep=5 seconds=1.202605783000763 mib=758.71875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=pymatgen rep=5 seconds=29.700579677999485 mib=2119.02734375 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ase_extxyz rep=5 seconds=8.178387575997476 mib=345.796875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=ovito rep=5 seconds=5.4099958459992195 mib=172.2265625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=chemfiles rep=5 seconds=1.8406582770003297 mib=166.94921875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=numpy rep=5 seconds=1.2983081599995785 mib=390.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=conbin rep=5 seconds=0.010002369002904743 mib=146.80078125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_eon_api rep=5 seconds=1.82474 mib=1059.2578125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon_py rep=5 seconds=16.653351183002087 mib=3045.671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=eon rep=5 seconds=0.4101949700016121 mib=263.1484375 matched=1 got=1 requested=1 exit=0 error=
-sample arm=ase_eon rep=5 seconds=11.38476560900017 mib=383.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_db rep=5 seconds=11.862944682001398 mib=398.0625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_first rep=5 seconds=0.09274396899854764 mib=131.0625 matched=1 got=1 requested=1 exit=0 error=
-sample arm=readcon_v0173 rep=5 seconds=3.3060561870006495 mib=2531.1015625 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_base rep=5 seconds=2.4602121069983696 mib=2531.11328125 matched=100000 got=100000 requested=100000 exit=0 error=
-sample arm=readcon_tip rep=5 seconds=0.18985870600226917 mib=205.4375 matched=100000 got=100000 requested=100000 exit=0 error=
-summary arm=readcon_tip scope=all_frames n_rep=6 median_s=1.750460765e-01 iqr_s=3.536584675e-02 mib_median=205.431641 mib_iqr=0.185547 requested=100000 matched=100000 failed=0 exit=0
-summary arm=readcon_base scope=all_frames n_rep=6 median_s=2.309185419e+00 iqr_s=2.725395470e-01 mib_median=2531.140625 mib_iqr=0.099609 requested=100000 matched=100000 failed=0 exit=0
-summary arm=readcon_v0173 scope=all_frames n_rep=6 median_s=2.396586538e+00 iqr_s=3.832387205e-01 mib_median=2531.296875 mib_iqr=0.229492 requested=100000 matched=100000 failed=0 exit=0
-summary arm=readcon_first scope=first_frame n_rep=6 median_s=3.317380500e-02 iqr_s=4.395161500e-03 mib_median=131.062500 mib_iqr=0.002930 requested=1 matched=1 failed=0 exit=0
-summary arm=readcon_db scope=all_frames n_rep=6 median_s=1.160690899e+01 iqr_s=1.927380647e-01 mib_median=398.076172 mib_iqr=0.062500 requested=100000 matched=100000 failed=0 exit=0
-summary arm=ase_eon scope=all_frames n_rep=6 median_s=1.148680162e+01 iqr_s=2.561163695e-01 mib_median=383.929688 mib_iqr=0.011719 requested=100000 matched=100000 failed=0 exit=0
-summary arm=eon scope=first_frame n_rep=6 median_s=3.588736100e-01 iqr_s=4.283150325e-02 mib_median=263.207031 mib_iqr=0.061523 requested=1 matched=1 failed=0 exit=0
-summary arm=eon_py scope=all_frames n_rep=6 median_s=1.565025976e+01 iqr_s=1.144916897e+00 mib_median=3045.673828 mib_iqr=0.115234 requested=100000 matched=100000 failed=0 exit=0
-summary arm=readcon_eon_api scope=readcon_through_eon n_rep=6 median_s=1.765600000e+00 iqr_s=1.914200000e-01 mib_median=1059.101562 mib_iqr=0.234375 requested=100000 matched=100000 failed=0 exit=0
-summary arm=conbin scope=all_frames n_rep=6 median_s=6.985350499e-03 iqr_s=3.079930002e-03 mib_median=146.800781 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
-summary arm=numpy scope=all_frames n_rep=6 median_s=1.337920357e+00 iqr_s=5.460566075e-02 mib_median=390.886719 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
-summary arm=chemfiles scope=all_frames n_rep=6 median_s=1.418634282e+00 iqr_s=2.733651025e-02 mib_median=166.855469 mib_iqr=0.712891 requested=100000 matched=100000 failed=0 exit=0
-summary arm=ovito scope=all_frames n_rep=6 median_s=4.915855938e+00 iqr_s=8.231331750e-02 mib_median=172.244141 mib_iqr=0.179688 requested=100000 matched=100000 failed=0 exit=0
-summary arm=ase_extxyz scope=all_frames n_rep=6 median_s=8.339288473e+00 iqr_s=2.011297653e-01 mib_median=345.830078 mib_iqr=0.077148 requested=100000 matched=100000 failed=0 exit=0
-summary arm=pymatgen scope=all_frames n_rep=6 median_s=2.743384129e+01 iqr_s=9.173769355e-01 mib_median=2119.027344 mib_iqr=0.067383 requested=100000 matched=100000 failed=0 exit=0
-summary arm=h5py scope=all_frames n_rep=6 median_s=8.338958110e-01 iqr_s=1.802631452e-01 mib_median=758.718750 mib_iqr=0.002930 requested=100000 matched=100000 failed=0 exit=0
-summary arm=mdanalysis scope=all_frames n_rep=6 median_s=5.183655813e+01 iqr_s=6.661860267e-01 mib_median=139.277344 mib_iqr=0.083984 requested=100000 matched=100000 failed=0 exit=0
+sample arm=readcon_tip rep=0 seconds=0.1878948879998461 mib=236.3046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=0 seconds=1.0553992440000002 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_v0173 rep=0 seconds=1.0230875879997257 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=0 seconds=0.027660703000037756 mib=131.07421875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=0 seconds=11.289319967999745 mib=397.44140625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=0 seconds=11.30516434800029 mib=383.7734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=0 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=eon_py rep=0 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=readcon_eon_api rep=0 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=conbin rep=0 seconds=0.004061102999912691 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=0 seconds=1.2300520449998658 mib=391.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=0 seconds=1.4362988439997935 mib=166.76171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=0 seconds=4.866503645999728 mib=172.33203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=0 seconds=8.084790971000075 mib=345.765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=0 seconds=26.432831821000036 mib=2118.97265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=0 seconds=0.5583756959999846 mib=758.703125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=0 seconds=51.304608138999356 mib=139.4296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=1 seconds=50.402194323 mib=139.3359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=1 seconds=0.5040231439998024 mib=758.671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=1 seconds=25.88024712599963 mib=2118.84765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=1 seconds=8.383267227000033 mib=345.859375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=1 seconds=4.781875664000836 mib=172.08984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=1 seconds=1.6077305140006501 mib=166.74609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=1 seconds=1.2733577459994194 mib=391.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=conbin rep=1 seconds=0.00776651900014258 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_eon_api rep=1 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=eon_py rep=1 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=eon rep=1 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=ase_eon rep=1 seconds=11.220813474999886 mib=383.89453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=1 seconds=11.320607175000077 mib=397.98046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=1 seconds=0.027303156999550993 mib=131.13671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_v0173 rep=1 seconds=1.0193799660000877 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=1 seconds=1.036335963000056 mib=913.19921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=1 seconds=0.18106599900056608 mib=236.3046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=2 seconds=0.18294181200053572 mib=236.3046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=2 seconds=1.0375436829999671 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_v0173 rep=2 seconds=1.023724458000288 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=2 seconds=0.027491130999806046 mib=131.13671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=2 seconds=11.242956801999753 mib=397.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=2 seconds=11.32845098100006 mib=383.890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=2 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=eon_py rep=2 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=readcon_eon_api rep=2 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=conbin rep=2 seconds=0.004209863000141922 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=2 seconds=1.3127556439994805 mib=391.09765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=2 seconds=1.493358358000478 mib=166.84375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=2 seconds=4.74681195499943 mib=172.546875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=2 seconds=8.132542414999989 mib=345.734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=2 seconds=25.23347758899945 mib=2118.97265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=2 seconds=0.5493900250003207 mib=758.7265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=2 seconds=50.59028213300007 mib=139.33203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=3 seconds=51.04921195899988 mib=139.33984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=3 seconds=0.5366270989998156 mib=758.7265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=3 seconds=25.7885686919999 mib=2118.85546875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=3 seconds=8.06552755499979 mib=345.8515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=3 seconds=4.709762010000304 mib=172.36328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=3 seconds=1.5069369919992823 mib=166.7890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=3 seconds=1.2638934140004494 mib=391.09765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=conbin rep=3 seconds=0.0038416019997384865 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_eon_api rep=3 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=eon_py rep=3 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=eon rep=3 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=ase_eon rep=3 seconds=11.275252313999772 mib=383.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=3 seconds=11.345454591999442 mib=397.90625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=3 seconds=0.02843012299945258 mib=131.07421875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_v0173 rep=3 seconds=1.0446242600000915 mib=913.19921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=3 seconds=1.044195593999575 mib=913.19921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=3 seconds=0.1843841039999461 mib=236.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=4 seconds=0.18635367599927122 mib=236.3046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=4 seconds=1.0400023669999428 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_v0173 rep=4 seconds=1.0903753740003594 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=4 seconds=0.027969261999714945 mib=131.07421875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_db rep=4 seconds=11.256510645999697 mib=397.98046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_eon rep=4 seconds=11.251194974999635 mib=383.94921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=eon rep=4 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=eon_py rep=4 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=readcon_eon_api rep=4 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=conbin rep=4 seconds=0.005710389999876497 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=4 seconds=1.2342577109993726 mib=391.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=4 seconds=1.4416336069998579 mib=166.78125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=4 seconds=4.6878982779999205 mib=172.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=4 seconds=8.080871168000158 mib=345.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=4 seconds=24.96636778500033 mib=2118.97265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=4 seconds=0.5804729880001105 mib=758.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=4 seconds=50.02779717700014 mib=139.33203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=mdanalysis rep=5 seconds=51.8408857179993 mib=139.3515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=h5py rep=5 seconds=0.5315252919999693 mib=758.6796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=pymatgen rep=5 seconds=25.713634610000554 mib=2118.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ase_extxyz rep=5 seconds=8.161833641000158 mib=345.8671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=ovito rep=5 seconds=4.668629544999931 mib=172.2734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=chemfiles rep=5 seconds=1.453275984999891 mib=166.79296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=numpy rep=5 seconds=1.284036338000078 mib=391.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=conbin rep=5 seconds=0.0037818330001755385 mib=146.6171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_eon_api rep=5 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes' 
+sample arm=eon_py rep=5 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon' 
+sample arm=eon rep=5 seconds=None mib=None matched=0 got=0 requested=100000 exit=1 error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient' 
+sample arm=ase_eon rep=5 seconds=11.166492250999909 mib=383.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_db rep=5 seconds=11.28289463999954 mib=397.98046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_first rep=5 seconds=0.027627929999653134 mib=131.13671875 matched=1 got=1 requested=1 exit=0 error=
+sample arm=readcon_v0173 rep=5 seconds=1.03734489100043 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_base rep=5 seconds=1.0508779570000115 mib=913.203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample arm=readcon_tip rep=5 seconds=0.18417609099924448 mib=236.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+summary arm=readcon_tip scope=all_frames n_rep=6 median_s=1.842800975e-01 iqr_s=2.610901249e-03 mib_median=236.304688 mib_iqr=0.046875 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_base scope=all_frames n_rep=6 median_s=1.042098980e+00 iqr_s=1.104901225e-02 mib_median=913.203125 mib_iqr=0.002930 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_v0173 scope=all_frames n_rep=6 median_s=1.030534675e+00 iqr_s=1.955761225e-02 mib_median=913.203125 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_first scope=first_frame n_rep=6 median_s=2.764431650e-02 iqr_s=3.667915000e-04 mib_median=131.105469 mib_iqr=0.062500 requested=1 matched=1 failed=0 exit=0
+summary arm=readcon_db scope=all_frames n_rep=6 median_s=1.128610730e+01 iqr_s=4.967872875e-02 mib_median=397.951172 mib_iqr=0.070312 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_eon scope=all_frames n_rep=6 median_s=1.126322364e+01 iqr_s=6.927748950e-02 mib_median=383.884766 mib_iqr=0.023438 requested=100000 matched=100000 failed=0 exit=0
+summary arm=eon error=Traceback (most recent call last):   File "<string>", line 85, in <module> ModuleNotFoundError: No module named 'pyeonclient'  exit=1
+summary arm=eon_py error=Traceback (most recent call last):   File "<string>", line 96, in <module> ModuleNotFoundError: No module named 'eon'  exit=1
+summary arm=readcon_eon_api error=d(args, executable, preexec_fn, close_fds,   File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child     raise child_exception_type(errno_num, err_msg, err_filename) FileNotFoundError: [Errno 2] No such file or directory: '/agent/repos/readcon-core/paper/cpc/bench/work/eon_allframes'  exit=1
+summary arm=conbin scope=all_frames n_rep=6 median_s=4.135483000e-03 iqr_s=1.438781000e-03 mib_median=146.617188 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
+summary arm=numpy scope=all_frames n_rep=6 median_s=1.268625580e+00 iqr_s=3.970005325e-02 mib_median=391.035156 mib_iqr=0.046875 requested=100000 matched=100000 failed=0 exit=0
+summary arm=chemfiles scope=all_frames n_rep=6 median_s=1.473317172e+00 iqr_s=5.899813200e-02 mib_median=166.785156 mib_iqr=0.025391 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ovito scope=all_frames n_rep=6 median_s=4.728286982e+00 iqr_s=7.974552575e-02 mib_median=172.302734 mib_iqr=0.219727 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_extxyz scope=all_frames n_rep=6 median_s=8.108666693e+00 iqr_s=7.265971575e-02 mib_median=345.855469 mib_iqr=0.078125 requested=100000 matched=100000 failed=0 exit=0
+summary arm=pymatgen scope=all_frames n_rep=6 median_s=2.575110165e+01 iqr_s=5.038106732e-01 mib_median=2118.937500 mib_iqr=0.105469 requested=100000 matched=100000 failed=0 exit=0
+summary arm=h5py scope=all_frames n_rep=6 median_s=5.430085620e-01 iqr_s=2.332853450e-02 mib_median=758.691406 mib_iqr=0.041016 requested=100000 matched=100000 failed=0 exit=0
+summary arm=mdanalysis scope=all_frames n_rep=6 median_s=5.081974705e+01 iqr_s=7.915428185e-01 mib_median=139.337891 mib_iqr=0.015625 requested=100000 matched=100000 failed=0 exit=0
 exit_code 0

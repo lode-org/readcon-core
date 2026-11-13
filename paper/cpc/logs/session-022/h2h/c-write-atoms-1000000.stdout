@@ -1,0 +1,36 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 bench/h2h/work/time_c write bench/h2h/work/inputs/con-1000000x1.con bench/h2h/work/outs/c-rewrite.con 6
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.085586488
+sample 0.111675385
+sample 0.113666002
+sample 0.101285930
+sample 0.103028163
+sample 0.098701378
+median_s 0.102157047
+q25_s 0.099347516
+q75_s 0.109513579
+iqr_s 0.010166064
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/inputs/con-1000000x1.con
+format con
+{"samples": [0.085586488, 0.111675385, 0.113666002, 0.10128593, 0.103028163, 0.098701378], "n": 6, "median_s": 0.1021570465, "q25_s": 0.099347516, "q75_s": 0.1095135795, "iqr_s": 0.010166063500000003, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "hwm_kib": [167248.0]}
+exit 0

@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py ase_extxyz
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 1.410732546
+sample 1.384992300
+sample 1.373452292
+sample 1.382185843
+sample 1.348628113
+sample 1.359207463
+median_s 1.377819068
+q25_s 1.362768670
+q75_s 1.384290686
+iqr_s 0.021522016
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/native/grid.extxyz
+format extxyz
+panel nearest-native
+{"samples": [1.410732545999963, 1.3849922999997943, 1.3734522919999108, 1.3821858430001157, 1.348628113000359, 1.3592074629996205], "n": 6, "median_s": 1.3778190675000133, "q25_s": 1.362768670249693, "q75_s": 1.3842906857498747, "iqr_s": 0.021522015500181624, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "panel": "nearest-native", "native_format": "extxyz", "note": "Atomic Simulation Environment extended xyz is a different file from the con file, and the lattice is in the file."}
+exit 0

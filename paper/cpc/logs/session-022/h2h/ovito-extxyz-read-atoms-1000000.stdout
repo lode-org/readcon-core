@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py ovito
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.151915843
+sample 0.134935832
+sample 0.126558228
+sample 0.124521430
+sample 0.124413364
+sample 0.123948527
+median_s 0.125539829
+q25_s 0.124440381
+q75_s 0.132841431
+iqr_s 0.008401051
+n_atoms 1000000
+n_frames 1
+cell 100.000000000 100.000000000 100.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/native/atoms.extxyz
+format extxyz
+panel nearest-native
+{"samples": [0.15191584299964234, 0.13493583200033754, 0.12655822799979433, 0.12452142999973148, 0.12441336400024738, 0.12394852700026604], "n": 6, "median_s": 0.1255398289997629, "q25_s": 0.12444038050011841, "q75_s": 0.13284143100020174, "iqr_s": 0.008401050500083329, "n_atoms": 1000000, "n_frames": 1, "cell": [100.0, 100.0, 100.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "panel": "nearest-native", "native_format": "extxyz", "note": "OVITO extended xyz is a different file, not the con file."}
+exit 0

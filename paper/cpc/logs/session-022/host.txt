@@ -1,0 +1,15 @@
+HOST 2026-11-12T23:38:47Z
+1:Architecture:                            x86_64
+5:CPU(s):                                  8
+6:On-line CPU(s) list:                     0-7
+7:Vendor ID:                               GenuineIntel
+8:Model name:                              Intel(R) Xeon(R) Processor
+11:Thread(s) per core:                      1
+12:Core(s) per socket:                      8
+13:Socket(s):                               1
+25:NUMA node0 CPU(s):                       0-7
+--- mem ---
+MemTotal:       49342816 kB
+MemAvailable:   16139400 kB
+--- readcon ---
+0.22.0 /home/ubuntu/.local/lib/python3.12/site-packages/readcon/__init__.py
