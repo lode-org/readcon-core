@@ -488,7 +488,12 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         geometry.ids,
     );
 
-    let chfl_bonds = bonds_from_chemfiles_frame(frame);
+    let topo_empty = unsafe { rc_chemfiles_topology_empty(frame_c_handle(frame)) } != 0;
+    let chfl_bonds = if topo_empty {
+        Vec::new()
+    } else {
+        bonds_from_chemfiles_frame(frame)
+    };
     if !chfl_bonds.is_empty() {
         let mut id_to_data_idx: BTreeMap<u64, u32> = BTreeMap::new();
         for (data_idx, atom) in con.atom_data.iter().enumerate() {
@@ -511,7 +516,11 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         }
     }
 
-    let chfl_residues = residues_from_chemfiles_frame(frame);
+    let chfl_residues = if topo_empty {
+        Vec::new()
+    } else {
+        residues_from_chemfiles_frame(frame)
+    };
     if !chfl_residues.is_empty() {
         let mut id_to_data_idx: BTreeMap<u64, u32> = BTreeMap::new();
         for (data_idx, atom) in con.atom_data.iter().enumerate() {
@@ -567,6 +576,19 @@ unsafe extern "C" {
         any_extra: *mut u32,
         any_props: *mut u32,
     ) -> i32;
+    fn rc_chemfiles_classify_range(
+        frame: *mut chemfiles_sys::CHFL_FRAME,
+        begin: u64,
+        end: u64,
+        sym_of: *mut u32,
+        names: *mut [u8; 16],
+        masses: *mut f64,
+        max_kinds: u32,
+        n_kinds: *mut u32,
+        any_extra: *mut u32,
+        any_props: *mut u32,
+    ) -> i32;
+    fn rc_chemfiles_topology_empty(frame: *mut chemfiles_sys::CHFL_FRAME) -> i32;
     fn rc_chemfiles_matches(
         frame: *mut chemfiles_sys::CHFL_FRAME,
         begin: u64,
@@ -776,6 +798,209 @@ fn parallel_uniform(
     }))
 }
 
+struct RangeKinds {
+    names: [[u8; 16]; 64],
+    masses: [f64; 64],
+    n_kinds: u32,
+    any_extra: u32,
+    any_props: u32,
+    status: i32,
+    begin: usize,
+    end: usize,
+}
+
+fn parallel_mixed(
+    handle: *mut chemfiles_sys::CHFL_FRAME,
+    positions: &[[f64; 3]],
+) -> Result<Option<ImportedGeometry>, ChemfilesImportError> {
+    let n = positions.len();
+    let threads = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1)
+        .clamp(1, 8);
+    let chunk = n.div_ceil(threads);
+    let mut sym_of = vec![0u32; n];
+    let mut ranges = Vec::with_capacity(threads);
+    for thread in 0..threads {
+        let begin = thread * chunk;
+        let end = (begin + chunk).min(n);
+        ranges.push(RangeKinds {
+            names: [[0; 16]; 64],
+            masses: [0.0; 64],
+            n_kinds: 0,
+            any_extra: 0,
+            any_props: 0,
+            status: 0,
+            begin,
+            end,
+        });
+    }
+    let sym_bits = sym_of.as_mut_ptr() as usize;
+    let handle_bits = handle as usize;
+    std::thread::scope(|scope| {
+        for range in &mut ranges {
+            if range.begin >= range.end {
+                continue;
+            }
+            let sym_bits = sym_bits;
+            let handle_bits = handle_bits;
+            scope.spawn(move || {
+                let status = unsafe {
+                    rc_chemfiles_classify_range(
+                        handle_bits as *mut chemfiles_sys::CHFL_FRAME,
+                        range.begin as u64,
+                        range.end as u64,
+                        (sym_bits as *mut u32).add(range.begin),
+                        range.names.as_mut_ptr(),
+                        range.masses.as_mut_ptr(),
+                        64,
+                        &mut range.n_kinds,
+                        &mut range.any_extra,
+                        &mut range.any_props,
+                    )
+                };
+                range.status = status;
+            });
+        }
+    });
+    if ranges
+        .iter()
+        .any(|range| range.status == 3 || range.any_extra != 0 || range.any_props != 0)
+    {
+        return Ok(None);
+    }
+    if ranges.iter().any(|range| range.status != 0) {
+        return Err(ChemfilesImportError::InvalidFrame(
+            "chemfiles frame scan failed".into(),
+        ));
+    }
+    let mut kinds: Vec<ImportedKind> = Vec::new();
+    for range in &ranges {
+        let mut remap = [0u32; 64];
+        for local in 0..range.n_kinds as usize {
+            let end = range.names[local]
+                .iter()
+                .position(|&byte| byte == 0)
+                .unwrap_or(0);
+            let text = std::str::from_utf8(&range.names[local][..end]).unwrap_or("X");
+            let global = kinds.iter().position(|kind| kind.symbol.as_ref() == text);
+            let global = if let Some(global) = global {
+                let mass = range.masses[local];
+                if mass > 0.0 && (kinds[global].mass == 1.0 || mass != 1.0) {
+                    kinds[global].mass = mass;
+                }
+                global
+            } else {
+                kinds.push(ImportedKind {
+                    symbol: Arc::from(text),
+                    mass: range.masses[local],
+                    mass_set: true,
+                    canonical: true,
+                });
+                kinds.len() - 1
+            };
+            remap[local] = global as u32;
+        }
+        for index in range.begin..range.end {
+            sym_of[index] = remap[sym_of[index] as usize];
+        }
+    }
+    if kinds.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(grouped_geometry(kinds, &sym_of, positions, None)))
+}
+
+fn grouped_geometry(
+    kinds: Vec<ImportedKind>,
+    sym_of: &[u32],
+    positions: &[[f64; 3]],
+    velocities: Option<&[[f64; 3]]>,
+) -> ImportedGeometry {
+    let n = positions.len();
+    let mut counts = vec![0usize; kinds.len()];
+    for &kind in sym_of {
+        counts[kind as usize] += 1;
+    }
+    let mut cursor = Vec::with_capacity(kinds.len());
+    let mut start = 0usize;
+    for &count in &counts {
+        cursor.push(start);
+        start += count;
+    }
+    let mut chem_at = vec![0usize; n];
+    let mut next = cursor;
+    for (index, &kind) in sym_of.iter().enumerate() {
+        let slot = next[kind as usize];
+        next[kind as usize] = slot + 1;
+        chem_at[slot] = index;
+    }
+    let mut flat = Vec::with_capacity(n * 3);
+    unsafe { flat.set_len(n * 3) };
+    for grouped in 0..n {
+        let chem = chem_at[grouped];
+        let row = positions[chem];
+        flat[grouped * 3..grouped * 3 + 3].copy_from_slice(&row);
+    }
+    if velocities.is_none() {
+        for (index, kind) in kinds.iter().enumerate() {
+            crate::types::bump_arc_str(&kind.symbol, counts[index]);
+        }
+    }
+    let mut atoms = Vec::with_capacity(n);
+    let mut ids = Vec::with_capacity(n);
+    let ptr = flat.as_mut_ptr();
+    for grouped in 0..n {
+        let chem = chem_at[grouped];
+        let kind = sym_of[chem] as usize;
+        let symbol = if velocities.is_none() {
+            crate::types::share_arc_str(&kinds[kind].symbol)
+        } else {
+            Arc::clone(&kinds[kind].symbol)
+        };
+        let atom_id = chem as u64;
+        if let Some(vels) = velocities {
+            let row = positions[chem];
+            atoms.push(AtomDatum::with_sections(
+                symbol,
+                row[0],
+                row[1],
+                row[2],
+                [false, false, false],
+                atom_id,
+                Some(vels[chem]),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ));
+        } else {
+            let slot = unsafe { ptr.add(grouped * 3) };
+            atoms.push(AtomDatum::at_slot(
+                symbol,
+                slot,
+                [false, false, false],
+                atom_id,
+            ));
+        }
+        ids.push(atom_id);
+    }
+    let masses = kinds.iter().map(|kind| kind.mass).collect();
+    ImportedGeometry {
+        kinds,
+        counts,
+        masses,
+        atoms,
+        positions: FloatArray2::from_f64_row_major(n, 3, flat),
+        ids,
+        sidecars: None,
+        atom_props: None,
+    }
+}
+
 fn scan_uniform(
     handle: *mut chemfiles_sys::CHFL_FRAME,
     positions: &[[f64; 3]],
@@ -789,6 +1014,9 @@ fn scan_uniform(
     // A million-atom frame is checked in disjoint ranges.
     if velocities.is_none() && n >= 65_536 {
         if let Some(geometry) = parallel_uniform(handle, positions)? {
+            return Ok(Some(geometry));
+        }
+        if let Some(geometry) = parallel_mixed(handle, positions)? {
             return Ok(Some(geometry));
         }
     }
@@ -864,78 +1092,9 @@ fn scan_uniform(
             atom_props: None,
         }));
     }
-    let mut counts = vec![0usize; n_kinds];
-    for &kind in &sym_of {
-        counts[kind as usize] += 1;
-    }
-    let mut cursor = Vec::with_capacity(n_kinds);
-    let mut start = 0usize;
-    for &count in &counts {
-        cursor.push(start);
-        start += count;
-    }
-    let mut chem_at = vec![0usize; n];
-    let mut next = cursor;
-    for (index, &kind) in sym_of.iter().enumerate() {
-        let slot = next[kind as usize];
-        next[kind as usize] = slot + 1;
-        chem_at[slot] = index;
-    }
-    let mut flat = vec![0.0f64; n * 3];
-    for grouped in 0..n {
-        let chem = chem_at[grouped];
-        let row = positions[chem];
-        flat[grouped * 3..grouped * 3 + 3].copy_from_slice(&row);
-    }
-    let mut atoms = Vec::with_capacity(n);
-    let mut ids = Vec::with_capacity(n);
-    let ptr = flat.as_mut_ptr();
-    for grouped in 0..n {
-        let chem = chem_at[grouped];
-        let kind = sym_of[chem] as usize;
-        let symbol = Arc::clone(&kinds[kind].symbol);
-        let atom_id = chem as u64;
-        if let Some(vels) = velocities {
-            let row = positions[chem];
-            atoms.push(AtomDatum::with_sections(
-                symbol,
-                row[0],
-                row[1],
-                row[2],
-                [false, false, false],
-                atom_id,
-                Some(vels[chem]),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
-        } else {
-            let slot = unsafe { ptr.add(grouped * 3) };
-            atoms.push(AtomDatum::at_slot(
-                symbol,
-                slot,
-                [false, false, false],
-                atom_id,
-            ));
-        }
-        ids.push(atom_id);
-    }
-    let positions_soa = FloatArray2::from_f64_row_major(n, 3, flat);
-    let masses = kinds.iter().map(|kind| kind.mass).collect();
-    Ok(Some(ImportedGeometry {
-        kinds,
-        counts,
-        masses,
-        atoms,
-        positions: positions_soa,
-        ids,
-        sidecars: None,
-        atom_props: None,
-    }))
+    Ok(Some(grouped_geometry(
+        kinds, &sym_of, positions, velocities,
+    )))
 }
 
 fn import_geometry(

@@ -74,6 +74,65 @@ extern "C" int rc_chemfiles_scan(
     return 0;
 }
 
+// One slice of a frame. `sym_of` is local to the slice (length end-begin).
+// Callers merge the small kind tables. Same rejection rules as the full scan.
+extern "C" int rc_chemfiles_classify_range(
+    chemfiles::Frame* frame,
+    uint64_t begin,
+    uint64_t end,
+    uint32_t* sym_of,
+    char names[][kNameCap],
+    double* masses,
+    uint32_t max_kinds,
+    uint32_t* n_kinds,
+    uint32_t* any_extra,
+    uint32_t* any_props
+) {
+    if (frame == nullptr || sym_of == nullptr || names == nullptr || masses == nullptr
+        || n_kinds == nullptr || any_extra == nullptr || any_props == nullptr || begin > end
+        || end > frame->size()) {
+        return 1;
+    }
+    *n_kinds = 0;
+    *any_extra = 0;
+    *any_props = 0;
+    uint32_t kinds = 0;
+    for (uint64_t index = begin; index < end; ++index) {
+        const chemfiles::Atom& atom = (*frame)[static_cast<size_t>(index)];
+        const std::string& name = atom.name();
+        const std::string& type_name = atom.type();
+        const std::string& symbol = !type_name.empty() ? type_name : (!name.empty() ? name : "X");
+        if (name != symbol || (!type_name.empty() && type_name != symbol)) {
+            *any_extra = 1;
+        }
+        if (atom.charge() != 0.0 || atom.properties().size() != 0) {
+            *any_props = 1;
+        }
+        uint32_t kind = kinds;
+        for (uint32_t seen = 0; seen < kinds; ++seen) {
+            if (symbol == names[seen]) {
+                kind = seen;
+                break;
+            }
+        }
+        if (kind == kinds) {
+            if (kinds >= max_kinds || !copy_fit(symbol, names[kinds])) {
+                return 3;
+            }
+            masses[kinds] = 1.0;
+            kinds += 1;
+        }
+        const bool canonical = name == type_name;
+        const double mass = atom.mass();
+        if (mass > 0.0 && (masses[kind] == 1.0 || canonical)) {
+            masses[kind] = mass;
+        }
+        sym_of[index - begin] = kind;
+    }
+    *n_kinds = kinds;
+    return 0;
+}
+
 // True when every atom in [begin, end) is `symbol`, with that mass, and no
 // charge or property. Readers call it on disjoint ranges.
 extern "C" int rc_chemfiles_matches(
@@ -104,6 +163,14 @@ extern "C" int rc_chemfiles_matches(
     }
     *bad = 0;
     return 0;
+}
+
+extern "C" int rc_chemfiles_topology_empty(chemfiles::Frame* frame) {
+    if (frame == nullptr) {
+        return 0;
+    }
+    const chemfiles::Topology& topo = frame->topology();
+    return topo.bonds().empty() && topo.residues().empty() ? 1 : 0;
 }
 
 extern "C" int rc_chemfiles_atom_view(
