@@ -100,3 +100,13 @@ def test_wheel_pull_requests_rebuild_when_the_build_script_changes():
     lists = _path_lists(text)
     assert len(lists) == 1
     _require(lists, WHEEL_INPUTS, "python_wheels.yml")
+
+
+def test_release_branch_pushes_build_wheels_before_the_tag():
+    text = (ROOT / ".github/workflows/python_wheels.yml").read_text(encoding="utf-8")
+    push, _, rest = text.partition("\n  pull_request:")
+    assert "workflow_dispatch:" in rest
+    assert "- 'v*'" in push
+    assert "- 'feat/release-*'" in push
+    assert "tags:" in push
+    assert "branches:" in push
