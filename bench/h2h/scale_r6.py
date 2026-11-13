@@ -381,78 +381,13 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
 
 
 def h2h(paths: dict[str, Path]) -> None:
-    import readcon
-    import extxyz
-    from ase.io import read as ase_read
-    import chemfiles
-    from ovito.io import import_file
+    # The scored extended-XYZ rows live in fair_h2h. This wrapper keeps
+    # the campaign entry point. Chemfiles and MDAnalysis are not timed:
+    # their XYZ readers do not return the file's masses, velocities and
+    # constraints.
+    from fair_h2h import run_table2
 
-    out = []
-    log = OUT / "h2h.json"
-    if log.exists():
-        out = json.loads(log.read_text())
-    done = {(row["file"], row["reader"]) for row in out}
-    targets = ("extxyz-alloy", "extxyz-md", "extxyz-same")
-    readers = (
-        "readcon",
-        "ovito",
-        "chemfiles",
-        "ase-extxyz",
-        "cextxyz",
-        "extxyz",
-        "mdanalysis",
-    )
-    for name in targets:
-        path = os.fspath(paths[name])
-        for reader in readers:
-            if (name, reader) in done:
-                continue
-
-            def once(reader=reader, path=path):
-                if reader == "readcon":
-                    readcon.read_extxyz(path, n_threads=1)
-                elif reader == "cextxyz":
-                    for frame in extxyz.iread_dicts(path, use_cextxyz=True):
-                        frame.arrays["pos"]
-                elif reader == "extxyz":
-                    for frame in extxyz.iread_dicts(path, use_cextxyz=False):
-                        frame.arrays["pos"]
-                elif reader == "mdanalysis":
-                    import MDAnalysis as mda
-
-                    universe = mda.Universe(path, format="XYZ")
-                    for _ts in universe.trajectory:
-                        universe.atoms.positions
-                elif reader == "ase-extxyz":
-                    ase_read(path, index=":", format="extxyz")
-                elif reader == "chemfiles":
-                    with chemfiles.Trajectory(path, "r", "XYZ") as traj:
-                        for frame in traj:
-                            frame.positions
-                else:
-                    data = import_file(path)
-                    for index in range(data.source.num_frames):
-                        block = data.compute(index)
-                        np.array(block.particles.positions, dtype=np.float64)
-
-            print(f"h2h {name} {reader}", flush=True)
-            once()
-            samples = []
-            for _ in range(REPEATS):
-                started = time.perf_counter()
-                once()
-                samples.append(time.perf_counter() - started)
-            median, iqr = type7(samples)
-            row = {
-                "file": name,
-                "reader": reader,
-                "median_s": median,
-                "iqr_s": iqr,
-                "samples_s": samples,
-            }
-            out.append(row)
-            print(f"  {median:.4f}", flush=True)
-            (OUT / "h2h.json").write_text(json.dumps(out, indent=2) + "\n")
+    run_table2(paths, OUT, REPEATS)
 
 
 def hardware(rows: list[dict]) -> None:

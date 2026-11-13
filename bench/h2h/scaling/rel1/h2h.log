@@ -1,0 +1,224 @@
+commit 0f5c362b6b1ea10b9b3f4cd3a85de9d4c463acdc
+versions {"MDAnalysis": "2.11.0", "ase": "3.29.0", "chemfiles": "0.10.4", "eon": "579738a9387e8d0ea55496f45dd057812cfab892", "eon_flags": "eon 579738a9387e8d0ea55496f45dd057812cfab892\ntimer -O3\nlibrary /tmp/eon-build/client/libeonclib.so\nconfile -O3\nmirror bench/h2h/eon_stub/ReadconDbMirror.h\nbuildtype release", "extxyz": "0.4.6", "numpy": "2.5.4", "ovito": "3.17.2", "readcon": "0.23.0"}
+startup excluded
+warmup 1 samples 6 percentile type7 serial 1
+cache warm and cold use the same prepare_cache for every reader
+file extxyz-alloy columns ['masses', 'pos', 'species']
+extxyz-alloy readcon warm median 0.053935142 iqr 0.000398591 atoms 1000000 frames 1
+sample 0.054021507
+sample 0.076487119
+sample 0.053977731
+sample 0.053892554
+sample 0.053454912
+sample 0.053518444
+extxyz-alloy ovito warm median 0.139530391 iqr 0.007205637 atoms 1000000 frames 1
+sample 0.160571609
+sample 0.147219871
+sample 0.138247577
+sample 0.140483224
+sample 0.138577559
+sample 0.133888545
+extxyz-alloy ase-extxyz warm median 1.381507407 iqr 0.029313677 atoms 1000000 frames 1
+sample 1.415174249
+sample 1.413985594
+sample 1.374851909
+sample 1.380225900
+sample 1.382788914
+sample 1.375755029
+extxyz-alloy cextxyz warm median 0.100109604 iqr 0.011653247 atoms 1000000 frames 1
+sample 0.096166558
+sample 0.121987594
+sample 0.100208843
+sample 0.114524931
+sample 0.100010366
+sample 0.099053427
+extxyz-alloy extxyz warm median 1.510336663 iqr 0.040518916 atoms 1000000 frames 1
+sample 1.473067146
+sample 1.514839036
+sample 1.465045430
+sample 1.524090786
+sample 1.505834290
+sample 1.552539133
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
+extxyz-alloy readcon cold median 0.067039942 iqr 0.006564838 atoms 1000000 frames 1
+sample 0.061310962
+sample 0.075664149
+sample 0.058580527
+sample 0.065769203
+sample 0.069216920
+sample 0.068310681
+extxyz-alloy ovito cold median 0.151042627 iqr 0.020253440 atoms 1000000 frames 1
+sample 0.178183254
+sample 0.176154627
+sample 0.149321026
+sample 0.150110708
+sample 0.151974545
+sample 0.149771319
+extxyz-alloy ase-extxyz cold median 1.447060639 iqr 0.065950667 atoms 1000000 frames 1
+sample 1.376250883
+sample 1.444917284
+sample 1.411474113
+sample 1.449203993
+sample 1.563246560
+sample 1.497979433
+extxyz-alloy cextxyz cold median 0.126575474 iqr 0.024283313 atoms 1000000 frames 1
+sample 0.130829355
+sample 0.209221969
+sample 0.150806176
+sample 0.120215397
+sample 0.122321593
+sample 0.121264346
+extxyz-alloy extxyz cold median 1.544102768 iqr 0.045058222 atoms 1000000 frames 1
+sample 1.545702302
+sample 1.542503234
+sample 1.599302173
+sample 1.540290899
+sample 1.804562140
+sample 1.509765875
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
+file extxyz-md columns ['masses', 'pos', 'species']
+extxyz-md readcon warm median 0.053695900 iqr 0.002616890 atoms 96 frames 10000
+sample 0.052572922
+sample 0.078982370
+sample 0.053457690
+sample 0.056348253
+sample 0.053934110
+sample 0.053017873
+extxyz-md ovito warm median 1.479213313 iqr 0.285138276 atoms 96 frames 10000
+sample 1.366987934
+sample 1.469993368
+sample 1.435786188
+sample 2.168849386
+sample 1.809823926
+sample 1.488433258
+extxyz-md ase-extxyz warm median 2.637030903 iqr 0.169955264 atoms 96 frames 10000
+sample 2.612196280
+sample 2.613989348
+sample 2.605351956
+sample 2.660072458
+sample 2.823442262
+sample 2.959811750
+extxyz-md cextxyz warm median 0.621376281 iqr 0.018417682 atoms 96 frames 10000
+sample 0.616372630
+sample 0.613359242
+sample 0.640826627
+sample 0.621221913
+sample 0.621530650
+sample 0.789426412
+extxyz-md extxyz warm median 4.627985979 iqr 0.070356723 atoms 96 frames 10000
+sample 4.645561924
+sample 4.604499984
+sample 4.748678409
+sample 4.610410034
+sample 4.575280482
+sample 4.686591651
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
+extxyz-md readcon cold median 0.066902221 iqr 0.002718676 atoms 96 frames 10000
+sample 0.069406682
+sample 0.074244792
+sample 0.065869684
+sample 0.067034077
+sample 0.066770365
+sample 0.063786073
+extxyz-md ovito cold median 1.419285267 iqr 0.029776224 atoms 96 frames 10000
+sample 1.410711646
+sample 1.420447729
+sample 1.411141491
+sample 1.450068149
+sample 1.654606274
+sample 1.418122806
+extxyz-md ase-extxyz cold median 2.564213944 iqr 0.046938774 atoms 96 frames 10000
+sample 2.530445470
+sample 2.555901889
+sample 2.572525999
+sample 2.549383215
+sample 2.606426877
+sample 2.654000705
+extxyz-md cextxyz cold median 0.615075591 iqr 0.011407996 atoms 96 frames 10000
+sample 0.601859524
+sample 0.616078551
+sample 0.616401546
+sample 0.614072632
+sample 0.762920802
+sample 0.556749124
+extxyz-md extxyz cold median 4.625950164 iqr 0.038439938 atoms 96 frames 10000
+sample 4.606933018
+sample 4.651890626
+sample 4.584313813
+sample 4.635393629
+sample 4.905343640
+sample 4.616506699
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [96, 96], "n_frames": [10000, 10000], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "ok": true}], "ok": true}
+file extxyz-same columns ['fixed', 'id', 'masses', 'pos', 'species', 'vel']
+extxyz-same readcon warm median 0.103334774 iqr 0.012216654 atoms 1000000 frames 1
+sample 0.103604549
+sample 0.139142432
+sample 0.118903312
+sample 0.102794290
+sample 0.103064999
+sample 0.102054584
+extxyz-same ovito warm median 0.235215756 iqr 0.009373696 atoms 1000000 frames 1
+sample 0.248841133
+sample 0.245153145
+sample 0.235113596
+sample 0.232722990
+sample 0.230148162
+sample 0.235317916
+extxyz-same ase-extxyz warm median 2.010828616 iqr 0.044802585 atoms 1000000 frames 1
+sample 1.933489194
+sample 2.144979443
+sample 1.978121089
+sample 2.022471688
+sample 2.030095821
+sample 1.999185543
+extxyz-same cextxyz warm median 0.153662615 iqr 0.003004795 atoms 1000000 frames 1
+sample 0.157209115
+sample 0.162981231
+sample 0.152960063
+sample 0.153924569
+sample 0.153377358
+sample 0.153400661
+extxyz-same extxyz warm median 2.643403720 iqr 0.037729237 atoms 1000000 frames 1
+sample 2.598435078
+sample 2.608999286
+sample 2.643685455
+sample 2.643121985
+sample 2.659117112
+sample 2.761919931
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}], "ok": true}
+extxyz-same readcon cold median 0.121052028 iqr 0.011962616 atoms 1000000 frames 1
+sample 0.132448669
+sample 0.137731691
+sample 0.122321923
+sample 0.117345111
+sample 0.116366773
+sample 0.119782133
+extxyz-same ovito cold median 0.248284181 iqr 0.005822072 atoms 1000000 frames 1
+sample 0.244143249
+sample 0.250602399
+sample 0.242368495
+sample 0.250239600
+sample 0.246328762
+sample 0.256232677
+extxyz-same ase-extxyz cold median 1.958751986 iqr 0.252196377 atoms 1000000 frames 1
+sample 1.876645421
+sample 1.976937484
+sample 1.940566488
+sample 2.239449908
+sample 1.915311737
+sample 2.322739517
+extxyz-same cextxyz cold median 0.176433224 iqr 0.002713960 atoms 1000000 frames 1
+sample 0.177025865
+sample 0.193725012
+sample 0.178567918
+sample 0.175840583
+sample 0.175344399
+sample 0.170922559
+extxyz-same extxyz cold median 2.654006434 iqr 0.040398303 atoms 1000000 frames 1
+sample 2.643321167
+sample 2.687087087
+sample 2.697945113
+sample 2.664691702
+sample 2.630278768
+sample 2.640346195
+compare {"pairs": [{"left": "readcon", "right": "ovito", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "readcon", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "ase-extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ovito", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "cextxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "ase-extxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}, {"left": "cextxyz", "right": "extxyz", "n_atoms": [1000000, 1000000], "n_frames": [1, 1], "positions": 0.0, "masses": 0.0, "cell": 0.0, "species": true, "velocities": 0.0, "fixed": 0.0, "ok": true}], "ok": true}

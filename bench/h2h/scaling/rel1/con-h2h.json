@@ -1,0 +1,481 @@
+{
+  "rows": [
+    {
+      "file": "con-1e6",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 0.6736977785000136,
+      "iqr_s": 0.02285821449981995,
+      "samples_s": [
+        0.6124007480000273,
+        0.7110892700000022,
+        0.6880243419998351,
+        0.6711552240001311,
+        0.6592417589999968,
+        0.676240332999896
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "ase",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 2.0305960550000464,
+      "iqr_s": 0.06204799250014048,
+      "samples_s": [
+        2.0412214230000245,
+        1.917442415999858,
+        2.0088226159998612,
+        2.019970687000068,
+        2.084548455999993,
+        2.084469694000063
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "eon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 0.336964,
+      "iqr_s": 0.020393750000000044,
+      "samples_s": [
+        0.329354,
+        0.333576,
+        0.403347,
+        0.329197,
+        0.354287,
+        0.340352
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 0.7067189499999813,
+      "iqr_s": 0.03707209900011321,
+      "samples_s": [
+        0.7453482040000381,
+        0.7582391450000614,
+        0.6995182559999193,
+        0.7121182260000296,
+        0.6883240809997915,
+        0.701319673999933
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "ase",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 2.100495289000037,
+      "iqr_s": 0.2529403185001229,
+      "samples_s": [
+        2.105661643000076,
+        2.0953289349999977,
+        2.246551350000118,
+        1.9127418279999802,
+        2.248671017000106,
+        1.8409786760003044
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "eon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 0.35699099999999995,
+      "iqr_s": 0.009435499999999986,
+      "samples_s": [
+        0.363691,
+        0.356378,
+        0.344395,
+        0.545087,
+        0.351519,
+        0.357604
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-1e6",
+      "reader": "readcon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.5416880734999268,
+      "iqr_s": 0.047515869000221755,
+      "samples_s": [
+        0.6403654119999374,
+        0.6006742459999259,
+        0.5396037199998318,
+        0.5027327249999871,
+        0.5437724270000217,
+        0.5387093229996935
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-1e6",
+      "reader": "ase",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 2.451948436500061,
+      "iqr_s": 0.02178788274989074,
+      "samples_s": [
+        2.408880258999943,
+        2.450053263999962,
+        2.4308201070002724,
+        2.4538436090001596,
+        2.458607169000061,
+        2.4741026390001934
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-1e6",
+      "reader": "eon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.589538,
+      "iqr_s": 0.0337400000000001,
+      "samples_s": [
+        0.636201,
+        0.580792,
+        0.593844,
+        0.585232,
+        0.578825,
+        0.622908
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 0.6622572794999542,
+      "iqr_s": 0.017902380750228986,
+      "samples_s": [
+        0.6216393830000015,
+        0.8057519829999364,
+        0.6797579340000084,
+        0.6657536580000851,
+        0.6582190119997904,
+        0.6587609009998232
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "ase",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 2.487166849500227,
+      "iqr_s": 0.11872245999973075,
+      "samples_s": [
+        2.4752513530002034,
+        2.5465111669996077,
+        2.706635434999953,
+        2.4990823460002503,
+        2.3961582179999823,
+        2.332591219000278
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "eon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 0.34066050000000003,
+      "iqr_s": 0.012463249999999981,
+      "samples_s": [
+        0.340241,
+        0.332143,
+        0.331454,
+        0.34108,
+        0.348481,
+        0.357005
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 0.7120090649998474,
+      "iqr_s": 0.013150142749736915,
+      "samples_s": [
+        0.6497132049998982,
+        0.8147395830001187,
+        0.7094369779997578,
+        0.714581151999937,
+        0.7183123840000007,
+        0.7024935850004113
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "ase",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 2.4099762079997618,
+      "iqr_s": 0.3894445077501132,
+      "samples_s": [
+        2.010757925999769,
+        2.5891958970000815,
+        2.2563968349995775,
+        2.563555580999946,
+        2.1723228020000533,
+        2.7358336910001526
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "eon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 0.3818885,
+      "iqr_s": 0.024951500000000015,
+      "samples_s": [
+        0.372802,
+        0.390975,
+        0.396463,
+        0.401297,
+        0.369252,
+        0.349237
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "readcon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.4892223515000751,
+      "iqr_s": 0.05813377224967553,
+      "samples_s": [
+        0.5507598130002407,
+        0.47831789400015623,
+        0.500126808999994,
+        0.47741164800027036,
+        0.5476537059998918,
+        0.4763998950002133
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "ase",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 2.3670664625001336,
+      "iqr_s": 0.012997879249951438,
+      "samples_s": [
+        2.3628678400000354,
+        2.357263211999907,
+        2.3557719099999304,
+        2.371794635999777,
+        2.375091619000159,
+        2.371265085000232
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-h2h-mask",
+      "reader": "eon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.6091135,
+      "iqr_s": 0.003545999999999938,
+      "samples_s": [
+        0.59472,
+        0.60895,
+        0.605376,
+        0.609995,
+        0.609277,
+        0.61853
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-h2h",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 1.3313553579998825,
+      "iqr_s": 0.018735606250515957,
+      "samples_s": [
+        1.3236485369998263,
+        1.5207034319996637,
+        1.3442992540003615,
+        1.3172587909998583,
+        1.3248602209996534,
+        1.3378504950001116
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h",
+      "reader": "eon",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 0.6101175,
+      "iqr_s": 0.0203819999999999,
+      "samples_s": [
+        0.682176,
+        0.596133,
+        0.6093,
+        0.622764,
+        0.610935,
+        0.585791
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h",
+      "reader": "readcon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 1.41305996899996,
+      "iqr_s": 0.04129975774992545,
+      "samples_s": [
+        1.4104348390001178,
+        1.5116360970000642,
+        1.4590664790002847,
+        1.4057502220002789,
+        1.3896020580000368,
+        1.415685098999802
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h",
+      "reader": "eon",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 0.637323,
+      "iqr_s": 0.035481500000000055,
+      "samples_s": [
+        0.648342,
+        0.648885,
+        0.605908,
+        0.644635,
+        0.630011,
+        0.597449
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1
+    },
+    {
+      "file": "con-h2h",
+      "reader": "readcon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.6872496190001129,
+      "iqr_s": 0.031942919999778496,
+      "samples_s": [
+        0.6552564960002201,
+        0.6938420110000152,
+        0.672443062000184,
+        0.6806572270002107,
+        0.7106386939999538,
+        0.7197774269998263
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    },
+    {
+      "file": "con-h2h",
+      "reader": "eon",
+      "op": "write",
+      "cache": "unlink-create",
+      "median_s": 0.875047,
+      "iqr_s": 0.021308749999999987,
+      "samples_s": [
+        0.881567,
+        0.863191,
+        0.920953,
+        0.889881,
+        0.865816,
+        0.868527
+      ],
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "correct": true
+    }
+  ],
+  "versions": {
+    "ase": "3.29.0",
+    "numpy": "2.5.4",
+    "chemfiles": "0.10.4",
+    "MDAnalysis": "2.11.0",
+    "extxyz": "0.4.6",
+    "ovito": "3.17.2",
+    "readcon": "0.23.0",
+    "eon": "579738a9387e8d0ea55496f45dd057812cfab892",
+    "eon_flags": "eon 579738a9387e8d0ea55496f45dd057812cfab892\ntimer -O3\nlibrary /tmp/eon-build/client/libeonclib.so\nconfile -O3\nmirror bench/h2h/eon_stub/ReadconDbMirror.h\nbuildtype release"
+  },
+  "startup": "excluded",
+  "skipped": [
+    {
+      "file": "con-h2h",
+      "reader": "ase",
+      "reason": "ase/io/eon.py reads coordinates only; a convel velocity block is not stored"
+    }
+  ],
+  "commit": "0f5c362b6b1ea10b9b3f4cd3a85de9d4c463acdc",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  },
+  "ceilings": {
+    "stream": "n 167772160\nrepeats 8\nparallel_threads 8\nparallel_triad_gbs 113.247679\nparallel_triad_iqr 1.856643\narray_kib 1310720\ncopy_gbs 16.613547\ncopy_iqr 0.056704\nscale_gbs 17.105642\nscale_iqr 0.065567\nadd_gbs 17.541996\nadd_iqr 0.045054\ntriad_gbs 17.602775\ntriad_iqr 0.023882\n",
+    "fdatasync_median_s": null,
+    "fdatasync_iqr_s": null,
+    "pwrite_median_s": null,
+    "pwrite_iqr_s": null,
+    "disk_sync": "fdatasync",
+    "pwrite": "raw",
+    "bytes": null
+  }
+}

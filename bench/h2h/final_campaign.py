@@ -35,6 +35,14 @@ def prepare(out: Path, repeats: int):
     os.environ["READCON_SCALE_OUT"] = str(out)
     os.environ["READCON_SCALE_LOG"] = str(out / "logs")
     os.environ["READCON_CAMPAIGN_REPEATS"] = str(repeats)
+    for key in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        os.environ[key] = "1"
     os.environ.pop("RAYON_NUM_THREADS", None)
     os.environ.pop("CARGO_TARGET_DIR", None)
     import scale_r6
@@ -275,42 +283,20 @@ def cmd_table2(out: Path, repeats: int) -> None:
     scale.h2h(paths)
     path = out / "h2h.json"
     finish(path, out, repeats, sha, ceilings=True)
+    log = out / "h2h.log"
+    if log.is_file():
+        finish(log, out, repeats, sha, ceilings=False)
 
 
 def cmd_con_h2h(out: Path, repeats: int) -> None:
     sha = head_sha()
     scale = prepare(out, repeats)
     paths = scale.ensure_inputs()
-    con = os.fspath(paths["con-1e6"])
-    import readcon
-    from ase.io import read as ase_read
+    from fair_h2h import run_con_h2h
 
-    eon_root = os.environ.get("EON_ROOT", "/tmp/eOn")
-    sys.path.insert(0, eon_root)
-    from eon.fileio import loadcons
-
-    def readers():
-        yield "readcon", lambda: readcon.read_con(con, n_threads=1)
-        yield "ase", lambda: ase_read(con, index=":", format="eon")
-        yield "eon", lambda: loadcons(con)
-
-    rows = []
-    for name, once in readers():
-        print(f"con-h2h {name}", flush=True)
-        median, iqr, samples = timed(once, repeats)
-        rows.append(
-            {
-                "file": "con-1e6",
-                "reader": name,
-                "median_s": median,
-                "iqr_s": iqr,
-                "samples_s": samples,
-            }
-        )
-        print(f"  {median:.4f}", flush=True)
-    path = out / "con-h2h.json"
-    path.write_text(json.dumps(rows) + "\n")
-    finish(path, out, repeats, sha, ceilings=True)
+    run_con_h2h(paths, out, repeats)
+    for name in ("con-h2h.json", "con-h2h.log"):
+        finish(out / name, out, repeats, sha, ceilings=name.endswith(".json"))
 
 
 def cmd_db(out: Path, repeats: int) -> None:

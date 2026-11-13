@@ -180,6 +180,7 @@ rule final_table2:
         f"{FINAL_OUT}/hardware.json",
     output:
         f"{FINAL_OUT}/h2h.json",
+        f"{FINAL_OUT}/h2h.log",
     params:
         out=FINAL_OUT,
         repeats=FINAL_REPEATS,
@@ -193,6 +194,7 @@ rule final_con_h2h:
         f"{FINAL_OUT}/hardware.json",
     output:
         f"{FINAL_OUT}/con-h2h.json",
+        f"{FINAL_OUT}/con-h2h.log",
     params:
         out=FINAL_OUT,
         repeats=FINAL_REPEATS,

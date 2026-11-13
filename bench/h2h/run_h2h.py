@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BENCH = Path(__file__).resolve().parent
 WORK = BENCH / "work"
 SCRIPT = Path(__file__)
-REPEATS = 7
+REPEATS = 6
 ABS_TOL = 1e-8
 PANEL = (
     {"id": "con-218x100", "kind": "repeat", "frames": 100, "atoms": 218},
@@ -555,9 +555,17 @@ def load_eon_dump(path: Path):
     import struct
 
     blob = path.read_bytes()
-    magic, nframes = struct.unpack_from("<II", blob, 0)
+    magic, second = struct.unpack_from("<II", blob, 0)
     if magic != 0x31434F4E:
         raise RuntimeError("dump")
+    # Version 2 stores the version word, then the frame count, then the
+    # fixed mask and velocities beside the old position block.
+    if second == 2:
+        from fair_h2h import load_eon_dump as load_v2
+
+        loaded = load_v2(path)
+        return loaded["positions"], loaded["masses"], loaded["cell"]
+    nframes = second
     offset = 8
     pos, mass, cell = [], [], []
     for _ in range(nframes):

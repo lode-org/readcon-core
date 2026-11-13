@@ -49,9 +49,14 @@ def samples_from_text(text: str) -> list[float]:
     return found
 
 
-def write_table2(h2h: list[dict]) -> None:
+def write_table2(h2h: list[dict] | dict) -> None:
+    rows = h2h["rows"] if isinstance(h2h, dict) else h2h
     lines = ["file\treader\tmedian_s\tiqr_s"]
-    for row in h2h:
+    for row in rows:
+        if row.get("op", "read") != "read":
+            continue
+        if row.get("cache", "warm") != "warm":
+            continue
         lines.append(
             f"{row['file']}\t{row['reader']}\t{sig3(row['median_s'])}\t{sig3(row['iqr_s'])}"
         )
