@@ -131,7 +131,23 @@ pub fn read_frames_for_convert(input: &Path) -> Result<(Vec<ConFrame>, bool), Co
 /// Convert `input` (CON or chemfiles-readable foreign format) to CON at `output`.
 ///
 /// Returns a [`ConvertReport`]. Fails if the foreign path needs chemfiles and
-/// this build is lean, or if zero frames are produced.
+/// this build is lean, or if zero frames are produced. This is the call the
+/// `readcon-core convert` binary makes.
+///
+/// ```
+/// use readcon_core::convert::convert_path_to_con;
+/// use std::path::Path;
+///
+/// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
+/// let dir = std::env::temp_dir().join(format!("readcon-convert-doc-{}", std::process::id()));
+/// std::fs::create_dir_all(&dir).unwrap();
+/// let out = dir.join("out.con");
+/// let report = convert_path_to_con(&src, &out).unwrap();
+/// assert!(report.native_con);
+/// assert_eq!(report.n_frames, 1);
+/// assert_eq!(report.n_atoms_last, 4);
+/// let _ = std::fs::remove_dir_all(dir);
+/// ```
 pub fn convert_path_to_con(input: &Path, output: &Path) -> Result<ConvertReport, ConvertError> {
     let (frames, native_con) = read_frames_for_convert(input)?;
     let n_frames = frames.len();

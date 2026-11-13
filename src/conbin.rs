@@ -1558,6 +1558,24 @@ fn write_header_page(
 ///
 /// The header occupies one host page, so the payload starts on a page
 /// boundary. Positions of every frame are written as one run, then velocities.
+///
+/// ```
+/// use readcon_core::conbin::{read_owned_f64, write_from_con};
+/// use std::path::Path;
+///
+/// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
+/// let dir = std::env::temp_dir().join(format!("readcon-conbin-doc-{}", std::process::id()));
+/// std::fs::create_dir_all(&dir).unwrap();
+/// let out = dir.join("tiny.bin");
+/// let header = write_from_con(&src, &out, false).unwrap();
+/// assert_eq!((header.n_frames, header.n_atoms), (1, 4));
+/// let (again, positions, velocities) = read_owned_f64(&out, 1).unwrap();
+/// assert_eq!(again.n_frames, 1);
+/// assert_eq!(positions.len(), 12);
+/// assert!((positions[0] - 0.6394).abs() < 1e-4);
+/// assert_eq!(velocities.len(), 12);
+/// let _ = std::fs::remove_dir_all(dir);
+/// ```
 pub fn write_from_con(
     con_path: &Path,
     out_path: &Path,

@@ -291,6 +291,14 @@ atom fixed on every axis and one fixed on z only, then reads them back.
    assert list(back[1].arrays["atom_id"]) == [4, 9]
    assert back[1].get_velocities()[1][0] != 0.0
 
+``read_conbin`` and ``read_pdb``
+--------------------------------
+
+``write_conbin(con_path, out_path)`` streams a CON file into a CON-bin.
+``read_conbin(path)`` returns positions, velocities, and the atom count.
+``read_pdb(path)`` returns positions, masses, and the cell, and does not
+build a frame. The runnable copies are in :doc:`howto`.
+
 C writer calls
 --------------
 

@@ -89,6 +89,21 @@ fn push_atom(line: &[u8], pos: &mut Vec<f64>, mass: &mut Vec<f64>) -> Result<(),
     Ok(())
 }
 
+/// Scan PDB bytes into positions, masses, and the cell.
+///
+/// ```
+/// use readcon_core::pdb_scan::tables_from_pdb_bytes;
+/// let text = b"\
+/// CRYST1   10.000   12.000   14.000  90.00  90.00  90.00 P 1
+/// ATOM      1   Cu MOL     1       0.000   1.000   2.000  1.00  0.00          CU
+/// END
+/// ";
+/// let tables = tables_from_pdb_bytes(text).unwrap();
+/// assert_eq!((tables.n_frames, tables.n_atoms), (1, 1));
+/// assert_eq!(tables.positions, vec![0.0, 1.0, 2.0]);
+/// assert!((tables.masses[0] - 63.546).abs() < 1e-9);
+/// assert_eq!(&tables.cell[..3], &[10.0, 12.0, 14.0]);
+/// ```
 pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
     let mut cell = [0.0; 6];
     let mut positions = Vec::new();

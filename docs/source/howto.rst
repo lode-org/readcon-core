@@ -1143,6 +1143,109 @@ Multi-frame trajectory processing
         println("Image $i: $n_free free atoms")
     end
 
+Compressed input
+~~~~~~~~~~~~~~~~
+
+``read_con`` opens the file with ``read_con_file_iterator``. That iterator
+decodes ``.gz``, and ``.zst`` when the shared library was built with ``zstd``.
+``write_con`` always writes plain CON text. It does not look at the suffix.
+Gzip and zstd output is ``create_writer_gzip_c`` / ``create_writer_zstd_c``
+in that same library, or ``write_con`` in Python with ``compression="gzip"``
+or ``"zstd"``.
+
+.. code:: julia
+
+    using ReadCon
+
+    frames = read_con("trajectory.con.gz")
+    println(length(frames), " frames")
+
+CON-bin
+-------
+
+CON-bin is a binary column file. The header is one host page. Positions
+of every frame follow as one little-endian run, then velocities the same
+way. Every frame must have the same atom count. ``write_conbin`` streams a
+CON text file into that layout. ``read_conbin`` returns a writable view of
+the position run, the velocity run, and the atom count. The arrays are
+shaped ``(frames, atoms * 3)``. A frame with no velocity section is stored
+as zeros. A binary32 file is ``read_conbin_f32``.
+
+.. code:: python
+
+    import readcon
+
+    atom = readcon.Atom("Cu", 1.0, 2.0, 3.0, atom_id=1, mass=63.546)
+    frame = readcon.ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom])
+    readcon.write_con("conbin_src.con", [frame])
+    n_frames, n_atoms = readcon.write_conbin("conbin_src.con", "conbin_out.bin")
+    positions, velocities, atoms = readcon.read_conbin("conbin_out.bin")
+    assert (n_frames, n_atoms, atoms) == (1, 1, 1)
+    assert positions.shape == (1, 3)
+    assert velocities.shape == (1, 3)
+    assert positions[0, 0] == 1.0
+    assert velocities[0, 0] == 0.0
+
+Rust uses ``conbin::write_from_con`` and ``conbin::read_owned_f64``. The
+doctest on ``write_from_con`` runs that round trip.
+
+PDB columns
+-----------
+
+``read_pdb`` scans a PDB file into three arrays and does not build a frame.
+Positions are ``(frames, atoms, 3)``, masses are ``(frames, atoms)``, and the
+cell is ``(frames, 6)`` with lengths then angles. ``CRYST1`` fills the cell.
+``ATOM`` and ``HETATM`` lines use the fixed coordinate columns. The element
+is the two characters at columns 77–78 when they are present. Masses are
+filled for H and Cu. Any other element is NaN. ``ENDMDL`` closes a frame.
+A file with no model records is one frame.
+
+.. code:: python
+
+    import readcon
+
+    pdb = """\
+    CRYST1   10.000   12.000   14.000  90.00  90.00  90.00 P 1
+    ATOM      1   Cu MOL     1       0.000   1.000   2.000  1.00  0.00          CU
+    END
+    """
+    open("one.pdb", "w", encoding="utf-8").write(pdb)
+    positions, masses, cell = readcon.read_pdb("one.pdb")
+    assert positions.shape == (1, 1, 3)
+    assert masses.shape == (1, 1)
+    assert cell.shape == (1, 6)
+    assert list(positions[0, 0]) == [0.0, 1.0, 2.0]
+    assert abs(masses[0, 0] - 63.546) < 1e-9
+    assert list(cell[0][:3]) == [10.0, 12.0, 14.0]
+
+Rust reads the same bytes with ``pdb_scan::tables_from_pdb_bytes``. The
+doctest on that function checks one copper atom.
+
+Fortran: gzip and zstd writers
+------------------------------
+
+``open_writer`` writes plain CON. ``open_writer_gzip`` writes gzip.
+``open_writer_zstd`` writes zstd when the library was built with that
+feature. A lean library returns a writer whose ``valid`` is false.
+``extend_one`` appends one frame. ``free`` releases the writer.
+
+.. code:: fortran
+
+    use readcon
+    type(frame_t) :: frame
+    type(writer_t) :: gz, zst
+    integer :: stat
+    frame = read_first_frame('in.con')
+    gz = open_writer_gzip('out.con.gz')
+    stat = gz%extend_one(frame)
+    call gz%free()
+    zst = open_writer_zstd('out.con.zst')
+    if (zst%valid()) then
+      stat = zst%extend_one(frame)
+      call zst%free()
+    end if
+    call frame%free()
+
 Chemfiles — convert other formats into CON
 ------------------------------------------
 

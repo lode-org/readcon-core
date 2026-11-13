@@ -154,6 +154,24 @@ From the repository root (fixtures live under ``resources/test/``):
     let frame = read_first_frame(std::path::Path::new("resources/test/tiny_cuh2.con"))?;
     println!("{:?} {}", frame.header.boxl, frame.atom_data.len());
 
+Command line
+------------
+
+The ``readcon-core`` binary inspects a CON file and can rewrite it.
+``convert`` copies a CON path with no extra features. XYZ, PDB, and GRO
+need a build with ``chemfiles``.
+
+.. code:: shell
+
+    cargo build --release
+    ./target/release/readcon-core resources/test/tiny_cuh2.con
+    ./target/release/readcon-core resources/test/tiny_cuh2.con copy.con
+    cargo build --release --features chemfiles
+    ./target/release/readcon-core convert water.xyz water.con
+
+The library call behind ``convert`` is ``convert_path_to_con``. A native CON
+input sets ``native_con`` and does not load chemfiles.
+
 Where to go next
 ----------------
 
