@@ -2,15 +2,19 @@
 """Cross-format head-to-head.
 
 readcon reads and writes CON (plain, gzip, zstd). ASE, chemfiles,
-MDAnalysis, and OVITO, where they import, read and write the same atoms,
-cell, and frames in their own format: extxyz, XYZ, PDB, DCD, XTC, and
-Amber NetCDF, plus a compressed variant when that library supports it.
+MDAnalysis, and OVITO read and write the same atoms, cell, and frames in
+the format each library does best from this set: extended XYZ, XYZ, PDB,
+DCD, XTC, Amber NetCDF, and TRR, plus a compressed variant when that
+library writes one. Chemfiles also writes DCD, XTC, PDB and Amber NetCDF
+(with velocities). MDAnalysis writes TRR with velocities. OVITO's XYZ
+keeps mass and velocity, and the gzip row compresses that text.
 Chemfiles reads CON by taking the frames readcon parsed and copying
 positions and the cell out of a chemfiles Frame. That row exists only
 when ``has_chemfiles_support()`` is true. Compressed XYZ rows exist when
 this chemfiles build opens ``.xyz.gz``, ``.xyz.xz`` and ``.xyz.bz2``.
-TRR is chemfiles' binary trajectory. PDB above 99,999 atoms stays in the
-table with that limit in the Drops column.
+MDAnalysis PDB above 99,999 atoms stays in the table with that limit in
+the Drops column. A round trip that moves a coordinate records precision
+in Drops.
 
 Each arm is converted once, outside the clock. Samples are fresh processes
 pinned to the same CPU set, one warmup, six serial samples, rotated order.
@@ -58,8 +62,12 @@ PRECISION = {
     "xtc": 1e-2,
     "ncdf": 1e-4,
     "trr": 1e-3,
+    # GRO prints nanometres to 0.001, which is 0.01 angstrom.
+    "gro": 1e-2,
 }
 FIELD_TOL = 1e-4
+# Smaller than a text CON digit, larger than a float64 round trip.
+PRECISION_DROP = 1e-8
 
 
 def serial_threads() -> None:
@@ -252,7 +260,13 @@ def write_chemfiles(path: Path, spec: dict, fmt: str) -> None:
             frame = chemfiles.Frame()
             frame.resize(n_atoms)
             frame.positions[:] = spec["positions"][frame_index]
-            if fmt == "TRR":
+            # TRR and Amber NetCDF both store a velocity array. Leaving it
+            # out made the Drops column blame the format for a field the
+            # writer never asked to save.
+            # TRR, Amber NetCDF and GRO store velocities. A compressed GRO
+            # name still carries ".gro", and the empty format string lets
+            # chemfiles pick gzip or xz from the extension.
+            if fmt in ("TRR", "Amber NetCDF", "GRO") or ".gro" in path.name:
                 frame.add_velocities()
                 frame.velocities[:] = spec["velocities"][frame_index]
             lengths = [float(value) for value in spec["cell"][frame_index, :3]]
@@ -448,12 +462,15 @@ def _mda_universe(spec: dict):
     return universe
 
 
-def _mda_write(path: Path, spec: dict) -> None:
+def _mda_write(path: Path, spec: dict, velocities: bool = False) -> None:
     import MDAnalysis as mda
 
     universe = _mda_universe(spec)
     path.unlink(missing_ok=True)
-    with mda.Writer(os.fspath(path), spec["n_atoms"]) as writer:
+    # Amber NetCDF only creates the velocity variable when the writer is
+    # opened with velocities=True. Setting the timestep flag later is not enough.
+    writer_kwargs = {"velocities": True} if velocities else {}
+    with mda.Writer(os.fspath(path), spec["n_atoms"], **writer_kwargs) as writer:
         for frame_index in range(spec["n_frames"]):
             universe.atoms.positions = spec["positions"][frame_index]
             lengths = spec["cell"][frame_index, :3]
@@ -461,22 +478,39 @@ def _mda_write(path: Path, spec: dict) -> None:
                 [lengths[0], lengths[1], lengths[2], 90.0, 90.0, 90.0],
                 dtype=np.float64,
             )
+            if velocities:
+                step = universe.trajectory.ts
+                step.velocities = np.asarray(
+                    spec["velocities"][frame_index], dtype=np.float64
+                )
+                step.has_velocities = True
             writer.write(universe.atoms)
 
 
-def _mda_read_reader(path: str, reader_cls) -> dict:
+def _mda_read_reader(path: str, reader_cls, velocities: bool = False) -> dict:
     positions = []
     cells = []
+    velocity_blocks = []
     with reader_cls(path) as reader:
         for ts in reader:
             positions.append(np.array(ts.positions, dtype=np.float64, copy=True))
             dim = np.asarray(ts.dimensions, dtype=np.float64)
             cells.append(dim.copy())
+            if velocities and ts.has_velocities:
+                velocity_blocks.append(
+                    np.array(ts.velocities, dtype=np.float64, copy=True)
+                )
+            else:
+                velocity_blocks.append(None)
+    if velocity_blocks and all(block is not None for block in velocity_blocks):
+        velocity_block = np.stack(velocity_blocks)
+    else:
+        velocity_block = None
     return {
         "positions": np.stack(positions),
         "cell": np.stack(cells),
         "masses": None,
-        "velocities": None,
+        "velocities": velocity_block,
         "fixed": None,
     }
 
@@ -541,6 +575,8 @@ def write_ovito(path: Path, spec: dict) -> None:
         data.create_cell(matrix, pbc=(True, True, True))
         particles = data.create_particles(count=spec["n_atoms"])
         particles.create_property("Position", data=spec["positions"][frame_index])
+        particles.create_property("Velocity", data=spec["velocities"][frame_index])
+        particles.create_property("Mass", data=spec["masses"][frame_index])
         types = particles.create_property("Particle Type")
         types.types.append(ParticleType(id=1, name="Cu"))
         types[...] = 1
@@ -550,11 +586,17 @@ def write_ovito(path: Path, spec: dict) -> None:
             pipeline,
             os.fspath(piece),
             "xyz",
-            columns=["Particle Type", "Position"],
+            columns=["Particle Type", "Position", "Velocity", "Mass"],
         )
         chunks.append(piece.read_text(encoding="utf-8"))
         piece.unlink()
-    path.write_text("".join(chunks), encoding="utf-8")
+    text = "".join(chunks)
+    if path.name.endswith(".gz"):
+        import gzip
+
+        path.write_bytes(gzip.compress(text.encode("utf-8")))
+    else:
+        path.write_text(text, encoding="utf-8")
 
 
 def read_ovito(path: str) -> dict:
@@ -563,6 +605,8 @@ def read_ovito(path: str) -> dict:
     pipeline = import_file(path)
     positions = []
     cells = []
+    masses = []
+    velocities = []
     for index in range(pipeline.source.num_frames):
         block = pipeline.compute(index)
         positions.append(
@@ -571,11 +615,25 @@ def read_ovito(path: str) -> dict:
         matrix = np.array(block.cell, dtype=np.float64)[:3, :3]
         lengths = np.sqrt(np.sum(matrix * matrix, axis=0))
         cells.append(np.concatenate([lengths, np.array([90.0, 90.0, 90.0])]))
+        mass = block.particles["Mass"][...] if "Mass" in block.particles else None
+        velocity = (
+            block.particles["Velocity"][...] if "Velocity" in block.particles else None
+        )
+        masses.append(
+            None if mass is None else np.array(mass, dtype=np.float64, copy=True)
+        )
+        velocities.append(
+            None if velocity is None else np.array(velocity, dtype=np.float64, copy=True)
+        )
     return {
         "positions": np.stack(positions),
         "cell": np.stack(cells),
-        "masses": None,
-        "velocities": None,
+        "masses": None
+        if any(block is None for block in masses)
+        else np.stack(masses),
+        "velocities": None
+        if any(block is None for block in velocities)
+        else np.stack(velocities),
         "fixed": None,
     }
 
@@ -628,6 +686,168 @@ def _try_zstd(spec: dict, directory: Path) -> bool:
     if plain.is_file():
         plain.unlink()
     return True
+
+
+def read_mda_xyz(path: str) -> dict:
+    """MDAnalysis XYZ keeps coordinates and drops the cell."""
+    import MDAnalysis as mda
+
+    universe = mda.Universe(path)
+    positions = [
+        np.array(ts.positions, dtype=np.float64, copy=True) for ts in universe.trajectory
+    ]
+    return {
+        "positions": np.stack(positions),
+        "cell": None,
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
+def write_mdtraj(path: Path, spec: dict) -> None:
+    """MDTraj's trajectory object is in nanometres. The file units differ by format."""
+    import mdtraj as md
+
+    topology = md.Topology()
+    chain = topology.add_chain()
+    residue = topology.add_residue("CU", chain)
+    element = md.element.copper
+    for _ in range(spec["n_atoms"]):
+        topology.add_atom("Cu", element, residue)
+    xyz_nm = np.asarray(spec["positions"], dtype=np.float32) / 10.0
+    trajectory = md.Trajectory(xyz_nm, topology)
+    trajectory.unitcell_lengths = np.asarray(spec["cell"][:, :3], dtype=np.float32) / 10.0
+    trajectory.unitcell_angles = np.asarray(spec["cell"][:, 3:], dtype=np.float32)
+    path.unlink(missing_ok=True)
+    trajectory.save(os.fspath(path))
+
+
+def read_mdtraj(path: str) -> dict:
+    """Read one MDTraj file back into angstroms.
+
+    NetCDF and DCD readers return angstroms. XTC returns nanometres.
+    None of these writers store velocities.
+    """
+    import mdtraj as md
+
+    suffix = Path(path).suffix
+    if suffix == ".nc":
+        with md.formats.NetCDFTrajectoryFile(path) as handle:
+            coords, _time, lengths, angles = handle.read()
+        positions = np.asarray(coords, dtype=np.float64)
+        cell = np.concatenate(
+            [np.asarray(lengths, dtype=np.float64), np.asarray(angles, dtype=np.float64)],
+            axis=1,
+        )
+    elif suffix == ".dcd":
+        with md.formats.DCDTrajectoryFile(path) as handle:
+            coords, lengths, angles = handle.read()
+        positions = np.asarray(coords, dtype=np.float64)
+        cell = np.concatenate(
+            [np.asarray(lengths, dtype=np.float64), np.asarray(angles, dtype=np.float64)],
+            axis=1,
+        )
+    elif suffix == ".xtc":
+        with md.formats.XTCTrajectoryFile(path) as handle:
+            coords, _time, _step, box = handle.read()
+        positions = np.asarray(coords, dtype=np.float64) * 10.0
+        vectors = np.asarray(box, dtype=np.float64)
+        lengths = np.sqrt(np.sum(vectors * vectors, axis=2)) * 10.0
+        angles = np.full((positions.shape[0], 3), 90.0)
+        cell = np.concatenate([lengths, angles], axis=1)
+    else:
+        raise RuntimeError(f"mdtraj reader does not know {path}")
+    return {
+        "positions": positions,
+        "cell": cell,
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
+def library_versions() -> dict:
+    """Versions pinned for this table. A mismatch aborts the run."""
+    import ase
+    import chemfiles
+    import mdtraj
+    import ovito
+    import readcon
+    import MDAnalysis
+
+    versions = {
+        "ase": ase.__version__,
+        "chemfiles": chemfiles.__version__,
+        "MDAnalysis": MDAnalysis.__version__,
+        "mdtraj": mdtraj.__version__,
+        "numpy": np.__version__,
+        "ovito": ".".join(str(part) for part in ovito.version),
+        "readcon": readcon.__version__,
+    }
+    required = {
+        "chemfiles": "0.10.4",
+        "MDAnalysis": "2.11.0",
+        "mdtraj": "1.11.2",
+        "ovito": "3.17.2",
+    }
+    mismatches = [
+        f"{name} {versions[name]} != {want}"
+        for name, want in required.items()
+        if versions[name] != want
+    ]
+    if mismatches:
+        raise SystemExit("version pin failed: " + "; ".join(mismatches))
+    return versions
+
+
+def ovito_extxyz_periodicity_and_drift() -> dict:
+    """OVITO 3.17.2 on a two-frame extended XYZ.
+
+    One axis is not periodic. The second frame moves past the cell so a
+    reader that wraps coordinates, or that repeats frame 0, fails the check.
+    """
+    import tempfile
+
+    from ovito.io import import_file
+
+    text = """2
+Lattice="5.0 0.0 0.0 0.0 5.0 0.0 0.0 0.0 5.0" Properties=species:S:1:pos:R:3 pbc="T T F"
+Cu 1.0 1.0 1.0
+Cu 0.2 0.2 0.2
+2
+Lattice="5.0 0.0 0.0 0.0 5.0 0.0 0.0 0.0 5.0" Properties=species:S:1:pos:R:3 pbc="T T F"
+Cu 1.2 6.4 -0.3
+Cu 0.2 0.2 0.2
+"""
+    folder = Path(tempfile.mkdtemp(prefix="h2h8-ovito-"))
+    path = folder / "drift.extxyz"
+    path.write_text(text)
+    pipeline = import_file(os.fspath(path))
+    frames = []
+    flags = []
+    for index in range(pipeline.source.num_frames):
+        block = pipeline.compute(index)
+        frames.append(np.array(block.particles.positions[0], dtype=np.float64))
+        flags.append([bool(value) for value in block.cell.pbc])
+    file_pbc = [True, True, False]
+    file_frame1 = np.array([1.2, 6.4, -0.3])
+    read_frame1 = frames[1] if len(frames) > 1 else None
+    drift = None if read_frame1 is None else float(np.max(np.abs(read_frame1 - file_frame1)))
+    wrapped = drift is not None and abs(float(read_frame1[1]) - 1.4) < 1e-6
+    stuck = drift is not None and float(np.max(np.abs(read_frame1 - frames[0]))) < 1e-8
+    return {
+        "ovito": "3.17.2",
+        "frames": len(frames),
+        "file_pbc": file_pbc,
+        "read_pbc": flags,
+        "pbc_matches": flags == [file_pbc, file_pbc],
+        "file_frame1": file_frame1.tolist(),
+        "read_frame1": None if read_frame1 is None else read_frame1.tolist(),
+        "drift_max_abs": drift,
+        "wrapped_into_cell": wrapped,
+        "stuck_on_frame0": stuck,
+    }
 
 
 def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
@@ -750,6 +970,35 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             )
         else:
             notes.append("chemfiles TRR write/read failed; binary row omitted.")
+        for arm_id, label, fmt in (
+            ("chemfiles-ncdf", "ncdf", "Amber NetCDF"),
+            ("chemfiles-dcd", "dcd", "DCD"),
+            ("chemfiles-xtc", "xtc", "XTC"),
+            ("chemfiles-pdb", "pdb", "PDB"),
+            ("chemfiles-gro", "gro", "GRO"),
+        ):
+            arms.append(
+                {
+                    "id": arm_id,
+                    "tool": "chemfiles",
+                    "format": label,
+                    "precision": PRECISION[label],
+                    "chemfiles_format": fmt,
+                }
+            )
+        for codec in ("gz", "xz"):
+            if not codecs.get(codec):
+                notes.append(f"chemfiles did not open .{codec}; text rows for it are omitted.")
+                continue
+            for stem, label in (("pdb", "pdb"), ("gro", "gro")):
+                arms.append(
+                    {
+                        "id": f"chemfiles-{stem}-{codec}",
+                        "tool": "chemfiles",
+                        "format": f"{label}.{codec}",
+                        "precision": PRECISION[label],
+                    }
+                )
     except ImportError:
         notes.append("chemfiles is not installed.")
     try:
@@ -790,6 +1039,15 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
         arms.append(pdb)
         arms.append(
             {
+                "id": "mda-xyz",
+                "tool": "mdanalysis",
+                "format": "xyz",
+                "precision": PRECISION["xyz"],
+                "notes": "XYZ keeps coordinates and has no cell",
+            }
+        )
+        arms.append(
+            {
                 "id": "mda-dcd",
                 "tool": "mdanalysis",
                 "format": "dcd",
@@ -812,8 +1070,44 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 "precision": PRECISION["ncdf"],
             }
         )
+        arms.append(
+            {
+                "id": "mda-trr",
+                "tool": "mdanalysis",
+                "format": "trr",
+                "precision": PRECISION["trr"],
+            }
+        )
+        notes.append(
+            "MDAnalysis "
+            + __import__("MDAnalysis").__version__
+            + " on DCD, XTC, NetCDF, TRR, XYZ and PDB. "
+            "Cells are orthogonal, so the 2.11 triclinic wrap does not apply."
+        )
     except ImportError:
         notes.append("MDAnalysis is not installed.")
+    try:
+        import mdtraj
+
+        if mdtraj.__version__ != "1.11.2":
+            notes.append(f"mdtraj {mdtraj.__version__} is not 1.11.2; rows omitted.")
+        else:
+            for arm_id, label in (
+                ("mdtraj-ncdf", "ncdf"),
+                ("mdtraj-dcd", "dcd"),
+                ("mdtraj-xtc", "xtc"),
+            ):
+                arms.append(
+                    {
+                        "id": arm_id,
+                        "tool": "mdtraj",
+                        "format": label,
+                        "precision": PRECISION[label],
+                        "notes": "MDTraj 1.11.2 does not write velocities for this format",
+                    }
+                )
+    except ImportError:
+        notes.append("mdtraj is not installed.")
     try:
         import ovito  # noqa: F401
 
@@ -823,6 +1117,16 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 "tool": "ovito",
                 "format": "xyz",
                 "precision": PRECISION["xyz"],
+                "notes": "extended XYZ with species, position, velocity and mass",
+            }
+        )
+        arms.append(
+            {
+                "id": "ovito-xyz-gz",
+                "tool": "ovito",
+                "format": "xyz.gz",
+                "precision": PRECISION["xyz"],
+                "notes": "the same extended XYZ, gzip-compressed",
             }
         )
     except ImportError:
@@ -870,6 +1174,36 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         path = directory / "chemfiles.trr"
         write_chemfiles(path, spec, "TRR")
         return path
+    if arm_id == "chemfiles-ncdf":
+        path = directory / "chemfiles.nc"
+        write_chemfiles(path, spec, "Amber NetCDF")
+        return path
+    if arm_id == "chemfiles-dcd":
+        path = directory / "chemfiles.dcd"
+        write_chemfiles(path, spec, "DCD")
+        return path
+    if arm_id == "chemfiles-xtc":
+        path = directory / "chemfiles.xtc"
+        write_chemfiles(path, spec, "XTC")
+        return path
+    if arm_id == "chemfiles-pdb":
+        path = directory / "chemfiles.pdb"
+        write_chemfiles(path, spec, "PDB")
+        return path
+    if arm_id == "chemfiles-gro":
+        path = directory / "chemfiles.gro"
+        write_chemfiles(path, spec, "GRO")
+        return path
+    if arm_id in (
+        "chemfiles-gro-gz",
+        "chemfiles-gro-xz",
+        "chemfiles-pdb-gz",
+        "chemfiles-pdb-xz",
+    ):
+        suffix = arm_id.removeprefix("chemfiles-").replace("-", ".")
+        path = directory / f"chemfiles.{suffix}"
+        write_chemfiles(path, spec, "")
+        return path
     if arm_id == "readcon-chemfiles":
         path = directory / "readcon-chemfiles.xyz"
         write_xyz_for_readcon(path, spec)
@@ -896,17 +1230,49 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         return path
     if arm_id == "mda-ncdf":
         path = directory / "mda.ncdf"
+        _mda_write(path, spec, velocities=True)
+        return path
+    if arm_id == "mda-xyz":
+        path = directory / "mda.xyz"
         _mda_write(path, spec)
+        return path
+    if arm_id == "mda-trr":
+        path = directory / "mda.trr"
+        _mda_write(path, spec, velocities=True)
         return path
     if arm_id == "ovito-xyz":
         path = directory / "ovito.xyz"
         write_ovito(path, spec)
+        return path
+    if arm_id == "ovito-xyz-gz":
+        path = directory / "ovito.xyz.gz"
+        write_ovito(path, spec)
+        return path
+    if arm_id == "mdtraj-ncdf":
+        path = directory / "mdtraj.nc"
+        write_mdtraj(path, spec)
+        return path
+    if arm_id == "mdtraj-dcd":
+        path = directory / "mdtraj.dcd"
+        write_mdtraj(path, spec)
+        return path
+    if arm_id == "mdtraj-xtc":
+        path = directory / "mdtraj.xtc"
+        write_mdtraj(path, spec)
         return path
     raise SystemExit(f"unknown arm {arm_id}")
 
 
 def read_arm(arm_id: str, path: str) -> dict:
     got = _dispatch_read(arm_id, path)
+    if got.get("cell") is None:
+        positions = np.array(got["positions"], dtype=np.float64, copy=True, order="C")
+        if positions.size == 0 or not np.isfinite(np.sum(positions)):
+            raise RuntimeError("reader returned empty or non-finite coordinates")
+        got = dict(got)
+        got["positions"] = positions
+        got["checksum"] = float(np.sum(positions, dtype=np.float64))
+        return got
     positions, cell, checksum = _materialize(got["positions"], got["cell"])
     got = dict(got)
     got["positions"] = positions
@@ -931,6 +1297,23 @@ def _dispatch_read(arm_id: str, path: str) -> dict:
         return read_chemfiles_xyz(path)
     if arm_id == "chemfiles-trr":
         return _read_chemfiles_format(path, "TRR")
+    if arm_id == "chemfiles-ncdf":
+        return _read_chemfiles_format(path, "Amber NetCDF")
+    if arm_id == "chemfiles-dcd":
+        return _read_chemfiles_format(path, "DCD")
+    if arm_id == "chemfiles-xtc":
+        return _read_chemfiles_format(path, "XTC")
+    if arm_id == "chemfiles-pdb":
+        return _read_chemfiles_format(path, "PDB")
+    if arm_id == "chemfiles-gro":
+        return _read_chemfiles_format(path, "GRO")
+    if arm_id in (
+        "chemfiles-gro-gz",
+        "chemfiles-gro-xz",
+        "chemfiles-pdb-gz",
+        "chemfiles-pdb-xz",
+    ):
+        return _read_chemfiles_format(path, "")
     if arm_id.startswith("ase-"):
         return read_ase(path)
     if arm_id == "mda-pdb":
@@ -946,15 +1329,24 @@ def _dispatch_read(arm_id: str, path: str) -> dict:
     if arm_id == "mda-ncdf":
         from MDAnalysis.coordinates.TRJ import NCDFReader
 
-        return _mda_read_reader(path, NCDFReader)
-    if arm_id == "ovito-xyz":
+        return _mda_read_reader(path, NCDFReader, velocities=True)
+    if arm_id == "mda-xyz":
+        return read_mda_xyz(path)
+    if arm_id == "mda-trr":
+        from MDAnalysis.coordinates.TRR import TRRReader
+
+        return _mda_read_reader(path, TRRReader, velocities=True)
+    if arm_id in ("ovito-xyz", "ovito-xyz-gz"):
         return read_ovito(path)
+    if arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
+        return read_mdtraj(path)
     raise SystemExit(f"unknown arm {arm_id}")
 
 
 def audit(spec: dict, got: dict, precision: float) -> dict:
     """What this format failed to bring back, measured on the conversion."""
     lost = []
+    coarse = False
     for key, label in (
         ("masses", "masses"),
         ("velocities", "velocities"),
@@ -968,12 +1360,29 @@ def audit(spec: dict, got: dict, precision: float) -> dict:
         found = got[key]
         if found.ndim == 1 and reference.ndim == 2:
             reference = reference[0]
-        if _max_abs(reference, found) > FIELD_TOL:
+        error = _max_abs(reference, found)
+        if error > FIELD_TOL:
             lost.append(label)
+        elif error > PRECISION_DROP:
+            coarse = True
+    position_error = _max_abs(spec["positions"], got["positions"])
+    if got.get("cell") is None:
+        lost.append("cell")
+        cell_error = float("inf")
+    else:
+        cell_error = _max_abs(spec["cell"], got["cell"])
+        if not np.isfinite(cell_error):
+            lost.append("cell")
+        elif cell_error > PRECISION_DROP:
+            coarse = True
+    if np.isfinite(position_error) and position_error > PRECISION_DROP:
+        coarse = True
+    if coarse:
+        lost.append("precision")
     return {
         "loses": "none" if not lost else ",".join(lost),
-        "position_error": _max_abs(spec["positions"], got["positions"]),
-        "cell_error": _max_abs(spec["cell"], got["cell"]),
+        "position_error": position_error,
+        "cell_error": cell_error,
         "precision": precision,
     }
 
@@ -1066,12 +1475,35 @@ def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
         write_chemfiles_compressed(dest, spec, "bz2")
     elif arm_id == "chemfiles-trr":
         write_chemfiles(dest, spec, "TRR")
+    elif arm_id == "chemfiles-ncdf":
+        write_chemfiles(dest, spec, "Amber NetCDF")
+    elif arm_id == "chemfiles-dcd":
+        write_chemfiles(dest, spec, "DCD")
+    elif arm_id == "chemfiles-xtc":
+        write_chemfiles(dest, spec, "XTC")
+    elif arm_id == "chemfiles-pdb":
+        write_chemfiles(dest, spec, "PDB")
+    elif arm_id == "chemfiles-gro":
+        write_chemfiles(dest, spec, "GRO")
+    elif arm_id in (
+        "chemfiles-gro-gz",
+        "chemfiles-gro-xz",
+        "chemfiles-pdb-gz",
+        "chemfiles-pdb-xz",
+    ):
+        write_chemfiles(dest, spec, "")
     elif arm_id in ("ase-extxyz", "ase-extxyz-gz"):
         write_ase(dest, spec)
-    elif arm_id in ("mda-pdb", "mda-dcd", "mda-xtc", "mda-ncdf"):
+    elif arm_id in ("mda-pdb", "mda-dcd", "mda-xtc", "mda-xyz"):
         _mda_write(dest, spec)
-    elif arm_id == "ovito-xyz":
+    elif arm_id == "mda-ncdf":
+        _mda_write(dest, spec, velocities=True)
+    elif arm_id == "mda-trr":
+        _mda_write(dest, spec, velocities=True)
+    elif arm_id in ("ovito-xyz", "ovito-xyz-gz"):
         write_ovito(dest, spec)
+    elif arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
+        write_mdtraj(dest, spec)
     else:
         raise SystemExit(arm_id)
 
@@ -1198,8 +1630,32 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
     sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    lines = [
+    versions = library_versions()
+    ovito_check = ovito_extxyz_periodicity_and_drift()
+    if (
+        ovito_check["pbc_matches"]
+        and not ovito_check["wrapped_into_cell"]
+        and not ovito_check["stuck_on_frame0"]
+        and ovito_check["drift_max_abs"] is not None
+        and ovito_check["drift_max_abs"] <= 1e-6
+    ):
+        notes.append(
+            "OVITO 3.17.2 reads extended XYZ periodicity and an out-of-cell "
+            "second frame without wrapping or repeating frame 0."
+        )
+    else:
+        notes.append("OVITO extxyz periodicity or drift check failed.")
+    notes.append(
+        "mdcompress 1.0.0 is not on PyPI. A source build of refresh-bio/mdcompress "
+        "failed to compile libxdrfile on this compiler, so the coordinate-only row is omitted."
+    )
+    lines = []
+    for note in notes:
+        lines.append(f"note {note}")
+    lines.extend([
         f"commit {sha}",
+        f"versions {json.dumps(versions, sort_keys=True)}",
+        "ovito-extxyz " + json.dumps(ovito_check, sort_keys=True),
         f"warmup 1 samples {repeats} percentile type7 serial 1",
         f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
         f"loadavg {host['loadavg']}",
@@ -1207,7 +1663,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
         f"cpu_mhz {host['cpu_mhz']}",
         "warm reads the file once before the clock; cold drops the page cache after warmup",
         "every timed read copies positions and the cell into numpy and checks the sum",
-    ]
+    ])
     only_arms = {
         item for item in os.environ.get("READCON_CROSS_ARMS", "").split(",") if item
     }
@@ -1275,10 +1731,10 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 lines.append(f"note {note}")
                 continue
             checked = audit(spec, got, arm["precision"])
-            if (
-                checked["position_error"] > arm["precision"]
-                or checked["cell_error"] > arm["precision"]
-            ):
+            lost = set() if checked["loses"] == "none" else set(checked["loses"].split(","))
+            position_bad = checked["position_error"] > arm["precision"]
+            cell_bad = "cell" not in lost and checked["cell_error"] > arm["precision"]
+            if position_bad or cell_bad:
                 note = (
                     f"{label} {arm['id']} round-trip position {checked['position_error']:.3g} "
                     f"cell {checked['cell_error']:.3g} exceeds {arm['precision']}"
@@ -1431,6 +1887,8 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
         "affinity": f"taskset -c {core_list()}",
         "warm": "file read once before the clock",
         "cold": "drop_caches after warmup, before the timed read",
+        "versions": versions,
+        "ovito_extxyz_check": ovito_check,
         "notes": notes,
         "rows": rows,
     }
@@ -1498,7 +1956,12 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, default=BENCH / "scaling" / "rel1")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=BENCH / "work" / "cross-format-out",
+        help="campaign directory; saved records under scaling/ are not the default",
+    )
     parser.add_argument("--repeats", type=int, default=6)
     args = parser.parse_args()
     run(args.out, args.repeats)

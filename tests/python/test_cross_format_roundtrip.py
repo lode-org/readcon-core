@@ -23,7 +23,9 @@ def test_cross_format_roundtrip(tmp_path: Path) -> None:
     assert not missing, (sorted(missing), notes)
     for row in rows:
         assert row["position_error"] <= row["precision"], row
-        assert row["cell_error"] <= row["precision"], row
+        loses = set() if row["loses"] == "none" else set(row["loses"].split(","))
+        if "cell" not in loses:
+            assert row["cell_error"] <= row["precision"], row
         assert row["file_bytes"] > 0
 
 

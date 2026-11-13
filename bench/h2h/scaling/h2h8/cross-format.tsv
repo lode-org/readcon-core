@@ -1,0 +1,256 @@
+commit 6acc776ab8cb0e4cf1e24926963e6b9a4b8bfd39
+structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_error	cell_error	precision	cold_median_s	cold_iqr_s	cold_n	checksum_ok	notes
+1k	readcon	con	read	0.000144987	8.742e-06	6	43171840	36958	none	0	0	1e-05	0.00147014	0.000717898	6	True
+1k	readcon	con	write	0.000190804	2.42751e-06	6	45789184	36958	none	0	0	1e-05
+1k	readcon	con.gz	read	0.000184484	3.45735e-05	6	43370496	5677	none	0	0	1e-05	0.00127973	0.00020959	6	True
+1k	readcon	con.gz	write	0.00063152	1.61307e-05	6	46608384	5677	none	0	0	1e-05
+1k	readcon	con.zst	read	0.000211274	9.085e-06	6	47808512	2876	none	0	0	1e-05	0.00144799	0.000619589	6	True
+1k	readcon	con.zst	write	0.000466084	1.28505e-05	6	45475840	2876	none	0	0	1e-05
+1k	readcon	xyz	read	0.000249817	4.78575e-06	6	43646976	36069	velocities,constraints	0	0	0.0001	0.00162704	0.0008409	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1k	readcon	xyz	write	0.000932132	3.4959e-05	6	55912448	36069	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1k	readcon	chemfiles.Frame	read	0.000239441	1.60868e-05	6	45463552	36958	masses,velocities,constraints	0	0	1e-05	0.000873398	0.000785782	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1k	readcon	chemfiles.Frame	write	0.000539369	0.000196605	6	35923968	36958	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1k	chemfiles	xyz	read	0.000197944	1.00655e-05	6	35512320	9069	masses,velocities,constraints	0	0	0.0001	0.00166823	0.000613648	6	True
+1k	chemfiles	xyz	write	0.00843316	0.000154524	6	36564992	9069	masses,velocities,constraints	0	0	0.0001
+1k	chemfiles	xyz.gz	read	0.000217662	1.63233e-05	6	35702784	1897	masses,velocities,constraints	0	0	0.0001	0.000832948	0.000275174	6	True
+1k	chemfiles	xyz.gz	write	0.00890595	0.000104684	6	36888576	1897	masses,velocities,constraints	0	0	0.0001
+1k	chemfiles	xyz.xz	read	0.000282706	1.93085e-05	6	35727360	500	masses,velocities,constraints	0	0	0.0001	0.00144571	0.000530521	6	True
+1k	chemfiles	xyz.xz	write	0.010572	0.000183145	6	37931008	500	masses,velocities,constraints	0	0	0.0001
+1k	chemfiles	xyz.bz2	read	0.000340417	7.0095e-06	6	35762176	754	masses,velocities,constraints	0	0	0.0001	0.00154217	0.000834917	6	True
+1k	chemfiles	xyz.bz2	write	0.00886896	9.5744e-05	6	36843520	754	masses,velocities,constraints	0	0	0.0001
+1k	chemfiles	trr	read	0.000160261	9.4955e-06	6	36175872	24120	masses,constraints,precision	2.38419e-07	4.76837e-07	0.001	0.000917228	0.000793807	6	True
+1k	chemfiles	trr	write	0.00991235	0.000268302	6	36497408	24120	masses,constraints,precision	2.38419e-07	4.76837e-07	0.001
+1k	chemfiles	ncdf	read	0.00014743	8.09575e-06	6	35639296	24800	masses,constraints	0	0	0.0001	0.00106821	0.000686854	6	True
+1k	chemfiles	ncdf	write	0.0104299	0.000800846	6	36464640	24800	masses,constraints	0	0	0.0001
+1k	chemfiles	dcd	read	0.000128209	8.65e-06	6	35506176	12196	masses,velocities,constraints	0	0	0.0001	0.0012267	0.000565888	6	True
+1k	chemfiles	dcd	write	0.0100269	0.000283897	6	36415488	12196	masses,velocities,constraints	0	0	0.0001
+1k	chemfiles	xtc	read	0.000152671	5.39275e-06	6	36089856	3696	masses,velocities,constraints,precision	4.76837e-07	4.76837e-07	0.01	0.00139066	0.00103496	6	True
+1k	chemfiles	xtc	write	0.00996864	0.00069847	6	36460544	3696	masses,velocities,constraints,precision	4.76837e-07	4.76837e-07	0.01
+1k	chemfiles	pdb	read	0.00100587	3.92135e-05	6	36552704	79093	masses,velocities,constraints	0	0	0.001	0.00281637	0.000907109	6	True
+1k	chemfiles	pdb	write	0.00896693	0.00100009	6	36556800	79093	masses,velocities,constraints	0	0	0.001
+1k	chemfiles	gro	read	0.000574403	3.9552e-05	6	35934208	69067	masses,constraints	0	0	0.01	0.00178244	0.000909095	6	True
+1k	chemfiles	gro	write	0.00871647	0.000179977	6	36564992	69067	masses,constraints	0	0	0.01
+1k	chemfiles	pdb.gz	read	0.00112268	3.643e-05	6	36782080	5657	masses,velocities,constraints	0	0	0.001	0.00227549	0.0005432	6	True
+1k	chemfiles	pdb.gz	write	0.00977459	0.000106831	6	36829184	5657	masses,velocities,constraints	0	0	0.001
+1k	chemfiles	gro.gz	read	0.000638227	1.99235e-05	6	36165632	5757	masses,constraints	0	0	0.01	0.00188152	0.00102629	6	True
+1k	chemfiles	gro.gz	write	0.00956359	0.000178024	6	36925440	5757	masses,constraints	0	0	0.01
+1k	chemfiles	pdb.xz	read	0.00139716	3.94155e-05	6	36947968	1804	masses,velocities,constraints	0	0	0.001	0.0026728	0.000966864	6	True
+1k	chemfiles	pdb.xz	write	0.0280181	0.00064765	6	38551552	1804	masses,velocities,constraints	0	0	0.001
+1k	chemfiles	gro.xz	read	0.000918368	9.36488e-05	6	36315136	1952	masses,constraints	0	0	0.01	0.00207293	0.000283942	6	True
+1k	chemfiles	gro.xz	write	0.0249528	0.000117158	6	38633472	1952	masses,constraints	0	0	0.01
+1k	ase	extxyz	read	0.00215312	9.99905e-05	6	83847168	125134	none	0	0	1e-06	0.00380103	0.00104011	6	True
+1k	ase	extxyz	write	0.00451555	6.5564e-05	6	83376128	125134	none	0	0	1e-06
+1k	ase	extxyz.gz	read	0.00255574	1.65865e-05	6	83994624	3024	none	0	0	1e-06	0.00366703	0.000770181	6	True
+1k	ase	extxyz.gz	write	0.00924957	2.94745e-05	6	83814400	3024	none	0	0	1e-06
+1k	mdanalysis	pdb	read	0.00712228	0.000345299	6	97689600	81162	velocities,constraints	0	0	0.001	0.00860246	0.000120612	6	True
+1k	mdanalysis	pdb	write	0.00757853	0.000163391	6	96774144	81162	velocities,constraints	0	0	0.001
+1k	mdanalysis	xyz	read	0.0049844	9.1703e-05	6	96890880	43065	masses,velocities,constraints,cell	0	inf	0.0001	0.00636883	0.000419921	6	True	XYZ keeps coordinates and has no cell
+1k	mdanalysis	xyz	write	0.0029347	2.28297e-05	6	96288768	43065	masses,velocities,constraints,cell	0	inf	0.0001					XYZ keeps coordinates and has no cell
+1k	mdanalysis	dcd	read	0.000239777	1.62018e-05	6	96456704	12436	masses,velocities,constraints	0	0	0.0001	0.0019554	0.00121952	6	True
+1k	mdanalysis	dcd	write	0.000844971	3.08965e-05	6	96561152	12436	masses,velocities,constraints	0	0	0.0001
+1k	mdanalysis	xtc	read	0.000965584	4.90255e-05	6	96534528	3696	masses,velocities,constraints,precision	4.76837e-07	9.53674e-07	0.01	0.00286539	0.000588628	6	True
+1k	mdanalysis	xtc	write	0.000857291	2.23525e-05	6	96571392	3696	masses,velocities,constraints,precision	4.76837e-07	9.53674e-07	0.01
+1k	mdanalysis	ncdf	read	0.000421991	6.70097e-05	6	96126976	24964	masses,constraints	0	0	0.0001	0.0020485	0.00130455	6	True
+1k	mdanalysis	ncdf	write	0.00187698	3.7866e-05	6	98002944	24964	masses,constraints	0	0	0.0001
+1k	mdanalysis	trr	read	0.00116812	2.9386e-05	6	96655360	24120	masses,constraints,precision	0	9.53674e-07	0.001	0.00284794	0.000915668	6	True
+1k	mdanalysis	trr	write	0.000944801	2.77312e-05	6	96612352	24120	masses,constraints,precision	0	9.53674e-07	0.001
+1k	mdtraj	ncdf	read	0.000885079	3.4472e-05	6	67008512	12900	masses,velocities,constraints	0	0	0.0001	0.00237956	0.000563705	6	True	MDTraj 1.11.2 does not write velocities for this format
+1k	mdtraj	ncdf	write	0.00198447	5.5847e-05	6	67446784	12900	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+1k	mdtraj	dcd	read	5.8423e-05	3.9565e-06	6	51058688	12356	masses,velocities,constraints	0	0	0.0001	0.00139733	0.000736095	6	True	MDTraj 1.11.2 does not write velocities for this format
+1k	mdtraj	dcd	write	0.000604435	1.38107e-05	6	51980288	12356	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+1k	mdtraj	xtc	read	0.000133696	9.93175e-06	6	51210240	3696	masses,velocities,constraints,precision	4.76837e-07	4.76837e-07	0.01	0.00113706	0.000526344	6	True	MDTraj 1.11.2 does not write velocities for this format
+1k	mdtraj	xtc	write	0.000777075	2.9159e-05	6	52221952	3696	masses,velocities,constraints,precision	4.76837e-07	4.76837e-07	0.01					MDTraj 1.11.2 does not write velocities for this format
+1k	ovito	xyz	read	0.000979869	0.000208944	6	94134272	35015	constraints	0	0	0.0001	0.00226756	0.000390444	6	True	extended XYZ with species, position, velocity and mass
+1k	ovito	xyz	write	0.00133086	0.000117346	6	88029184	35015	constraints	0	0	0.0001					extended XYZ with species, position, velocity and mass
+1k	ovito	xyz.gz	read	0.000958662	0.000218397	6	94570496	2455	constraints	0	0	0.0001	0.00160177	0.000318556	6	True	the same extended XYZ, gzip-compressed
+1k	ovito	xyz.gz	write	0.00798001	0.000476712	6	88377344	2455	constraints	0	0	0.0001					the same extended XYZ, gzip-compressed
+100k	mdanalysis	pdb	read			0			unsupported: PDB atom serial is five digits (max 99999 atoms)			0.001
+100k	readcon	con	read	0.00854716	0.000199423	6	68657152	4303070	none	0	0	1e-05	0.0153649	0.00212528	6	True
+100k	readcon	con	write	0.0170479	0.000964069	6	114044928	4303070	none	0	0	1e-05
+100k	readcon	con.gz	read	0.0162604	0.00790014	6	106303488	647854	none	0	0	1e-05	0.0169458	0.00673594	6	True
+100k	readcon	con.gz	write	0.0442479	0.00371391	6	106733568	647854	none	0	0	1e-05
+100k	readcon	con.zst	read	0.00991971	0.000522777	6	79269888	436801	none	0	0	1e-05	0.0123319	0.00150656	6	True
+100k	readcon	con.zst	write	0.0151407	0.000128538	6	109559808	436801	none	0	0	1e-05
+100k	readcon	xyz	read	0.0217205	0.00110504	6	71655424	3835081	velocities,constraints	0	0	0.0001	0.0295258	0.00215031	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+100k	readcon	xyz	write	0.0544236	0.00567907	6	228368384	3835081	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+100k	readcon	chemfiles.Frame	read	0.0145607	0.000300727	6	77889536	4303070	masses,velocities,constraints	0	0	1e-05	0.0224544	0.00203557	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+100k	readcon	chemfiles.Frame	write	0.00767294	0.000285775	6	66867200	4303070	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+100k	chemfiles	xyz	read	0.0178909	0.00524796	6	55332864	1135081	masses,velocities,constraints	0	0	0.0001	0.0206622	0.00249233	6	True
+100k	chemfiles	xyz	write	0.827272	0.00540824	6	65110016	1135081	masses,velocities,constraints	0	0	0.0001
+100k	chemfiles	xyz.gz	read	0.0196814	0.000314942	6	55566336	214040	masses,velocities,constraints	0	0	0.0001	0.0225189	0.00132919	6	True
+100k	chemfiles	xyz.gz	write	0.884963	0.0120635	6	65574912	214040	masses,velocities,constraints	0	0	0.0001
+100k	chemfiles	xyz.xz	read	0.0233325	0.000421916	6	57882624	16128	masses,velocities,constraints	0	0	0.0001	0.0256948	0.000896434	6	True
+100k	chemfiles	xyz.xz	write	1.16501	0.0210326	6	77613056	16128	masses,velocities,constraints	0	0	0.0001
+100k	chemfiles	xyz.bz2	read	0.0410036	0.00420662	6	55562240	116985	masses,velocities,constraints	0	0	0.0001	0.0426573	0.000376391	6	True
+100k	chemfiles	xyz.bz2	write	0.865229	0.0113363	6	69814272	116985	masses,velocities,constraints	0	0	0.0001
+100k	chemfiles	trr	read	0.00960808	0.000212204	6	64184320	2400120	masses,constraints,precision	1.90735e-06	1.90735e-06	0.001	0.02105	0.0019168	6	True
+100k	chemfiles	trr	write	0.813607	0.0131458	6	75689984	2400120	masses,constraints,precision	1.90735e-06	1.90735e-06	0.001
+100k	chemfiles	ncdf	read	0.00888519	0.000754537	6	63744000	2400800	masses,constraints	0	0	0.0001	0.0198729	0.00159349	6	True
+100k	chemfiles	ncdf	write	0.814558	0.0130013	6	72157184	2400800	masses,constraints	0	0	0.0001
+100k	chemfiles	dcd	read	0.00846626	0.00106236	6	55691264	1200196	masses,velocities,constraints	0	0	0.0001	0.0134012	0.00176728	6	True
+100k	chemfiles	dcd	write	0.797934	0.00795027	6	66883584	1200196	masses,velocities,constraints	0	0	0.0001
+100k	chemfiles	xtc	read	0.00975092	0.000503423	6	56555520	369516	masses,velocities,constraints,precision	3.8147e-06	1.90735e-06	0.01	0.0136286	0.0028281	6	True
+100k	chemfiles	xtc	write	0.802405	0.0261129	6	68835328	369516	masses,velocities,constraints,precision	3.8147e-06	1.90735e-06	0.01
+100k	chemfiles	pdb	read	0.159828	0.00424622	6	167751680	7900093	masses,velocities,constraints	0	0	0.001	0.166885	0.00869875	6	True
+100k	chemfiles	pdb	write	0.884102	0.0102001	6	67573760	7900093	masses,velocities,constraints	0	0	0.001
+100k	chemfiles	gro	read	0.0756319	0.00247805	6	101390336	6900068	masses,constraints	0	0	0.01	0.0805643	0.00372159	6	True
+100k	chemfiles	gro	write	0.846366	0.00735138	6	67647488	6900068	masses,constraints	0	0	0.01
+100k	chemfiles	pdb.gz	read	0.166889	0.00581589	6	168017920	712687	masses,velocities,constraints	0	0	0.001	0.169581	0.00356925	6	True
+100k	chemfiles	pdb.gz	write	0.970493	0.0097769	6	68040704	712687	masses,velocities,constraints	0	0	0.001
+100k	chemfiles	gro.gz	read	0.0887238	0.000813391	6	101636096	669040	masses,constraints	0	0	0.01	0.0867029	0.00151084	6	True
+100k	chemfiles	gro.gz	write	0.959186	0.0190966	6	68104192	669040	masses,constraints	0	0	0.01
+100k	chemfiles	pdb.xz	read	0.192196	0.00551777	6	175960064	172236	masses,velocities,constraints	0	0	0.001	0.193068	0.00345376	6	True
+100k	chemfiles	pdb.xz	write	3.22869	0.071338	6	146096128	172236	masses,velocities,constraints	0	0	0.001
+100k	chemfiles	gro.xz	read	0.107511	0.00803215	6	108572672	152324	masses,constraints	0	0	0.01	0.111854	0.0062439	6	True
+100k	chemfiles	gro.xz	write	3.09641	0.0670301	6	133373952	152324	masses,constraints	0	0	0.01
+100k	ase	extxyz	read	0.200818	0.00504635	6	146868224	12500136	none	0	0	1e-06	0.216588	0.00714684	6	True
+100k	ase	extxyz	write	0.423755	0.00462358	6	118327296	12500136	none	0	0	1e-06
+100k	ase	extxyz.gz	read	0.229033	0.00102571	6	142274560	249713	none	0	0	1e-06	0.230452	0.00283931	6	True
+100k	ase	extxyz.gz	write	0.774498	0.00633151	6	118671360	249713	none	0	0	1e-06
+100k	mdanalysis	xyz	read	0.467944	0.0022824	6	150861824	4300067	masses,velocities,constraints,cell	0	inf	0.0001	0.47427	0.0116045	6	True	XYZ keeps coordinates and has no cell
+100k	mdanalysis	xyz	write	0.232463	0.00180143	6	116885504	4300067	masses,velocities,constraints,cell	0	inf	0.0001					XYZ keeps coordinates and has no cell
+100k	mdanalysis	dcd	read	0.00441524	0.000174891	6	105633792	1200436	masses,velocities,constraints	0	0	0.0001	0.00921277	0.00111462	6	True
+100k	mdanalysis	dcd	write	0.0210317	0.000227412	6	120719360	1200436	masses,velocities,constraints	0	0	0.0001
+100k	mdanalysis	xtc	read	0.0103638	0.000716349	6	102707200	369516	masses,velocities,constraints,precision	3.8147e-06	3.8147e-06	0.01	0.0136825	0.000266416	6	True
+100k	mdanalysis	xtc	write	0.0227749	0.000298171	6	121061376	369516	masses,velocities,constraints,precision	3.8147e-06	3.8147e-06	0.01
+100k	mdanalysis	ncdf	read	0.00567249	0.000111997	6	107952128	2400964	masses,constraints	0	0	0.0001	0.0115609	0.00200892	6	True
+100k	mdanalysis	ncdf	write	0.0274126	0.00112257	6	130369536	2400964	masses,constraints	0	0	0.0001
+100k	mdanalysis	trr	read	0.0255593	0.000505753	6	109549568	2400120	masses,constraints,precision	3.8147e-06	3.8147e-06	0.001	0.0296264	0.00172976	6	True
+100k	mdanalysis	trr	write	0.0292588	0.000296934	6	123873280	2400120	masses,constraints,precision	3.8147e-06	3.8147e-06	0.001
+100k	mdtraj	ncdf	read	0.00195633	0.000164356	6	73529344	1200900	masses,velocities,constraints	0	0	0.0001	0.00542273	0.00174287	6	True	MDTraj 1.11.2 does not write velocities for this format
+100k	mdtraj	ncdf	write	0.0623002	0.00142007	6	103168000	1200900	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+100k	mdtraj	dcd	read	0.00201369	2.60155e-05	6	55744512	1200356	masses,velocities,constraints	0	0	0.0001	0.0045841	0.00113237	6	True	MDTraj 1.11.2 does not write velocities for this format
+100k	mdtraj	dcd	write	0.0594434	0.000472536	6	89505792	1200356	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+100k	mdtraj	xtc	read	0.00439992	0.000169844	6	56422400	369516	masses,velocities,constraints,precision	3.8147e-06	1.90735e-06	0.01	0.00757012	0.000944546	6	True	MDTraj 1.11.2 does not write velocities for this format
+100k	mdtraj	xtc	write	0.060955	0.00176357	6	88924160	369516	masses,velocities,constraints,precision	3.8147e-06	1.90735e-06	0.01					MDTraj 1.11.2 does not write velocities for this format
+100k	ovito	xyz	read	0.0184876	0.000561089	6	112457728	3725127	constraints	0	0	0.0001	0.0226454	0.000409411	6	True	extended XYZ with species, position, velocity and mass
+100k	ovito	xyz	write	0.055194	0.00340911	6	114669568	3725127	constraints	0	0	0.0001					extended XYZ with species, position, velocity and mass
+100k	ovito	xyz.gz	read	0.0209576	0.000222839	6	112861184	252277	constraints	0	0	0.0001	0.0226386	0.000645387	6	True	the same extended XYZ, gzip-compressed
+100k	ovito	xyz.gz	write	0.367026	0.00166975	6	115406848	252277	constraints	0	0	0.0001					the same extended XYZ, gzip-compressed
+1M	mdanalysis	pdb	read			0			unsupported: PDB atom serial is five digits (max 99999 atoms)			0.001
+1M	readcon	con	read	0.0977237	0.00169822	6	287694848	45378064	none	0	0	1e-05	0.120158	0.00230127	6	True
+1M	readcon	con	write	0.182075	0.00799352	6	536510464	45378064	none	0	0	1e-05
+1M	readcon	con.gz	read	0.129645	0.0138373	6	381696000	5419616	none	0	0	1e-05	0.14468	0.00703472	6	True
+1M	readcon	con.gz	write	0.457114	0.00401835	6	447387648	5419616	none	0	0	1e-05
+1M	readcon	con.zst	read	0.0985255	0.000969404	6	321087488	1414782	none	0	0	1e-05	0.100603	0.000912225	6	True
+1M	readcon	con.zst	write	0.136586	0.00544384	6	446162944	1414782	none	0	0	1e-05
+1M	readcon	xyz	read	0.256237	0.0144452	6	319473664	38700075	velocities,constraints	0	0	0.0001	0.290395	0.0296969	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	readcon	xyz	write	0.519646	0.0391147	6	1460891648	38700075	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+1M	readcon	chemfiles.Frame	read	0.166498	0.0125295	6	385751040	45378064	masses,velocities,constraints	0	0	1e-05	0.202457	0.0291671	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	readcon	chemfiles.Frame	write	0.0833345	0.00454918	6	347756544	45378064	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+1M	chemfiles	xyz	read	0.185302	0.00462527	6	235182080	11700075	masses,velocities,constraints	0	0	0.0001	0.203167	0.0146933	6	True
+1M	chemfiles	xyz	write	8.25589	0.117475	6	324392960	11700075	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	xyz.gz	read	0.206801	0.00511986	6	235450368	1675339	masses,velocities,constraints	0	0	0.0001	0.221526	0.0132921	6	True
+1M	chemfiles	xyz.gz	write	8.55543	0.0550261	6	324851712	1675339	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	xyz.xz	read	0.259925	0.0118063	6	243849216	104764	masses,velocities,constraints	0	0	0.0001	0.259275	0.00940614	6	True
+1M	chemfiles	xyz.xz	write	12.1122	0.275903	6	406489088	104764	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	xyz.bz2	read	0.430806	0.00620938	6	237811712	894507	masses,velocities,constraints	0	0	0.0001	0.438734	0.0094151	6	True
+1M	chemfiles	xyz.bz2	write	8.70927	0.263087	6	329074688	894507	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	trr	read	0.132052	0.00258205	6	319815680	24000120	masses,constraints,precision	3.8147e-06	3.8147e-06	0.001	0.183397	0.0162524	6	True
+1M	chemfiles	trr	write	8.16099	0.273658	6	432236544	24000120	masses,constraints,precision	3.8147e-06	3.8147e-06	0.001
+1M	chemfiles	ncdf	read	0.120218	0.00474452	6	319309824	24000800	masses,constraints	0	0	0.0001	0.168258	0.0607187	6	True
+1M	chemfiles	ncdf	write	8.29665	0.346265	6	396314624	24000800	masses,constraints	0	0	0.0001
+1M	chemfiles	dcd	read	0.100985	0.00621562	6	239245312	12000196	masses,velocities,constraints	0	0	0.0001	0.122621	0.00928377	6	True
+1M	chemfiles	dcd	write	7.94856	0.122255	6	344289280	12000196	masses,velocities,constraints	0	0	0.0001
+1M	chemfiles	xtc	read	0.121018	0.00253791	6	243142656	3720100	masses,velocities,constraints,precision	7.62939e-06	3.8147e-06	0.01	0.136162	0.00682705	6	True
+1M	chemfiles	xtc	write	8.14011	0.182676	6	363943936	3720100	masses,velocities,constraints,precision	7.62939e-06	3.8147e-06	0.01
+1M	chemfiles	pdb	read	1.77173	0.0227214	6	1318004736	79000093	masses,velocities,constraints	0	0	0.001	1.87898	0.0459386	6	True
+1M	chemfiles	pdb	write	8.8146	0.184197	6	349462528	79000093	masses,velocities,constraints	0	0	0.001
+1M	chemfiles	gro	read	0.439403	0.00237336	6	410415104	69000069	masses,constraints	0	0	0.01	0.489085	0.0398253	6	True
+1M	chemfiles	gro	write	8.60615	0.145992	6	348594176	69000069	masses,constraints	0	0	0.01
+1M	chemfiles	pdb.gz	read	1.88565	0.00996068	6	1318408192	7318170	masses,velocities,constraints	0	0	0.001	1.93579	0.0102734	6	True
+1M	chemfiles	pdb.gz	write	9.77578	0.204565	6	349868032	7318170	masses,velocities,constraints	0	0	0.001
+1M	chemfiles	gro.gz	read	0.486465	0.00198513	6	410656768	2670576	masses,constraints	0	0	0.01	0.501477	0.0317882	6	True
+1M	chemfiles	gro.gz	write	8.92956	0.0339067	6	348960768	2670576	masses,constraints	0	0	0.01
+1M	chemfiles	pdb.xz	read	2.15185	0.022962	6	1326604288	1451472	masses,velocities,constraints	0	0	0.001	2.17548	0.0513795	6	True
+1M	chemfiles	pdb.xz	write	37.9289	1.55263	6	446054400	1451472	masses,velocities,constraints	0	0	0.001
+1M	chemfiles	gro.xz	read	0.616145	0.0241783	6	420308992	346668	masses,constraints	0	0	0.01	0.62633	0.0267879	6	True
+1M	chemfiles	gro.xz	write	24.6101	0.616757	6	432517120	346668	masses,constraints	0	0	0.01
+1M	ase	extxyz	read	2.02775	0.0296886	6	670398464	125000140	none	0	0	1e-06	2.15022	0.0379787	6	True
+1M	ase	extxyz	write	4.2133	0.0356546	6	432412672	125000140	none	0	0	1e-06
+1M	ase	extxyz.gz	read	2.31347	0.0246798	6	670842880	2775716	none	0	0	1e-06	2.36506	0.0498957	6	True
+1M	ase	extxyz.gz	write	8.9854	0.0244513	6	438327296	2775716	none	0	0	1e-06
+1M	mdanalysis	xyz	read	5.94902	0.121082	6	617027584	43000068	masses,velocities,constraints,cell	0	inf	0.0001	6.07107	0.227765	6	True	XYZ keeps coordinates and has no cell
+1M	mdanalysis	xyz	write	2.35154	0.0302534	6	304281600	43000068	masses,velocities,constraints,cell	0	inf	0.0001					XYZ keeps coordinates and has no cell
+1M	mdanalysis	dcd	read	0.0358589	0.000652043	6	192012288	12000436	masses,velocities,constraints	0	0	0.0001	0.0534311	0.00554706	6	True
+1M	mdanalysis	dcd	write	0.227899	0.00489157	6	340404224	12000436	masses,velocities,constraints	0	0	0.0001
+1M	mdanalysis	xtc	read	0.0829726	0.00326739	6	160124928	3720100	masses,velocities,constraints,precision	7.62939e-06	0	0.01	0.0921409	0.014265	6	True
+1M	mdanalysis	xtc	write	0.241681	0.00550348	6	344113152	3720100	masses,velocities,constraints,precision	7.62939e-06	0	0.01
+1M	mdanalysis	ncdf	read	0.0357499	0.00220784	6	215939072	24000964	masses,constraints	0	0	0.0001	0.057641	0.00732838	6	True
+1M	mdanalysis	ncdf	write	0.297197	0.00757934	6	425900032	24000964	masses,constraints	0	0	0.0001
+1M	mdanalysis	trr	read	0.240729	0.00238658	6	228317184	24000120	masses,constraints,precision	7.62939e-06	0	0.001	0.251467	0.0169858	6	True
+1M	mdanalysis	trr	write	0.310426	0.00296761	6	372568064	24000120	masses,constraints,precision	7.62939e-06	0	0.001
+1M	mdtraj	ncdf	read	0.0158276	0.000417192	6	134424576	12000900	masses,velocities,constraints	0	0	0.0001	0.0354991	0.00898802	6	True	MDTraj 1.11.2 does not write velocities for this format
+1M	mdtraj	ncdf	write	0.968444	0.0335308	6	410607616	12000900	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+1M	mdtraj	dcd	read	0.0165982	0.000496791	6	98934784	12000356	masses,velocities,constraints	0	0	0.0001	0.0280329	0.00247089	6	True	MDTraj 1.11.2 does not write velocities for this format
+1M	mdtraj	dcd	write	0.962863	0.0281737	6	404631552	12000356	masses,velocities,constraints	0	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+1M	mdtraj	xtc	read	0.037132	0.0003964	6	99481600	3720100	masses,velocities,constraints,precision	7.62939e-06	3.8147e-06	0.01	0.042888	0.00154833	6	True	MDTraj 1.11.2 does not write velocities for this format
+1M	mdtraj	xtc	write	0.934354	0.0264437	6	412573696	3720100	masses,velocities,constraints,precision	7.62939e-06	3.8147e-06	0.01					MDTraj 1.11.2 does not write velocities for this format
+1M	ovito	xyz	read	0.182745	0.00157598	6	277714944	37600121	constraints	0	0	0.0001	0.209113	0.0105812	6	True	extended XYZ with species, position, velocity and mass
+1M	ovito	xyz	write	0.570218	0.00414726	6	358924288	37600121	constraints	0	0	0.0001					extended XYZ with species, position, velocity and mass
+1M	ovito	xyz.gz	read	0.199305	0.00309633	6	278867968	2402559	constraints	0	0	0.0001	0.206981	0.0061715	6	True	the same extended XYZ, gzip-compressed
+1M	ovito	xyz.gz	write	5.99499	0.0162665	6	366266368	2402559	constraints	0	0	0.0001					the same extended XYZ, gzip-compressed
+traj	readcon	con	read	0.000789231	4.731e-06	6	45611008	302664	none	0	0	1e-05	0.00228215	0.000354506	6	True
+traj	readcon	con	write	0.00130232	5.3735e-05	6	52711424	302664	none	0	0	1e-05
+traj	readcon	con.gz	read	0.00101444	1.29993e-05	6	49836032	44174	none	0	0	1e-05	0.00219645	0.000744707	6	True
+traj	readcon	con.gz	write	0.00569597	5.65948e-05	6	51392512	44174	none	0	0	1e-05
+traj	readcon	con.zst	read	0.00103915	4.03712e-05	6	52498432	9766	none	0	0	1e-05	0.00178573	0.000695475	6	True
+traj	readcon	con.zst	write	0.00135482	3.7836e-05	6	50626560	9766	none	0	0	1e-05
+traj	readcon	xyz	read	0.00163027	1.7935e-05	6	43847680	288552	velocities,constraints	0	0	0.0001	0.00345297	0.000933781	6	True	readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+traj	readcon	xyz	write	0.00393183	0.000845074	6	63506432	288552	velocities,constraints	0	0	0.0001					readcon.read_chemfiles imports this extended XYZ through libchemfiles; the write is write_con of those frames
+traj	readcon	chemfiles.Frame	read	0.0012506	2.3244e-05	6	45979648	302664	masses,velocities,constraints	0	0	1e-05	0.00305301	0.000766344	6	True	readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+traj	readcon	chemfiles.Frame	write	0.000699917	0.000394354	6	36509696	302664	masses,velocities,constraints	0	0	1e-05					readcon parses CON and copies positions and the cell into a chemfiles.Frame; the write fills that Frame from coordinates already in memory
+traj	chemfiles	xyz	read	0.00119661	2.1159e-05	6	35837952	93552	masses,velocities,constraints	0	0	0.0001	0.00278554	0.000599566	6	True
+traj	chemfiles	xyz	write	0.0653493	0.000633183	6	37134336	93552	masses,velocities,constraints	0	0	0.0001
+traj	chemfiles	xyz.gz	read	0.00143338	3.58847e-05	6	36075520	13670	masses,velocities,constraints	0	0	0.0001	0.00282168	0.000344977	6	True
+traj	chemfiles	xyz.gz	write	0.0692756	0.00168572	6	37625856	13670	masses,velocities,constraints	0	0	0.0001
+traj	chemfiles	xyz.xz	read	0.001722	2.20682e-05	6	36372480	1332	masses,velocities,constraints	0	0	0.0001	0.00256295	0.000675987	6	True
+traj	chemfiles	xyz.xz	write	0.0852742	0.00360026	6	39493632	1332	masses,velocities,constraints	0	0	0.0001
+traj	chemfiles	xyz.bz2	read	0.00245996	3.92312e-05	6	36440064	6801	masses,velocities,constraints	0	0	0.0001	0.00387766	0.000274117	6	True
+traj	chemfiles	xyz.bz2	write	0.0692024	0.00115176	6	38223872	6801	masses,velocities,constraints	0	0	0.0001
+traj	chemfiles	trr	read	0.00075934	2.9231e-05	6	36941824	192960	masses,constraints,precision	2.95639e-07	4.76837e-07	0.001	0.0027695	0.000402024	6	True
+traj	chemfiles	trr	write	0.0662471	0.000953476	6	37171200	192960	masses,constraints,precision	2.95639e-07	4.76837e-07	0.001
+traj	chemfiles	ncdf	read	0.000775226	3.31972e-05	6	36335616	192968	masses,constraints,precision	4.57764e-07	0	0.0001	0.00224423	0.000586979	6	True
+traj	chemfiles	ncdf	write	0.0663181	0.00119137	6	37076992	192968	masses,constraints,precision	4.57764e-07	0	0.0001
+traj	chemfiles	dcd	read	0.000460789	1.97453e-05	6	35983360	96756	masses,velocities,constraints,precision	4.57764e-07	0	0.0001	0.00173328	0.000898529	6	True
+traj	chemfiles	dcd	write	0.0659486	0.00152441	6	36993024	96756	masses,velocities,constraints,precision	4.57764e-07	0	0.0001
+traj	chemfiles	xtc	read	0.000615674	8.1805e-06	6	36409344	29568	masses,velocities,constraints,precision	6.96182e-07	4.76837e-07	0.01	0.00162075	0.000601941	6	True
+traj	chemfiles	xtc	write	0.0661332	0.00208572	6	37074944	29568	masses,velocities,constraints,precision	6.96182e-07	4.76837e-07	0.01
+traj	chemfiles	pdb	read	0.00747119	0.000170402	6	37392384	632716	masses,velocities,constraints	0	0	0.001	0.0100986	0.00192106	6	True
+traj	chemfiles	pdb	write	0.0696827	0.000831187	6	37134336	632716	masses,velocities,constraints	0	0	0.001
+traj	chemfiles	gro	read	0.00374863	1.95133e-05	6	36995072	552536	masses,constraints	1.77636e-15	0	0.01	0.00498228	0.000288265	6	True
+traj	chemfiles	gro	write	0.068057	0.00194743	6	37109760	552536	masses,constraints	1.77636e-15	0	0.01
+traj	chemfiles	pdb.gz	read	0.00830286	0.000263024	6	37656576	44768	masses,velocities,constraints	0	0	0.001	0.010133	0.000428921	6	True
+traj	chemfiles	pdb.gz	write	0.0768938	0.00125654	6	37550080	44768	masses,velocities,constraints	0	0	0.001
+traj	chemfiles	gro.gz	read	0.00452265	9.0901e-05	6	36980736	45570	masses,constraints	1.77636e-15	0	0.01	0.00635793	0.000859243	6	True
+traj	chemfiles	gro.gz	write	0.0753486	0.00196841	6	37539840	45570	masses,constraints	1.77636e-15	0	0.01
+traj	chemfiles	pdb.xz	read	0.00960777	1.71505e-05	6	38344704	9932	masses,velocities,constraints	0	0	0.001	0.0108883	0.000422217	6	True
+traj	chemfiles	pdb.xz	write	0.265054	0.0177215	6	44505088	9932	masses,velocities,constraints	0	0	0.001
+traj	chemfiles	gro.xz	read	0.00557697	4.1249e-05	6	37556224	5548	masses,constraints	1.77636e-15	0	0.01	0.0064959	0.000528731	6	True
+traj	chemfiles	gro.xz	write	0.199426	0.00260609	6	43692032	5548	masses,constraints	1.77636e-15	0	0.01
+traj	ase	extxyz	read	0.015123	0.000171286	6	85542912	1001072	none	0	0	1e-06	0.0190922	0.00105376	6	True
+traj	ase	extxyz	write	0.0347283	0.000917043	6	84647936	1001072	none	0	0	1e-06
+traj	ase	extxyz.gz	read	0.0213304	6.32017e-05	6	85639168	23257	none	0	0	1e-06	0.0233852	0.000267072	6	True
+traj	ase	extxyz.gz	write	0.080643	0.00324554	6	85012480	23257	none	0	0	1e-06
+traj	mdanalysis	pdb	read	0.0157964	0.000405075	6	99276800	648316	velocities,constraints,precision	4.57764e-07	0	0.001	0.0179741	0.000982971	6	True
+traj	mdanalysis	pdb	write	0.0534029	0.000507748	6	97357824	648316	velocities,constraints,precision	4.57764e-07	0	0.001
+traj	mdanalysis	xyz	read	0.00847542	0.000121871	6	97331200	344513	masses,velocities,constraints,cell,precision	4.57764e-07	inf	0.0001	0.0100345	0.000309103	6	True	XYZ keeps coordinates and has no cell
+traj	mdanalysis	xyz	write	0.0182213	0.000167395	6	96862208	344513	masses,velocities,constraints,cell,precision	4.57764e-07	inf	0.0001					XYZ keeps coordinates and has no cell
+traj	mdanalysis	dcd	read	0.000520399	3.55167e-05	6	96763904	96996	masses,velocities,constraints,precision	4.57764e-07	0	0.0001	0.0022309	0.000855644	6	True
+traj	mdanalysis	dcd	write	0.00128045	2.736e-05	6	97159168	96996	masses,velocities,constraints,precision	4.57764e-07	0	0.0001
+traj	mdanalysis	xtc	read	0.00140058	3.35873e-05	6	96870400	29568	masses,velocities,constraints,precision	1.14441e-06	9.53674e-07	0.01	0.00374069	0.000383059	6	True
+traj	mdanalysis	xtc	write	0.00139433	4.40127e-05	6	97124352	29568	masses,velocities,constraints,precision	1.14441e-06	9.53674e-07	0.01
+traj	mdanalysis	ncdf	read	0.000822185	3.49748e-05	6	96712704	193328	masses,constraints,precision	4.57764e-07	0	0.0001	0.00244022	0.000808286	6	True
+traj	mdanalysis	ncdf	write	0.00401918	0.000207078	6	98609152	193328	masses,constraints,precision	4.57764e-07	0	0.0001
+traj	mdanalysis	trr	read	0.00222264	0.000136994	6	97218560	192960	masses,constraints,precision	6.86646e-07	9.53674e-07	0.001	0.00443964	0.00069671	6	True
+traj	mdanalysis	trr	write	0.00188654	7.69185e-05	6	97124352	192960	masses,constraints,precision	6.86646e-07	9.53674e-07	0.001
+traj	mdtraj	ncdf	read	0.000939991	6.92198e-05	6	67104768	97264	masses,velocities,constraints,precision	6.86646e-07	0	0.0001	0.0029559	0.000908153	6	True	MDTraj 1.11.2 does not write velocities for this format
+traj	mdtraj	ncdf	write	0.00224111	5.73248e-05	6	68024320	97264	masses,velocities,constraints,precision	6.86646e-07	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+traj	mdtraj	dcd	read	0.000206085	1.92567e-05	6	51308544	96916	masses,velocities,constraints,precision	6.86646e-07	0	0.0001	0.0010919	0.000312277	6	True	MDTraj 1.11.2 does not write velocities for this format
+traj	mdtraj	dcd	write	0.000700101	2.89892e-05	6	52703232	96916	masses,velocities,constraints,precision	6.86646e-07	0	0.0001					MDTraj 1.11.2 does not write velocities for this format
+traj	mdtraj	xtc	read	0.000348783	1.2551e-05	6	51697664	29568	masses,velocities,constraints,precision	6.96182e-07	4.76837e-07	0.01	0.00188331	0.000267219	6	True	MDTraj 1.11.2 does not write velocities for this format
+traj	mdtraj	xtc	write	0.00105968	1.37053e-05	6	52992000	29568	masses,velocities,constraints,precision	6.96182e-07	4.76837e-07	0.01					MDTraj 1.11.2 does not write velocities for this format
+traj	ovito	xyz	read	0.00387612	0.000745901	6	95410176	287120	constraints	0	0	0.0001	0.00818882	0.00261145	6	True	extended XYZ with species, position, velocity and mass
+traj	ovito	xyz	write	0.0095473	0.000748468	6	89235456	287120	constraints	0	0	0.0001					extended XYZ with species, position, velocity and mass
+traj	ovito	xyz.gz	read	0.00410388	0.000933418	6	95496192	20660	constraints	0	0	0.0001	0.00654719	0.00134281	6	True	the same extended XYZ, gzip-compressed
+traj	ovito	xyz.gz	write	0.0543622	0.000497204	6	89700352	20660	constraints	0	0	0.0001					the same extended XYZ, gzip-compressed
