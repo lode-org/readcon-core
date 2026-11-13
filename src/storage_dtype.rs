@@ -240,7 +240,9 @@ impl Optional2 {
         if array.nrows() == 0 {
             Self { inner: None }
         } else {
-            Self { inner: Some(Box::new(array)) }
+            Self {
+                inner: Some(Box::new(array)),
+            }
         }
     }
 }
@@ -411,6 +413,36 @@ impl Array2Storage {
         match self {
             Self::F64(a) => a.as_slice_memory_order(),
             _ => None,
+        }
+    }
+
+    /// Take the contiguous f64 allocation, leaving an empty matrix.
+    ///
+    /// `None` when the storage is shared or not a packed f64 block. The
+    /// returned `Vec` is the same allocation, so pointers into it stay valid
+    /// when the `Vec` is moved and not reallocated.
+    pub(crate) fn take_contiguous_f64(&mut self) -> Option<Vec<f64>> {
+        let stolen = std::mem::replace(self, empty_f64_rows());
+        match stolen {
+            Self::F64(array) => match array.try_into_owned_nocopy() {
+                Ok(owned) => {
+                    let (vec, offset) = owned.into_raw_vec_and_offset();
+                    if offset.unwrap_or(0) == 0 {
+                        Some(vec)
+                    } else {
+                        *self = Self::from_f64_row_major(vec.len(), 1, vec);
+                        None
+                    }
+                }
+                Err(array) => {
+                    *self = Self::F64(array);
+                    None
+                }
+            },
+            other => {
+                *self = other;
+                None
+            }
         }
     }
 
@@ -700,7 +732,9 @@ impl Optional1 {
         if array.len() == 0 {
             Self { inner: None }
         } else {
-            Self { inner: Some(Box::new(array)) }
+            Self {
+                inner: Some(Box::new(array)),
+            }
         }
     }
 }

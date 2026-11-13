@@ -1089,6 +1089,120 @@ impl Drop for AtomDatum {
     }
 }
 
+/// Drop `atoms` when every shell shares one symbol and owns no coordinate box.
+///
+/// A million atoms otherwise run a million decrements against the same
+/// symbol counter. One `fetch_sub` matches that count.
+#[derive(Clone, Copy)]
+struct SymbolDropHint {
+    atoms: usize,
+    symbol: *const u8,
+    n: usize,
+}
+
+thread_local! {
+    static SYMBOL_DROP_HINT: std::cell::Cell<SymbolDropHint> = const {
+        std::cell::Cell::new(SymbolDropHint {
+            atoms: 0,
+            symbol: std::ptr::null(),
+            n: 0,
+        })
+    };
+}
+
+/// The next drop of this atom buffer releases its symbol counts in one step.
+///
+/// The buffer must be one shared symbol and no owned coordinate boxes.
+pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
+    if atoms.is_empty() {
+        return;
+    }
+    let symbol = std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8;
+    SYMBOL_DROP_HINT.with(|hint| {
+        hint.set(SymbolDropHint {
+            atoms: atoms.as_ptr() as usize,
+            symbol,
+            n: atoms.len(),
+        });
+    });
+}
+
+fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
+    let n = atoms.len();
+    if n < 1024 {
+        return;
+    }
+    let hint = SYMBOL_DROP_HINT.with(|hint| hint.get());
+    if hint.n != n || hint.atoms != atoms.as_ptr() as usize {
+        return;
+    }
+    SYMBOL_DROP_HINT.with(|hint| {
+        hint.set(SymbolDropHint {
+            atoms: 0,
+            symbol: std::ptr::null(),
+            n: 0,
+        });
+    });
+    if !std::ptr::eq(std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8, hint.symbol) {
+        return;
+    }
+    release_arc_str_count(&atoms[0].symbol, n);
+    let mut taken = std::mem::take(atoms);
+    let cap = taken.capacity();
+    let ptr = taken.as_mut_ptr();
+    std::mem::forget(taken);
+    let recycled =
+        unsafe { Vec::from_raw_parts(ptr as *mut std::mem::MaybeUninit<AtomDatum>, 0, cap) };
+    stash_atom_spare(recycled);
+}
+
+thread_local! {
+    static ATOM_SPARE: std::cell::RefCell<Vec<std::mem::MaybeUninit<AtomDatum>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn take_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
+    ATOM_SPARE.with(|cell| {
+        let spare = cell.replace(Vec::new());
+        if spare.capacity() < n {
+            Vec::with_capacity(n)
+        } else {
+            spare
+        }
+    })
+}
+
+fn stash_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
+    ATOM_SPARE.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if buf.capacity() > slot.capacity() {
+            *slot = buf;
+        }
+    });
+}
+
+fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
+    let header = 2 * std::mem::size_of::<usize>();
+    let align = std::mem::align_of_val(symbol.as_ref());
+    let rem = header % align;
+    let offset = if rem == 0 {
+        header
+    } else {
+        header + (align - rem)
+    };
+    let bytes = std::sync::Arc::as_ptr(symbol) as *const u8;
+    let strong = unsafe { bytes.sub(offset) as *const std::sync::atomic::AtomicUsize };
+    unsafe {
+        (*strong).fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl Drop for ConFrame {
+    fn drop(&mut self) {
+        bulk_drop_uniform_symbols(&mut self.atom_data);
+    }
+}
+
 impl AtomDatum {
     /// Coordinate-only atom. Section accessors return `None` until one is set.
     pub fn coords(
@@ -4041,15 +4155,21 @@ pub(crate) fn con_frame_coords_only_with_ids(
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = header.metadata.dtypes();
 
-    let mut mass_flat = Vec::with_capacity(n);
-    for (ti, &count) in header.natms_per_type.iter().enumerate() {
-        let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
-        let take = count.min(n.saturating_sub(mass_flat.len()));
-        mass_flat.extend(std::iter::repeat_n(m, take));
-    }
-    if mass_flat.len() < n {
-        mass_flat.resize(n, 0.0);
-    }
+    let mass_flat = if header.natms_per_type.len() == 1 && header.natms_per_type[0] == n {
+        let mass = header.masses_per_type.first().copied().unwrap_or(0.0);
+        vec![mass; n]
+    } else {
+        let mut mass_flat = Vec::with_capacity(n);
+        for (ti, &count) in header.natms_per_type.iter().enumerate() {
+            let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
+            let take = count.min(n.saturating_sub(mass_flat.len()));
+            mass_flat.extend(std::iter::repeat_n(m, take));
+        }
+        if mass_flat.len() < n {
+            mass_flat.resize(n, 0.0);
+        }
+        mass_flat
+    };
     let masses_arr = if dt.masses == crate::storage_dtype::ElementKind::Float64 {
         FloatArray1::from_f64_vec(mass_flat)
     } else {

@@ -585,28 +585,30 @@ fn count_newlines(data: &[u8]) -> usize {
 #[target_feature(enable = "avx2")]
 unsafe fn count_newlines_avx2(data: &[u8]) -> usize {
     use std::arch::x86_64::*;
-    let mut n = 0usize;
-    let mut i = 0usize;
-    let nl = _mm256_set1_epi8(b'\n' as i8);
-    while i + 128 <= data.len() {
-        let mut mask_n = 0usize;
-        for lane in 0..4 {
-            let v = _mm256_loadu_si256(data.as_ptr().add(i + lane * 32) as *const _);
-            mask_n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
+    unsafe {
+        let mut n = 0usize;
+        let mut i = 0usize;
+        let nl = _mm256_set1_epi8(b'\n' as i8);
+        while i + 128 <= data.len() {
+            let mut mask_n = 0usize;
+            for lane in 0..4 {
+                let v = _mm256_loadu_si256(data.as_ptr().add(i + lane * 32) as *const _);
+                mask_n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
+            }
+            n += mask_n;
+            i += 128;
         }
-        n += mask_n;
-        i += 128;
+        while i + 32 <= data.len() {
+            let v = _mm256_loadu_si256(data.as_ptr().add(i) as *const _);
+            n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
+            i += 32;
+        }
+        while i < data.len() {
+            n += usize::from(*data.get_unchecked(i) == b'\n');
+            i += 1;
+        }
+        n
     }
-    while i + 32 <= data.len() {
-        let v = _mm256_loadu_si256(data.as_ptr().add(i) as *const _);
-        n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
-        i += 32;
-    }
-    while i < data.len() {
-        n += usize::from(*data.get_unchecked(i) == b'\n');
-        i += 1;
-    }
-    n
 }
 
 fn gzip_member(data: &[u8]) -> io::Result<Vec<u8>> {

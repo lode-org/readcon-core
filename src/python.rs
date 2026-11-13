@@ -2501,7 +2501,18 @@ fn con_frame_list(
     // shared slab is the coordinate view; the frames still hold the
     // parsed coordinates when that view cannot be built.
     let numpy_ok = py.import("numpy").is_ok();
-    let packed = if numpy_ok {
+    // One wide frame already parsed into a contiguous f64 block. Moving
+    // that block into the NumPy array skips the extra SoA memcpy and the
+    // pointer walk that followed it.
+    let adopted = if numpy_ok && n_frames == 1 {
+        frames[0].positions.take_contiguous_f64()
+    } else {
+        None
+    };
+    let adopted_ptr = adopted.as_ref().map(|values| values.as_ptr());
+    let packed = if adopted.is_some() {
+        None
+    } else if numpy_ok {
         py.detach(|| match pool.as_ref() {
             Some(pool) if workers >= 2 => {
                 pool.install(|| crate::iterators::pack_position_slab(&frames, workers))
@@ -2513,25 +2524,37 @@ fn con_frame_list(
     };
     let slab_s = t_slab.elapsed().as_secs_f64();
     let slab_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
-    let n_atoms = match packed.as_ref() {
-        Some(values) if n_frames > 0 => values.len() / n_frames / 3,
-        _ => 0,
+    let n_atoms = if let Some(values) = adopted.as_ref() {
+        values.len() / 3
+    } else {
+        match packed.as_ref() {
+            Some(values) if n_frames > 0 => values.len() / n_frames / 3,
+            _ => 0,
+        }
     };
     let t_build = std::time::Instant::now();
-    let slab = match packed {
-        Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
-        None => None,
+    let slab = if let Some(values) = adopted {
+        Some(slab_from_values(py, values, 1, n_atoms)?)
+    } else {
+        match packed {
+            Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
+            None => None,
+        }
     };
     let python_build_s = t_build.elapsed().as_secs_f64();
     // The writer reads atom slots, not the empty position column. Those
     // slots have to address the slab before the parse buffer is freed.
+    // An adopted buffer already has that address, so the walk is skipped.
     if let Some(slab) = &slab {
         let contiguous = unsafe { slab.bind(py).as_slice() }.map_err(|err| {
             pyo3::exceptions::PyValueError::new_err(format!(
                 "coordinate slab is not contiguous: {err}"
             ))
         })?;
-        retarget_frames_to_slab(&mut frames, contiguous.as_ptr() as *mut f64, n_atoms);
+        let new_ptr = contiguous.as_ptr() as *mut f64;
+        if adopted_ptr != Some(new_ptr as *const f64) {
+            retarget_frames_to_slab(&mut frames, new_ptr, n_atoms);
+        }
     }
     let t_release = std::time::Instant::now();
     if slab.is_some() {

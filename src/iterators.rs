@@ -3707,7 +3707,7 @@ pub struct PhasedFrames {
 fn piped_stock_frames(
     file: &[u8],
     threads: usize,
-) -> Result<Option<Vec<types::ConFrame>>, Box<dyn std::error::Error>> {
+) -> Result<Option<(Vec<types::ConFrame>, f64, f64)>, Box<dyn std::error::Error>> {
     use std::sync::atomic::{AtomicBool, Ordering};
     let Some(index) = crate::compression::indexed_members(file) else {
         return Ok(None);
@@ -3719,11 +3719,8 @@ fn piped_stock_frames(
     if natoms == 0 {
         return Ok(None);
     }
+    let t_alloc = std::time::Instant::now();
     let n = natoms as usize;
-    let total: usize = index.plain.iter().sum();
-    let mut plain = Vec::<u8>::new();
-    plain.reserve(total);
-    unsafe { plain.set_len(total) };
     let mut offset = Vec::with_capacity(index.plain.len());
     let mut cursor = 0usize;
     for len in &index.plain {
@@ -3745,37 +3742,22 @@ fn piped_stock_frames(
     let mut ids = Vec::<u64>::new();
     ids.reserve(n);
     unsafe { ids.set_len(n) };
-    let mut flags = vec![[false; 3]; n];
-    let mut atoms: Vec<std::mem::MaybeUninit<types::AtomDatum>> = Vec::new();
-    atoms.reserve(n);
+    let mut flags = Vec::<[bool; 3]>::new();
+    flags.reserve(n);
+    unsafe { flags.set_len(n) };
+    let mut atoms = crate::types::take_atom_spare(n);
     unsafe { atoms.set_len(n) };
     let error: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-    let ranges = {
-        let threads = threads.min(index.plain.len()).max(1);
-        let mut ranges = Vec::new();
-        let mut start = 0usize;
-        for worker in 0..threads {
-            let end = if worker + 1 == threads {
-                index.plain.len()
-            } else {
-                (worker + 1) * index.plain.len() / threads
-            };
-            if end > start {
-                ranges.push((start, end));
-                start = end;
-            }
-        }
-        ranges
-    };
+    let alloc_s = t_alloc.elapsed().as_secs_f64();
+    let nworkers = threads.min(index.plain.len()).max(1);
+    let t_scope = std::time::Instant::now();
     let xyz_addr = xyz.as_mut_ptr() as usize;
     let ids_addr = ids.as_mut_ptr() as usize;
     let flags_addr = flags.as_mut_ptr() as usize;
     let atoms_addr = atoms.as_mut_ptr() as usize;
-    let plain_addr = plain.as_mut_ptr() as usize;
-    let nworkers = ranges.len();
     crate::parser::on_pool(nworkers, || {
         rayon::scope(|scope| {
-            for (worker, (begin, end)) in ranges.into_iter().enumerate() {
+            for worker in 0..nworkers {
                 let index = &index;
                 let offset = &offset;
                 let ends = &ends;
@@ -3791,75 +3773,77 @@ fn piped_stock_frames(
                     let ids_ptr = ids_addr as *mut u64;
                     let flags_ptr = flags_addr as *mut [bool; 3];
                     let atoms_ptr = atoms_addr as *mut std::mem::MaybeUninit<types::AtomDatum>;
-                    let plain_ptr = plain_addr as *mut u8;
+                    // One inflate buffer per pool thread, kept after the first file.
+                    thread_local! {
+                        static INFLATE_BUF: std::cell::RefCell<Vec<u8>> =
+                            const { std::cell::RefCell::new(Vec::new()) };
+                    }
                     crate::parser::pin_worker(worker);
-                    for member in begin..end {
+                    let mut symbol: Option<std::sync::Arc<str>> = None;
+                    let mut member = worker;
+                    while member < index.plain.len() {
                         let src = &file[index.starts[member]..ends[member]];
-                        let dst = unsafe {
-                            std::slice::from_raw_parts_mut(
-                                plain_ptr.add(offset[member]),
-                                index.plain[member],
-                            )
-                        };
-                        if let Err(err) = crate::compression::inflate_member(index.gzip, src, dst) {
-                            *error.lock().unwrap() = Some(err.to_string());
-                            failed.store(true, Ordering::Release);
-                            return;
-                        }
-                        if member == 0 {
-                            match stock_header(dst) {
-                                Some((parsed, syms, origin)) => {
-                                    spec.store(parsed.spec_version, Ordering::Release);
-                                    row_origin.store(origin, Ordering::Release);
-                                    *symbols.lock().unwrap() = syms;
-                                    *header.lock().unwrap() = Some(parsed);
-                                    ready.store(true, Ordering::Release);
+                        let plain_len = index.plain[member];
+                        let parsed = INFLATE_BUF.with(|cell| {
+                            let mut buf = cell.borrow_mut();
+                            if buf.capacity() < plain_len {
+                                let extra = plain_len - buf.capacity();
+                                buf.reserve(extra);
+                            }
+                            unsafe { buf.set_len(plain_len) };
+                            if let Err(err) = crate::compression::inflate_member(
+                                index.gzip,
+                                src,
+                                &mut buf[..plain_len],
+                            ) {
+                                return Err(err.to_string());
+                            }
+                            if member == 0 {
+                                match stock_header(&buf[..plain_len]) {
+                                    Some((parsed, syms, origin)) => {
+                                        spec.store(parsed.spec_version, Ordering::Release);
+                                        row_origin.store(origin, Ordering::Release);
+                                        *symbols.lock().unwrap() = syms;
+                                        *header.lock().unwrap() = Some(parsed);
+                                        ready.store(true, Ordering::Release);
+                                    }
+                                    None => {
+                                        return Err(
+                                            "indexed member is not one coordinate block".into()
+                                        );
+                                    }
                                 }
-                                None => {
-                                    *error.lock().unwrap() =
-                                        Some("indexed member is not one coordinate block".into());
-                                    failed.store(true, Ordering::Release);
-                                    return;
+                            }
+                            let (base, count) = index.rows[member];
+                            if count == 0 {
+                                return Ok(());
+                            }
+                            while !ready.load(Ordering::Acquire) {
+                                if failed.load(Ordering::Acquire) {
+                                    return Ok(());
                                 }
+                                std::thread::yield_now();
                             }
-                        }
-                        let (base, count) = index.rows[member];
-                        if count == 0 {
-                            continue;
-                        }
-                        while !ready.load(Ordering::Acquire) {
-                            if failed.load(Ordering::Acquire) {
-                                return;
+                            if symbol.is_none() {
+                                symbol =
+                                    symbols.lock().unwrap().first().map(|(sym, _)| sym.clone());
                             }
-                            std::thread::yield_now();
-                        }
-                        let spec_v = spec.load(Ordering::Acquire);
-                        let origin = row_origin.load(Ordering::Acquire);
-                        let local = if offset[member] >= origin {
-                            0
-                        } else {
-                            origin - offset[member]
-                        };
-                        let slice = unsafe {
-                            std::slice::from_raw_parts(
-                                plain_ptr.add(offset[member]),
-                                index.plain[member],
-                            )
-                        };
-                        let syms = symbols.lock().unwrap().clone();
-                        let mut row = base as usize;
-                        let mut left = count as usize;
-                        let mut at = local;
-                        while left > 0 {
-                            let (symbol, type_end) = symbol_covering(&syms, row);
-                            let take = left.min(type_end.saturating_sub(row));
-                            if take == 0 {
-                                break;
-                            }
-                            match crate::parser::parse_coord_run(
-                                slice,
-                                at,
-                                take,
+                            let Some(symbol) = symbol.as_ref() else {
+                                return Err("indexed frame has no species".into());
+                            };
+                            let spec_v = spec.load(Ordering::Acquire);
+                            let origin = row_origin.load(Ordering::Acquire);
+                            let local = if offset[member] >= origin {
+                                0
+                            } else {
+                                origin - offset[member]
+                            };
+                            let row = base as usize;
+                            let nrows = count as usize;
+                            if let Err(err) = crate::parser::parse_coord_run(
+                                &buf[..plain_len],
+                                local,
+                                nrows,
                                 spec_v,
                                 row,
                                 Some(symbol),
@@ -3868,33 +3852,30 @@ fn piped_stock_frames(
                                 flags_ptr,
                                 atoms_ptr,
                             ) {
-                                Ok(next) => at = next,
-                                Err(err) => {
-                                    *error.lock().unwrap() = Some(err.to_string());
-                                    failed.store(true, Ordering::Release);
-                                    return;
-                                }
+                                return Err(err.to_string());
                             }
-                            row += take;
-                            left -= take;
-                        }
-                        if left != 0 {
-                            *error.lock().unwrap() =
-                                Some("coordinate rows stopped before the index count".into());
+                            Ok(())
+                        });
+                        if let Err(err) = parsed {
+                            *error.lock().unwrap() = Some(err);
                             failed.store(true, Ordering::Release);
                             return;
                         }
+                        if failed.load(Ordering::Acquire) {
+                            return;
+                        }
+                        member += nworkers;
                     }
                 });
             }
         });
     });
+    let scope_s = t_scope.elapsed().as_secs_f64();
     if let Some(err) = error.into_inner().unwrap_or(None) {
         std::mem::forget(atoms);
         unsafe {
             xyz.set_len(0);
             ids.set_len(0);
-            plain.set_len(0);
         }
         return Err(err.into());
     }
@@ -3903,7 +3884,6 @@ fn piped_stock_frames(
         unsafe {
             xyz.set_len(0);
             ids.set_len(0);
-            plain.set_len(0);
         }
         return Ok(None);
     };
@@ -3912,6 +3892,7 @@ fn piped_stock_frames(
     let atoms_raw = atoms.as_mut_ptr() as *mut types::AtomDatum;
     std::mem::forget(atoms);
     let mut atoms = unsafe { Vec::from_raw_parts(atoms_raw, n, n) };
+    crate::types::mark_uniform_symbol_drop(&atoms);
     if let Some(slice) = positions.f64_slice() {
         let new_ptr = slice.as_ptr() as *mut f64;
         if new_ptr != old as *mut f64 {
@@ -3921,14 +3902,30 @@ fn piped_stock_frames(
         }
     }
     let frame = crate::types::con_frame_coords_only_with_ids(header, atoms, positions, ids);
-    Ok(Some(vec![frame]))
+    Ok(Some((vec![frame], alloc_s, scope_s)))
 }
 
 #[cfg(feature = "parallel")]
 fn stock_header(
     bytes: &[u8],
 ) -> Option<(types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize)> {
-    let text = std::str::from_utf8(bytes).ok()?;
+    // The member is several megabytes. The header is the first few dozen
+    // lines; scanning the whole member as UTF-8 sat on the critical path.
+    let header_region = {
+        let mut seen = 0usize;
+        let mut end = bytes.len();
+        for (index, byte) in bytes.iter().enumerate() {
+            if *byte == b'\n' {
+                seen += 1;
+                if seen == 64 {
+                    end = index + 1;
+                    break;
+                }
+            }
+        }
+        &bytes[..end]
+    };
+    let text = std::str::from_utf8(header_region).ok()?;
     let mut lines = text.lines();
     let header = crate::parser::parse_frame_header(&mut lines).ok()?;
     if header.natm_types != 1 || header.natms_per_type.len() != 1 {
@@ -3980,7 +3977,9 @@ fn read_compressed_phased(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    let t_open = std::time::Instant::now();
     let file = std::fs::read(path)?;
+    let open_s = t_open.elapsed().as_secs_f64();
     let t_all = std::time::Instant::now();
     let piped_threads = match num_threads {
         Some(n) if n >= 2 => n,
@@ -3991,21 +3990,24 @@ fn read_compressed_phased(
     };
     #[cfg(feature = "parallel")]
     if piped_threads >= 2 {
-        if let Some(frames) = piped_stock_frames(&file, piped_threads)? {
+        if let Some((frames, alloc_s, scope_s)) = piped_stock_frames(&file, piped_threads)? {
             let elapsed = t_all.elapsed().as_secs_f64();
             let n_frames = frames.len() as u64;
             return Ok(PhasedFrames {
                 frames,
-                n_bytes: 0,
-                chunk_s: vec![elapsed],
+                n_bytes: file.len(),
+                chunk_s: vec![scope_s],
                 scan_kind: SCAN_SERIAL,
                 worker_minflt: Vec::new(),
                 share_frames: vec![n_frames],
                 share_bytes: Vec::new(),
                 phases: ReadPhaseTimes {
-                    worker_parse_s: elapsed,
-                    worker_sum_s: elapsed,
-                    worker_max_s: elapsed,
+                    open_mmap_s: open_s,
+                    slot_alloc_s: alloc_s,
+                    worker_parse_s: scope_s,
+                    worker_sum_s: scope_s,
+                    worker_max_s: scope_s,
+                    finish_s: (elapsed - alloc_s - scope_s).max(0.0),
                     ..ReadPhaseTimes::default()
                 },
                 pool: None,
@@ -4013,7 +4015,7 @@ fn read_compressed_phased(
         }
     }
     crate::compression::with_inflated_plain(&file, |plain| {
-        let open_mmap_s = t_all.elapsed().as_secs_f64();
+        let open_mmap_s = open_s + t_all.elapsed().as_secs_f64();
         let n_bytes = plain.len();
         let phased = frames_from_bytes_phased_located(plain, num_threads)
             .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)?;
