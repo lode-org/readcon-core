@@ -14,7 +14,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 
 OUT = Path(__file__).resolve().parents[0] / "scaling" / "r8"
 WORKERS = (1, 2, 4, 8)
@@ -24,7 +23,9 @@ def load() -> list[dict]:
     return json.loads((OUT / "rows.json").read_text())
 
 
-def series(rows: list[dict], op: str, sink: str | None, kind: str) -> dict[str, dict[int, dict]]:
+def series(
+    rows: list[dict], op: str, sink: str | None, kind: str
+) -> dict[str, dict[int, dict]]:
     found: dict[str, dict[int, dict]] = {}
     for row in rows:
         if row.get("op") != op or row.get("kind") != kind:
@@ -71,22 +72,48 @@ def draw(ax, found: dict[str, dict[int, dict]], ylabel: str, efficiency: bool) -
 
 def main() -> None:
     rows = load()
-    plt.rcParams.update({
-        "font.size": 9,
-        "axes.labelsize": 9,
-        "xtick.labelsize": 8,
-        "ytick.labelsize": 8,
-        "legend.fontsize": 8,
-    })
+    plt.rcParams.update(
+        {
+            "font.size": 9,
+            "axes.labelsize": 9,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 8,
+        }
+    )
     fig, axes = plt.subplots(4, 2, figsize=(11, 14))
-    draw(axes[0, 0], series(rows, "read", "memory", "threads"), "thread read speedup", False)
-    draw(axes[0, 1], series(rows, "read", "memory", "threads"), "thread read efficiency", True)
-    draw(axes[1, 0], series(rows, "write", "memory", "threads"), "format-only speedup", False)
-    draw(axes[1, 1], series(rows, "write", "memory", "threads"), "format-only efficiency", True)
+    draw(
+        axes[0, 0],
+        series(rows, "read", "memory", "threads"),
+        "thread read speedup",
+        False,
+    )
+    draw(
+        axes[0, 1],
+        series(rows, "read", "memory", "threads"),
+        "thread read efficiency",
+        True,
+    )
+    draw(
+        axes[1, 0],
+        series(rows, "write", "memory", "threads"),
+        "format-only speedup",
+        False,
+    )
+    draw(
+        axes[1, 1],
+        series(rows, "write", "memory", "threads"),
+        "format-only efficiency",
+        True,
+    )
     draw(axes[2, 0], series(rows, "read", "memory", "mpi"), "rank read speedup", False)
-    draw(axes[2, 1], series(rows, "read", "memory", "mpi"), "rank read efficiency", True)
+    draw(
+        axes[2, 1], series(rows, "read", "memory", "mpi"), "rank read efficiency", True
+    )
     draw(axes[3, 0], series(rows, "write", "disk", "mpi"), "rank write speedup", False)
-    draw(axes[3, 1], series(rows, "write", "disk", "mpi"), "rank write efficiency", True)
+    draw(
+        axes[3, 1], series(rows, "write", "disk", "mpi"), "rank write efficiency", True
+    )
     for ax in axes[2:, :].ravel():
         ax.set_xlabel("ranks")
     fig.tight_layout()

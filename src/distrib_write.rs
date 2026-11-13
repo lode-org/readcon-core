@@ -289,6 +289,7 @@ fn gather_u64s(comm: &Comm, mine: &[u64]) -> Option<Vec<u64>> {
     }
 }
 
+#[allow(dead_code)]
 fn write_mpiio(
     comm: &Comm,
     path: &Path,

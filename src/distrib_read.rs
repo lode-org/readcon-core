@@ -1014,12 +1014,30 @@ mod atom_range_tests {
         let bytes = text.as_bytes();
         let (start, end) = frame_coord_span(bytes).unwrap();
         let mut coords = Vec::new();
+        let mut cursor = start;
         for rank in 0..4 {
             let range = rank_line_range(bytes, start, end, rank, 4);
+            assert_eq!(range.start, cursor, "rank {rank} left a gap or an overlap");
+            cursor = range.end;
             coords.extend(parse_coord_lines(&bytes[range]).unwrap());
         }
+        assert_eq!(cursor, end);
         assert_eq!(coords.len(), 15);
         assert_eq!(coords[0], 0.5);
         assert_eq!(coords[12], 4.5);
+    }
+
+    #[test]
+    fn a_trailing_newline_still_tiles_equal_frames() {
+        let frame = "grid\n{\"con_spec_version\":2}\n1 1 1\n90 90 90\n0 0\n0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        let mut bytes = frame.repeat(3);
+        bytes.push('\n');
+        let path = std::env::temp_dir().join(format!("readcon-tail-{}.con", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        let tiled = super::tiled_span(&path);
+        let _ = std::fs::remove_file(&path);
+        let (span, n) = tiled.expect("a trailing newline is not another frame");
+        assert_eq!(n, 3);
+        assert_eq!(span, frame.len());
     }
 }

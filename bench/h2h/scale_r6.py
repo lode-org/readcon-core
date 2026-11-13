@@ -80,7 +80,9 @@ def save_rows(rows: list[dict]) -> None:
 
 
 def have(rows: list[dict], **keys) -> bool:
-    return any(all(row.get(key) == value for key, value in keys.items()) for row in rows)
+    return any(
+        all(row.get(key) == value for key, value in keys.items()) for row in rows
+    )
 
 
 def record(rows: list[dict], row: dict) -> None:
@@ -100,6 +102,7 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
         for workers in THREADS:
             if have(rows, op="read", file=name, workers=workers, kind="threads"):
                 continue
+
             def once(path=path, workers=workers, name=name):
                 if name.startswith("extxyz"):
                     readcon.read_extxyz(os.fspath(path), n_threads=workers)
@@ -107,6 +110,7 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
                     readcon.read_positions(os.fspath(path), n_threads=workers)
                 else:
                     readcon.read_con(os.fspath(path), n_threads=workers)
+
             once()
             samples = []
             for _ in range(REPEATS):
@@ -114,25 +118,47 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
                 once()
                 samples.append(time.perf_counter() - started)
             median, iqr = type7(samples)
-            record(rows, {
-                "op": "read", "file": name, "workers": workers, "kind": "threads",
-                "sink": "memory", "median_s": median, "iqr_s": iqr, "samples_s": samples,
-            })
-        for sink, dest_root in (("disk", WORK / "r6" / "disk"), ("memory", Path("/dev/shm/r6"))):
+            record(
+                rows,
+                {
+                    "op": "read",
+                    "file": name,
+                    "workers": workers,
+                    "kind": "threads",
+                    "sink": "memory",
+                    "median_s": median,
+                    "iqr_s": iqr,
+                    "samples_s": samples,
+                },
+            )
+        for sink, dest_root in (
+            ("disk", WORK / "r6" / "disk"),
+            ("memory", Path("/dev/shm/r6")),
+        ):
             dest_root.mkdir(parents=True, exist_ok=True)
             for workers in THREADS:
-                if have(rows, op="write", file=name, workers=workers, kind="threads", sink=sink):
+                if have(
+                    rows,
+                    op="write",
+                    file=name,
+                    workers=workers,
+                    kind="threads",
+                    sink=sink,
+                ):
                     continue
                 if name.startswith("extxyz"):
                     data = readcon.read_extxyz(os.fspath(path), n_threads=1)
                     dest = dest_root / f"{name}.extxyz"
+
                     def go(data=data, dest=dest, workers=workers):
                         readcon.write_extxyz(os.fspath(dest), data, n_threads=workers)
                 else:
                     frames = readcon.read_con(os.fspath(path), n_threads=1)
                     dest = dest_root / f"{name}.con"
+
                     def go(frames=frames, dest=dest, workers=workers):
                         readcon.write_con(os.fspath(dest), frames, n_threads=workers)
+
                 go()
                 samples = []
                 for _ in range(REPEATS):
@@ -141,11 +167,20 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
                     samples.append(time.perf_counter() - started)
                 median, iqr = type7(samples)
                 nbytes = dest.stat().st_size if dest.exists() else 0
-                record(rows, {
-                    "op": "write", "file": name, "workers": workers, "kind": "threads",
-                    "sink": sink, "median_s": median, "iqr_s": iqr, "samples_s": samples,
-                    "bytes": nbytes,
-                })
+                record(
+                    rows,
+                    {
+                        "op": "write",
+                        "file": name,
+                        "workers": workers,
+                        "kind": "threads",
+                        "sink": sink,
+                        "median_s": median,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "bytes": nbytes,
+                    },
+                )
 
 
 def h2h(paths: dict[str, Path]) -> None:
@@ -161,6 +196,7 @@ def h2h(paths: dict[str, Path]) -> None:
     for name in targets:
         path = os.fspath(paths[name])
         for reader in readers:
+
             def once(reader=reader, path=path):
                 if reader == "readcon":
                     readcon.read_extxyz(path, n_threads=1)
@@ -178,6 +214,7 @@ def h2h(paths: dict[str, Path]) -> None:
                     for index in range(data.source.num_frames):
                         block = data.compute(index)
                         np.array(block.particles.positions, dtype=np.float64)
+
             print(f"h2h {name} {reader}", flush=True)
             once()
             samples = []
@@ -186,7 +223,13 @@ def h2h(paths: dict[str, Path]) -> None:
                 once()
                 samples.append(time.perf_counter() - started)
             median, iqr = type7(samples)
-            row = {"file": name, "reader": reader, "median_s": median, "iqr_s": iqr, "samples_s": samples}
+            row = {
+                "file": name,
+                "reader": reader,
+                "median_s": median,
+                "iqr_s": iqr,
+                "samples_s": samples,
+            }
             out.append(row)
             print(f"  {median:.4f}", flush=True)
             (OUT / "h2h.json").write_text(json.dumps(out, indent=2) + "\n")
@@ -199,14 +242,31 @@ def hardware(rows: list[dict]) -> None:
     stream_bin = Path("/tmp/readcon-stream")
     if not stream_bin.exists():
         subprocess.run(
-            ["rustc", "-C", "opt-level=3", "-C", "target-cpu=native",
-             "examples/stream_triad.rs", "-o", str(stream_bin)],
-            cwd=ROOT, check=True,
+            [
+                "rustc",
+                "-C",
+                "opt-level=3",
+                "-C",
+                "target-cpu=native",
+                "examples/stream_triad.rs",
+                "-o",
+                str(stream_bin),
+            ],
+            cwd=ROOT,
+            check=True,
         )
     stream = subprocess.check_output([str(stream_bin)], text=True, cwd=ROOT)
     disk = WORK / "r6" / "disk-ceiling.bin"
     disk.parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["dd", "if=/dev/zero", f"of={disk}", "bs=1M", "count=256", "conv=fdatasync", "status=none"]
+    cmd = [
+        "dd",
+        "if=/dev/zero",
+        f"of={disk}",
+        "bs=1M",
+        "count=256",
+        "conv=fdatasync",
+        "status=none",
+    ]
     subprocess.run(cmd, check=True)
     samples = []
     for _ in range(REPEATS):
@@ -226,7 +286,7 @@ def hardware(rows: list[dict]) -> None:
         "disk_Bps": nbytes / median,
     }
     (OUT / "hardware.json").write_text(json.dumps(info, indent=2) + "\n")
-    print(f"disk {median:.4f}s {info['disk_Bps']/1e6:.0f} MB/s", flush=True)
+    print(f"disk {median:.4f}s {info['disk_Bps'] / 1e6:.0f} MB/s", flush=True)
 
 
 def langs(paths: dict[str, Path]) -> None:
@@ -236,7 +296,13 @@ def langs(paths: dict[str, Path]) -> None:
     if probe.exists():
         for kind in ("pos", "write"):
             text = run([str(probe), kind, str(con), "1"])
-            rows.append({"lang": "rust", "op": "read" if kind == "pos" else "write", "line": text.strip()})
+            rows.append(
+                {
+                    "lang": "rust",
+                    "op": "read" if kind == "pos" else "write",
+                    "line": text.strip(),
+                }
+            )
     c_bin = WORK / "time_c"
     f_bin = WORK / "time_f"
     cpp_bin = WORK / "time_cpp"
@@ -254,14 +320,18 @@ def langs(paths: dict[str, Path]) -> None:
             text = run([str(f_bin), op, str(con), str(out), str(REPEATS)])
             rows.append({"lang": "fortran", "op": op, "line": text})
     import readcon
+
     def time_py(op: str) -> str:
         if op == "read":
+
             def once():
                 readcon.read_positions(os.fspath(con), n_threads=1)
         else:
             frames = readcon.read_con(os.fspath(con), n_threads=1)
+
             def once(frames=frames):
                 readcon.write_con(os.fspath(out), frames, n_threads=1)
+
         once()
         samples = []
         for _ in range(REPEATS):
@@ -270,6 +340,7 @@ def langs(paths: dict[str, Path]) -> None:
             samples.append(time.perf_counter() - started)
         median, iqr = type7(samples)
         return f"median={median:.6f} iqr={iqr:.6f} samples={','.join(f'{s:.6f}' for s in samples)}"
+
     rows.append({"lang": "python", "op": "read", "line": time_py("read")})
     rows.append({"lang": "python", "op": "write", "line": time_py("write")})
     (OUT / "langs.json").write_text(json.dumps(rows, indent=2) + "\n")
@@ -277,21 +348,58 @@ def langs(paths: dict[str, Path]) -> None:
 
 
 def build_tools() -> None:
-    run(["cargo", "build", "--release", "--features", "parallel", "--example", "scale_probe", "--example", "weak_scale_threads"])
+    run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--features",
+            "parallel",
+            "--example",
+            "scale_probe",
+            "--example",
+            "weak_scale_threads",
+        ]
+    )
     import sys
+
     sys.path.insert(0, str(BENCH))
     import support
+
     support.compile_tools()
     cpp = WORK / "time_cpp"
     source = BENCH / "time_cpp.cpp"
     if (not cpp.exists()) or source.stat().st_mtime > cpp.stat().st_mtime:
-        run([
-            "g++", "-O2", "-std=c++17", "-o", str(cpp), str(source),
-            "-I", "include", "target/release/libreadcon_core.a",
-            "-lpthread", "-ldl", "-lm",
-        ])
+        run(
+            [
+                "g++",
+                "-O2",
+                "-std=c++17",
+                "-o",
+                str(cpp),
+                str(source),
+                "-I",
+                "include",
+                "target/release/libreadcon_core.a",
+                "-lpthread",
+                "-ldl",
+                "-lm",
+            ]
+        )
     try:
-        run(["cargo", "build", "--release", "--features", "parallel,mpi", "--example", "strong_scale_mpi", "--example", "weak_scale_mpi"])
+        run(
+            [
+                "cargo",
+                "build",
+                "--release",
+                "--features",
+                "parallel,mpi",
+                "--example",
+                "strong_scale_mpi",
+                "--example",
+                "weak_scale_mpi",
+            ]
+        )
     except subprocess.CalledProcessError as exc:
         (OUT / "mpi-build.txt").write_text(exc.stderr or str(exc))
         print("mpi build failed", flush=True)
@@ -306,17 +414,38 @@ def mpi_strong(paths: dict[str, Path], rows: list[dict]) -> None:
             for op in ("read", "write"):
                 if have(rows, op=op, file=name, workers=ranks, kind="mpi"):
                     continue
-                text = run([
-                    "mpirun", "--bind-to", "core", "-n", str(ranks),
-                    str(binary), op, str(paths[name]), str(REPEATS),
-                ])
-                samples = [float(piece) for piece in text.strip().split("samples=")[1].split(",")]
+                text = run(
+                    [
+                        "mpirun",
+                        "--bind-to",
+                        "core",
+                        "-n",
+                        str(ranks),
+                        str(binary),
+                        op,
+                        str(paths[name]),
+                        str(REPEATS),
+                    ]
+                )
+                samples = [
+                    float(piece)
+                    for piece in text.strip().split("samples=")[1].split(",")
+                ]
                 median, iqr = type7(samples)
-                record(rows, {
-                    "op": op, "file": name, "workers": ranks, "kind": "mpi",
-                    "sink": "disk" if op == "write" else "memory",
-                    "median_s": median, "iqr_s": iqr, "samples_s": samples, "raw": text.strip(),
-                })
+                record(
+                    rows,
+                    {
+                        "op": op,
+                        "file": name,
+                        "workers": ranks,
+                        "kind": "mpi",
+                        "sink": "disk" if op == "write" else "memory",
+                        "median_s": median,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "raw": text.strip(),
+                    },
+                )
 
 
 def weak(paths: dict[str, Path]) -> None:
@@ -347,7 +476,19 @@ def weak(paths: dict[str, Path]) -> None:
             with sized.open("wb") as handle:
                 for _ in range(per * ranks):
                     handle.write(blob)
-        run(["mpirun", "--bind-to", "core", "-n", str(ranks), str(mpi_bin), str(sized), str(dest), "6"])
+        run(
+            [
+                "mpirun",
+                "--bind-to",
+                "core",
+                "-n",
+                str(ranks),
+                str(mpi_bin),
+                str(sized),
+                str(dest),
+                "6",
+            ]
+        )
 
 
 def main() -> None:

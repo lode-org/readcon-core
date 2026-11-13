@@ -3073,21 +3073,47 @@ fn write_con(
             let workers = n_threads.unwrap_or(1);
             if !append {
                 if let Ok(list) = frames.cast::<ConFrameList>() {
-                    let borrowed = list.borrow();
-                    let slots = borrowed.frames.lock().expect("frames");
-                    let refs: Vec<&ConFrame> = slots
-                        .iter()
-                        .map(|slot| slot.as_ref().expect("stored frame"))
-                        .collect();
-                    crate::writer::write_frame_refs_to_path(
-                        Path::new(path),
-                        &refs,
-                        workers,
-                        precision,
-                        canonical,
-                        true,
-                    )
-                    .map_err(|err| write_err_to_py(py, err))?;
+                    let all_stored = {
+                        let borrowed = list.borrow();
+                        let slots = borrowed.frames.lock().expect("frames");
+                        slots.iter().all(|slot| slot.is_some())
+                    };
+                    if all_stored {
+                        let borrowed = list.borrow();
+                        let slots = borrowed.frames.lock().expect("frames");
+                        let refs: Vec<&ConFrame> = slots
+                            .iter()
+                            .map(|slot| slot.as_ref().expect("stored frame"))
+                            .collect();
+                        crate::writer::write_frame_refs_to_path(
+                            Path::new(path),
+                            &refs,
+                            workers,
+                            precision,
+                            canonical,
+                            true,
+                        )
+                        .map_err(|err| write_err_to_py(py, err))?;
+                    } else {
+                        // Indexing a frame moves it into the Python cache.
+                        // The write then uses that object instead of the slot.
+                        let mut writer = if let Some(precision) = precision {
+                            crate::writer::ConFrameWriter::from_path_with_precision(path, precision)
+                                .map_err(|e| {
+                                    PyIOError::new_err(format!("failed to create writer: {e}"))
+                                })?
+                        } else {
+                            crate::writer::ConFrameWriter::from_path(path).map_err(|e| {
+                                PyIOError::new_err(format!("failed to create writer: {e}"))
+                            })?
+                        }
+                        .canonical(canonical);
+                        stream_frames(py, frames, |frame| {
+                            write_stamped_frame(&mut writer, frame)
+                                .map_err(|e| write_err_to_py(py, e))
+                        })?;
+                        flush_writer(&mut writer)?;
+                    }
                 } else {
                     let rust_frames = py_frames_to_rust(py, frames)?;
                     let refs: Vec<&ConFrame> = rust_frames.iter().collect();

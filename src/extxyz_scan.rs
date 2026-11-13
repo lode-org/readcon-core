@@ -2231,4 +2231,48 @@ Cu 4.0 5.0 6.0 63.546
         assert_eq!(from_path.n_frames, 1);
         std::fs::remove_file(&path).unwrap();
     }
+
+    #[test]
+    fn per_thread_buffers_match_the_serial_formatter() {
+        fn written(text: &str, workers: usize) -> Vec<u8> {
+            let tables = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+            let symbols = expanded_species(&tables);
+            let mut columns = tables.columns.clone();
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "species") {
+                column.text.clone_from(&symbols);
+            }
+            if let Some(column) = columns.iter_mut().find(|column| column.name == "pos") {
+                column.real.clone_from(&tables.positions);
+            }
+            let sources: Vec<&(dyn ExtxyzSource + Sync)> = columns
+                .iter()
+                .map(|column| column as &(dyn ExtxyzSource + Sync))
+                .collect();
+            extxyz_bytes_with_threads(
+                tables.n_frames,
+                tables.n_atoms,
+                &tables.cell,
+                &sources,
+                workers,
+            )
+            .unwrap()
+        }
+        let mut wide = String::from(
+            "4096\nLattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n",
+        );
+        for index in 0..4096 {
+            wide.push_str(&format!("Cu {} 0.25 0.5\n", index as f64 * 0.125));
+        }
+        let serial = written(&wide, 1);
+        assert_eq!(written(&wide, 8), serial);
+        let mut many = String::new();
+        for frame in 0..32 {
+            many.push_str(&format!(
+                "2\nLattice=\"{frame}.5 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\nCu 0.1 0.2 0.3\nH 1 0 0\n"
+            ));
+        }
+        let serial = written(&many, 1);
+        assert_eq!(written(&many, 2), serial);
+        assert_eq!(written(&many, 8), serial);
+    }
 }

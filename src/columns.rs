@@ -345,6 +345,9 @@ fn parse_one_frame(
     let natm_types = parse_count_line(types_line, 1)?[0];
     if natm_types == 0 {
         zero_atom_tail(bytes, pos)?;
+        // Every frame records where its rows would start, including a
+        // frame with no atoms. The parallel fill indexes this by frame.
+        out.head_ends.push(*pos);
         return Ok((0, stock));
     }
     let count_line = utf8_line(read_line(bytes, pos)?)?;
@@ -393,17 +396,26 @@ fn parse_one_frame(
                 n += 1;
             }
         } else if counts.len() == 1 && *count >= 4096 && workers >= 2 {
-            let start = *pos;
-            let mut index = crate::parser::newline_index_at(&bytes[start..], start, workers);
-            if index.len() < *count {
-                return Err(ParseError::IncompleteFrame);
+            #[cfg(feature = "parallel")]
+            {
+                let start = *pos;
+                let mut index = crate::parser::newline_index_at(&bytes[start..], start, workers);
+                if index.len() < *count {
+                    return Err(ParseError::IncompleteFrame);
+                }
+                let end = index[*count - 1] + 1;
+                index.truncate(*count);
+                *out.wide_breaks.last_mut().expect("frame breaks") = index;
+                *pos = end;
+                out.masses.extend(std::iter::repeat_n(*mass, *count));
+                n += *count;
             }
-            let end = index[*count - 1] + 1;
-            index.truncate(*count);
-            *out.wide_breaks.last_mut().expect("frame breaks") = index;
-            *pos = end;
-            out.masses.extend(std::iter::repeat_n(*mass, *count));
-            n += *count;
+            #[cfg(not(feature = "parallel"))]
+            {
+                skip_count_lines(bytes, pos, *count)?;
+                out.masses.extend(std::iter::repeat_n(*mass, *count));
+                n += *count;
+            }
         } else {
             skip_count_lines(bytes, pos, *count)?;
             out.masses.extend(std::iter::repeat_n(*mass, *count));
