@@ -998,9 +998,17 @@ fn assemble_tables(
     let mut positions = Vec::new();
     let mut masses = fill_nan(n_frames * n_atoms);
     let mut species = Vec::new();
+    // One `pos` column is the slab, so the column itself can be emptied.
+    // A second `pos` column has to stay in the table: moving each one
+    // into `positions` drops the earlier column on the floor.
+    let pos_columns = columns.iter().filter(|column| column.name == "pos").count();
     for column in &mut columns {
         if column.name == "pos" {
-            positions = std::mem::take(&mut column.real);
+            if pos_columns > 1 {
+                positions.clone_from(&column.real);
+            } else {
+                positions = std::mem::take(&mut column.real);
+            }
         } else if column.name == "masses" || column.name == "mass" {
             if column.width == 1 {
                 masses = std::mem::take(&mut column.real);
@@ -1054,7 +1062,7 @@ fn tables_stream_parallel(
     let (body, comment) = line_span(bytes, count_end)?;
     let properties = quoted_after(comment, b"Properties=")?;
     let specs = property_columns(properties).ok()?;
-    if !stream_layout(&specs) {
+    if !stream_layout(&specs) || !parallel_stream_columns(&specs) {
         return None;
     }
     // One fat frame is split by atoms. A long series of small frames is
@@ -1798,6 +1806,30 @@ fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
         species_ids: ids,
         columns,
     })
+}
+
+/// The parallel stream writer matches the serial scan for one `pos`
+/// column of width 3 and mass columns of width 1.
+///
+/// A wider mass column is stored in full by the general scanner. The
+/// stream writer keeps the last component, in the one-value mass slot.
+/// A second `pos` column stays in the column table on the general scanner.
+/// The stream writer overwrites the position slab and leaves that column
+/// empty.
+#[cfg(feature = "parallel")]
+fn parallel_stream_columns(specs: &[ColumnSpec]) -> bool {
+    let mut pos = 0usize;
+    for spec in specs {
+        if spec.name == "pos" {
+            if spec.width != 3 {
+                return false;
+            }
+            pos += 1;
+        } else if (spec.name == "mass" || spec.name == "masses") && spec.width != 1 {
+            return false;
+        }
+    }
+    pos == 1
 }
 
 fn stream_layout(specs: &[ColumnSpec]) -> bool {
@@ -3402,5 +3434,97 @@ Al 2 0 0 delta 0.125 0.25 0.5
             "pool {}",
             serial.species_pool.len()
         );
+    }
+
+    fn wide_bytes(properties: &str, rows: &[&str]) -> Vec<u8> {
+        let mut comment =
+            format!("Lattice=\"1 0 0 0 1 0 0 0 1\" Properties={properties} pbc=\"T T T\"");
+        let pad = (1usize << 20).saturating_sub(comment.len());
+        comment.push_str(&" ".repeat(pad));
+        let mut bytes = Vec::with_capacity((1 << 20) + 256);
+        for _ in 0..2 {
+            bytes.extend_from_slice(format!("{}\n", rows.len()).as_bytes());
+            bytes.extend_from_slice(comment.as_bytes());
+            bytes.push(b'\n');
+            for row in rows {
+                bytes.extend_from_slice(row.as_bytes());
+                bytes.push(b'\n');
+            }
+        }
+        assert!(bytes.len() >= (1 << 20));
+        bytes
+    }
+
+    #[test]
+    fn a_wide_mass_column_matches_the_serial_scan() {
+        let bytes = wide_bytes(
+            "species:S:1:pos:R:3:masses:R:2:charge:R:1",
+            &["Cu 0.25 0.5 0.75 1.5 2.5 -1.0", "H 1.0 0.0 0.0 3.5 4.5 0.5"],
+        );
+        let serial = tables_from_extxyz_bytes(&bytes).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(&bytes, 2).unwrap();
+        assert_eq!(parallel.n_frames, serial.n_frames);
+        assert_eq!(parallel.n_atoms, serial.n_atoms);
+        assert_eq!(expanded_species(&parallel), expanded_species(&serial));
+        let bits = |values: &[f64]| {
+            values
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(bits(&parallel.positions), bits(&serial.positions));
+        assert_eq!(bits(&parallel.masses), bits(&serial.masses));
+        assert_eq!(bits(&parallel.cell), bits(&serial.cell));
+        for (left, right) in serial.columns.iter().zip(&parallel.columns) {
+            assert_eq!(left.name, right.name);
+            if left.name == "pos" {
+                continue;
+            }
+            assert_eq!(left.text, right.text);
+            assert_eq!(bits(&left.real), bits(&right.real), "{}", left.name);
+        }
+        let mass = serial
+            .columns
+            .iter()
+            .find(|column| column.name == "masses")
+            .expect("masses");
+        assert_eq!(mass.real.len(), serial.n_frames * serial.n_atoms * 2);
+        assert_eq!(
+            mass.real.len(),
+            parallel
+                .columns
+                .iter()
+                .find(|column| column.name == "masses")
+                .expect("masses")
+                .real
+                .len()
+        );
+    }
+
+    #[test]
+    fn a_wide_second_position_column_matches_the_serial_scan() {
+        let bytes = wide_bytes(
+            "species:S:1:pos:R:3:pos:R:3",
+            &["Cu 0.25 0.5 0.75 1.5 2.5 3.5", "H 1.0 0.0 0.0 4.0 5.0 6.0"],
+        );
+        let serial = tables_from_extxyz_bytes(&bytes).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(&bytes, 2).unwrap();
+        assert_same_tables(&serial, &parallel);
+        let serial_pos: Vec<_> = serial
+            .columns
+            .iter()
+            .filter(|column| column.name == "pos")
+            .collect();
+        let parallel_pos: Vec<_> = parallel
+            .columns
+            .iter()
+            .filter(|column| column.name == "pos")
+            .collect();
+        assert_eq!(serial_pos.len(), 2);
+        assert_eq!(parallel_pos.len(), 2);
+        for (left, right) in serial_pos.iter().zip(&parallel_pos) {
+            assert_eq!(left.real.len(), right.real.len());
+            assert!(!left.real.is_empty());
+        }
     }
 }
