@@ -2064,9 +2064,20 @@ where
                 crate::parser::set_wide_workers(workers);
             }
             let mut iter = ConFrameIterator::from_bytes(&bytes[byte_start..byte_end]);
+            OWNED_RANGES.with(|ranges| ranges.borrow_mut().push((start, end)));
+            let mut known_atoms = 0usize;
             for i in start..end {
                 let frame = match iter.next() {
-                    Some(Ok(frame)) => Ok(frame),
+                    Some(Ok(frame)) => {
+                        if known_atoms == 0 {
+                            known_atoms = frame.atom_data.len();
+                            let left = end - i - 1;
+                            if known_atoms > 0 && left > 0 {
+                                crate::parser::prestash_coord_shells(left, known_atoms);
+                            }
+                        }
+                        Ok(frame)
+                    }
                     Some(Err(error)) => {
                         let line = share_cursor(iter.lines.line_no(), bytes, byte_start);
                         fail_lines.lock().expect("fail lines").push((i, line));
@@ -2084,6 +2095,7 @@ where
                     slots_ptr.write_slot(i, frame);
                 }
             }
+            crate::parser::clear_coord_shells();
             if wide {
                 crate::parser::set_wide_workers(1);
             }
@@ -2262,6 +2274,48 @@ fn slot_cache()
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
     > = std::sync::Mutex::new(Vec::new());
     &CACHE
+}
+
+#[cfg(feature = "parallel")]
+thread_local! {
+    static OWNED_RANGES: std::cell::RefCell<Vec<(usize, usize)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Drop `frames` on the threads that allocated them.
+///
+/// A parallel parse hands each worker a contiguous range. Freeing those
+/// frames on the same workers keeps the pages in that worker's heap for
+/// the next file. `workers < 2` drops on the calling thread.
+pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
+    #[cfg(feature = "parallel")]
+    {
+        if workers >= 2 {
+            if let Some(pool) = shared_pool(workers) {
+                let mut slots: Vec<Option<types::ConFrame>> =
+                    frames.into_iter().map(Some).collect();
+                let ptr = slots.as_mut_ptr() as usize;
+                let len = slots.len();
+                pool.broadcast(|_| {
+                    let ranges =
+                        OWNED_RANGES.with(|ranges| std::mem::take(&mut *ranges.borrow_mut()));
+                    for (start, end) in ranges {
+                        let end = end.min(len);
+                        let start = start.min(end);
+                        for index in start..end {
+                            unsafe {
+                                drop((*((ptr as *mut Option<types::ConFrame>).add(index))).take());
+                            }
+                        }
+                    }
+                });
+                drop(slots);
+                return;
+            }
+        }
+    }
+    let _ = workers;
+    drop(frames);
 }
 
 /// One pool per worker count, kept for the life of the process.
@@ -2591,6 +2645,9 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             match shared_pool(n) {
                 Some(pool) => {
                     let built = t_pool.elapsed().as_secs_f64();
+                    pool.broadcast(|_| {
+                        OWNED_RANGES.with(|ranges| ranges.borrow_mut().clear());
+                    });
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();

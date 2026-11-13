@@ -361,6 +361,18 @@ fn parse_one_frame(
     let masses = parse_line_of_n_f64(mass_line, natm_types)?;
     let mut n = 0usize;
     let mut head_end = *pos;
+    if store_rows {
+        let total: usize = counts.iter().sum();
+        // One allocation for the whole frame. Growing by three floats at a
+        // time copied the slab on every power of two, which is what made a
+        // one-thread million-atom read slower than the plain walker.
+        out.positions.reserve(total.saturating_mul(3));
+        out.masses.reserve(total);
+        if rich {
+            out.ids.reserve(total);
+            out.flags.reserve(total);
+        }
+    }
     for (count, mass) in counts.iter().zip(&masses) {
         let symbol_line = utf8_line(read_line(bytes, pos)?)?;
         let symbol: Arc<str> = Arc::from(symbol_line.trim());

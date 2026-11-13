@@ -1822,6 +1822,57 @@ where
     }
 }
 
+struct CoordShell {
+    atoms: Vec<crate::types::AtomDatum>,
+    coords: Vec<f64>,
+    ids: Vec<u64>,
+}
+
+thread_local! {
+    static COORD_SHELLS: std::cell::RefCell<Vec<CoordShell>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Allocate `n_frames` coordinate shells on this thread before the parse.
+///
+/// One tight reservation, then each frame takes a shell. Doing the
+/// reservations inside the parse mixed the allocator with the float
+/// parse and made eight threads slower than the bytes they write.
+pub(crate) fn prestash_coord_shells(n_frames: usize, n_atoms: usize) {
+    if n_frames == 0 || n_atoms == 0 {
+        return;
+    }
+    COORD_SHELLS.with(|pool| {
+        let mut pool = pool.borrow_mut();
+        pool.reserve(n_frames);
+        for _ in 0..n_frames {
+            pool.push(CoordShell {
+                atoms: Vec::with_capacity(n_atoms),
+                coords: Vec::with_capacity(n_atoms.saturating_mul(3)),
+                ids: Vec::with_capacity(n_atoms),
+            });
+        }
+    });
+}
+
+pub(crate) fn clear_coord_shells() {
+    COORD_SHELLS.with(|pool| pool.borrow_mut().clear());
+}
+
+fn take_coord_shell(n_atoms: usize) -> Option<CoordShell> {
+    COORD_SHELLS.with(|pool| {
+        let shell = pool.borrow_mut().pop()?;
+        if shell.atoms.capacity() >= n_atoms
+            && shell.coords.capacity() >= n_atoms.saturating_mul(3)
+            && shell.ids.capacity() >= n_atoms
+        {
+            Some(shell)
+        } else {
+            None
+        }
+    })
+}
+
 /// Frame parse over a [`LineStream`].
 ///
 /// Coordinate rows go through [`LineStream::next_coord_row`] so the memchr
@@ -1838,15 +1889,20 @@ where
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
-    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
+    let shell = take_coord_shell(total_atoms);
+    let (mut pos_flat, mut ids, mut atom_data) = match shell {
+        Some(shell) => (shell.coords, shell.ids, shell.atoms),
+        None => (
+            Vec::with_capacity(total_atoms.saturating_mul(3)),
+            Vec::with_capacity(total_atoms),
+            Vec::with_capacity(total_atoms),
+        ),
+    };
     let mut positions_other = if f64_positions {
         None
     } else {
         Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
-    let mut ids = Vec::with_capacity(total_atoms);
-    let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(total_atoms);
-
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;

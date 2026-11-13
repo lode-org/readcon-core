@@ -3334,13 +3334,14 @@ pub(crate) fn con_frame_coords_only_with_ids(
     use crate::storage_dtype::{FloatArray1, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
 
-    let mut mass_flat = vec![0.0f64; n];
-    let mut off = 0usize;
+    let mut mass_flat = Vec::with_capacity(n);
     for (ti, &count) in header.natms_per_type.iter().enumerate() {
         let m = header.masses_per_type.get(ti).copied().unwrap_or(0.0);
-        let end = (off + count).min(n);
-        mass_flat[off..end].fill(m);
-        off = end;
+        let take = count.min(n.saturating_sub(mass_flat.len()));
+        mass_flat.extend(std::iter::repeat_n(m, take));
+    }
+    if mass_flat.len() < n {
+        mass_flat.resize(n, 0.0);
     }
     let masses_arr = if dt.masses == crate::storage_dtype::ElementKind::Float64 {
         FloatArray1::from_f64_vec(mass_flat)

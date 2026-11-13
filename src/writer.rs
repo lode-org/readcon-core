@@ -100,6 +100,17 @@ pub struct ConFrameWriter<W: Write> {
     fmt_slot: [FmtSlot; 3],
     /// Workers for one wide coordinate block. One keeps the serial loop.
     atom_workers: usize,
+    /// Binding stamp for the next [`Self::write_frame`]. The atoms stay in
+    /// `frame`; only the header the writer emits changes.
+    bound: Option<BoundHeader>,
+    /// Wide-frame rows are formatted on several threads and written to this
+    /// file as each chunk finishes, so the disk write overlaps the format.
+    stream_file: Option<File>,
+}
+
+struct BoundHeader {
+    meta: BTreeMap<String, Value>,
+    spec: u32,
 }
 
 /// One column of the round-trip float cache.
@@ -263,6 +274,8 @@ impl<W: Write> ConFrameWriter<W> {
             ryu: ryu::Buffer::new(),
             fmt_slot: [FmtSlot::new(); 3],
             atom_workers: 1,
+            bound: None,
+            stream_file: None,
         }
     }
 
@@ -298,17 +311,19 @@ impl<W: Write> ConFrameWriter<W> {
         self.canonical
     }
 
-    fn refresh_metadata_cache(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
-        let spec_version = frame.header.spec_version;
-        let has_vel = frame.has_velocities();
-        let has_frc = frame.has_forces();
-        let has_eng = frame.has_energies();
-        let has_chg = frame.has_charges();
-        let has_spn = frame.has_spins();
-        let has_mm = frame.has_magmoms();
-        let has_dsp = frame.has_displacements();
-        let has_spr = frame.has_spreads();
-
+    fn refresh_metadata_cache(
+        &mut self,
+        spec_version: u32,
+        metadata: &BTreeMap<String, Value>,
+        has_vel: bool,
+        has_frc: bool,
+        has_eng: bool,
+        has_chg: bool,
+        has_spn: bool,
+        has_mm: bool,
+        has_dsp: bool,
+        has_spr: bool,
+    ) -> Result<(), WriteError> {
         let cache_hit = !self.canonical
             && self.metadata_cache.as_ref().is_some_and(|c| {
                 c.matches(
@@ -316,7 +331,7 @@ impl<W: Write> ConFrameWriter<W> {
                     [
                         has_vel, has_frc, has_eng, has_chg, has_spn, has_mm, has_dsp, has_spr,
                     ],
-                    &frame.header.metadata,
+                    metadata,
                 )
             });
         if cache_hit {
@@ -350,16 +365,14 @@ impl<W: Write> ConFrameWriter<W> {
         if has_spr {
             sections.push(json!(SECTION_SPREADS));
         }
-        let validate = frame
-            .header
-            .metadata
+        let validate = metadata
             .get(meta::VALIDATE)
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
         if !sections.is_empty() || validate {
             meta_obj.insert(meta::SECTIONS.into(), json!(sections));
         }
-        for (k, v) in &frame.header.metadata {
+        for (k, v) in metadata {
             if k == meta::CON_SPEC_VERSION || k == meta::SECTIONS {
                 continue;
             }
@@ -386,9 +399,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
         }
-        let minor = frame
-            .header
-            .metadata
+        let minor = metadata
             .get(meta::CON_SPEC_MINOR)
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
@@ -418,7 +429,7 @@ impl<W: Write> ConFrameWriter<W> {
             has_magmoms: has_mm,
             has_displacements: has_dsp,
             has_spreads: has_spr,
-            metadata: frame.header.metadata.clone(),
+            metadata: metadata.clone(),
             serialized,
         });
         Ok(())
@@ -429,16 +440,21 @@ impl<W: Write> ConFrameWriter<W> {
     /// The stamp is installed for the duration of the write and then put back.
     /// Atoms are not rebuilt.
     pub fn write_frame_binding(&mut self, frame: &mut ConFrame) -> Result<(), WriteError> {
-        let stamped = binding_metadata(frame);
-        let saved_meta = std::mem::replace(&mut frame.header.metadata, stamped);
-        let saved_spec = frame.header.spec_version;
-        if frame.header.spec_version < crate::CON_SPEC_VERSION {
-            frame.header.spec_version = crate::CON_SPEC_VERSION;
-        }
-        let result = self.write_frame(frame);
-        frame.header.metadata = saved_meta;
-        frame.header.spec_version = saved_spec;
-        result
+        self.write_frame_bound(frame)
+    }
+
+    /// [`Self::write_frame_binding`] without a mutable frame.
+    ///
+    /// The header the file emits is the binding stamp. `frame`'s atoms and
+    /// its stored header are left as the caller passed them, so a wide frame
+    /// is not cloned before its rows are formatted.
+    pub fn write_frame_bound(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
+        let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+        self.bound = Some(BoundHeader {
+            meta: binding_metadata(frame),
+            spec,
+        });
+        self.write_frame(frame)
     }
 
     /// Writes a single `ConFrame` to the output stream.
@@ -463,8 +479,29 @@ impl<W: Write> ConFrameWriter<W> {
         }
         ensure_unique_ids(&frame.atom_data)?;
         let prec = self.float_format;
-        if frame.header.spec_version >= 2 {
-            self.refresh_metadata_cache(frame)?;
+        let mut stream_file = self.stream_file.take();
+        let bound = self.bound.take();
+        let spec_version = bound
+            .as_ref()
+            .map(|item| item.spec)
+            .unwrap_or(frame.header.spec_version);
+        let metadata = bound
+            .as_ref()
+            .map(|item| &item.meta)
+            .unwrap_or(&frame.header.metadata);
+        if spec_version >= 2 {
+            self.refresh_metadata_cache(
+                spec_version,
+                metadata,
+                frame.has_velocities(),
+                frame.has_forces(),
+                frame.has_energies(),
+                frame.has_charges(),
+                frame.has_spins(),
+                frame.has_magmoms(),
+                frame.has_displacements(),
+                frame.has_spreads(),
+            )?;
         }
         let (boxl, angles) = match frame.header.lattice_vectors() {
             Some(vecs) => crate::types::lengths_and_angles(vecs),
@@ -500,7 +537,7 @@ impl<W: Write> ConFrameWriter<W> {
             .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
         self.scratch.clear();
         push_str_line(&mut self.scratch, &frame.header.prebox_header.user);
-        if frame.header.spec_version < 2 {
+        if spec_version < 2 {
             // Spec 1 line 2 is free text. Do not re-emit JSON major 0 or 1 (D15).
             push_str_line(
                 &mut self.scratch,
@@ -568,9 +605,10 @@ impl<W: Write> ConFrameWriter<W> {
                     slots,
                     &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
                     prec,
-                    frame.header.spec_version,
+                    spec_version,
                     self.atom_workers,
-                );
+                    stream_file.as_mut(),
+                )?;
                 atom_idx_offset += num_atoms_in_type;
             }
 
@@ -594,7 +632,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [vx, vy, vz],
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -622,7 +660,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [fx, fy, fz],
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -650,7 +688,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             e,
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -675,7 +713,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             q,
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -700,7 +738,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             s,
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -725,7 +763,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [mx, my, mz],
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -750,7 +788,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [dx, dy, dz],
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -786,7 +824,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [sx, sy, sz],
                             prec,
-                            written_fixed_flag(atom.fixed, frame.header.spec_version),
+                            written_fixed_flag(atom.fixed, spec_version),
                             atom.atom_id,
                         );
                     }
@@ -795,7 +833,19 @@ impl<W: Write> ConFrameWriter<W> {
             }
         }
 
-        self.writer.write_all(&self.scratch)?;
+        if let Some(mut file) = stream_file {
+            if !self.scratch.is_empty() {
+                file.write_all(&self.scratch)?;
+                self.scratch.clear();
+            }
+            file.flush()?;
+        } else if self.scratch.len() >= 64 * 1024 {
+            // BufWriter would copy this frame through an 8 KiB buffer.
+            self.writer.flush()?;
+            self.writer.get_mut().write_all(&self.scratch)?;
+        } else {
+            self.writer.write_all(&self.scratch)?;
+        }
         Ok(())
     }
 
@@ -1008,7 +1058,15 @@ fn append_coord_rows(
     prec: FloatFormat,
     spec_version: u32,
     workers: usize,
-) {
+    stream: Option<&mut File>,
+) -> Result<(), WriteError> {
+    if let Some(file) = stream {
+        if workers >= 2 && atoms.len() >= WIDE_ATOM_GRAIN {
+            file.write_all(buf).map_err(WriteError::Io)?;
+            buf.clear();
+            return stream_coord_rows(file, atoms, workers, prec, spec_version);
+        }
+    }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
         for atom in atoms {
             push_xyz_line(
@@ -1021,36 +1079,42 @@ fn append_coord_rows(
                 atom.atom_id,
             );
         }
-        return;
+        return Ok(());
     }
     #[cfg(feature = "parallel")]
     {
         let chunk = atoms.len().div_ceil(workers).max(1);
-        use rayon::prelude::*;
-        let parts: Vec<Vec<u8>> = atoms
-            .par_chunks(chunk)
-            .map(|group| {
-                let mut local = Vec::with_capacity(group.len().saturating_mul(48));
-                let mut ryu = ryu::Buffer::new();
-                let mut slots = [FmtSlot::new(); 3];
-                for atom in group {
-                    push_xyz_line(
-                        &mut local,
-                        &mut ryu,
-                        &mut slots,
-                        [atom.x, atom.y, atom.z],
-                        prec,
-                        written_fixed_flag(atom.fixed, spec_version),
-                        atom.atom_id,
-                    );
-                }
-                local
-            })
-            .collect();
+        let format = || {
+            use rayon::prelude::*;
+            atoms
+                .par_chunks(chunk)
+                .map(|group| {
+                    let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut ryu = ryu::Buffer::new();
+                    let mut slots = [FmtSlot::new(); 3];
+                    for atom in group {
+                        push_xyz_line(
+                            &mut local,
+                            &mut ryu,
+                            &mut slots,
+                            [atom.x, atom.y, atom.z],
+                            prec,
+                            written_fixed_flag(atom.fixed, spec_version),
+                            atom.atom_id,
+                        );
+                    }
+                    local
+                })
+                .collect::<Vec<Vec<u8>>>()
+        };
+        let parts = match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+            Ok(pool) => pool.install(format),
+            Err(_) => format(),
+        };
         for part in parts {
             buf.extend_from_slice(&part);
         }
-        return;
+        return Ok(());
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -1066,7 +1130,69 @@ fn append_coord_rows(
                 atom.atom_id,
             );
         }
+        return Ok(());
     }
+}
+
+fn stream_coord_rows(
+    file: &mut File,
+    atoms: &[crate::types::AtomDatum],
+    workers: usize,
+    prec: FloatFormat,
+    spec_version: u32,
+) -> Result<(), WriteError> {
+    let groups = workers.saturating_mul(4).max(workers);
+    let chunk = atoms.len().div_ceil(groups).max(1);
+    let nparts = atoms.len().div_ceil(chunk);
+    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>)>(2);
+    let format_threads = workers.saturating_sub(1).max(1);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
+    std::thread::scope(|scope| {
+        for _ in 0..format_threads {
+            let tx = tx.clone();
+            let pieces = &pieces;
+            let next_job = &next_job;
+            scope.spawn(move || {
+                loop {
+                    let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= pieces.len() {
+                        break;
+                    }
+                    let group = pieces[index];
+                    let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut ryu = ryu::Buffer::new();
+                    let mut slots = [FmtSlot::new(); 3];
+                    for atom in group {
+                        push_xyz_line(
+                            &mut local,
+                            &mut ryu,
+                            &mut slots,
+                            [atom.x, atom.y, atom.z],
+                            prec,
+                            written_fixed_flag(atom.fixed, spec_version),
+                            atom.atom_id,
+                        );
+                    }
+                    tx.send((index, local)).ok();
+                }
+            });
+        }
+        drop(tx);
+        let mut next = 0usize;
+        let mut pending = BTreeMap::<usize, Vec<u8>>::new();
+        while next < nparts {
+            let (index, part) = rx
+                .recv()
+                .map_err(|err| WriteError::Io(io::Error::other(err.to_string())))?;
+            pending.insert(index, part);
+            while let Some(part) = pending.remove(&next) {
+                file.write_all(&part).map_err(WriteError::Io)?;
+                next += 1;
+            }
+        }
+        Ok(())
+    })
 }
 
 fn push_xyz_line(
@@ -1176,7 +1302,7 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
     let mut meta = frame.header.metadata.clone();
     meta.remove(meta::CON_SPEC_VERSION);
     meta.remove(meta::SECTIONS);
-    let has_velocity = frame.atom_data.iter().any(|atom| atom.has_velocity());
+    let has_velocity = frame.has_velocities();
     stamp_legacy_velocity_time(&mut meta, frame.header.spec_version, has_velocity);
     // The builder writes the current spec and fills units when the file
     // omitted them. A binding rewrite has to emit that same header.
@@ -1335,8 +1461,29 @@ pub fn write_frame_refs_to_path(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    if workers >= 2 && frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(Vec::<u8>::new(), precision),
+            None => ConFrameWriter::new(Vec::<u8>::new()),
+        }
+        .canonical(canonical)
+        .parallel_atoms(workers);
+        writer.stream_file = Some(File::create(path).map_err(WriteError::Io)?);
+        return if bind {
+            writer.write_frame_bound(frames[0])
+        } else {
+            writer.write_frame(frames[0])
+        };
+    }
     let parts = formatted_parts(frames, workers, precision, canonical, bind)?;
-    pwrite_parts(path, &parts).map_err(WriteError::Io)
+    if parts.len() == 1 {
+        // One wide frame is already formatted in parallel row runs and
+        // joined. A single write matches the disk; slicing it into pwrite
+        // calls spent the gain on a second pass over the file.
+        std::fs::write(path, &parts[0]).map_err(WriteError::Io)
+    } else {
+        pwrite_parts(path, &parts).map_err(WriteError::Io)
+    }
 }
 
 /// [`write_frames_to_vec_with_threads`] over borrowed frames.
@@ -1363,8 +1510,7 @@ fn write_group<W: Write>(
 ) -> Result<(), WriteError> {
     if bind {
         for frame in group {
-            let mut stamped = (*frame).clone();
-            writer.write_frame_binding(&mut stamped)?;
+            writer.write_frame_bound(frame)?;
         }
         return Ok(());
     }
@@ -1402,7 +1548,10 @@ fn formatted_parts(
             .parallel_atoms(workers);
             write_group(&mut writer, frames, bind)?;
         }
-        return Ok(split_for_pwrite(&buffer, workers));
+        // The row runs were formatted on `workers` threads and joined in
+        // order. The file write splits this buffer by offset; it does not
+        // copy it into another set of parts.
+        return Ok(vec![buffer]);
     }
     #[cfg(feature = "parallel")]
     {
@@ -1445,15 +1594,12 @@ fn formatted_parts(
     }
 }
 
-fn split_for_pwrite(buffer: &[u8], workers: usize) -> Vec<Vec<u8>> {
-    if buffer.is_empty() || workers < 2 {
-        return vec![buffer.to_vec()];
-    }
-    let chunk = buffer.len().div_ceil(workers).max(1);
-    buffer.chunks(chunk).map(|piece| piece.to_vec()).collect()
+fn pwrite_parts(path: &std::path::Path, parts: &[Vec<u8>]) -> io::Result<()> {
+    let slices: Vec<&[u8]> = parts.iter().map(|part| part.as_slice()).collect();
+    pwrite_borrowed(path, &slices)
 }
 
-fn pwrite_parts(path: &std::path::Path, parts: &[Vec<u8>]) -> io::Result<()> {
+fn pwrite_borrowed(path: &std::path::Path, parts: &[&[u8]]) -> io::Result<()> {
     let mut offset = 0u64;
     let mut offsets = Vec::with_capacity(parts.len());
     for part in parts {

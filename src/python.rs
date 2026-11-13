@@ -3071,7 +3071,7 @@ fn write_con(
         }
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
-            if !append && workers >= 2 {
+            if !append {
                 if let Ok(list) = frames.cast::<ConFrameList>() {
                     let borrowed = list.borrow();
                     let slots = borrowed.frames.lock().expect("frames");

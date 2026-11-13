@@ -238,9 +238,9 @@ pub fn tables_from_extxyz_bytes_with_threads(
     if workers < 2 {
         return tables_serial(bytes);
     }
-    let lines = split_lines(bytes);
+    let lines = split_lines_fast(bytes, workers);
     let mut specs: Vec<ColumnSpec> = Vec::new();
-    let mut cell = Vec::new();
+    let mut first_props: &[u8] = b"";
     let mut starts = Vec::new();
     let mut mark = 0usize;
     let mut n_atoms = 0usize;
@@ -255,22 +255,16 @@ pub fn tables_from_extxyz_bytes_with_threads(
             return Err("comment".to_string());
         }
         let comment = lines[mark + 1];
-        let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
         let properties = quoted_after(comment, b"Properties=").ok_or("properties")?;
-        let frame_specs = property_columns(properties)?;
-        let frame_cell = lattice_cell(lattice)?;
         if starts.is_empty() {
-            specs = frame_specs;
+            specs = property_columns(properties)?;
+            first_props = properties;
             n_atoms = count;
-        } else if count != n_atoms
-            || frame_specs.len() != specs.len()
-            || frame_specs.iter().zip(specs.iter()).any(|(left, right)| {
-                left.name != right.name || left.kind != right.kind || left.width != right.width
-            })
-        {
+        } else if count != n_atoms || properties != first_props {
+            // Same property bytes as frame 0. Re-parsing the column list
+            // allocated a fresh name string per column per frame.
             return Err("properties".to_string());
         }
-        cell.extend_from_slice(&frame_cell);
         mark += 2;
         if mark + count > lines.len() {
             return Err("atoms".to_string());
@@ -282,6 +276,8 @@ pub fn tables_from_extxyz_bytes_with_threads(
     if n_frames == 0 {
         return Err("no frames".to_string());
     }
+    let mut cell = vec![0.0f64; n_frames * 6];
+    let cell_ptr = cell.as_mut_ptr() as usize;
     let mut columns: Vec<XyzColumn> = specs
         .iter()
         .map(|spec| {
@@ -298,7 +294,11 @@ pub fn tables_from_extxyz_bytes_with_threads(
                 real: if spec.kind == b'S' {
                     Vec::new()
                 } else {
-                    vec![0.0; n]
+                    // Every lane is overwritten by the workers before a read.
+                    // Zeroing here was a serial pass over the whole column.
+                    let mut values = Vec::with_capacity(n);
+                    unsafe { values.set_len(n) };
+                    values
                 },
             }
         })
@@ -328,8 +328,19 @@ pub fn tables_from_extxyz_bytes_with_threads(
             let to = (from + chunk).min(n_frames);
             let column_ptrs = &column_ptrs;
             let starts = &starts;
+            let cell_ptr = cell_ptr;
             handles.push(scope.spawn(move || -> Result<(), String> {
                 for frame in from..to {
+                    let comment = line_ref[starts[frame] - 1];
+                    let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
+                    let frame_cell = lattice_cell(lattice)?;
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            frame_cell.as_ptr(),
+                            (cell_ptr as *mut f64).add(frame * 6),
+                            6,
+                        );
+                    }
                     let base_atom = frame * n_atoms;
                     for (atom, line) in line_ref[starts[frame]..starts[frame] + n_atoms]
                         .iter()
@@ -384,6 +395,62 @@ pub fn tables_from_extxyz_bytes_with_threads(
     assemble_tables(n_frames, n_atoms, cell, columns)
 }
 
+fn split_lines_fast(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
+    #[cfg(feature = "parallel")]
+    {
+        if workers >= 2 && bytes.len() >= (1 << 20) {
+            return split_lines_indexed(bytes, workers);
+        }
+    }
+    let _ = workers;
+    split_lines(bytes)
+}
+
+#[cfg(feature = "parallel")]
+fn split_lines_indexed(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
+    let newlines = crate::parser::newline_index(bytes, workers);
+    let n = if bytes.is_empty() {
+        0
+    } else if bytes.last() == Some(&b'\n') {
+        newlines.len()
+    } else {
+        newlines.len() + 1
+    };
+    let mut lines: Vec<&[u8]> = Vec::with_capacity(n);
+    // Each slot is written before the vector is read. `&[u8]` has no
+    // destructor, so a short write still drops.
+    unsafe { lines.set_len(n) };
+    let ptr = lines.as_mut_ptr() as usize;
+    let newlines = &newlines;
+    let chunk = n.div_ceil(workers.max(1)).max(1);
+    std::thread::scope(|scope| {
+        for worker in 0..workers {
+            let from = worker * chunk;
+            if from >= n {
+                break;
+            }
+            let to = (from + chunk).min(n);
+            scope.spawn(move || {
+                for i in from..to {
+                    let start = if i == 0 { 0 } else { newlines[i - 1] + 1 };
+                    let mut end = if i < newlines.len() {
+                        newlines[i]
+                    } else {
+                        bytes.len()
+                    };
+                    if end > start && bytes[end - 1] == b'\r' {
+                        end -= 1;
+                    }
+                    unsafe {
+                        *((ptr as *mut &[u8]).add(i)) = &bytes[start..end];
+                    }
+                }
+            });
+        }
+    });
+    lines
+}
+
 fn split_lines(bytes: &[u8]) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut index = 0;
@@ -415,10 +482,10 @@ fn assemble_tables(
     let mut species = Vec::new();
     for column in &mut columns {
         if column.name == "pos" {
-            positions.clone_from(&column.real);
+            positions = std::mem::take(&mut column.real);
         } else if column.name == "masses" || column.name == "mass" {
             if column.width == 1 {
-                masses.clone_from(&column.real);
+                masses = std::mem::take(&mut column.real);
             }
         } else if column.name == "species" && column.width == 1 {
             // The parallel scan wrote each symbol once, into this column.
@@ -814,6 +881,13 @@ mod tests {
             .find(|column| column.name == "species")
         {
             column.text.clone_from(&parallel.species);
+        }
+        if let Some(column) = parallel
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "pos")
+        {
+            column.real.clone_from(&parallel.positions);
         }
         let parallel_bytes = extxyz_bytes_with_threads(
             parallel.n_frames,

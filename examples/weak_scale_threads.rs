@@ -176,26 +176,8 @@ fn time_one(text: &str, workers: usize, n_frames: usize) -> f64 {
     let frames = frames_from_text(text, Some(workers)).expect("parse");
     assert_eq!(frames.len(), n_frames);
     std::hint::black_box(frames.len());
-    drop_frames(frames, workers);
+    readcon_core::iterators::release_parsed_frames(frames, workers);
     started.elapsed().as_secs_f64()
-}
-
-fn drop_frames(mut frames: Vec<readcon_core::types::ConFrame>, workers: usize) {
-    if workers < 2 || frames.len() < 2 {
-        drop(frames);
-        return;
-    }
-    let chunk = frames.len().div_ceil(workers).max(1);
-    let mut parts = Vec::new();
-    while !frames.is_empty() {
-        let n = chunk.min(frames.len());
-        parts.push(frames.split_off(frames.len() - n));
-    }
-    std::thread::scope(|scope| {
-        for part in parts {
-            scope.spawn(move || drop(part));
-        }
-    });
 }
 
 fn write_refusal(path: &PathBuf, reason: &str) {
