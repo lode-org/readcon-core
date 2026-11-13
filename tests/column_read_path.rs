@@ -285,6 +285,57 @@ fn a_custom_header_fills_columns_from_the_frames() {
 }
 
 #[test]
+fn stock_frames_match_the_line_parser_and_round_trip() {
+    let root = root();
+    let names = [
+        "resources/test/cuh2.con",
+        "resources/test/tiny_cuh2.con",
+        "resources/test/tiny_multi_cuh2.con",
+        "resources/test/sulfolene.con",
+        "resources/test/tiny_cuh2.convel",
+        "resources/test/tiny_cuh2_forces.con",
+        "resources/test/tiny_cuh2_vel_forces.con",
+        "resources/test/tiny_multi_cuh2.convel",
+    ];
+    for name in names {
+        let path = root.join(name);
+        assert_frames_match(&path);
+    }
+    let bytes = fs::read(root.join("resources/test/cuh2.con")).unwrap();
+    let text = String::from_utf8(bytes).unwrap().replace(
+        "{\"con_spec_version\":2}",
+        "{\"con_spec_version\":2,\"energy\":1.5}",
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("extra-key.con");
+    fs::write(&path, text).unwrap();
+    assert_frames_match(&path);
+}
+
+fn assert_frames_match(path: &Path) {
+    let bytes = fs::read(path).unwrap();
+    let mut slow = Vec::new();
+    let mut iter = ConFrameIterator::from_bytes(&bytes);
+    while let Some(item) = iter.next() {
+        slow.push(item.unwrap_or_else(|err| panic!("{} iterator: {err}", path.display())));
+    }
+    let fast = read_all_frames_with_threads(path, Some(1))
+        .unwrap_or_else(|err| panic!("{} column: {err}", path.display()));
+    assert_eq!(fast.len(), slow.len(), "{}", path.display());
+    for (left, right) in fast.iter().zip(&slow) {
+        assert_eq!(left, right, "{}", path.display());
+    }
+    let via_fast = readcon_core::writer::write_frames_to_vec(&fast).unwrap();
+    let via_slow = readcon_core::writer::write_frames_to_vec(&slow).unwrap();
+    assert_eq!(
+        via_fast,
+        via_slow,
+        "{} rewrite bytes differ",
+        path.display()
+    );
+}
+
+#[test]
 fn an_empty_file_has_no_coordinate_columns() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("empty.con");

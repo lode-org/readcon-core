@@ -293,12 +293,24 @@ module readcon
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_frame_copy_positions
     end function
+    function c_rkr_frame_copy_positions_at(f, out, n) bind(C, name="rkr_frame_copy_positions")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: f, out
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_positions_at
+    end function
     function c_rkr_frame_copy_velocities(f, out, n) bind(C, name="rkr_frame_copy_velocities")
       import :: c_ptr, c_int, c_double, c_size_t
       type(c_ptr), value :: f
       real(c_double), intent(out) :: out(*)
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_frame_copy_velocities
+    end function
+    function c_rkr_frame_copy_velocities_at(f, out, n) bind(C, name="rkr_frame_copy_velocities")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: f, out
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_velocities_at
     end function
     function c_rkr_frame_copy_forces(f, out, n) bind(C, name="rkr_frame_copy_forces")
       import :: c_ptr, c_int, c_double, c_size_t
@@ -307,12 +319,24 @@ module readcon
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_frame_copy_forces
     end function
+    function c_rkr_frame_copy_forces_at(f, out, n) bind(C, name="rkr_frame_copy_forces")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: f, out
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_forces_at
+    end function
     function c_rkr_frame_copy_masses(f, out, n) bind(C, name="rkr_frame_copy_masses")
       import :: c_ptr, c_int, c_double, c_size_t
       type(c_ptr), value :: f
       real(c_double), intent(out) :: out(*)
       integer(c_size_t), value :: n
       integer(c_int) :: c_rkr_frame_copy_masses
+    end function
+    function c_rkr_frame_copy_masses_at(f, out, n) bind(C, name="rkr_frame_copy_masses")
+      import :: c_ptr, c_int, c_size_t
+      type(c_ptr), value :: f, out
+      integer(c_size_t), value :: n
+      integer(c_int) :: c_rkr_frame_copy_masses_at
     end function
     subroutine c_free_rkr_frame_ptr_array(arr, n) bind(C, name="free_rkr_frame_ptr_array")
       import :: c_ptr, c_size_t
@@ -862,9 +886,10 @@ contains
   end function
 
   integer function fr_copy_positions(self, pos)
-    ! pos(3, n) column-major Fortran layout from row-major C buffer
+    ! pos(3, n) is already the C row-major xyz order. A leading dimension
+    ! other than 3 is padded, so that case still scatters one triple.
     class(frame_t), intent(in) :: self
-    real(real64), intent(out) :: pos(:,:)
+    real(real64), intent(out), target :: pos(:,:)
     real(c_double), allocatable :: flat(:)
     integer :: i, n, st
     integer(c_size_t) :: nn
@@ -872,8 +897,16 @@ contains
     if (.not. c_associated(self%handle)) return
     nn = c_rkr_frame_atom_count(self%handle)
     n = int(nn)
-    if (size(pos, 2) < n) then
+    if (n == 0) then
+      fr_copy_positions = 0
+      return
+    end if
+    if (size(pos, 1) < 3 .or. size(pos, 2) < n) then
       fr_copy_positions = -6
+      return
+    end if
+    if (size(pos, 1) == 3 .and. is_contiguous(pos)) then
+      fr_copy_positions = int(c_rkr_frame_copy_positions_at(self%handle, c_loc(pos(1, 1)), int(3*n, c_size_t)))
       return
     end if
     allocate(flat(3*n))
@@ -1626,6 +1659,15 @@ contains
     end if
     p = c_rkr_frame_builder_positions_data(self%b)
     if (.not. c_associated(p)) return
+    if (size(pos, 1) == 3 .and. is_contiguous(pos)) then
+      block
+        real(c_double), pointer :: packed(:, :)
+        call c_f_pointer(p, packed, [3, n])
+        pos(:, 1:n) = packed
+      end block
+      bd_copy_positions = 0
+      return
+    end if
     call c_f_pointer(p, flat, [3 * n])
     do i = 1, n
       do j = 1, 3
@@ -1806,7 +1848,7 @@ contains
 
   integer function fr_copy_velocities(self, vel)
     class(frame_t), intent(in) :: self
-    real(real64), intent(out) :: vel(:,:)
+    real(real64), intent(out), target :: vel(:,:)
     real(c_double), allocatable :: flat(:)
     integer :: i, n, st
     integer(c_size_t) :: nn
@@ -1814,8 +1856,16 @@ contains
     if (.not. c_associated(self%handle)) return
     nn = c_rkr_frame_atom_count(self%handle)
     n = int(nn)
-    if (size(vel, 2) < n) then
+    if (n == 0) then
+      fr_copy_velocities = 0
+      return
+    end if
+    if (size(vel, 1) < 3 .or. size(vel, 2) < n) then
       fr_copy_velocities = rkr_status_buffer_too_small
+      return
+    end if
+    if (size(vel, 1) == 3 .and. is_contiguous(vel)) then
+      fr_copy_velocities = int(c_rkr_frame_copy_velocities_at(self%handle, c_loc(vel(1, 1)), int(3*n, c_size_t)))
       return
     end if
     allocate(flat(3*n))
@@ -1831,7 +1881,7 @@ contains
 
   integer function fr_copy_forces(self, frc)
     class(frame_t), intent(in) :: self
-    real(real64), intent(out) :: frc(:,:)
+    real(real64), intent(out), target :: frc(:,:)
     real(c_double), allocatable :: flat(:)
     integer :: i, n, st
     integer(c_size_t) :: nn
@@ -1839,8 +1889,16 @@ contains
     if (.not. c_associated(self%handle)) return
     nn = c_rkr_frame_atom_count(self%handle)
     n = int(nn)
-    if (size(frc, 2) < n) then
+    if (n == 0) then
+      fr_copy_forces = 0
+      return
+    end if
+    if (size(frc, 1) < 3 .or. size(frc, 2) < n) then
       fr_copy_forces = rkr_status_buffer_too_small
+      return
+    end if
+    if (size(frc, 1) == 3 .and. is_contiguous(frc)) then
+      fr_copy_forces = int(c_rkr_frame_copy_forces_at(self%handle, c_loc(frc(1, 1)), int(3*n, c_size_t)))
       return
     end if
     allocate(flat(3*n))
@@ -1856,7 +1914,7 @@ contains
 
   integer function fr_copy_masses(self, mass)
     class(frame_t), intent(in) :: self
-    real(real64), intent(out) :: mass(:)
+    real(real64), intent(out), target :: mass(:)
     real(c_double), allocatable :: flat(:)
     integer :: n, st
     integer(c_size_t) :: nn
@@ -1864,8 +1922,16 @@ contains
     if (.not. c_associated(self%handle)) return
     nn = c_rkr_frame_atom_count(self%handle)
     n = int(nn)
+    if (n == 0) then
+      fr_copy_masses = 0
+      return
+    end if
     if (size(mass) < n) then
       fr_copy_masses = rkr_status_buffer_too_small
+      return
+    end if
+    if (is_contiguous(mass)) then
+      fr_copy_masses = int(c_rkr_frame_copy_masses_at(self%handle, c_loc(mass(1)), int(n, c_size_t)))
       return
     end if
     allocate(flat(n))

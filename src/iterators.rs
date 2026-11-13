@@ -1213,15 +1213,16 @@ fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
     let compression = crate::compression::detect_compression(&magic[..n]);
     if matches!(compression, crate::compression::Compression::None) {
         let file_len = path.metadata().map(|m| m.len()).unwrap_or(0);
-        // A modest plain file is one buffer and the column-speed frame
-        // parser. The windowed reader stays for a long trajectory so the
-        // text is not resident beside every frame. 64 MiB covers the
-        // million-atom CON and leaves the 100k-frame file on the window.
+        // A modest plain file stays mapped, the same way the coordinate
+        // read does. Copying it into a buffer first was a visible share of
+        // a million-atom frame read. The windowed reader stays for a long
+        // trajectory so the text is not resident beside every frame.
+        // 64 MiB covers the million-atom CON and leaves the 100k-frame
+        // file on the window.
         if file_len > 0 && file_len <= 64 * 1024 * 1024 {
-            let mut buf = Vec::with_capacity(file_len as usize);
-            buf.extend_from_slice(&magic[..n]);
-            file.read_to_end(&mut buf).map_err(LoadError::Io)?;
-            return frames_from_bytes_located(&buf, Some(1)).map_err(LoadError::Parse);
+            drop(file);
+            let source = crate::compression::read_bytes_owned(path).map_err(load_error_from_box)?;
+            return frames_from_bytes_located(source.as_slice(), Some(1)).map_err(LoadError::Parse);
         }
         return stream_reader(&mut file, &magic[..n], file_len);
     }
@@ -1935,6 +1936,10 @@ fn frames_from_bytes_located(
 }
 
 /// Serial byte parse. The cursor is the iterator's file line.
+///
+/// Species shells are built in this pass. Wrapping a finished column walk
+/// in a second shell pass was slower on a million-atom frame, so
+/// `read_positions` stays on the column walk and a full frame stays here.
 fn collect_bytes_located(bytes: &[u8]) -> Result<Vec<types::ConFrame>, error::LocatedParseError> {
     let mut frames = Vec::new();
     let mut iter = ConFrameIterator::from_bytes(bytes);

@@ -45,6 +45,29 @@ program test_read_con
     st2 = fr%copy_positions(pbuf)
     if (st2 /= 0) nfail = nfail + 1
     print *, "frame_copy_positions st=", st2, " natoms=", na
+    block
+      ! (3, n) is the C xyz order, so the packed copy matches the zero-copy
+      ! view. A leading dimension below 3 used to write past the array.
+      real(c_double), pointer :: xyz(:, :)
+      real(real64), allocatable :: narrow(:, :)
+      integer :: nptr, i, st_narrow
+      call fr%xyz_ptr(xyz, nptr)
+      if (.not. associated(xyz) .or. nptr /= na) then
+        nfail = nfail + 1
+      else
+        do i = 1, na
+          if (pbuf(1, i) /= xyz(1, i) .or. pbuf(2, i) /= xyz(2, i) .or. &
+              pbuf(3, i) /= xyz(3, i)) then
+            nfail = nfail + 1
+            exit
+          end if
+        end do
+      end if
+      allocate(narrow(2, na))
+      st_narrow = fr%copy_positions(narrow)
+      if (st_narrow /= -6) nfail = nfail + 1
+      print *, "narrow_copy st=", st_narrow
+    end block
     ! tiny_cuh2 has no velocities/forces; expect SECTION_ABSENT (-8) or success
     st2 = fr%copy_velocities(vbuf)
     if (st2 /= 0 .and. st2 /= -8) nfail = nfail + 1
