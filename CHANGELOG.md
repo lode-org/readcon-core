@@ -61,6 +61,18 @@ All notable changes to this project will be documented in this file. See [conven
 - A parsed frame compares equal to the frame that was built from the same
   atoms. The column-tail arena is not part of that equality.
 - The bulk C reader test frees every frame `rkr_read_all_frames` returns.
+- A chemfiles frame with no coordinate storage returns an error. Chemfiles
+  0.10 builds a slice from a null pointer in that case, and that abort is
+  gone.
+- An extended XYZ count that does not fit in the file is rejected. The reader
+  does not turn that count into `usize::MAX` and then reserve it.
+- macOS and Windows wheels build. `sched_setaffinity` and the tmpfs probe stay
+  on Linux. `pwrite` stays on Unix. Windows writes with `seek_write`.
+- Linux wheels build on PyPy. Tuple items are read through the API PyPy
+  exports. `PyTuple_GET_ITEM` is a CPython macro and is not in that build.
+- A multi-frame write formats on every worker. Two threads no longer leave
+  one worker idle on a channel that only waits. A ranked write on tmpfs copies
+  through a shared mapping instead of `pwrite`.
 
 ### Performance
 
@@ -68,6 +80,27 @@ All notable changes to this project will be documented in this file. See [conven
   every atom.
 - Wide-frame compression uses the worker count the caller asked for, and at
   most one deflate thread per CPU when the caller does not ask.
+- A chemfiles import no longer builds a name, a type, and a property map for
+  every atom. Repeated symbols share one string. A million-atom XYZ import
+  stays within 1.3 times a raw chemfiles read.
+- A mixed or multi-frame chemfiles import classifies each element once and
+  shares one symbol string. A frame with no bonds skips the chemfiles
+  topology lock.
+
+### Improved Documentation
+
+- The how-to shows CON-bin, a PDB column read, and the Fortran gzip and zstd
+  writers. Julia `read_con` decodes `.gz` and, in a zstd build, `.zst`.
+  `write_con` in Julia still writes plain text.
+- Getting started shows the `readcon-core` command. `convert` copies a CON
+  file with no extra features. XYZ, PDB, and GRO need the chemfiles build.
+
+### Fuzzing
+
+- Fuzz targets cover the CON reader, the extended XYZ reader, the C entry
+  points, gzip and zstd indexes, round-trip writes, chemfiles import, and a
+  multi-frame read that seeks to one frame. The corpora stay out of the
+  published crate.
 
 
 ## v0.22.0 - 2026-11-12
