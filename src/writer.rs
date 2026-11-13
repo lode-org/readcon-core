@@ -1365,6 +1365,119 @@ fn push_atom_motion(
     }
 }
 
+/// File header and the species lines that belong in front of `frame`'s coordinates.
+///
+/// The bytes match a binding rewrite up to the first coordinate row.
+pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
+    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+    let meta = binding_metadata(frame);
+    let mut writer = ConFrameWriter::new(Vec::<u8>::new());
+    writer.refresh_metadata_cache(
+        spec,
+        &meta,
+        frame.has_velocities(),
+        frame.has_forces(),
+        frame.has_energies(),
+        frame.has_charges(),
+        frame.has_spins(),
+        frame.has_magmoms(),
+        frame.has_displacements(),
+        frame.has_spreads(),
+    )?;
+    let (boxl, angles) = match frame.header.lattice_vectors() {
+        Some(vecs) => crate::types::lengths_and_angles(vecs),
+        None => (frame.header.boxl, frame.header.angles),
+    };
+    let prec = FloatFormat::RoundTrip;
+    let mut buf = Vec::with_capacity(256);
+    push_str_line(&mut buf, &frame.header.prebox_header.user);
+    if spec < 2 {
+        push_str_line(&mut buf, frame.header.prebox_header.metadata_line());
+    } else {
+        let line = writer
+            .metadata_cache
+            .as_ref()
+            .expect("metadata")
+            .serialized
+            .as_bytes();
+        buf.extend_from_slice(line);
+        buf.push(b'\n');
+    }
+    let ryu = &mut writer.ryu;
+    push_f64(&mut buf, ryu, boxl[0], prec);
+    buf.push(b' ');
+    push_f64(&mut buf, ryu, boxl[1], prec);
+    buf.push(b' ');
+    push_f64(&mut buf, ryu, boxl[2], prec);
+    buf.push(b'\n');
+    push_f64(&mut buf, ryu, angles[0], prec);
+    buf.push(b' ');
+    push_f64(&mut buf, ryu, angles[1], prec);
+    buf.push(b' ');
+    push_f64(&mut buf, ryu, angles[2], prec);
+    buf.push(b'\n');
+    push_str_line(&mut buf, &frame.header.postbox_header[0]);
+    push_str_line(&mut buf, &frame.header.postbox_header[1]);
+    push_u64(&mut buf, frame.header.natm_types as u64);
+    buf.push(b'\n');
+    for (i, n) in frame.header.natms_per_type.iter().enumerate() {
+        if i > 0 {
+            buf.push(b' ');
+        }
+        push_u64(&mut buf, *n as u64);
+    }
+    buf.push(b'\n');
+    for (i, m) in frame.header.masses_per_type.iter().enumerate() {
+        if i > 0 {
+            buf.push(b' ');
+        }
+        push_f64(&mut buf, ryu, *m, prec);
+    }
+    buf.push(b'\n');
+    Ok(buf)
+}
+
+/// Coordinate lines for atoms `begin..end`, including a species header when
+/// the range contains the first atom of that species.
+pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
+    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+    let prec = FloatFormat::RoundTrip;
+    let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
+    let mut ryu = ryu::Buffer::new();
+    let mut slots = [FmtSlot::new(); 3];
+    let mut vel_slots = [FmtSlot::new(); 3];
+    let mut offset = 0usize;
+    for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let type_end = offset + count;
+        let from = begin.max(offset);
+        let to = end.min(type_end);
+        if from < to {
+            if from == offset {
+                let symbol = frame.atom_data[offset].symbol.as_ref();
+                push_str_line(&mut buf, symbol);
+                push_component_line(&mut buf, "Coordinates of Component", type_idx);
+            }
+            let atoms = &frame.atom_data[from..to];
+            let slab = coord_slab(atoms);
+            for (index, atom) in atoms.iter().enumerate() {
+                push_atom_motion(
+                    &mut buf,
+                    None,
+                    &mut ryu,
+                    &mut slots,
+                    &mut vel_slots,
+                    load_xyz(atom, slab, index),
+                    atom,
+                    prec,
+                    spec,
+                );
+            }
+        }
+        offset = type_end;
+    }
+    buf
+}
+
 /// Coordinate lines for `atoms`, using the same formatter as a frame write.
 ///
 /// One pass, private buffer. Callers that split a frame across ranks write

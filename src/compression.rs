@@ -639,21 +639,162 @@ pub fn write_gzip_members_n(path: &Path, data: &[u8], members: usize) -> io::Res
 ///
 /// Eight members on two workers compress four slices per worker. The
 /// bytes match a one-worker write of the same slices.
+/// Format each atom slice and deflate it on that same worker.
+///
+/// The plain text is the binding header on the first slice plus coordinate
+/// lines. One member stays on the streaming encoder so its bytes do not
+/// change. `threads == 1` is the caller's problem: this function always
+/// uses `threads` workers.
+pub fn write_fused_gzip_frame(
+    path: &Path,
+    frame: &crate::types::ConFrame,
+    members: usize,
+    threads: usize,
+) -> io::Result<usize> {
+    write_fused_frame(path, frame, members, threads, true)
+}
+
+/// [`write_fused_gzip_frame`] for zstd frames.
+#[cfg(feature = "zstd")]
+pub fn write_fused_zstd_frame(
+    path: &Path,
+    frame: &crate::types::ConFrame,
+    members: usize,
+    threads: usize,
+) -> io::Result<usize> {
+    write_fused_frame(path, frame, members, threads, false)
+}
+
+fn write_fused_frame(
+    path: &Path,
+    frame: &crate::types::ConFrame,
+    members: usize,
+    threads: usize,
+    gzip: bool,
+) -> io::Result<usize> {
+    let n = frame.atom_data.len();
+    let members = members.max(2).min(n.max(2));
+    let mut ranges = Vec::with_capacity(members);
+    let mut row = 0u32;
+    let mut rows = Vec::with_capacity(members);
+    let mut start = 0usize;
+    for index in 0..members {
+        let end = if index + 1 == members {
+            n
+        } else {
+            (index + 1) * n / members
+        };
+        if end <= start {
+            continue;
+        }
+        let count = (end - start) as u32;
+        rows.push((row, count));
+        row += count;
+        ranges.push((start, end));
+        start = end;
+    }
+    let header = crate::writer::binding_header_bytes(frame)
+        .map_err(|err| io::Error::other(err.to_string()))?;
+    let slots: Vec<std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>> =
+        (0..ranges.len()).map(|_| std::sync::Mutex::new(None)).collect();
+    let threads = threads.max(1).min(ranges.len());
+    let ranges_ref = &ranges;
+    let rows_ref = &rows;
+    let _ = rows_ref;
+    std::thread::scope(|scope| {
+        for (begin, end) in worker_ranges(ranges.len(), threads) {
+            let slots = &slots;
+            let header = &header;
+            scope.spawn(move || {
+                for index in begin..end {
+                    let (atom_from, atom_to) = ranges_ref[index];
+                    let mut plain = if atom_from == 0 {
+                        header.clone()
+                    } else {
+                        Vec::new()
+                    };
+                    plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
+                    let plain_len = plain.len();
+                    let encoded = if gzip {
+                        gzip_member(&plain)
+                    } else {
+                        #[cfg(feature = "zstd")]
+                        {
+                            zstd_compress_part(&plain)
+                        }
+                        #[cfg(not(feature = "zstd"))]
+                        {
+                            let _ = plain;
+                            Err(zstd_unsupported())
+                        }
+                    };
+                    *slots[index].lock().unwrap() = Some(encoded.map(|bytes| (bytes, plain_len)));
+                }
+            });
+        }
+    });
+    let mut encoded = Vec::with_capacity(ranges.len());
+    let mut plain_lens = Vec::with_capacity(ranges.len());
+    for slot in slots {
+        match slot.into_inner().unwrap_or(None) {
+            Some(Ok((bytes, plain_len))) => {
+                encoded.push(bytes);
+                plain_lens.push(plain_len);
+            }
+            Some(Err(err)) => return Err(err),
+            None => return Err(io::Error::other("compress")),
+        }
+    }
+    if gzip {
+        if encoded.len() > 1 {
+            stamp_gzip_index(&mut encoded, &plain_lens, Some(&rows));
+        }
+        write_members(path, &encoded)?;
+    } else {
+        #[cfg(feature = "zstd")]
+        {
+            let mut file = std::fs::File::create(path)?;
+            if encoded.len() > 1 {
+                file.write_all(&zstd_index_frame(&encoded, &plain_lens, Some(&rows)))?;
+            }
+            for part in &encoded {
+                file.write_all(part)?;
+            }
+            file.flush()?;
+        }
+    }
+    Ok(encoded.len())
+}
+
 pub fn write_gzip_members_limited(
     path: &Path,
     data: &[u8],
     members: usize,
     threads: usize,
 ) -> io::Result<usize> {
+    let trace = std::env::var_os("READCON_WRITE_TRACE").is_some();
+    let t0 = std::time::Instant::now();
     let parts = split_chunks(data, members.max(1));
     let plain: Vec<usize> = parts.iter().map(|part| part.len()).collect();
+    let t_split = t0.elapsed().as_secs_f64();
+    let t1 = std::time::Instant::now();
     let mut encoded = encode_parts(&parts, threads, gzip_member)?;
+    let t_encode = t1.elapsed().as_secs_f64();
+    let t2 = std::time::Instant::now();
     if encoded.len() > 1 {
         let rows = coord_member_rows(data, &parts);
         stamp_gzip_index(&mut encoded, &plain, rows.as_deref());
     }
+    let t_index = t2.elapsed().as_secs_f64();
+    let t3 = std::time::Instant::now();
     let count = encoded.len();
     write_members(path, &encoded)?;
+    if trace {
+        eprintln!(
+            "gzip-write split={t_split:.4} encode={t_encode:.4} index={t_index:.4} io={:.4} members={count} threads={threads}",
+            t3.elapsed().as_secs_f64()
+        );
+    }
     Ok(count)
 }
 
@@ -1075,8 +1216,12 @@ pub fn write_zstd_members_limited(
     members: usize,
     threads: usize,
 ) -> io::Result<usize> {
+    let trace = std::env::var_os("READCON_WRITE_TRACE").is_some();
+    let t0 = std::time::Instant::now();
     let parts = split_chunks(data, members.max(1));
     let plain: Vec<usize> = parts.iter().map(|part| part.len()).collect();
+    let t_split = t0.elapsed().as_secs_f64();
+    let t1 = std::time::Instant::now();
     // One frame keeps the `bulk::compress` bytes. Several frames reuse a
     // context; the plaintext is what callers compare.
     let encoded = if parts.len() < 2 {
@@ -1086,16 +1231,26 @@ pub fn write_zstd_members_limited(
     } else {
         encode_parts(&parts, threads, zstd_compress_part)?
     };
+    let t_encode = t1.elapsed().as_secs_f64();
+    let t2 = std::time::Instant::now();
     let count = encoded.len();
     let mut file = std::fs::File::create(path)?;
     if count > 1 {
         let rows = coord_member_rows(data, &parts);
         file.write_all(&zstd_index_frame(&encoded, &plain, rows.as_deref()))?;
     }
+    let t_index = t2.elapsed().as_secs_f64();
+    let t3 = std::time::Instant::now();
     for frame in &encoded {
         file.write_all(frame)?;
     }
     file.flush()?;
+    if trace {
+        eprintln!(
+            "zstd-write split={t_split:.4} encode={t_encode:.4} index={t_index:.4} io={:.4} members={count} threads={threads}",
+            t3.elapsed().as_secs_f64()
+        );
+    }
     Ok(count)
 }
 

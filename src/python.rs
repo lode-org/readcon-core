@@ -3687,6 +3687,72 @@ fn plain_binding_bytes(
     Ok(buffer)
 }
 
+fn frame_is_one_coord_block(frame: &crate::types::ConFrame) -> bool {
+    frame.header.natm_types == 1
+        && frame.header.sections.is_empty()
+        && !frame.has_velocities()
+        && !frame.has_forces()
+        && !frame.has_energies()
+        && !frame.has_charges()
+        && !frame.has_spins()
+        && !frame.has_magmoms()
+        && !frame.has_displacements()
+        && !frame.has_spreads()
+}
+
+/// Format and deflate each member on `n_threads` workers.
+///
+/// `false` keeps the caller on the format-then-compress path. One member
+/// and a single worker stay there so their bytes do not change.
+fn try_fused_members(
+    path: &str,
+    frames: &Bound<'_, PyAny>,
+    compression_members: Option<usize>,
+    n_threads: Option<usize>,
+    gzip: bool,
+) -> PyResult<bool> {
+    let Some(threads) = n_threads.filter(|count| *count >= 2) else {
+        return Ok(false);
+    };
+    let Ok(list) = frames.cast::<ConFrameList>() else {
+        return Ok(false);
+    };
+    let borrowed = list.borrow();
+    let slots = borrowed.frames.lock().expect("frames");
+    if slots.len() != 1 {
+        return Ok(false);
+    }
+    let Some(frame) = slots[0].as_ref() else {
+        return Ok(false);
+    };
+    if !frame_is_one_coord_block(frame) {
+        return Ok(false);
+    }
+    let mut members = compression_members.unwrap_or_else(|| {
+        crate::compression::compression_workers(frame.atom_data.len().saturating_mul(32))
+    });
+    if members <= 1 {
+        return Ok(false);
+    }
+    if threads > members {
+        members = threads;
+    }
+    let write = if gzip {
+        crate::compression::write_fused_gzip_frame(Path::new(path), frame, members, threads)
+    } else {
+        #[cfg(feature = "zstd")]
+        {
+            crate::compression::write_fused_zstd_frame(Path::new(path), frame, members, threads)
+        }
+        #[cfg(not(feature = "zstd"))]
+        {
+            return Ok(false);
+        }
+    };
+    write.map_err(|err| PyIOError::new_err(format!("failed to create compressed writer: {err}")))?;
+    Ok(true)
+}
+
 /// The `compression` argument controls output compression:
 /// - `None` (default): codec from the path extension (`.gz` gzip, `.zst` zstd)
 /// - `"gzip"`, `"zstd"`, or `"none"`
@@ -3743,7 +3809,18 @@ fn write_con(
     match codec {
         OutputCodec::Gzip => {
             if chunk_wide_frame(frames, compression_members) {
+                if try_fused_members(path, frames, compression_members, n_threads, true)? {
+                    return Ok(());
+                }
+                let t_fmt = std::time::Instant::now();
                 let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+                if std::env::var_os("READCON_WRITE_TRACE").is_some() {
+                    eprintln!(
+                        "gzip-format {:.4} plain_bytes={}",
+                        t_fmt.elapsed().as_secs_f64(),
+                        plain.len()
+                    );
+                }
                 let members = compression_members
                     .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
                 // Member count is the compress width, as it was before
@@ -3782,7 +3859,18 @@ fn write_con(
             #[cfg(feature = "zstd")]
             {
                 if chunk_wide_frame(frames, compression_members) {
+                    if try_fused_members(path, frames, compression_members, n_threads, false)? {
+                        return Ok(());
+                    }
+                    let t_fmt = std::time::Instant::now();
                     let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+                    if std::env::var_os("READCON_WRITE_TRACE").is_some() {
+                        eprintln!(
+                            "zstd-format {:.4} plain_bytes={}",
+                            t_fmt.elapsed().as_secs_f64(),
+                            plain.len()
+                        );
+                    }
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
                     let threads = n_threads
