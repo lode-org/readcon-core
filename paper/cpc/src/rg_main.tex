@@ -265,9 +265,10 @@ file, the checkpoint of the search.
 The checkpoint has to return four fields that a trajectory reader can
 ignore.
 A surface search fixes the slab and can hold an adatom at a set height
-while it crosses the surface, so mobility belongs to each Cartesian
-component, and a lost hold changes the saddle that the search converges
-to (Section~\ref{sec:prefactor}).
+while it crosses the surface.
+Mobility then belongs to each Cartesian component, and a lost hold
+changes the saddle that the search converges to
+(Section~\ref{sec:prefactor}).
 Mode following and AKMC bookkeeping match atoms across frames and events
 by an identifier on each row.
 A reader has to return that identifier as written rather than as the row order.
@@ -281,8 +282,8 @@ that takes a versioned grammar rather than the convention of one reader.
 
 Existing formats keep some of these fields and drop the ones a restart reads.
 Extended XYZ publishes a grammar for key-value metadata on the comment line
-\cite{kermodeLibatomsExtxyzV0462026},
-and a mask or an identifier survives there only under a column name chosen by the Atomic Simulation Environment (ASE)
+\cite{kermodeLibatomsExtxyzV0462026}.
+A mask or an identifier survives there only under a column name chosen by the Atomic Simulation Environment (ASE)
 \cite{larsenAtomicSimulationEnvironmenta2017},
 with neither a version nor a velocity unit.
 H5MD stores an identifier, velocities with a unit and the box \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011}
@@ -291,13 +292,15 @@ but defines no element for a per-component constraint, and MDAnalysis, pyh5md, Z
 XTC, TRR, DCD and TNG store molecular-dynamics output with neither a mask nor a velocity unit, and the GROMACS trajectory that replaces TNG is still an H5MD file with no per-component constraint (Section~\ref{sec:supp-formats}).
 The ASE trajectory keeps the fields in the layout of its own Python code, while POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}.
 
-chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats but not CON at the versions tested in Section~\ref{sec:performance}, and ASE's eon reader stops at the velocity section of the frame in Section~\ref{sec:worked} \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}.
+chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats but not CON at the versions tested in Section~\ref{sec:performance} \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}.
+ASE's eon reader stops at the velocity section of the frame in Section~\ref{sec:worked}.
 A live stream of positions, velocities, forces and the box
-\cite{thirumalaiswamyStreamingMolecularDynamics2026},
-a ReaxFF analysis path
-\cite{dinaniReaxkitModularPython2026},
+\cite{thirumalaiswamyStreamingMolecularDynamics2026}
+carries no per-component mask.
+A ReaxFF analysis path
+\cite{dinaniReaxkitModularPython2026}
 and the tools that convert, check or index a trajectory after it has been written \cite{woodsSire2024,evansOptimade2024,petixLammpsio2025,tiemannMdverse2024}
-likewise carry no per-component mask for the saddle search.
+likewise carry none for the saddle search.
 
 Most atomistic formats have no specification apart from the code that
 reads them, so that code is the de facto definition of the format.
@@ -310,16 +313,16 @@ Electronic structure has done the same for densities and wavefunctions
 with the European Theoretical Spectroscopy Facility (ETSF) file format
 \cite{Gonze2008ETSF} and TREXIO \cite{posenitskiyTrexioFileFormat2023},
 and for pseudopotentials with the pseudopotential markup language (PSML) \cite{Garcia2018PSML}.
-
 A computed barrier is reproducible from a file only when every reader
 returns the same fields from it.
+
 A versioned specification and a corpus of files with known verdicts turn
 that condition into a test of any reader.
-
 Here, we describe the grammar, the library and the checks that keep a restart file paired across frames.
 The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
+
 Section~\ref{sec:fields} states the fields a restart must keep.
 Section~\ref{sec:implementation} describes the library and the programs that store and compare frames.
 Section~\ref{sec:conformance} is the conformance corpus.
@@ -329,7 +332,8 @@ Section~\ref{sec:discussion} sets CON 3.1 beside H5MD, extended XYZ and POSCAR.
 
 \section{The CON 3.1 format}
 \subsection{Stored fields}\label{sec:fields}
-CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit.
+CON 3.1 stores, on each frame, the coordinates and the full \(3\times 3\) cell, including the axes the periodic flags leave open.
+It also stores a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit.
 The nudged elastic band, the dimer and AKMC pair images by that identifier, so a reader must return it even after a file reorders the rows.
 The mask is an integer from 0 to 7, Eq.~\eqref{eq:mask}, and the mass enters the Lagrangian, Eq.~\eqref{eq:lagrangian}.
 The velocity section names its time unit, Eq.~\eqref{eq:tau}.
@@ -386,7 +390,8 @@ The wrapped displacement of each matched pair uses the reference cell.
 Python, C and C++ expose the four calls (Table~\ref{tab:correspondence}, Section~\ref{sec:supp-api}).
 In strict mode, which is the default, the mass and the fixed mask must agree as well.
 
-The path reader keeps a plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes in memory and leaves a larger one mapped, and it decompresses a gzip or zstd file into memory whatever its size (Algorithm~\ref{alg:parser}, Section~\ref{sec:supp-parser}).
+The path reader keeps a plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes in memory and leaves a larger one mapped.
+It decompresses a gzip or zstd file into memory whatever its size (Algorithm~\ref{alg:parser}, Section~\ref{sec:supp-parser}).
 The read stays on the calling thread until the caller asks for two or more workers, with no minimum file length for the pool.
 Equal-length frames, including a whitespace tail, split into equal spans.
 On any other file one thread walks the frame boundaries from the counts in each header before the pool parses the frames and returns them in file order (Figure~\ref{fig:scaling-r6}, Figure~\ref{fig:parser}, Table~\ref{tab:anchors}).
@@ -396,9 +401,10 @@ A coordinate row is three decimals, a mask and an optional identifier (Section~\
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
 For a text of \(B\) bytes, after inflation for a gzip or zstd file, the read costs one serial \(\Theta(B)\) boundary walk and a \(\Theta(B)\) parse, and the frames it returns occupy \(\Theta(B)\) memory.
 A compressed file of \(C\) bytes is first inflated by one serial decoder in \(\Theta(C+B)\) time.
-The peak resident set of each reader on the Xeon is reported with those reads (Section~\ref{sec:host}).
 
-A path writer opens the destination and truncates it before writing the frames, so a failure during the write leaves a partial file, while a writer to a string or to a stream the caller opened writes into that stream.
+A path writer opens the destination and truncates it before writing the frames.
+A failure during the write leaves a partial file.
+A writer to a string or to a stream the caller opened writes into that stream.
 The Python round trip reads a band and writes it back to the same path, which the writer truncates when the write opens (Listing~\ref{lst:py}, Section~\ref{sec:supp-parser}).
 A DLPack view of the positions costs 0.12 times an explicit copy (Figure~\ref{fig:dlpack}).
 \label{sec:dlpack}
@@ -416,8 +422,8 @@ A frame key is 12 bytes, the trajectory id and the frame index, and the record i
 The commands include \texttt{ingest}, \texttt{select}, \texttt{dedup-export}, \texttt{annotate-topology}, \texttt{find-by-topology}, \texttt{index-canonical}, \texttt{find-by-atom-order}, \texttt{shard}, \texttt{compact} and \texttt{h5md-velocities}.
 \texttt{dedup-export} keeps one copy of a frame whose serialized text hashes to a frame already stored.
 That hash is the xxHash3-128 of the CON text, an identity of bytes rather than of chemical graphs \cite{muraokaGraphIdentifiers2026}.
-
 \texttt{index-canonical} reorders each frame into increasing \texttt{atom\_id}, under the strict check of symbol, mass and fixed mask, and stores the xxHash3-128 of that round-trip text.
+
 \texttt{find-by-atom-order} returns each stored frame with that hash and the permutation back to the query.
 A NEB image or an AKMC product whose rows were grouped by element is then the same geometry.
 seams-core selects from the corpus by element or by formula (Section~\ref{sec:connectivity}).
@@ -442,14 +448,14 @@ Read through the Python module of the release, all \(\corpusConfAgree\)
 files return the verdict and error class of their manifest entries, and
 we check the same files from Rust, Python, C, Fortran and
 Julia.
-
-
-A second corpus and an independent reader agree with readcon on every file both accept, bit for bit in the coordinates, velocities, cell, masks, identifiers, units and periodic flags (Section~\ref{sec:supp-corpora}), and Section~\ref{sec:supp-moved} gives the mutant construction, the extended XYZ drift and the comparison of the published wheels (Section~\ref{sec:supp-versions}).
+A second corpus and an independent reader agree with readcon on every file both accept, bit for bit in the coordinates, velocities, cell, masks, identifiers, units and periodic flags (Section~\ref{sec:supp-corpora}).
+Section~\ref{sec:supp-moved} gives the mutant construction, the extended XYZ drift and the comparison of the published wheels (Section~\ref{sec:supp-versions}).
 
 \section{Validation}\label{sec:validation}
 \subsection{Hydrogen hop}\label{sec:claisen}
 A lost field changes the calculation that reads the file, and Section~\ref{sec:supp-applications} gives the three studies in full.
-A hydrogen adatom hops from one fourfold hollow of Cu(100) to the next, and the improved NEB tangent at image \(i\) is built from the forward and backward differences
+A hydrogen adatom hops from one fourfold hollow of Cu(100) to the next.
+The improved NEB tangent at image \(i\) is built from the forward and backward differences
 \begin{equation}
 \label{eq:tangent}
 \tau_i^{+}=R_{i+1}-R_i,\qquad \tau_i^{-}=R_i-R_{i-1},
@@ -494,14 +500,16 @@ Nearest-neighbour bonds, clipped to the cell.}
 \end{figure}
 
 \subsection{What a second reader keeps}\label{sec:fidelity}
-We read the same five files with readcon, with ASE's eon reader and with eOn's Python loader, on one core of the Xeon in Section~\ref{sec:compute}, and we report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
+We read five CON files (Section~\ref{sec:identity}) with readcon, with ASE's eon reader and with eOn's Python loader.
+The reads use one core of the Xeon in Section~\ref{sec:compute}.
+We report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
 A band, an AKMC catalog and a dynamical step pair atoms rather than file slots.
 Column 5 is the atom id, column 4 is the per-axis mask, the mass enters Eq.~\eqref{eq:lagrangian}, the cell is the minimum image, and a velocity is the momentum divided by that mass.
 
 Of those three readers, readcon returns the identifier in file order together with the per-axis mask, the masses, the cell on every frame and the velocities, and each of those fields matches the input.
 The eon reader in ASE builds the atom from the coordinates and from the mask column as one Boolean on every axis.
-On the platinum slab, where the adatom is held in height only, one atom therefore leaves the written file with every axis held, and the same reader stops when the next block is a force or a velocity section.
-
+On the platinum slab, where the adatom is held in height only, one atom therefore leaves the written file with every axis held.
+The same reader stops when the next block is a force or a velocity section.
 The written cell stays inside the tolerance of six printed decimals.
 The eOn loader keeps the identifiers, and a three-image band stays in file order.
 Velocities come back as the numbers in the file, under the natural time unit even when an older header names femtoseconds.
@@ -649,16 +657,18 @@ Extended XYZ can carry a mask or an identifier only under a column name the writ
 POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier.
 The identifier is what a band pairs, and the mask is what a search holds: the hydrogen images follow the stored ids, and dropping the Pt(100) height hold selects the other saddle of Section~\ref{sec:cases}.
 
-readcon finishes the million-atom extended XYZ ahead of ASE, chemfiles and OVITO because one pass over the text returns the stored columns, while ASE builds an \texttt{Atoms} object and the other two build a scene or a topology (Table~\ref{tab:h2h-main}).
+readcon finishes the million-atom extended XYZ ahead of ASE, chemfiles and OVITO because one pass over the text returns the stored columns (Table~\ref{tab:h2h-main}).
+ASE builds an \texttt{Atoms} object, and the other two build a scene or a topology.
 That same pass keeps the identifier and the mask, so the faster read is the restart rather than a coordinate-only extract.
 The file stores the coordinates, the mask and the identifier, and optimiser state stays outside the frame.
 A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different path after a restart even when every coordinate matches.
-The next step is a declared section for that optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
-readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
-The bridge mode on that model is \(147\mathrm{i}\,\mathrm{cm}^{-1}\) along the hop.
+readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader.
+On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
+Optimiser state stays outside the frame.
+The next step is a declared section for that optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}

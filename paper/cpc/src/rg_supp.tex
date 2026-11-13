@@ -124,7 +124,7 @@ This section states the CON 3.1 specification as readcon-core 0.22.0 distributes
 The relative difference between the parsed natural time unit and the eOn constant is \(2.07\times 10^{-8}\).
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
-The specification also points to an informative parsing expression grammar (PEG), the surface grammar, which is not reproduced.
+The distributed text cites an informative parsing expression grammar (PEG), the surface grammar, and the clauses in this section are the specification.
 The reader-compatibility notes and the references of the source are omitted, because they describe other programs.
 
 \input{figures/generated/spec_normative}
@@ -312,7 +312,7 @@ The program prints the cell, the counts and the first five atoms with their fixe
 The test-run step then runs the same program on that file with line~4 replaced by the two variants of Section~\ref{sec:worked}, angles of \wkFlatAlpha, \wkFlatBeta{} and \wkFlatGamma{} degrees and of \wkNoneAlpha, \wkNoneAlpha{} and \wkNoneGamma{} degrees, each as written and with \texttt{"validate": true} in line~2.
 In both modes the program reads the flat cell and prints its angles.
 In both modes it stops on the impossible cell with the error \texttt{cell angles do not form a real cell} in line~\trCellLine.
-The test-run record keeps the commands, the toolchain and what the program printed for each of the five files.
+The five files are the survey frame, the two angle lines, and those two lines with \texttt{"validate": true}.
 
 \input{figures/generated/test_run}
 
@@ -355,18 +355,17 @@ The path check reads the \cpathsFiles{} files of both corpora through the string
 The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
 Every file takes \cpathsReadKinds{} reads, except that the \cpathsNotText{} files that are not UTF-8 take no \texttt{read\_con\_string} read.
 All \cpathsMatch{} of the \cpathsReads{} reads return the outcome of the manifest entry of their file, with its frame count or error class (Table~\ref{tab:corpus-paths}).
-The record keeps the verdict of every read with the builds that made them.
+The default build and the parallel build both return that verdict.
 The path count runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
 Table~\ref{tab:corpus31-open} lists the \cthreeoneNotExplicit{} entries whose outcome no clause decides by name, each with the reading that its manifest entry records and that readcon-core follows.
 Table~\ref{tab:corpus-crosscheck} is the cross-check over both corpora, beside the independent reader, and it records the outcome of every reader on every file.
 
-The mutant comparison records the cases.
 A case takes one of the \mutantFiles{} files of \texttt{corpus31} under \mutantMaxBytes{} bytes and makes one to three edits at random places: it inserts a token, deletes one to eight characters or replaces one character with a token.
-The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block, and the record lists them.
+The tokens are whitespace and line ends, digits, signs and JSON punctuation, component headers, keys of line 2, element symbols and a whole velocity block.
 \texttt{random.Random} draws the file, the edits and the tokens from the seed.
 Each of the \mutantSeeds{} seeds gives the same \mutantPerSeed{} cases on every run, and \texttt{\texttt{-}\texttt{-}check} reruns them.
-The comparison covers the verdicts and the frame counts or error classes and leaves out the lines, since the exceptions of the readcon module carry none.
-The record still keeps the error line of each reader.
+The comparison covers the verdicts and the frame counts or error classes.
+readcon-core reports an error line on each failed read, and the comparison leaves that line out, because the exceptions of the readcon module carry none.
 Each group has a variant of the independent reader that follows readcon-core on one rule.
 A differing case belongs to the first group whose variant returns the verdict and class of readcon-core.
 All \(\mutantDiffer\) differing cases fall in the count-line group.
@@ -1646,7 +1645,7 @@ The Xeon is Section~\ref{sec:compute}.}
 \input{si_from_main}
 
 \FloatBarrier \section{The atom-id test}\label{sec:supp-atomid}
-The hop test \texttt{hop\_positional\_zip\_is\_the\_wrong\_displacement} was added after readcon-core 0.22.0.
+The hop test \texttt{hop\_positional\_zip\_is\_the\_wrong\_displacement} ships in the next release after 0.22.0.
 Index pairing of the exchanged copper row moves that copper by 3.610~\text{\AA}.
 Matching column 5 leaves the copper in place and moves the hydrogen by 2.553~\text{\AA}, and \texttt{reorder\_like} restores the identifier order.
 Listing~\ref{lst:atomid} is the command.

@@ -87,7 +87,7 @@ def bonds(pos, symbols, cell):
     return found
 
 
-def draw_panel(ax, inset, symbols, pos, cell, title, paths=None):
+def draw_panel(ax, inset, symbols, pos, cell, title, paths=None, ticks="right"):
     span_x = 2.0 * cell[0]
     span_y = 2.0 * cell[1]
     box = (0.0, span_x, 0.0, span_y)
@@ -183,23 +183,28 @@ def draw_panel(ax, inset, symbols, pos, cell, title, paths=None):
     ax.set_xlim(0.0, span_x)
     ax.set_ylim(0.0, span_y)
     ax.set_aspect("equal", adjustable="box")
-    ax.set_title(title, fontsize=9, pad=3)
-    ax.tick_params(labelsize=8, length=3, pad=2)
-    ax.set_xlabel("x (Å)", fontsize=8, labelpad=2)
-    ax.set_ylabel("y (Å)", fontsize=8, labelpad=2)
+    # The PDF is wider than the 390 pt text block, so 11 pt here is at least 8 pt on the page.
+    ax.set_title(title, fontsize=11, pad=3)
+    ax.tick_params(labelsize=11, length=3, pad=2)
+    ax.set_xlabel("x (Å)", fontsize=11, labelpad=2)
+    ax.set_ylabel("y (Å)", fontsize=11, labelpad=2)
 
-    top = float(pos[symbols == "Cu", 2].max())
+    copper = pos[symbols == "Cu"]
     hydrogen = pos[symbols == "H"][0]
     inset.set_facecolor("white")
-    inset.scatter([0.0], [top], s=36, c=CU, edgecolors=CU_EDGE, linewidths=0.4, zorder=2)
-    inset.plot([0.0, 0.0], [top, hydrogen[2]], color=BOND, lw=0.9, zorder=1, solid_capstyle="butt")
-    inset.scatter([0.0], [hydrogen[2]], s=32, c=H, edgecolors="#0B3A82", linewidths=0.4, zorder=3)
-    inset.set_xlim(-1.0, 1.0)
-    inset.set_ylim(8.2, 10.8)
+    inset.scatter(copper[:, 0], copper[:, 2], s=22, c=CU, edgecolors=CU_EDGE, linewidths=0.4, zorder=2)
+    inset.scatter([hydrogen[0]], [hydrogen[2]], s=28, c=H, edgecolors="#0B3A82", linewidths=0.4, zorder=3)
+    inset.set_xlim(-0.4, float(cell[0]) + 0.4)
+    inset.set_ylim(4.4, 11.5)
     inset.set_xticks([])
-    inset.set_yticks([8.5, 9.5, 10.5])
-    inset.tick_params(labelsize=8, length=3, pad=1)
-    inset.set_title("z (Å)", fontsize=8, pad=2)
+    inset.set_yticks([4.6, 6.2, 7.6, 9.4, 11.2])
+    if ticks == "right":
+        inset.yaxis.tick_right()
+        inset.tick_params(labelsize=11, length=2.5, pad=2, labelright=True, labelleft=False)
+    else:
+        inset.yaxis.tick_left()
+        inset.tick_params(labelsize=11, length=2.5, pad=2, labelleft=True, labelright=False)
+    inset.set_title("z (Å)", fontsize=11, pad=2)
 
 
 def main() -> None:
@@ -215,25 +220,58 @@ def main() -> None:
     # Draw the swapped geometry in file order so the exchanged atoms sit
     # in the slots the lost identifier pairs.
     plt.rcParams.update({
-        "font.size": 8,
+        "font.size": 11,
         "pdf.fonttype": 42,
         "axes.linewidth": 0.6,
-        "xtick.labelsize": 8,
-        "ytick.labelsize": 8,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+        "axes.labelsize": 11,
+        "axes.titlesize": 11,
     })
     # Full text width. Each top view keeps a y label; each side inset
     # sits in its own gutter so the tick labels do not meet the lattice.
     fig = plt.figure(figsize=(7.16, 3.15))
-    left = fig.add_axes((0.075, 0.16, 0.30, 0.74))
-    inset_l = fig.add_axes((0.395, 0.30, 0.075, 0.46))
-    right = fig.add_axes((0.575, 0.16, 0.30, 0.74))
-    inset_r = fig.add_axes((0.895, 0.30, 0.075, 0.46))
-    draw_panel(left, inset_l, symbols, saddle, cell, "Paired by atom id")
-    draw_panel(right, inset_r, file_sym, file_pos, cell, "Paired by file row", paths=paths)
+    left = fig.add_axes((0.09, 0.16, 0.25, 0.74))
+    inset_l = fig.add_axes((0.43, 0.30, 0.065, 0.46))
+    right = fig.add_axes((0.60, 0.16, 0.25, 0.74))
+    inset_r = fig.add_axes((0.90, 0.30, 0.065, 0.46))
+    draw_panel(left, inset_l, symbols, saddle, cell, "Paired by atom id", ticks="left")
+    draw_panel(right, inset_r, file_sym, file_pos, cell, "Paired by file row", paths=paths, ticks="right")
     OUT.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT / "claisen_structures.pdf")
-    fig.savefig(OUT / "claisen_structures.png", dpi=150)
+    fig.savefig(OUT / "claisen_structures.pdf", bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(OUT / "claisen_structures.png", dpi=150, bbox_inches="tight", pad_inches=0.02)
+    landscape(OUT)
     print(OUT / "claisen_structures.pdf", "paths", len(paths))
+
+
+def landscape(out: Path) -> None:
+    """Fig 3. The values are the published EMT profiles. Fonts are 8 pt or larger."""
+    matched = [0.0, 0.014588961261054134, 0.03335417913934968, 0.039894281917480345,
+               0.03335792588108655, 0.014596112332057487, 0.0]
+    by_row = [0.0, 1.0550736587440164, 5.758180765486507, 15.555979952129109,
+              10.812257269042275, 1.3769164484163814, 0.0]
+    plt.rcParams.update({
+        "font.size": 11,
+        "axes.labelsize": 11,
+        "axes.titlesize": 11,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+        "pdf.fonttype": 42,
+    })
+    fig, axes = plt.subplots(1, 2, figsize=(7.16, 3.15))
+    axes[0].plot(range(len(matched)), matched, marker="o", color="#1f4e79")
+    axes[0].set_title("Paired by atom id", fontsize=11)
+    axes[0].set_ylabel("energy above the hollow (eV)", fontsize=11)
+    axes[1].plot(range(len(by_row)), by_row, marker="o", color="#8c2f39")
+    axes[1].set_title("Paired by file row", fontsize=11)
+    axes[1].set_ylabel("energy above the hollow (eV)", fontsize=11)
+    for ax in axes:
+        ax.set_xlabel("image", fontsize=11)
+        ax.tick_params(labelsize=11)
+        ax.grid(True, linewidth=0.4)
+    fig.tight_layout()
+    fig.savefig(out / "claisen_landscape.pdf", bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
