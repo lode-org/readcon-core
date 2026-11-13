@@ -2120,6 +2120,42 @@ fn numa_remote_pages() -> i64 {
     remote
 }
 
+/// True when `boundaries` is `0, span, 2*span, ...`.
+#[cfg(feature = "parallel")]
+fn equal_frame_stride(boundaries: &[usize]) -> bool {
+    if boundaries.len() < 2 {
+        return false;
+    }
+    let span = boundaries[1] - boundaries[0];
+    if span == 0 || boundaries[0] != 0 {
+        return false;
+    }
+    boundaries
+        .iter()
+        .enumerate()
+        .all(|(index, start)| *start == index * span)
+}
+
+/// One contiguous frame run per worker.
+#[cfg(feature = "parallel")]
+fn one_range_per_worker(n: usize, workers: usize) -> Vec<(usize, usize)> {
+    let workers = workers.max(1).min(n.max(1));
+    let mut ranges = Vec::with_capacity(workers);
+    let mut start = 0usize;
+    for worker in 0..workers {
+        let end = if worker + 1 == workers {
+            n
+        } else {
+            ((worker as u128 + 1) * (n as u128) / workers as u128) as usize
+        };
+        if end > start {
+            ranges.push((start, end));
+            start = end;
+        }
+    }
+    ranges
+}
+
 /// Contiguous frame ranges that cover `boundaries` and split the file
 /// into similar byte lengths.
 ///
@@ -2276,10 +2312,15 @@ where
     let t_alloc = std::time::Instant::now();
     let mut slots = take_slot_buf(n);
     let alloc_s = t_alloc.elapsed().as_secs_f64();
-    // Several byte-balanced ranges per worker. A slow range can be
-    // stolen. Each range is still one iterator, not one iterator per
-    // frame: a fresh iterator per frame faulted a private heap.
-    let ranges = byte_balanced_ranges(boundaries, len, workers);
+    // Equal frames are one range per worker. Each range prestashes its
+    // coordinate shells and drops that stash at the end, so four ranges
+    // on one worker allocate the same shells four times. Unequal frames
+    // keep several byte-balanced ranges so a long frame can be stolen.
+    let ranges = if equal_frame_stride(boundaries) {
+        one_range_per_worker(n, workers)
+    } else {
+        byte_balanced_ranges(boundaries, len, workers)
+    };
     let chunk_ns: Vec<std::sync::atomic::AtomicU64> = (0..ranges.len())
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
@@ -4735,6 +4776,18 @@ mod phased_read_tests {
         assert_eq!(got.len(), 8);
         let phased = frames_from_bytes_phased(bytes, Some(4)).expect("phased");
         assert_eq!(phased.scan_kind, SCAN_EQUAL_SPAN);
+        let wide = fixture("cuh2.con").repeat(32);
+        let ranges = frames_from_bytes_phased(wide.as_bytes(), Some(4)).expect("ranges");
+        assert_eq!(ranges.frames.len(), 32);
+        assert_eq!(
+            ranges.chunk_s.len(),
+            4,
+            "equal frames are one range per worker, so the shell stash is one burst"
+        );
+        assert_eq!(
+            ranges.frames,
+            frames_from_text(&wide, Some(1)).expect("wide serial")
+        );
         assert_eq!(
             phased.frames,
             frames_from_text(&text, Some(1)).expect("serial")

@@ -230,7 +230,10 @@ fn main() {
         drop(serial);
         let parallel = frames_from_text(&text, Some(workers)).expect("parallel parse");
         let parallel_fp = frame_fingerprint(&parallel);
-        drop(parallel);
+        // The match parse allocated on the worker heaps. Dropping it here
+        // would free those blocks on this thread and the timed samples
+        // would allocate cold.
+        readcon_core::iterators::release_parsed_frames(parallel, workers);
         if serial_fp != parallel_fp {
             write_refusal(&out_path, "serial-match output failed");
             std::process::exit(2);
