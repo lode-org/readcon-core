@@ -126,7 +126,7 @@ kinetic Monte Carlo, restart from saved geometries and must pair atoms
 across frames, so the file has to carry identity and constraints exactly.
 CON is the format they exchange, and it had no specification.
 readcon-core is the reference implementation of that grammar: it reads and writes CON 3.1.
-Two conformance corpora, 165 files in all, define which files a
+Two conformance corpora, \corpusFiles{} files in all, define which files a
 conforming reader accepts.
 One Rust core serves C, C++, Fortran, Julia and Python and exports
 coordinate arrays through DLPack.
@@ -134,9 +134,7 @@ eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
 \mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
-% UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
-Losing the identifier changes the hop from 0.04~eV to 15.6~eV on an EMT model (Section~\ref{sec:claisen}).
-readcon takes 0.07444~s on the million-atom CON frame, against 1.876~s for ASE.
+readcon takes \conReadconMedian~s on the million-atom CON frame, against \conAseMedian~s for ASE.
 readcon-core is available under the MIT licence at
 \url{https://github.com/lode-org/readcon-core}.
 \end{abstract}
@@ -148,11 +146,11 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 \end{keyword}
 
 \begin{highlights}
-\item readcon-core reads and writes CON 3.1, a versioned grammar for atomistic checkpoints.
-\item Every frame keeps atom ids, per-axis masks, masses and a declared velocity time unit.
-\item One Rust core serves C, C++, Fortran, Julia and Python; eOn reads CON through it.
-\item readcon-db stores CON corpora in LMDB; readcon-ops matches frames by atom identity.
-\item Atom identifiers keep NEB, dimer and AKMC images paired across restarts and codes.
+\item readcon reads a million-atom CON frame in \conReadconMedian~s; ASE takes \conAseMedian~s.
+\item readcon reads a million-atom extended XYZ frame faster than OVITO, chemfiles and ASE.
+\item CON.zst is the smallest million-atom file that drops nothing.
+\item readcon-db's recorded ingest is faster than the ASE database.
+\item eOn takes longer than readcon on the same million-atom CON frame.
 \end{highlights}
 
 \begin{graphicalabstract}
@@ -165,7 +163,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 % proseguard off rgoswami.Acronyms.
 \noindent\textbf{PROGRAM SUMMARY}
 
-\begin{small} \noindent\textit{Program Title:} readcon-core 0.22.0
+\begin{small} \noindent\textit{Program Title:} readcon-core 0.23.0
 
 \noindent\textit{CPC Library link to program files:} (to be added by
 Technical Editor)
@@ -179,10 +177,11 @@ Technical Editor)
 
 \noindent\textit{Programming language:} Rust 1.88, with C99, C++17, Python
 3.10, Julia and Fortran 2008 interfaces.
-The core links fast-float2, ryu, flate2, serde\_json, memmap2 and the
-DLPack types.
-Rayon, zstd, MPI, chemfiles, metatensor and CUDA are optional and stay
-off unless the build asks for them.
+The core links dlpk, half, ndarray, fast-float2, ryu, flate2,
+serde\_json, memchr, memmap2, libc, rustc-hash and mimalloc.
+Rayon, zstd, MPI, chemfiles, metatensor, CUDA, Cap'n Proto and Pest are
+optional and stay off unless the build asks for them.
+The Python package requires Python 3.10 or later.
 
 \noindent\textit{Supplementary material:} the normative specification,
 the two conformance corpora and the programs and data behind every table
@@ -220,7 +219,7 @@ A path writer opens the destination and truncates it, then writes the
 frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
-The library is readcon-core 0.22.0.
+The library is readcon-core 0.23.0.
 The companion programs are readcon-db 0.2.1, under the MIT licence, at
 \url{https://github.com/lode-org/readcon-db}, and readcon-ops 0.1.1,
 under the BSD 3-clause licence, at
@@ -235,7 +234,7 @@ The velocities of a file of an earlier version are read in the natural
 unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file
 (Listing~\ref{lst:py}).
-Atom-id correspondence is part of readcon-core 0.22.0:
+Atom-id correspondence is part of readcon-core 0.23.0:
 \texttt{atom\_id\_permutation}, \texttt{reorder\_like},
 \texttt{check\_atom\_id\_consistency} and
 \texttt{minimum\_image\_displacements}.

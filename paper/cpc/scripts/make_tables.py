@@ -532,6 +532,10 @@ def cited_macros(store: Store, cross: Store) -> str:
     for row in ext["rows"]:
         if row["file"] == "extxyz-same" and row["op"] == "read" and row["cache"] == "warm":
             warm[row["reader"]] = float(row["median_s"])
+    con_warm = {}
+    for row in store.json(f"{REL1}/con-h2h.json")["rows"]:
+        if row["file"] == "con-1e6" and row["op"] == "read" and row["cache"] == "warm":
+            con_warm[row["reader"]] = float(row["median_s"])
     rows = cross_rows(cross)
     xtc = float(sig(cross_median(rows, "1M", "mdanalysis", "xtc", "write"))) / float(
         sig(cross_median(rows, "1M", "readcon", "con.zst", "write"))
@@ -543,6 +547,8 @@ def cited_macros(store: Store, cross: Store) -> str:
     commands = {
         "extxyzReadconMedian": sig(warm["readcon"]),
         "extxyzOvitoMedian": sig(warm["ovito"]),
+        "conReadconMedian": sig(con_warm["readcon"]),
+        "conAseMedian": sig(con_warm["ase"]),
         "xtcWriteOverZst": f"{xtc:.3g}",
         "ovitoTrajWriteOverZst": f"{ovito_traj:.3g}",
         "dbReadconMedian": sig(type7(samples["readcon-db"])),
