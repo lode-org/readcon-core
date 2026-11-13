@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the campaign TeX from six rel1 files at one commit.
+"""Regenerate the campaign TeX from the rel1 campaign files at one commit.
 
 Sources, and no others:
 
@@ -9,11 +9,19 @@ Sources, and no others:
   bench/h2h/scaling/rel1/h2h.json
   bench/h2h/scaling/rel1/compressed.json
   bench/h2h/scaling/rel1/db.log
+  bench/h2h/scaling/rel1/strong-threads.json
+  bench/h2h/scaling/rel1/strong-mpi.json
+  bench/h2h/scaling/rel1/perf10-samples.json
+  bench/h2h/scaling/rel1/weak-threads.json
+  bench/h2h/scaling/rel1/weak-ranks-1.json
+  bench/h2h/scaling/rel1/weak-ranks-2.json
+  bench/h2h/scaling/rel1/weak-ranks-4.json
+  bench/h2h/scaling/rel1/weak-ranks-8.json
 
 Every number written into the TeX must be a rounding of a value in those
-files, or of the type-7 median of a db.log sample list. Anything else is
-an error. ``--dry-run`` prints the TeX values that would change and does
-not write.
+files, of a type-7 median of a sample list, or of the weak-scaling
+efficiency of those medians. Anything else is an error. ``--dry-run``
+prints the TeX values that would change and does not write.
 """
 
 from __future__ import annotations
@@ -36,7 +44,16 @@ SOURCES = (
     f"{REL1}/h2h.json",
     f"{REL1}/compressed.json",
     f"{REL1}/db.log",
+    f"{REL1}/strong-threads.json",
+    f"{REL1}/strong-mpi.json",
+    f"{REL1}/perf10-samples.json",
+    f"{REL1}/weak-threads.json",
+    f"{REL1}/weak-ranks-1.json",
+    f"{REL1}/weak-ranks-2.json",
+    f"{REL1}/weak-ranks-4.json",
+    f"{REL1}/weak-ranks-8.json",
 )
+WEAK_RANK_PATHS = tuple(f"{REL1}/weak-ranks-{n}.json" for n in (1, 2, 4, 8))
 NUMBER = re.compile(r"(?<![A-Za-z])\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?![A-Za-z])")
 READERS = (
     ("readcon", "readcon"),
@@ -84,13 +101,35 @@ def db_samples(text: str) -> dict[str, list[float]]:
     return samples
 
 
+def weak_points(blobs: dict[str, str]) -> list[tuple[str, list[dict]]]:
+    threads = json.loads(blobs[f"{REL1}/weak-threads.json"])
+    thread_points = sorted(threads["points"], key=lambda point: point["workers"])
+    ranks = []
+    for path in WEAK_RANK_PATHS:
+        record = json.loads(blobs[path])
+        ranks.append(record)
+    ranks.sort(key=lambda record: record["workers"])
+    return [("threads", thread_points), ("ranks", ranks)]
+
+
+def weak_derived(blobs: dict[str, str]) -> list[float]:
+    found = []
+    for _kind, points in weak_points(blobs):
+        medians = [type7(point["samples_s"]) for point in points]
+        found.extend(medians)
+        base = medians[0]
+        found.extend(base / median for median in medians)
+    return found
+
+
 def source_values(blobs: dict[str, str]) -> list[float]:
     found = []
     for text in blobs.values():
         for token in NUMBER.findall(text):
             found.append(float(token))
-    for samples in db_samples(blobs[SOURCES[5]]).values():
+    for samples in db_samples(blobs[f"{REL1}/db.log"]).values():
         found.append(type7(samples))
+    found.extend(weak_derived(blobs))
     return found
 
 
@@ -187,23 +226,58 @@ def render(blobs: dict[str, str]) -> dict[str, str]:
         r"File & 1 & 2 & 4 & 8",
         read_rows,
     )
-    disk_files, disk = grid("threads", "write", "disk")
-    mem_files, mem = grid("threads", "write", "memory")
+    perf10 = json.loads(blobs[f"{REL1}/perf10-samples.json"])
+    compute = perf10["compute_ceiling_s"]
+    mapping = perf10["mapping_ceiling_s"]["page_cache"]
+    pwrite = perf10["pwrite_ceiling_s"]["page_cache"]
     write_rows = []
-    for name in disk_files:
-        write_rows.append(
-            name + " & disk & " + " & ".join(disk[name][str(n)] for n in (1, 2, 4, 8)) + r" \\"
+    mpi_rows = []
+    for row in s61:
+        workers = row["workers"]
+        ceilings = (
+            f"{float(compute[workers]):.6f} & "
+            f"{float(mapping[workers]):.6f} & "
+            f"{float(pwrite[workers]):.6f}"
         )
-        if name in mem:
-            write_rows.append(
-                name + " & memory & " + " & ".join(mem[name][str(n)] for n in (1, 2, 4, 8)) + r" \\"
-            )
+        line = (
+            f"{row['kind']} & {row['file']} & {row['sink']} & {workers} "
+            f"& {row['median_s']} & {ceilings} \\\\"
+        )
+        if row["op"] == "write":
+            write_rows.append(line)
+        elif row["kind"] == "mpi" and row["sink"] == "memory":
+            mpi_rows.append(f"{row['op']} & " + line)
     out["writes.tex"] = table(
-        "Thread writes from s61-strong.tsv. Each entry is the median in seconds.",
+        "Strong-scaling writes from s61-strong.tsv. "
+        "Compute, mapping and pwrite are the perf10 ceilings for that worker count.",
         "tab:thread-writes",
-        "@{}llrrrr@{}",
-        r"File & Sink & 1 & 2 & 4 & 8",
+        "@{}lllrrrrr@{}",
+        r"Kind & File & Sink & Workers & Median (s) & Compute & Mapping & Pwrite",
         write_rows,
+    )
+    out["mpi_memory.tex"] = table(
+        "MPI memory rows from s61-strong.tsv, beside the same per-count ceilings.",
+        "tab:mpi-memory",
+        "@{}llllrrrrr@{}",
+        r"Op & Kind & File & Sink & Workers & Median (s) & Compute & Mapping & Pwrite",
+        mpi_rows,
+    )
+    weak_rows = []
+    for kind, points in weak_points(blobs):
+        medians = [type7(point["samples_s"]) for point in points]
+        base = medians[0]
+        for point, median in zip(points, medians):
+            weak_rows.append(
+                f"{kind} & {point['workers']} & {point['n_frames']} "
+                f"& {median:.6f} & {base / median:.3f} \\\\"
+            )
+    out["weak.tex"] = table(
+        "Weak scaling. The median is the type-7 median of the samples in the weak json. "
+        "Efficiency is the one-worker median divided by the median.",
+        "tab:weak-campaign",
+        "@{}lrrrr@{}",
+        r"Kind & Workers & Frames & Median (s) & Efficiency",
+        weak_rows,
     )
 
     comp_rows = {"gzip": [], "zstd": []}
@@ -283,7 +357,9 @@ def changes(current: Path, fresh: dict[str, str]) -> list[str]:
     pairs = {
         "table2.tex": "Table 2 extxyz rows",
         "s61.tex": "perf6 reads",
-        "writes.tex": "perf7 writes",
+        "writes.tex": "strong-scaling writes",
+        "mpi_memory.tex": "MPI memory rows",
+        "weak.tex": "weak scaling",
         "compressed.tex": "compressed rows",
         "rcdb.tex": "readcon-db / ase.db",
     }
