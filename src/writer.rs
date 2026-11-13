@@ -246,6 +246,24 @@ fn require_minor2_section_arity(
     Ok(())
 }
 
+/// Puts a streamed frame back to the last complete prefix when the
+/// write fails after the file has already grown.
+struct StreamOut {
+    file: File,
+    start: u64,
+    armed: bool,
+}
+
+impl Drop for StreamOut {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let _ = self.file.set_len(self.start);
+        let _ = self.file.seek(SeekFrom::Start(self.start));
+    }
+}
+
 // General implementation for any type that implements `Write`.
 impl<W: Write> ConFrameWriter<W> {
     /// Creates a new `ConFrameWriter` that wraps a given writer.
@@ -513,13 +531,16 @@ impl<W: Write> ConFrameWriter<W> {
         #[cfg(not(feature = "parallel"))]
         let parallel_rows = false;
         if parallel_rows {
-            // The coordinate formatter reads every atom. The id compare
-            // rides that pass; a separate scan walked the whole frame first.
+            // Ids are unique across the whole frame. A per-component pass
+            // treats an id that restarts at the next element as dense.
+            if !ids_are_dense(&frame.atom_data, self.atom_workers) {
+                ensure_unique_ids(&frame.atom_data, self.atom_workers)?;
+            }
         } else {
             ensure_unique_ids(&frame.atom_data, 1)?;
         }
         let prec = self.float_format;
-        let mut stream_file = self.stream_file.take();
+        let stream_file = self.stream_file.take();
         let bound = self.bound.take();
         let spec_version = bound
             .as_ref()
@@ -576,6 +597,17 @@ impl<W: Write> ConFrameWriter<W> {
         if frame.has_spreads() {
             blocks += 1;
         }
+        let mut stream_out = match stream_file {
+            Some(mut file) => {
+                let start = file.stream_position().map_err(WriteError::Io)?;
+                Some(StreamOut {
+                    file,
+                    start,
+                    armed: true,
+                })
+            }
+            None => None,
+        };
         self.scratch
             .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
         if !self.keep_scratch {
@@ -662,7 +694,7 @@ impl<W: Write> ConFrameWriter<W> {
                     self.atom_workers,
                     mapped,
                     self.force_map,
-                    stream_file.as_mut(),
+                    stream_out.as_mut().map(|out| &mut out.file),
                     if save_velocity {
                         Some(&mut vel_buf)
                     } else {
@@ -884,14 +916,18 @@ impl<W: Write> ConFrameWriter<W> {
         }
 
         if self.keep_scratch {
+            if let Some(out) = stream_out.as_mut() {
+                out.armed = false;
+            }
             return Ok(());
         }
-        if let Some(mut file) = stream_file {
+        if let Some(out) = stream_out.as_mut() {
             if !self.scratch.is_empty() {
-                file.write_all(&self.scratch)?;
+                out.file.write_all(&self.scratch)?;
                 self.scratch.clear();
             }
-            file.flush()?;
+            out.file.flush()?;
+            out.armed = false;
         } else if self.scratch.len() >= 64 * 1024 {
             // BufWriter would copy this frame through an 8 KiB buffer.
             self.writer.flush()?;
@@ -1688,7 +1724,12 @@ fn stream_coord_pipeline(
                     std::hint::spin_loop();
                 };
                 pwrite_full(&out, &coord, offset).map_err(WriteError::Io)?;
-                offset += coord.len() as u64;
+                offset = offset.checked_add(coord.len() as u64).ok_or_else(|| {
+                    WriteError::Io(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "coordinate block is too large",
+                    ))
+                })?;
                 if want_vel {
                     vel_bytes.extend_from_slice(&vel);
                 }
@@ -1706,6 +1747,9 @@ fn stream_coord_pipeline(
         }
         Ok((offset, vel_bytes))
     })?;
+    // `pwrite` extends the file to the last byte it stored and leaves any
+    // older tail in place. The mapped path truncates to the same end.
+    file.set_len(end).map_err(WriteError::Io)?;
     file.seek(SeekFrom::Start(end)).map_err(WriteError::Io)?;
     if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
         ensure_unique_ids(atoms, 1)?;
@@ -1714,6 +1758,24 @@ fn stream_coord_pipeline(
         vel_bytes.clear();
     }
     Ok(vel_bytes)
+}
+
+/// Bytes one coordinate line can occupy.
+///
+/// Round-trip spellings fit in 128. A fixed number of decimal places can
+/// be hundreds of digits, and the mapped reserve has to hold that line or
+/// the other workers spin forever waiting for a length that is never stored.
+fn mapped_line_budget(prec: FloatFormat) -> usize {
+    match prec {
+        FloatFormat::RoundTrip => 128,
+        FloatFormat::DecimalPlaces(places) => {
+            let float = 1usize
+                .saturating_add(309)
+                .saturating_add(1)
+                .saturating_add(places);
+            float.saturating_mul(3).saturating_add(4 + 1 + 1 + 20 + 1)
+        }
+    }
 }
 
 fn stream_coord_rows(
@@ -1741,9 +1803,21 @@ fn stream_coord_rows(
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
     let base = file.stream_position().map_err(WriteError::Io)?;
-    let upper = atoms.len().saturating_mul(128);
+    let line_budget = mapped_line_budget(prec);
+    let upper = atoms.len().checked_mul(line_budget).ok_or_else(|| {
+        WriteError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "coordinate block is too large",
+        ))
+    })?;
+    let reserve_end = base.checked_add(upper as u64).ok_or_else(|| {
+        WriteError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "coordinate block is too large",
+        ))
+    })?;
     let mut map = {
-        file.set_len(base + upper as u64).map_err(WriteError::Io)?;
+        file.set_len(reserve_end).map_err(WriteError::Io)?;
         Some(unsafe { memmap2::MmapMut::map_mut(&*file).map_err(WriteError::Io)? })
     };
     let dest_base = map
@@ -1754,6 +1828,7 @@ fn stream_coord_rows(
         .map(|_| std::sync::atomic::AtomicU64::new(0))
         .collect();
     let bad_ids = std::sync::atomic::AtomicBool::new(false);
+    let failed = std::sync::atomic::AtomicBool::new(false);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let produced = std::sync::atomic::AtomicUsize::new(0);
     let copies: std::sync::Mutex<Vec<(Vec<u8>, usize)>> = std::sync::Mutex::new(Vec::new());
@@ -1810,6 +1885,7 @@ fn stream_coord_rows(
             let copies = &copies;
             let ready = &ready;
             let produced = &produced;
+            let failed = &failed;
             formatters.push(scope.spawn(move || -> Result<(), WriteError> {
                 crate::parser::pin_worker(worker);
                 let mut ryu = ryu::Buffer::new();
@@ -1851,7 +1927,12 @@ fn stream_coord_rows(
                         );
                     }
                     let n = coord.len();
-                    if n > group.len().saturating_mul(128) {
+                    if n > group.len().saturating_mul(line_budget) {
+                        // Publish a zero length so a later range stops waiting,
+                        // and do it after the failure flag so that range does
+                        // not copy at the dummy offset.
+                        failed.store(true, std::sync::atomic::Ordering::Release);
+                        lengths[index].store(1, std::sync::atomic::Ordering::Release);
                         return Err(WriteError::Io(io::Error::other(
                             "coordinate line exceeded the mapped reserve",
                         )));
@@ -1860,8 +1941,18 @@ fn stream_coord_rows(
                     let mut offset = 0usize;
                     for prev in 0..index {
                         loop {
+                            if failed.load(std::sync::atomic::Ordering::Acquire) {
+                                return Err(WriteError::Io(io::Error::other(
+                                    "coordinate line exceeded the mapped reserve",
+                                )));
+                            }
                             let known = lengths[prev].load(std::sync::atomic::Ordering::Acquire);
                             if known != 0 {
+                                if failed.load(std::sync::atomic::Ordering::Acquire) {
+                                    return Err(WriteError::Io(io::Error::other(
+                                        "coordinate line exceeded the mapped reserve",
+                                    )));
+                                }
                                 offset += (known - 1) as usize;
                                 break;
                             }
@@ -1894,12 +1985,16 @@ fn stream_coord_rows(
                 Ok(())
             }));
         }
-        for handle in formatters {
-            handle
-                .join()
-                .unwrap_or_else(|_| Err(WriteError::Io(io::Error::other("formatter panicked"))))?;
-        }
-        // Every range has been queued. Wake copiers waiting on an empty queue.
+        let formatted = (|| -> Result<(), WriteError> {
+            for handle in formatters {
+                handle.join().unwrap_or_else(|_| {
+                    Err(WriteError::Io(io::Error::other("formatter panicked")))
+                })?;
+            }
+            Ok(())
+        })();
+        // A formatter that returns early must still wake copiers blocked on
+        // an empty queue. Otherwise the scope waits for them forever.
         produced.store(nparts, std::sync::atomic::Ordering::Release);
         ready.notify_all();
         for handle in copiers {
@@ -1907,6 +2002,7 @@ fn stream_coord_rows(
                 .join()
                 .map_err(|_| WriteError::Io(io::Error::other("copy panicked")))?;
         }
+        formatted?;
         Ok(())
     })?;
     let mut cursor = 0u64;
@@ -2193,6 +2289,46 @@ pub fn write_frames_to_vec_with_threads(
 /// Each worker formats a contiguous run. A prefix sum of those lengths
 /// is the file offset, and each run is written with `pwrite` at that
 /// offset. The bytes match [`write_frame_refs_with_threads`].
+fn temporary_sibling(path: &Path) -> io::Result<(std::path::PathBuf, File)> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        _ => std::path::PathBuf::from("."),
+    };
+    let tmp = dir.join(format!(
+        ".readcon-write-{}-{}.tmp",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&tmp)?;
+    Ok((tmp, file))
+}
+
+fn commit_temporary(
+    tmp: &Path,
+    dest: &Path,
+    result: Result<(), WriteError>,
+) -> Result<(), WriteError> {
+    match result {
+        Ok(()) => match std::fs::rename(tmp, dest) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                let _ = std::fs::remove_file(tmp);
+                Err(WriteError::Io(err))
+            }
+        },
+        Err(err) => {
+            let _ = std::fs::remove_file(tmp);
+            Err(err)
+        }
+    }
+}
+
 pub fn write_frame_refs_to_path(
     path: &std::path::Path,
     frames: &[&ConFrame],
@@ -2211,22 +2347,17 @@ pub fn write_frame_refs_to_path(
         }
         .canonical(canonical)
         .parallel_atoms(workers);
-        // Read-write so a tmpfs destination can be mapped. Page cache
-        // still uses `pwrite` on this handle.
-        writer.stream_file = Some(
-            OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(path)
-                .map_err(WriteError::Io)?,
-        );
-        return if bind {
+        // Replace the destination only after the frame is complete. Opening
+        // it first destroyed a file the serial writer would have left alone.
+        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        writer.stream_file = Some(file);
+        let result = if bind {
             writer.write_frame_bound(frames[0])
         } else {
             writer.write_frame(frames[0])
         };
+        drop(writer);
+        return commit_temporary(&tmp, path, result);
     }
     let parts = formatted_parts(frames, workers, precision, canonical, bind)?;
     if parts.len() == 1 {
@@ -2278,7 +2409,8 @@ fn pipeline_frame_groups(
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
     let format_threads = workers.saturating_sub(1).max(1);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
-    std::thread::scope(|scope| {
+    let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+    let result = std::thread::scope(|scope| {
         for _ in 0..format_threads {
             let tx = tx.clone();
             let pieces = &pieces;
@@ -2297,7 +2429,7 @@ fn pipeline_frame_groups(
             });
         }
         drop(tx);
-        let mut file = File::create(path).map_err(WriteError::Io)?;
+        let mut file = file;
         let mut next = 0usize;
         let mut pending = BTreeMap::<usize, Vec<u8>>::new();
         while next < pieces.len() {
@@ -2312,7 +2444,8 @@ fn pipeline_frame_groups(
         }
         file.flush().map_err(WriteError::Io)?;
         Ok(())
-    })
+    });
+    commit_temporary(&tmp, path, result)
 }
 
 fn write_group<W: Write>(
@@ -2965,5 +3098,177 @@ mod parallel_write_tests {
                 assert_eq!(got, serial, "n={n} workers={workers}");
             }
         }
+    }
+
+    fn copper_frame(
+        n: usize,
+        symbol: &str,
+        mass: f64,
+        id_at: impl Fn(usize) -> u64,
+    ) -> crate::types::ConFrame {
+        use crate::types::ConFrameBuilder;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for i in 0..n {
+            builder.add_atom(
+                symbol,
+                i as f64 * 0.125,
+                0.25,
+                0.5,
+                [false, false, false],
+                id_at(i),
+                mass,
+            );
+        }
+        builder.build().expect("frame")
+    }
+
+    #[test]
+    fn parallel_write_rejects_an_id_repeated_in_another_type() {
+        use crate::types::ConFrameBuilder;
+        let n = 4096usize;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for i in 0..n {
+            builder.add_atom(
+                "Cu",
+                i as f64 * 0.125,
+                0.25,
+                0.5,
+                [false, false, false],
+                i as u64,
+                63.546,
+            );
+        }
+        for i in 0..n {
+            builder.add_atom(
+                "H",
+                i as f64 * 0.125,
+                1.5,
+                0.5,
+                [false, false, false],
+                i as u64,
+                1.008,
+            );
+        }
+        let frame = builder.build().expect("frame");
+        let serial = write_frames_to_vec(std::slice::from_ref(&frame));
+        let parallel =
+            write_frames_to_vec_with_threads(std::slice::from_ref(&frame), 4, None, false);
+        assert!(serial.is_err(), "serial writer accepted a repeated id");
+        assert!(parallel.is_err(), "parallel writer accepted a repeated id");
+        let path =
+            std::env::temp_dir().join(format!("readcon-repeat-id-{}.con", std::process::id()));
+        std::fs::write(&path, b"keep").unwrap();
+        let refs = [&frame];
+        let err = super::write_frame_refs_to_path(&path, &refs, 4, None, false, false);
+        assert!(err.is_err(), "path write accepted a repeated id");
+        assert_eq!(std::fs::read(&path).unwrap(), b"keep");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_failed_later_group_leaves_the_previous_file() {
+        let good = copper_frame(2, "Cu", 63.546, |i| i as u64);
+        let bad = copper_frame(2, "Cu", 63.546, |_| 0);
+        let path =
+            std::env::temp_dir().join(format!("readcon-group-fail-{}.con", std::process::id()));
+        std::fs::write(&path, b"keep").unwrap();
+        let refs = [&good, &bad];
+        let err = super::write_frame_refs_to_path(&path, &refs, 4, None, false, false);
+        assert!(err.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"keep");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn mapped_decimal_lines_match_the_serial_writer() {
+        let frame = copper_frame(64, "Cu", 63.546, |i| i as u64);
+        let frames = [frame];
+        let serial = write_frames_to_vec_with_threads(&frames, 1, Some(40), false).unwrap();
+        let path =
+            std::env::temp_dir().join(format!("readcon-long-line-{}.con", std::process::id()));
+        let mut writer = super::ConFrameWriter::with_precision(Vec::<u8>::new(), 40)
+            .parallel_atoms(4)
+            .map_rows(true);
+        writer.stream_file = Some(
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .unwrap(),
+        );
+        writer.write_frame(&frames[0]).unwrap();
+        drop(writer);
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
+    }
+
+    #[test]
+    fn a_rejected_spread_does_not_keep_the_reserved_file() {
+        use crate::types::ConFrameBuilder;
+        let n = 4096usize;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for i in 0..n {
+            builder.add_atom(
+                "Cu",
+                i as f64 * 0.125,
+                0.25,
+                0.5,
+                [false, false, false],
+                i as u64,
+                63.546,
+            );
+        }
+        builder.with_spread([0.0, 0.0, 0.0]);
+        let mut frame = builder.build().expect("frame");
+        frame.atom_data[0].set_spread(Some([-1.0, 0.0, 0.0]));
+        let path =
+            std::env::temp_dir().join(format!("readcon-spread-fail-{}.con", std::process::id()));
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        let mut writer = super::ConFrameWriter::new(Vec::<u8>::new())
+            .parallel_atoms(4)
+            .map_rows(true)
+            .mapped_file(file);
+        let err = writer.write_frame(&frame);
+        drop(writer);
+        assert!(err.is_err());
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn overlapped_pwrite_does_not_keep_bytes_past_the_frame() {
+        use std::io::{Seek, Write};
+        let frame = copper_frame(4096, "Cu", 63.546, |i| i as u64);
+        let serial = write_frames_to_vec(std::slice::from_ref(&frame)).unwrap();
+        let path = std::env::current_dir()
+            .unwrap()
+            .join(format!("readcon-pwrite-tail-{}.con", std::process::id()));
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        file.write_all(&vec![b'Z'; serial.len() + 64]).unwrap();
+        file.seek(std::io::SeekFrom::Start(0)).unwrap();
+        let workers = super::physical_cores().max(2);
+        let mut writer = super::ConFrameWriter::new(Vec::<u8>::new())
+            .parallel_atoms(workers)
+            .mapped_file(file);
+        writer.write_frame(&frame).unwrap();
+        drop(writer);
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
     }
 }
