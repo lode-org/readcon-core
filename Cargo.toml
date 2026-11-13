@@ -122,9 +122,10 @@ pest_derive = "2.8"
 cog = "0.1.0"
 criterion = { version = "0.6.0", features = ["html_reports"] }
 jsonschema = { version = "0.46.9", default-features = false }
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 tempfile = "3"
 
-[target.'cfg(target_os = "linux")'.dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
 
 [[example]]

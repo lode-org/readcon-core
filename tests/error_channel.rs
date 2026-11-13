@@ -427,25 +427,23 @@ fn located_parallel_policy_reads_an_empty_buffer_and_a_long_file() {
 
 #[cfg(feature = "parallel")]
 #[test]
-fn parallel_blank_chunk_is_an_incomplete_frame() {
-    let err = frames_from_text_located(" \n", Some(2)).unwrap_err();
-    assert_eq!(err.error.class_name(), "IncompleteFrame");
-    assert_eq!(err.frame_index, 0);
-    assert_eq!(err.line, 1, "{err}");
-
-    // The parallel slot list matches the serial iterator: ASCII whitespace
-    // is not a frame. The located reader above still reports the failure.
+fn parallel_blank_chunk_is_not_a_frame() {
+    // The located reader, the slot list, and the sequential iterator agree:
+    // a whitespace tail is not a frame (CON-frame.1). `str::trim` removes a
+    // non-breaking space, so that tail is not a chunk either.
+    assert!(frames_from_text_located(" \n", Some(2))
+        .unwrap()
+        .is_empty());
     let parts = readcon_core::iterators::parse_frames_parallel(" \n");
     assert!(parts.is_empty());
+    assert!(frames_from_bytes("\u{00A0}\n".as_bytes(), Some(2))
+        .unwrap()
+        .is_empty());
 
-    // A truncated header stops the byte scanner on the error. A non-breaking
-    // space is not ASCII whitespace, so it is still a chunk, and the parser
-    // then reports that the chunk holds no frame.
+    // A truncated header starts with a graphic byte, so the scan keeps it
+    // and the parser reports the short header.
     let err = frames_from_bytes(b"seed\n", Some(2)).unwrap_err();
     assert_eq!(err.class_name(), "IncompleteHeader");
-    let blank = "\u{00A0}\n";
-    let err = frames_from_bytes(blank.as_bytes(), Some(2)).unwrap_err();
-    assert_eq!(err.class_name(), "IncompleteFrame");
 }
 
 #[cfg(feature = "parallel")]

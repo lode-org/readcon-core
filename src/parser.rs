@@ -135,7 +135,13 @@ fn section_follows<'a>(lines: &mut impl LineStream<'a>) -> bool {
     line_has_component_label(label)
 }
 
-/// Hot-path: parse up to 5 whitespace-separated f64s into a stack buffer.
+/// Length of the stack buffer of [`parse_line_of_range_f64_stack`]: the most
+/// columns an atom line has, which are x, y, z, the flag and the optional id
+/// (spec "Coordinates").
+pub const NUMERIC_STACK_WIDTH: usize = COORD_ROW_MIN_COLUMNS + 1;
+
+/// Hot-path: parse up to [`NUMERIC_STACK_WIDTH`] whitespace-separated f64s
+/// into a stack buffer.
 /// Returns count of tokens actually present (before padding).
 /// Pads `out[found..max]` from `defaults` when `found < max` and `found >= min`.
 ///
@@ -149,9 +155,9 @@ pub fn parse_line_of_range_f64_stack(
     min: usize,
     max: usize,
     defaults: &[f64],
-    out: &mut [f64; 5],
+    out: &mut [f64; NUMERIC_STACK_WIDTH],
 ) -> Result<usize, ParseError> {
-    debug_assert!(max <= 5 && min <= max && defaults.len() >= max);
+    debug_assert!(max <= NUMERIC_STACK_WIDTH && min <= max && defaults.len() >= max);
     let bytes = line.as_bytes();
     let n = bytes.len();
     let mut i = 0usize;
@@ -223,13 +229,13 @@ pub fn parse_line_of_range_f64_stack(
 /// * `line` - A string slice representing a single line of data.
 /// * `n` - The exact number of f64 values expected on the line.
 pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError> {
-    if n <= 5 {
-        let defaults = [0.0f64; 5];
-        let mut buf = [0.0f64; 5];
+    if n <= NUMERIC_STACK_WIDTH {
+        let defaults = [0.0f64; NUMERIC_STACK_WIDTH];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, n, n, &defaults, &mut buf)?;
         return Ok(buf[..n].to_vec());
     }
-    let mut values = Vec::with_capacity(n);
+    let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
     for token in line.split_ascii_whitespace() {
         values.push(parse_finite_float_token(token)?);
     }
@@ -248,15 +254,16 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
 /// padding with values from `defaults` when fewer than `max` are present.
 ///
 /// Used for atom lines where column 5 (atom_index) is optional.
-/// Prefer [`parse_line_of_range_f64_stack`] on the atom hot path (`max <= 5`).
+/// Prefer [`parse_line_of_range_f64_stack`] on the atom hot path
+/// (`max <= NUMERIC_STACK_WIDTH`).
 pub fn parse_line_of_range_f64(
     line: &str,
     min: usize,
     max: usize,
     defaults: &[f64],
 ) -> Result<Vec<f64>, ParseError> {
-    if max <= 5 {
-        let mut buf = [0.0f64; 5];
+    if max <= NUMERIC_STACK_WIDTH {
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, min, max, defaults, &mut buf)?;
         return Ok(buf[..max].to_vec());
     }
@@ -860,6 +867,14 @@ fn token_count(line: &str) -> usize {
     line.split_ascii_whitespace().count()
 }
 
+/// Most whitespace-separated tokens `line` can hold.
+///
+/// `k` tokens take at least one byte each and one separator between each
+/// pair, `2k - 1` bytes in all.
+fn max_tokens_on_line(line: &str) -> usize {
+    line.len().div_ceil(2)
+}
+
 fn json_u64(value: &Value) -> Option<u64> {
     value.as_u64()
 }
@@ -894,7 +909,7 @@ fn validate_section_arity_value(value: &Value) -> Result<(), ParseError> {
 /// is `InvalidCount` (CON-error.3). Zero is a legal token here. The caller
 /// rejects a per-type count of 0 when the type count is 1 or more (D4).
 pub(crate) fn parse_count_line(line: &str, n: usize) -> Result<Vec<usize>, ParseError> {
-    let mut values = Vec::with_capacity(n);
+    let mut values = Vec::with_capacity(n.min(max_tokens_on_line(line)));
     for token in line.split_ascii_whitespace() {
         if token.is_empty() || !token.bytes().all(|b| b.is_ascii_digit()) {
             return Err(ParseError::InvalidCount(format!(
@@ -1404,6 +1419,10 @@ pub fn parse_frame_header<'a>(
 /// (specifically the number of atom types and atoms per type) to parse the subsequent
 /// atom coordinate blocks.
 ///
+/// Each atom takes one line, so the atom vectors reserve no more rows than the
+/// upper bound of `lines.size_hint()`. With no upper bound, as for `str::lines`,
+/// they grow as the rows arrive.
+///
 /// # Arguments
 ///
 /// * `lines` - A mutable reference to an iterator that yields string slices for the frame.
@@ -1452,7 +1471,8 @@ pub fn parse_single_frame<'a>(
     // The caller owns the iterator and may not be able to clone it. Section
     // detection, which needs a lookahead clone, runs later on a `LineStream`
     // that can probe (`MemchrLines`, or a `Peekable` whose source is `Clone`).
-    parse_single_frame_ls(&mut IterStream(lines))
+    let max_rows = lines.size_hint().1;
+    parse_single_frame_ls(&mut IterStream(lines), max_rows)
 }
 
 /// Iterator adapter so [`parse_single_frame`] can satisfy [`LineStream`]
@@ -1481,19 +1501,43 @@ where
     }
 }
 
+/// Columns every atom line has: x, y, z and the flag (spec "Coordinates",
+/// CON-num.9). The id column is optional (CON-id.9).
+const COORD_ROW_MIN_COLUMNS: usize = 4;
+
+/// Fewest bytes an atom line takes, as in `0 0 0 0`: one byte for each of
+/// the [`COORD_ROW_MIN_COLUMNS`] columns and one separator between each
+/// pair. Newlines and the symbol and label lines only add bytes, so `n`
+/// unread bytes hold at most `n / MIN_COORD_ROW_BYTES` atom lines.
+pub(crate) const MIN_COORD_ROW_BYTES: usize = 2 * COORD_ROW_MIN_COLUMNS - 1;
+
 /// Frame parse over a [`LineStream`].
 ///
 /// Coordinate rows go through [`LineStream::next_coord_row`] so the memchr
 /// cursor can fuse the newline scan with numeric parse. Positions, ids, and
 /// flags land in flat buffers; [`AtomDatum`] values are built from those
 /// buffers afterwards (one `Vec` allocation, no per-atom heap traffic).
-pub(crate) fn parse_single_frame_ls<'a, L>(lines: &mut L) -> Result<ConFrame, ParseError>
+///
+/// `max_rows` bounds the atom lines the rest of the input can hold, and is
+/// `None` when that is unknown. The buffers reserve no more atoms than it
+/// allows, so a header that declares more atoms than the input holds
+/// cannot force a large allocation. The declared counts still decide how
+/// many rows are read, and so which error is reported.
+pub(crate) fn parse_single_frame_ls<'a, L>(
+    lines: &mut L,
+    max_rows: Option<usize>,
+) -> Result<ConFrame, ParseError>
 where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
     let header = parse_frame_header(lines)?;
+    // A count the unread input can hold stays in this function, on the same
+    // reservation and `Arc` bump as before the bound existed. A count that
+    // cannot fit is a separate cold function so it does not shape this loop.
+    let Some(total_atoms) = fitting_atom_count(&header.natms_per_type, max_rows) else {
+        return parse_oversized_frame(lines, header, max_rows);
+    };
     let validate = header.strict_validation;
-    let total_atoms: usize = header.natms_per_type.iter().sum();
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
@@ -1533,6 +1577,82 @@ where
     } else {
         positions_other.expect("non-f64 positions allocated")
     };
+    Ok(crate::types::con_frame_coords_only_with_ids(
+        header, atom_data, positions, ids,
+    ))
+}
+
+/// Atom total when it can use [`Vec::with_capacity`] safely.
+///
+/// `None` means the counts wrap, exceed `isize::MAX / 4`, or exceed the
+/// unread atom lines. A `u32::MAX` count with no size hint is `None`: that
+/// reservation is tens of GiB.
+#[inline]
+fn fitting_atom_count(counts: &[usize], max_rows: Option<usize>) -> Option<usize> {
+    let mut total = 0usize;
+    for &count in counts {
+        total = total.checked_add(count)?;
+    }
+    if total > (isize::MAX as usize) / 4 {
+        return None;
+    }
+    match max_rows {
+        Some(rows) if total > rows => None,
+        None if total > (1 << 20) => None,
+        _ => Some(total),
+    }
+}
+
+/// A header declared more atoms than the rest of the input can hold.
+///
+/// Reservations stay within `max_rows`. Rows are still read up to the
+/// declared count, so a short file is `IncompleteFrame`.
+#[cold]
+#[inline(never)]
+fn parse_oversized_frame<'a, L>(
+    lines: &mut L,
+    header: FrameHeader,
+    max_rows: Option<usize>,
+) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
+    let validate = header.strict_validation;
+    let total_atoms = header
+        .natms_per_type
+        .iter()
+        .fold(0usize, |sum, &n| sum.saturating_add(n));
+    let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
+    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let mut pos_flat = Vec::new();
+    let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
+    let mut ids = Vec::new();
+    let _ = ids.try_reserve_exact(reserve_atoms);
+    let mut atom_data: Vec<AtomDatum> = Vec::new();
+    let _ = atom_data.try_reserve_exact(reserve_atoms);
+
+    let mut global_atom_idx: u64 = 0;
+    for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let symbol: Arc<str> = Arc::from(symbol_line.trim());
+        let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        if validate {
+            validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
+        }
+        global_atom_idx = ingest_coord_rows_cloned(
+            lines,
+            *num_atoms,
+            header.spec_version,
+            global_atom_idx,
+            &symbol,
+            &mut pos_flat,
+            &mut ids,
+            &mut atom_data,
+        )?;
+    }
+    let mut positions = FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat);
+    positions.project_to(dt.positions);
     Ok(crate::types::con_frame_coords_only_with_ids(
         header, atom_data, positions, ids,
     ))
@@ -1623,6 +1743,37 @@ where
         ids.push(atom_id);
         atom_data.push(AtomDatum::coords(
             sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+/// Coordinate rows when the declared count must not bump an `Arc` by `n`.
+fn ingest_coord_rows_cloned<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            Arc::clone(symbol),
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            fixed,
+            atom_id,
         ));
         global_atom_idx += 1;
     }
@@ -3357,7 +3508,7 @@ Coordinates of Component 1
         // Typical CON atom line: x y z fixed_mask [atom_id]
         let line = "   0.63939999999999997    0.90449999999999997   -0.00009999999999977 1    0";
         let defaults = [0.0, 0.0, 0.0, 0.0, 99.0];
-        let mut buf = [0.0f64; 5];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         let n = parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
         assert_eq!(n, 5);
         assert!((buf[0] - 0.6394).abs() < 1e-4);
@@ -3376,7 +3527,7 @@ Coordinates of Component 1
     fn test_parse_line_of_range_f64_stack_matches_vec_api() {
         let defaults = [0.0, 0.0, 0.0, 0.0, 7.0];
         let line = "1.0 2.0 3.0 0.0";
-        let mut buf = [0.0f64; 5];
+        let mut buf = [0.0f64; NUMERIC_STACK_WIDTH];
         parse_line_of_range_f64_stack(line, 4, 5, &defaults, &mut buf).unwrap();
         let via_vec = parse_line_of_range_f64(line, 4, 5, &defaults).unwrap();
         assert_eq!(&buf[..5], via_vec.as_slice());
@@ -3427,5 +3578,49 @@ Coordinates of Component 1
         assert_eq!(frame.atom_data[1].atom_id, 1);
         assert_eq!(frame.atom_data[2].atom_id, 2);
         assert!(frame.atom_data[2].is_fixed());
+    }
+
+    #[test]
+    fn test_positions_take_the_storage_dtype_of_the_metadata() {
+        use crate::storage_dtype::{ElementKind, FloatArray2};
+        let rows = [[0.5, -1.25, 3.0], [1.0e-3, 2.5e4, -7.75]];
+        let atom_lines: Vec<String> = rows
+            .iter()
+            .enumerate()
+            .map(|(id, [x, y, z])| format!("{x} {y} {z} 0 {id}"))
+            .collect();
+        for &kind in ElementKind::all_hosted() {
+            let metadata = format!(
+                "{{\"con_spec_version\":3,\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\
+                 \"storage_dtypes\":{{\"positions\":\"{}\"}}}}",
+                kind.as_str()
+            );
+            let mut lines = vec![
+                "PREBOX1",
+                metadata.as_str(),
+                "10.0 10.0 10.0",
+                "90.0 90.0 90.0",
+                "POSTBOX1",
+                "POSTBOX2",
+                "1",
+                "2",
+                "1.008",
+                "H",
+                "Coordinates of Component 1",
+            ];
+            lines.extend(atom_lines.iter().map(String::as_str));
+            let frame = parse_single_frame(&mut lines.iter().copied()).unwrap();
+            assert_eq!(frame.positions.kind(), kind);
+            assert_eq!(frame.positions.nrows(), rows.len());
+            for (i, &xyz) in rows.iter().enumerate() {
+                let mut expected = FloatArray2::zeros(kind, 1, 3);
+                expected.set_f64_row(0, xyz);
+                assert_eq!(
+                    frame.positions.as_f64_row(i),
+                    expected.as_f64_row(0),
+                    "{kind:?} row {i}"
+                );
+            }
+        }
     }
 }

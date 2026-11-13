@@ -28,17 +28,17 @@ import sys
 from pathlib import Path
 
 version = sys.argv[1]
-path = Path("Cargo.lock")
-text = path.read_text(encoding="utf-8")
-updated, count = re.subn(
-    r'(name = "readcon-core"\nversion = ")[^"]+(")',
-    rf"\g<1>{version}\2",
-    text,
-    count=1,
-)
-if count != 1:
-    raise SystemExit("Cargo.lock is missing the readcon-core package entry")
-path.write_text(updated, encoding="utf-8")
+for path in (Path("Cargo.lock"), Path("fuzz/Cargo.lock")):
+    text = path.read_text(encoding="utf-8")
+    updated, count = re.subn(
+        r'(name = "readcon-core"\nversion = ")[^"]+(")',
+        rf"\g<1>{version}\2",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise SystemExit(f"{path} is missing the readcon-core package entry")
+    path.write_text(updated, encoding="utf-8")
 PY
 
 echo "bump-version: VERSION is ${VER}"

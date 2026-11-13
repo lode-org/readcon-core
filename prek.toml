@@ -13,6 +13,7 @@ exclude = """(?x)(
     ^docs/notebooks/|
     ^fortran/.*/build/|
     ^benches/|
+    ^fuzz/corpus/|
     ^resources/test/|
     ^.*\\.svg$|
     ^.*\\.lock$
