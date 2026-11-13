@@ -27,7 +27,10 @@ from pathlib import Path
 
 import numpy as np
 
-import touch_fold
+try:
+    from . import touch_fold
+except ImportError:
+    import touch_fold
 
 REPEATS = 6
 FOLD = None
