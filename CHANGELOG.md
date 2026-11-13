@@ -22,6 +22,52 @@ All notable changes to this project will be documented in this file. See [conven
   symbols. `species.ids()` is the `(frames, atoms)` id array. A row supports
   len, index, iteration, slicing, equality with a tuple or a list, pickling,
   and hashing. A shorter frame is still a tuple.
+- Compressed CON and extended XYZ read and write gzip (`.gz`) and zstd
+  (`.zst`). A wide file is split into independent members with an index, so a
+  read inflates those members together. `ConFrameReader` streams a compressed
+  file one frame at a time. The default Python wheel is built with the `zstd`
+  feature. A source build without it raises `ValueError` and names `zstd`.
+- `write_columns` writes a coordinate block from column arrays. C++ and
+  Fortran `read_positions` return that block without building a frame per row.
+- The ASE plugin registers `readcon-con` and `readcon-convel` on the
+  `ase.ioformats` entry point. `ase.io.read` and `ase.io.write` use those
+  names.
+- Head-to-head benches time CON and extended XYZ, including the compressed
+  files, against ASE, chemfiles, MDAnalysis, and OVITO on the same atoms and
+  cell.
+
+### Bugfixes
+
+- A streaming write no longer keeps a parsed metadata map on every frame.
+  Lattice lookups share a four-entry thread-local cache of the metadata line.
+  A repeated lookup of the same line does not reparse, and a long trajectory
+  does not retain one map per frame. Each thread has its own cache.
+- A gzip or zstd member index that overflows, skips an atom, or is shorter
+  than the file claims is rejected. The reader returns the parse error instead
+  of panicking or reading past the buffer.
+- Reused inflate and atom buffers stay inside their allocation. A reused
+  buffer is cleared before it is grown, because `reserve` grows past the
+  current length.
+- A header that declares more types or atoms than the rest of the input can
+  hold returns `IncompleteFrame` or `InvalidVectorLength`. It does not reserve
+  that declared count up front. A frame skip returns the same error when the
+  declared atom count would overflow `usize`.
+- Positions stored in a dtype other than float64 are converted from the rows
+  that were read. The reader does not allocate the declared atom count before
+  the first row.
+- With two or more threads, a file that ends in whitespace returns the same
+  frames as one thread. A lone newline, a vertical tab, a form feed, or a
+  no-break space after the last frame does not open another frame.
+- A parsed frame compares equal to the frame that was built from the same
+  atoms. The column-tail arena is not part of that equality.
+- The bulk C reader test frees every frame `rkr_read_all_frames` returns.
+
+### Performance
+
+- `composition_formula` counts a repeated symbol without copying a string for
+  every atom.
+- Wide-frame compression uses the worker count the caller asked for, and at
+  most one deflate thread per CPU when the caller does not ask.
 
 
 ## v0.22.0 - 2026-11-12

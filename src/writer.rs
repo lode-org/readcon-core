@@ -3631,4 +3631,33 @@ Coordinates of Component 1
         assert_eq!(twin.header.lattice_vectors().unwrap()[0][0], 14.0);
         assert!(!twin.header.metadata.has_cached_map());
     }
+
+    /// Each thread keeps its own metadata-line cache. Concurrent lookups of
+    /// different lines must not observe another thread's lattice.
+    #[test]
+    fn lattice_lookups_from_several_threads_keep_their_own_lines() {
+        let frames: Vec<_> = (1..17)
+            .map(|side| {
+                let text = format!(
+                    "grid\n{{\"con_spec_version\":2,\"lattice_vectors\":[[{side},0,0],[0,{side},0],[0,0,{side}]]}}\n5 5 5\n90 90 90\n0 0\n0 0\n1\n1\n1.0\nCu\nCoordinates of Component 1\n0 0 0 0 1\n"
+                );
+                frames_from_text(&text, Some(1)).unwrap().remove(0)
+            })
+            .collect();
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    for _ in 0..8 {
+                        for (index, frame) in frames.iter().enumerate() {
+                            let side = 1.0 + index as f64;
+                            let vecs = frame.header.lattice_vectors().unwrap();
+                            assert_eq!(vecs[0][0], side);
+                            assert_eq!(vecs[1][1], side);
+                            assert_eq!(vecs[2][2], side);
+                        }
+                    }
+                });
+            }
+        });
+    }
 }
