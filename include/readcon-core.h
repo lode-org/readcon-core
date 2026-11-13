@@ -2214,6 +2214,21 @@ enum RKRStatus rkr_frame_metatensor_atom_energies_block(const struct RKRConFrame
 #endif
 
 /**
+ * Cell, angles, and which of velocities, forces, and energies are present.
+ * Does not allocate the atom table.
+ */
+typedef struct RKRFrameGeometry {
+    double cell[3];
+    double angles[3];
+    bool has_velocities;
+    bool has_forces;
+    bool has_energies;
+} RKRFrameGeometry;
+
+enum RKRStatus rkr_frame_geometry(const struct RKRConFrame *frame_handle,
+                                  struct RKRFrameGeometry *out);
+
+/**
  * Number of atoms on the frame (atom_data order).
  */
 uintptr_t rkr_frame_atom_count(const struct RKRConFrame *frame_handle);

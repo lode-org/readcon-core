@@ -1557,6 +1557,47 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
     });
     Box::into_raw(c_frame)
 }
+
+/// Cell, angles, and which of the three legacy sections are present.
+///
+/// This does not allocate the atom table. [`rkr_frame_to_c_frame`] still
+/// does, for callers that need every atom.
+#[repr(C)]
+pub struct RKRFrameGeometry {
+    pub cell: [f64; 3],
+    pub angles: [f64; 3],
+    pub has_velocities: bool,
+    pub has_forces: bool,
+    pub has_energies: bool,
+}
+
+/// Write [`RKRFrameGeometry`] for `frame_handle` into `out`.
+///
+/// # Safety
+/// `frame_handle` and `out` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_geometry(
+    frame_handle: *const RKRConFrame,
+    out: *mut RKRFrameGeometry,
+) -> RKRStatus {
+    if out.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let Some(frame) = (unsafe { (frame_handle as *const ConFrame).as_ref() }) else {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    };
+    unsafe {
+        *out = RKRFrameGeometry {
+            cell: frame.header.boxl,
+            angles: frame.header.angles,
+            has_velocities: frame.has_velocities(),
+            has_forces: frame.has_forces(),
+            has_energies: frame.has_energies(),
+        };
+    }
+    note(RKRStatus::RKR_STATUS_SUCCESS)
+}
+
 /// Frees the memory of a `CFrame` struct, including its internal atoms array.
 ///
 /// # Safety
@@ -7424,6 +7465,118 @@ Coordinates of Component 1
         assert!(!fr2.is_null());
         unsafe {
             free_rkr_frame(fr2);
+            free_con_frame_iterator(it2);
+        }
+    }
+
+    /// Map `text` as its own pages, open a string iterator, then deny all
+    /// access to those pages. The following read must use the iterator's copy.
+    fn protect_none_still_parses(text: &str) {
+        const PROT_NONE: i32 = 0;
+        const PROT_READ: i32 = 1;
+        const PROT_WRITE: i32 = 2;
+        const MAP_PRIVATE: i32 = 2;
+        const MAP_ANONYMOUS: i32 = 0x20;
+        unsafe extern "C" {
+            fn mmap(
+                addr: *mut u8,
+                len: usize,
+                prot: i32,
+                flags: i32,
+                fd: i32,
+                offset: i64,
+            ) -> *mut u8;
+            fn mprotect(addr: *mut u8, len: usize, prot: i32) -> i32;
+            fn munmap(addr: *mut u8, len: usize) -> i32;
+        }
+        let page = 4096usize;
+        let map_len = (text.len() + 1).div_ceil(page) * page;
+        let ptr = unsafe {
+            mmap(
+                std::ptr::null_mut(),
+                map_len,
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS,
+                -1,
+                0,
+            )
+        };
+        assert!(!ptr.is_null() && ptr != (-1isize as usize as *mut u8));
+        unsafe {
+            std::ptr::copy_nonoverlapping(text.as_ptr(), ptr, text.len());
+            *ptr.add(text.len()) = 0;
+        }
+        let it = unsafe { read_con_string_iterator(ptr as *const c_char) };
+        assert!(!it.is_null());
+        assert_eq!(unsafe { mprotect(ptr, map_len, PROT_NONE) }, 0);
+        let fr = unsafe { con_frame_iterator_next(it) };
+        assert!(!fr.is_null(), "iterator must not read the caller's pages");
+        let frame = unsafe { &*(fr as *const ConFrame) };
+        assert!(frame.atom_data.len() >= 1);
+        unsafe {
+            free_rkr_frame(fr);
+            free_con_frame_iterator(it);
+            mprotect(ptr, map_len, PROT_READ | PROT_WRITE);
+            munmap(ptr, map_len);
+        }
+    }
+
+    /// The string and buffer constructors copy. Overwriting or freeing the
+    /// caller's buffer immediately after open must still yield the same frames.
+    #[test]
+    fn string_and_buffer_iterators_keep_a_private_copy() {
+        let text =
+            std::fs::read_to_string("resources/test/tiny_cuh2.con").expect("fixture tiny_cuh2.con");
+        let expected: Vec<ConFrame> = ConFrameIterator::new(&text)
+            .map(|frame| frame.expect("fixture parses"))
+            .collect();
+        assert!(!expected.is_empty());
+
+        let mut raw = text.clone().into_bytes();
+        raw.push(0);
+        let it = unsafe { read_con_string_iterator(raw.as_ptr() as *const c_char) };
+        assert!(!it.is_null());
+        raw.fill(b'X');
+        drop(raw);
+        // A dedicated mapping made inaccessible after open. A borrowed
+        // iterator would fault on the next read; the owned copy does not.
+        protect_none_still_parses(&text);
+
+        let mut got = Vec::new();
+        loop {
+            let fr = unsafe { con_frame_iterator_next(it) };
+            if fr.is_null() {
+                break;
+            }
+            got.push(unsafe { *Box::from_raw(fr as *mut ConFrame) });
+        }
+        unsafe { free_con_frame_iterator(it) };
+        assert_eq!(got.len(), expected.len());
+        for (got_frame, expect_frame) in got.iter().zip(&expected) {
+            assert_eq!(got_frame.header.boxl, expect_frame.header.boxl);
+            assert_eq!(got_frame.header.angles, expect_frame.header.angles);
+            assert_eq!(got_frame.atom_data.len(), expect_frame.atom_data.len());
+            assert_eq!(
+                got_frame.atom_data[0].x.to_bits(),
+                expect_frame.atom_data[0].x.to_bits()
+            );
+        }
+
+        let mut bytes = text.into_bytes();
+        let it2 = unsafe { read_con_buffer_iterator(bytes.as_ptr(), bytes.len()) };
+        assert!(!it2.is_null());
+        bytes.fill(0);
+        let fr = unsafe { con_frame_iterator_next(it2) };
+        assert!(!fr.is_null());
+        let frame = unsafe { &*(fr as *const ConFrame) };
+        assert_eq!(frame.header.boxl, expected[0].header.boxl);
+        assert_eq!(frame.atom_data.len(), expected[0].atom_data.len());
+        assert_eq!(
+            frame.atom_data[0].x.to_bits(),
+            expected[0].atom_data[0].x.to_bits()
+        );
+        unsafe {
+            free_rkr_frame(fr);
             free_con_frame_iterator(it2);
         }
     }

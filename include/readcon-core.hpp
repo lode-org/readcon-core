@@ -598,11 +598,17 @@ class ConFrame {
         }
     };
     explicit ConFrame(RKRConFrame *frame_handle);
+    /// Replace the owned handle. Used by the iterator so `operator++`
+    /// does not allocate a new frame holder.
+    void adopt_handle(RKRConFrame *next);
     std::unique_ptr<RKRConFrame, FrameDeleter> frame_handle_;
 
     // --- Caching Implementation ---
-    void cache_data() const;
-    mutable bool is_cached_ = false;
+    // bit 0 geometry, bit 1 atoms, bit 2 header strings.
+    void ensure_geometry() const;
+    void ensure_atoms() const;
+    void ensure_headers() const;
+    mutable uint8_t cache_bits_ = 0;
     mutable std::vector<Atom> atoms_cache_;
     mutable std::array<double, 3> cell_cache_;
     mutable std::array<double, 3> angles_cache_;
@@ -1378,11 +1384,15 @@ inline ConFrameIterator::Iterator::Iterator(CConFrameIterator *iterator_ptr)
 
 inline void ConFrameIterator::Iterator::fetch_next_frame() {
     RKRConFrame *frame_handle = con_frame_iterator_next(iterator_ptr_);
-    if (frame_handle) {
-        current_frame_ = std::unique_ptr<ConFrame>(new ConFrame(frame_handle));
-    } else {
-        current_frame_ = nullptr;
+    if (!frame_handle) {
+        current_frame_.reset();
+        return;
     }
+    if (!current_frame_) {
+        current_frame_.reset(new ConFrame(frame_handle));
+        return;
+    }
+    current_frame_->adopt_handle(frame_handle);
 }
 
 inline ConFrame &ConFrameIterator::Iterator::operator*() {
@@ -1401,24 +1411,62 @@ inline ConFrameIterator::Iterator &ConFrameIterator::Iterator::operator++() {
 inline ConFrame::ConFrame(RKRConFrame *frame_handle)
     : frame_handle_(frame_handle) {}
 
-inline void ConFrame::cache_data() const {
-    if (is_cached_) {
-        return;
-    }
+inline void ConFrame::adopt_handle(RKRConFrame *next) {
+    frame_handle_.reset(next);
+    cache_bits_ = 0;
+    atoms_cache_.clear();
+}
 
-    // Extract the C-struct once for numeric data.
+inline void ConFrame::ensure_geometry() const {
+    if (cache_bits_ & 1)
+        return;
+    RKRFrameGeometry geometry{};
+    throw_on_error(rkr_frame_geometry(frame_handle_.get(), &geometry),
+                   "rkr_frame_geometry");
+    cell_cache_ = {geometry.cell[0], geometry.cell[1], geometry.cell[2]};
+    angles_cache_ = {geometry.angles[0], geometry.angles[1], geometry.angles[2]};
+    has_velocities_cache_ = geometry.has_velocities;
+    has_forces_cache_ = geometry.has_forces;
+    has_energies_cache_ = geometry.has_energies;
+    cache_bits_ |= 1;
+}
+
+inline void ConFrame::ensure_headers() const {
+    if (cache_bits_ & 4)
+        return;
+    auto get_and_free_string =
+        [frame_handle = frame_handle_.get()](bool is_prebox, size_t index) {
+            char *c_str =
+                rkr_frame_get_header_line_cpp(frame_handle, is_prebox, index);
+            if (!c_str) {
+                return std::string();
+            }
+            std::string result(c_str);
+            rkr_free_string(c_str);
+            return result;
+        };
+    prebox_header_cache_[0] = get_and_free_string(true, 0);
+    prebox_header_cache_[1] = get_and_free_string(true, 1);
+    postbox_header_cache_[0] = get_and_free_string(false, 0);
+    postbox_header_cache_[1] = get_and_free_string(false, 1);
+    cache_bits_ |= 4;
+}
+
+inline void ConFrame::ensure_atoms() const {
+    if (cache_bits_ & 2)
+        return;
+
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
     if (!c_frame) {
         throw Error::from_last("Failed to extract CFrame from handle for caching.");
     }
 
     cell_cache_ = {c_frame->cell[0], c_frame->cell[1], c_frame->cell[2]};
-    angles_cache_ = {c_frame->angles[0], c_frame->angles[1],
-                     c_frame->angles[2]};
-
+    angles_cache_ = {c_frame->angles[0], c_frame->angles[1], c_frame->angles[2]};
     has_velocities_cache_ = c_frame->has_velocities;
     has_forces_cache_ = c_frame->has_forces;
     has_energies_cache_ = c_frame->has_energies;
+    cache_bits_ |= 1;
 
     atoms_cache_.reserve(c_frame->num_atoms);
     // The legacy Atom fields (vx/vy/vz, fx/fy/fz, has_velocity,
@@ -1446,62 +1494,41 @@ inline void ConFrame::cache_data() const {
 #endif
 
     free_c_frame(c_frame);
-
-    // Cache headers using the flexible FFI that allocates and frees
-    // strings. This helper lambda makes the code cleaner and ensures memory is
-    // always freed.
-    auto get_and_free_string =
-        [frame_handle = frame_handle_.get()](bool is_prebox, size_t index) {
-            char *c_str =
-                rkr_frame_get_header_line_cpp(frame_handle, is_prebox, index);
-            if (!c_str) {
-                return std::string();
-            }
-            std::string result(c_str);
-            rkr_free_string(c_str);
-            return result;
-        };
-
-    prebox_header_cache_[0] = get_and_free_string(true, 0);
-    prebox_header_cache_[1] = get_and_free_string(true, 1);
-    postbox_header_cache_[0] = get_and_free_string(false, 0);
-    postbox_header_cache_[1] = get_and_free_string(false, 1);
-
-    is_cached_ = true;
+    cache_bits_ |= 2;
 }
 
 inline const std::array<double, 3> &ConFrame::cell() const {
-    cache_data();
+    ensure_geometry();
     return cell_cache_;
 }
 
 inline const std::array<double, 3> &ConFrame::angles() const {
-    cache_data();
+    ensure_geometry();
     return angles_cache_;
 }
 
 inline const std::vector<Atom> &ConFrame::atoms() const {
-    cache_data();
+    ensure_atoms();
     return atoms_cache_;
 }
 
 inline const std::array<std::string, 2> &ConFrame::prebox_header() const {
-    cache_data();
+    ensure_headers();
     return prebox_header_cache_;
 }
 
 inline const std::array<std::string, 2> &ConFrame::postbox_header() const {
-    cache_data();
+    ensure_headers();
     return postbox_header_cache_;
 }
 
 inline bool ConFrame::has_velocities() const {
-    cache_data();
+    ensure_geometry();
     return has_velocities_cache_;
 }
 
 inline bool ConFrame::has_forces() const {
-    cache_data();
+    ensure_geometry();
     return has_forces_cache_;
 }
 
@@ -1514,7 +1541,7 @@ inline bool ConFrame::has_spreads() const {
 }
 
 inline bool ConFrame::has_energies() const {
-    cache_data();
+    ensure_geometry();
     return has_energies_cache_;
 }
 
