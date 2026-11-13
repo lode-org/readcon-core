@@ -232,6 +232,32 @@ fn byte_frames_ignore_trailing_whitespace_with_parallel_workers() {
     }
 }
 
+#[test]
+fn invalid_utf8_in_header_symbol_and_coordinate_is_the_same_error() {
+    fn corrupt(line: &str) -> Vec<u8> {
+        corrupt_unique_line(FRAME, line)
+    }
+    let cases = [
+        corrupt("seed"),
+        corrupt("{\"con_spec_version\":2}"),
+        corrupt("H"),
+        corrupt("Coordinates of Component 1"),
+        corrupt("1.25 -2.5 3.75 0 42"),
+    ];
+    for bytes in cases {
+        for workers in [Some(1), Some(2), Some(4)] {
+            assert_invalid_utf8(
+                &frames_from_bytes(&bytes, workers).expect_err("invalid UTF-8 must not succeed"),
+            );
+        }
+        let err = ConFrameIterator::from_bytes(&bytes)
+            .next()
+            .expect("invalid UTF-8 is an item")
+            .expect_err("invalid UTF-8 must fail");
+        assert_invalid_utf8(&err);
+    }
+}
+
 fn assert_invalid_utf8(err: &ParseError) {
     assert!(
         matches!(err, ParseError::ValidationError(message) if message == "invalid UTF-8"),
