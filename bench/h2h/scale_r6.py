@@ -201,7 +201,7 @@ def drop_file(path: Path) -> None:
 
 
 def ensure_inputs() -> dict[str, Path]:
-    folder = WORK / "r6"
+    folder = WORK / "thread-reads"
     folder.mkdir(parents=True, exist_ok=True)
     paths = {
         "con-100k": WORK / "parallel-frames" / "frames-32x100000.con",
@@ -307,10 +307,10 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
     # writeback.
     for sinks in (
         (
-            ("disk", WORK / "r6" / "disk", False),
+            ("disk", WORK / "thread-reads" / "disk", False),
             ("memory", Path("/dev/shm/r6"), False),
         ),
-        (("disk_sync", WORK / "r6" / "disk-sync", True),),
+        (("disk_sync", WORK / "thread-reads" / "disk-sync", True),),
     ):
         for name, path in paths.items():
             for sink, dest_root, sync in sinks:
@@ -411,7 +411,7 @@ def hardware(rows: list[dict]) -> None:
             check=True,
         )
     stream = subprocess.check_output([str(stream_bin)], text=True, cwd=ROOT)
-    disk = WORK / "r6" / "disk-ceiling.bin"
+    disk = WORK / "thread-reads" / "disk-ceiling.bin"
     disk.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "dd",
@@ -461,7 +461,7 @@ def langs(paths: dict[str, Path]) -> None:
     c_bin = WORK / "time_c"
     f_bin = WORK / "time_f"
     cpp_bin = WORK / "time_cpp"
-    out = WORK / "r6" / "lang-out.con"
+    out = WORK / "thread-reads" / "lang-out.con"
     if c_bin.exists():
         for op in ("read", "write"):
             text = run([str(c_bin), op, str(con), str(out), str(REPEATS)])
@@ -575,7 +575,7 @@ def mpi_strong(paths: dict[str, Path], rows: list[dict]) -> None:
     binary = ROOT / "target" / "release" / "examples" / "strong_scale_mpi"
     if not binary.exists():
         return
-    sync_root = WORK / "r6" / "disk-sync"
+    sync_root = WORK / "thread-reads" / "disk-sync"
     sync_root.mkdir(parents=True, exist_ok=True)
     shm_root = Path("/dev/shm/r6")
     shm_root.mkdir(parents=True, exist_ok=True)
@@ -652,7 +652,7 @@ def weak(paths: dict[str, Path]) -> None:
     fixture = ROOT / "resources" / "test" / "cuh2.con"
     blob = fixture.read_bytes()
     per = 2000
-    big = WORK / "r6" / "weak-cuh2-x8.con"
+    big = WORK / "thread-reads" / "weak-cuh2-x8.con"
     if not big.exists():
         with big.open("wb") as handle:
             for _ in range(per * 8):
@@ -664,7 +664,7 @@ def weak(paths: dict[str, Path]) -> None:
         # The file has 8 * per frames, which is a multiple of 1, 2, 4 and 8.
         # That is strong-shaped for smaller rank counts, so build a file
         # whose frame count is per * ranks.
-        sized = WORK / "r6" / f"weak-cuh2-x{ranks}.con"
+        sized = WORK / "thread-reads" / f"weak-cuh2-x{ranks}.con"
         if not sized.exists():
             with sized.open("wb") as handle:
                 for _ in range(per * ranks):

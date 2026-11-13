@@ -1,7 +1,7 @@
 """Publication readers. timeout is 600 s. time_* is one call.
 
 The realistic files are the alloy frame and the changing-comment
-trajectory under bench/h2h/work/r6. cextxyz is extxyz.iread_dicts.
+trajectory under bench/h2h/work/thread-reads. cextxyz is extxyz.iread_dicts.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-R6 = ROOT / "bench" / "h2h" / "work" / "r6"
+R6 = ROOT / "bench" / "h2h" / "work" / "thread-reads"
 
 
 class RealisticExtxyz:

@@ -55,7 +55,7 @@
     }
   },
   "extxyz_alloy_read_in_memory": {
-    "path": "bench/h2h/work/r6/alloy-1e6.extxyz",
+    "path": "bench/h2h/work/thread-reads/alloy-1e6.extxyz",
     "bytes": 17700091,
     "note": "Rust tables only. Campaign serial read_extxyz is 0.060281 s; the gap is the Python species tuples, which this timer does not build.",
     "serial": {
@@ -69,7 +69,7 @@
     }
   },
   "extxyz_same_read_in_memory": {
-    "path": "bench/h2h/work/r6/atoms-1000000x1.extxyz",
+    "path": "bench/h2h/work/thread-reads/atoms-1000000x1.extxyz",
     "bytes": 61572357,
     "note": "One frame with vel, id, and fixed. The general parallel scanner used to leave that frame on one worker, which was slower than serial. The streaming scanner now splits the atoms. Eight workers stay faster than one. A repeat while 8-thread memchr was 0.0008 s instead of 0.0005 s measured parallel 0.023537 s against serial 0.090754 s.",
     "serial": {

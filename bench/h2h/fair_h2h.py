@@ -475,7 +475,7 @@ def run_eon_sample(op: str, cache: str, src: Path, dest: Path) -> dict:
 
 def interleaved(arms: list[dict], repeats: int, cache: str, path: Path, tag: str):
     """One fresh process per sample. Sample ``i`` rotates which arm is first."""
-    dump_dir = WORK / "r6" / "views"
+    dump_dir = WORK / "thread-reads" / "views"
     dump_dir.mkdir(parents=True, exist_ok=True)
     samples = {arm["name"]: [] for arm in arms}
     loads = {arm["name"]: [] for arm in arms}
@@ -1316,7 +1316,7 @@ def compare_con(views: dict[str, dict], expect_vel: bool) -> dict:
 
 
 def con_files(paths: dict[str, Path]) -> list[tuple[str, Path, bool]]:
-    folder = WORK / "r6"
+    folder = WORK / "thread-reads"
     folder.mkdir(parents=True, exist_ok=True)
     masked = folder / "con-h2h-mask.con"
     convel = folder / "con-h2h.convel"
@@ -1376,7 +1376,7 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                             "kind": "eon",
                             "compare": True,
                             "eon_op": "read",
-                            "dest": WORK / "r6" / f"eon-{name}-{cache}.dump",
+                            "dest": WORK / "thread-reads" / f"eon-{name}-{cache}.dump",
                         }
                     )
                 else:
@@ -1433,10 +1433,10 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
         # Writes are from memory. The destination is unlinked inside the
         # timed call. The source is the cold read, which is the last cache.
         source = views["readcon"]
-        columns_npz = WORK / "r6" / "views" / f"con-{name}-cold-readcon.npz"
+        columns_npz = WORK / "thread-reads" / "views" / f"con-{name}-cold-readcon.npz"
         write_arms = []
         for reader in readers:
-            dest = WORK / "r6" / f"write-{name}-{reader}{path.suffix}"
+            dest = WORK / "thread-reads" / f"write-{name}-{reader}{path.suffix}"
             if reader == "eon":
                 write_arms.append(
                     {
@@ -1461,7 +1461,7 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
         for order in orders:
             lines.append(f"order write {name} {' '.join(order)}")
         for reader in readers:
-            dest = WORK / "r6" / f"write-{name}-{reader}{path.suffix}"
+            dest = WORK / "thread-reads" / f"write-{name}-{reader}{path.suffix}"
             median, iqr = type7(samples[reader])
             check = read_con_readcon(os.fspath(dest), expect_vel)
             # ASE's writer rounds the cell to 6 decimals. The other writers

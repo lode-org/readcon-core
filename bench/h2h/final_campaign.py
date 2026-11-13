@@ -141,7 +141,7 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
     stream = subprocess.check_output([str(stream_bin)], text=True, cwd=ROOT)
     lscpu = subprocess.check_output(["lscpu"], text=True)
     nbytes = 256 * 1024 * 1024
-    disk = BENCH / "work" / "r6" / "disk-ceiling.bin"
+    disk = BENCH / "work" / "thread-reads" / "disk-ceiling.bin"
     disk.parent.mkdir(parents=True, exist_ok=True)
     dd = [
         "dd",
@@ -158,7 +158,7 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
         subprocess.run(dd, check=True)
 
     sync_median, sync_iqr, sync_samples = timed(sync_once, repeats)
-    pwrite_path = BENCH / "work" / "r6" / "pwrite-ceiling.bin"
+    pwrite_path = BENCH / "work" / "thread-reads" / "pwrite-ceiling.bin"
     chunk = b"\0" * (8 * 1024 * 1024)
 
     def pwrite_once() -> None:

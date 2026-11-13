@@ -4573,7 +4573,7 @@ Forces of Component 1
         if !cfg!(debug_assertions) {
             assert!(elapsed < 0.35, "convel parse {elapsed:.4} s");
         }
-        let real = std::path::Path::new("bench/h2h/work/r6/con-h2h.convel");
+        let real = std::path::Path::new("bench/h2h/work/thread-reads/con-h2h.convel");
         if let Ok(bytes) = std::fs::read(real) {
             let started = std::time::Instant::now();
             let frame = ConFrameIterator::from_bytes(&bytes)
