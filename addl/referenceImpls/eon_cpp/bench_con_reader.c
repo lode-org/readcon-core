@@ -5,7 +5,14 @@
  *
  * Build: cc -O2 -o bench_con_reader bench_con_reader.c -lm
  * Usage: ./bench_con_reader <file.con> [repeat]
+ *    or: ./bench_con_reader --dump <file.con>
+ *
+ * --dump prints "FRAME <frame> <atoms>" for each frame and then one
+ * "ATOM <frame> <atom> <symbol> <x> <y> <z> <fixed> <id>" line per atom.
+ * Coordinates carry DBL_DECIMAL_DIG significant digits, so each one reads
+ * back as the same double.
  */
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,9 +112,45 @@ static int read_frame(FILE *f, Frame *frame) {
     return 1;
 }
 
+static int dump_frames(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        perror("fopen");
+        return 1;
+    }
+    Frame frame;
+    int frame_idx = 0;
+    while (read_frame(f, &frame)) {
+        printf("FRAME %d %d\n", frame_idx, frame.n_atoms);
+        for (int atom_idx = 0; atom_idx < frame.n_atoms; atom_idx++) {
+            Atom *at = &frame.atoms[atom_idx];
+            printf(
+                "ATOM %d %d %s %.*g %.*g %.*g %d %ld\n",
+                frame_idx,
+                atom_idx,
+                at->symbol,
+                DBL_DECIMAL_DIG, at->x,
+                DBL_DECIMAL_DIG, at->y,
+                DBL_DECIMAL_DIG, at->z,
+                at->fixed,
+                at->atom_id
+            );
+        }
+        free(frame.atoms);
+        frame_idx++;
+    }
+    fclose(f);
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc >= 3 && strcmp(argv[1], "--dump") == 0) {
+        return dump_frames(argv[2]);
+    }
+
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <file.con> [repeat]\n", argv[0]);
+        fprintf(stderr, "   or: %s --dump <file.con>\n", argv[0]);
         return 1;
     }
 

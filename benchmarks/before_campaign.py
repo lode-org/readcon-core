@@ -18,7 +18,10 @@ import subprocess
 import time
 from pathlib import Path
 
-import touch_fold
+try:
+    from . import touch_fold
+except ImportError:
+    import touch_fold
 
 REPEATS = 6
 LADDER = (1, 2, 4, 8)

@@ -104,4 +104,12 @@ line_endings = "LF"
 # `mts_block_t` is declared once, globally, in the header preamble above (and
 # by metatensor.h when that feature is on); a second declaration inside the
 # readcon namespace collides with it in C++.
-exclude = ["FxHashMap", "PARALLEL_BYTES_THRESHOLD", "mts_block_t"]
+# `MMAP_THRESHOLD` and `NUMERIC_STACK_WIDTH` size Rust-only paths, and no C
+# call takes them.
+exclude = [
+  "FxHashMap",
+  "PARALLEL_BYTES_THRESHOLD",
+  "mts_block_t",
+  "MMAP_THRESHOLD",
+  "NUMERIC_STACK_WIDTH",
+]

@@ -8,9 +8,9 @@ Threshold, fixed before looking at a given run:
 * Each main-vs-main repetition records r = median(later samples) / median(earlier samples).
 * Time benchmarks use ``TIME_AA_ROUNDS`` rounds of ``TIME_REPEAT`` samples
   inside one ``asv run --interleave-rounds``. That is 72 samples. Odd rounds
-  are one side and even rounds the other (36 and 36), the same alternation
-  ``asv continuous --interleave-rounds`` uses between commits, and the same
-  count the comparison records with ``COMPARE_ROUNDS`` rounds of ``TIME_REPEAT``.
+  are one side and even rounds the other (36 and 36). The comparison records
+  that same count with ``COMPARE_ROUNDS`` rounds of ``TIME_REPEAT``, one
+  round of the base commit and then one round of the head commit.
 * Memory benchmarks are one memray peak per ``asv run`` (asv does not keep
   that scalar in ``samples`` across rounds). ``MEM_AA_ROUNDS`` successive
   runs are split into odd and even rounds, ``MEM_AA_ROUNDS // 2`` peaks a side.
@@ -793,6 +793,11 @@ def _noise_document(n_time: int, benchmarks: dict, alpha: float | None) -> dict:
             "Time within one run: twelve asv rounds inside one --interleave-rounds run, "
             "odd rounds against even rounds, 36 samples a side, matching the comparison's "
             "six rounds of six repeats. "
+            "The comparison runs one round of the base commit and then one round of the "
+            "head commit, and repeats that pair. "
+            "asv continuous --interleave-rounds reverses commit order on even rounds, "
+            "so an even round count would give the commits different numbers of "
+            "back-to-back rounds. "
             "Each round is its own process of one installed build. A speed shift that "
             "covers an odd round and the following even round cancels in their ratio. "
             "Time between runs: each repetition contributes the odd-round median and the "
@@ -1398,7 +1403,7 @@ def cmd_report(args: argparse.Namespace) -> None:
         ),
         ("commenter draft: " + ("yes" if draft else "no")),
         (
-            "asv continuous --factor (maximum timing upper bound, at least 1): "
+            "asv compare --factor (maximum timing upper bound, at least 1): "
             + format_lossless(noise["asv_factor"])
         ),
         "",
