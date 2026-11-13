@@ -141,7 +141,9 @@ writer buffer is flushed before the function returns.
 
 ``compression`` is ``None`` to take the codec from the extension
 (``.gz`` gzip, ``.zst`` zstd), or ``"gzip"``, ``"zstd"``, or ``"none"``.
-A ``.zst`` write needs a build with the ``zstd`` feature.
+The wheels on PyPI are built with the ``zstd`` feature, so a ``.zst``
+path writes zstd. A source build without that feature raises
+``ValueError`` and names ``zstd``.
 ``append=True`` extends an uncompressed file. Gzip, zstd, and ``comm=`` are refused.
 
 ``write_con_string``
@@ -179,6 +181,9 @@ frame is that same tuple when the frame is under 4096 atoms.
 ``tables["arrays"]["pos"]`` is ``tables["positions"]``.
 ``tables["arrays"]["masses"]`` is ``tables["masses"]``.
 ``tables["arrays"]["species"]`` is ``tables["species"]``.
+A ``.gz`` or ``.zst`` path is read and written as that codec. The wheels
+on PyPI include zstd. A source build without the ``zstd`` feature raises
+``ValueError`` and names ``zstd``.
 ``n_threads`` of 2 or more splits frames, or the atoms of one wide frame.
 A file whose symbols differ, or whose header changes from frame to frame,
 uses the general scan. The uniform scan is only for one species and one

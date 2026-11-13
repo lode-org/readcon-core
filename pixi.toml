@@ -32,7 +32,7 @@ capnproto = "*"
 
 [feature.python]
 dependencies = { python = ">=3.10", maturin = ">=1.5", pytest = "*", pip = "*", numpy = ">=1.22" }
-tasks = { python-build = "maturin develop --features python", python-build-chemfiles = "maturin develop --features python,chemfiles", python-test = { cmd = "pytest tests/python/", depends-on = [
+tasks = { python-build = "maturin develop --features python,zstd", python-build-chemfiles = "maturin develop --features python,chemfiles,zstd", python-test = { cmd = "pytest tests/python/", depends-on = [
   "python-build",
 ] }, chemfiles-notebook = { cmd = "scripts/run-chemfiles-notebook.sh", depends-on = [
   "python-build-chemfiles",

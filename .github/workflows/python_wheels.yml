@@ -81,27 +81,27 @@ jobs:
             os: ubuntu-24.04
             target: x86_64
             pyproject: pyproject.toml
-            features: python
+            features: python,zstd
           - variant: default
             os: ubuntu-24.04-arm
             target: aarch64
             pyproject: pyproject.toml
-            features: python
+            features: python,zstd
           - variant: default
             os: macos-15-intel
             target: x86_64
             pyproject: pyproject.toml
-            features: python
+            features: python,zstd
           - variant: default
             os: macos-15
             target: aarch64
             pyproject: pyproject.toml
-            features: python
+            features: python,zstd
           - variant: default
             os: windows-2022
             target: x86_64
             pyproject: pyproject.toml
-            features: python
+            features: python,zstd
           - variant: chemfiles
             os: ubuntu-24.04
             target: x86_64

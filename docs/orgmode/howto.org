@@ -409,7 +409,9 @@ free_rkr_writer(writer);
 A path ending in =.gz= is gzip and =.zst= is zstd, on read and on write.
 The same choice is the magic bytes at the start of a read. Pass
 =compression="gzip"=, ="zstd"=, or ="none"= to =write_con= to override the
-extension. A =.zst= write needs the =zstd= Cargo feature.
+extension. The PyPI wheels are built with the =zstd= feature, so a
+=.zst= path writes zstd. A source build without that feature raises
+=ValueError= and names =zstd=.
 =append=True= is only for an uncompressed file.
 
 =ConFrameReader::new= takes any =std::io::Read=. Standard input is that

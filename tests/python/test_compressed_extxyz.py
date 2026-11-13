@@ -15,26 +15,11 @@ PLAIN = (
 )
 
 
-def _zstd_write(tmp_path: Path, source: dict) -> bool:
-    path = tmp_path / "zstd-probe.extxyz.zst"
-    try:
-        readcon.write_extxyz(str(path), source, n_threads=1)
-    except ValueError as exc:
-        if "zstd" in str(exc).lower():
-            return False
-        raise
-    path.unlink()
-    return True
-
-
 def test_gzip_and_zstd_extxyz_round_trip(tmp_path: Path) -> None:
     plain = tmp_path / "frame.extxyz"
     plain.write_text(PLAIN)
     source = readcon.read_extxyz(str(plain), n_threads=1)
-    suffixes = [".gz"]
-    if _zstd_write(tmp_path, source):
-        suffixes.append(".zst")
-    for suffix in suffixes:
+    for suffix in (".gz", ".zst"):
         path = tmp_path / f"frame.extxyz{suffix}"
         readcon.write_extxyz(str(path), source, n_threads=1)
         assert path.stat().st_size < plain.stat().st_size

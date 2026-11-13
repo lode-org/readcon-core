@@ -43,7 +43,8 @@ chemfiles = ["readcon-chemfiles==0.23.0"]
 
 [tool.maturin]
 # `python` pulls `parallel` (Rayon multi-frame parse) via Cargo.toml.
-features = ["python"]
+# `zstd` is on so a `.zst` path writes zstd in the default wheel.
+features = ["python", "zstd"]
 module-name = "readcon"
 
 [tool.ruff.lint]

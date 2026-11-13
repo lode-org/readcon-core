@@ -53,9 +53,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - features: python
+          - features: python,zstd
             name: lean
-          - features: python,chemfiles-from-sources
+          - features: python,chemfiles-from-sources,zstd
             name: chemfiles
     steps:
       - uses: actions/checkout@v6

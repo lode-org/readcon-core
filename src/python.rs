@@ -3912,7 +3912,7 @@ fn write_con(
                     n_threads,
                     compression_members,
                 );
-                Err(PyIOError::new_err(
+                Err(pyo3::exceptions::PyValueError::new_err(
                     "zstd compression requires readcon built with the zstd feature",
                 ))
             }
