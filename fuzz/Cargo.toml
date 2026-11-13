@@ -110,3 +110,10 @@ path = "fuzz_targets/ffi_entry.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "round-trip"
+path = "fuzz_targets/round_trip.rs"
+test = false
+doc = false
+bench = false
