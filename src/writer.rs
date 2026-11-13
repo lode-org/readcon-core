@@ -154,8 +154,14 @@ impl SpellCache {
         let (text, len) = {
             let slot = &mut self.slots[idx];
             if slot.state != 2 || slot.bits != bits {
-                let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
-                debug_assert!(n <= 24);
+                let n = match write_short_decimal(&mut slot.text, value) {
+                    Some(n) => n,
+                    None => {
+                        let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
+                        debug_assert!(n <= 24);
+                        n
+                    }
+                };
                 slot.bits = bits;
                 slot.len = n as u8;
                 slot.state = 2;
@@ -1002,6 +1008,121 @@ fn push_round_trip(
     spell.push(buf, value);
 }
 
+/// Shortest fixed-point spelling, when it is exactly the ryu spelling.
+///
+/// One multiply by `1e6`. When that product is an exact integer inside the
+/// 53-bit mantissa, trailing fraction zeros are stripped and `finish`
+/// re-parses the short decimal. The bytes are emitted only when that parse
+/// reproduces `value` and the shape is ryu's fixed-point form (`123.0`,
+/// `12.34`, `0.001234`). Every other value returns `None`.
+fn write_short_decimal(out: &mut [u8; 24], value: f64) -> Option<usize> {
+    let bits = value.to_bits();
+    if bits == 0 {
+        out[..3].copy_from_slice(b"0.0");
+        return Some(3);
+    }
+    if bits == 1_u64 << 63 {
+        out[..4].copy_from_slice(b"-0.0");
+        return Some(4);
+    }
+    if !value.is_finite() {
+        return None;
+    }
+    let neg = value.is_sign_negative();
+    let abs = value.abs();
+    // `1e6` is exact. Above this the product no longer fits in 53 bits,
+    // so an integer coordinate would be a false miss; those go to ryu.
+    if !(1e-6..9.0e9).contains(&abs) {
+        return None;
+    }
+    let scaled = abs * 1e6;
+    if !scaled.is_finite() || scaled > (1_u64 << 53) as f64 {
+        return None;
+    }
+    let nearest = scaled.round();
+    if nearest != scaled {
+        return None;
+    }
+    let mut n = nearest as u64;
+    let mut k = 6usize;
+    while k > 0 && n % 10 == 0 {
+        n /= 10;
+        k -= 1;
+    }
+    if n == 0 {
+        return None;
+    }
+    let parsed = crate::fast_dec::decimal_f64(neg, n, -(k as i32))?;
+    if parsed.to_bits() != bits {
+        return None;
+    }
+    render_fixed(out, neg, n, k)
+}
+
+fn render_fixed(out: &mut [u8; 24], neg: bool, n: u64, k: usize) -> Option<usize> {
+    let mut digits = [0u8; 20];
+    let nd = if n == 0 {
+        digits[0] = b'0';
+        1
+    } else {
+        let mut tmp = [0u8; 20];
+        let mut i = 20usize;
+        let mut x = n;
+        while x > 0 {
+            i -= 1;
+            tmp[i] = b'0' + (x % 10) as u8;
+            x /= 10;
+        }
+        let len = 20 - i;
+        digits[..len].copy_from_slice(&tmp[i..]);
+        len
+    };
+    let kk = nd as isize - k as isize;
+    if kk > 16 || kk <= -5 {
+        return None;
+    }
+    let mut w = 0usize;
+    if neg {
+        out[w] = b'-';
+        w += 1;
+    }
+    if k == 0 {
+        if w + nd + 2 > out.len() {
+            return None;
+        }
+        out[w..w + nd].copy_from_slice(&digits[..nd]);
+        w += nd;
+        out[w] = b'.';
+        out[w + 1] = b'0';
+        return Some(w + 2);
+    }
+    if kk > 0 {
+        let cut = kk as usize;
+        if w + nd + 1 > out.len() || cut > nd {
+            return None;
+        }
+        out[w..w + cut].copy_from_slice(&digits[..cut]);
+        w += cut;
+        out[w] = b'.';
+        w += 1;
+        let rest = nd - cut;
+        out[w..w + rest].copy_from_slice(&digits[cut..nd]);
+        return Some(w + rest);
+    }
+    let zeros = (2 - kk) as usize - 2;
+    let total = 2 + zeros + nd;
+    if w + total > out.len() {
+        return None;
+    }
+    out[w] = b'0';
+    out[w + 1] = b'.';
+    for i in 0..zeros {
+        out[w + 2 + i] = b'0';
+    }
+    out[w + 2 + zeros..w + total].copy_from_slice(&digits[..nd]);
+    Some(w + total)
+}
+
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
 /// Non-finite values and `prec > 17` fall back to `std::fmt`.
 fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
@@ -1364,6 +1485,46 @@ mod float_format_tests {
                 let got = formatted(v, prec);
                 let exp = format!("{v:.prec$}");
                 assert_eq!(got, exp, "v={v:?} prec={prec}");
+            }
+        }
+    }
+
+    #[test]
+    fn short_decimal_matches_ryu_or_declines() {
+        fn check(value: f64) {
+            if !value.is_finite() {
+                return;
+            }
+            let mut slot = [0u8; 24];
+            let Some(n) = super::write_short_decimal(&mut slot, value) else {
+                return;
+            };
+            let mut ryu_buf = ryu::Buffer::new();
+            let expect = ryu_buf.format_finite(value).as_bytes();
+            assert_eq!(
+                &slot[..n],
+                expect,
+                "value {value:?} short {} ryu {}",
+                std::str::from_utf8(&slot[..n]).unwrap_or("?"),
+                std::str::from_utf8(expect).unwrap_or("?"),
+            );
+        }
+        check(0.0);
+        check(-0.0);
+        check(f64::INFINITY);
+        check(f64::NAN);
+        let mut state = 0x1234_5678_9abc_def0_u64;
+        for _ in 0..200_000 {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            check(f64::from_bits(state));
+            check(-f64::from_bits(state));
+        }
+        for k in 0..=6 {
+            let scale = 10_f64.powi(k);
+            let limit = 200_000u64;
+            for i in 0..limit {
+                check(i as f64 / scale);
+                check(-(i as f64) / scale);
             }
         }
     }
