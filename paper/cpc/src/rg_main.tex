@@ -599,6 +599,17 @@ On the page cache the eight-thread ideal efficiency is 0.3648 and the ceiling fr
 On tmpfs the ideal efficiency is 0.3938 and the ceiling fraction is 0.6154.
 \input{campaign/final/fig8}
 
+\subsection{Same structures, each tool in its format}\label{sec:cross-format}
+Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are one frame of \(10^{6}\) atoms and one trajectory.
+Each tool reads and writes the format named in its row.
+The Drops column is what that format does not keep.
+On the million-atom frame the NetCDF, DCD, XTC and OVITO XYZ read medians are lower than the plain CON read.
+On the trajectory only the NetCDF and DCD read medians are lower.
+NetCDF, DCD and XTC drop masses, velocities and constraints.
+OVITO XYZ and chemfiles XYZ drop those three as well.
+Plain CON and extended XYZ drop none.
+\input{campaign/final/cross_format}
+
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
 H5MD stores an identifier and a velocity unit and defines no per-component constraint.

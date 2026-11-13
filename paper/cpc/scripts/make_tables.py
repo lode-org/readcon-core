@@ -11,6 +11,8 @@ The caption states the host taken from lscpu.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import subprocess
 from pathlib import Path
@@ -425,6 +427,68 @@ def figures(store: Store, out: Path) -> None:
     plt.close(fig)
 
 
+def mib(nbytes: str) -> str:
+    """Recorded byte count, printed in mebibytes."""
+    return sig(int(nbytes) / (1024 * 1024))
+
+
+def drops(text: str) -> str:
+    return esc(text.replace(",", ", "))
+
+
+def cross_format(store: Store, host: str) -> str:
+    """1M-atom frame and trajectory from cross-format.tsv. No sample count is recorded."""
+    raw = store.text(f"{REL1}/cross-format.tsv")
+    rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
+    chunks = []
+    specs = (
+        ("1M", r"One frame of \(10^{6}\) atoms.", "tab:cross-1m"),
+        ("traj", "The trajectory.", "tab:cross-traj"),
+    )
+    for structure, title, label in specs:
+        body = []
+        seen_readcon = False
+        marked_readcon = False
+        seen_chem = False
+        marked_chem = False
+        for row in rows:
+            if row["structure"] != structure:
+                continue
+            if row["tool"] == "readcon":
+                seen_readcon = True
+            elif seen_readcon and not marked_readcon:
+                body.append("% PENDING h2h5 readcon-chemfiles")
+                marked_readcon = True
+            if row["tool"] == "chemfiles":
+                seen_chem = True
+            elif seen_chem and not marked_chem:
+                body.append("% PENDING h2h5 compressed chemfiles")
+                marked_chem = True
+            body.append(
+                f"{esc(row['tool'])} & {esc(row['format'])} & {esc(row['op'])} "
+                f"& {sig(row['median_s'])} ({sig(row['iqr_s'])}) "
+                f"& {mib(row['rss_bytes'])} & {mib(row['file_bytes'])} "
+                f"& {drops(row['loses'])} \\\\"
+            )
+        if not marked_readcon:
+            body.append("% PENDING h2h5 readcon-chemfiles")
+        if not marked_chem:
+            body.append("% PENDING h2h5 compressed chemfiles")
+        chunks.append(table(
+            title + " Each tool uses the format in its row. "
+            "Time is the median in seconds, with the interquartile range in parentheses. "
+            "RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. "
+            "Drops names the fields that format does not keep. "
+            "The file does not record the sample count.",
+            label,
+            "@{}lllrrrl@{}",
+            r"Tool & Format & Op & Time (IQR) & RSS & File & Drops",
+            body,
+            host,
+        ))
+    return "\n".join(chunks)
+
+
 def figure_tex(out_name: str, graphic: str, caption: str, label: str, host: str) -> str:
     return (
         "\\begin{figure}[tbp]\n\\centering\n"
@@ -436,6 +500,7 @@ def figure_tex(out_name: str, graphic: str, caption: str, label: str, host: str)
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", default="")
+    parser.add_argument("--cross-commit", default="")
     parser.add_argument("--scaling", type=Path)
     parser.add_argument("--fidelity", type=Path)
     parser.add_argument("--db", type=Path)
@@ -443,6 +508,8 @@ def main() -> None:
     args = parser.parse_args()
     store = Store(args.commit or None, args.scaling, args.fidelity, args.db)
     host = host_line(store.json(f"{REL1}/hardware.json")["lscpu"])
+    cross = Store(args.cross_commit or args.commit or None, args.scaling, None, None)
+    cross_host = host_line(cross.json(f"{REL1}/hardware.json")["lscpu"])
     out = args.out if args.out.is_absolute() else REPO / "paper" / "cpc" / args.out
     out.mkdir(parents=True, exist_ok=True)
     files = {
@@ -454,6 +521,7 @@ def main() -> None:
         "compressed.tex": compressed(store, host),
         "db.tex": database(store, host),
         "fidelity.tex": fidelity(store, host),
+        "cross_format.tex": cross_format(cross, cross_host),
     }
     figures(store, out)
     files["fig7.tex"] = figure_tex(

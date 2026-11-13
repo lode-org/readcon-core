@@ -133,6 +133,7 @@ rule regen_figures_log:
 
 # Refresh every results table from bench/h2h/scaling on the release tip.
 FINAL_COMMIT = "ee7662a955e173ea7faffcae614b4d0a78dd7682"
+CROSS_COMMIT = "0b42d8e40f9b4ed97358157eaf39f8062d3a4e43"
 
 rule final_campaign:
     output:
@@ -146,10 +147,11 @@ rule final_campaign:
         "src/campaign/final/fidelity.tex",
         "src/campaign/final/fig7.tex",
         "src/campaign/final/fig8.tex",
+        "src/campaign/final/cross_format.tex",
         "src/campaign/final/strong.pdf",
         "src/campaign/final/weak.pdf",
     shell:
-        "python3 scripts/make_tables.py --commit " + FINAL_COMMIT + " --out src/campaign/final"
+        "python3 scripts/make_tables.py --commit " + FINAL_COMMIT + " --cross-commit " + CROSS_COMMIT + " --out src/campaign/final"
 
 rule reader_figures:
     input:

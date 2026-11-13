@@ -613,7 +613,7 @@ The chemfiles build and then the head-to-head step write the head-to-head record
 For the conformance records, the corpus step runs the corpus report of readcon-core over the CON 3.1 corpus, the path step reads both corpora through the readcon module and through the C library in the default build and the parallel build, the path-count step runs the reader-path tests and counts their inputs, the cross-check step runs the three readers of Table~\ref{tab:corpus-crosscheck}, the probe step runs the probes, the mutant step reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and the clause step lists what names each clause.
 The version-drift step reads each of four published wheels in its own process, the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3.
 
-\begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.22.0.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
+\begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.22.0.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=fullflexible,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
 cd readcon-core
 git checkout v0.22.0
@@ -1607,7 +1607,7 @@ Index pairing of the exchanged copper row moves that copper by 3.610~\text{\AA}.
 Matching column 5 leaves the copper in place and moves the hydrogen by 2.553~\text{\AA}, and \texttt{reorder\_like} restores the identifier order.
 Listing~\ref{lst:atomid} is the command.
 
-\begin{lstlisting}[caption={Command for the hop distances of Section~\ref{sec:claisen}.},label={lst:atomid},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true]
+\begin{lstlisting}[caption={Command for the hop distances of Section~\ref{sec:claisen}.},label={lst:atomid},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=fullflexible,keepspaces=true]
 cargo test --features parallel --test atom_correspondence hop_positional_zip_is_the_wrong_displacement
 \end{lstlisting}
 
