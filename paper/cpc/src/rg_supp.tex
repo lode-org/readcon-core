@@ -1522,7 +1522,8 @@ It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
 A gzip read of 10000 frames of 218 atoms takes 0.668~s, and the streaming read of that file takes 0.594~s.
 The same file as zstd takes 0.420~s, and the streaming zstd read takes 0.344~s.
 Each of those medians is type 7 over six samples after one warmup.
-The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
+The Python binding opens the \num{100000}-frame gzip file in 0.718~s.
+The Rust reader of that file, 0.412~s, is the earlier comparison.
 ASE's eon reader takes \SI{10.6}{\second}.
 Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
 On a gzip file of one frame of $10^{6}$ atoms the Rust reader takes \SI{0.100}{\second} and ASE's eon reader takes \SI{1.47}{\second}.
@@ -1533,6 +1534,8 @@ ASE's eon writer takes \SI{14.2}{\second}.
 \begin{table}[tbp]
 \centering
 \caption{Median time in seconds for gzip CON.
+The Python read of the \num{100000}-frame file is 0.718~s in this session.
+The other cells are an earlier comparison.
 The first two columns are reads.
 The last column is the write of the \num{100000}-frame file.
 A blank cell was not part of this comparison.}
@@ -1542,7 +1545,7 @@ A blank cell was not part of this comparison.}
 Reader & \num{100000} frames & $10^{6}$ atoms & Write \\
 \midrule
 readcon, Rust & 0.412 & 0.100 & 0.561 \\
-readcon, Python & 0.439 & & \\
+readcon, Python & 0.718 & & \\
 ASE eon & 10.6 & 1.47 & 14.2 \\
 gzip, then plain read & 0.643 & & \\
 ASE xyz & & 127 & \\
