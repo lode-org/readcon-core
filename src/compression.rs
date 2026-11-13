@@ -675,8 +675,8 @@ fn write_fused_frame(
     let n = frame.atom_data.len();
     let members = members.max(2).min(n.max(2));
     let mut ranges = Vec::with_capacity(members);
-    let mut row = 0u32;
     let mut rows = Vec::with_capacity(members);
+    let mut row = 0u32;
     let mut start = 0usize;
     for index in 0..members {
         let end = if index + 1 == members {
@@ -700,20 +700,18 @@ fn write_fused_frame(
         .collect();
     let threads = threads.max(1).min(ranges.len());
     let ranges_ref = &ranges;
-    let rows_ref = &rows;
-    let _ = rows_ref;
     std::thread::scope(|scope| {
         for (begin, end) in worker_ranges(ranges.len(), threads) {
             let slots = &slots;
             let header = &header;
             scope.spawn(move || {
+                let mut plain = Vec::new();
                 for index in begin..end {
                     let (atom_from, atom_to) = ranges_ref[index];
-                    let mut plain = if atom_from == 0 {
-                        header.clone()
-                    } else {
-                        Vec::new()
-                    };
+                    plain.clear();
+                    if atom_from == 0 {
+                        plain.extend_from_slice(&header);
+                    }
                     plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
                     let plain_len = plain.len();
                     let encoded = if gzip {
@@ -725,7 +723,7 @@ fn write_fused_frame(
                         }
                         #[cfg(not(feature = "zstd"))]
                         {
-                            let _ = plain;
+                            let _ = &plain;
                             Err(zstd_unsupported())
                         }
                     };
@@ -2114,5 +2112,32 @@ mod tests {
             many.frames[0].atom_data[4].symbol.as_ref(),
             frame.atom_data[4].symbol.as_ref()
         );
+    }
+
+    #[test]
+    fn fused_worker_count_does_not_change_the_bytes() {
+        let frame = copper_frame(4_096);
+        let dir = tempfile::tempdir().unwrap();
+        let one = dir.path().join("one.con.gz");
+        let eight = dir.path().join("eight.con.gz");
+        assert!(write_fused_gzip_frame(&one, &frame, 8, 1).unwrap() > 1);
+        assert!(write_fused_gzip_frame(&eight, &frame, 8, 8).unwrap() > 1);
+        assert_eq!(std::fs::read(&one).unwrap(), std::fs::read(&eight).unwrap());
+        let loaded = crate::iterators::read_all_frames_phased(&eight, Some(8)).unwrap();
+        assert_eq!(coords(&loaded.frames[0]), coords(&frame));
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn fused_zstd_worker_count_does_not_change_the_bytes() {
+        let frame = copper_frame(4_096);
+        let dir = tempfile::tempdir().unwrap();
+        let one = dir.path().join("one.con.zst");
+        let eight = dir.path().join("eight.con.zst");
+        assert!(write_fused_zstd_frame(&one, &frame, 8, 1).unwrap() > 1);
+        assert!(write_fused_zstd_frame(&eight, &frame, 8, 8).unwrap() > 1);
+        assert_eq!(std::fs::read(&one).unwrap(), std::fs::read(&eight).unwrap());
+        let loaded = crate::iterators::read_all_frames_phased(&eight, Some(4)).unwrap();
+        assert_eq!(coords(&loaded.frames[0]), coords(&frame));
     }
 }

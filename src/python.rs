@@ -3703,7 +3703,9 @@ fn frame_is_one_coord_block(frame: &crate::types::ConFrame) -> bool {
 /// Format and deflate each member on `n_threads` workers.
 ///
 /// `false` keeps the caller on the format-then-compress path. One member
-/// and a single worker stay there so their bytes do not change.
+/// stays there so its bytes match the streaming encoder. One worker
+/// still fuses: it walks the same members, so the thread count changes
+/// the speed and not the bytes.
 fn try_fused_members(
     path: &str,
     frames: &Bound<'_, PyAny>,
@@ -3711,7 +3713,7 @@ fn try_fused_members(
     n_threads: Option<usize>,
     gzip: bool,
 ) -> PyResult<bool> {
-    let Some(threads) = n_threads.filter(|count| *count >= 2) else {
+    let Some(threads) = n_threads.filter(|count| *count >= 1) else {
         return Ok(false);
     };
     let Ok(list) = frames.cast::<ConFrameList>() else {
@@ -3823,14 +3825,9 @@ fn write_con(
                 }
                 let members = compression_members
                     .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                // Member count is the compress width, as it was before
-                // `n_threads` also selected formatter workers. A smaller
-                // `n_threads` still formats on fewer cores; it does not
-                // serialize the members.
-                let threads = n_threads
-                    .filter(|count| *count >= 2)
-                    .map(|count| count.max(members))
-                    .unwrap_or(members);
+                // `n_threads` is the worker count for this write. `None`
+                // keeps the member width, which is the historical default.
+                let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
                 crate::compression::write_gzip_members_limited(
                     Path::new(path),
                     &plain,
@@ -3873,10 +3870,7 @@ fn write_con(
                     }
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                    let threads = n_threads
-                        .filter(|count| *count >= 2)
-                        .map(|count| count.max(members))
-                        .unwrap_or(members);
+                    let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
                     crate::compression::write_zstd_members_limited(
                         Path::new(path),
                         &plain,
