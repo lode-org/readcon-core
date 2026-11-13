@@ -13,12 +13,9 @@ keywords = ["Parser", "comp-chem", "file-format"]
 categories = ["filesystem", "parser-implementations", "science"]
 license = "MIT"
 exclude = [
-  # Campaign logs and rows. The harness stays. The published crate does not
-  # ship those records, and fuzz corpora are not part of this package.
-  "bench/h2h/scaling/**",
-  "bench/h2h/logs/**",
-  "bench/h2h/results/**",
-  "bench/h2h/versions.json",
+  # Campaign harness, fixtures, and recorded rows. The library build does
+  # not read this tree. Tests that open a fixture use the git checkout.
+  "bench/**",
 ]
 
 [lib]

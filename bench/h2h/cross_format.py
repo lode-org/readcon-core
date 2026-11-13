@@ -623,14 +623,14 @@ def read_ovito(path: str) -> dict:
             None if mass is None else np.array(mass, dtype=np.float64, copy=True)
         )
         velocities.append(
-            None if velocity is None else np.array(velocity, dtype=np.float64, copy=True)
+            None
+            if velocity is None
+            else np.array(velocity, dtype=np.float64, copy=True)
         )
     return {
         "positions": np.stack(positions),
         "cell": np.stack(cells),
-        "masses": None
-        if any(block is None for block in masses)
-        else np.stack(masses),
+        "masses": None if any(block is None for block in masses) else np.stack(masses),
         "velocities": None
         if any(block is None for block in velocities)
         else np.stack(velocities),
@@ -694,7 +694,8 @@ def read_mda_xyz(path: str) -> dict:
 
     universe = mda.Universe(path)
     positions = [
-        np.array(ts.positions, dtype=np.float64, copy=True) for ts in universe.trajectory
+        np.array(ts.positions, dtype=np.float64, copy=True)
+        for ts in universe.trajectory
     ]
     return {
         "positions": np.stack(positions),
@@ -717,7 +718,9 @@ def write_mdtraj(path: Path, spec: dict) -> None:
         topology.add_atom("Cu", element, residue)
     xyz_nm = np.asarray(spec["positions"], dtype=np.float32) / 10.0
     trajectory = md.Trajectory(xyz_nm, topology)
-    trajectory.unitcell_lengths = np.asarray(spec["cell"][:, :3], dtype=np.float32) / 10.0
+    trajectory.unitcell_lengths = (
+        np.asarray(spec["cell"][:, :3], dtype=np.float32) / 10.0
+    )
     trajectory.unitcell_angles = np.asarray(spec["cell"][:, 3:], dtype=np.float32)
     path.unlink(missing_ok=True)
     trajectory.save(os.fspath(path))
@@ -737,7 +740,10 @@ def read_mdtraj(path: str) -> dict:
             coords, _time, lengths, angles = handle.read()
         positions = np.asarray(coords, dtype=np.float64)
         cell = np.concatenate(
-            [np.asarray(lengths, dtype=np.float64), np.asarray(angles, dtype=np.float64)],
+            [
+                np.asarray(lengths, dtype=np.float64),
+                np.asarray(angles, dtype=np.float64),
+            ],
             axis=1,
         )
     elif suffix == ".dcd":
@@ -745,7 +751,10 @@ def read_mdtraj(path: str) -> dict:
             coords, lengths, angles = handle.read()
         positions = np.asarray(coords, dtype=np.float64)
         cell = np.concatenate(
-            [np.asarray(lengths, dtype=np.float64), np.asarray(angles, dtype=np.float64)],
+            [
+                np.asarray(lengths, dtype=np.float64),
+                np.asarray(angles, dtype=np.float64),
+            ],
             axis=1,
         )
     elif suffix == ".xtc":
@@ -833,7 +842,11 @@ Cu 0.2 0.2 0.2
     file_pbc = [True, True, False]
     file_frame1 = np.array([1.2, 6.4, -0.3])
     read_frame1 = frames[1] if len(frames) > 1 else None
-    drift = None if read_frame1 is None else float(np.max(np.abs(read_frame1 - file_frame1)))
+    drift = (
+        None
+        if read_frame1 is None
+        else float(np.max(np.abs(read_frame1 - file_frame1)))
+    )
     wrapped = drift is not None and abs(float(read_frame1[1]) - 1.4) < 1e-6
     stuck = drift is not None and float(np.max(np.abs(read_frame1 - frames[0]))) < 1e-8
     return {
@@ -988,7 +1001,9 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             )
         for codec in ("gz", "xz"):
             if not codecs.get(codec):
-                notes.append(f"chemfiles did not open .{codec}; text rows for it are omitted.")
+                notes.append(
+                    f"chemfiles did not open .{codec}; text rows for it are omitted."
+                )
                 continue
             for stem, label in (("pdb", "pdb"), ("gro", "gro")):
                 arms.append(
@@ -1652,18 +1667,20 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
     lines = []
     for note in notes:
         lines.append(f"note {note}")
-    lines.extend([
-        f"commit {sha}",
-        f"versions {json.dumps(versions, sort_keys=True)}",
-        "ovito-extxyz " + json.dumps(ovito_check, sort_keys=True),
-        f"warmup 1 samples {repeats} percentile type7 serial 1",
-        f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
-        f"loadavg {host['loadavg']}",
-        f"governor {json.dumps(host['governor'], sort_keys=True)}",
-        f"cpu_mhz {host['cpu_mhz']}",
-        "warm reads the file once before the clock; cold drops the page cache after warmup",
-        "every timed read copies positions and the cell into numpy and checks the sum",
-    ])
+    lines.extend(
+        [
+            f"commit {sha}",
+            f"versions {json.dumps(versions, sort_keys=True)}",
+            "ovito-extxyz " + json.dumps(ovito_check, sort_keys=True),
+            f"warmup 1 samples {repeats} percentile type7 serial 1",
+            f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
+            f"loadavg {host['loadavg']}",
+            f"governor {json.dumps(host['governor'], sort_keys=True)}",
+            f"cpu_mhz {host['cpu_mhz']}",
+            "warm reads the file once before the clock; cold drops the page cache after warmup",
+            "every timed read copies positions and the cell into numpy and checks the sum",
+        ]
+    )
     only_arms = {
         item for item in os.environ.get("READCON_CROSS_ARMS", "").split(",") if item
     }
@@ -1731,7 +1748,11 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 lines.append(f"note {note}")
                 continue
             checked = audit(spec, got, arm["precision"])
-            lost = set() if checked["loses"] == "none" else set(checked["loses"].split(","))
+            lost = (
+                set()
+                if checked["loses"] == "none"
+                else set(checked["loses"].split(","))
+            )
             position_bad = checked["position_error"] > arm["precision"]
             cell_bad = "cell" not in lost and checked["cell_error"] > arm["precision"]
             if position_bad or cell_bad:

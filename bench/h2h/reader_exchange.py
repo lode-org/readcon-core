@@ -343,6 +343,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
     ]
     names = [name for name, _ in arms]
     paths = dict(arms)
+
     def take(name: str, cache: str) -> dict:
         if pin_errors.get(name):
             return {
@@ -387,17 +388,19 @@ def run(out: Path, frames: int, repeats: int) -> None:
     for name in names:
         warm = taken[name]["warm"]
         cold = taken[name]["cold"]
-        got = [row for row in warm if row.get("seconds") is not None and not row.get("error")]
+        got = [
+            row
+            for row in warm
+            if row.get("seconds") is not None and not row.get("error")
+        ]
         got_cold = [
-            row for row in cold if row.get("seconds") is not None and not row.get("error")
+            row
+            for row in cold
+            if row.get("seconds") is not None and not row.get("error")
         ]
         if len(got) < repeats or len(got_cold) < repeats:
             err = next(
-                (
-                    row.get("error")
-                    for row in [*warm, *cold]
-                    if row.get("error")
-                ),
+                (row.get("error") for row in [*warm, *cold] if row.get("error")),
                 "short",
             )
             lines.append(f"summary arm={name} error={err} exit=1")
@@ -409,7 +412,9 @@ def run(out: Path, frames: int, repeats: int) -> None:
             }
             continue
         med, iqr, q1, q3 = _type7([row["seconds"] for row in got])
-        cold_med, cold_iqr, cold_q1, cold_q3 = _type7([row["seconds"] for row in got_cold])
+        cold_med, cold_iqr, cold_q1, cold_q3 = _type7(
+            [row["seconds"] for row in got_cold]
+        )
         mib, mib_iqr, mib_q1, mib_q3 = _type7([row["mib"] for row in got])
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
