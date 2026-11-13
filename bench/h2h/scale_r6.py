@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -93,6 +94,17 @@ def ensure_inputs() -> dict[str, Path]:
         "con-1e6": WORK / "inputs" / "con-1000000x1.con",
         "extxyz-cu": WORK / "parallel-frames" / "copper-32x100000.extxyz",
     }
+    parallel = (paths["con-100k"], paths["convel"], paths["extxyz-cu"])
+    if any(not path.is_file() or path.stat().st_size == 0 for path in parallel):
+        sys.path.insert(0, str(BENCH / "asv"))
+        import bench_parallel_frames as frames
+
+        frames.write_inputs(frames.reference())
+    if not paths["con-1e6"].is_file() or paths["con-1e6"].stat().st_size == 0:
+        sys.path.insert(0, str(BENCH))
+        from run_h2h import write_grid
+
+        write_grid(paths["con-1e6"], 1_000_000, 1)
     alloy = folder / "alloy-1e6.extxyz"
     md = folder / "md-10k.extxyz"
     same = folder / "atoms-1000000x1.extxyz"
