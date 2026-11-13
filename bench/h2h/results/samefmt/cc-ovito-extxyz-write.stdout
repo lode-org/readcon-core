@@ -1,0 +1,41 @@
+git rev-parse HEAD
+eba16e123c1962f08707f986df4d6c2a3c15329b
+git rev-parse HEAD^{tree}
+e921d1a3d9beefb3a1669f08f43c0a66517e6998
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt cc-ovito-extxyz-write
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 1.688562682
+sample 1.691037900
+sample 1.690231728
+sample 1.692553641
+sample 1.679179023
+sample 1.691200801
+median_s 1.690634814
+q25_s 1.688979944
+q75_s 1.691160076
+iqr_s 0.002180132
+n_atoms 96
+n_frames 10000
+field positions ok
+field ids ok
+field cell ok
+field masses ok
+field fixed ok
+field velocities ok
+id_map_ok 1
+reordered 0
+correct 1
+reason ok
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [1.688562682000338, 1.691037900000083, 1.6902317280000716, 1.692553640999904, 1.6791790229999606, 1.6912008010003774], "n": 6, "median_s": 1.6906348140000773, "q25_s": 1.6889799435002715, "q75_s": 1.6911600757503038, "iqr_s": 0.0021801322500323295, "n_atoms": 96, "n_frames": 10000, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "cc-ovito-extxyz-write", "tool": "ovito", "format": "extxyz", "operation": "write", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-10000x96.extxyz", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
+exit 0

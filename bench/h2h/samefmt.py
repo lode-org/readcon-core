@@ -50,6 +50,9 @@ MASS = 63.546
 # the digits still matches. Masses are a short decimal; 1e-9 covers parser ulps
 # and still rejects a substituted atomic mass.
 TOL_POSITION = 1e-12
+# mdtraj stores lengths in nanometres. The comparison converts them back to
+# angstroms and uses this tolerance.
+TOL_MDTRAJ = 1e-5
 TOL_CELL = 1e-9
 TOL_MASS = 1e-9
 TOL_VELOCITY = 1e-12
@@ -66,6 +69,7 @@ STORED = {
     "con": ("positions", "ids", "cell", "masses", "fixed"),
     "convel": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
     "extxyz": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
+    "cextxyz": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
     "pdb": ("positions", "cell"),
     # Plain XYZ stores an element symbol and a coordinate. No cell, mass,
     # id, fixed mask, or velocity.
@@ -143,11 +147,23 @@ ARMS = (
     "alloy-ase-extxyz-read",
     "alloy-chemfiles-extxyz-read",
     "alloy-ovito-extxyz-read",
+    "alloy-ase-cextxyz-read",
+    "alloy-ase-cextxyz-write",
     # 10000 frames of 96 O/H atoms. energy and step change on every comment.
     "cc-readcon-extxyz-read",
+    "cc-readcon-extxyz-write",
+    "cc-readcon-extxyz-roundtrip",
     "cc-ase-extxyz-read",
+    "cc-ase-extxyz-write",
+    "cc-ase-extxyz-roundtrip",
+    "cc-ase-cextxyz-read",
+    "cc-ase-cextxyz-write",
     "cc-chemfiles-extxyz-read",
+    "cc-chemfiles-extxyz-write",
+    "cc-chemfiles-extxyz-roundtrip",
     "cc-ovito-extxyz-read",
+    "cc-ovito-extxyz-write",
+    "cc-ovito-extxyz-roundtrip",
 )
 
 
@@ -173,6 +189,7 @@ def _paths(fmt: str, multi: bool = False, variant: str = "single") -> Path:
         "con": ".con",
         "convel": ".convel",
         "extxyz": ".extxyz",
+        "cextxyz": ".extxyz",
         "pdb": ".pdb",
         "xyz": ".xyz",
     }[fmt]
@@ -659,7 +676,13 @@ def _pack(
     return got
 
 
-def judge(fmt: str, got: dict, geom: dict | None = None) -> dict:
+def judge(
+    fmt: str,
+    got: dict,
+    geom: dict | None = None,
+    position_tol: float | None = None,
+    cell_tol: float | None = None,
+) -> dict:
     if geom is None:
         geom = geometry()
     stored = STORED[fmt]
@@ -694,6 +717,10 @@ def judge(fmt: str, got: dict, geom: dict | None = None) -> dict:
         tol = {"positions": TOL_POSITION, "cell": TOL_CELL, "masses": TOL_MASS, "velocities": TOL_VELOCITY}[
             name
         ]
+        if name == "positions" and position_tol is not None:
+            tol = position_tol
+        elif name == "cell" and cell_tol is not None:
+            tol = cell_tol
         if values.shape != ref.shape:
             fields[name] = "mismatch"
             reasons.append(f"{name} shape {tuple(values.shape)}")
@@ -949,10 +976,50 @@ def _got_from_structure(structure) -> dict:
     return _pack(positions, cell, masses, ids, fixed, velocities)
 
 
-def _ase_images(fmt: str):
+def _ase_image(geom: dict, fmt: str, frame: int | None = None):
+    from ase import Atoms
+
+    if frame is None:
+        positions = geom["positions"]
+        cell = geom["cell"]
+        masses = geom["masses"]
+        species = geom.get("species")
+        ids = geom["ids"]
+        fixed = geom["fixed"]
+        velocities = geom["velocities"]
+    else:
+        positions = geom["positions"][frame]
+        cell = geom["cell"][frame]
+        masses = geom["masses"][frame]
+        species = geom["species"][frame]
+        ids = geom["ids"][frame]
+        fixed = geom["fixed"][frame]
+        velocities = geom["velocities"][frame]
+    symbols = ["Cu"] * len(positions) if species is None else [str(symbol) for symbol in species]
+    span = float(cell[0])
+    atoms = Atoms(
+        symbols=symbols,
+        positions=np.array(positions, copy=True),
+        cell=[span, span, span],
+        pbc=True,
+    )
+    atoms.set_masses(np.array(masses, copy=True))
+    if fmt in ("extxyz", "cextxyz"):
+        atoms.set_array("id", np.array(ids, dtype=np.float64))
+        atoms.set_array("fixed", np.array(fixed, dtype=np.float64))
+        atoms.set_velocities(np.array(velocities, copy=True))
+    return atoms
+
+
+def _ase_images(fmt: str, variant: str = "single"):
     from ase import Atoms
     from ase.constraints import FixAtoms
 
+    if variant == "alloy":
+        return [_ase_image(alloy_geometry(), fmt)]
+    if variant == "cc":
+        geom = cc_geometry()
+        return [_ase_image(geom, fmt, frame) for frame in range(geom["positions"].shape[0])]
     geom = geometry()
     span = float(geom["cell"][0])
     atoms = Atoms(
@@ -1105,11 +1172,13 @@ def _chemfiles_read(path: Path, chem_format: str) -> dict:
 def _chemfiles_write(frame, path: Path, chem_format: str) -> None:
     import chemfiles
 
+    frames = frame if isinstance(frame, list) else [frame]
     if path.exists():
         path.unlink()
     traj = chemfiles.Trajectory(os.fspath(path), "w", chem_format)
     try:
-        traj.write(frame)
+        for item in frames:
+            traj.write(item)
     finally:
         traj.close()
 
@@ -1170,6 +1239,7 @@ def _out_path(arm: str, fmt: str) -> Path:
         "con": ".con",
         "convel": ".convel",
         "extxyz": ".extxyz",
+        "cextxyz": ".extxyz",
         "pdb": ".pdb",
         "xyz": ".xyz",
     }[fmt]
@@ -1181,36 +1251,43 @@ def _out_path(arm: str, fmt: str) -> Path:
 _CACHE: dict = {}
 
 
-def _source(tool: str, fmt: str):
+def _source(tool: str, fmt: str, variant: str = "single"):
     """In-memory structure for a write. Built once per process, outside the clock."""
-    key = (tool, fmt)
+    key = (tool, fmt, variant)
     if key in _CACHE:
         return _CACHE[key]
+    path = _paths(fmt, variant=variant)
     if tool == "readcon" and fmt in ("con", "convel"):
         import readcon
 
-        value = readcon.read_con(os.fspath(_paths(fmt)))
+        value = readcon.read_con(os.fspath(path))
     elif tool == "readcon" and fmt == "extxyz":
         import readcon
 
-        value = readcon.read_extxyz(os.fspath(_paths(fmt)))
+        value = readcon.read_extxyz(os.fspath(path))
     elif tool == "ase":
-        value = _ase_images(fmt)
+        value = _ase_images(fmt, variant)
     elif tool == "eon":
         value = _structure_from_geometry()
     elif tool == "chemfiles":
         import chemfiles
 
         chem_format = "XYZ" if fmt == "extxyz" else "PDB"
-        traj = chemfiles.Trajectory(os.fspath(_paths(fmt)), "r", chem_format)
+        traj = chemfiles.Trajectory(os.fspath(path), "r", chem_format)
         try:
-            value = traj.read()
+            if variant == "cc":
+                value = [traj.read() for _step in range(traj.nsteps)]
+            else:
+                value = traj.read()
         finally:
             traj.close()
     elif tool == "ovito":
         from ovito.io import import_file
 
-        value = import_file(os.fspath(_paths(fmt)))
+        if variant == "cc":
+            value = import_file(os.fspath(path), multiple_frames=True)
+        else:
+            value = import_file(os.fspath(path))
     elif tool == "mdanalysis":
         import MDAnalysis as mda
 
@@ -1235,7 +1312,7 @@ def _read_tool(tool: str, fmt: str, path: Path) -> dict:
     if tool == "ase":
         from ase.io import read as ase_read
 
-        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        format_name = {"con": "eon", "extxyz": "extxyz", "cextxyz": "cextxyz", "pdb": "proteindatabank"}[fmt]
         images = ase_read(os.fspath(path), index=":", format=format_name)
         return _got_from_ase(images, fmt)
     if tool == "eon":
@@ -1273,8 +1350,8 @@ def _read_tool(tool: str, fmt: str, path: Path) -> dict:
     raise RuntimeError(f"no reader for {tool} {fmt}")
 
 
-def _write_tool(tool: str, fmt: str, path: Path) -> None:
-    source = _source(tool, fmt)
+def _write_tool(tool: str, fmt: str, path: Path, variant: str = "single") -> None:
+    source = _source(tool, fmt, variant)
     if tool == "readcon" and fmt in ("con", "convel"):
         import readcon
 
@@ -1288,7 +1365,7 @@ def _write_tool(tool: str, fmt: str, path: Path) -> None:
     if tool == "ase":
         from ase.io import write as ase_write
 
-        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        format_name = {"con": "eon", "extxyz": "extxyz", "cextxyz": "cextxyz", "pdb": "proteindatabank"}[fmt]
         ase_write(os.fspath(path), source, format=format_name)
         return
     if tool == "eon":
@@ -1303,7 +1380,10 @@ def _write_tool(tool: str, fmt: str, path: Path) -> None:
         from ovito.io import export_file
 
         columns = list(source.compute().particles.keys())
-        export_file(source, os.fspath(path), "xyz", columns=columns)
+        if variant == "cc":
+            export_file(source, os.fspath(path), "xyz", columns=columns, multiple_frames=True)
+        else:
+            export_file(source, os.fspath(path), "xyz", columns=columns)
         return
     if tool == "mdanalysis":
         import MDAnalysis as mda
@@ -1333,7 +1413,7 @@ def _raw_read(tool: str, fmt: str, path: Path):
     if tool == "ase":
         from ase.io import read as ase_read
 
-        format_name = {"con": "eon", "extxyz": "extxyz", "pdb": "proteindatabank"}[fmt]
+        format_name = {"con": "eon", "extxyz": "extxyz", "cextxyz": "cextxyz", "pdb": "proteindatabank"}[fmt]
         return ase_read(os.fspath(path), index=":", format=format_name)
     if tool == "eon":
         loadcons, _savecon, _Structure = _ensure_eon()
@@ -1896,10 +1976,10 @@ def once(arm: str):
         return _raw_read(tool, fmt, path)
     out = _out_path(arm, fmt)
     if op == "write":
-        _write_tool(tool, fmt, out)
+        _write_tool(tool, fmt, out, variant)
         return out
     if op == "roundtrip":
-        _write_tool(tool, fmt, out)
+        _write_tool(tool, fmt, out, variant)
         return _raw_read(tool, fmt, out)
     raise RuntimeError(op)
 
@@ -1914,15 +1994,24 @@ def _active_geom(variant: str) -> dict:
     return geometry()
 
 
+def _tool_judge(tool: str, fmt: str, got: dict, geom: dict) -> dict:
+    if tool == "mdtraj":
+        return judge(fmt, got, geom, position_tol=TOL_MDTRAJ, cell_tol=TOL_MDTRAJ)
+    return judge(fmt, got, geom)
+
+
 def _check(arm: str, result) -> dict:
     tool, fmt, op, _multi, variant = split_arm(arm)
     geom = _active_geom(variant)
     if tool == "eon-cpp" and op == "read":
         return judge(fmt, _load_eon_dump(result), geom)
     if op == "read":
-        return judge(fmt, _materialize(tool, fmt, result), geom)
+        return _tool_judge(tool, fmt, _materialize(tool, fmt, result), geom)
     out = result if op == "write" else _out_path(arm, fmt)
-    file_fmt = "extxyz" if tool == "eon-cpp" and fmt == "extxyz" else fmt
+    if fmt == "cextxyz" or (tool == "eon-cpp" and fmt == "extxyz"):
+        file_fmt = "extxyz"
+    else:
+        file_fmt = fmt
     if file_fmt == "xyz":
         file_got = _read_xyz(Path(out))
     else:
@@ -1931,7 +2020,7 @@ def _check(arm: str, result) -> dict:
     if op == "write":
         file_judge["source"] = "file"
         return file_judge
-    tool_judge = judge(fmt, _materialize(tool, fmt, result), geom)
+    tool_judge = _tool_judge(tool, fmt, _materialize(tool, fmt, result), geom)
     correct = bool(file_judge["correct"] and tool_judge["correct"])
     reason = tool_judge["reason"]
     if file_judge["reason"] != "ok":
@@ -1956,7 +2045,7 @@ def _versions() -> str:
         parts.append(f"readcon {getattr(readcon, '__version__', '0.22.0')}")
     except Exception:
         parts.append("readcon missing")
-    for name in ("ase", "chemfiles", "MDAnalysis", "ovito"):
+    for name in ("ase", "ase_extxyz", "chemfiles", "MDAnalysis", "ovito"):
         try:
             mod = __import__(name)
             version = getattr(mod, "__version__", None) or getattr(mod, "version", "")
@@ -1986,7 +2075,7 @@ def run(arm: str) -> dict:
     if tool == "eon-cpp":
         _ensure_eon_binary()
     elif tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "mdtraj", "readcon") and op != "read":
-        _source(tool, fmt)
+        _source(tool, fmt, _variant)
     if tool == "mdtraj" and fmt == "xyz":
         _mdtraj_topology()
     print(f"warmup {arm}", flush=True)
@@ -2007,7 +2096,7 @@ def run(arm: str) -> dict:
     row.update(check)
     row["arm"] = arm
     row["tool"], row["format"], row["operation"], row["multi"], _variant = split_arm(arm)
-    row["file"] = support.rel(_paths(fmt, row["multi"]))
+    row["file"] = support.rel(_paths(fmt, row["multi"], _variant))
     row["readcon_sha"] = os.environ.get("READCON_SHA", "").strip()
     command = [
         "taskset",
@@ -2070,13 +2159,19 @@ def _row_from_log(arm: str) -> dict:
     return payload
 
 
+TABLE_NOTE = (
+    "# mdtraj positions and cell are compared after converting nanometres to "
+    "angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions.\n"
+)
+
+
 def _write_csv(rows: list[dict], destination: Path) -> None:
     header = (
         "tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
         "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,"
         "readcon_sha\n"
     )
-    lines = [header]
+    lines = [TABLE_NOTE, header]
     for row in rows:
         fields = row["fields"]
         sha = row.get("readcon_sha") or LEGACY_READCON_SHA

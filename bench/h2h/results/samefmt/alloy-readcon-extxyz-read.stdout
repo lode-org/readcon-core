@@ -1,7 +1,7 @@
 git rev-parse HEAD
-c6669fc16bbf43adaeb47bddbe8859a927363ad7
+eba16e123c1962f08707f986df4d6c2a3c15329b
 git rev-parse HEAD^{tree}
-53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+e921d1a3d9beefb3a1669f08f43c0a66517e6998
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -13,17 +13,17 @@ serial 1
 quantile type-7
 warmup 1
 cache warm
-versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.177901281
-sample 0.189391211
-sample 0.183695301
-sample 0.178067091
-sample 0.176074217
-sample 0.175903865
-median_s 0.177984186
-q25_s 0.176530983
-q75_s 0.182288249
-iqr_s 0.005757265
+versions readcon 0.22.0 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.197023578
+sample 0.202892459
+sample 0.193292573
+sample 0.192348169
+sample 0.191771852
+sample 0.194021646
+median_s 0.193657110
+q25_s 0.192584270
+q75_s 0.196273095
+iqr_s 0.003688825
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,6 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
-{"samples": [0.1779012810002314, 0.18939121099901968, 0.18369530100062548, 0.1780670909993205, 0.1760742170008598, 0.17590386499978194], "n": 6, "median_s": 0.17798418599977595, "q25_s": 0.1765309830007027, "q75_s": 0.18228824850029923, "iqr_s": 0.005757265499596542, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "alloy-readcon-extxyz-read", "tool": "readcon", "format": "extxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [0.19702357800088066, 0.20289245899948583, 0.19329257299978053, 0.1923481690009794, 0.19177185199987434, 0.19402164600069227], "n": 6, "median_s": 0.1936571095002364, "q25_s": 0.19258427000067968, "q75_s": 0.19627309500083356, "iqr_s": 0.0036888250001538836, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "alloy-readcon-extxyz-read", "tool": "readcon", "format": "extxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/alloy-1000000x1.extxyz", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
 exit 0

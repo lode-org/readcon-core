@@ -1,7 +1,7 @@
 git rev-parse HEAD
-c6669fc16bbf43adaeb47bddbe8859a927363ad7
+eba16e123c1962f08707f986df4d6c2a3c15329b
 git rev-parse HEAD^{tree}
-53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+e921d1a3d9beefb3a1669f08f43c0a66517e6998
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -13,20 +13,20 @@ serial 1
 quantile type-7
 warmup 1
 cache warm
-versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 14.637170338
-sample 12.882903352
-sample 14.098133362
-sample 13.802097518
-sample 14.670440039
-sample 14.424260215
-median_s 14.261196789
-q25_s 13.876106479
-q75_s 14.583942807
-iqr_s 0.707836328
+versions readcon 0.22.0 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 13.095600369
+sample 12.641915056
+sample 13.928174185
+sample 13.773768869
+sample 14.589900057
+sample 14.386221179
+median_s 13.850971527
+q25_s 13.265142494
+q75_s 14.271709431
+iqr_s 1.006566937
 n_atoms 1000000
 n_frames 1
-field positions max_abs 3.815e-06
+field positions ok
 field ids not_in_format
 field cell ok
 field masses not_in_format
@@ -34,8 +34,8 @@ field fixed not_in_format
 field velocities not_in_format
 id_map_ok 0
 reordered 0
-correct 0
-reason positions max abs 3.815e-06
-readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
-{"samples": [14.637170337999123, 12.88290335199963, 14.098133362000226, 13.802097518000664, 14.670440039000823, 14.424260215000686], "n": 6, "median_s": 14.261196788500456, "q25_s": 13.876106479000555, "q75_s": 14.583942807249514, "iqr_s": 0.707836328248959, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 3.815e-06", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "positions max abs 3.815e-06", "arm": "mdtraj-pdb-read", "tool": "mdtraj", "format": "pdb", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+correct 1
+reason ok
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [13.09560036899893, 12.641915055999561, 13.928174185000898, 13.773768869001287, 14.589900057000705, 14.386221179000131], "n": 6, "median_s": 13.850971527001093, "q25_s": 13.26514249399952, "q75_s": 14.271709430500323, "iqr_s": 1.0065669365008034, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "arm": "mdtraj-pdb-read", "tool": "mdtraj", "format": "pdb", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
 exit 0

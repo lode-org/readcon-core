@@ -1,7 +1,7 @@
 git rev-parse HEAD
-c625bd7e9f75c2c2418fa9922839c78c7353f59b
+eba16e123c1962f08707f986df4d6c2a3c15329b
 git rev-parse HEAD^{tree}
-5ba56017ce5d983123f59af3662ea0bc360e6047
+e921d1a3d9beefb3a1669f08f43c0a66517e6998
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -13,17 +13,17 @@ serial 1
 quantile type-7
 warmup 1
 cache warm
-versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.296021991
-sample 0.544178663
-sample 0.399858022
-sample 0.440319793
-sample 0.406435960
-sample 0.385187285
-median_s 0.403146991
-q25_s 0.388854969
-q75_s 0.431848835
-iqr_s 0.042993865
+versions readcon 0.22.0 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.313290374
+sample 0.666563216
+sample 0.401266469
+sample 0.523741872
+sample 0.432013731
+sample 0.506902811
+median_s 0.469458271
+q25_s 0.408953285
+q75_s 0.519532107
+iqr_s 0.110578822
 n_atoms 32
 n_frames 100000
 field positions ok
@@ -36,6 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
-{"samples": [0.29602199100008875, 0.5441786630017305, 0.3998580219995347, 0.44031979299870727, 0.40643595999972604, 0.3851872849991196], "n": 6, "median_s": 0.40314699099963036, "q25_s": 0.38885496924922336, "q75_s": 0.43184883474896196, "iqr_s": 0.042993865499738604, "n_atoms": 32, "n_frames": 100000, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "not_in_format"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "mf-readcon-con-read", "tool": "readcon", "format": "con", "operation": "read", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-100000x32.con", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [0.3132903740006441, 0.6665632160002133, 0.4012664689998928, 0.5237418719989364, 0.43201373100055207, 0.5069028110010549], "n": 6, "median_s": 0.4694582710008035, "q25_s": 0.40895328450005763, "q75_s": 0.519532106749466, "iqr_s": 0.1105788222494084, "n_atoms": 32, "n_frames": 100000, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "not_in_format"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "mf-readcon-con-read", "tool": "readcon", "format": "con", "operation": "read", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-100000x32.con", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
 exit 0
