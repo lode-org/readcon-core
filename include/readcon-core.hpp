@@ -1336,6 +1336,80 @@ read_all_frames(const std::filesystem::path &path, std::size_t n_threads) {
     return adopt_frame_handles(handles, num_frames, path);
 }
 
+/// Coordinates of every frame, no per-atom frame objects.
+///
+/// `data()` is row-major `x y z` and stays valid until this object is
+/// destroyed. `n_threads` below 2 parses on the calling thread.
+class PositionBlock {
+  public:
+    PositionBlock() noexcept = default;
+    PositionBlock(const PositionBlock &) = delete;
+    PositionBlock &operator=(const PositionBlock &) = delete;
+    PositionBlock(PositionBlock &&other) noexcept { move_from(other); }
+    PositionBlock &operator=(PositionBlock &&other) noexcept {
+        if (this != &other) {
+            reset();
+            move_from(other);
+        }
+        return *this;
+    }
+    ~PositionBlock() { reset(); }
+
+    std::size_t n_frames() const noexcept { return n_frames_; }
+    std::size_t n_atoms() const noexcept { return n_atoms_; }
+    const double *data() const noexcept { return values_; }
+    std::size_t size() const noexcept { return n_frames_ * n_atoms_ * 3; }
+
+  private:
+    friend PositionBlock read_positions(const char *, std::size_t);
+    void reset() noexcept {
+        if (block_ != nullptr) {
+            rkr_free_position_block(block_);
+            block_ = nullptr;
+            values_ = nullptr;
+        }
+    }
+    void move_from(PositionBlock &other) noexcept {
+        block_ = other.block_;
+        values_ = other.values_;
+        n_frames_ = other.n_frames_;
+        n_atoms_ = other.n_atoms_;
+        other.block_ = nullptr;
+        other.values_ = nullptr;
+        other.n_frames_ = 0;
+        other.n_atoms_ = 0;
+    }
+
+    RKRPositionBlock *block_ = nullptr;
+    const double *values_ = nullptr;
+    std::size_t n_frames_ = 0;
+    std::size_t n_atoms_ = 0;
+};
+
+inline PositionBlock read_positions(const char *filename, std::size_t n_threads) {
+    uintptr_t n_frames = 0;
+    uintptr_t n_atoms = 0;
+    RKRPositionBlock *raw = rkr_read_positions_n_threads(
+        filename, &n_frames, &n_atoms, n_threads);
+    if (raw == nullptr) {
+        throw Error::from_last(std::string("read_positions failed: ") +
+                               (filename != nullptr ? filename : ""));
+    }
+    PositionBlock block;
+    block.block_ = raw;
+    block.values_ = rkr_position_block_values(raw);
+    block.n_frames_ = n_frames;
+    block.n_atoms_ = n_atoms;
+    return block;
+}
+
+inline PositionBlock read_positions(const std::filesystem::path &path,
+                                    std::size_t n_threads = 1) {
+    // `c_str()` is the stored path. `path.string()` would copy it on
+    // every call, which showed up on a million-atom read.
+    return read_positions(path.c_str(), n_threads);
+}
+
 // --- Implementation of ConFrameIterator and its nested Iterator ---
 
 inline ConFrameIterator::ConFrameIterator(const std::filesystem::path &path) {

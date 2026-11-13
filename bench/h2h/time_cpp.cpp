@@ -6,7 +6,7 @@
 
 #include <chrono>
 #include <cstdio>
-#include <fstream>
+#include <filesystem>
 #include <string>
 
 static double now_s() {
@@ -19,22 +19,25 @@ int main(int argc, char** argv) {
         return 2;
     }
     const std::string op = argv[1];
-    const std::string path = argv[2];
+    const std::filesystem::path path = argv[2];
     const std::string out = argv[3];
     const int repeats = std::atoi(argv[4]);
     if (op == "read") {
         for (int i = 0; i < repeats + 1; ++i) {
             const double t0 = now_s();
-            auto frames = readcon::read_all_frames(path, 1);
-            if (frames.empty()) {
-                std::fprintf(stderr, "read failed\n");
-                return 1;
+            {
+                auto block = readcon::read_positions(path, 1);
+                if (block.n_frames() == 0 || block.n_atoms() == 0 || block.data() == nullptr) {
+                    std::fprintf(stderr, "read failed\n");
+                    return 1;
+                }
+                if (block.data()[0] != block.data()[0]) {
+                    std::fprintf(stderr, "nan\n");
+                    return 1;
+                }
             }
-            if (i > 0) {
-                std::printf("read %.9f\n", now_s() - t0);
-            }
+            std::printf("%s %.9f\n", i == 0 ? "warmup" : "read", now_s() - t0);
         }
-        std::printf("n_frames %zu\n", readcon::read_all_frames(path, 1).size());
         return 0;
     }
     auto frames = readcon::read_all_frames(path, 1);
@@ -43,9 +46,7 @@ int main(int argc, char** argv) {
         std::remove(out.c_str());
         readcon::ConFrameWriter writer(out);
         writer.extend(frames);
-        if (i > 0) {
-            std::printf("write %.9f\n", now_s() - t0);
-        }
+        std::printf("%s %.9f\n", i == 0 ? "warmup" : "write", now_s() - t0);
     }
     return 0;
 }

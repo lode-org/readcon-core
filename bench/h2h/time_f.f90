@@ -20,16 +20,27 @@ program time_f
   read(count, *) repeats
 
   if (trim(op) == "read") then
-    ! One untimed pass, then `repeats` samples. Free the previous frames
-    ! before the clock so a dropped million-atom frame is not in the sample.
-    do i = 0, repeats
-      if (allocated(frames)) call release_frames(frames)
-      call wall(t0)
-      frames = read_all_frames(trim(path), 1)
-      call wall(t1)
-      if (i > 0) write(*, "(A,1X,F16.9)") "read", t1 - t0
-    end do
-    call report(frames, trim(path))
+    ! Coordinate column, same work as the C and Rust position reads.
+    ! One warmup is printed, then `repeats` samples.
+    block
+      type(position_block_t) :: block
+      real(c_double), pointer :: xyz(:, :, :)
+      integer :: nf, na
+      do i = 0, repeats
+        call wall(t0)
+        block = read_positions(trim(path), 1)
+        call block%xyz_ptr(xyz, nf, na)
+        if (.not. associated(xyz)) stop 1
+        if (xyz(1, 1, 1) /= xyz(1, 1, 1)) stop 1
+        call block%free()
+        call wall(t1)
+        if (i == 0) then
+          write(*, "(A,1X,F16.9)") "warmup", t1 - t0
+        else
+          write(*, "(A,1X,F16.9)") "read", t1 - t0
+        end if
+      end do
+    end block
   else
     frames = read_all_frames(trim(path), 1)
     do i = 0, repeats
@@ -40,7 +51,11 @@ program time_f
       call writer%free()
       call wall(t1)
       if (stat /= 0) stop 1
-      if (i > 0) write(*, "(A,1X,F16.9)") "write", t1 - t0
+      if (i == 0) then
+        write(*, "(A,1X,F16.9)") "warmup", t1 - t0
+      else
+        write(*, "(A,1X,F16.9)") "write", t1 - t0
+      end if
     end do
     block
       type(frame_t), allocatable :: written(:)

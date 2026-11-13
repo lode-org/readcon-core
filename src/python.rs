@@ -2333,7 +2333,9 @@ fn read_positions(
         .map_err(count_fail_to_py)?;
     let array = Array3::from_shape_vec((block.n_frames, block.n_atoms, 3), block.values)
         .map_err(|e| PyValueError::new_err(format!("positions shape error: {e}")))?;
-    Ok(array.into_pyarray(py).unbind())
+    // The coordinate buffer is already the NumPy array. Copying it into
+    // the Python heap added a few milliseconds on a million-atom frame.
+    Ok(PyArray3::from_owned_array(py, array).unbind())
 }
 
 fn frames_from_parsed(py: Python<'_>, frames: Vec<ConFrame>) -> PyResult<Vec<PyConFrame>> {

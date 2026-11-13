@@ -59,9 +59,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             rkr_free_position_block(block);
-            if (i > 0) {
-                printf("read %.9f\n", now_s() - t0);
-            }
+            printf("%s %.9f\n", i == 0 ? "warmup" : "read", now_s() - t0);
         }
     } else if (strcmp(op, "frames") == 0) {
         for (i = 0; i < repeats + 1; i++) {
@@ -74,9 +72,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             free_rkr_frame_array(frames, nframes);
-            if (i > 0) {
-                printf("read %.9f\n", now_s() - t0);
-            }
+            printf("%s %.9f\n", i == 0 ? "warmup" : "read", now_s() - t0);
         }
         printf("hwm_kib %ld\n", vm_hwm_kib());
     } else {
@@ -97,9 +93,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             free_rkr_writer(writer);
-            if (i > 0) {
-                printf("write %.9f\n", now_s() - t0);
-            }
+            printf("%s %.9f\n", i == 0 ? "warmup" : "write", now_s() - t0);
         }
         free_rkr_frame_array(frames, nframes);
     }

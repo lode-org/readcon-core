@@ -20,8 +20,8 @@ module readcon
   public :: library_version, readcon_version, con_spec_version, has_chemfiles_support, status_message
   public :: last_error_code, last_error_line, last_error_frame, last_error_message, clear_error
   public :: symbol_to_z, z_to_symbol
-  public :: frame_t, iterator_t, builder_t, writer_t
-  public :: read_first_frame, read_all_frames, read_nth_frame, count_frames
+  public :: frame_t, iterator_t, builder_t, writer_t, position_block_t
+  public :: read_first_frame, read_all_frames, read_positions, read_nth_frame, count_frames
   public :: open_iterator, new_builder, open_writer
   public :: open_writer_gzip, open_writer_zstd
   public :: open_writer_gzip_with_precision, open_writer_zstd_with_precision
@@ -211,6 +211,20 @@ module readcon
     procedure :: is_canonical => wr_is_canonical
   end type
 
+  !> Owned coordinate column from `rkr_read_positions`. No frame objects.
+  type :: position_block_t
+    private
+    type(c_ptr) :: handle = c_null_ptr
+    integer(c_size_t) :: n_frames = 0_c_size_t
+    integer(c_size_t) :: n_atoms = 0_c_size_t
+  contains
+    procedure :: valid => pb_valid
+    procedure :: free => pb_free
+    procedure :: frame_count => pb_frames
+    procedure :: atom_count => pb_atoms
+    procedure :: xyz_ptr => pb_xyz
+  end type
+
   interface
     function c_rkr_con_spec_version() bind(C, name="rkr_con_spec_version")
       import :: c_int32_t
@@ -357,6 +371,23 @@ module readcon
       integer(c_size_t), value :: nthr
       type(c_ptr) :: c_rkr_read_all_frames_n_threads
     end function
+    function c_rkr_read_positions_n_threads(fn, nframes, natoms, nthr) &
+        bind(C, name="rkr_read_positions_n_threads")
+      import :: c_char, c_ptr, c_size_t
+      character(kind=c_char), intent(in) :: fn(*)
+      integer(c_size_t), intent(out) :: nframes, natoms
+      integer(c_size_t), value :: nthr
+      type(c_ptr) :: c_rkr_read_positions_n_threads
+    end function
+    function c_rkr_position_block_values(block) bind(C, name="rkr_position_block_values")
+      import :: c_ptr
+      type(c_ptr), value :: block
+      type(c_ptr) :: c_rkr_position_block_values
+    end function
+    subroutine c_rkr_free_position_block(block) bind(C, name="rkr_free_position_block")
+      import :: c_ptr
+      type(c_ptr), value :: block
+    end subroutine
     subroutine c_free_rkr_frame_array(arr, n) bind(C, name="free_rkr_frame_array")
       import :: c_ptr, c_size_t
       type(c_ptr), value :: arr
@@ -993,6 +1024,66 @@ contains
     end do
     call c_free_rkr_frame_ptr_array(arr, n)
   end function
+
+  !> Coordinate column. `n_threads` below 2 stays on the calling thread.
+  !> The block does not build frame objects. Free it with `free`.
+  function read_positions(path, n_threads) result(block)
+    character(len=*), intent(in) :: path
+    integer, intent(in), optional :: n_threads
+    type(position_block_t) :: block
+    character(kind=c_char), allocatable :: c(:)
+    integer(c_size_t) :: nthr
+    call to_c(path, c)
+    nthr = 1_c_size_t
+    if (present(n_threads)) nthr = int(max(n_threads, 0), c_size_t)
+    block%handle = c_rkr_read_positions_n_threads(c, block%n_frames, block%n_atoms, nthr)
+    if (.not. c_associated(block%handle)) then
+      block%n_frames = 0_c_size_t
+      block%n_atoms = 0_c_size_t
+    end if
+  end function
+
+  logical function pb_valid(self)
+    class(position_block_t), intent(in) :: self
+    pb_valid = c_associated(self%handle)
+  end function
+
+  subroutine pb_free(self)
+    class(position_block_t), intent(inout) :: self
+    if (c_associated(self%handle)) then
+      call c_rkr_free_position_block(self%handle)
+      self%handle = c_null_ptr
+    end if
+    self%n_frames = 0_c_size_t
+    self%n_atoms = 0_c_size_t
+  end subroutine
+
+  integer function pb_frames(self)
+    class(position_block_t), intent(in) :: self
+    pb_frames = int(self%n_frames)
+  end function
+
+  integer function pb_atoms(self)
+    class(position_block_t), intent(in) :: self
+    pb_atoms = int(self%n_atoms)
+  end function
+
+  !> `xyz(3, n_atoms, n_frames)` views the row-major C buffer. No copy.
+  subroutine pb_xyz(self, xyz, n_frames, n_atoms)
+    class(position_block_t), intent(in) :: self
+    real(c_double), pointer, intent(out) :: xyz(:, :, :)
+    integer, intent(out) :: n_frames, n_atoms
+    type(c_ptr) :: p
+    xyz => null()
+    n_frames = 0
+    n_atoms = 0
+    if (.not. c_associated(self%handle)) return
+    p = c_rkr_position_block_values(self%handle)
+    n_frames = int(self%n_frames)
+    n_atoms = int(self%n_atoms)
+    if (.not. c_associated(p) .or. n_frames <= 0 .or. n_atoms <= 0) return
+    call c_f_pointer(p, xyz, [3, n_atoms, n_frames])
+  end subroutine
 
   !> Take ownership of a C array of `n` RKRConFrame handles (as returned by
   !> rkr_read_all_frames or rkr_mpi_read_block_f). Frees the array itself;

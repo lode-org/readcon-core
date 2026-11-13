@@ -97,6 +97,35 @@ program test_read_con
         call allf(ia)%free()
       end do
     end if
+    block
+      type(position_block_t) :: cols
+      real(c_double), pointer :: xyz(:, :, :)
+      integer :: nf, na, i
+      real(c_double), pointer :: frame_xyz(:, :)
+      integer :: frame_n
+      cols = read_positions(trim(tiny), 1)
+      if (.not. cols%valid()) error stop "read_positions tiny"
+      if (cols%frame_count() /= 1) nfail = nfail + 1
+      if (cols%atom_count() /= int(fr%atom_count())) nfail = nfail + 1
+      call cols%xyz_ptr(xyz, nf, na)
+      call fr%xyz_ptr(frame_xyz, frame_n)
+      if (.not. associated(xyz) .or. .not. associated(frame_xyz)) then
+        nfail = nfail + 1
+      else if (nf /= 1 .or. na /= frame_n) then
+        nfail = nfail + 1
+      else
+        do i = 1, na
+          if (xyz(1, i, 1) /= frame_xyz(1, i) .or. &
+              xyz(2, i, 1) /= frame_xyz(2, i) .or. &
+              xyz(3, i, 1) /= frame_xyz(3, i)) then
+            nfail = nfail + 1
+            exit
+          end if
+        end do
+      end if
+      call cols%free()
+      print *, "read_positions frames=", nf, " atoms=", na
+    end block
   end block
 
   ! Lazy multi-frame iterator (C ABI: read_con_file_iterator / next)

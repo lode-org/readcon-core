@@ -26,13 +26,29 @@ fn time_it(repeats: usize, mut body: impl FnMut()) -> Vec<f64> {
     samples
 }
 
+/// One warmup, then `repeats` samples. Both are printed, one line each.
+fn time_logged(label: &str, repeats: usize, mut body: impl FnMut()) -> Vec<f64> {
+    let started = Instant::now();
+    body();
+    println!("warmup {:.9}", started.elapsed().as_secs_f64());
+    let mut samples = Vec::with_capacity(repeats);
+    for _ in 0..repeats {
+        let started = Instant::now();
+        body();
+        let elapsed = started.elapsed().as_secs_f64();
+        samples.push(elapsed);
+        println!("{label} {elapsed:.9}");
+    }
+    samples
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let which = args.next().unwrap_or_else(|| "pos".into());
     let path = args.next().expect("path");
     let workers: usize = args.next().unwrap_or_else(|| "1".into()).parse().unwrap();
     let samples = match which.as_str() {
-        "pos" => time_it(6, || {
+        "pos" => time_logged("read", 6, || {
             let block = readcon_core::iterators::read_positions_with_threads(
                 std::path::Path::new(&path),
                 Some(workers),
@@ -56,7 +72,8 @@ fn main() {
             let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
             let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
             let out = std::path::Path::new("/dev/shm/r7-rust-write.con");
-            time_it(6, || {
+            time_logged("write", 6, || {
+                let _ = std::fs::remove_file(out);
                 readcon_core::writer::write_frame_refs_to_path(
                     out, &refs, workers, None, false, true,
                 )

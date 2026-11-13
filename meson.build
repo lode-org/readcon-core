@@ -213,6 +213,22 @@ if get_option('with_tests')
         env: {'LD_LIBRARY_PATH': meson.project_build_root()},
         timeout: 180,
     )
+    if add_languages('cpp', required: false)
+        cpp_positions = executable(
+            'test_cpp_positions',
+            files('tests/c/test_cpp_positions.cpp'),
+            dependencies: readcon_dep,
+            include_directories: _incdir,
+            build_rpath: meson.project_build_root(),
+        )
+        test(
+            'cpp-positions',
+            cpp_positions,
+            args: [_msproot],
+            env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+            timeout: 180,
+        )
+    endif
 endif
 
 if get_option('with_examples')
