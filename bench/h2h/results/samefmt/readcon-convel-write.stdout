@@ -1,7 +1,7 @@
 git rev-parse HEAD
-68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+c625bd7e9f75c2c2418fa9922839c78c7353f59b
 git rev-parse HEAD^{tree}
-0b41eb7cf69d32f7b01e77eeaede952a2080e010
+5ba56017ce5d983123f59af3662ea0bc360e6047
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -14,16 +14,16 @@ quantile type-7
 warmup 1
 cache warm
 versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.334894675
-sample 0.316165696
-sample 0.315288324
-sample 0.309359581
-sample 0.296148000
-sample 0.292586764
-median_s 0.312323953
-q25_s 0.299450895
-q75_s 0.315946353
-iqr_s 0.016495458
+sample 0.190989047
+sample 0.176711954
+sample 0.171701701
+sample 0.168030491
+sample 0.182551365
+sample 0.170250276
+median_s 0.174206827
+q25_s 0.170613132
+q75_s 0.181091512
+iqr_s 0.010478380
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,5 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-{"samples": [0.3348946750002142, 0.31616569600009825, 0.31528832399999374, 0.3093595810005354, 0.2961479999994481, 0.29258676399967953], "n": 6, "median_s": 0.31232395250026457, "q25_s": 0.2994508952497199, "q75_s": 0.3159463530000721, "iqr_s": 0.016495457750352216, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "readcon-convel-write", "tool": "readcon", "format": "convel", "operation": "write", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.convel"}
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [0.19098904699967534, 0.17671195399998396, 0.1717017009996198, 0.16803049099871714, 0.1825513649982895, 0.17025027599993336], "n": 6, "median_s": 0.17420682749980188, "q25_s": 0.17061313224985497, "q75_s": 0.18109151224871312, "iqr_s": 0.010478379998858145, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "readcon-convel-write", "tool": "readcon", "format": "convel", "operation": "write", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.convel", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
 exit 0

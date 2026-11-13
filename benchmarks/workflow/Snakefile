@@ -602,15 +602,44 @@ for _arm in SAMEFMT_ARMS:
     _samefmt_rule(_arm)
 
 
+SAMEFMT_SINGLE = [arm for arm in SAMEFMT_ARMS if not arm.startswith("mf-")]
+SAMEFMT_MULTI = [arm for arm in SAMEFMT_ARMS if arm.startswith("mf-")]
+
+
+rule h2h_table_1e6:
+    input:
+        expand("bench/h2h/results/samefmt/{arm}.stdout", arm=SAMEFMT_SINGLE),
+    output:
+        "bench/h2h/results/samefmt/table-1e6.csv",
+    shell:
+        """
+        set -euo pipefail
+        taskset -c 0 python bench/h2h/asv/drive.py samefmt report 1e6
+        """
+
+
+rule h2h_table_100k:
+    input:
+        expand("bench/h2h/results/samefmt/{arm}.stdout", arm=SAMEFMT_MULTI),
+    output:
+        "bench/h2h/results/samefmt/table-100k.csv",
+    shell:
+        """
+        set -euo pipefail
+        taskset -c 0 python bench/h2h/asv/drive.py samefmt report 100k
+        """
+
+
 rule h2h_samefmt:
     input:
-        expand("bench/h2h/results/samefmt/{arm}.stdout", arm=SAMEFMT_ARMS),
+        "bench/h2h/results/samefmt/table-1e6.csv",
+        "bench/h2h/results/samefmt/table-100k.csv",
     output:
         "bench/h2h/results/samefmt/summary.csv",
     shell:
         """
         set -euo pipefail
-        taskset -c 0 python bench/h2h/asv/drive.py samefmt report
+        taskset -c 0 python bench/h2h/asv/drive.py samefmt report summary
         """
 
 

@@ -51,7 +51,7 @@ def main() -> None:
         if command == "prepare":
             samefmt.prepare()
         elif command == "report":
-            samefmt.write_report()
+            samefmt.write_report(sys.argv[3] if len(sys.argv) > 3 else "all")
         else:
             samefmt.run(command)
         return

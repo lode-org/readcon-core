@@ -1,0 +1,141 @@
+diff --git a/client/ConFileIO.cpp b/client/ConFileIO.cpp
+index 91b8532..7002987 100644
+--- a/client/ConFileIO.cpp
++++ b/client/ConFileIO.cpp
+@@ -424,7 +424,8 @@ void apply_geometry(readcon::ConFrameBuilder &builder, Matter &m,
+   }
+ 
+   if (with_velocities) {
+-    const AtomMatrix vel = m.getVelocities();
++    // getVelocities() drops fixed axes. The file stores the raw component.
++    const AtomMatrix vel = m.getVelocitiesRaw();
+     for (long i = 0; i < n; ++i) {
+       builder.set_atom_velocity(static_cast<size_t>(i),
+                                 {vel(i, 0), vel(i, 1), vel(i, 2)});
+@@ -707,7 +708,9 @@ IoStatus con2matter(Matter &m, const readcon::ConFrame &frame,
+     m.setPositions(positions);
+ 
+     if (any_velocity || frame.has_velocities()) {
+-      m.setVelocities(velocities);
++      // setVelocities() would zero a fixed axis and the atom id would no
++      // longer carry the velocity from the file.
++      m.setVelocitiesRaw(velocities);
+     }
+ 
+     const auto meta = metadata_from_frame(frame);
+diff --git a/client/Matter.cpp b/client/Matter.cpp
+index f5e1f81..5330871 100644
+--- a/client/Matter.cpp
++++ b/client/Matter.cpp
+@@ -605,6 +605,10 @@ void Matter::setVelocities(const AtomMatrix &v) {
+   velocities = v.array() * getFree().array();
+ }
+ 
++const AtomMatrix &Matter::getVelocitiesRaw() const { return velocities; }
++
++void Matter::setVelocitiesRaw(const AtomMatrix &v) { velocities = v; }
++
+ void Matter::setForces(const AtomMatrix &f) {
+   forces = f.array() * getFree().array();
+ }
+diff --git a/client/unit_tests/ConFileIOTest.cpp b/client/unit_tests/ConFileIOTest.cpp
+index 53d62a0..64dbd14 100644
+--- a/client/unit_tests/ConFileIOTest.cpp
++++ b/client/unit_tests/ConFileIOTest.cpp
+@@ -744,6 +744,79 @@ TEST_CASE("ConFileIO convel round-trip preserves velocities",
+   std::filesystem::remove(tmpfile);
+ }
+ 
++TEST_CASE("convel velocity stays with a fixed atom id",
++          "[confileio][convel]") {
++  // Ids are not sorted. Atom 2 is fixed in x and has a velocity on that
++  // axis. Dynamics still sees a zero there; the written convel must not.
++  const auto src_path =
++      std::filesystem::temp_directory_path() / "_convel_fixed_src.convel";
++  const auto dst_path =
++      std::filesystem::temp_directory_path() / "_convel_fixed_dst.convel";
++  const std::string src = src_path.string();
++  const std::string dst = dst_path.string();
++  {
++    std::ofstream out(src);
++    out << "repro\n"
++           "{\"con_spec_version\":3,\"con_spec_minor\":1,\"sections\":["
++           "\"velocities\"],\"units\":{\"energy\":\"eV\",\"length\":"
++           "\"angstrom\",\"time\":\"fs\"}}\n"
++           "10.0 10.0 10.0\n"
++           "90.0 90.0 90.0\n"
++           "\n"
++           "\n"
++           "1\n"
++           "2\n"
++           "63.546\n"
++           "Cu\n"
++           "Coordinates of Component 1\n"
++           "1.0 0.0 0.0 1 2\n"
++           "0.0 0.0 0.0 0 1\n"
++           "\n"
++           "Cu\n"
++           "Velocities of Component 1\n"
++           "0.400000 0.500000 0.600000 1 2\n"
++           "0.100000 0.200000 0.300000 0 1\n";
++  }
++
++  Parameters params;
++  params.potential_options.potential = PotType::LJ;
++  auto pot = eonc::helpers::makePotential(PotType::LJ, params);
++  Matter loaded(pot, params);
++  REQUIRE(eonc::io::io_ok(eonc::io::convel2matter(loaded, src)));
++
++  long fixed_row = -1;
++  for (long i = 0; i < loaded.numberOfAtoms(); ++i) {
++    if (loaded.getAtomIndex(i) == 2) {
++      fixed_row = i;
++    }
++  }
++  REQUIRE(fixed_row >= 0);
++  REQUIRE(loaded.getVelocities()(fixed_row, 0) ==
++          Catch::Approx(0.0).margin(0.0));
++  REQUIRE(loaded.getVelocitiesRaw()(fixed_row, 0) == Catch::Approx(0.4));
++  REQUIRE(loaded.getVelocitiesRaw()(fixed_row, 1) == Catch::Approx(0.5));
++  REQUIRE(loaded.getVelocitiesRaw()(fixed_row, 2) == Catch::Approx(0.6));
++
++  REQUIRE(eonc::io::io_ok(eonc::io::matter2convel(loaded, dst)));
++  const auto frames = readcon::read_all_frames(dst);
++  REQUIRE(frames.size() == 1);
++  bool saw = false;
++  for (const auto &atom : frames[0].atoms()) {
++    if (atom.atom_id != 2) {
++      continue;
++    }
++    saw = true;
++    const auto vel = atom.velocity();
++    REQUIRE(vel.has_value());
++    REQUIRE((*vel)[0] == Catch::Approx(0.4));
++    REQUIRE((*vel)[1] == Catch::Approx(0.5));
++    REQUIRE((*vel)[2] == Catch::Approx(0.6));
++  }
++  REQUIRE(saw);
++  std::filesystem::remove(src);
++  std::filesystem::remove(dst);
++}
++
+ TEST_CASE("ConFileIO writeTibble produces valid output",
+           "[confileio][tibble]") {
+   Parameters params;
+diff --git a/include/eon/Matter.h b/include/eon/Matter.h
+index 11a8a29..1ee9d6d 100644
+--- a/include/eon/Matter.h
++++ b/include/eon/Matter.h
+@@ -185,6 +185,12 @@ public:
+ 
+   AtomMatrix getVelocities() const;
+   void setVelocities(const AtomMatrix &v);
++  /// Stored velocities, including components on fixed axes.
++  /// getVelocities() zeros those components for dynamics. File I/O uses the
++  /// raw matrix so a convel round-trip keeps the velocity that belongs to
++  /// the atom id.
++  const AtomMatrix &getVelocitiesRaw() const;
++  void setVelocitiesRaw(const AtomMatrix &v);
+   void setBiasForces(const AtomMatrix &bf);
+   void setBiasPotential(BondBoost *bondBoost);
+   void setForces(const AtomMatrix &f);

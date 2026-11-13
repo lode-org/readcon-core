@@ -1,7 +1,7 @@
 git rev-parse HEAD
-5f3a28adeeda0ec4cd1c504697b4dbe5297aa830
+c625bd7e9f75c2c2418fa9922839c78c7353f59b
 git rev-parse HEAD^{tree}
-8a7a470463dea39ccc321c1e9aa4e886575b72ce
+5ba56017ce5d983123f59af3662ea0bc360e6047
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -14,16 +14,16 @@ quantile type-7
 warmup 1
 cache warm
 versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.454371822
-sample 0.730295592
-sample 0.618825174
-sample 0.723427443
-sample 0.761406518
-sample 0.849571331
-median_s 0.726861517
-q25_s 0.644975741
-q75_s 0.753628787
-iqr_s 0.108653045
+sample 0.296021991
+sample 0.544178663
+sample 0.399858022
+sample 0.440319793
+sample 0.406435960
+sample 0.385187285
+median_s 0.403146991
+q25_s 0.388854969
+q75_s 0.431848835
+iqr_s 0.042993865
 n_atoms 32
 n_frames 100000
 field positions ok
@@ -36,5 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-{"samples": [0.4543718219993025, 0.7302955920004024, 0.6188251739986299, 0.7234274429993093, 0.7614065180005127, 0.8495713310003339], "n": 6, "median_s": 0.7268615174998558, "q25_s": 0.6449757412487997, "q75_s": 0.7536287865004851, "iqr_s": 0.1086530452516854, "n_atoms": 32, "n_frames": 100000, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "not_in_format"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "mf-readcon-con-read", "tool": "readcon", "format": "con", "operation": "read", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-100000x32.con"}
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [0.29602199100008875, 0.5441786630017305, 0.3998580219995347, 0.44031979299870727, 0.40643595999972604, 0.3851872849991196], "n": 6, "median_s": 0.40314699099963036, "q25_s": 0.38885496924922336, "q75_s": 0.43184883474896196, "iqr_s": 0.042993865499738604, "n_atoms": 32, "n_frames": 100000, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "not_in_format"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "mf-readcon-con-read", "tool": "readcon", "format": "con", "operation": "read", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-100000x32.con", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
 exit 0

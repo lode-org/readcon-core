@@ -1,7 +1,8 @@
 """ASV arms for the same-format pairs.
 
-``time_call`` is one read, write, or round-trip. The Snakemake rule records
-one warmup and six serial samples of that call, then checks fidelity.
+``time_call`` is one read, write, or round-trip. The Snakemake rules
+``h2h_table_1e6`` and ``h2h_table_100k`` rebuild the two tables from the raw
+logs of these arms (``Same_*`` and ``Same_mf_*``).
 """
 
 from __future__ import annotations

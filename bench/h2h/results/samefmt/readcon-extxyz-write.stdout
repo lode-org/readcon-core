@@ -1,7 +1,7 @@
 git rev-parse HEAD
-68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+c625bd7e9f75c2c2418fa9922839c78c7353f59b
 git rev-parse HEAD^{tree}
-0b41eb7cf69d32f7b01e77eeaede952a2080e010
+5ba56017ce5d983123f59af3662ea0bc360e6047
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -14,16 +14,16 @@ quantile type-7
 warmup 1
 cache warm
 versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.630510240
-sample 0.628323720
-sample 0.625486825
-sample 0.630798904
-sample 0.630172935
-sample 0.623201374
-median_s 0.629248327
-q25_s 0.626196049
-q75_s 0.630425914
-iqr_s 0.004229865
+sample 0.571763532
+sample 0.570782663
+sample 0.569153454
+sample 0.567081658
+sample 0.573555468
+sample 0.568774113
+median_s 0.569968059
+q25_s 0.568868948
+q75_s 0.571518315
+iqr_s 0.002649366
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,5 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-{"samples": [0.6305102399992393, 0.628323719999571, 0.6254868249998253, 0.630798904000585, 0.6301729349997913, 0.6232013740000184], "n": 6, "median_s": 0.6292483274996812, "q25_s": 0.6261960487497618, "q75_s": 0.6304259137493773, "iqr_s": 0.004229864999615529, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "readcon-extxyz-write", "tool": "readcon", "format": "extxyz", "operation": "write", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz"}
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [0.5717635319997498, 0.5707826630005002, 0.5691534540001157, 0.5670816580004612, 0.5735554680013593, 0.5687741130004724], "n": 6, "median_s": 0.569968058500308, "q25_s": 0.5688689482503833, "q75_s": 0.5715183147499374, "iqr_s": 0.002649366499554162, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "readcon-extxyz-write", "tool": "readcon", "format": "extxyz", "operation": "write", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
 exit 0

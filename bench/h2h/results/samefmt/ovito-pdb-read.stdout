@@ -1,7 +1,7 @@
 git rev-parse HEAD
-68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+c625bd7e9f75c2c2418fa9922839c78c7353f59b
 git rev-parse HEAD^{tree}
-0b41eb7cf69d32f7b01e77eeaede952a2080e010
+5ba56017ce5d983123f59af3662ea0bc360e6047
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -14,16 +14,16 @@ quantile type-7
 warmup 1
 cache warm
 versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 1.089650273
-sample 1.322695694
-sample 1.136049932
-sample 1.156828751
-sample 1.136057750
-sample 1.153867673
-median_s 1.144962712
-q25_s 1.136051887
-q75_s 1.156088482
-iqr_s 0.020036595
+sample 1.148653390
+sample 1.199698995
+sample 1.184973194
+sample 1.177719544
+sample 1.190441082
+sample 1.180003972
+median_s 1.182488583
+q25_s 1.178290651
+q75_s 1.189074110
+iqr_s 0.010783459
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,5 +36,6 @@ id_map_ok 0
 reordered 0
 correct 1
 reason ok
-{"samples": [1.089650272999961, 1.3226956940000036, 1.1360499320001054, 1.1568287510001483, 1.1360577499999636, 1.1538676730001498], "n": 6, "median_s": 1.1449627115000567, "q25_s": 1.13605188650007, "q75_s": 1.1560884815001486, "iqr_s": 0.020036595000078705, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "arm": "ovito-pdb-read", "tool": "ovito", "format": "pdb", "operation": "read", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb"}
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [1.148653390000618, 1.1996989950002899, 1.184973194000122, 1.1777195439990464, 1.1904410819988698, 1.1800039720001223], "n": 6, "median_s": 1.1824885830001222, "q25_s": 1.1782906509993154, "q75_s": 1.1890741099991828, "iqr_s": 0.010783458999867435, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "arm": "ovito-pdb-read", "tool": "ovito", "format": "pdb", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
 exit 0

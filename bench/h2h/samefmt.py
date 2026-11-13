@@ -943,12 +943,28 @@ def _chemfiles_write(frame, path: Path, chem_format: str) -> None:
         traj.close()
 
 
-def _ovito_read(path: Path) -> dict:
+def _ovito_load(path: Path):
+    """One import of every frame, then the file source.
+
+    ``Pipeline.compute`` evaluates the modifier stack and, if each result is
+    kept, retains a data collection per frame. The file source's ``compute``
+    is the read, and the caller drops the collection after copying what it
+    needs.
+    """
     from ovito.io import import_file
 
-    pipe = import_file(os.fspath(path))
-    frames = [pipe.compute(index) for index in range(pipe.num_frames)]
-    data = frames[0]
+    pipeline = import_file(os.fspath(path), multiple_frames=True)
+    source = pipeline.source
+    for index in range(source.num_frames):
+        data = source.compute(index)
+        # Touch the coordinates so a lazy reader cannot defer the scan.
+        _ = data.particles.positions
+    return pipeline
+
+
+def _ovito_read(path: Path) -> dict:
+    pipeline = _ovito_load(path)
+    data = pipeline.source.compute(0)
     positions = np.array(data.particles.positions, dtype=np.float64)
     matrix = np.array(data.cell[:, :3], dtype=np.float64)
     lengths = np.linalg.norm(matrix, axis=1)
@@ -967,7 +983,15 @@ def _ovito_read(path: Path) -> dict:
             ids = np.array(data.particles[key])
             break
     fixed = np.array(data.particles["fixed"], dtype=np.float64) if "fixed" in keys else None
-    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+    return _pack(
+        positions,
+        cell,
+        masses,
+        ids,
+        fixed,
+        velocities,
+        n_frames=int(pipeline.source.num_frames),
+    )
 
 
 def _out_path(arm: str, fmt: str) -> Path:
@@ -1138,10 +1162,7 @@ def _raw_read(tool: str, fmt: str, path: Path):
             traj.close()
         return frames
     if tool == "ovito":
-        from ovito.io import import_file
-
-        pipe = import_file(os.fspath(path))
-        return [pipe.compute(index) for index in range(pipe.num_frames)]
+        return _ovito_load(path)
     if tool == "mdanalysis":
         import MDAnalysis as mda
 
@@ -1383,10 +1404,22 @@ def _chemfiles_frames_to_got(frames) -> dict:
     )
 
 
+def _ovito_frame_count(frames) -> int:
+    if isinstance(frames, list):
+        return len(frames)
+    return int(frames.source.num_frames)
+
+
+def _ovito_frame_at(frames, index: int):
+    if isinstance(frames, list):
+        return frames[index]
+    return frames.source.compute(index)
+
+
 def _ovito_frames_to_got(frames) -> dict:
-    if len(frames) > 1:
-        n_frames = len(frames)
-        n = int(frames[0].particles.count)
+    n_frames = _ovito_frame_count(frames)
+    if n_frames > 1:
+        n = int(_ovito_frame_at(frames, 0).particles.count)
         positions = np.empty((n_frames, n, 3), dtype=np.float64)
         cell = np.empty((n_frames, 6), dtype=np.float64)
         masses = np.empty((n_frames, n), dtype=np.float64)
@@ -1394,7 +1427,8 @@ def _ovito_frames_to_got(frames) -> dict:
         fixed = np.empty((n_frames, n), dtype=np.float64)
         velocities = np.empty((n_frames, n, 3), dtype=np.float64)
         have_mass = have_id = have_fixed = have_vel = False
-        for index, data in enumerate(frames):
+        for index in range(n_frames):
+            data = _ovito_frame_at(frames, index)
             positions[index] = np.array(data.particles.positions, dtype=np.float64)
             matrix = np.array(data.cell[:, :3], dtype=np.float64)
             cell[index, :3] = np.linalg.norm(matrix, axis=1)
@@ -1425,7 +1459,7 @@ def _ovito_frames_to_got(frames) -> dict:
             velocities if have_vel else None,
             stacked=True,
         )
-    data = frames[0]
+    data = _ovito_frame_at(frames, 0)
     positions = np.array(data.particles.positions, dtype=np.float64)
     matrix = np.array(data.cell[:, :3], dtype=np.float64)
     lengths = np.linalg.norm(matrix, axis=1)
@@ -1443,7 +1477,7 @@ def _ovito_frames_to_got(frames) -> dict:
             ids = np.array(data.particles[key])
             break
     fixed = np.array(data.particles["fixed"], dtype=np.float64) if "fixed" in keys else None
-    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=len(frames))
+    return _pack(positions, cell, masses, ids, fixed, velocities, n_frames=n_frames)
 
 
 EON_BUILD = Path(os.environ.get("EON_BUILD", "/tmp/eOn/build-h2h"))
@@ -1705,6 +1739,7 @@ def run(arm: str) -> dict:
     row["arm"] = arm
     row["tool"], row["format"], row["operation"], row["multi"] = split_arm(arm)
     row["file"] = support.rel(_paths(fmt, row["multi"]))
+    row["readcon_sha"] = os.environ.get("READCON_SHA", "").strip()
     command = [
         "taskset",
         "-c",
@@ -1736,6 +1771,8 @@ def run(arm: str) -> dict:
     lines.append(f"reordered {int(bool(row['reordered']))}")
     lines.append(f"correct {int(bool(row['correct']))}")
     lines.append(f"reason {row['reason']}")
+    if row["readcon_sha"]:
+        lines.append(f"readcon_sha {row['readcon_sha']}")
     lines.append(json.dumps(row, default=str))
     body = "\n".join(lines) + "\n"
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -1748,26 +1785,32 @@ def run(arm: str) -> dict:
     return row
 
 
-def write_report() -> None:
-    rows = []
-    for arm in ARMS:
-        path = RESULTS / f"{arm}.stdout"
-        payload = None
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("{") and line.endswith("}"):
-                payload = json.loads(line)
-        if payload is None:
-            raise RuntimeError(f"missing result in {path}")
-        rows.append(payload)
-    RESULTS.mkdir(parents=True, exist_ok=True)
-    destination = RESULTS / "summary.csv"
+# Rows measured before the parallel-scaling wheel recorded no SHA. That wheel
+# was readcon 0.22.0 at this commit.
+LEGACY_READCON_SHA = "68dfb7c307e0923044d4a9f41159b7a2ed2dd605"
+
+
+def _row_from_log(arm: str) -> dict:
+    path = RESULTS / f"{arm}.stdout"
+    payload = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("{") and line.endswith("}"):
+            payload = json.loads(line)
+    if payload is None:
+        raise RuntimeError(f"missing result in {path}")
+    return payload
+
+
+def _write_csv(rows: list[dict], destination: Path) -> None:
     header = (
         "tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,"
-        "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities\n"
+        "correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,"
+        "readcon_sha\n"
     )
     lines = [header]
     for row in rows:
         fields = row["fields"]
+        sha = row.get("readcon_sha") or LEGACY_READCON_SHA
         lines.append(
             ",".join(
                 [
@@ -1790,12 +1833,32 @@ def write_report() -> None:
                     str(fields.get("masses", "")).replace(",", ";"),
                     str(fields.get("fixed", "")).replace(",", ";"),
                     str(fields.get("velocities", "")).replace(",", ";"),
+                    sha,
                 ]
             )
             + "\n"
         )
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("".join(lines), encoding="utf-8")
     print(f"wrote {destination}", flush=True)
+
+
+def write_report(kind: str = "all") -> None:
+    """Rebuild the csv tables from the raw arm logs.
+
+    ``1e6`` writes the single-frame table, ``100k`` the multi-frame table,
+    ``summary`` the combined table, and ``all`` writes every file.
+    """
+    single = [arm for arm in ARMS if not split_arm(arm)[3]]
+    multi = [arm for arm in ARMS if split_arm(arm)[3]]
+    if kind in ("all", "1e6"):
+        _write_csv([_row_from_log(arm) for arm in single], RESULTS / "table-1e6.csv")
+    if kind in ("all", "100k"):
+        _write_csv([_row_from_log(arm) for arm in multi], RESULTS / "table-100k.csv")
+    if kind in ("all", "summary"):
+        _write_csv([_row_from_log(arm) for arm in ARMS], RESULTS / "summary.csv")
+    if kind not in ("all", "1e6", "100k", "summary"):
+        raise SystemExit(f"unknown report {kind}")
 
 
 def self_check() -> None:
@@ -1835,7 +1898,7 @@ def main() -> None:
         prepare()
         return
     if command == "report":
-        write_report()
+        write_report(sys.argv[2] if len(sys.argv) > 2 else "all")
         return
     if command == "self-check":
         self_check()
