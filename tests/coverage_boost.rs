@@ -692,6 +692,27 @@ fn more_types_frame_helpers_and_chemfiles_convert() {
 
 #[cfg(feature = "chemfiles")]
 #[test]
+fn chemfiles_uniform_frame_uses_the_parallel_scan() {
+    use readcon_core::chemfiles_import::con_frames_from_memory;
+    let n = 65_536usize;
+    let mut xyz = format!("{n}\nuniform Cu\n");
+    xyz.reserve(n.saturating_mul(16));
+    for _ in 0..n {
+        xyz.push_str("Cu 0.0 0.0 0.0\n");
+    }
+    let frames = con_frames_from_memory(&xyz, "XYZ").expect("uniform xyz");
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].atom_data.len(), n);
+    assert!(
+        frames[0]
+            .atom_data
+            .iter()
+            .all(|atom| atom.symbol.as_ref() == "Cu")
+    );
+}
+
+#[cfg(feature = "chemfiles")]
+#[test]
 fn chemfiles_import_surface() {
     use readcon_core::chemfiles_import::{
         chemfiles_enabled, con_frames_from_memory, con_frames_from_trajectory_path,
