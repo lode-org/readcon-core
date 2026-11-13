@@ -1670,12 +1670,67 @@ mod tests {
         text_of_at_least(MMAP_THRESHOLD as usize)
     }
 
+    /// Independent members inflate back to the same bytes. One member stays
+    /// a single frame; several members carry the index a parallel read uses.
+    #[test]
+    fn codec_deflate_round_trips_one_member_and_several() {
+        let plain = b"aaaa\nbbbb\ncccc\ndddd\neeee\nffff\n".repeat(80);
+        for members in [1usize, 4] {
+            let gzip = codec_deflate(&plain, members, 2, true).unwrap();
+            assert!(gzip.starts_with(&[0x1f, 0x8b]));
+            assert_eq!(codec_inflate(&gzip, 2).unwrap(), plain);
+            #[cfg(feature = "zstd")]
+            {
+                let zstd_bytes = codec_deflate(&plain, members, 2, false).unwrap();
+                assert_eq!(codec_inflate(&zstd_bytes, 2).unwrap(), plain);
+            }
+        }
+        let raw = b"not a compressed buffer";
+        assert_eq!(codec_inflate(raw, 1).unwrap(), raw);
+    }
+
     fn mapped_text(path: &Path) -> Result<String, String> {
         let contents = read_file_contents(path).map_err(|e| e.to_string())?;
         contents
             .as_str()
             .map(str::to_owned)
             .map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn compressed_text_that_is_not_utf8_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let raw = b"Cu \xff";
+        let gz = dir.path().join("bad.con.gz");
+        {
+            let mut enc = flate2::write::GzEncoder::new(
+                std::fs::File::create(&gz).unwrap(),
+                flate2::Compression::default(),
+            );
+            enc.write_all(raw).unwrap();
+            enc.finish().unwrap();
+        }
+        let err = read_file_text(&gz).unwrap_err().to_string();
+        assert!(err.contains("invalid utf-8"), "{err}");
+        #[cfg(feature = "zstd")]
+        {
+            let zst = dir.path().join("bad.con.zst");
+            std::fs::write(&zst, zstd::stream::encode_all(&raw[..], 3).unwrap()).unwrap();
+            let err = read_file_text(&zst).unwrap_err().to_string();
+            assert!(err.contains("invalid utf-8"), "{err}");
+        }
+    }
+
+    #[test]
+    fn dontneed_outside_a_rayon_pool_keeps_the_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con");
+        let bytes = large_text();
+        std::fs::write(&path, &bytes).unwrap();
+        let file = std::fs::File::open(&path).unwrap();
+        let map = unsafe { memmap2::Mmap::map(&file).unwrap() };
+        advise_dontneed_parallel(&map, 4);
+        assert_eq!(&map[..bytes.len()], bytes.as_slice());
     }
 
     #[test]

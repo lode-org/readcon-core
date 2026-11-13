@@ -3484,3 +3484,107 @@ mod parallel_write_tests {
         assert_eq!(got, serial);
     }
 }
+
+#[cfg(test)]
+mod gzip_stream_memory {
+    use super::ConFrameWriter;
+    use crate::iterators::{frames_from_text, read_all_frames};
+
+    fn parsed_frame() -> crate::types::ConFrame {
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n20 20 20\n90 90 90\n0 0\n0 0\n1\n48\n63.546\nCu\nCoordinates of Component 1\n",
+        );
+        for i in 0..48 {
+            text.push_str(&format!("0.{i} 1 2 0 {i}\n"));
+        }
+        frames_from_text(&text, Some(1)).unwrap().remove(0)
+    }
+
+    /// A streaming gzip rewrite must not pin a metadata map on every frame.
+    ///
+    /// The map is about a kilobyte and stays reachable on the frame. Four
+    /// thousand frames keep several megabytes after the writer is gone, which
+    /// is what pushed a 20k-frame rewrite past the 8 MiB high-water budget.
+    /// Isolated measurements of that rewrite: 26 MiB high-water and 30 MB
+    /// committed before, 4 MiB high-water and 5.5 MB committed after (the
+    /// deflate arena, flat in the frame count).
+    #[test]
+    fn parsed_frames_gzip_write_drops_the_metadata_maps() {
+        let frames = vec![parsed_frame(); 4000];
+        assert!(
+            frames
+                .iter()
+                .all(|frame| !frame.header.metadata.has_cached_map())
+        );
+        let path = std::env::temp_dir().join(format!(
+            "readcon-gzip-peak-{}-{}.con.gz",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        {
+            let mut writer = ConFrameWriter::from_path_gzip(&path).unwrap();
+            for frame in &frames {
+                writer.write_frame(frame).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        let cached = frames
+            .iter()
+            .filter(|frame| frame.header.metadata.has_cached_map())
+            .count();
+        assert_eq!(
+            cached, 0,
+            "the write retained {cached} metadata maps; each is about a kilobyte"
+        );
+        let back = read_all_frames(&path).unwrap();
+        assert_eq!(back.len(), frames.len());
+        assert_eq!(back[0].atom_data.len(), 48);
+        assert_eq!(back[0].atom_data[3].atom_id, 3);
+        assert_eq!(back[17].atom_data[0].symbol.as_ref(), "Cu");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Lattice vectors live on the metadata line. Reading them must not pin
+    /// the parsed map, and a later keyed lookup still sees the same matrix.
+    #[test]
+    fn lattice_line_overrides_box_lengths_and_can_be_reread_from_the_cache() {
+        let text = "\
+grid
+{\"con_spec_version\":2,\"lattice_vectors\":[[10,0,0],[0,20,0],[0,0,30]]}
+5 5 5
+90 90 90
+0 0
+0 0
+1
+1
+1.0
+Cu
+Coordinates of Component 1
+0 0 0 0 1
+";
+        let frame = frames_from_text(text, Some(1)).unwrap().remove(0);
+        assert!(!frame.header.metadata.has_cached_map());
+        let vecs = frame.header.lattice_vectors().unwrap();
+        assert_eq!(vecs, [[10.0, 0.0, 0.0], [0.0, 20.0, 0.0], [0.0, 0.0, 30.0]]);
+        assert!(
+            !frame.header.metadata.has_cached_map(),
+            "reading lattice vectors cached the whole metadata map"
+        );
+        let path =
+            std::env::temp_dir().join(format!("readcon-lattice-line-{}.con", std::process::id()));
+        {
+            let mut writer = ConFrameWriter::from_path(&path).unwrap();
+            writer.write_frame(&frame).unwrap();
+            writer.flush().unwrap();
+        }
+        let back = read_all_frames(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(back[0].header.boxl, [10.0, 20.0, 30.0]);
+        assert!(frame.header.metadata.get("lattice_vectors").is_some());
+        assert!(frame.header.metadata.has_cached_map());
+        assert_eq!(frame.header.lattice_vectors().unwrap()[1][1], 20.0);
+    }
+}

@@ -318,6 +318,21 @@ impl FrameMeta {
         }
     }
 
+    /// The parsed map is kept only after a lookup that expects to reuse it.
+    /// A streaming write must not be one of those lookups: one map per frame
+    /// is about a kilobyte, and a long trajectory holds every frame.
+    pub(crate) fn has_cached_map(&self) -> bool {
+        self.map.get().is_some()
+    }
+
+    fn with_map<R>(&self, f: impl FnOnce(&BTreeMap<String, serde_json::Value>) -> R) -> R {
+        if let Some(map) = self.map.get() {
+            return f(map);
+        }
+        let parsed = metadata_map_from_line(&self.raw);
+        f(&parsed)
+    }
+
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.ensure().get(key)
     }
@@ -649,18 +664,23 @@ impl FrameHeader {
     /// Exact 3x3 lattice vector matrix (row-major, angstroms).
     /// When present, takes precedence over the length/angle values on lines 3-4.
     pub fn lattice_vectors(&self) -> Option<[[f64; 3]; 3]> {
-        let arr = self.metadata.get(meta::LATTICE_VECTORS)?.as_array()?;
-        if arr.len() != 3 {
-            return None;
-        }
-        let row = |i: usize| -> Option<[f64; 3]> {
-            let r = arr[i].as_array()?;
-            if r.len() != 3 {
+        // Do not cache the map. Writers call this once per frame, and the
+        // cached map stays reachable for as long as the caller holds the
+        // trajectory.
+        self.metadata.with_map(|map| {
+            let arr = map.get(meta::LATTICE_VECTORS)?.as_array()?;
+            if arr.len() != 3 {
                 return None;
             }
-            Some([r[0].as_f64()?, r[1].as_f64()?, r[2].as_f64()?])
-        };
-        Some([row(0)?, row(1)?, row(2)?])
+            let row = |i: usize| -> Option<[f64; 3]> {
+                let r = arr[i].as_array()?;
+                if r.len() != 3 {
+                    return None;
+                }
+                Some([r[0].as_f64()?, r[1].as_f64()?, r[2].as_f64()?])
+            };
+            Some([row(0)?, row(1)?, row(2)?])
+        })
     }
 
     /// Cell matrix. A present `lattice_vectors` wins over lines 3-4 (CON-cell.1).
