@@ -303,29 +303,37 @@ fn a_flipped_member_length_does_not_panic() {
     }
 }
 
+fn cut_every_byte(label: &str, bytes: &[u8], dir: &std::path::Path) {
+    for len in 0..bytes.len() {
+        let path = write(dir, &format!("{label}-{len}.cut"), &bytes[..len]);
+        accept_con(&format!("{label} cut {len}"), &path);
+    }
+}
+
 #[test]
-fn truncation_and_damage_stay_clean_at_one_and_eight_threads() {
+fn plain_con_truncation_stays_clean() {
     let dir = tempfile::tempdir().unwrap();
     let con = con_text(false);
-    let convel = con_text(true);
-    let xyz = extxyz_text();
-    let con_path = write(dir.path(), "two.con", con.as_bytes());
-    let vel_path = write(dir.path(), "two.convel", convel.as_bytes());
-    let con_golden = read_con(&con_path, 1).expect("con");
-    let vel_golden = read_con(&vel_path, 1).expect("convel");
-    assert_eq!(con_golden.len(), 2);
-    assert!(vel_golden.iter().all(|frame| frame.has_velocities()));
-    let xyz_golden = read_extxyz(xyz.as_bytes(), 1).expect("extxyz");
+    let path = write(dir.path(), "two.con", con.as_bytes());
+    let golden = read_con(&path, 1).expect("con");
+    assert_eq!(golden.len(), 2);
+    cut_every_byte("con", con.as_bytes(), dir.path());
+}
 
-    for (label, bytes, _golden) in [
-        ("con", con.as_bytes(), &con_golden),
-        ("convel", convel.as_bytes(), &vel_golden),
-    ] {
-        for len in 0..bytes.len() {
-            let path = write(dir.path(), &format!("{label}-{len}.cut"), &bytes[..len]);
-            accept_con(&format!("{label} cut {len}"), &path);
-        }
-    }
+#[test]
+fn plain_convel_truncation_stays_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let convel = con_text(true);
+    let path = write(dir.path(), "two.convel", convel.as_bytes());
+    let golden = read_con(&path, 1).expect("convel");
+    assert!(golden.iter().all(|frame| frame.has_velocities()));
+    cut_every_byte("convel", convel.as_bytes(), dir.path());
+}
+
+#[test]
+fn extxyz_truncation_stays_clean() {
+    let xyz = extxyz_text();
+    let golden = read_extxyz(xyz.as_bytes(), 1).expect("extxyz");
     for len in 0..xyz.len() {
         for threads in THREADS {
             match read_extxyz(&xyz.as_bytes()[..len], threads) {
@@ -336,14 +344,26 @@ fn truncation_and_damage_stay_clean_at_one_and_eight_threads() {
             }
         }
     }
+    let _ = golden;
+}
 
+#[test]
+fn gzip_truncation_stays_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let con = con_text(false);
     let gz = dir.path().join("two.con.gz");
     readcon_core::compression::write_gzip_members_limited(&gz, con.as_bytes(), 2, 2).unwrap();
     let gz_bytes = std::fs::read(&gz).unwrap();
-    for len in 0..gz_bytes.len() {
-        let path = write(dir.path(), &format!("gz-{len}.cut"), &gz_bytes[..len]);
-        accept_con(&format!("gz cut {len}"), &path);
-    }
+    cut_every_byte("gz", &gz_bytes, dir.path());
+}
+
+#[test]
+fn gzip_index_bitflips_stay_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let con = con_text(false);
+    let gz = dir.path().join("two.con.gz");
+    readcon_core::compression::write_gzip_members_limited(&gz, con.as_bytes(), 2, 2).unwrap();
+    let gz_bytes = std::fs::read(&gz).unwrap();
     let (at, count) = rcz1(&gz_bytes).expect("gzip index");
     let end = index_end(&gz_bytes, at, count);
     for offset in at..end {
@@ -354,28 +374,41 @@ fn truncation_and_damage_stay_clean_at_one_and_eight_threads() {
             accept_con(&format!("gz bit {offset}:{bit}"), &path);
         }
     }
+}
 
-    #[cfg(feature = "zstd")]
-    {
-        let zst = dir.path().join("two.con.zst");
-        readcon_core::compression::write_zstd_members_limited(&zst, con.as_bytes(), 2, 2).unwrap();
-        let zst_bytes = std::fs::read(&zst).unwrap();
-        for len in 0..zst_bytes.len() {
-            let path = write(dir.path(), &format!("zst-{len}.cut"), &zst_bytes[..len]);
-            accept_con(&format!("zst cut {len}"), &path);
-        }
-        if let Some((at, count)) = rcz1(&zst_bytes) {
-            let end = index_end(&zst_bytes, at, count);
-            for offset in at..end {
-                for bit in 0..8 {
-                    let mut flipped = zst_bytes.clone();
-                    flipped[offset] ^= 1 << bit;
-                    let path = write(dir.path(), "flip.con.zst", &flipped);
-                    accept_con(&format!("zst bit {offset}:{bit}"), &path);
-                }
+#[cfg(feature = "zstd")]
+#[test]
+fn zstd_truncation_and_bitflips_stay_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let con = con_text(false);
+    let zst = dir.path().join("two.con.zst");
+    readcon_core::compression::write_zstd_members_limited(&zst, con.as_bytes(), 2, 2).unwrap();
+    let zst_bytes = std::fs::read(&zst).unwrap();
+    cut_every_byte("zst", &zst_bytes, dir.path());
+    if let Some((at, count)) = rcz1(&zst_bytes) {
+        let end = index_end(&zst_bytes, at, count);
+        for offset in at..end {
+            for bit in 0..8 {
+                let mut flipped = zst_bytes.clone();
+                flipped[offset] ^= 1 << bit;
+                let path = write(dir.path(), "flip.con.zst", &flipped);
+                accept_con(&format!("zst bit {offset}:{bit}"), &path);
             }
         }
     }
+}
+
+#[test]
+fn line_endings_counts_and_nonfinite_stay_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let con = con_text(false);
+    let convel = con_text(true);
+    let xyz = extxyz_text();
+    let con_path = write(dir.path(), "two.con", con.as_bytes());
+    let vel_path = write(dir.path(), "two.convel", convel.as_bytes());
+    let con_golden = read_con(&con_path, 1).expect("con");
+    let vel_golden = read_con(&vel_path, 1).expect("convel");
+    let xyz_golden = read_extxyz(xyz.as_bytes(), 1).expect("extxyz");
 
     let crlf = write(dir.path(), "crlf.con", con.replace('\n', "\r\n").as_bytes());
     require_equal("crlf", &crlf, &con_golden);

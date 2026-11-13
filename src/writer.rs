@@ -1725,16 +1725,35 @@ fn physical_cores() -> usize {
 }
 
 fn side_copy_workers(workers: usize) -> bool {
-    workers >= 2 && workers.saturating_mul(2) <= physical_cores()
+    // The side copy maps the file. Miri writes through `pwrite_full`.
+    #[cfg(miri)]
+    {
+        let _ = workers;
+        return false;
+    }
+    #[cfg(not(miri))]
+    {
+        workers >= 2 && workers.saturating_mul(2) <= physical_cores()
+    }
 }
 
 /// tmpfs wants many small ranges so the writer starts early. The page
 /// cache wants fewer writes.
 fn file_is_tmpfs(file: &File) -> bool {
-    use std::os::fd::AsRawFd;
-    let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
-    let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
-    rc == 0 && stat.f_type == 0x01021994
+    // Miri has no `fstatfs`. Treating the file as a normal one only
+    // changes how many ranges the pipeline formats.
+    #[cfg(miri)]
+    {
+        let _ = file;
+        return false;
+    }
+    #[cfg(not(miri))]
+    {
+        use std::os::fd::AsRawFd;
+        let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
+        let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
+        rc == 0 && stat.f_type == 0x01021994
+    }
 }
 
 /// One ordered `pwrite` overlapping the format.
@@ -1823,7 +1842,9 @@ fn stream_coord_pipeline(
         // The writer owns core 0. Leaving it free to wander put it on
         // a formatter's core and stretched the copy. The caller's mask
         // is restored even when a write fails.
+        #[cfg(not(miri))]
         let mut old_affinity = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
+        #[cfg(not(miri))]
         unsafe {
             libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut old_affinity);
         }
@@ -1849,6 +1870,7 @@ fn stream_coord_pipeline(
             }
             Ok(())
         })();
+        #[cfg(not(miri))]
         unsafe {
             libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &old_affinity);
         }
@@ -2721,35 +2743,48 @@ fn pwrite_borrowed(path: &std::path::Path, parts: &[&[u8]]) -> io::Result<()> {
 }
 
 fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
-    use std::os::unix::io::AsRawFd;
     if buf.is_empty() {
         return Ok(());
     }
-    let fd = file.as_raw_fd();
-    let mut written = 0usize;
-    while written < buf.len() {
-        let n = unsafe {
-            libc::pwrite(
-                fd,
-                buf[written..].as_ptr() as *const libc::c_void,
-                buf.len() - written,
-                offset as libc::off_t,
-            )
-        };
-        if n < 0 {
-            let err = io::Error::last_os_error();
-            if err.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(err);
-        }
-        if n == 0 {
-            return Err(io::Error::new(io::ErrorKind::WriteZero, "pwrite"));
-        }
-        written += n as usize;
-        offset += n as u64;
+    // Miri can seek and write. `pwrite` keeps the caller's offset on a
+    // normal build; the clone does the same under Miri.
+    #[cfg(miri)]
+    {
+        use std::io::{Seek, SeekFrom, Write};
+        let mut out = file.try_clone()?;
+        out.seek(SeekFrom::Start(offset))?;
+        out.write_all(buf)?;
+        return Ok(());
     }
-    Ok(())
+    #[cfg(not(miri))]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = file.as_raw_fd();
+        let mut written = 0usize;
+        while written < buf.len() {
+            let n = unsafe {
+                libc::pwrite(
+                    fd,
+                    buf[written..].as_ptr() as *const libc::c_void,
+                    buf.len() - written,
+                    offset as libc::off_t,
+                )
+            };
+            if n < 0 {
+                let err = io::Error::last_os_error();
+                if err.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(err);
+            }
+            if n == 0 {
+                return Err(io::Error::new(io::ErrorKind::WriteZero, "pwrite"));
+            }
+            written += n as usize;
+            offset += n as u64;
+        }
+        Ok(())
+    }
 }
 
 /// Serializes `frames` to a CON string. No file is created.

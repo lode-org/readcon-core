@@ -419,13 +419,14 @@ fn release(map: &memmap2::Mmap, start: usize, end: usize) -> io::Result<()> {
         return Ok(());
     }
     // SAFETY: `start..end` lies inside the map, which is shared and read
-    // only, so dropped pages read back from the file.
-    #[cfg(unix)]
+    // only, so dropped pages read back from the file. Miri has no
+    // `MADV_DONTNEED`; skipping the hint leaves the bytes in place.
+    #[cfg(all(unix, not(miri)))]
     unsafe {
         map.unchecked_advise_range(memmap2::UncheckedAdvice::DontNeed, start, end - start)?;
     }
-    #[cfg(not(unix))]
-    let _ = map;
+    #[cfg(not(all(unix, not(miri))))]
+    let _ = (map, start, end);
     Ok(())
 }
 
@@ -1721,7 +1722,9 @@ mod tests {
         }
     }
 
+    /// File-backed maps are not available under Miri.
     #[test]
+    #[cfg(not(miri))]
     fn dontneed_outside_a_rayon_pool_keeps_the_bytes() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("wide.con");

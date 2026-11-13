@@ -2058,7 +2058,8 @@ unsafe impl Sync for SlotWritePtr {}
 /// diagnostic and the parse result does not depend on it.
 #[cfg(feature = "parallel")]
 fn thread_minflt() -> i64 {
-    #[cfg(target_os = "linux")]
+    // Diagnostic. Miri has no `getrusage`; the parse does not use this count.
+    #[cfg(all(target_os = "linux", not(miri)))]
     {
         unsafe {
             let mut usage = std::mem::zeroed::<libc::rusage>();
@@ -2066,7 +2067,7 @@ fn thread_minflt() -> i64 {
             usage.ru_minflt
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(all(target_os = "linux", not(miri))))]
     {
         0
     }
@@ -2080,11 +2081,12 @@ fn thread_minflt() -> i64 {
 #[cfg(feature = "parallel")]
 fn sample_llc_misses() -> i64 {
     // `perf_event_open` is Linux. `-1` is the existing "counter refused" value.
-    #[cfg(not(target_os = "linux"))]
+    // Miri cannot make that syscall.
+    #[cfg(not(all(target_os = "linux", not(miri))))]
     {
         return -1;
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(miri)))]
     {
         #[repr(C)]
         struct PerfEventAttr {
@@ -2563,7 +2565,7 @@ fn keep_parse_pages() {
     // glibc `M_MMAP_MAX` and `M_TRIM_THRESHOLD`. macOS and Windows have
     // no `mallopt`; leaving the pages to the system allocator is enough
     // for the parse to be correct.
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(miri)))]
     unsafe {
         libc::mallopt(-4, 0);
         libc::mallopt(-1, i32::MAX);
@@ -2682,7 +2684,8 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
 /// `getrusage` is Unix. Windows reports 0.
 #[cfg(feature = "parallel")]
 pub fn process_minflt() -> i64 {
-    #[cfg(unix)]
+    // Diagnostic. Miri has no `getrusage`; the parse does not use this count.
+    #[cfg(all(unix, not(miri)))]
     {
         unsafe {
             let mut usage = std::mem::zeroed::<libc::rusage>();
@@ -2690,7 +2693,7 @@ pub fn process_minflt() -> i64 {
             usage.ru_minflt
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(not(all(unix, not(miri))))]
     {
         0
     }
@@ -2699,12 +2702,12 @@ pub fn process_minflt() -> i64 {
 /// Page size from `sysconf`, with the POSIX page as the fallback.
 #[cfg(feature = "parallel")]
 fn host_page_size() -> usize {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(miri)))]
     {
         let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
         if raw > 0 { raw as usize } else { 4096 }
     }
-    #[cfg(not(unix))]
+    #[cfg(not(all(unix, not(miri))))]
     {
         4096
     }

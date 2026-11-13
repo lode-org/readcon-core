@@ -84,7 +84,6 @@ half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
 ryu = "1.0"
-flate2 = { version = "1", default-features = false, features = ["zlib-ng"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"
@@ -116,6 +115,14 @@ cudarc = { version = "0.13", optional = true, default-features = false, features
 ] }
 pest = { version = "2.8", optional = true }
 pest_derive = { version = "2.8", optional = true }
+
+# Ordinary builds use zlib-ng. `cargo miri` sets `cfg(miri)` and links the
+# pure-Rust flate2 backend so the gzip readers can run under Miri.
+[target.'cfg(not(miri))'.dependencies]
+flate2 = { version = "1", default-features = false, features = ["zlib-ng"] }
+
+[target.'cfg(miri)'.dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 [dev-dependencies]
 pest = "2.8"

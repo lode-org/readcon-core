@@ -120,6 +120,21 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
     if workers < 2 {
         return body();
     }
+    // The cached pool is leaked for the process. Miri rejects a thread
+    // that is still running when the test binary exits, so it builds a
+    // pool, runs `body`, and joins.
+    #[cfg(miri)]
+    {
+        return match rayon::ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+        {
+            Ok(pool) => pool.install(body),
+            Err(_) => body(),
+        };
+    }
+    #[cfg(not(miri))]
+    {
     let pool = {
         use std::sync::{Mutex, OnceLock};
         static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> = OnceLock::new();
@@ -153,9 +168,17 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
         }
     };
     pool.install(body)
+    }
 }
 
 pub(crate) fn pin_worker(core: usize) {
+    // Miri has no `sched_setaffinity`. Pinning is a performance hint.
+    #[cfg(miri)]
+    {
+        let _ = core;
+        return;
+    }
+    #[cfg(not(miri))]
     unsafe {
         let mut set: libc::cpu_set_t = std::mem::zeroed();
         libc::CPU_ZERO(&mut set);

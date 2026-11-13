@@ -186,3 +186,86 @@ fn more_values_than_the_line_holds_is_a_length_error() {
         );
     }
 }
+
+fn extxyz_does_not_panic(bytes: &[u8]) {
+    for threads in [1usize, 8] {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            readcon_core::extxyz_scan::tables_from_extxyz_bytes_with_threads(bytes, threads)
+        }));
+        assert!(
+            result.is_ok(),
+            "extxyz reader panicked at {threads} threads"
+        );
+    }
+}
+
+#[test]
+fn extxyz_huge_stride_does_not_panic() {
+    extxyz_does_not_panic(include_bytes!("fuzz_data/extxyz_huge_stride.bin"));
+}
+
+#[test]
+fn extxyz_huge_count_does_not_allocate() {
+    extxyz_does_not_panic(include_bytes!("fuzz_data/extxyz_huge_count.bin"));
+}
+
+#[test]
+fn extxyz_wide_property_does_not_reserve_past_the_file() {
+    // 100 atoms times a 4096-wide column is more lanes than the file has
+    // bytes. The scanner must reject it instead of reserving that product.
+    let bytes = b"\
+100
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3:q:R:4096
+Cu 0 0 0
+";
+    extxyz_does_not_panic(bytes);
+}
+
+fn resident_bytes() -> usize {
+    let status = std::fs::read_to_string("/proc/self/status").expect("status");
+    for line in status.lines() {
+        let Some(rest) = line.strip_prefix("VmRSS:") else {
+            continue;
+        };
+        let kb: usize = rest.split_whitespace().next().unwrap().parse().unwrap();
+        return kb.saturating_mul(1024);
+    }
+    0
+}
+
+#[test]
+fn extxyz_ten_to_the_fifteenth_is_an_error_without_allocating() {
+    // 10^15 fits in `usize` and used to be reserved up front. That
+    // reservation aborts. The reader now rejects the count.
+    let bytes = b"\
+1000000000000000
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3
+Cu 0 0 0
+";
+    for threads in [1usize, 8] {
+        let before = resident_bytes();
+        let result =
+            readcon_core::extxyz_scan::tables_from_extxyz_bytes_with_threads(bytes, threads);
+        let after = resident_bytes();
+        let err = result.expect_err("a 10^15 count is not a frame");
+        assert!(
+            err.contains("atoms"),
+            "t{threads} error was {err}, rss {before} -> {after}"
+        );
+        assert!(
+            after < before.saturating_add(8 << 20),
+            "t{threads} resident {before} -> {after}"
+        );
+    }
+}
+
+#[test]
+fn extxyz_stream_huge_count_does_not_allocate() {
+    // A streaming layout (species, then pos) used to reserve the parsed
+    // count before noticing the file cannot hold that many atoms.
+    let bytes = b"\
+80000000000000009887
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3
+";
+    extxyz_does_not_panic(bytes);
+}

@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-readcon-core = { path = "..", features = ["parallel", "grammar"] }
+readcon-core = { path = "..", features = ["parallel", "grammar", "zstd"] }
 serde_json = "1"
 tempfile = "3"
 
@@ -72,6 +72,41 @@ bench = false
 [[bin]]
 name = "index-proj"
 path = "fuzz_targets/index_proj.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "con-reader"
+path = "fuzz_targets/con_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extxyz-reader"
+path = "fuzz_targets/extxyz_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gzip-indexed"
+path = "fuzz_targets/gzip_indexed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "zstd-indexed"
+path = "fuzz_targets/zstd_indexed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi-entry"
+path = "fuzz_targets/ffi_entry.rs"
 test = false
 doc = false
 bench = false

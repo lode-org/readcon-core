@@ -63,6 +63,17 @@ fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
     Ok(value)
 }
 
+/// A file count that is safe to add to and multiply by a small constant.
+///
+/// `f64 as usize` saturates at `usize::MAX`. Adding 2 to that count
+/// overflows, which is what a huge atom-count line used to do.
+fn usize_count(value: f64) -> Option<usize> {
+    if !value.is_finite() || value < 0.0 || value > (usize::MAX / 4) as f64 {
+        return None;
+    }
+    Some(value as usize)
+}
+
 fn quoted_after<'a>(line: &'a [u8], key: &[u8]) -> Option<&'a [u8]> {
     let mut index = 0;
     while index + key.len() <= line.len() {
@@ -125,8 +136,8 @@ fn property_columns(properties: &[u8]) -> Result<Vec<ColumnSpec>, String> {
             .iter()
             .position(|byte| *byte == b':')
             .unwrap_or(rest.len());
-        let count = parse_f64(&rest[..count_end])? as usize;
-        if count == 0 {
+        let count = usize_count(parse_f64(&rest[..count_end])?).ok_or("properties")?;
+        if count == 0 || count > 4096 {
             return Err("properties".to_string());
         }
         if name == "pos" {
@@ -309,7 +320,7 @@ pub fn tables_from_extxyz_bytes_reporting(
             mark += 1;
             continue;
         }
-        let count = parse_f64(count_line)? as usize;
+        let count = usize_count(parse_f64(count_line)?).ok_or("atoms")?;
         if mark + 1 >= lines.len() {
             return Err("comment".to_string());
         }
@@ -325,7 +336,11 @@ pub fn tables_from_extxyz_bytes_reporting(
             return Err("properties".to_string());
         }
         mark += 2;
-        if mark + count > lines.len() {
+        if mark
+            .checked_add(count)
+            .map(|end| end > lines.len())
+            .unwrap_or(true)
+        {
             return Err("atoms".to_string());
         }
         starts.push(mark);
@@ -334,6 +349,17 @@ pub fn tables_from_extxyz_bytes_reporting(
     let n_frames = starts.len();
     if n_frames == 0 {
         return Err("no frames".to_string());
+    }
+    // Each stored number occupies at least one byte of the file. A width
+    // times the atom count must not reserve more than that.
+    let atoms = n_frames.checked_mul(n_atoms).ok_or("atoms")?;
+    let mut slots = 0usize;
+    for spec in &specs {
+        let lane = atoms.checked_mul(spec.width.max(1)).ok_or("atoms")?;
+        slots = slots.checked_add(lane).ok_or("atoms")?;
+    }
+    if slots > bytes.len() {
+        return Err("atoms".to_string());
     }
     let fast_nfloat = species_pos_width(&specs);
     let mut cell = vec![0.0f64; n_frames * 6];
@@ -509,11 +535,11 @@ fn uniform_extxyz_frames(
     if lines.len() < 2 {
         return None;
     }
-    let count = parse_f64(trim(lines[0])).ok()? as usize;
+    let count = usize_count(parse_f64(trim(lines[0])).ok()?)?;
     if count == 0 {
         return None;
     }
-    let stride = 2 + count;
+    let stride = 2usize.checked_add(count)?;
     if !lines.len().is_multiple_of(stride) {
         return None;
     }
@@ -1055,7 +1081,7 @@ fn tables_stream_parallel(
     if count_line.is_empty() {
         return None;
     }
-    let n_atoms = parse_f64(count_line).ok()? as usize;
+    let n_atoms = usize_count(parse_f64(count_line).ok()?)?;
     if n_atoms == 0 {
         return None;
     }
@@ -1707,8 +1733,8 @@ fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
             cursor = line_end;
             continue;
         }
-        let count = parse_f64(count_line).ok()? as usize;
-        if count == 0 {
+        let count = usize_count(parse_f64(count_line).ok()?)?;
+        if count == 0 || count > bytes.len().saturating_sub(line_end) {
             return None;
         }
         let (comment_end, comment) = line_span(bytes, line_end)?;
@@ -2040,7 +2066,12 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         if count_line.is_empty() {
             continue;
         }
-        let count = parse_f64(count_line)? as usize;
+        let count = usize_count(parse_f64(count_line)?).ok_or("atoms")?;
+        // Each atom is at least one byte. A count larger than the file
+        // cannot be allocated.
+        if count > bytes.len() {
+            return Err("atoms".to_string());
+        }
         let Some((next, comment)) = line_span(bytes, cursor) else {
             return Err("comment".to_string());
         };
@@ -2050,6 +2081,20 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         let frame_specs = property_columns(properties)?;
         let frame_cell = lattice_cell(lattice)?;
         if n_frames == 0 {
+            // Numeric lanes are reserved up front. More lanes than bytes
+            // in the file cannot be filled, and the reservation would be
+            // the size that used to abort.
+            let mut slots = 0usize;
+            for spec in &frame_specs {
+                if spec.kind == b'S' {
+                    continue;
+                }
+                let lane = count.checked_mul(spec.width.max(1)).ok_or("atoms")?;
+                slots = slots.checked_add(lane).ok_or("atoms")?;
+            }
+            if slots > bytes.len() {
+                return Err("atoms".to_string());
+            }
             columns = frame_specs
                 .iter()
                 .map(|spec| XyzColumn {
