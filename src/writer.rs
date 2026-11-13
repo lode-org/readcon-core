@@ -1,7 +1,7 @@
 use crate::types::{
-    ConFrame, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES, SECTION_FORCES,
-    SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES, encode_fixed_bitmask,
-    meta,
+    ConFrame, ConFrameBuilder, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES,
+    SECTION_FORCES, SECTION_MAGMOMS, SECTION_SPINS, SECTION_SPREADS, SECTION_VELOCITIES,
+    encode_fixed_bitmask, meta,
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -3125,6 +3125,360 @@ pub(crate) fn publish_new<E>(
     write(&mut file)?;
     drop(file);
     staged.commit(dest).map_err(map_io)
+}
+
+fn mass_runs(masses: &[f64]) -> (Vec<usize>, Vec<f64>) {
+    let mut counts = Vec::new();
+    let mut values = Vec::new();
+    let mut index = 0usize;
+    while index < masses.len() {
+        let mass = masses[index];
+        let bits = mass.to_bits();
+        let mut count = 1usize;
+        while index + count < masses.len() && masses[index + count].to_bits() == bits {
+            count += 1;
+        }
+        counts.push(count);
+        values.push(mass);
+        index += count;
+    }
+    (counts, values)
+}
+
+fn column_fixed(fixed: Option<&[f64]>, index: usize) -> u8 {
+    let flags = match fixed {
+        Some(bits) => {
+            let base = index * 3;
+            [
+                bits[base] != 0.0,
+                bits[base + 1] != 0.0,
+                bits[base + 2] != 0.0,
+            ]
+        }
+        None => [false, false, false],
+    };
+    written_fixed_flag(flags, crate::CON_SPEC_VERSION)
+}
+
+/// Spellings of `0.0` ..= `9999.0`, the form `encode_fixed_decimal` emits
+/// for those integers. A lattice coordinate hits this table instead of the
+/// general float formatter.
+fn small_int_text(n: u32) -> &'static [u8] {
+    use std::sync::OnceLock;
+    const LIMIT: u32 = 10_000;
+    static TEXT: OnceLock<Vec<u8>> = OnceLock::new();
+    static OFF: OnceLock<Vec<u32>> = OnceLock::new();
+    let text = TEXT.get_or_init(|| {
+        let mut bytes = Vec::with_capacity(LIMIT as usize * 6);
+        let mut off = Vec::with_capacity(LIMIT as usize + 1);
+        off.push(0u32);
+        for value in 0..LIMIT {
+            let start = bytes.len();
+            let mut tmp = [0u8; 8];
+            let mut i = tmp.len();
+            let mut n = value;
+            if n == 0 {
+                i -= 1;
+                tmp[i] = b'0';
+            } else {
+                while n > 0 {
+                    i -= 1;
+                    tmp[i] = b'0' + (n % 10) as u8;
+                    n /= 10;
+                }
+            }
+            bytes.extend_from_slice(&tmp[i..]);
+            bytes.extend_from_slice(b".0");
+            off.push(bytes.len() as u32);
+            let _ = start;
+        }
+        OFF.set(off).ok();
+        bytes
+    });
+    let off = OFF.get().expect("small int offsets");
+    let n = n as usize;
+    &text[off[n] as usize..off[n + 1] as usize]
+}
+
+fn push_column_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, slot: &mut FmtSlot, value: f64) {
+    if value >= 0.0 && value < 10_000.0 {
+        let n = value as u32;
+        if n as f64 == value {
+            buf.extend_from_slice(small_int_text(n));
+            return;
+        }
+    }
+    push_round_trip(buf, ryu, Some(slot), value);
+}
+
+/// Decimal form of a sequential atom id. Incrementing the last digit is the
+/// common step; a run of nines carries once per power of ten.
+struct IdDigits {
+    buf: [u8; 20],
+    start: usize,
+}
+
+impl IdDigits {
+    fn from_u64(mut n: u64) -> Self {
+        let mut buf = [b'0'; 20];
+        let mut i = 20usize;
+        if n == 0 {
+            return Self { buf, start: 19 };
+        }
+        while n > 0 {
+            i -= 1;
+            buf[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+        Self { buf, start: i }
+    }
+
+    fn text(&self) -> &[u8] {
+        &self.buf[self.start..]
+    }
+
+    fn bump(&mut self) {
+        let mut i = self.buf.len() - 1;
+        loop {
+            if self.buf[i] < b'9' {
+                self.buf[i] += 1;
+                if i < self.start {
+                    self.start = i;
+                }
+                return;
+            }
+            self.buf[i] = b'0';
+            if i == 0 {
+                return;
+            }
+            i -= 1;
+        }
+    }
+}
+
+fn push_column_line(
+    buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
+    slots: &mut [FmtSlot; 3],
+    xyz: [f64; 3],
+    mask: u8,
+    id: &[u8],
+) {
+    push_column_f64(buf, ryu, &mut slots[0], xyz[0]);
+    buf.push(b' ');
+    push_column_f64(buf, ryu, &mut slots[1], xyz[1]);
+    buf.push(b' ');
+    push_column_f64(buf, ryu, &mut slots[2], xyz[2]);
+    buf.push(b' ');
+    buf.push(b'0' + mask);
+    buf.push(b' ');
+    buf.extend_from_slice(id);
+    buf.push(b'\n');
+}
+
+fn format_column_span(
+    positions: &[f64],
+    extra: Option<&[f64]>,
+    fixed: Option<&[f64]>,
+    start: usize,
+    end: usize,
+) -> (Vec<u8>, Vec<u8>) {
+    let n = end - start;
+    let mut coord = Vec::with_capacity(n.saturating_mul(32));
+    let mut side = if extra.is_some() {
+        Vec::with_capacity(n.saturating_mul(32))
+    } else {
+        Vec::new()
+    };
+    let mut ryu = ryu::Buffer::new();
+    let mut slots = [FmtSlot::new(); 3];
+    let mut side_slots = [FmtSlot::new(); 3];
+    let mut ids = IdDigits::from_u64(start as u64);
+    for index in start..end {
+        let base = index * 3;
+        let mask = column_fixed(fixed, index);
+        let mut id_buf = [0u8; 20];
+        let id_len = ids.text().len();
+        id_buf[..id_len].copy_from_slice(ids.text());
+        let id = &id_buf[..id_len];
+        push_column_line(
+            &mut coord,
+            &mut ryu,
+            &mut slots,
+            [positions[base], positions[base + 1], positions[base + 2]],
+            mask,
+            id,
+        );
+        if let Some(values) = extra {
+            push_column_line(
+                &mut side,
+                &mut ryu,
+                &mut side_slots,
+                [values[base], values[base + 1], values[base + 2]],
+                mask,
+                id,
+            );
+        }
+        ids.bump();
+    }
+    (coord, side)
+}
+
+fn format_column_parallel(
+    positions: &[f64],
+    extra: Option<&[f64]>,
+    fixed: Option<&[f64]>,
+    start: usize,
+    end: usize,
+    workers: usize,
+) -> (Vec<u8>, Vec<u8>) {
+    let span = end - start;
+    if workers < 2 || span < WIDE_ATOM_GRAIN {
+        return format_column_span(positions, extra, fixed, start, end);
+    }
+    let workers = workers.min(span);
+    let mut bounds = Vec::with_capacity(workers);
+    for worker in 0..workers {
+        let from = start + span * worker / workers;
+        let to = start + span * (worker + 1) / workers;
+        if from < to {
+            bounds.push((from, to));
+        }
+    }
+    let mut parts = Vec::with_capacity(bounds.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(bounds.len());
+        for (from, to) in bounds {
+            handles
+                .push(scope.spawn(move || format_column_span(positions, extra, fixed, from, to)));
+        }
+        for handle in handles {
+            parts.push(handle.join().unwrap_or_else(|_| (Vec::new(), Vec::new())));
+        }
+    });
+    let mut coord = Vec::new();
+    let mut side = Vec::new();
+    for (rows, extra_rows) in parts {
+        coord.extend_from_slice(&rows);
+        side.extend_from_slice(&extra_rows);
+    }
+    (coord, side)
+}
+
+fn column_header(
+    cell: &[f64],
+    counts: &[usize],
+    mass_values: &[f64],
+    symbol: &str,
+    has_velocity: bool,
+    has_force: bool,
+) -> Result<Vec<u8>, WriteError> {
+    let mut builder =
+        ConFrameBuilder::new([cell[0], cell[1], cell[2]], [cell[3], cell[4], cell[5]]);
+    builder
+        .prebox_header("readcon")
+        .postbox_header(["0 0".to_string(), "0 0".to_string()])
+        .add_atom(symbol, 0.0, 0.0, 0.0, [false; 3], 0, mass_values[0]);
+    if has_velocity {
+        builder.with_velocity([0.0, 0.0, 0.0]);
+    }
+    if has_force {
+        builder.with_force([0.0, 0.0, 0.0]);
+    }
+    let mut frame = builder.build().map_err(WriteError::Format)?;
+    frame.header.natm_types = counts.len();
+    frame.header.natms_per_type = counts.to_vec();
+    frame.header.masses_per_type = mass_values.to_vec();
+    frame.header.postbox_header = ["0 0".to_string(), "0 0".to_string()];
+    frame.header.prebox_header = crate::types::PreboxHeader::new("readcon");
+    // Same stamp as `frame_from_column_slice`: spec 2 in the stored header,
+    // so the binding rewrite records units.time before it emits spec 3.
+    frame.header.spec_version = 2;
+    let mut metadata = BTreeMap::new();
+    metadata.insert(meta::CON_SPEC_MINOR.to_string(), json!(1));
+    metadata.insert(meta::CON_SPEC_VERSION.to_string(), json!(2));
+    frame.header.metadata = crate::types::FrameMeta::from_map(metadata);
+    binding_header_bytes(&frame)
+}
+
+/// Write binding CON text from column slices, without a per-atom object.
+///
+/// `workers` of 0 uses one thread per physical core. The bytes match
+/// [`ConFrameWriter::write_frame_bound`] of the frame those columns describe.
+pub fn write_binding_columns(
+    path: &Path,
+    n_frames: usize,
+    n_atoms: usize,
+    positions: &[f64],
+    masses: &[f64],
+    cell: &[f64],
+    fixed: Option<&[f64]>,
+    velocities: Option<&[f64]>,
+    forces: Option<&[f64]>,
+    symbol: &str,
+    workers: usize,
+) -> Result<(), WriteError> {
+    let workers = if workers == 0 {
+        physical_cores()
+    } else {
+        workers
+    };
+    let mut file_bytes = Vec::new();
+    for frame_index in 0..n_frames {
+        let atom_base = frame_index * n_atoms;
+        let pos = &positions[atom_base * 3..(atom_base + n_atoms) * 3];
+        let mass = &masses[atom_base..atom_base + n_atoms];
+        let box_cell = &cell[frame_index * 6..frame_index * 6 + 6];
+        let flags = fixed.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
+        let vel = velocities.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
+        let force = forces.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
+        let (counts, mass_values) = mass_runs(mass);
+        let header = column_header(
+            box_cell,
+            &counts,
+            &mass_values,
+            symbol,
+            vel.is_some(),
+            force.is_some(),
+        )?;
+        file_bytes.extend_from_slice(&header);
+        let mut offset = 0usize;
+        let mut velocity_block = Vec::new();
+        let mut force_block = Vec::new();
+        for (type_idx, count) in counts.iter().copied().enumerate() {
+            push_str_line(&mut file_bytes, symbol);
+            push_component_line(&mut file_bytes, "Coordinates of Component", type_idx);
+            if vel.is_some() {
+                push_str_line(&mut velocity_block, symbol);
+                push_component_line(&mut velocity_block, "Velocities of Component", type_idx);
+            }
+            if force.is_some() {
+                push_str_line(&mut force_block, symbol);
+                push_component_line(&mut force_block, "Forces of Component", type_idx);
+            }
+            let (coord, side) =
+                format_column_parallel(pos, vel, flags, offset, offset + count, workers);
+            file_bytes.extend_from_slice(&coord);
+            velocity_block.extend_from_slice(&side);
+            if let Some(values) = force {
+                let (rows, _) =
+                    format_column_parallel(values, None, flags, offset, offset + count, workers);
+                force_block.extend_from_slice(&rows);
+            }
+            offset += count;
+        }
+        if vel.is_some() {
+            file_bytes.push(b'\n');
+            file_bytes.extend_from_slice(&velocity_block);
+        }
+        if force.is_some() {
+            file_bytes.push(b'\n');
+            file_bytes.extend_from_slice(&force_block);
+        }
+    }
+    publish_new(path, WriteError::Io, |file| {
+        file.write_all(&file_bytes).map_err(WriteError::Io)
+    })
 }
 
 /// Write `frames` to `path`, replacing that path only after the bytes are complete.

@@ -216,22 +216,41 @@ def write_readcon(path: Path, spec: dict, compression: str | None) -> None:
 
 
 def read_readcon_conbin(path: str) -> dict:
-    """MAP_PRIVATE view of a CON-bin, copied into owned arrays inside the clock.
+    """MAP_PRIVATE view of a version-2 CON-bin.
 
-    The file is positions then velocities. It has no masses, constraints, or cell.
+    Positions, velocities, masses, the cell and the per-axis fixed mask are
+    in the file. The views stay mapped; the campaign materialises positions
+    and the cell.
     """
     import readcon
 
-    pos, vel, n_atoms = readcon.read_conbin(path)
-    pos = np.array(pos, dtype=np.float64, copy=True)
-    vel = np.array(vel, dtype=np.float64, copy=True)
-    n_frames = int(pos.shape[0])
+    got = readcon.read_conbin_columns(path, n_threads=1)
+    n_frames = int(got["n_frames"])
+    n_atoms = int(got["n_atoms"])
+    positions = np.asarray(got["positions"]).reshape(n_frames, n_atoms, 3)
+    velocities = None
+    if got.get("velocities") is not None:
+        velocities = np.asarray(got["velocities"]).reshape(n_frames, n_atoms, 3)
+    masses = None
+    if got.get("masses") is not None:
+        masses = np.asarray(got["masses"]).reshape(n_frames, n_atoms)
+    cell = None
+    if got.get("cell") is not None:
+        cell = np.asarray(got["cell"]).reshape(n_frames, 6)
+    fixed = None
+    if got.get("fixed_mask") is not None:
+        masks = np.asarray(got["fixed_mask"], dtype=np.uint8)
+        fixed = np.zeros((n_frames, n_atoms, 3), dtype=np.float64)
+        flat = masks.reshape(n_frames, n_atoms)
+        fixed[:, :, 0] = flat & 1
+        fixed[:, :, 1] = (flat >> 1) & 1
+        fixed[:, :, 2] = (flat >> 2) & 1
     return {
-        "positions": pos.reshape(n_frames, n_atoms, 3),
-        "velocities": vel.reshape(n_frames, n_atoms, 3),
-        "cell": None,
-        "masses": None,
-        "fixed": None,
+        "positions": positions,
+        "velocities": velocities,
+        "cell": cell,
+        "masses": masses,
+        "fixed": fixed,
     }
 
 
@@ -860,7 +879,7 @@ def profile_chemfiles_dcd_write(directory: Path) -> str:
         stats = pstats.Stats(prof, stream=buf).sort_stats("cumulative")
         stats.print_stats(12)
         parts.append(f"== {label} ==\n{buf.getvalue()}")
-    text = "\n".join(parts)
+    text = "\n".join(parts).rstrip("\n") + "\n"
     (directory / "chemfiles-write-profile.txt").write_text(text)
     return text
 
@@ -995,9 +1014,10 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                     "format": "xyz",
                     "precision": PRECISION["xyz"],
                     "notes": (
-                        "same chemfiles XYZ as the chemfiles xyz row: Lattice comment "
-                        "and chemfiles coordinate spelling. readcon fills masses from "
-                        "the element symbol. The write is write_con of those frames"
+                        "same chemfiles XYZ as the chemfiles xyz row. That file "
+                        "stores coordinates and a lattice, not velocities or "
+                        "per-axis constraints. readcon fills masses from the "
+                        "element symbol. The write is write_con of those frames"
                     ),
                 }
             )
@@ -1159,8 +1179,9 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 "format": "conbin",
                 "precision": PRECISION["conbin"],
                 "notes": (
-                    "write_conbin streams the CON text; read_conbin is the "
-                    "MAP_PRIVATE mmap of positions and velocities"
+                    "version-2 CON-bin keeps positions, velocities, masses, "
+                    "per-axis constraints, the cell and atom ids. The timed "
+                    "write copies those columns; the read is the MAP_PRIVATE map"
                 ),
             }
         )
@@ -1730,7 +1751,14 @@ def worker_main() -> None:
                 import readcon
 
                 dest.unlink(missing_ok=True)
-                readcon.write_conbin(job["plain"], os.fspath(dest))
+                readcon.write_conbin_columns(
+                    os.fspath(dest),
+                    spec["positions"],
+                    spec["velocities"],
+                    spec["masses"],
+                    spec["cell"],
+                    spec["fixed"],
+                )
             elif con_frames is not None:
                 import readcon
 
@@ -1775,6 +1803,37 @@ def type7(values: list[float]) -> tuple[float, float]:
     return float(median), float(q75 - q25)
 
 
+def con_writer_thread_note() -> str:
+    """1M-atom CON write, one warmup and six samples, serial and default."""
+    import readcon
+
+    spec = make_spec(1_000_000, 1)
+    columns = _columns(spec)
+    path = WORK / "con-writer-1M.con"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    def once(threads: int | None) -> float:
+        path.unlink(missing_ok=True)
+        started = time.perf_counter()
+        if threads is None:
+            readcon.write_columns(os.fspath(path), columns)
+        else:
+            readcon.write_columns(os.fspath(path), columns, n_threads=threads)
+        return time.perf_counter() - started
+
+    def median(threads: int | None) -> float:
+        once(threads)
+        return type7([once(threads) for _ in range(6)])[0]
+
+    serial = median(1)
+    default = median(None)
+    return (
+        f"readcon 1M CON write serial {serial:.4f}s, "
+        f"default threads {default:.4f}s, "
+        f"same bytes, warmup 1 samples 6"
+    )
+
+
 def run(
     out: Path,
     repeats: int = 6,
@@ -1811,11 +1870,12 @@ def run(
         notes.append("OVITO extxyz periodicity or drift check failed.")
     notes.append(
         "mdcompress 1.0.0 is not on PyPI and conda is not installed. "
-        "apt has no libxdrfile. The refresh-bio clone reports version 2.0.5, "
-        "not 1.0.0. `make` stops on the example binaries with "
-        "cc: error: unknown argument: '-fabi-version=6'. "
-        "That is the 1.0.0 install failure, so the coordinate-only row is omitted."
+        "apt has no libxdrfile. CC=gcc CXX=g++ make mdcompress links "
+        "bin/mdcompress; it prints version 2.0.5, not 1.0.0. "
+        "gcc accepts -fabi-version=6, which is the flag clang rejected. "
+        "The coordinate-only row stays omitted rather than labeling 2.0.5 as 1.0.0."
     )
+    notes.append(con_writer_thread_note())
     lines = []
     for note in notes:
         lines.append(f"note {note}")

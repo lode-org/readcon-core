@@ -17,9 +17,15 @@ use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
 
 const MAGIC: &[u8; 8] = b"CONBIN01";
-const VERSION: u32 = 1;
+const VERSION_1: u32 = 1;
+const VERSION_2: u32 = 2;
 const FLAG_F32: u32 = 1;
 const FLAG_VELOCITY: u32 = 2;
+const FLAG_FORCE: u32 = 4;
+const FLAG_MASS: u32 = 8;
+const FLAG_FIXED: u32 = 16;
+const FLAG_CELL: u32 = 32;
+const FLAG_IDS: u32 = 64;
 
 /// Magic, version, flags, frame count, atom count, payload offset.
 /// 8 + 4 + 4 + 8 + 8 + 8.
@@ -27,13 +33,67 @@ const FIELD_BYTES: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConBinHeader {
+    pub version: u32,
     pub n_frames: u64,
     pub n_atoms: u64,
     pub binary32: bool,
     pub velocities: bool,
+    pub forces: bool,
+    pub masses: bool,
+    pub fixed: bool,
+    pub cell: bool,
+    pub atom_ids: bool,
 }
 
 impl ConBinHeader {
+    /// Version 1: positions, and velocities when `velocities` is set.
+    pub fn version1(n_frames: u64, n_atoms: u64, binary32: bool, velocities: bool) -> Self {
+        Self {
+            version: VERSION_1,
+            n_frames,
+            n_atoms,
+            binary32,
+            velocities,
+            forces: false,
+            masses: false,
+            fixed: false,
+            cell: false,
+            atom_ids: false,
+        }
+    }
+
+    fn flags(&self) -> u32 {
+        let mut flags = 0u32;
+        if self.binary32 {
+            flags |= FLAG_F32;
+        }
+        if self.velocities {
+            flags |= FLAG_VELOCITY;
+        }
+        if self.version >= VERSION_2 {
+            if self.forces {
+                flags |= FLAG_FORCE;
+            }
+            if self.masses {
+                flags |= FLAG_MASS;
+            }
+            if self.fixed {
+                flags |= FLAG_FIXED;
+            }
+            if self.cell {
+                flags |= FLAG_CELL;
+            }
+            if self.atom_ids {
+                flags |= FLAG_IDS;
+            }
+        }
+        flags
+    }
+
+    fn elem_width(&self) -> usize {
+        if self.binary32 { 4 } else { 8 }
+    }
+
     pub fn position_len(&self) -> Result<usize, ParseError> {
         (self.n_frames as usize)
             .checked_mul(self.n_atoms as usize)
@@ -251,15 +311,8 @@ fn page_size() -> Result<usize, ParseError> {
 fn header_fields(header: &ConBinHeader, payload_off: u64) -> [u8; FIELD_BYTES] {
     let mut out = [0u8; FIELD_BYTES];
     out[..8].copy_from_slice(MAGIC);
-    out[8..12].copy_from_slice(&VERSION.to_le_bytes());
-    let mut flags = 0u32;
-    if header.binary32 {
-        flags |= FLAG_F32;
-    }
-    if header.velocities {
-        flags |= FLAG_VELOCITY;
-    }
-    out[12..16].copy_from_slice(&flags.to_le_bytes());
+    out[8..12].copy_from_slice(&header.version.to_le_bytes());
+    out[12..16].copy_from_slice(&header.flags().to_le_bytes());
     out[16..24].copy_from_slice(&header.n_frames.to_le_bytes());
     out[24..32].copy_from_slice(&header.n_atoms.to_le_bytes());
     out[32..40].copy_from_slice(&payload_off.to_le_bytes());
@@ -273,19 +326,26 @@ fn parse_fields(bytes: &[u8]) -> Result<(ConBinHeader, u64), ParseError> {
         ));
     }
     let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
-    if version != VERSION {
+    if version != VERSION_1 && version != VERSION_2 {
         return Err(ParseError::ValidationError(format!(
-            "CON-bin version {version} is not {VERSION}"
+            "CON-bin version {version} is not {VERSION_1} or {VERSION_2}"
         )));
     }
     let flags = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
     let offset = u64::from_le_bytes(bytes[32..40].try_into().unwrap());
+    let v2 = version >= VERSION_2;
     Ok((
         ConBinHeader {
+            version,
             n_frames: u64::from_le_bytes(bytes[16..24].try_into().unwrap()),
             n_atoms: u64::from_le_bytes(bytes[24..32].try_into().unwrap()),
             binary32: flags & FLAG_F32 != 0,
             velocities: flags & FLAG_VELOCITY != 0,
+            forces: v2 && flags & FLAG_FORCE != 0,
+            masses: v2 && flags & FLAG_MASS != 0,
+            fixed: v2 && flags & FLAG_FIXED != 0,
+            cell: v2 && flags & FLAG_CELL != 0,
+            atom_ids: v2 && flags & FLAG_IDS != 0,
         },
         offset,
     ))
@@ -373,6 +433,135 @@ impl ConBinMap {
     pub fn velocities_f32(&self) -> Result<&[f32], ParseError> {
         let n = self.header.position_len()?;
         self.run(std::mem::size_of::<f32>(), n)
+    }
+
+    /// Byte offset of the first section after positions, velocities and forces.
+    fn after_motion(&self) -> Result<usize, ParseError> {
+        let width = self.header.elem_width();
+        let block = self
+            .header
+            .position_len()?
+            .checked_mul(width)
+            .ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin column byte length overflows".into())
+            })?;
+        let mut at = self
+            .payload_off
+            .checked_add(block)
+            .ok_or_else(|| ParseError::InvalidCount("CON-bin payload offset overflows".into()))?;
+        if self.header.velocities {
+            at = at.checked_add(block).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        if self.header.forces {
+            at = at.checked_add(block).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        Ok(at)
+    }
+
+    fn atoms_per_file(&self) -> Result<usize, ParseError> {
+        (self.header.n_frames as usize)
+            .checked_mul(self.header.n_atoms as usize)
+            .ok_or_else(|| ParseError::InvalidCount("CON-bin atom count overflows".into()))
+    }
+
+    pub fn masses_f64(&self) -> Result<Option<&[f64]>, ParseError> {
+        if !self.header.masses || self.header.binary32 {
+            return Ok(None);
+        }
+        let n = self.atoms_per_file()?;
+        self.view_at(self.after_motion()?, n).map(Some)
+    }
+
+    pub fn cell_f64(&self) -> Result<Option<&[f64]>, ParseError> {
+        if !self.header.cell || self.header.binary32 {
+            return Ok(None);
+        }
+        let mut at = self.after_motion()?;
+        if self.header.masses {
+            let n = self
+                .atoms_per_file()?
+                .checked_mul(8)
+                .ok_or_else(|| ParseError::InvalidCount("CON-bin mass bytes overflow".into()))?;
+            at = at.checked_add(n).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        let n = (self.header.n_frames as usize)
+            .checked_mul(6)
+            .ok_or_else(|| ParseError::InvalidCount("CON-bin cell length overflows".into()))?;
+        self.view_at(at, n).map(Some)
+    }
+
+    pub fn atom_ids(&self) -> Result<Option<&[u64]>, ParseError> {
+        if !self.header.atom_ids {
+            return Ok(None);
+        }
+        self.view_at(self.ids_off()?, self.atoms_per_file()?)
+            .map(Some)
+    }
+
+    pub fn fixed_masks(&self) -> Result<Option<&[u8]>, ParseError> {
+        if !self.header.fixed {
+            return Ok(None);
+        }
+        let mut at = self.ids_off()?;
+        if self.header.atom_ids {
+            let n = self
+                .atoms_per_file()?
+                .checked_mul(8)
+                .ok_or_else(|| ParseError::InvalidCount("CON-bin id bytes overflow".into()))?;
+            at = at.checked_add(n).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        self.view_at(at, self.atoms_per_file()?).map(Some)
+    }
+
+    fn ids_off(&self) -> Result<usize, ParseError> {
+        let mut at = self.after_motion()?;
+        let width = self.header.elem_width();
+        if self.header.masses {
+            let n = self
+                .atoms_per_file()?
+                .checked_mul(width)
+                .ok_or_else(|| ParseError::InvalidCount("CON-bin mass bytes overflow".into()))?;
+            at = at.checked_add(n).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        if self.header.cell {
+            let n = (self.header.n_frames as usize)
+                .checked_mul(6)
+                .and_then(|n| n.checked_mul(width))
+                .ok_or_else(|| ParseError::InvalidCount("CON-bin cell bytes overflow".into()))?;
+            at = at.checked_add(n).ok_or_else(|| {
+                ParseError::InvalidCount("CON-bin payload offset overflows".into())
+            })?;
+        }
+        Ok(at)
+    }
+
+    fn view_at<T>(&self, start: usize, n: usize) -> Result<&[T], ParseError> {
+        let nbytes = n.checked_mul(std::mem::size_of::<T>()).ok_or_else(|| {
+            ParseError::InvalidCount("CON-bin column byte length overflows".into())
+        })?;
+        let end = start.checked_add(nbytes).ok_or_else(|| {
+            ParseError::InvalidCount("CON-bin column extends past the file".into())
+        })?;
+        if end > self.map.len() {
+            return Err(ParseError::IncompleteFrame);
+        }
+        let bytes = &self.map[start..end];
+        if bytes.as_ptr().align_offset(std::mem::align_of::<T>()) != 0 {
+            return Err(ParseError::ValidationError(
+                "CON-bin payload is not aligned for its element type".into(),
+            ));
+        }
+        Ok(unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<T>(), n) })
     }
 
     fn run<T>(&self, width: usize, column: usize) -> Result<&[T], ParseError> {
@@ -1580,6 +1769,62 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
+/// Write version 2 from columns already in memory.
+///
+/// Positions are required. Velocities, masses, the cell, atom ids and the
+/// per-axis fixed mask are stored when the caller passes them. The payload
+/// order is positions, velocities, masses, cell, atom ids, fixed masks.
+pub fn write_f64_columns(
+    path: &Path,
+    n_frames: u64,
+    n_atoms: u64,
+    positions: &[f64],
+    velocities: Option<&[f64]>,
+    masses: Option<&[f64]>,
+    cell: Option<&[f64]>,
+    atom_ids: Option<&[u64]>,
+    fixed: Option<&[u8]>,
+) -> Result<ConBinHeader, ParseError> {
+    let header = ConBinHeader {
+        version: VERSION_2,
+        n_frames,
+        n_atoms,
+        binary32: false,
+        velocities: velocities.is_some(),
+        forces: false,
+        masses: masses.is_some(),
+        fixed: fixed.is_some(),
+        cell: cell.is_some(),
+        atom_ids: atom_ids.is_some(),
+    };
+    let page = page_size()?;
+    crate::writer::publish_new(
+        path,
+        |err| ParseError::ValidationError(err.to_string()),
+        |file| {
+            write_header_page(file, &header, page)?;
+            write_values(file, positions)?;
+            if let Some(values) = velocities {
+                write_values(file, values)?;
+            }
+            if let Some(values) = masses {
+                write_values(file, values)?;
+            }
+            if let Some(values) = cell {
+                write_values(file, values)?;
+            }
+            if let Some(values) = atom_ids {
+                write_values(file, values)?;
+            }
+            if let Some(values) = fixed {
+                write_values(file, values)?;
+            }
+            Ok(())
+        },
+    )?;
+    Ok(header)
+}
+
 /// Stream a CON text file into a CON-bin of the same frames.
 ///
 /// The header occupies one host page, so the payload starts on a page
@@ -1624,21 +1869,19 @@ fn write_conbin_body(
     binary32: bool,
     page: usize,
 ) -> Result<(), ParseError> {
-    write_header_page(
-        file,
-        &ConBinHeader {
-            n_frames: 0,
-            n_atoms: 0,
-            binary32,
-            velocities: true,
-        },
-        page,
-    )?;
+    write_header_page(file, &ConBinHeader::version1(0, 0, binary32, true), page)?;
 
     let mut n_frames = 0u64;
     let mut n_atoms = 0u64;
     let mut positions: Vec<f64> = Vec::new();
     let mut velocities: Vec<f64> = Vec::new();
+    let mut forces: Vec<f64> = Vec::new();
+    let mut masses: Vec<f64> = Vec::new();
+    let mut fixed: Vec<u8> = Vec::new();
+    let mut cells: Vec<f64> = Vec::new();
+    let mut ids: Vec<u64> = Vec::new();
+    let mut any_force = false;
+    let mut any_velocity = false;
     for frame in ConFrameIterator::new(text) {
         let frame = frame?;
         let n = frame.atom_data.len();
@@ -1649,27 +1892,79 @@ fn write_conbin_body(
                 "CON-bin requires the same atom count in every frame".into(),
             ));
         }
+        let mut mass_at = 0usize;
+        for (count, mass) in frame
+            .header
+            .natms_per_type
+            .iter()
+            .zip(frame.header.masses_per_type.iter())
+        {
+            for _ in 0..*count {
+                masses.push(*mass);
+                mass_at += 1;
+            }
+        }
+        if mass_at < n {
+            let fill = frame.header.masses_per_type.last().copied().unwrap_or(0.0);
+            masses.extend(std::iter::repeat(fill).take(n - mass_at));
+        } else if mass_at > n {
+            masses.truncate(masses.len() - (mass_at - n));
+        }
+        cells.extend_from_slice(&frame.header.boxl);
+        cells.extend_from_slice(&frame.header.angles);
+        any_velocity |= frame.has_velocities();
         for atom in &frame.atom_data {
             positions.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
             velocities.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
+            if let Some(row) = atom.force() {
+                any_force = true;
+                forces.extend_from_slice(&row);
+            } else {
+                forces.extend_from_slice(&[0.0, 0.0, 0.0]);
+            }
+            let flags = atom.fixed();
+            fixed.push(u8::from(flags[0]) | (u8::from(flags[1]) << 1) | (u8::from(flags[2]) << 2));
+            ids.push(atom.atom_id);
         }
         n_frames += 1;
     }
+    let header = ConBinHeader {
+        version: VERSION_2,
+        n_frames,
+        n_atoms,
+        binary32,
+        velocities: true,
+        forces: any_force,
+        masses: true,
+        fixed: true,
+        cell: true,
+        atom_ids: true,
+    };
+    let _ = any_velocity;
     if binary32 {
         let pos32: Vec<f32> = positions.iter().map(|v| *v as f32).collect();
         let vel32: Vec<f32> = velocities.iter().map(|v| *v as f32).collect();
         write_values(file, &pos32)?;
         write_values(file, &vel32)?;
+        if any_force {
+            let force32: Vec<f32> = forces.iter().map(|v| *v as f32).collect();
+            write_values(file, &force32)?;
+        }
+        let mass32: Vec<f32> = masses.iter().map(|v| *v as f32).collect();
+        write_values(file, &mass32)?;
+        let cell32: Vec<f32> = cells.iter().map(|v| *v as f32).collect();
+        write_values(file, &cell32)?;
     } else {
         write_values(file, &positions)?;
         write_values(file, &velocities)?;
+        if any_force {
+            write_values(file, &forces)?;
+        }
+        write_values(file, &masses)?;
+        write_values(file, &cells)?;
     }
-    let header = ConBinHeader {
-        n_frames,
-        n_atoms,
-        binary32,
-        velocities: true,
-    };
+    write_values(file, &ids)?;
+    write_values(file, &fixed)?;
     file.seek(SeekFrom::Start(0))
         .map_err(|err| ParseError::ValidationError(err.to_string()))?;
     write_header_page(file, &header, page)?;
@@ -1683,12 +1978,7 @@ mod tests {
     fn write_known(path: &Path, frames: usize, atoms: usize) {
         let page = page_size().unwrap();
         let mut file = File::create(path).unwrap();
-        let header = ConBinHeader {
-            n_frames: frames as u64,
-            n_atoms: atoms as u64,
-            binary32: false,
-            velocities: true,
-        };
+        let header = ConBinHeader::version1(frames as u64, atoms as u64, false, true);
         write_header_page(&mut file, &header, page).unwrap();
         let n = frames * atoms * 3;
         let pos: Vec<f64> = (0..n).map(|i| i as f64 * 0.25).collect();
@@ -1811,6 +2101,12 @@ mod tests {
         let pos = mapped.positions_f64().unwrap();
         assert_eq!(pos.len(), 2 * 4 * 3);
         assert!(pos[0].is_finite());
+        assert_eq!(mapped.header.version, 2);
+        assert!(mapped.header.masses && mapped.header.cell && mapped.header.fixed);
+        assert_eq!(mapped.masses_f64().unwrap().unwrap().len(), 2 * 4);
+        assert_eq!(mapped.cell_f64().unwrap().unwrap().len(), 2 * 6);
+        assert_eq!(mapped.fixed_masks().unwrap().unwrap().len(), 2 * 4);
+        assert_eq!(mapped.atom_ids().unwrap().unwrap().len(), 2 * 4);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1841,12 +2137,7 @@ mod tests {
         // The stored offset is 4096, and the file is shorter than a 16 KiB
         // or 64 KiB page. The reader keeps 4096. It does not replace that
         // offset with the host page.
-        let header = ConBinHeader {
-            n_frames: 1,
-            n_atoms: 1,
-            binary32: false,
-            velocities: true,
-        };
+        let header = ConBinHeader::version1(1, 1, false, true);
         let mut bytes = header_fields(&header, 4096).to_vec();
         bytes.resize(4096 + 48, 0);
         bytes[4096..4096 + 8].copy_from_slice(&1.25f64.to_le_bytes());
@@ -1870,12 +2161,7 @@ mod tests {
     }
 
     fn write_typed(path: &Path, binary32: bool, velocities: bool) {
-        let header = ConBinHeader {
-            n_frames: 1,
-            n_atoms: 1,
-            binary32,
-            velocities,
-        };
+        let header = ConBinHeader::version1(1, 1, binary32, velocities);
         let mut bytes = header_fields(&header, 64).to_vec();
         bytes.resize(64 + 48, 0);
         std::fs::write(path, bytes).unwrap();

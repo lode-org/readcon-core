@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, Array3, ArrayView2};
+use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
 };
@@ -1719,56 +1719,70 @@ fn write_columns(
     {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
-    let fixed_owned = match columns.get_item("fixed")? {
-        Some(value) if !value.is_none() => {
-            let arr = value.cast::<PyArray3<f64>>()?.readonly();
+    let fixed_value = columns.get_item("fixed")?;
+    let fixed_arr = match fixed_value.as_ref() {
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
+        _ => None,
+    };
+    let fixed_slice = match fixed_arr.as_ref() {
+        Some(arr) => {
             let slice = arr.as_slice()?;
             if slice.len() != n_frames.saturating_mul(n_atoms).saturating_mul(3) {
                 return Err(PyValueError::new_err("fixed"));
             }
-            Some(slice.to_vec())
+            Some(slice)
         }
+        None => None,
+    };
+    let vel_value = columns.get_item("velocities")?;
+    let vel_arr = match vel_value.as_ref() {
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
         _ => None,
     };
-    let vel_owned = optional_vec3(columns, "velocities", n_frames, n_atoms)?;
-    let force_owned = optional_vec3(columns, "forces", n_frames, n_atoms)?;
-    // Copy before the file write. The NumPy borrows must not stay alive
-    // across `detach`: another thread that already holds the GIL and
-    // touches these arrays waits on the borrow, and this thread then
-    // waits to reacquire the GIL.
-    let pos_owned = pos_slice.to_vec();
-    let mass_owned = mass_slice.to_vec();
-    let cell_owned = cell_slice.to_vec();
-    drop(pos);
-    drop(mass);
-    drop(cell_arr);
-    let path_owned = path.to_owned();
-    let symbol_owned = symbol.to_owned();
-    let workers = n_threads.unwrap_or(1);
-    py.detach(move || {
-        let frames = frames_from_columns(
-            &pos_owned,
-            &mass_owned,
-            &cell_owned,
-            fixed_owned.as_deref(),
-            vel_owned.as_deref(),
-            force_owned.as_deref(),
-            n_frames,
-            n_atoms,
-            &symbol_owned,
-        )?;
-        let refs: Vec<&ConFrame> = frames.iter().collect();
-        crate::writer::write_frame_refs_to_path(
-            Path::new(&path_owned),
-            &refs,
-            workers,
-            None,
-            false,
-            true,
-        )
-        .map_err(|err| err.to_string())
-    })
-    .map_err(PyIOError::new_err)
+    let vel_slice = match vel_arr.as_ref() {
+        Some(arr) => {
+            let slice = arr.as_slice()?;
+            if slice.len() != n_frames * n_atoms * 3 {
+                return Err(PyValueError::new_err("velocities"));
+            }
+            Some(slice)
+        }
+        None => None,
+    };
+    let force_value = columns.get_item("forces")?;
+    let force_arr = match force_value.as_ref() {
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
+        _ => None,
+    };
+    let force_slice = match force_arr.as_ref() {
+        Some(arr) => {
+            let slice = arr.as_slice()?;
+            if slice.len() != n_frames * n_atoms * 3 {
+                return Err(PyValueError::new_err("forces"));
+            }
+            Some(slice)
+        }
+        None => None,
+    };
+    // The NumPy borrows stay on this thread. Copying them before the
+    // format was a second pass over every coordinate. `n_threads` of
+    // `None` uses one thread per physical core; `1` stays serial.
+    let _ = py;
+    let workers = n_threads.unwrap_or(0);
+    crate::writer::write_binding_columns(
+        Path::new(path),
+        n_frames,
+        n_atoms,
+        pos_slice,
+        mass_slice,
+        cell_slice,
+        fixed_slice,
+        vel_slice,
+        force_slice,
+        symbol,
+        workers,
+    )
+    .map_err(|err| PyIOError::new_err(err.to_string()))
 }
 
 fn optional_vec3(
@@ -1837,14 +1851,12 @@ fn frame_from_column_slice(
     let mut metadata = BTreeMap::new();
     metadata.insert(meta::CON_SPEC_MINOR.to_string(), serde_json::json!(1));
     metadata.insert(meta::CON_SPEC_VERSION.to_string(), serde_json::json!(2));
-    let mut pos_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
-    for i in 0..n {
-        let base = i * 3;
-        pos_storage.set_f64_row(
-            i,
-            [positions[base], positions[base + 1], positions[base + 2]],
-        );
-    }
+    // One copy into the frame slab. Per-atom `set_f64_row` was the same
+    // bytes with a call per atom. Velocity and force rows point at that
+    // slab: a boxed tail per atom allocated a million objects on the
+    // serial write and then chased them while formatting.
+    let pos_storage =
+        crate::storage_dtype::Array2Storage::from_f64_row_major(n, 3, positions.to_vec());
     let slot = pos_storage.f64_slice().ok_or("positions")?.as_ptr() as *mut f64;
     let mut atom_data = Vec::with_capacity(n);
     for i in 0..n {
@@ -1867,36 +1879,9 @@ fn frame_from_column_slice(
         );
         atom_data.push(atom);
     }
-    if let Some(vel) = velocities {
-        for (i, atom) in atom_data.iter_mut().enumerate() {
-            let base = i * 3;
-            atom.set_velocity(Some([vel[base], vel[base + 1], vel[base + 2]]));
-        }
-    }
-    if let Some(force) = forces {
-        for (i, atom) in atom_data.iter_mut().enumerate() {
-            let base = i * 3;
-            atom.set_force(Some([force[base], force[base + 1], force[base + 2]]));
-        }
-    }
-    let mut velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(0, 3);
-    if velocities.is_some() {
-        velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
-        for i in 0..n {
-            let base = i * 3;
-            let vel = velocities.unwrap();
-            velocities_storage.set_f64_row(i, [vel[base], vel[base + 1], vel[base + 2]]);
-        }
-    }
-    let mut forces_storage = crate::storage_dtype::Array2Storage::zeros_f64(0, 3);
-    if let Some(force) = forces {
-        forces_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
-        for i in 0..n {
-            let base = i * 3;
-            forces_storage.set_f64_row(i, [force[base], force[base + 1], force[base + 2]]);
-        }
-    }
-    Ok(ConFrame {
+    let velocity_column = velocities.map(|vel| vel.to_vec());
+    let force_column = forces.map(|force| force.to_vec());
+    let mut frame = ConFrame {
         header: crate::types::FrameHeader {
             prebox_header: crate::types::PreboxHeader::new("readcon"),
             boxl: [cell[0], cell[1], cell[2]],
@@ -1915,8 +1900,8 @@ fn frame_from_column_slice(
         column_tails: Vec::new(),
         sequential_plain: false,
         positions: pos_storage,
-        velocities: velocities_storage.into(),
-        forces: forces_storage.into(),
+        velocities: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
+        forces: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
         atom_energies: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
         charges: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
         spins: crate::storage_dtype::Array1Storage::zeros_f64(0).into(),
@@ -1925,7 +1910,14 @@ fn frame_from_column_slice(
         spreads: crate::storage_dtype::Array2Storage::zeros_f64(0, 3).into(),
         masses: crate::storage_dtype::Array1Storage::from_f64_vec(masses.to_vec()),
         atom_ids: ndarray::Array1::from_iter(0..n as u64).into_shared(),
-    })
+    };
+    if let Some(column) = velocity_column {
+        frame.adopt_velocity_column(column);
+    }
+    if let Some(column) = force_column {
+        frame.adopt_force_column(column);
+    }
+    Ok(frame)
 }
 
 /// One CON component per run of equal masses. A uniform frame stays one
@@ -4795,6 +4787,205 @@ fn write_conbin(
     Ok((header.n_frames, header.n_atoms))
 }
 
+/// Write a version-2 CON-bin from arrays already in memory.
+///
+/// `fixed` is `(frames, atoms, 3)` with a non-zero entry meaning that axis
+/// is constrained. Atom ids are the index within the frame.
+#[pyfunction]
+#[pyo3(signature = (path, positions, velocities, masses, cell, fixed))]
+fn write_conbin_columns(
+    py: Python<'_>,
+    path: &str,
+    positions: PyReadonlyArray3<f64>,
+    velocities: PyReadonlyArray3<f64>,
+    masses: PyReadonlyArray2<f64>,
+    cell: PyReadonlyArray2<f64>,
+    fixed: PyReadonlyArray3<f64>,
+) -> PyResult<()> {
+    let pos = positions.as_slice()?;
+    let vel = velocities.as_slice()?;
+    let mass = masses.as_slice()?;
+    let box_cell = cell.as_slice()?;
+    let flags = fixed.as_slice()?;
+    let shape = positions.dims();
+    let n_frames = shape[0] as u64;
+    let n_atoms = shape[1] as u64;
+    let n = (n_frames as usize).saturating_mul(n_atoms as usize);
+    if vel.len() != pos.len()
+        || mass.len() != n
+        || box_cell.len() != (n_frames as usize) * 6
+        || flags.len() != n * 3
+    {
+        return Err(PyValueError::new_err("CON-bin columns disagree"));
+    }
+    let mut masks = Vec::with_capacity(n);
+    for index in 0..n {
+        let base = index * 3;
+        let mask = u8::from(flags[base] != 0.0)
+            | (u8::from(flags[base + 1] != 0.0) << 1)
+            | (u8::from(flags[base + 2] != 0.0) << 2);
+        masks.push(mask);
+    }
+    let mut ids = Vec::with_capacity(n);
+    for _ in 0..n_frames {
+        for atom in 0..n_atoms {
+            ids.push(atom);
+        }
+    }
+    let path_owned = path.to_owned();
+    let _ = py;
+    crate::conbin::write_f64_columns(
+        Path::new(&path_owned),
+        n_frames,
+        n_atoms,
+        pos,
+        Some(vel),
+        Some(mass),
+        Some(box_cell),
+        Some(&ids),
+        Some(&masks),
+    )
+    .map(|_| ())
+    .map_err(|err| PyIOError::new_err(err.to_string()))
+}
+
+/// Read every column a version-2 CON-bin stored, as views of the map.
+#[pyfunction]
+#[pyo3(signature = (path, n_threads=1))]
+fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult<Py<PyDict>> {
+    let path_owned = path.to_owned();
+    let mapped = py
+        .detach(|| crate::conbin::map_file(Path::new(&path_owned), n_threads))
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    if mapped.header.binary32 {
+        return Err(PyValueError::new_err("CON-bin file is binary32"));
+    }
+    let n_frames = mapped.header.n_frames as usize;
+    let n_atoms = mapped.header.n_atoms as usize;
+    let width = n_atoms * 3;
+    let ptr = |slice: &[f64]| slice.as_ptr() as usize;
+    let pos = mapped
+        .positions_f64()
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    let pos_ptr = ptr(pos);
+    let pos_len = pos.len();
+    let vel_ptr = if mapped.header.velocities {
+        let vel = mapped
+            .velocities_f64()
+            .map_err(|e| PyIOError::new_err(e.to_string()))?;
+        Some((ptr(vel), vel.len()))
+    } else {
+        None
+    };
+    let mass_ptr = match mapped
+        .masses_f64()
+        .map_err(|e| PyIOError::new_err(e.to_string()))?
+    {
+        Some(mass) => Some((ptr(mass), mass.len())),
+        None => None,
+    };
+    let cell_ptr = match mapped
+        .cell_f64()
+        .map_err(|e| PyIOError::new_err(e.to_string()))?
+    {
+        Some(cell) => Some((ptr(cell), cell.len())),
+        None => None,
+    };
+    let id_ptr = match mapped
+        .atom_ids()
+        .map_err(|e| PyIOError::new_err(e.to_string()))?
+    {
+        Some(ids) => Some((ids.as_ptr() as usize, ids.len())),
+        None => None,
+    };
+    let mask_ptr = match mapped
+        .fixed_masks()
+        .map_err(|e| PyIOError::new_err(e.to_string()))?
+    {
+        Some(masks) => Some((masks.as_ptr() as usize, masks.len())),
+        None => None,
+    };
+    drop(pos);
+    let owner = Py::new(py, ConBinMapping { map: mapped.map })?;
+    let base = owner.bind(py).clone();
+    let dict = PyDict::new(py);
+    dict.set_item("n_atoms", n_atoms)?;
+    dict.set_item("n_frames", n_frames)?;
+    dict.set_item(
+        "positions",
+        view_f64_ptr(
+            py,
+            base.clone().into_any(),
+            pos_ptr,
+            pos_len,
+            (n_frames, width),
+        )?,
+    )?;
+    if let Some((ptr, len)) = vel_ptr {
+        dict.set_item(
+            "velocities",
+            view_f64_ptr(py, base.clone().into_any(), ptr, len, (n_frames, width))?,
+        )?;
+    }
+    if let Some((ptr, len)) = mass_ptr {
+        dict.set_item(
+            "masses",
+            view_f64_ptr(py, base.clone().into_any(), ptr, len, (n_frames, n_atoms))?,
+        )?;
+    }
+    if let Some((ptr, len)) = cell_ptr {
+        dict.set_item(
+            "cell",
+            view_f64_ptr(py, base.clone().into_any(), ptr, len, (n_frames, 6))?,
+        )?;
+    }
+    if let Some((ptr, len)) = id_ptr {
+        dict.set_item(
+            "atom_ids",
+            view_u64_ptr(py, base.clone().into_any(), ptr, len)?,
+        )?;
+    }
+    if let Some((ptr, len)) = mask_ptr {
+        dict.set_item("fixed_mask", view_u8_ptr(py, base.into_any(), ptr, len)?)?;
+    }
+    let _ = owner;
+    Ok(dict.unbind())
+}
+
+fn view_f64_ptr<'py>(
+    py: Python<'py>,
+    base: Bound<'py, PyAny>,
+    ptr: usize,
+    len: usize,
+    shape: (usize, usize),
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    if shape.0.saturating_mul(shape.1) != len {
+        return Err(PyValueError::new_err("CON-bin view shape"));
+    }
+    let view = unsafe { ArrayView2::from_shape_ptr(shape, ptr as *const f64) };
+    Ok(unsafe { PyArray2::borrow_from_array(&view, base) })
+}
+
+fn view_u64_ptr<'py>(
+    py: Python<'py>,
+    base: Bound<'py, PyAny>,
+    ptr: usize,
+    n: usize,
+) -> PyResult<Bound<'py, PyArray1<u64>>> {
+    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr as *const u64) };
+    Ok(unsafe { PyArray1::borrow_from_array(&view, base) })
+}
+
+fn view_u8_ptr<'py>(
+    py: Python<'py>,
+    base: Bound<'py, PyAny>,
+    ptr: usize,
+    n: usize,
+) -> PyResult<Bound<'py, PyArray1<u8>>> {
+    let view = unsafe { ArrayView1::from_shape_ptr(n, ptr as *const u8) };
+    Ok(unsafe { PyArray1::borrow_from_array(&view, base) })
+}
+
 pyo3::create_exception!(readcon, ConError, pyo3::exceptions::PyValueError);
 pyo3::create_exception!(readcon, NonFiniteValue, ConError);
 pyo3::create_exception!(readcon, InvalidFixedFlag, ConError);
@@ -5287,6 +5478,8 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(write_columns, m)?)?;
     m.add_class::<ConBinMapping>()?;
     m.add_function(wrap_pyfunction!(read_conbin, m)?)?;
+    m.add_function(wrap_pyfunction!(read_conbin_columns, m)?)?;
+    m.add_function(wrap_pyfunction!(write_conbin_columns, m)?)?;
     m.add_function(wrap_pyfunction!(write_conbin, m)?)?;
     // Ergonomic alias for multi-language matrix (batch all frames).
     m.add_function(wrap_pyfunction!(read_all_frames, m)?)?;
