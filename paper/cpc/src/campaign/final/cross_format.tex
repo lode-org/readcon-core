@@ -1,7 +1,7 @@
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{One frame of \(10^{6}\) atoms. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\caption{One frame of \(10^{6}\) atoms. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
 \label{tab:cross-1m}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lllccrrl@{}}
@@ -51,7 +51,7 @@ ovito & xyz & write & 0.2127 (0.003937, $n{=}6$) &  & 272.8 & 16.88 & masses, ve
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{The trajectory. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\caption{The trajectory. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
 \label{tab:cross-traj}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lllccrrl@{}}

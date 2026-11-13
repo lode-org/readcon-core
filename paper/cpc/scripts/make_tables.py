@@ -488,7 +488,10 @@ def cross_format(store: Store, host: str) -> str:
                 f"& {drops(loses)} \\\\"
             )
         chunks.append(table(
-            title + " Each tool uses the format in its row. "
+            title + " The structure is an orthogonal copper grid with integer coordinates. "
+            "The cell edges are side, side$+$0.5 and side$+$1. "
+            "Compressed sizes depend on that regularity. "
+            "Each tool uses the format in its row. "
             "Warm is the main read or write: the median in seconds, the interquartile range, and $n$. "
             "Cold is the cold-cache read, with its own median, interquartile range, and $n$. "
             "RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. "
