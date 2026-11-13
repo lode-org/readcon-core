@@ -1677,14 +1677,16 @@ fn write_columns(
     let pos_slice = pos.as_slice()?;
     let mass_slice = mass.as_slice()?;
     let cell_slice = cell_arr.as_slice()?;
-    if mass_slice.len() != n_frames * n_atoms || cell_slice.len() != n_frames * 6 {
+    if mass_slice.len() != n_frames.saturating_mul(n_atoms)
+        || cell_slice.len() != n_frames.saturating_mul(6)
+    {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
     let fixed_owned = match columns.get_item("fixed")? {
         Some(value) if !value.is_none() => {
             let arr = value.cast::<PyArray3<f64>>()?.readonly();
             let slice = arr.as_slice()?;
-            if slice.len() != n_frames * n_atoms * 3 {
+            if slice.len() != n_frames.saturating_mul(n_atoms).saturating_mul(3) {
                 return Err(PyValueError::new_err("fixed"));
             }
             Some(slice.to_vec())
@@ -1693,9 +1695,16 @@ fn write_columns(
     };
     let vel_owned = optional_vec3(columns, "velocities", n_frames, n_atoms)?;
     let force_owned = optional_vec3(columns, "forces", n_frames, n_atoms)?;
+    // Copy before the file write. The NumPy borrows must not stay alive
+    // across `detach`: another thread that already holds the GIL and
+    // touches these arrays waits on the borrow, and this thread then
+    // waits to reacquire the GIL.
     let pos_owned = pos_slice.to_vec();
     let mass_owned = mass_slice.to_vec();
     let cell_owned = cell_slice.to_vec();
+    drop(pos);
+    drop(mass);
+    drop(cell_arr);
     let path_owned = path.to_owned();
     let symbol_owned = symbol.to_owned();
     let workers = n_threads.unwrap_or(1);
@@ -1787,7 +1796,7 @@ fn frame_from_column_slice(
         return Err("positions, masses and cell disagree".to_string());
     }
     let shared: std::sync::Arc<str> = std::sync::Arc::from(symbol);
-    let mass0 = masses[0];
+    let (type_counts, type_masses) = mass_runs(masses);
     let mut metadata = BTreeMap::new();
     metadata.insert(meta::CON_SPEC_MINOR.to_string(), serde_json::json!(1));
     metadata.insert(meta::CON_SPEC_VERSION.to_string(), serde_json::json!(2));
@@ -1850,16 +1859,15 @@ fn frame_from_column_slice(
             forces_storage.set_f64_row(i, [force[base], force[base + 1], force[base + 2]]);
         }
     }
-    let _ = mass0;
     Ok(ConFrame {
         header: crate::types::FrameHeader {
             prebox_header: crate::types::PreboxHeader::new("readcon"),
             boxl: [cell[0], cell[1], cell[2]],
             angles: [cell[3], cell[4], cell[5]],
             postbox_header: ["0 0".to_string(), "0 0".to_string()],
-            natm_types: 1,
-            natms_per_type: vec![n],
-            masses_per_type: vec![masses[0]],
+            natm_types: type_counts.len(),
+            natms_per_type: type_counts,
+            masses_per_type: type_masses,
             spec_version: 2,
             metadata: crate::types::FrameMeta::from_map(metadata),
             sections: Vec::new(),
@@ -1880,6 +1888,27 @@ fn frame_from_column_slice(
         masses: crate::storage_dtype::Array1Storage::from_f64_vec(masses.to_vec()),
         atom_ids: ndarray::Array1::from_iter(0..n as u64).into_shared(),
     })
+}
+
+/// One CON component per run of equal masses. A uniform frame stays one
+/// component. The file stores a mass per component, not per atom, so a
+/// single component would keep only `masses[0]`.
+fn mass_runs(masses: &[f64]) -> (Vec<usize>, Vec<f64>) {
+    let mut counts = Vec::new();
+    let mut values = Vec::new();
+    let mut index = 0usize;
+    while index < masses.len() {
+        let mass = masses[index];
+        let bits = mass.to_bits();
+        let mut count = 1usize;
+        while index + count < masses.len() && masses[index + count].to_bits() == bits {
+            count += 1;
+        }
+        counts.push(count);
+        values.push(mass);
+        index += count;
+    }
+    (counts, values)
 }
 
 /// Write coordinates from contiguous arrays.
@@ -2198,26 +2227,27 @@ impl ConFrameList {
     /// force block as one contiguous NumPy array each.
     ///
     /// `positions` is the coordinate slab from the read, the same array
-    /// object on every call. The other arrays are filled from the parsed
-    /// frames with the GIL released. Indexing a frame takes that frame
-    /// out of the list, and a later call then fails. Call this before
-    /// `frames[i]`. `write_columns` writes the dict back. Indexing a
-    /// frame still builds Python atoms; this does not.
+    /// object on every call. The other arrays are copied from the parsed
+    /// frames while this call holds the list lock and the GIL. Releasing
+    /// the GIL while that lock is held deadlocks a thread that already
+    /// has the GIL and is waiting to index a frame. Indexing a frame
+    /// takes that frame out of the list, and a later call then fails.
+    /// Call this before `frames[i]`. `write_columns` writes the dict
+    /// back. Indexing a frame still builds Python atoms; this does not.
     fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        let frames = self.frames.lock().expect("frames");
-        if frames.iter().any(|slot| slot.is_none()) {
-            return Err(PyIOError::new_err(
-                "columns() needs every frame still stored; indexing a frame borrows it",
-            ));
-        }
         let pack_positions = self.slab.is_none();
-        let packed = py.detach(|| {
+        let packed = {
+            let frames = self.frames.lock().expect("frames");
+            if frames.iter().any(|slot| slot.is_none()) {
+                return Err(PyIOError::new_err(
+                    "columns() needs every frame still stored; indexing a frame borrows it",
+                ));
+            }
             pack_frame_columns(
                 frames.iter().map(|slot| slot.as_ref().unwrap()),
                 pack_positions,
             )
-        });
-        drop(frames);
+        };
         let Some(packed) = packed else {
             return Err(PyValueError::new_err(
                 "columns() needs the same atom count in every frame",
@@ -5899,11 +5929,25 @@ fn read_extxyz<'py>(
     let workers = n_threads.unwrap_or(1);
     let mut tables = py
         .detach(move || -> Result<_, String> {
-            let file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
-            // The map is the parse input. A second copy of the file was a
-            // serial pass in front of every threaded read.
-            // SAFETY: the file is not truncated while this map is alive.
-            let bytes = unsafe { memmap2::Mmap::map(&file) }.map_err(|_| "read".to_string())?;
+            use std::io::Read;
+            let mut file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
+            let meta = file.metadata().map_err(|_| "read".to_string())?;
+            // A pipe has no map. A proc file can report size 0 and still
+            // return bytes from read; mapping it fails or yields an empty
+            // slice. A regular file with a size is mapped. Truncating that
+            // file while the map is alive is still a SIGBUS.
+            if meta.is_file() && meta.len() > 0 {
+                // SAFETY: `file` is a regular file of nonzero length. The
+                // slice is the parse input and is dropped before return.
+                if let Ok(bytes) = unsafe { memmap2::Mmap::map(&file) } {
+                    return crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(
+                        &bytes, workers,
+                    );
+                }
+            }
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)
+                .map_err(|_| "read".to_string())?;
             crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
         })
         .map_err(pyo3::exceptions::PyValueError::new_err)?;

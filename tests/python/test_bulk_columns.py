@@ -66,6 +66,64 @@ def test_columns_match_serial_rust_and_atoms(tmp_path: Path) -> None:
         assert velocities[index].tobytes() == np.asarray(frame.vel).tobytes()
 
 
+def test_write_columns_keeps_distinct_masses(tmp_path: Path) -> None:
+    import readcon
+
+    src = tmp_path / "in.convel"
+    dst = tmp_path / "out.convel"
+    _write_convel(src)
+    frames = readcon.read_con(str(src), n_threads=1)
+    cols = frames.columns()
+    cols["masses"][0] = [1.0, 1.0, 12.0, 12.0]
+    readcon.write_columns(str(dst), cols, n_threads=1)
+    again = readcon.read_con(str(dst), n_threads=1).columns()
+    assert np.array_equal(again["masses"][0], [1.0, 1.0, 12.0, 12.0])
+    assert np.array_equal(again["positions"], cols["positions"])
+    assert np.array_equal(again["velocities"], cols["velocities"])
+
+
+def test_columns_can_run_beside_a_frame_index(tmp_path: Path) -> None:
+    import threading
+
+    import readcon
+
+    path = tmp_path / "wide.con"
+    n_atoms = 20000
+    lines = [
+        "wide",
+        '{"con_spec_version":2}',
+        "10.0 10.0 10.0",
+        "90.0 90.0 90.0",
+        "0 0",
+        "0 0",
+        "1",
+        str(n_atoms),
+        "63.546",
+        "Cu",
+        "Coordinates of Component 1",
+    ]
+    lines.extend(f" {i}.0 0.0 0.0 0 {i}" for i in range(n_atoms))
+    lines.append("")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    frames = readcon.read_con(str(path), n_threads=1)
+    stop = threading.Event()
+
+    def index_frames() -> None:
+        while not stop.is_set():
+            _ = len(frames)
+
+    thread = threading.Thread(target=index_frames)
+    thread.start()
+    try:
+        for _ in range(8):
+            cols = frames.columns()
+            assert cols["positions"].shape == (1, n_atoms, 3)
+    finally:
+        stop.set()
+        thread.join(timeout=10)
+    assert not thread.is_alive()
+
+
 def test_write_columns_round_trip(tmp_path: Path) -> None:
     import readcon
 

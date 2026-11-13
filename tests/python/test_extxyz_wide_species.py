@@ -52,6 +52,37 @@ def test_wide_species_is_an_interned_sequence(tmp_path: Path):
     assert again["positions"][0, 2, 0] == pytest.approx(2.125)
 
 
+def test_fifo_extxyz_is_read(tmp_path: Path):
+    import os
+    import threading
+
+    path = tmp_path / "pipe.extxyz"
+    os.mkfifo(path)
+    payload = (
+        b"1\n"
+        b'Lattice="1 0 0 0 1 0 0 0 1" Properties=species:S:1:pos:R:3\n'
+        b"Cu 0.25 0.5 0.75\n"
+    )
+
+    def write() -> None:
+        with open(path, "wb") as handle:
+            handle.write(payload)
+
+    thread = threading.Thread(target=write)
+    thread.start()
+    got = readcon.read_extxyz(str(path))
+    thread.join()
+    assert got["positions"].shape == (1, 1, 3)
+    assert got["positions"][0, 0, 0] == pytest.approx(0.25)
+    assert got["species"][0] == ("Cu",)
+
+
+def test_zero_size_proc_file_is_read():
+    # st_size is 0 and mmap fails. The bytes are not an extxyz frame.
+    with pytest.raises(ValueError, match="float"):
+        readcon.read_extxyz("/proc/self/cmdline")
+
+
 def test_repeated_non_utf8_symbol_is_one_string(tmp_path: Path):
     n_atoms = 4096
     line = b"\xff 0.125 0.25 0.5"
