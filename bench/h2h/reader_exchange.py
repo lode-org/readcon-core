@@ -197,6 +197,10 @@ def sample_arm(arm: str, path: Path, cache: str) -> dict:
     env["READCON_V0173"] = str(br.RELEASE_DIR)
     env.pop("TMPDIR", None)
     env.pop("PYTHONPATH", None)
+    # The 0.17.3 reader allocates a small Python object per atom. The
+    # default glibc arena policy moves that sample by a few tenths of a
+    # second. One mmap threshold for every arm keeps the treatment the same.
+    env["MALLOC_MMAP_THRESHOLD_"] = "65536"
     if arm == "eon":
         env["PYTHONPATH"] = str(br.EON_PY)
         env["LD_LIBRARY_PATH"] = (
@@ -299,6 +303,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "cold drops the page cache after READY, before the cold clock",
         "clock parse only; the coordinate check is outside the clock",
         "gc collect then disable before READY, every arm",
+        "MALLOC_MMAP_THRESHOLD_=65536 for every arm",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
         "numpy_percentile method=linear type=7",
         "git_status_begin",
