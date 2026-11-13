@@ -278,8 +278,79 @@ fn content_hash(bytes: &[u8]) -> u64 {
     };
     #[cfg(not(feature = "parallel"))]
     let blocks: Vec<u64> = bytes.chunks(HASH_BLOCK).map(block_hash).collect();
-    let seed = fnv1a(FNV_OFFSET, &(bytes.len() as u64).to_le_bytes());
+    fold_block_hashes(bytes.len() as u64, &blocks)
+}
+
+/// Fold per-block hashes in file order. `blocks` is one hash per
+/// [`HASH_BLOCK`], and the last block may be short.
+pub(crate) fn fold_block_hashes(total: u64, blocks: &[u64]) -> u64 {
+    let seed = fnv1a(FNV_OFFSET, &total.to_le_bytes());
     blocks.iter().fold(seed, |h, b| fnv1a(h, &b.to_le_bytes()))
+}
+
+/// Block hashes this slice can finish, plus the bytes that share a
+/// block with a neighbour. `offset` is the slice's position in the file.
+pub(crate) struct SliceParts {
+    pub hashed: Vec<(u64, u64)>,
+    pub fragments: Vec<(u64, Vec<u8>)>,
+}
+
+pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
+    let mut hashed = Vec::new();
+    let mut fragments = Vec::new();
+    if data.is_empty() {
+        return SliceParts { hashed, fragments };
+    }
+    let block = HASH_BLOCK as u64;
+    let end = offset + data.len() as u64;
+    let mut pos = offset;
+    while pos < end {
+        let block_start = (pos / block) * block;
+        let block_limit = block_start + block;
+        let take_end = block_limit.min(end);
+        let local = (pos - offset) as usize;
+        let n = (take_end - pos) as usize;
+        let chunk = &data[local..local + n];
+        if pos == block_start && take_end == block_limit {
+            hashed.push((pos / block, block_hash(chunk)));
+        } else {
+            fragments.push((pos, chunk.to_vec()));
+        }
+        pos = take_end;
+    }
+    SliceParts { hashed, fragments }
+}
+
+/// Content hash of a file split into ordered pieces. The pieces may
+/// start mid-block. The result matches [`content_hash`] of the
+/// concatenation.
+pub(crate) fn fold_slice_parts(total: u64, parts: &[SliceParts]) -> u64 {
+    if total == 0 {
+        return fold_block_hashes(0, &[]);
+    }
+    let nblocks = total.div_ceil(HASH_BLOCK as u64) as usize;
+    let mut hashes = vec![0u64; nblocks];
+    let mut frags: Vec<(u64, &[u8])> = Vec::new();
+    for part in parts {
+        for &(idx, hash) in &part.hashed {
+            hashes[idx as usize] = hash;
+        }
+        for (off, bytes) in &part.fragments {
+            frags.push((*off, bytes.as_slice()));
+        }
+    }
+    frags.sort_by_key(|(off, _)| *off);
+    let mut i = 0;
+    while i < frags.len() {
+        let block = (frags[i].0 / HASH_BLOCK as u64) as usize;
+        let mut buf = Vec::new();
+        while i < frags.len() && (frags[i].0 / HASH_BLOCK as u64) as usize == block {
+            buf.extend_from_slice(frags[i].1);
+            i += 1;
+        }
+        hashes[block] = block_hash(&buf);
+    }
+    fold_block_hashes(total, &hashes)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -412,6 +483,20 @@ pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
             "frame index length does not match the data file size",
         ));
     }
+    write_encoded(path, &encode(fp, idx))
+}
+
+/// Write the sidecar from a content hash the caller already has.
+///
+/// [`write_sidecar`] reads `path` to hash it. A ranked write already
+/// holds those bytes, so reading the file again is a serial pass over
+/// the whole trajectory. `content` is the hash of the bytes just written,
+/// and `idx.data_len` is their length.
+pub(crate) fn write_sidecar_known(path: &Path, idx: &FrameIndex, content: u64) -> io::Result<()> {
+    let fp = Fingerprint {
+        size: idx.data_len,
+        content,
+    };
     write_encoded(path, &encode(fp, idx))
 }
 
@@ -646,6 +731,55 @@ mod tests {
             |acc, b| fnv1a(acc, &b.to_le_bytes()),
         );
         assert_eq!(serial, h);
+    }
+
+    #[test]
+    fn split_blocks_match_the_whole_buffer() {
+        let data: Vec<u8> = (0..HASH_BLOCK * 2 + 100).map(|i| (i % 251) as u8).collect();
+        let whole = content_hash(&data);
+        let cuts = [
+            vec![0, data.len()],
+            vec![0, 1, data.len()],
+            vec![
+                0,
+                10,
+                HASH_BLOCK - 3,
+                HASH_BLOCK,
+                HASH_BLOCK + 1,
+                HASH_BLOCK + 50,
+                data.len() - 1,
+                data.len(),
+            ],
+            vec![0, HASH_BLOCK, 2 * HASH_BLOCK, data.len()],
+        ];
+        for cut in cuts {
+            let parts: Vec<super::SliceParts> = cut
+                .windows(2)
+                .map(|span| super::slice_block_parts(span[0] as u64, &data[span[0]..span[1]]))
+                .collect();
+            assert_eq!(
+                super::fold_slice_parts(data.len() as u64, &parts),
+                whole,
+                "{cut:?}"
+            );
+        }
+        assert_eq!(super::fold_slice_parts(0, &[]), content_hash(&[]));
+    }
+
+    #[test]
+    fn known_hash_sidecar_matches_a_file_fingerprint() {
+        let dir = std::env::temp_dir().join(format!("rcidx-known-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let con = dir.join("t.con");
+        let text = fixture(4);
+        std::fs::write(&con, &text).unwrap();
+        let idx = load_or_build(&con, &text, false).unwrap();
+        super::write_sidecar_known(&con, &idx, content_hash(text.as_bytes())).unwrap();
+        let known = std::fs::read(sidecar_path(&con)).unwrap();
+        write_sidecar(&con, &idx).unwrap();
+        let fingerprinted = std::fs::read(sidecar_path(&con)).unwrap();
+        assert_eq!(known, fingerprinted);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Frames parsed from the ranges of `idx`, in order.

@@ -161,13 +161,7 @@ fn write_pwrite(
     total: u64,
 ) -> Result<(), BoxErr> {
     let created = if comm.rank() == 0 {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .and_then(|file| file.set_len(total))
-            .map_err(BoxErr::from)
+        prepare_ranked_file(path, total).map_err(BoxErr::from)
     } else {
         Ok(())
     };
@@ -189,6 +183,26 @@ fn write_pwrite(
         pwrite_all(&file, bytes, offset).map_err(BoxErr::from)
     };
     collective(comm, wrote, "pwrite")?;
+    Ok(())
+}
+
+/// Create `path` at `total` bytes, or leave it when it is already that long.
+///
+/// Truncating a file we are about to fill frees every page and faults
+/// them back. Rank 0 did that alone, so eight ranks waited on one
+/// free of the whole trajectory. A same-length rewrite keeps the pages.
+fn prepare_ranked_file(path: &Path, total: u64) -> std::io::Result<()> {
+    if let Ok(meta) = std::fs::metadata(path)
+        && meta.len() == total
+    {
+        return Ok(());
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)?;
+    file.set_len(total)?;
     Ok(())
 }
 
@@ -264,7 +278,10 @@ pub fn write_block_refs(
     }
 
     // Sidecar from the offsets every rank already knows (best effort,
-    // so a read-only sidecar location never fails the write).
+    // so a read-only sidecar location never fails the write). The
+    // content hash is folded from the bytes just formatted. Fingerprinting
+    // the file re-read it on rank 0 while every other rank waited.
+    let content = ranked_content_hash(comm, offset, &bytes, total);
     let global: Vec<u64> = starts.iter().map(|s| s + offset).collect();
     let all = gather_u64s(comm, &global);
     if let Some(offsets) = all {
@@ -273,13 +290,103 @@ pub fn write_block_refs(
             data_len: total,
         };
         if !idx.is_empty() {
-            let _ = frame_index::write_sidecar(path, &idx);
+            let _ = frame_index::write_sidecar_known(path, &idx, content);
         } else {
             let _ = std::fs::remove_file(frame_index::sidecar_path(path));
         }
     }
     world.barrier();
     Ok(total)
+}
+
+fn pack_slice_parts(parts: &frame_index::SliceParts) -> Vec<u8> {
+    let mut out =
+        Vec::with_capacity(16 + parts.fragments.iter().map(|(_, b)| b.len()).sum::<usize>());
+    out.extend_from_slice(&(parts.hashed.len() as u64).to_le_bytes());
+    for &(idx, hash) in &parts.hashed {
+        out.extend_from_slice(&idx.to_le_bytes());
+        out.extend_from_slice(&hash.to_le_bytes());
+    }
+    out.extend_from_slice(&(parts.fragments.len() as u64).to_le_bytes());
+    for (off, bytes) in &parts.fragments {
+        out.extend_from_slice(&off.to_le_bytes());
+        out.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        out.extend_from_slice(bytes);
+    }
+    out
+}
+
+fn unpack_slice_parts(mut buf: &[u8]) -> Result<frame_index::SliceParts, String> {
+    fn take<'a>(buf: &mut &'a [u8], n: usize) -> Result<&'a [u8], String> {
+        if buf.len() < n {
+            return Err("short slice-part payload".into());
+        }
+        let (head, rest) = buf.split_at(n);
+        *buf = rest;
+        Ok(head)
+    }
+    fn u64_le(buf: &mut &[u8]) -> Result<u64, String> {
+        let bytes = take(buf, 8)?;
+        Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+    let n_hashed = usize::try_from(u64_le(&mut buf)?).map_err(|err| err.to_string())?;
+    let mut hashed = Vec::with_capacity(n_hashed);
+    for _ in 0..n_hashed {
+        hashed.push((u64_le(&mut buf)?, u64_le(&mut buf)?));
+    }
+    let n_frags = usize::try_from(u64_le(&mut buf)?).map_err(|err| err.to_string())?;
+    let mut fragments = Vec::with_capacity(n_frags);
+    for _ in 0..n_frags {
+        let off = u64_le(&mut buf)?;
+        let len = usize::try_from(u64_le(&mut buf)?).map_err(|err| err.to_string())?;
+        fragments.push((off, take(&mut buf, len)?.to_vec()));
+    }
+    if !buf.is_empty() {
+        return Err("trailing slice-part payload".into());
+    }
+    Ok(frame_index::SliceParts { hashed, fragments })
+}
+
+/// Content hash of the ranked bytes, matching a hash of the whole file.
+/// Rank 0 returns the hash. Every rank must call this.
+fn ranked_content_hash(comm: &Comm, offset: u64, bytes: &[u8], total: u64) -> u64 {
+    let parts = frame_index::slice_block_parts(offset, bytes);
+    let payload = pack_slice_parts(&parts);
+    let world = comm.raw();
+    let root = world.process_at_rank(0);
+    let len = payload.len() as u64;
+    if comm.rank() == 0 {
+        let mut lens = vec![0u64; comm.size()];
+        root.gather_into_root(&len, &mut lens[..]);
+        let counts: Vec<i32> = lens.iter().map(|&n| n as i32).collect();
+        let displs: Vec<i32> = counts
+            .iter()
+            .scan(0i32, |acc, &c| {
+                let d = *acc;
+                *acc += c;
+                Some(d)
+            })
+            .collect();
+        let sum: usize = counts.iter().map(|&c| c as usize).sum();
+        let mut store = vec![0u8; sum.max(1)];
+        {
+            let mut part = PartitionMut::new(&mut store[..sum], &counts[..], &displs[..]);
+            root.gather_varcount_into_root(&payload[..], &mut part);
+        }
+        let mut decoded = Vec::with_capacity(comm.size());
+        let mut at = 0usize;
+        for &count in &counts {
+            let n = count as usize;
+            decoded
+                .push(unpack_slice_parts(&store[at..at + n]).expect("ranked content hash payload"));
+            at += n;
+        }
+        frame_index::fold_slice_parts(total, &decoded)
+    } else {
+        root.gather_into(&len);
+        root.gather_varcount_into(&payload[..]);
+        0
+    }
 }
 
 /// Gather variable-length u64 lists to rank 0 in rank order.
@@ -547,5 +654,35 @@ mod ranked_sink_tests {
         assert_eq!(&got[..4], b"abcd");
         assert_eq!(&got[8..12], b"WXYZ");
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Truncating a same-length file used to drop the bytes (and the
+    /// pages) before the rewrite. The ranked prepare leaves them.
+    #[test]
+    fn a_same_length_file_keeps_its_bytes() {
+        let path =
+            std::path::PathBuf::from(format!("/dev/shm/readcon-reuse-{}", std::process::id()));
+        std::fs::write(&path, b"abcdefghijklmnop").unwrap();
+        super::prepare_ranked_file(&path, 16).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        assert_eq!(got, b"abcdefghijklmnop");
+        super::prepare_ranked_file(&path, 8).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        assert_eq!(got.len(), 8);
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod slice_part_codec {
+    use super::{pack_slice_parts, unpack_slice_parts};
+
+    #[test]
+    fn packed_slice_parts_round_trip() {
+        let data: Vec<u8> = (0..3000).map(|i| (i % 251) as u8).collect();
+        let parts = crate::frame_index::slice_block_parts(10, &data);
+        let back = unpack_slice_parts(&pack_slice_parts(&parts)).unwrap();
+        assert_eq!(back.hashed, parts.hashed);
+        assert_eq!(back.fragments, parts.fragments);
     }
 }

@@ -151,7 +151,19 @@ fn rank_child() {
     if comm.rank() == 0 {
         let got = fs::read(&out).expect("written");
         assert_eq!(got, serial, "ranks {}", comm.size());
+        let side = readcon_core::frame_index::sidecar_path(&out);
+        let written = fs::read(&side).expect("sidecar");
+        let idx = readcon_core::frame_index::read_sidecar(&out)
+            .expect("read sidecar")
+            .expect("index");
+        readcon_core::frame_index::write_sidecar(&out, &idx).expect("fingerprint");
+        let fingerprinted = fs::read(&side).expect("fingerprinted sidecar");
+        assert_eq!(
+            written, fingerprinted,
+            "the ranked sidecar must match a fingerprint of the file"
+        );
         let _ = fs::remove_file(&out);
+        let _ = fs::remove_file(&side);
     }
 }
 

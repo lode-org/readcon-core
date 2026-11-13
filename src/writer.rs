@@ -2534,6 +2534,77 @@ pub fn write_frame_refs_with_threads(
     Ok(out)
 }
 
+/// Byte weight of one frame: atom lines, counting each extra section.
+///
+/// A velocity frame is about twice a coordinate frame of the same
+/// atoms. Splitting on frame counts glues that heavy frame to a light
+/// neighbour and leaves the other workers short.
+pub(crate) fn frame_byte_weight(frame: &ConFrame) -> usize {
+    let atoms = frame.atom_data.len().max(1);
+    let mut blocks = 1usize;
+    if frame.has_velocities() {
+        blocks += 1;
+    }
+    if frame.has_forces() {
+        blocks += 1;
+    }
+    if frame.has_energies() {
+        blocks += 1;
+    }
+    if frame.has_charges() {
+        blocks += 1;
+    }
+    if frame.has_spins() {
+        blocks += 1;
+    }
+    if frame.has_magmoms() {
+        blocks += 1;
+    }
+    if frame.has_displacements() {
+        blocks += 1;
+    }
+    if frame.has_spreads() {
+        blocks += 1;
+    }
+    atoms.saturating_mul(blocks)
+}
+
+/// Contiguous groups whose weights are as equal as a frame boundary allows.
+///
+/// `workers` groups when there are at least that many frames. A frame
+/// heavier than the mean stands in its own group instead of sharing one
+/// with the light frames an equal count would pair it with.
+pub(crate) fn pack_frames_by_weight(weights: &[usize], workers: usize) -> Vec<(usize, usize)> {
+    let n = weights.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let workers = workers.max(1).min(n);
+    let mut prefix = vec![0u64; n + 1];
+    for (i, weight) in weights.iter().enumerate() {
+        prefix[i + 1] = prefix[i] + (*weight as u64).max(1);
+    }
+    let total = prefix[n];
+    let mut out = Vec::with_capacity(workers);
+    let mut start = 0usize;
+    for worker in 0..workers {
+        let end = if worker + 1 == workers {
+            n
+        } else {
+            let target = ((worker as u64 + 1) * total) / workers as u64;
+            let latest = n - (workers - worker - 1);
+            let mut end = start + 1;
+            while end < latest && prefix[end] < target {
+                end += 1;
+            }
+            end
+        };
+        out.push((start, end));
+        start = end;
+    }
+    out
+}
+
 /// How many threads format frame groups.
 ///
 /// The caller writes a finished group and then blocks on the channel.
@@ -2600,9 +2671,34 @@ fn pipeline_frame_groups(
         })();
         return commit_temporary(&tmp, path, result);
     }
+    // Touching every frame on the caller was a serial 5 ms before the
+    // formatters started. The same workers weigh the frames first.
+    let mut weights = vec![0usize; frames.len()];
+    let weighers = workers.max(1).min(frames.len());
+    std::thread::scope(|scope| {
+        let chunk = frames.len().div_ceil(weighers);
+        for (index, slot) in weights.chunks_mut(chunk).enumerate() {
+            let start = index * chunk;
+            let end = start + slot.len();
+            let frames = &frames[start..end];
+            scope.spawn(move || {
+                for (weight, frame) in slot.iter_mut().zip(frames.iter()) {
+                    *weight = frame_byte_weight(frame);
+                }
+            });
+        }
+    });
+    // Several groups per worker so the first one finishes early and the
+    // copy overlaps the rest. Weights, not frame counts: a velocity
+    // frame is not glued to a light neighbour.
     let groups = workers.saturating_mul(4).max(workers);
-    let chunk = frames.len().div_ceil(groups).max(1);
-    let pieces: Vec<&[&ConFrame]> = frames.chunks(chunk).collect();
+    let ranges = pack_frames_by_weight(&weights, groups);
+    let pieces: Vec<&[&ConFrame]> = ranges
+        .iter()
+        .map(|&(start, end)| &frames[start..end])
+        .collect();
+    // Depth 2 keeps the copy on the caller's core. A deep queue lets
+    // every group finish first and the copy becomes a second pass.
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
     let format_threads = pipeline_format_threads(workers);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
@@ -3107,7 +3203,7 @@ mod section_arity_tests {
 
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_write_tests {
-    use super::pipeline_format_threads;
+    use super::{frame_byte_weight, pack_frames_by_weight, pipeline_format_threads};
 
     /// Two workers used to format on one thread. The caller only writes
     /// a group it has already received, so both workers have to format.
@@ -3116,6 +3212,78 @@ mod parallel_write_tests {
         assert_eq!(pipeline_format_threads(1), 1);
         assert_eq!(pipeline_format_threads(2), 2);
         assert_eq!(pipeline_format_threads(8), 8);
+    }
+
+    /// Equal frame counts would split `[1, 1, 1, 100]` into two and two,
+    /// gluing the heavy frame to a light one.
+    #[test]
+    fn a_heavy_frame_is_not_glued_to_a_light_one() {
+        assert_eq!(
+            pack_frames_by_weight(&[1, 1, 1, 100], 2),
+            vec![(0, 3), (3, 4)]
+        );
+        assert_eq!(
+            pack_frames_by_weight(&[100, 1, 1, 1], 2),
+            vec![(0, 1), (1, 4)]
+        );
+        assert_eq!(
+            pack_frames_by_weight(&[4, 4, 4, 4, 4, 4, 4, 4], 4),
+            vec![(0, 2), (2, 4), (4, 6), (6, 8)]
+        );
+    }
+
+    #[test]
+    fn velocity_lines_weigh_more_than_the_same_coordinates() {
+        let con = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.con"
+        ))
+        .unwrap();
+        let vel = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.convel"
+        ))
+        .unwrap();
+        let plain = crate::iterators::frames_from_text(&con, Some(1)).unwrap();
+        let moving = crate::iterators::frames_from_text(&vel, Some(1)).unwrap();
+        assert!(frame_byte_weight(&moving[0]) > frame_byte_weight(&plain[0]));
+        assert_eq!(
+            frame_byte_weight(&moving[0]),
+            plain[0].atom_data.len().max(1) * 2
+        );
+    }
+
+    /// Three frames, the last with velocities. Two workers must not
+    /// scramble the file when the heavy frame sits in its own group.
+    #[test]
+    fn packed_groups_match_the_serial_bytes() {
+        let con = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.con"
+        ))
+        .unwrap();
+        let vel = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.convel"
+        ))
+        .unwrap();
+        let text = format!("{con}{con}{vel}");
+        let frames = crate::iterators::frames_from_text(&text, Some(1)).unwrap();
+        assert!(frames.len() > 2);
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let mut serial = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut serial);
+            for frame in &frames {
+                writer.write_frame_bound(frame).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        let path = std::env::temp_dir().join(format!("rc-pack-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&path, &refs, 2, None, false, true).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        assert_eq!(got, serial);
+        let _ = std::fs::remove_file(&path);
     }
 }
 
