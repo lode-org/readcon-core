@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Fair CON and extended-XYZ head-to-head.
 
-One warmup, then serial samples. The median and IQR are type-7. Python
-startup stays outside the clock for every Python tool. The eOn C++ timer
-reports its own wall, so process startup is outside that clock too.
+One warmup, then serial samples. The median and IQR are type-7. Each
+sample is a fresh process pinned to the same core, with that warmup
+inside the process and outside the clock. Arms are interleaved: sample
+``i`` rotates which tool runs first, instead of finishing one tool's
+block before the next. Python startup stays outside the clock. The eOn
+C++ timer reports its own wall, so its process startup is outside that
+clock too.
 Reads use the same warm and cold page-cache preparation for every tool.
 Writes unlink the destination and then create it, for every sample.
 Each timed call materialises the fields the file actually carries
@@ -36,17 +40,68 @@ THREAD_ENV = (
     "NUMEXPR_NUM_THREADS",
     "VECLIB_MAXIMUM_THREADS",
 )
+# Every arm uses this core. A shared mask keeps the cache and the
+# scheduler the same; it is not a per-tool core.
+CORE = "0"
 
 
 def serial_threads() -> None:
     for key in THREAD_ENV:
         os.environ[key] = "1"
+    os.environ.pop("RAYON_NUM_THREADS", None)
     try:
         import threadpoolctl
 
         threadpoolctl.threadpool_limits(limits=1)
     except Exception:
         return
+
+
+def pin_cores() -> None:
+    os.sched_setaffinity(0, {int(part) for part in CORE.split(",") if part})
+
+
+def cpu_mhz() -> float | None:
+    try:
+        text = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.lower().startswith("cpu mhz"):
+            return float(line.split(":", 1)[1])
+    return None
+
+
+def host_snapshot() -> dict:
+    """Load, governor, and lscpu for this machine, taken outside the clock."""
+    pin_cores()
+    governors = {}
+    for cpu in range(os.cpu_count() or 1):
+        path = Path(f"/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor")
+        governors[str(cpu)] = (
+            path.read_text(encoding="utf-8").strip() if path.is_file() else "absent"
+        )
+    lscpu = subprocess.run(
+        ["lscpu"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    return {
+        "loadavg": Path("/proc/loadavg").read_text(encoding="utf-8").strip(),
+        "affinity": sorted(os.sched_getaffinity(0)),
+        "core": CORE,
+        "governor": governors,
+        "cpu_mhz": cpu_mhz(),
+        "lscpu": lscpu.stdout,
+    }
+
+
+def rotate(items: list, shift: int) -> list:
+    if not items:
+        return []
+    step = shift % len(items)
+    return items[step:] + items[:step]
 
 
 def type7(values: list[float]) -> tuple[float, float]:
@@ -109,13 +164,25 @@ def pages_resident(path: Path) -> tuple[int, int]:
 
 def prepare_cache(path: Path, cache: str) -> tuple[int, int]:
     if cache == "cold":
-        fd = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
-        finally:
-            os.close(fd)
-    elif cache == "warm":
+        import gc
+
+        gc.collect()
+        resident, total = 0, 0
+        # DONTNEED is not always finished when mincore runs. Every tool
+        # waits for the same drop, so a cold sample is actually cold.
+        for _ in range(40):
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+            finally:
+                os.close(fd)
+            resident, total = pages_resident(path)
+            if resident == 0:
+                return resident, total
+            time.sleep(0.05)
+        return resident, total
+    if cache == "warm":
         with path.open("rb") as handle:
             handle.read()
     else:
@@ -236,6 +303,226 @@ def time_python(fn, repeats: int, path: Path, cache: str):
         last = fn()
         samples.append(time.perf_counter() - started)
     return samples, last, pages
+
+
+_ARRAY_KEYS = ("positions", "masses", "cell", "velocities", "fixed", "forces")
+
+
+def save_view(path: Path, view: dict) -> None:
+    expand_species(view)
+    arrays = {}
+    meta = {
+        "n_frames": int(view["n_frames"]),
+        "n_atoms": int(view["n_atoms"]),
+        "checksum": float(view.get("checksum") or 0.0),
+    }
+    for key in _ARRAY_KEYS:
+        value = view.get(key)
+        if value is not None:
+            arrays[key] = np.asarray(value)
+    columns = view.get("columns")
+    if isinstance(columns, dict):
+        for key, value in columns.items():
+            if value is None or isinstance(value, (int, float, str)):
+                meta[f"col_{key}"] = value
+            else:
+                arrays[f"col_{key}"] = np.asarray(value)
+    if view.get("species"):
+        meta["species"] = view["species"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if arrays:
+        np.savez(path, **arrays)
+    else:
+        np.savez(path, empty=np.zeros(0))
+    path.with_suffix(".meta.json").write_text(json.dumps(meta))
+
+
+def load_view(path: Path) -> dict:
+    meta = json.loads(path.with_suffix(".meta.json").read_text(encoding="utf-8"))
+    blob = np.load(path)
+    view = {
+        "n_frames": meta["n_frames"],
+        "n_atoms": meta["n_atoms"],
+        "checksum": meta["checksum"],
+        "species": meta.get("species") or [],
+    }
+    for key in _ARRAY_KEYS:
+        view[key] = blob[key] if key in blob.files else None
+    columns = {}
+    for key, value in meta.items():
+        if key.startswith("col_"):
+            columns[key[4:]] = value
+    for name in blob.files:
+        if name.startswith("col_"):
+            columns[name[4:]] = blob[name]
+    if columns:
+        view["columns"] = columns
+    return view
+
+
+def worker_env() -> dict:
+    env = os.environ.copy()
+    for key in THREAD_ENV:
+        env[key] = "1"
+    env.pop("RAYON_NUM_THREADS", None)
+    return env
+
+
+def dispatch_read(job: dict) -> dict:
+    path = job["path"]
+    reader = job["reader"]
+    if job["op"] == "extxyz-read":
+        need = set(job.get("need") or [])
+        calls = {
+            "readcon": read_extxyz_readcon,
+            "ovito": read_extxyz_ovito,
+            "ase-extxyz": read_extxyz_ase,
+            "cextxyz": lambda item, columns: read_extxyz_lib(item, columns, True),
+            "extxyz": lambda item, columns: read_extxyz_lib(item, columns, False),
+            "chemfiles": read_extxyz_chemfiles,
+            "mdanalysis": read_extxyz_mdanalysis,
+        }
+        return calls[reader](path, need)
+    expect = bool(job.get("expect_vel"))
+    if reader == "readcon":
+        return read_con_readcon(path, expect)
+    if reader == "ase":
+        return read_con_ase(path, expect)
+    raise SystemExit(f"unknown reader {reader}")
+
+
+def worker_main() -> None:
+    pin_cores()
+    serial_threads()
+    job = json.loads(sys.stdin.read())
+    state: dict = {}
+    if job["op"] == "con-write" and job["reader"] == "readcon":
+        state["columns"] = load_view(Path(job["columns"]))["columns"]
+    elif job["op"] == "con-write" and job["reader"] == "ase":
+        state["images"] = read_con_ase(job["path"], False)["images"]
+
+    def call():
+        if job["op"] != "con-write":
+            return dispatch_read(job)
+        dest = Path(job["dest"])
+        dest.unlink(missing_ok=True)
+        if job["reader"] == "readcon":
+            import readcon
+
+            readcon.write_columns(os.fspath(dest), state["columns"], n_threads=1)
+        else:
+            from ase.io import write as ase_write
+
+            ase_write(os.fspath(dest), state["images"], format="eon")
+        return {
+            "n_frames": 1,
+            "n_atoms": 0,
+            "checksum": 0.0,
+            "positions": None,
+            "masses": None,
+            "cell": None,
+            "velocities": None,
+            "fixed": None,
+            "species": [],
+        }
+
+    samples, view, pages = time_python(call, 1, Path(job["path"]), job["cache"])
+    if job.get("dump"):
+        save_view(Path(job["dump"]), view)
+    result = {
+        "wall_s": samples[0],
+        "checksum": float(view.get("checksum") or 0.0),
+        "n_atoms": int(view.get("n_atoms") or 0),
+        "n_frames": int(view.get("n_frames") or 0),
+        "pages": pages[0] if pages else None,
+        "loadavg": Path("/proc/loadavg").read_text(encoding="utf-8").split()[0],
+        "cpu_mhz": cpu_mhz(),
+    }
+    Path(job["result"]).write_text(json.dumps(result))
+
+
+def run_python_sample(job: dict) -> dict:
+    result_path = Path(job["result"])
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    completed = subprocess.run(
+        ["taskset", "-c", CORE, sys.executable, str(Path(__file__).resolve()), "worker"],
+        input=json.dumps(job),
+        text=True,
+        capture_output=True,
+        env=worker_env(),
+        check=False,
+    )
+    if completed.returncode != 0 or not result_path.is_file():
+        raise SystemExit(
+            f"worker {job.get('op')} {job.get('reader')} failed "
+            f"{completed.returncode}\n{completed.stdout}\n{completed.stderr}"
+        )
+    return json.loads(result_path.read_text(encoding="utf-8"))
+
+
+def run_eon_sample(op: str, cache: str, src: Path, dest: Path) -> dict:
+    completed = subprocess.run(
+        ["taskset", "-c", CORE, str(EON_BIN), op, cache, os.fspath(src), os.fspath(dest)],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    payload = None
+    for line in (completed.stdout or "").splitlines():
+        if line.startswith("{") and line.endswith("}"):
+            payload = json.loads(line)
+    if payload is None or payload.get("status") != "ok" or completed.returncode != 0:
+        raise SystemExit(
+            f"eon {op} failed {completed.returncode} {completed.stdout} {completed.stderr}"
+        )
+    payload["wall_s"] = float(payload["wall_s"])
+    payload["loadavg"] = Path("/proc/loadavg").read_text(encoding="utf-8").split()[0]
+    payload["cpu_mhz"] = cpu_mhz()
+    payload["pages"] = payload.get("pages_resident")
+    return payload
+
+
+def interleaved(arms: list[dict], repeats: int, cache: str, path: Path, tag: str):
+    """One fresh process per sample. Sample ``i`` rotates which arm is first."""
+    dump_dir = WORK / "r6" / "views"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    samples = {arm["name"]: [] for arm in arms}
+    loads = {arm["name"]: [] for arm in arms}
+    mhz = {arm["name"]: [] for arm in arms}
+    pages = {arm["name"]: [] for arm in arms}
+    views = {}
+    last = {}
+    orders = []
+    for index in range(repeats):
+        order = rotate(arms, index)
+        orders.append([arm["name"] for arm in order])
+        print(f"  sample {index} {' '.join(orders[-1])}", flush=True)
+        for arm in order:
+            dump = None
+            if index == repeats - 1 and arm.get("compare"):
+                dump = dump_dir / f"{tag}-{arm['name']}.npz"
+            if arm["kind"] == "eon":
+                result = run_eon_sample(arm["eon_op"], cache, path, Path(arm["dest"]))
+                if dump is not None and arm["eon_op"] == "read":
+                    views[arm["name"]] = load_eon_dump(Path(arm["dest"]))
+            else:
+                job = dict(arm["job"])
+                job["cache"] = cache
+                job["path"] = os.fspath(path)
+                job["dump"] = os.fspath(dump) if dump else None
+                job["result"] = os.fspath(
+                    dump_dir / f"{tag}-{arm['name']}-{index}.json"
+                )
+                result = run_python_sample(job)
+                if dump is not None:
+                    views[arm["name"]] = load_view(dump)
+            samples[arm["name"]].append(float(result["wall_s"]))
+            loads[arm["name"]].append(result.get("loadavg"))
+            mhz[arm["name"]].append(result.get("cpu_mhz"))
+            pages[arm["name"]].append(result.get("pages"))
+            last[arm["name"]] = result
+            print(f"    {arm['name']} {result['wall_s']:.4f}", flush=True)
+    return samples, views, pages, loads, mhz, orders, last
 
 
 def check_versions() -> dict:
@@ -572,8 +859,10 @@ def compare_views(views: dict[str, dict], need: set[str]) -> dict:
 
 
 def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
+    pin_cores()
     serial_threads()
     versions = check_versions()
+    host = host_snapshot()
     out.mkdir(parents=True, exist_ok=True)
     targets = ("extxyz-alloy", "extxyz-md", "extxyz-same")
     # chemfiles keeps element masses (H is 1.008, not the file's 1.00784)
@@ -594,36 +883,63 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
             read_extxyz_mdanalysis,
         ),
     )
-    readers = (
-        ("readcon", read_extxyz_readcon),
-        ("ovito", read_extxyz_ovito),
-        ("ase-extxyz", read_extxyz_ase),
-        ("cextxyz", lambda path, need: read_extxyz_lib(path, need, True)),
-        ("extxyz", lambda path, need: read_extxyz_lib(path, need, False)),
-    )
+    scored_names = ("readcon", "ovito", "ase-extxyz", "cextxyz", "extxyz")
     rows = []
     lines = [
         f"versions {json.dumps(versions, sort_keys=True)}",
         "startup excluded",
         f"warmup 1 samples {repeats} percentile type7 serial 1",
+        f"fresh process per sample, taskset -c {CORE}, rotate order each sample",
         "cache warm and cold use the same prepare_cache for every reader",
+        f"loadavg {host['loadavg']}",
+        f"governor {json.dumps(host['governor'], sort_keys=True)}",
+        f"cpu_mhz {host['cpu_mhz']}",
     ]
+    reasons = {name: reason for name, reason, _fn in unscored}
     for name in targets:
         path = Path(paths[name])
         need = file_columns(path)
         lines.append(f"file {name} columns {sorted(need)}")
         for cache in ("warm", "cold"):
-            views = {}
-            for reader, fn in readers:
-                print(f"h2h {name} {reader} {cache}", flush=True)
-
-                def once(fn=fn, path=path, need=need):
-                    return fn(os.fspath(path), need)
-
-                samples, view, pages = time_python(once, repeats, path, cache)
-                median, iqr = type7(samples)
-                expand_species(view)
-                views[reader] = view
+            arms = []
+            for reader in scored_names:
+                arms.append(
+                    {
+                        "name": reader,
+                        "kind": "python",
+                        "compare": True,
+                        "job": {
+                            "op": "extxyz-read",
+                            "reader": reader,
+                            "need": sorted(need),
+                        },
+                    }
+                )
+            for reader, _reason, _fn in unscored:
+                arms.append(
+                    {
+                        "name": reader,
+                        "kind": "python",
+                        "compare": False,
+                        "job": {
+                            "op": "extxyz-read",
+                            "reader": reader,
+                            "need": sorted(need),
+                        },
+                    }
+                )
+            print(f"h2h {name} {cache}", flush=True)
+            samples, views, pages, loads, mhz, orders, last = interleaved(
+                arms, repeats, cache, path, f"{name}-{cache}"
+            )
+            for order in orders:
+                lines.append(f"order {name} {cache} {' '.join(order)}")
+            scored_views = {
+                reader: views[reader] for reader in scored_names if reader in views
+            }
+            for reader in scored_names:
+                view = scored_views[reader]
+                median, iqr = type7(samples[reader])
                 row = {
                     "file": name,
                     "reader": reader,
@@ -631,10 +947,12 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     "op": "read",
                     "median_s": median,
                     "iqr_s": iqr,
-                    "samples_s": samples,
+                    "samples_s": samples[reader],
+                    "sample_loadavg": loads[reader],
+                    "sample_cpu_mhz": mhz[reader],
                     "n_atoms": view["n_atoms"],
                     "n_frames": view["n_frames"],
-                    "pages_resident": pages,
+                    "pages_resident": pages[reader],
                     "checksum": view["checksum"],
                 }
                 rows.append(row)
@@ -642,16 +960,16 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     f"{name} {reader} {cache} median {median:.9f} iqr {iqr:.9f} "
                     f"atoms {view['n_atoms']} frames {view['n_frames']}"
                 )
-                for sample in samples:
+                for sample in samples[reader]:
                     lines.append(f"sample {sample:.9f}")
-                print(f"  {median:.4f}", flush=True)
-            report = compare_views(views, need)
+                print(f"  {reader} {median:.4f}", flush=True)
+            report = compare_views(scored_views, need)
             lines.append("compare " + json.dumps(report))
             if not report["ok"]:
                 (out / "h2h.log").write_text("\n".join(lines) + "\n")
                 raise SystemExit(f"{name} {cache} fields disagree")
             if cache == "cold":
-                for reader, view in views.items():
+                for reader, view in scored_views.items():
                     warm = next(
                         row
                         for row in rows
@@ -661,15 +979,9 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     )
                     if abs(warm["checksum"] - view["checksum"]) > 1e-6:
                         raise SystemExit(f"{name} {reader} warm and cold parses differ")
-        for reader, reason, fn in unscored:
-            for cache in ("warm", "cold"):
-                print(f"h2h {name} {reader} {cache} unscored", flush=True)
-
-                def once(fn=fn, path=path, need=need):
-                    return fn(os.fspath(path), need)
-
-                samples, view, pages = time_python(once, repeats, path, cache)
-                median, iqr = type7(samples)
+            for reader, _reason, _fn in unscored:
+                done = last[reader]
+                median, iqr = type7(samples[reader])
                 rows.append(
                     {
                         "file": name,
@@ -677,30 +989,36 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
                         "cache": cache,
                         "op": "read",
                         "scored": False,
-                        "reason": reason,
+                        "reason": reasons[reader],
                         "median_s": median,
                         "iqr_s": iqr,
-                        "samples_s": samples,
-                        "n_atoms": view["n_atoms"],
-                        "n_frames": view["n_frames"],
-                        "pages_resident": pages,
-                        "checksum": view["checksum"],
+                        "samples_s": samples[reader],
+                        "sample_loadavg": loads[reader],
+                        "sample_cpu_mhz": mhz[reader],
+                        "n_atoms": done["n_atoms"],
+                        "n_frames": done["n_frames"],
+                        "pages_resident": pages[reader],
+                        "checksum": done["checksum"],
                     }
                 )
                 lines.append(
                     f"unscored {name} {reader} {cache} median {median:.9f} "
-                    f"iqr {iqr:.9f} reason {reason}"
+                    f"iqr {iqr:.9f} reason {reasons[reader]}"
                 )
-                for sample in samples:
+                for sample in samples[reader]:
                     lines.append(f"sample {sample:.9f}")
-                print(f"  {median:.4f}", flush=True)
+                print(f"  {reader} {median:.4f}", flush=True)
     payload = {
         "rows": rows,
         "unscored": [
             {"reader": name, "reason": reason} for name, reason, _fn in unscored
         ],
         "versions": versions,
+        "host": host,
         "startup": "excluded",
+        "process": "fresh subprocess per sample",
+        "interleave": "rotate-per-sample",
+        "affinity": f"taskset -c {CORE}",
         "fields": "positions masses cell species, plus vel and fixed when the file declares them",
     }
     (out / "h2h.json").write_text(json.dumps(payload) + "\n")
@@ -1011,17 +1329,23 @@ def ase_can_read_convel(path: Path) -> bool:
 
 
 def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
+    pin_cores()
     serial_threads()
     ensure_eon_timer()
     versions = check_versions()
+    host = host_snapshot()
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     lines = [
         f"versions {json.dumps(versions, sort_keys=True)}",
         "startup excluded",
         f"warmup 1 samples {repeats} percentile type7 serial 1",
+        f"fresh process per sample, taskset -c {CORE}, rotate order each sample",
         "writes unlink then create",
         "eon corpus mirror is not in the timed read or write",
+        f"loadavg {host['loadavg']}",
+        f"governor {json.dumps(host['governor'], sort_keys=True)}",
+        f"cpu_mhz {host['cpu_mhz']}",
     ]
     tools_read = ("readcon", "ase", "eon")
     for name, path, expect_vel in con_files(paths):
@@ -1032,25 +1356,47 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
             readers = ["readcon", "eon"]
             lines.append(f"skip {name} ase velocities are not representable")
         for cache in ("warm", "cold"):
-            views = {}
+            arms = []
             for reader in readers:
-                print(f"con-h2h read {name} {reader} {cache}", flush=True)
                 if reader == "eon":
-                    dump = WORK / "r6" / f"eon-{name}-{cache}.dump"
-                    samples, payload = time_eon("read", cache, path, dump, repeats)
-                    view = load_eon_dump(dump)
-                    if expect_vel and view["velocities"] is None:
-                        raise SystemExit("eon convel read dropped velocities")
+                    arms.append(
+                        {
+                            "name": reader,
+                            "kind": "eon",
+                            "compare": True,
+                            "eon_op": "read",
+                            "dest": WORK / "r6" / f"eon-{name}-{cache}.dump",
+                        }
+                    )
                 else:
-                    fn = read_con_readcon if reader == "readcon" else read_con_ase
-
-                    def once(fn=fn, path=path, expect_vel=expect_vel):
-                        return fn(os.fspath(path), expect_vel)
-
-                    samples, view, _pages = time_python(once, repeats, path, cache)
-                    payload = {"n_atoms": view["n_atoms"], "n_frames": view["n_frames"]}
-                median, iqr = type7(samples)
-                views[reader] = view
+                    arms.append(
+                        {
+                            "name": reader,
+                            "kind": "python",
+                            "compare": True,
+                            "job": {
+                                "op": "con-read",
+                                "reader": reader,
+                                "expect_vel": expect_vel,
+                            },
+                        }
+                    )
+            print(f"con-h2h read {name} {cache}", flush=True)
+            samples, views, _pages, loads, mhz, orders, _last = interleaved(
+                arms, repeats, cache, path, f"con-{name}-{cache}"
+            )
+            for order in orders:
+                lines.append(f"order read {name} {cache} {' '.join(order)}")
+            if expect_vel and views["eon"].get("velocities") is None:
+                raise SystemExit("eon convel read dropped velocities")
+            report = compare_con(views, expect_vel)
+            lines.append("compare " + json.dumps(report))
+            if not report["ok"]:
+                (out / "con-h2h.log").write_text("\n".join(lines) + "\n")
+                raise SystemExit(f"{name} {cache} CON fields disagree")
+            for reader in readers:
+                view = views[reader]
+                median, iqr = type7(samples[reader])
                 rows.append(
                     {
                         "file": name,
@@ -1059,7 +1405,9 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                         "cache": cache,
                         "median_s": median,
                         "iqr_s": iqr,
-                        "samples_s": samples,
+                        "samples_s": samples[reader],
+                        "sample_loadavg": loads[reader],
+                        "sample_cpu_mhz": mhz[reader],
                         "n_atoms": view["n_atoms"],
                         "n_frames": view["n_frames"],
                     }
@@ -1068,47 +1416,43 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     f"read {name} {reader} {cache} median {median:.9f} iqr {iqr:.9f} "
                     f"atoms {view['n_atoms']}"
                 )
-                for sample in samples:
+                for sample in samples[reader]:
                     lines.append(f"sample {sample:.9f}")
-                print(f"  {median:.4f}", flush=True)
-            report = compare_con(views, expect_vel)
-            lines.append("compare " + json.dumps(report))
-            if not report["ok"]:
-                (out / "con-h2h.log").write_text("\n".join(lines) + "\n")
-                raise SystemExit(f"{name} {cache} CON fields disagree")
-        # Writes are from memory. The destination is unlinked first, so the
-        # input page cache is not part of the sample.
+                print(f"  {reader} {median:.4f}", flush=True)
+        # Writes are from memory. The destination is unlinked inside the
+        # timed call. The source is the cold read, which is the last cache.
         source = views["readcon"]
+        columns_npz = WORK / "r6" / "views" / f"con-{name}-cold-readcon.npz"
+        write_arms = []
         for reader in readers:
-            print(f"con-h2h write {name} {reader}", flush=True)
             dest = WORK / "r6" / f"write-{name}-{reader}{path.suffix}"
             if reader == "eon":
-                samples, _payload = time_eon("write", "warm", path, dest, repeats)
-                written = dest
-            elif reader == "readcon":
-                columns = source["columns"]
-
-                def once(columns=columns, dest=dest):
-                    dest.unlink(missing_ok=True)
-                    import readcon
-
-                    readcon.write_columns(os.fspath(dest), columns, n_threads=1)
-
-                samples, _view, _pages = time_python(once, repeats, path, "warm")
-                written = dest
+                write_arms.append(
+                    {
+                        "name": reader,
+                        "kind": "eon",
+                        "compare": False,
+                        "eon_op": "write",
+                        "dest": dest,
+                    }
+                )
             else:
-                images = read_con_ase(os.fspath(path), False)["images"]
-
-                def once(images=images, dest=dest):
-                    dest.unlink(missing_ok=True)
-                    from ase.io import write as ase_write
-
-                    ase_write(os.fspath(dest), images, format="eon")
-
-                samples, _view, _pages = time_python(once, repeats, path, "warm")
-                written = dest
-            median, iqr = type7(samples)
-            check = read_con_readcon(os.fspath(written), expect_vel)
+                job = {"op": "con-write", "reader": reader, "dest": os.fspath(dest)}
+                if reader == "readcon":
+                    job["columns"] = os.fspath(columns_npz)
+                write_arms.append(
+                    {"name": reader, "kind": "python", "compare": False, "job": job}
+                )
+        print(f"con-h2h write {name}", flush=True)
+        samples, _views, _pages, loads, mhz, orders, _last = interleaved(
+            write_arms, repeats, "warm", path, f"con-write-{name}"
+        )
+        for order in orders:
+            lines.append(f"order write {name} {' '.join(order)}")
+        for reader in readers:
+            dest = WORK / "r6" / f"write-{name}-{reader}{path.suffix}"
+            median, iqr = type7(samples[reader])
+            check = read_con_readcon(os.fspath(dest), expect_vel)
             # ASE's writer rounds the cell to 6 decimals. The other writers
             # emit the parsed values.
             cell_tol = 5e-7 if reader == "ase" else ABS_TOL
@@ -1121,9 +1465,7 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                 and max_abs(check["fixed"], source["fixed"]) <= ABS_TOL
             )
             if expect_vel:
-                ok = (
-                    ok and max_abs(check["velocities"], source["velocities"]) <= ABS_TOL
-                )
+                ok = ok and max_abs(check["velocities"], source["velocities"]) <= ABS_TOL
             rows.append(
                 {
                     "file": name,
@@ -1132,7 +1474,9 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                     "cache": "unlink-create",
                     "median_s": median,
                     "iqr_s": iqr,
-                    "samples_s": samples,
+                    "samples_s": samples[reader],
+                    "sample_loadavg": loads[reader],
+                    "sample_cpu_mhz": mhz[reader],
                     "n_atoms": check["n_atoms"],
                     "n_frames": check["n_frames"],
                     "correct": ok,
@@ -1141,16 +1485,20 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
             lines.append(
                 f"write {name} {reader} median {median:.9f} iqr {iqr:.9f} correct {int(ok)}"
             )
-            for sample in samples:
+            for sample in samples[reader]:
                 lines.append(f"sample {sample:.9f}")
-            print(f"  {median:.4f}", flush=True)
+            print(f"  {reader} {median:.4f}", flush=True)
             if not ok:
                 (out / "con-h2h.log").write_text("\n".join(lines) + "\n")
                 raise SystemExit(f"write {name} {reader} did not round-trip")
     payload = {
         "rows": rows,
         "versions": versions,
+        "host": host,
         "startup": "excluded",
+        "process": "fresh subprocess per sample",
+        "interleave": "rotate-per-sample",
+        "affinity": f"taskset -c {CORE}",
         "skipped": [
             {
                 "file": "con-h2h",
@@ -1164,6 +1512,9 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "worker":
+        worker_main()
+        return
     command = sys.argv[1] if len(sys.argv) > 1 else "con"
     repeats = int(os.environ.get("READCON_CAMPAIGN_REPEATS", "6"))
     out = Path(os.environ.get("READCON_SCALE_OUT", str(BENCH / "scaling" / "rel1")))
