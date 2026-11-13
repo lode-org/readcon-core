@@ -6212,9 +6212,12 @@ fn intern_text_column(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
     let mut uniq = Vec::new();
     let mut ids = Vec::with_capacity(total);
     for frame in &frames {
-        let base = frame.as_ptr();
         for index in 0..frame.len() {
-            let ptr = unsafe { pyo3::ffi::PyTuple_GET_ITEM(base, index as isize) } as usize;
+            // `PyTuple_GET_ITEM` is a CPython macro. PyPy's pyo3-ffi does
+            // not export it, and that is the interpreter the wheel build
+            // compiles after CPython.
+            let item = frame.get_item(index)?;
+            let ptr = item.as_ptr() as usize;
             if let Some(id) = uniq.iter().position(|known| *known == ptr) {
                 ids.push(id as u32);
                 continue;
