@@ -67,7 +67,7 @@ impl ConPositions {
 
 /// Positions from a CON or convel buffer, in file order.
 pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, false, false, true, 1)
+    parse_con(bytes, false, false, true, 1, None)
 }
 
 /// Coordinates plus column 5, the fixed mask, and the per-type symbol runs.
@@ -76,7 +76,7 @@ pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError
 /// `flags`, and `components` are filled so a later frame can keep an element
 /// order that is not the first frame's.
 pub fn positions_with_identity(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, true, false, true, 1)
+    parse_con(bytes, true, false, true, 1, None)
 }
 
 /// Like [`positions_from_con_bytes`], also keeping ids, flags, and symbols
@@ -86,7 +86,7 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
     // A vector section means the frame objects cannot be rebuilt from the
     // coordinate column. Stop at the first one so the caller can fall back
     // to the frame parser without a second full walk.
-    parse_con(bytes, true, true, true, 1)
+    parse_con(bytes, true, true, true, 1, None)
 }
 
 /// Header walk plus a parallel fill of the coordinate rows.
@@ -102,9 +102,40 @@ pub(crate) fn positions_parallel(
     rich: bool,
 ) -> Result<ConPositions, ParseError> {
     if workers < 2 {
-        return parse_con(bytes, rich, false, true, 1);
+        return parse_con(bytes, rich, false, true, 1, None);
     }
-    let mut out = parse_con(bytes, rich, false, false, workers)?;
+    // N copies of one wide frame. Planning the first copy on every core
+    // and then parsing it again made N threads slower than one thread.
+    if let Some(repeated) = parse_repeated_copies(bytes, workers, rich)? {
+        return Ok(repeated);
+    }
+    let mut out = parse_con(bytes, rich, false, false, workers, Some(1))?;
+    if let Some(first) = out.spans.first() {
+        let first_end = first.end;
+        let head0 = out.head_ends.first().copied().unwrap_or(0);
+        if first_end > 0 && first_end < bytes.len() {
+            if let Some(nframes) = tiled_frame_count(bytes, first_end, head0) {
+                let count0 = out.counts[0];
+                let cells0 = out.cells.clone();
+                let masses0 = out.masses.clone();
+                for frame in 1..nframes {
+                    let base = frame * first_end;
+                    out.counts.push(count0);
+                    out.spans.push(base..base + first_end);
+                    out.head_ends.push(head0 + base);
+                    out.cells.extend_from_slice(&cells0);
+                    out.masses.extend_from_slice(&masses0);
+                    out.wide_breaks.push(Vec::new());
+                    // Planned on the worker. Shifted chunk offsets are only
+                    // valid when every line has the same width.
+                    out.wide_chunks.push(Vec::new());
+                    out.n_frames += 1;
+                }
+            } else {
+                out = parse_con(bytes, rich, false, false, workers, None)?;
+            }
+        }
+    }
     let n_atoms: usize = out.counts.iter().sum();
     let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
     let mut ids = Vec::<u64>::new();
@@ -139,23 +170,77 @@ pub(crate) fn positions_parallel(
             flags_ptr as *mut u8,
         )?;
     } else if !jobs.is_empty() {
-        use rayon::prelude::*;
-        let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
-            fill_frame_rows(
-                bytes,
-                &out,
-                frame,
-                dest,
-                workers,
-                rich,
-                positions_ptr as *mut f64,
-                ids_ptr as *mut u64,
-                flags_ptr as *mut u8,
-            )
-            .err()
-        });
-        if let Some(err) = failed {
-            return Err(err);
+        // One worker per frame once there is a frame for every worker.
+        // Passing `workers` into each frame nested another pool inside
+        // the frame iterator, so two million-atom frames on two threads
+        // were slower than one frame on one thread.
+        let frame_workers = if jobs.len() >= workers {
+            1
+        } else {
+            (workers / jobs.len()).max(1)
+        };
+        if frame_workers < 2 {
+            let pool_threads = workers.min(jobs.len());
+            crate::parser::on_pool(pool_threads, || {
+                use rayon::prelude::*;
+                let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
+                    let span = out.spans[frame].clone();
+                    let parsed = match parse_con(
+                        &bytes[span.start..span.end],
+                        rich,
+                        false,
+                        true,
+                        1,
+                        Some(1),
+                    ) {
+                        Ok(parsed) => parsed,
+                        Err(err) => return Some(err),
+                    };
+                    if parsed.positions.len() != out.counts[frame] * 3 {
+                        return Some(ParseError::InvalidCount(
+                            "frame atom count does not match the first frame".into(),
+                        ));
+                    }
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            parsed.positions.as_ptr(),
+                            (positions_ptr as *mut f64).add(dest * 3),
+                            parsed.positions.len(),
+                        );
+                        if rich {
+                            std::ptr::copy_nonoverlapping(
+                                parsed.ids.as_ptr(),
+                                (ids_ptr as *mut u64).add(dest),
+                                parsed.ids.len(),
+                            );
+                            std::ptr::copy_nonoverlapping(
+                                parsed.flags.as_ptr(),
+                                (flags_ptr as *mut u8).add(dest),
+                                parsed.flags.len(),
+                            );
+                        }
+                    }
+                    None
+                });
+                if let Some(err) = failed {
+                    return Err(err);
+                }
+                Ok(())
+            })?;
+        } else {
+            for &(frame, dest) in &jobs {
+                fill_frame_rows(
+                    bytes,
+                    &out,
+                    frame,
+                    dest,
+                    frame_workers,
+                    rich,
+                    positions_ptr as *mut f64,
+                    ids_ptr as *mut u64,
+                    flags_ptr as *mut u8,
+                )?;
+            }
         }
     }
     if n_atoms > 0 {
@@ -311,6 +396,7 @@ fn parse_con(
     stop_on_section: bool,
     store_rows: bool,
     workers: usize,
+    frame_limit: Option<usize>,
 ) -> Result<ConPositions, ParseError> {
     let mut pos = 0usize;
     let mut out = ConPositions {
@@ -342,8 +428,349 @@ fn parse_con(
         if stop_on_section && out.has_section {
             break;
         }
+        if frame_limit.is_some_and(|limit| out.n_frames >= limit) {
+            break;
+        }
     }
     Ok(out)
+}
+
+/// Identical copies of one wide frame, one copy per worker.
+///
+/// The size check is a single header. A file that is only one frame never
+/// walks its coordinate lines here, so the single-frame split below is
+/// unchanged. Each copy is then the serial column walk on its own core.
+#[cfg(feature = "parallel")]
+fn parse_repeated_copies(
+    bytes: &[u8],
+    workers: usize,
+    rich: bool,
+) -> Result<Option<ConPositions>, ParseError> {
+    let Some(header) = peek_first_coord_line(bytes) else {
+        return Ok(None);
+    };
+    if header.count < 4096 || header.line_len == 0 {
+        return Ok(None);
+    }
+    // The first coordinate line is the short one on this file. A single
+    // frame stays under 1.5x that estimate and keeps the chunked fill.
+    // Walking those lines to learn the span took 15 ms, which was the
+    // whole weak-scaling gap, so the second copy is found with memmem.
+    let est = header
+        .head_end
+        .saturating_add(header.count.saturating_mul(header.line_len));
+    if est == 0 || bytes.len() <= est.saturating_add(est / 2) {
+        return Ok(None);
+    }
+    let Some((span, nframes)) = repeated_span(bytes, header.head_end, est) else {
+        return Ok(None);
+    };
+    let count0 = header.count;
+    let mut out = ConPositions {
+        n_frames: 0,
+        counts: Vec::with_capacity(nframes),
+        positions: Vec::new(),
+        cells: Vec::with_capacity(nframes * 6),
+        masses: Vec::new(),
+        spans: Vec::with_capacity(nframes),
+        stock: header.stock,
+        has_section: false,
+        ids: Vec::new(),
+        flags: Vec::new(),
+        components: Vec::new(),
+        head_ends: Vec::with_capacity(nframes),
+        wide_breaks: Vec::new(),
+        wide_chunks: Vec::new(),
+    };
+    for frame in 0..nframes {
+        let base = frame * span;
+        out.counts.push(count0);
+        out.spans.push(base..base + span);
+        out.head_ends.push(header.head_end + base);
+        out.cells.extend_from_slice(&header.cells);
+        if rich {
+            out.components.push((Arc::clone(&header.symbol), count0));
+        }
+        out.wide_breaks.push(Vec::new());
+        out.wide_chunks.push(Vec::new());
+        out.n_frames += 1;
+    }
+    let n_atoms = count0.saturating_mul(nframes);
+    let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
+    let mut masses = Vec::<f64>::new();
+    if rich && n_atoms > 0 {
+        masses.reserve(n_atoms);
+    }
+    let mut ids = Vec::<u64>::new();
+    let mut flags = Vec::<u8>::new();
+    if rich && n_atoms > 0 {
+        ids = Vec::with_capacity(n_atoms);
+        flags = Vec::with_capacity(n_atoms);
+    }
+    let positions_ptr = positions.as_mut_ptr() as usize;
+    let masses_ptr = if rich {
+        masses.as_mut_ptr() as usize
+    } else {
+        0
+    };
+    let ids_ptr = ids.as_mut_ptr() as usize;
+    let flags_ptr = flags.as_mut_ptr() as usize;
+    let saw_section = std::sync::atomic::AtomicBool::new(false);
+    let lost_stock = std::sync::atomic::AtomicBool::new(false);
+    let saw_section = &saw_section;
+    let lost_stock = &lost_stock;
+    // One core per copy. A two-item rayon iterator stayed on the caller,
+    // so the second copy never overlapped the first.
+    let pool_threads = workers.min(nframes);
+    let share = nframes.div_ceil(pool_threads);
+    let mass = header.mass;
+    let head0 = header.head_end;
+    let mut failed: Option<ParseError> = None;
+    std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(pool_threads);
+        for worker in 0..pool_threads {
+            let start_frame = worker * share;
+            let end_frame = (start_frame + share).min(nframes);
+            guards.push(scope.spawn(move || -> Result<(), ParseError> {
+                crate::parser::pin_worker(worker);
+                for frame in start_frame..end_frame {
+                    let start = frame * span;
+                    let (certified, saw) = fill_copied_frame(
+                        bytes,
+                        start,
+                        start + span,
+                        head0 + start,
+                        count0,
+                        mass,
+                        frame * count0,
+                        rich,
+                        positions_ptr,
+                        masses_ptr,
+                        ids_ptr,
+                        flags_ptr,
+                    )?;
+                    if saw {
+                        saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    if !certified {
+                        lost_stock.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+                Ok(())
+            }));
+        }
+        for guard in guards {
+            if failed.is_some() {
+                break;
+            }
+            if let Err(err) = guard.join().expect("frame parser panicked") {
+                failed = Some(err);
+            }
+        }
+    });
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    if lost_stock.load(std::sync::atomic::Ordering::Relaxed) {
+        out.stock = false;
+    }
+    if saw_section.load(std::sync::atomic::Ordering::Relaxed) {
+        out.has_section = true;
+    }
+    if n_atoms > 0 {
+        unsafe {
+            positions.set_len(n_atoms * 3);
+            if rich {
+                masses.set_len(n_atoms);
+            }
+            if rich {
+                ids.set_len(n_atoms);
+                flags.set_len(n_atoms);
+            }
+        }
+    }
+    out.positions = positions;
+    out.masses = masses;
+    if rich {
+        out.ids = ids;
+        out.flags = flags;
+    }
+    Ok(Some(out))
+}
+
+struct PeekedHeader {
+    count: usize,
+    head_end: usize,
+    line_len: usize,
+    cells: [f64; 6],
+    mass: f64,
+    stock: bool,
+    symbol: Arc<str>,
+}
+
+/// Parse one copied frame straight into the shared column buffers.
+///
+/// A temporary `Vec` per copy allocated, copied, and freed on the same
+/// core as the parse. Eight of those on eight cores were slower than the
+/// parse itself.
+#[cfg(feature = "parallel")]
+fn fill_copied_frame(
+    bytes: &[u8],
+    frame_start: usize,
+    frame_end: usize,
+    head: usize,
+    count: usize,
+    mass: f64,
+    dest: usize,
+    rich: bool,
+    positions: usize,
+    masses: usize,
+    ids: usize,
+    flags: usize,
+) -> Result<(bool, bool), ParseError> {
+    let spec = frame_spec(bytes, frame_start)?;
+    let mut pos = head;
+    for row in 0..count {
+        let ((row_xyz, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, row as u64)?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                row_xyz.as_ptr(),
+                (positions as *mut f64).add((dest + row) * 3),
+                3,
+            );
+            if masses != 0 {
+                *((masses as *mut f64).add(dest + row)) = mass;
+            }
+            if rich {
+                *((ids as *mut u64).add(dest + row)) = atom_id;
+                *((flags as *mut u8).add(dest + row)) = flag_bits(fixed);
+            }
+        }
+        pos = next;
+    }
+    if pos < frame_start || pos > frame_end {
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    let mut rel = pos - frame_start;
+    let (certified, saw) = skip_sections(&bytes[frame_start..frame_end], &mut rel, count + 2)?;
+    Ok((certified, saw))
+}
+
+/// Header fields of a one-component frame, without walking its atom lines.
+/// `None` when the header is not the shape this fast path owns.
+#[cfg(feature = "parallel")]
+fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
+    let mut pos = 0usize;
+    skip_line(bytes, &mut pos).ok()?;
+    let meta = read_line(bytes, &mut pos).ok()?;
+    spec_version(meta).ok()?;
+    let stock = stock_meta_line(meta);
+    let box_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let boxl = parse_line_of_n_f64(box_line, 3).ok()?;
+    let ang_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let angles = parse_line_of_n_f64(ang_line, 3).ok()?;
+    skip_line(bytes, &mut pos).ok()?;
+    skip_line(bytes, &mut pos).ok()?;
+    let types_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let natm_types = parse_count_line(types_line, 1).ok()?[0];
+    if natm_types != 1 {
+        return None;
+    }
+    let count_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let counts = parse_count_line(count_line, 1).ok()?;
+    let count = counts[0];
+    if count == 0 {
+        return None;
+    }
+    let mass_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let mass = parse_line_of_n_f64(mass_line, 1).ok()?[0];
+    let symbol_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let symbol: Arc<str> = Arc::from(symbol_line.trim());
+    skip_line(bytes, &mut pos).ok()?;
+    let head_end = pos;
+    let start = pos;
+    skip_line(bytes, &mut pos).ok()?;
+    let line_len = pos - start;
+    let mut cells = [0.0; 6];
+    cells[..3].copy_from_slice(&boxl);
+    cells[3..].copy_from_slice(&angles);
+    Some(PeekedHeader {
+        count,
+        head_end,
+        line_len,
+        cells,
+        mass,
+        stock,
+        symbol,
+    })
+}
+
+/// Byte length of one copy, and how many copies tile `bytes`.
+///
+/// The second header is a memmem hit. Counting every newline of the first
+/// copy to learn the same number was a serial 15 ms on a million-atom frame.
+#[cfg(feature = "parallel")]
+fn repeated_span(bytes: &[u8], head_end: usize, est: usize) -> Option<(usize, usize)> {
+    if head_end < 16 || head_end >= bytes.len() {
+        return None;
+    }
+    let eol = memchr::memchr(b'\n', bytes)?;
+    if eol + 1 >= head_end {
+        return None;
+    }
+    let first_line = &bytes[..=eol];
+    // Lines are at least as long as the first coordinate line, so the next
+    // copy starts at or after `est`. Scanning from byte 0 read the whole
+    // first frame and cost 5 ms before any worker could parse.
+    let hinted = find_line_at(bytes, first_line, est.max(eol + 1));
+    let span = match hinted {
+        Some(span) => span,
+        None => find_line_at(bytes, first_line, eol + 1)?,
+    };
+    let nframes = tiled_frame_count(bytes, span, head_end)?;
+    Some((span, nframes))
+}
+
+#[cfg(feature = "parallel")]
+fn find_line_at(bytes: &[u8], line: &[u8], from: usize) -> Option<usize> {
+    if line.is_empty() || from >= bytes.len() {
+        return None;
+    }
+    let rare = line[0];
+    let mut cursor = from;
+    while let Some(hit) = memchr::memchr(rare, &bytes[cursor..]) {
+        let at = cursor + hit;
+        if bytes[at..].starts_with(line) {
+            return Some(at);
+        }
+        cursor = at + 1;
+    }
+    None
+}
+
+/// `bytes` is `n` copies of a frame of `span` bytes, each starting with
+/// the same header. Later frames can then be planned on their own core.
+fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
+    if span < 16 || head_end == 0 || head_end > span || !bytes.len().is_multiple_of(span) {
+        return None;
+    }
+    let n = bytes.len() / span;
+    if n < 2 {
+        return None;
+    }
+    let header = &bytes[..head_end];
+    for frame in 1..n {
+        let start = frame * span;
+        if bytes.get(start - 1) != Some(&b'\n') {
+            return None;
+        }
+        if bytes.get(start..start + head_end) != Some(header) {
+            return None;
+        }
+    }
+    Some(n)
 }
 
 fn parse_one_frame(
@@ -425,37 +852,43 @@ fn parse_one_frame(
         } else if counts.len() == 1 && *count >= 4096 && workers >= 2 {
             #[cfg(feature = "parallel")]
             {
-                let (chunks, end) = crate::parser::plan_coord_chunks(bytes, *pos, *count, workers)?;
-                // The constant mass is a streaming store. Doing it on the
-                // same workers as the newline count keeps it off the
-                // calling thread.
-                let origin = out.masses.len();
-                let mut row_at = Vec::with_capacity(chunks.len());
-                let mut acc = origin;
-                for (_, nrows) in &chunks {
-                    row_at.push(acc);
-                    acc += *nrows;
-                }
-                out.masses.reserve(acc - origin);
-                let ptr = out.masses.as_mut_ptr() as usize;
-                let mass_value = *mass;
-                let nchunks = chunks.len();
-                if nchunks >= 2 {
-                    crate::parser::on_pool(workers, || {
-                        use rayon::prelude::*;
-                        (0..nchunks).into_par_iter().for_each(|index| {
-                            let start = row_at[index];
-                            let rows = chunks[index].1;
-                            for step in 0..rows {
-                                unsafe {
-                                    *((ptr as *mut f64).add(start + step)) = mass_value;
+                let (chunks, end) = crate::parser::plan_coord_chunks(
+                    bytes,
+                    *pos,
+                    *count,
+                    workers.saturating_mul(4),
+                )?;
+                // Positions-only reads drop this column. Filling it was a
+                // second pass over a million atoms on the timed path.
+                if rich {
+                    let origin = out.masses.len();
+                    let mut row_at = Vec::with_capacity(chunks.len());
+                    let mut acc = origin;
+                    for (_, nrows) in &chunks {
+                        row_at.push(acc);
+                        acc += *nrows;
+                    }
+                    out.masses.reserve(acc - origin);
+                    let ptr = out.masses.as_mut_ptr() as usize;
+                    let mass_value = *mass;
+                    let nchunks = chunks.len();
+                    if nchunks >= 2 {
+                        crate::parser::on_pool(workers, || {
+                            use rayon::prelude::*;
+                            (0..nchunks).into_par_iter().for_each(|index| {
+                                let start = row_at[index];
+                                let rows = chunks[index].1;
+                                for step in 0..rows {
+                                    unsafe {
+                                        *((ptr as *mut f64).add(start + step)) = mass_value;
+                                    }
                                 }
-                            }
+                            });
                         });
-                    });
-                    unsafe { out.masses.set_len(acc) };
-                } else {
-                    out.masses.extend(std::iter::repeat_n(mass_value, *count));
+                        unsafe { out.masses.set_len(acc) };
+                    } else {
+                        out.masses.extend(std::iter::repeat_n(mass_value, *count));
+                    }
                 }
                 *out.wide_chunks.last_mut().expect("frame chunks") = chunks;
                 *pos = end;
@@ -834,6 +1267,46 @@ mod tests {
         ] {
             bits_match_iterator(rel);
         }
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn two_wide_frames_on_two_threads_keep_up_with_one_frame() {
+        let n = 200_000usize;
+        let mut one = String::from(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        one.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            one.push_str(&format!("{i}.125000 0.250000 0.500000 0 {i}\n"));
+        }
+        let two = format!("{one}{one}");
+        let serial = positions_parallel(one.as_bytes(), 1, false).unwrap();
+        let parallel = positions_parallel(two.as_bytes(), 2, false).unwrap();
+        assert_eq!(parallel.n_frames, 2);
+        assert_eq!(parallel.counts, vec![n, n]);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions[..n * 3], &serial.positions),
+            None
+        );
+        let time = |bytes: &[u8], workers: usize| {
+            let _ = positions_parallel(bytes, workers, false).unwrap();
+            let mut samples = Vec::with_capacity(5);
+            for _ in 0..5 {
+                let started = std::time::Instant::now();
+                let got = positions_parallel(bytes, workers, false).unwrap();
+                std::hint::black_box(got.positions.len());
+                samples.push(started.elapsed().as_secs_f64());
+            }
+            samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
+            samples[samples.len() / 2]
+        };
+        let one_s = time(one.as_bytes(), 1);
+        let two_s = time(two.as_bytes(), 2);
+        assert!(
+            two_s < one_s * 1.7,
+            "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
+        );
     }
 
     #[cfg(feature = "parallel")]

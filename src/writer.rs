@@ -2410,6 +2410,52 @@ fn pipeline_frame_groups(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    // One formatter per frame when there is a core for each. Reserving a
+    // thread for the writer left two frames on two threads formatting
+    // one after the other, so the pair took about twice one frame.
+    if (2..=workers).contains(&frames.len()) {
+        let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
+        std::thread::scope(|scope| {
+            let mut guards = Vec::with_capacity(frames.len());
+            for (index, frame) in frames.iter().enumerate() {
+                guards.push(scope.spawn(move || {
+                    #[cfg(feature = "parallel")]
+                    crate::parser::pin_worker(index);
+                    format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
+                }));
+            }
+            for guard in guards {
+                parts.push(match guard.join() {
+                    Ok(part) => part,
+                    Err(_) => Err(WriteError::Io(io::Error::other("frame formatter panicked"))),
+                });
+            }
+        });
+        let mut formatted = Vec::with_capacity(parts.len());
+        for part in parts {
+            formatted.push(part?);
+        }
+        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        let result = (|| -> Result<(), WriteError> {
+            use std::os::unix::fs::FileExt;
+            let total: u64 = formatted.iter().map(|part| part.len() as u64).sum();
+            file.set_len(total).map_err(WriteError::Io)?;
+            let mut at = 0u64;
+            for part in &formatted {
+                let mut wrote = 0usize;
+                while wrote < part.len() {
+                    let n = file.write_at(&part[wrote..], at).map_err(WriteError::Io)?;
+                    if n == 0 {
+                        return Err(WriteError::Io(io::Error::other("short pwrite")));
+                    }
+                    wrote += n;
+                    at += n as u64;
+                }
+            }
+            Ok(())
+        })();
+        return commit_temporary(&tmp, path, result);
+    }
     let groups = workers.saturating_mul(4).max(workers);
     let chunk = frames.len().div_ceil(groups).max(1);
     let pieces: Vec<&[&ConFrame]> = frames.chunks(chunk).collect();
@@ -3127,6 +3173,46 @@ mod parallel_write_tests {
             );
         }
         builder.build().expect("frame")
+    }
+
+    #[test]
+    fn two_wide_frames_on_two_threads_keep_up_with_one_frame() {
+        let n = 200_000usize;
+        let one = copper_frame(n, "Cu", 63.546, |i| i as u64);
+        let frames = [one.clone(), one.clone()];
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let serial = super::write_frames_to_vec(&frames).expect("serial");
+        let path =
+            std::env::temp_dir().join(format!("readcon-weak-write-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&path, &refs, 2, None, false, false).expect("parallel");
+        let got = std::fs::read(&path).expect("read");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
+        let time = |frames: &[crate::types::ConFrame], workers: usize| {
+            let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+            let path = std::env::temp_dir().join(format!(
+                "readcon-weak-time-{}-{workers}.con",
+                std::process::id()
+            ));
+            let _ = super::write_frame_refs_to_path(&path, &refs, workers, None, false, false);
+            let mut samples = Vec::with_capacity(5);
+            for _ in 0..5 {
+                let _ = std::fs::remove_file(&path);
+                let started = std::time::Instant::now();
+                super::write_frame_refs_to_path(&path, &refs, workers, None, false, false)
+                    .expect("write");
+                samples.push(started.elapsed().as_secs_f64());
+            }
+            let _ = std::fs::remove_file(&path);
+            samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
+            samples[samples.len() / 2]
+        };
+        let one_s = time(std::slice::from_ref(&one), 1);
+        let two_s = time(&frames, 2);
+        assert!(
+            two_s < one_s * 1.7,
+            "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
+        );
     }
 
     #[test]

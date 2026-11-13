@@ -570,7 +570,31 @@ pub(crate) fn fill_rows_from_chunks(
                 Ok(())
             })
     };
-    if workers < 2 || chunks.len() < 2 {
+    if workers < 2 {
+        let mut row_at = 0usize;
+        for &(start, nrows) in chunks {
+            let mut pos = start;
+            for _ in 0..nrows {
+                let ((row_xyz, fixed, atom_id), next) =
+                    parse_coord_row_at(bytes, pos, spec_version, start_id + row_at as u64)?;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(row_xyz.as_ptr(), xyz.add(row_at * 3), 3);
+                    if ids_ptr != 0 {
+                        *((ids_ptr as *mut u64).add(row_at)) = atom_id;
+                    }
+                    if flags_ptr != 0 {
+                        let mask = u8::from(fixed[0])
+                            | (u8::from(fixed[1]) << 1)
+                            | (u8::from(fixed[2]) << 2);
+                        *((flags_ptr as *mut u8).add(row_at)) = mask;
+                    }
+                }
+                pos = next;
+                row_at += 1;
+            }
+        }
+        Ok(())
+    } else if chunks.len() < 2 {
         fill()
     } else {
         on_pool(workers, fill)
