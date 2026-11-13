@@ -1,0 +1,30 @@
+{
+  "base": "817a4b056880d7198e9b8b3d1ebbbaa756960713",
+  "formatter_only_con1e6_s": {
+    "1": 0.033912,
+    "8": 0.004666,
+    "8_repeat": 0.004798,
+    "8_under_load": 0.005292,
+    "efficiency_8": 0.9085,
+    "efficiency_8_repeat": 0.8835,
+    "efficiency_8_under_load": 0.8008,
+    "protocol": "one warmup, n=6, type-7 median. In-memory write_frames_to_vec_with_threads, no file."
+  },
+  "why_it_was_0_58": "Equal chunks take 4.1 ms alone. A second memcpy of the finished 23.6 MB buffer sat on the serial thread, and one static range per worker made a preempted core own the whole eighth. Rayon's steal left 1-2 ms idle between short pieces. perf_event_open of cycles, instructions, and cache misses returns ENOENT in this VM. After warmup, minor faults are 0. TSC is constant 2.7 GHz. A coarse /proc/stat sample showed steal 0.",
+  "counters": {
+    "perf_event_open": "ENOENT for hardware cycles, instructions, and cache-misses",
+    "tsc_ghz": 2.7,
+    "minor_faults_after_warmup": 0,
+    "voluntary_context_switches_per_8_thread_call": "35-45",
+    "involuntary_context_switches_per_8_thread_call": "0-4",
+    "serial_chunk_s": "0.0041-0.0044",
+    "proc_stat_steal": 0
+  },
+  "same_day_perf7_con1e6_write_s": {
+    "threads_memory_8": 0.011089,
+    "threads_disk_8": 0.013010,
+    "threads_memory_4": 0.013935,
+    "threads_memory_2": 0.024116
+  },
+  "note": "Eight threads map on tmpfs and pwrite on the page cache. map_rows still forces the mapping when no core is spare, and that copy is done by the formatter rather than a second set of threads. s61 write rows are the campaign type-7 medians."
+}
