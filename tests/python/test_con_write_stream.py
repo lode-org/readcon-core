@@ -71,3 +71,27 @@ def test_write_con_does_not_materialise_a_second_trajectory(tmp_path):
     restored = readcon.read_con(str(vel_out))
     assert restored[0].atoms[1].vx == pytest.approx(0.1)
     assert restored[2].atoms[0].y == pytest.approx(2.0)
+
+
+def test_multicomponent_read_write_keeps_coordinates(tmp_path):
+    """A read that parks coordinates in the shared slab still writes them.
+
+    The atom slots alias the parse buffer. Dropping that buffer before the
+    slots point at the slab writes freed coordinates, and a one-rank MPI
+    rewrite of the same frames no longer matches the serial file.
+    """
+    src = Path(__file__).resolve().parents[2] / "resources/test/tiny_multi_cuh2.con"
+    many = tmp_path / "many.con"
+    many.write_text(src.read_text(encoding="utf-8") * 40, encoding="utf-8")
+    loaded = readcon.read_con(str(many))
+    out = tmp_path / "out.con"
+    readcon.write_con(str(out), loaded)
+    first = out.read_text(encoding="utf-8").splitlines()[11]
+    assert "0.6394" in first
+    assert "0.9045" in first
+    again = readcon.read_con(str(out))
+    assert again[0].atoms[0].x == pytest.approx(0.6394)
+    assert again[0].atoms[0].y == pytest.approx(0.9045)
+    assert again[0].atoms[0].z == pytest.approx(6.9753)
+    assert again[1].atoms[2].x == pytest.approx(8.8549)
+    assert again[1].atoms[2].z == pytest.approx(11.165)

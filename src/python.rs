@@ -1886,6 +1886,26 @@ impl ConFrameListIter {
     }
 }
 
+/// Point coordinate slots at `base`, laid out `[frame, atom, xyz]`.
+///
+/// The slots alias `frame.positions` until the shared slab takes over.
+/// Owned boxes are left in place: they do not alias that buffer.
+fn retarget_frames_to_slab(frames: &mut [ConFrame], base: *mut f64, n_atoms: usize) {
+    if n_atoms == 0 || base.is_null() {
+        return;
+    }
+    let stride = n_atoms * 3;
+    for (frame_index, frame) in frames.iter_mut().enumerate() {
+        let origin = unsafe { base.add(frame_index * stride) };
+        for (atom_index, atom) in frame.atom_data.iter_mut().enumerate() {
+            if atom_index >= n_atoms {
+                break;
+            }
+            atom.retarget(unsafe { origin.add(atom_index * 3) });
+        }
+    }
+}
+
 fn clear_packed_positions(frames: &mut [ConFrame], workers: usize) {
     let clear = |frame: &mut ConFrame| {
         frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
@@ -1987,8 +2007,24 @@ fn con_frame_list(
         Some(values) if n_frames > 0 => values.len() / n_frames / 3,
         _ => 0,
     };
+    let t_build = std::time::Instant::now();
+    let slab = match packed {
+        Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
+        None => None,
+    };
+    let python_build_s = t_build.elapsed().as_secs_f64();
+    // The writer reads atom slots, not the empty position column. Those
+    // slots have to address the slab before the parse buffer is freed.
+    if let Some(slab) = &slab {
+        let contiguous = unsafe { slab.bind(py).as_slice() }.map_err(|err| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "coordinate slab is not contiguous: {err}"
+            ))
+        })?;
+        retarget_frames_to_slab(&mut frames, contiguous.as_ptr() as *mut f64, n_atoms);
+    }
     let t_release = std::time::Instant::now();
-    if packed.is_some() {
+    if slab.is_some() {
         py.detach(|| match pool.as_ref() {
             Some(pool) if workers >= 2 => {
                 pool.install(|| clear_packed_positions(&mut frames, workers))
@@ -1997,12 +2033,6 @@ fn con_frame_list(
         });
     }
     let release_s = t_release.elapsed().as_secs_f64();
-    let t_build = std::time::Instant::now();
-    let slab = match packed {
-        Some(values) => Some(slab_from_values(py, values, n_frames, n_atoms)?),
-        None => None,
-    };
-    let python_build_s = t_build.elapsed().as_secs_f64();
     let mut record = ReadCallPhases::from_rust(phases, n_bytes, n_frames, build);
     record.slab_s = slab_s;
     record.slab_minflt = slab_minflt;
