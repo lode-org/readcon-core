@@ -1,6 +1,8 @@
 # Rebuild the corpora, the reader exchange, and the tables the paper inputs.
 # Run from paper/cpc: snakemake -c1 all
 
+from pathlib import Path
+
 rule cargo_version:
     output:
         "src/cargo_version.tex",
@@ -161,15 +163,31 @@ rule scaling_figures:
     shell:
         "python3 src/figures/plot_thread_scaling.py --commit " + FINAL_COMMIT
 
+def exchange_source(wildcards):
+    # perf19 writes the JSON. Until then the 0.17.3 log is the record.
+    if (Path(workflow.basedir) / "logs" / "reader-exchange.json").is_file():
+        return "logs/reader-exchange.json"
+    return "logs/reader-exchange.log"
+
+
 rule reader_figures:
     input:
-        "logs/reader-exchange.log",
+        exchange_source,
     output:
         "src/figures/generated/timing.pdf",
         "src/figures/generated/ratios.pdf",
         "src/figures/generated/memory.pdf",
+        "src/figures/generated/exchange_macros.tex",
     shell:
-        "cd scripts && python3 -c 'import plot_union_extra as u; u.reader_figures()'"
+        "python3 scripts/exchange_figures.py"
+
+rule roofline:
+    input:
+        "bench/results/reads.json",
+    output:
+        "src/figures/generated/roofline.pdf",
+    shell:
+        "python3 scripts/plot_roofline.py"
 
 # Pinned campaign. Change REL1_COMMIT when a later release rerun lands.
 # The manuscript switch is \campaignid in src/campaign.tex (published by default).

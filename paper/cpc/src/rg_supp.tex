@@ -77,6 +77,7 @@ Elsevier%
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
 \input{campaign/final/campaign_macros}
+\input{figures/generated/exchange_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
 \makeatletter
@@ -920,41 +921,46 @@ The extended XYZ timings run every reader in one process, one arm after another.
 The harness is a Snakemake rule called from an asv class.
 The timing rule generates the files larger than ten atoms.
 
-Figures~\ref{fig:timing} and~\ref{fig:ratios} are the reader-exchange log: readcon-core 0.17.3, one file of 100000 frames and 32 atoms, six repeats, on an Intel Xeon with 8 CPUs.
+% PENDING perf19
+Figures~\ref{fig:timing} and~\ref{fig:ratios} are the reader-exchange record: readcon-core \exReadconVersion, one file of \exFrames{} frames and \exAtoms{} atoms, $n{=}\exN$, on \exHost, \exCpus{} CPUs.
 Those arms return full frames, so the times differ from the one-core reads, which return arrays.
 
+% PENDING perf19
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{All-frame CON readers of one file, 100000 frames of 32 atoms, six repeats.
-The readcon release in the log is 0.17.3.
-The host is an Intel Xeon with 8 CPUs.
+\caption{All-frame CON readers of one file, \exFrames{} frames of \exAtoms{} atoms, $n{=}\exN$.
+The readcon release in the record is \exReadconVersion.
+The host is \exHost, \exCpus{} CPUs.
 The scale is logarithmic.}
 \label{fig:timing}
 \end{figure}
 
+% PENDING perf19
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
 \caption{Wall time of each other all-frame CON reader divided by the readcon tip.
-One file of 100000 frames and 32 atoms, six repeats.
-The readcon release in the log is 0.17.3.
-The host is an Intel Xeon with 8 CPUs.}
+One file of \exFrames{} frames and \exAtoms{} atoms, $n{=}\exN$.
+The readcon release in the record is \exReadconVersion.
+The host is \exHost, \exCpus{} CPUs.}
 \label{fig:ratios}
 \end{figure}
 
-The resident set added by the readcon read is \SI{236}{\mebi\byte} (Figure~\ref{fig:reader-rss}).
+The resident set added by the readcon read is \SI{\exRssMib}{\mebi\byte} (Figure~\ref{fig:reader-rss}).
 
+% PENDING perf19
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/memory.pdf}
 \caption{Resident set added by each all-frame CON reader, in mebibytes above the import.
-One file of 100000 frames and 32 atoms, six repeats.
-The readcon release in the log is 0.17.3, and its median increase is 236~MiB.
-The host is an Intel Xeon with 8 CPUs.}
+One file of \exFrames{} frames and \exAtoms{} atoms, $n{=}\exN$.
+The readcon release in the record is \exReadconVersion, and its median increase is \exRssMib~MiB.
+The host is \exHost, \exCpus{} CPUs.}
 \label{fig:reader-rss}
 \end{figure}
 
+% PENDING perf19
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/roofline.pdf}
