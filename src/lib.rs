@@ -4,6 +4,25 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+#[cfg(test)]
+mod allocator_link_tests {
+    unsafe extern "C" {
+        fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
+    }
+
+    /// Rust, C, and Python builds all link this crate, so they all use
+    /// this allocator. `mi_usable_size` is only meaningful for mimalloc.
+    #[test]
+    fn the_shipped_allocator_is_mimalloc() {
+        let boxed = Box::new([0u8; 32]);
+        let usable = unsafe { mi_usable_size(boxed.as_ptr() as *const std::ffi::c_void) };
+        assert!(
+            usable >= 32,
+            "global allocator is not mimalloc (usable size {usable})"
+        );
+    }
+}
+
 pub mod array;
 mod columns;
 pub mod compression;

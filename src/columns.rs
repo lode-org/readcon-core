@@ -46,6 +46,9 @@ pub struct ConPositions {
     pub components: Vec<(Arc<str>, usize)>,
     /// Byte offset where the first coordinate row of each frame starts.
     pub head_ends: Vec<usize>,
+    /// Absolute newline positions of the coordinate rows, one vector per
+    /// frame. Empty when the rows were not indexed.
+    pub(crate) wide_breaks: Vec<Vec<usize>>,
 }
 
 impl ConPositions {
@@ -61,7 +64,7 @@ impl ConPositions {
 
 /// Positions from a CON or convel buffer, in file order.
 pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, false, false, true)
+    parse_con(bytes, false, false, true, 1)
 }
 
 /// Coordinates plus column 5, the fixed mask, and the per-type symbol runs.
@@ -70,7 +73,7 @@ pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError
 /// `flags`, and `components` are filled so a later frame can keep an element
 /// order that is not the first frame's.
 pub fn positions_with_identity(bytes: &[u8]) -> Result<ConPositions, ParseError> {
-    parse_con(bytes, true, false, true)
+    parse_con(bytes, true, false, true, 1)
 }
 
 /// Like [`positions_from_con_bytes`], also keeping ids, flags, and symbols
@@ -80,7 +83,7 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
     // A vector section means the frame objects cannot be rebuilt from the
     // coordinate column. Stop at the first one so the caller can fall back
     // to the frame parser without a second full walk.
-    parse_con(bytes, true, true, true)
+    parse_con(bytes, true, true, true, 1)
 }
 
 /// Header walk plus a parallel fill of the coordinate rows.
@@ -96,9 +99,9 @@ pub(crate) fn positions_parallel(
     rich: bool,
 ) -> Result<ConPositions, ParseError> {
     if workers < 2 {
-        return parse_con(bytes, rich, false, true);
+        return parse_con(bytes, rich, false, true, 1);
     }
-    let mut out = parse_con(bytes, rich, false, false)?;
+    let mut out = parse_con(bytes, rich, false, false, workers)?;
     let n_atoms: usize = out.counts.iter().sum();
     let mut positions = Vec::<f64>::with_capacity(n_atoms.saturating_mul(3));
     // The workers write every lane. A zeroed allocation would fault the
@@ -195,6 +198,33 @@ fn fill_frame_rows(
     }
     let head = out.head_ends[frame];
     let spec = frame_spec(bytes, out.spans[frame].start)?;
+    if out.wide_breaks.get(frame).map(|item| item.len()) == Some(count) {
+        let breaks = &out.wide_breaks[frame];
+        let mut relative = Vec::with_capacity(count);
+        for &absolute in breaks {
+            relative.push(absolute - head);
+        }
+        let ids_ptr = if rich {
+            unsafe { ids.add(dest) }
+        } else {
+            std::ptr::null_mut()
+        };
+        let flags_ptr = if rich {
+            unsafe { flags.add(dest) }
+        } else {
+            std::ptr::null_mut()
+        };
+        return crate::parser::fill_rows_from_breaks(
+            &bytes[head..],
+            &relative,
+            spec,
+            0,
+            workers,
+            unsafe { positions.add(dest * 3) },
+            ids_ptr,
+            flags_ptr,
+        );
+    }
     let rows = if count >= 4096 {
         crate::parser::parallel_coord_rows(&bytes[head..], count, spec, 0, workers, None)?
     } else {
@@ -258,6 +288,7 @@ fn parse_con(
     rich: bool,
     stop_on_section: bool,
     store_rows: bool,
+    workers: usize,
 ) -> Result<ConPositions, ParseError> {
     let mut pos = 0usize;
     let mut out = ConPositions {
@@ -273,13 +304,14 @@ fn parse_con(
         flags: Vec::new(),
         components: Vec::new(),
         head_ends: Vec::new(),
+        wide_breaks: Vec::new(),
     };
     loop {
         if pos >= bytes.len() || bytes[pos..].iter().all(u8::is_ascii_whitespace) {
             break;
         }
         let start = pos;
-        let (n, stock) = parse_one_frame(bytes, &mut pos, &mut out, rich, store_rows)?;
+        let (n, stock) = parse_one_frame(bytes, &mut pos, &mut out, rich, store_rows, workers)?;
         out.stock &= stock;
         out.counts.push(n);
         out.spans.push(start..pos);
@@ -297,7 +329,9 @@ fn parse_one_frame(
     out: &mut ConPositions,
     rich: bool,
     store_rows: bool,
+    workers: usize,
 ) -> Result<(usize, bool), ParseError> {
+    out.wide_breaks.push(Vec::new());
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
     let spec = spec_version(meta)?;
@@ -349,6 +383,19 @@ fn parse_one_frame(
                 *pos = next;
                 n += 1;
             }
+        } else if counts.len() == 1 && *count >= 4096 && workers >= 2 {
+            let start = *pos;
+            let index = crate::parser::newline_index(&bytes[start..], workers);
+            if index.len() < *count {
+                return Err(ParseError::IncompleteFrame);
+            }
+            out.wide_breaks
+                .last_mut()
+                .expect("frame breaks")
+                .extend(index.iter().take(*count).map(|rel| start + rel));
+            *pos = start + index[*count - 1] + 1;
+            out.masses.extend(std::iter::repeat_n(*mass, *count));
+            n += *count;
         } else {
             skip_count_lines(bytes, pos, *count)?;
             out.masses.extend(std::iter::repeat_n(*mass, *count));

@@ -45,6 +45,83 @@ std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
 }
 
+/// Fill `n` coordinate rows whose newlines are `breaks_rel` (positions
+/// of `\n` relative to `bytes`, length `n`).
+///
+/// `xyz` receives `n * 3` values. `ids` and `flags` may be null when the
+/// caller does not want them. `flags` is the packed column-4 mask.
+#[cfg(feature = "parallel")]
+pub(crate) fn fill_rows_from_breaks(
+    bytes: &[u8],
+    breaks_rel: &[usize],
+    spec_version: u32,
+    start_id: u64,
+    workers: usize,
+    xyz: *mut f64,
+    ids: *mut u64,
+    flags: *mut u8,
+) -> Result<(), ParseError> {
+    let n = breaks_rel.len();
+    if n == 0 {
+        return Ok(());
+    }
+    let chunk = n.div_ceil(workers.max(1)).max(1);
+    let groups = n.div_ceil(chunk);
+    let xyz_ptr = xyz as usize;
+    let ids_ptr = ids as usize;
+    let flags_ptr = flags as usize;
+    let fill = || {
+        use rayon::prelude::*;
+        (0..groups).into_par_iter().try_for_each(|group| {
+            let first = group * chunk;
+            let last = (first + chunk).min(n);
+            for row_index in first..last {
+                let start = if row_index == 0 {
+                    0
+                } else {
+                    breaks_rel[row_index - 1] + 1
+                };
+                let end = breaks_rel[row_index] + 1;
+                if end > bytes.len() || start > end {
+                    return Err(ParseError::IncompleteFrame);
+                }
+                let default_id = start_id + row_index as u64;
+                let ((row, fixed, atom_id), _next) =
+                    parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        row.as_ptr(),
+                        (xyz_ptr as *mut f64).add(row_index * 3),
+                        3,
+                    );
+                    if ids_ptr != 0 {
+                        *((ids_ptr as *mut u64).add(row_index)) = atom_id;
+                    }
+                    if flags_ptr != 0 {
+                        let mask = u8::from(fixed[0])
+                            | (u8::from(fixed[1]) << 1)
+                            | (u8::from(fixed[2]) << 2);
+                        *((flags_ptr as *mut u8).add(row_index)) = mask;
+                    }
+                }
+            }
+            Ok(())
+        })
+    };
+    on_pool(workers, fill)
+}
+
+#[cfg(feature = "parallel")]
+fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
+    if workers < 2 {
+        return body();
+    }
+    match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+        Ok(pool) => pool.install(body),
+        Err(_) => body(),
+    }
+}
+
 /// Coordinate rows in `bytes`, which begins at the first row.
 ///
 /// `n` rows are required. The returned `consumed` count is the number of
@@ -82,24 +159,26 @@ pub(crate) fn parallel_coord_rows(
     let flags_ptr = flags.as_mut_ptr() as usize;
     let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
     let chunk = n.div_ceil(workers.max(1)).max(1);
-    use rayon::prelude::*;
-    let built = ranges
-        .par_chunks(chunk)
-        .enumerate()
-        .try_for_each(|(chunk_index, group)| {
-            write_coord_group(
-                bytes,
-                group,
-                chunk_index * chunk,
-                spec_version,
-                start_id,
-                symbol,
-                xyz_ptr,
-                ids_ptr,
-                flags_ptr,
-                atoms_ptr,
-            )
-        });
+    let built = on_pool(workers, || {
+        use rayon::prelude::*;
+        ranges
+            .par_chunks(chunk)
+            .enumerate()
+            .try_for_each(|(chunk_index, group)| {
+                write_coord_group(
+                    bytes,
+                    group,
+                    chunk_index * chunk,
+                    spec_version,
+                    start_id,
+                    symbol,
+                    xyz_ptr,
+                    ids_ptr,
+                    flags_ptr,
+                    atoms_ptr,
+                )
+            })
+    });
     if let Err(err) = built {
         std::mem::forget(atoms_raw);
         return Err(err);
@@ -131,11 +210,7 @@ fn coord_line_ranges(
     n: usize,
     workers: usize,
 ) -> Result<Vec<(usize, usize)>, ParseError> {
-    let newlines = if workers >= 2 && bytes.len() >= (1 << 20) {
-        parallel_newlines(bytes, workers)
-    } else {
-        memchr::memchr_iter(b'\n', bytes).collect()
-    };
+    let newlines = newline_index(bytes, workers);
     let mut ranges = Vec::with_capacity(n);
     let mut start = 0usize;
     for index in 0..n {
@@ -158,29 +233,70 @@ fn coord_line_ranges(
     Ok(ranges)
 }
 
+/// Newline positions in `bytes`.
+///
+/// Chunks are cut on byte boundaries, then each interior cut that lands
+/// inside a line is moved to the next newline so a row is not split.
+/// Each chunk counts its newlines, a prefix sum of those counts gives
+/// the write range, and the chunks fill one buffer. `workers < 2`
+/// scans on the calling thread.
 #[cfg(feature = "parallel")]
-fn parallel_newlines(bytes: &[u8], workers: usize) -> Vec<usize> {
-    let workers = workers.max(1).min(bytes.len().max(1));
-    let cuts: Vec<usize> = (0..=workers)
-        .map(|index| (index * bytes.len()) / workers)
-        .collect();
-    use rayon::prelude::*;
-    let parts: Vec<Vec<usize>> = cuts
-        .windows(2)
-        .collect::<Vec<_>>()
-        .par_iter()
-        .map(|window| {
-            let (from, to) = (window[0], window[1]);
-            memchr::memchr_iter(b'\n', &bytes[from..to])
-                .map(|at| from + at)
-                .collect()
-        })
-        .collect();
-    let mut all = Vec::new();
-    for part in parts {
-        all.extend(part);
+pub(crate) fn newline_index(bytes: &[u8], workers: usize) -> Vec<usize> {
+    if bytes.is_empty() || workers < 2 || bytes.len() < (1 << 20) {
+        return memchr::memchr_iter(b'\n', bytes).collect();
     }
-    all
+    let workers = workers.min(bytes.len());
+    let mut cuts = Vec::with_capacity(workers + 1);
+    cuts.push(0usize);
+    for index in 1..workers {
+        let mut at = index * bytes.len() / workers;
+        // A cut in the middle of a row belongs to the chunk that holds
+        // the newline. Move it to the first byte after that newline.
+        if at > 0 && at < bytes.len() && bytes[at - 1] != b'\n' {
+            if let Some(rel) = memchr::memchr(b'\n', &bytes[at..]) {
+                at += rel + 1;
+            } else {
+                at = bytes.len();
+            }
+        }
+        if cuts.last().copied() != Some(at) {
+            cuts.push(at);
+        }
+    }
+    if cuts.last().copied() != Some(bytes.len()) {
+        cuts.push(bytes.len());
+    }
+    let nchunks = cuts.len() - 1;
+    let mut counts = vec![0usize; nchunks];
+    on_pool(workers, || {
+        use rayon::prelude::*;
+        counts
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, count)| {
+                let (from, to) = (cuts[index], cuts[index + 1]);
+                *count = memchr::memchr_iter(b'\n', &bytes[from..to]).count();
+            });
+        let mut slot = vec![0usize; nchunks];
+        let mut total = 0usize;
+        for index in 0..nchunks {
+            slot[index] = total;
+            total += counts[index];
+        }
+        let mut out = vec![0usize; total];
+        let out_ptr = out.as_mut_ptr() as usize;
+        (0..nchunks).into_par_iter().for_each(|index| {
+            let (from, to) = (cuts[index], cuts[index + 1]);
+            let mut at = slot[index];
+            for rel in memchr::memchr_iter(b'\n', &bytes[from..to]) {
+                unsafe {
+                    *((out_ptr as *mut usize).add(at)) = from + rel;
+                }
+                at += 1;
+            }
+        });
+        out
+    })
 }
 
 #[cfg(feature = "parallel")]

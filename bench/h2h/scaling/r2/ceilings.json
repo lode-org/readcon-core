@@ -1,0 +1,18 @@
+{
+  "stream_copy": {
+    "n_f64": 67108864,
+    "bytes_moved": 1073741824,
+    "median_s": 0.04351397,
+    "GBps": 24.676,
+    "note": "rust copy_from_slice, one warmup then six samples, type-7 median"
+  },
+  "disk_write": {
+    "bytes": 268435456,
+    "fstype": "ext4",
+    "device": "/dev/vdc",
+    "tool": "dd bs=1M count=256 conv=fdatasync",
+    "median_s": 0.2269196,
+    "MBps": 1183.0,
+    "note": "three samples after one warmup, type-7 median, same filesystem as the bench writes"
+  }
+}

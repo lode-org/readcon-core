@@ -291,7 +291,7 @@ pub fn tables_from_extxyz_bytes_with_threads(
                 kind: spec.kind,
                 width: spec.width,
                 text: if spec.kind == b'S' {
-                    vec![String::new(); n]
+                    Vec::with_capacity(n)
                 } else {
                     Vec::new()
                 },
@@ -344,7 +344,7 @@ pub fn tables_from_extxyz_bytes_with_threads(
                                 if kind == b'S' {
                                     let text = String::from_utf8_lossy(token).into_owned();
                                     unsafe {
-                                        *((text_ptr as *mut String).add(index)) = text;
+                                        std::ptr::write((text_ptr as *mut String).add(index), text);
                                     }
                                 } else {
                                     let value = if kind == b'L' {
@@ -368,7 +368,18 @@ pub fn tables_from_extxyz_bytes_with_threads(
             .find_map(|handle| handle.join().ok().and_then(|result| result.err()))
     });
     if let Some(err) = failed {
+        for column in &mut columns {
+            // Slots were written with `ptr::write` and `len` is still 0.
+            // Forgetting the buffer drops nothing and leaks only on error.
+            std::mem::forget(std::mem::take(&mut column.text));
+        }
         return Err(err);
+    }
+    for column in &mut columns {
+        if column.kind == b'S' {
+            let n = n_frames * n_atoms * column.width;
+            unsafe { column.text.set_len(n) };
+        }
     }
     assemble_tables(n_frames, n_atoms, cell, columns)
 }
@@ -397,12 +408,12 @@ fn assemble_tables(
     n_frames: usize,
     n_atoms: usize,
     cell: Vec<f64>,
-    columns: Vec<XyzColumn>,
+    mut columns: Vec<XyzColumn>,
 ) -> Result<XyzTables, String> {
     let mut positions = Vec::new();
     let mut masses = vec![f64::NAN; n_frames * n_atoms];
-    let mut species = vec![String::new(); n_frames * n_atoms];
-    for column in &columns {
+    let mut species = Vec::new();
+    for column in &mut columns {
         if column.name == "pos" {
             positions.clone_from(&column.real);
         } else if column.name == "masses" || column.name == "mass" {
@@ -410,7 +421,10 @@ fn assemble_tables(
                 masses.clone_from(&column.real);
             }
         } else if column.name == "species" && column.width == 1 {
-            species.clone_from(&column.text);
+            // The parallel scan wrote each symbol once, into this column.
+            // Moving it is the species table. A second clone of every
+            // string was the serial tail.
+            species = std::mem::take(&mut column.text);
         }
     }
     if positions.len() != n_frames * n_atoms * 3 {
@@ -619,21 +633,22 @@ pub fn extxyz_bytes(
     n_frames: usize,
     n_atoms: usize,
     cell: &[f64],
-    columns: &[&dyn ExtxyzSource],
+    columns: &[&(dyn ExtxyzSource + Sync)],
 ) -> Result<Vec<u8>, String> {
     extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, 1)
 }
 
-/// [`extxyz_bytes`]. `workers` is ignored: the text is formatted on the
-/// calling thread, so it stays byte-identical to that call.
+/// [`extxyz_bytes`] with each frame run formatted on its own thread.
+///
+/// The runs are concatenated in frame order, so the bytes match one
+/// serial [`extxyz_bytes`] call. `workers < 2` formats on the calling thread.
 pub fn extxyz_bytes_with_threads(
     n_frames: usize,
     n_atoms: usize,
     cell: &[f64],
-    columns: &[&dyn ExtxyzSource],
+    columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
 ) -> Result<Vec<u8>, String> {
-    let _ = workers;
     if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
         return Err("frames".to_string());
     }
@@ -652,6 +667,38 @@ pub fn extxyz_bytes_with_threads(
         })
         .collect::<Vec<_>>()
         .join(":");
+    if workers >= 2 && n_frames >= 2 {
+        let chunk = n_frames.div_ceil(workers).max(1);
+        let mut parts: Vec<Vec<u8>> = (0..workers).map(|_| Vec::new()).collect();
+        let error = std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for worker in 0..workers {
+                let from = worker * chunk;
+                if from >= n_frames {
+                    break;
+                }
+                let to = (from + chunk).min(n_frames);
+                let properties = properties.as_str();
+                handles.push(scope.spawn(move || {
+                    format_extxyz_range(from, to, n_atoms, cell, columns, properties)
+                }));
+            }
+            for (index, handle) in handles.into_iter().enumerate() {
+                match handle.join() {
+                    Ok(Ok(buf)) => parts[index] = buf,
+                    Ok(Err(err)) => return Err(err),
+                    Err(_) => return Err("write".to_string()),
+                }
+            }
+            Ok(())
+        });
+        error?;
+        let mut out = Vec::new();
+        for part in parts {
+            out.extend_from_slice(&part);
+        }
+        return Ok(out);
+    }
     let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
     for frame in 0..n_frames {
         let lattice = lattice_from_cell(&cell[frame * 6..frame * 6 + 6])?;
@@ -678,12 +725,46 @@ pub fn extxyz_bytes_with_threads(
     Ok(out)
 }
 
+fn format_extxyz_range(
+    from: usize,
+    to: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&(dyn ExtxyzSource + Sync)],
+    properties: &str,
+) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    for frame in from..to {
+        let lattice = lattice_from_cell(&cell[frame * 6..frame * 6 + 6])?;
+        let lattice_text = lattice
+            .iter()
+            .map(|value| format_number(*value))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let header = format!(
+            "{n_atoms}\nLattice=\"{lattice_text}\" Properties={properties} pbc=\"T T T\"\n"
+        );
+        out.extend_from_slice(header.as_bytes());
+        for atom in 0..n_atoms {
+            for (index, column) in columns.iter().enumerate() {
+                if index > 0 {
+                    out.push(b' ');
+                }
+                let base = (frame * n_atoms + atom) * column.column_width();
+                column.write_fields(base, &mut out);
+            }
+            out.push(b'\n');
+        }
+    }
+    Ok(out)
+}
+
 /// Write species, the lattice, `pbc`, and every per-atom column.
 pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
-    let columns: Vec<&dyn ExtxyzSource> = tables
+    let columns: Vec<&(dyn ExtxyzSource + Sync)> = tables
         .columns
         .iter()
-        .map(|column| column as &dyn ExtxyzSource)
+        .map(|column| column as &(dyn ExtxyzSource + Sync))
         .collect();
     extxyz_bytes(tables.n_frames, tables.n_atoms, &tables.cell, &columns)
 }
@@ -713,6 +794,40 @@ mod tests {
         assert_eq!(parallel.positions, serial.positions);
         assert_eq!(parallel.species, serial.species);
         assert_eq!(parallel.cell, serial.cell);
+        let serial_bytes = extxyz_bytes(
+            serial.n_frames,
+            serial.n_atoms,
+            &serial.cell,
+            &serial
+                .columns
+                .iter()
+                .map(|column| column as &(dyn ExtxyzSource + Sync))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        // The parallel read moved species out of the column. Put it back
+        // so the writer sees the same symbols as the serial table.
+        let mut parallel = parallel;
+        if let Some(column) = parallel
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "species")
+        {
+            column.text.clone_from(&parallel.species);
+        }
+        let parallel_bytes = extxyz_bytes_with_threads(
+            parallel.n_frames,
+            parallel.n_atoms,
+            &parallel.cell,
+            &parallel
+                .columns
+                .iter()
+                .map(|column| column as &(dyn ExtxyzSource + Sync))
+                .collect::<Vec<_>>(),
+            4,
+        )
+        .unwrap();
+        assert_eq!(parallel_bytes, serial_bytes);
     }
 
     #[test]

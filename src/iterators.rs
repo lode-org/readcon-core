@@ -1121,12 +1121,10 @@ pub fn frames_from_text(
     #[cfg(feature = "parallel")]
     {
         if let Some(n) = num_threads.filter(|n| *n >= 2) {
-            let parts = parse_frames_parallel_with_threads(text, Some(n));
-            let mut frames = Vec::with_capacity(parts.len());
-            for r in parts {
-                frames.push(r?);
-            }
-            return Ok(frames);
+            // The phased path finishes the slots on the same pool. A
+            // serial move of every frame was a growing tail once a worker
+            // owned tens of thousands of frames.
+            return Ok(frames_from_bytes_phased(text.as_bytes(), Some(n))?.frames);
         }
     }
     #[cfg(not(feature = "parallel"))]

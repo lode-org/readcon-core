@@ -1322,6 +1322,23 @@ pub fn write_frames_to_vec_with_threads(
     write_frame_refs_with_threads(&refs, workers, precision, canonical)
 }
 
+/// Write `frames` to `path`.
+///
+/// Each worker formats a contiguous run. A prefix sum of those lengths
+/// is the file offset, and each run is written with `pwrite` at that
+/// offset. The bytes match [`write_frame_refs_with_threads`].
+pub fn write_frame_refs_to_path(
+    path: &std::path::Path,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    let parts = formatted_parts(frames, workers, precision, canonical, bind)?;
+    pwrite_parts(path, &parts).map_err(WriteError::Io)
+}
+
 /// [`write_frames_to_vec_with_threads`] over borrowed frames.
 ///
 /// A `read_con` result can be written without cloning the trajectory.
@@ -1331,6 +1348,36 @@ pub fn write_frame_refs_with_threads(
     precision: Option<usize>,
     canonical: bool,
 ) -> Result<Vec<u8>, WriteError> {
+    let parts = formatted_parts(frames, workers, precision, canonical, false)?;
+    let mut out = Vec::new();
+    for part in parts {
+        out.extend_from_slice(&part);
+    }
+    Ok(out)
+}
+
+fn write_group<W: Write>(
+    writer: &mut ConFrameWriter<W>,
+    group: &[&ConFrame],
+    bind: bool,
+) -> Result<(), WriteError> {
+    if bind {
+        for frame in group {
+            let mut stamped = (*frame).clone();
+            writer.write_frame_binding(&mut stamped)?;
+        }
+        return Ok(());
+    }
+    writer.extend(group.iter().copied())
+}
+
+fn formatted_parts(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<Vec<u8>>, WriteError> {
     let wide = frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN;
     if workers < 2 || (frames.len() < 2 && !wide) {
         let mut buffer = Vec::new();
@@ -1340,9 +1387,9 @@ pub fn write_frame_refs_with_threads(
                 None => ConFrameWriter::new(&mut buffer),
             }
             .canonical(canonical);
-            writer.extend(frames.iter().copied())?;
+            write_group(&mut writer, frames, bind)?;
         }
-        return Ok(buffer);
+        return Ok(vec![buffer]);
     }
     if wide {
         let mut buffer = Vec::new();
@@ -1353,33 +1400,34 @@ pub fn write_frame_refs_with_threads(
             }
             .canonical(canonical)
             .parallel_atoms(workers);
-            writer.write_frame(&frames[0])?;
+            write_group(&mut writer, frames, bind)?;
         }
-        return Ok(buffer);
+        return Ok(split_for_pwrite(&buffer, workers));
     }
     #[cfg(feature = "parallel")]
     {
         let chunk = frames.len().div_ceil(workers).max(1);
-        use rayon::prelude::*;
-        let parts: Result<Vec<Vec<u8>>, WriteError> = frames
-            .par_chunks(chunk)
-            .map(|group| {
-                let mut buffer = Vec::new();
-                let mut writer = match precision {
-                    Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
-                    None => ConFrameWriter::new(&mut buffer),
-                }
-                .canonical(canonical);
-                writer.extend(group.iter().copied())?;
-                drop(writer);
-                Ok(buffer)
-            })
-            .collect();
-        let mut out = Vec::new();
-        for part in parts? {
-            out.extend_from_slice(&part);
+        let run = || {
+            use rayon::prelude::*;
+            frames
+                .par_chunks(chunk)
+                .map(|group| {
+                    let mut buffer = Vec::new();
+                    let mut writer = match precision {
+                        Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                        None => ConFrameWriter::new(&mut buffer),
+                    }
+                    .canonical(canonical);
+                    write_group(&mut writer, group, bind)?;
+                    drop(writer);
+                    Ok(buffer)
+                })
+                .collect()
+        };
+        match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+            Ok(pool) => pool.install(run),
+            Err(_) => run(),
         }
-        return Ok(out);
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -1391,10 +1439,78 @@ pub fn write_frame_refs_with_threads(
                 None => ConFrameWriter::new(&mut buffer),
             }
             .canonical(canonical);
-            writer.extend(frames.iter().copied())?;
+            write_group(&mut writer, frames, bind)?;
         }
-        Ok(buffer)
+        Ok(vec![buffer])
     }
+}
+
+fn split_for_pwrite(buffer: &[u8], workers: usize) -> Vec<Vec<u8>> {
+    if buffer.is_empty() || workers < 2 {
+        return vec![buffer.to_vec()];
+    }
+    let chunk = buffer.len().div_ceil(workers).max(1);
+    buffer.chunks(chunk).map(|piece| piece.to_vec()).collect()
+}
+
+fn pwrite_parts(path: &std::path::Path, parts: &[Vec<u8>]) -> io::Result<()> {
+    let mut offset = 0u64;
+    let mut offsets = Vec::with_capacity(parts.len());
+    for part in parts {
+        offsets.push(offset);
+        offset += part.len() as u64;
+    }
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)?;
+    file.set_len(offset)?;
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for (part, at) in parts.iter().zip(offsets) {
+            let file = file.try_clone()?;
+            handles.push(scope.spawn(move || pwrite_full(&file, part, at)));
+        }
+        for handle in handles {
+            handle
+                .join()
+                .unwrap_or_else(|_| Err(io::Error::other("pwrite worker")))?;
+        }
+        Ok(())
+    })
+}
+
+fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    if buf.is_empty() {
+        return Ok(());
+    }
+    let fd = file.as_raw_fd();
+    let mut written = 0usize;
+    while written < buf.len() {
+        let n = unsafe {
+            libc::pwrite(
+                fd,
+                buf[written..].as_ptr() as *const libc::c_void,
+                buf.len() - written,
+                offset as libc::off_t,
+            )
+        };
+        if n < 0 {
+            let err = io::Error::last_os_error();
+            if err.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err);
+        }
+        if n == 0 {
+            return Err(io::Error::new(io::ErrorKind::WriteZero, "pwrite"));
+        }
+        written += n as usize;
+        offset += n as u64;
+    }
+    Ok(())
 }
 
 /// Serializes `frames` to a CON string. No file is created.
@@ -1620,5 +1736,62 @@ mod parallel_write_tests {
         let serial = write_frames_to_vec(&one).unwrap();
         let parallel = write_frames_to_vec_with_threads(&one, 4, None, false).unwrap();
         assert_eq!(parallel, serial);
+    }
+
+    #[test]
+    fn pwrite_matches_the_concatenated_writer() {
+        let one = frames_from_text(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/resources/test/cuh2.con"
+            ))
+            .unwrap()
+            .repeat(8),
+            Some(1),
+        )
+        .unwrap();
+        let serial = write_frames_to_vec(&one).unwrap();
+        let refs: Vec<&crate::types::ConFrame> = one.iter().collect();
+        let path = std::env::temp_dir().join(format!(
+            "readcon-pwrite-{}-{}.con",
+            std::process::id(),
+            one.len()
+        ));
+        super::write_frame_refs_to_path(&path, &refs, 4, None, false, false).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
+    }
+
+    #[test]
+    fn stamped_pwrite_matches_the_binding_writer() {
+        let one = frames_from_text(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/resources/test/cuh2.con"
+            ))
+            .unwrap()
+            .repeat(8),
+            Some(1),
+        )
+        .unwrap();
+        let mut serial = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut serial);
+            for frame in &one {
+                let mut stamped = frame.clone();
+                writer.write_frame_binding(&mut stamped).unwrap();
+            }
+        }
+        let refs: Vec<&crate::types::ConFrame> = one.iter().collect();
+        let path = std::env::temp_dir().join(format!(
+            "readcon-pwrite-bind-{}-{}.con",
+            std::process::id(),
+            one.len()
+        ));
+        super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
+        let got = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(got, serial);
     }
 }

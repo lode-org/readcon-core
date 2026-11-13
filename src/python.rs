@@ -3072,31 +3072,35 @@ fn write_con(
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
             if !append && workers >= 2 {
-                let bytes = if let Ok(list) = frames.cast::<ConFrameList>() {
+                if let Ok(list) = frames.cast::<ConFrameList>() {
                     let borrowed = list.borrow();
                     let slots = borrowed.frames.lock().expect("frames");
                     let refs: Vec<&ConFrame> = slots
                         .iter()
                         .map(|slot| slot.as_ref().expect("stored frame"))
                         .collect();
-                    crate::writer::write_frame_refs_with_threads(
-                        &refs, workers, precision, canonical,
+                    crate::writer::write_frame_refs_to_path(
+                        Path::new(path),
+                        &refs,
+                        workers,
+                        precision,
+                        canonical,
+                        true,
                     )
-                    .map_err(|err| write_err_to_py(py, err))?
+                    .map_err(|err| write_err_to_py(py, err))?;
                 } else {
                     let rust_frames = py_frames_to_rust(py, frames)?;
-                    py.detach(|| {
-                        crate::writer::write_frames_to_vec_with_threads(
-                            &rust_frames,
-                            workers,
-                            precision,
-                            canonical,
-                        )
-                    })
-                    .map_err(|err| write_err_to_py(py, err))?
-                };
-                std::fs::write(path, bytes)
-                    .map_err(|err| PyIOError::new_err(format!("failed to create writer: {err}")))?;
+                    let refs: Vec<&ConFrame> = rust_frames.iter().collect();
+                    crate::writer::write_frame_refs_to_path(
+                        Path::new(path),
+                        &refs,
+                        workers,
+                        precision,
+                        canonical,
+                        true,
+                    )
+                    .map_err(|err| write_err_to_py(py, err))?;
+                }
                 return Ok(());
             }
             let mut writer = if append {
@@ -4541,6 +4545,9 @@ fn read_extxyz<'py>(
     let mut shared_species: Option<Bound<'py, PyList>> = None;
     for column in tables.columns.drain(..) {
         if column.kind == b'S' {
+            if column.name == "species" && column.width == 1 && column.text.is_empty() {
+                continue;
+            }
             let built = py_text_frames(py, &column.text, n_atoms, column.width)?;
             if column.name == "species" && column.width == 1 {
                 shared_species = Some(built.clone());
@@ -4563,7 +4570,11 @@ fn read_extxyz<'py>(
     }
     let species = match shared_species {
         Some(found) => found,
-        None => py_text_frames(py, &tables.species, n_atoms, 1)?,
+        None => {
+            let built = py_text_frames(py, &tables.species, n_atoms, 1)?;
+            arrays.set_item("species", &built)?;
+            built
+        }
     };
     let dict = PyDict::new(py);
     dict.set_item("positions", positions)?;
@@ -4633,7 +4644,8 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
 /// including forces, are written. Numeric columns are borrowed from the
 /// caller's arrays. The binding does not allocate a second copy of them.
 #[pyfunction]
-fn write_extxyz(path: &str, data: &Bound<'_, PyDict>) -> PyResult<()> {
+#[pyo3(signature = (path, data, n_threads=None))]
+fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) -> PyResult<()> {
     let positions = data
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
@@ -4758,18 +4770,24 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>) -> PyResult<()> {
             }
         }
     }
-    let sources: Vec<&dyn crate::extxyz_scan::ExtxyzSource> = plan
+    let sources: Vec<&(dyn crate::extxyz_scan::ExtxyzSource + Sync)> = plan
         .iter()
         .map(|(kind, index)| {
             if *kind == 0 {
-                &texts[*index] as &dyn crate::extxyz_scan::ExtxyzSource
+                &texts[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
             } else {
-                &reals[*index] as &dyn crate::extxyz_scan::ExtxyzSource
+                &reals[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
             }
         })
         .collect();
-    let bytes = crate::extxyz_scan::extxyz_bytes(n_frames, n_atoms, cell, &sources)
-        .map_err(PyValueError::new_err)?;
+    let bytes = crate::extxyz_scan::extxyz_bytes_with_threads(
+        n_frames,
+        n_atoms,
+        cell,
+        &sources,
+        n_threads.unwrap_or(1),
+    )
+    .map_err(PyValueError::new_err)?;
     if let Some(parent) = std::path::Path::new(path).parent()
         && !parent.as_os_str().is_empty()
     {
