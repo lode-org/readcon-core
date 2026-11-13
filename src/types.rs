@@ -1757,7 +1757,7 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 /// these as the source of truth for DLPack (`as_dlpack` exports **storage** dtype).
 /// Project in-memory representation with [`Self::project_storage_dtypes`]. On-disk CON
 /// text remains binary64. [`Self::atom_data`] is the AoS projection for the writer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
@@ -1789,6 +1789,27 @@ pub struct ConFrame {
     pub masses: crate::storage_dtype::FloatArray1,
     /// Per-atom ids `(N,)` u64 (always).
     pub atom_ids: ndarray::ArcArray1<u64>,
+}
+
+impl PartialEq for ConFrame {
+    /// The column-tail arena is how a parsed frame addresses its velocity
+    /// and force columns. A built frame keeps those values in the section
+    /// arrays and in each atom. Both shapes are the same frame.
+    fn eq(&self, other: &Self) -> bool {
+        self.header == other.header
+            && self.atom_data == other.atom_data
+            && self.positions == other.positions
+            && self.velocities == other.velocities
+            && self.forces == other.forces
+            && self.atom_energies == other.atom_energies
+            && self.charges == other.charges
+            && self.spins == other.spins
+            && self.magmoms == other.magmoms
+            && self.displacements == other.displacements
+            && self.spreads == other.spreads
+            && self.masses == other.masses
+            && self.atom_ids == other.atom_ids
+    }
 }
 
 impl ConFrame {
