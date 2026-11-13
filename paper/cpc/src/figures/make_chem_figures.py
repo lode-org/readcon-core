@@ -305,6 +305,8 @@ def _clear_of_samples(ax, samples: np.ndarray, gap: float = 0.55) -> None:
         text.set_position((float(anchor_x), float(spot_y)))
         text.set_ha("left")
         text.set_va("center")
+        text.set_fontsize(8)
+        text.set_bbox({"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.85})
 
 
 def _viewport(rmsd_r, rmsd_p, final_r, final_p, basis):
@@ -387,6 +389,7 @@ def landscape() -> None:
         return gradient_matern, original
 
     fig, axes = journal_figure("cpc", columns="double", nrows=1, ncols=2)
+    fig.set_size_inches(7.16, 3.5)
     for (_title, band, basis, xlim, ylim), ax in zip(prepared, axes, strict=True):
         final_only = not band["fit_steps"]
         n_final = len(band["final_r"])
@@ -489,8 +492,9 @@ def landscape() -> None:
         ax.set_ylim(*ylim)
         ax.set_box_aspect(1)
         ax.set_title(_title, fontsize=8)
-        ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)")
-        ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)")
+        ax.set_xlabel(r"Reaction progress $s$ ($\mathrm{\AA}$)", fontsize=8)
+        ax.set_ylabel(r"Deviation $d$ ($\mathrm{\AA}$)", fontsize=8)
+        ax.tick_params(labelsize=8)
         progress, deviation = project_to_sd(band["r"], band["p"], basis)
         _clear_of_samples(ax, np.column_stack([progress, deviation]))
         print(_title, f"colour {lo:.3f} to {hi:.3f} eV")

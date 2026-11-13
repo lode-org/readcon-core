@@ -296,15 +296,25 @@ def memory(theme) -> None:
     meds = [by_arm[name] for name in order]
     fig, ax = plt.subplots(figsize=(7.2, 3.4))
     x = np.arange(len(order))
-    ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
+    bars = ax.bar(x, meds, color=CYCLE[0], edgecolor=BLACK, linewidth=0.4)
     ax.set_xticks(x)
     ax.set_xticklabels(
         [CON_LABELS.get(name, name) for name in order],
-        fontsize=7,
+        fontsize=8,
         rotation=30,
         ha="right",
     )
-    ax.set_ylabel("MiB above the import")
+    ax.tick_params(axis="y", labelsize=8)
+    for bar, value in zip(bars, meds):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.0f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+    ax.set_ylabel("MiB above the import", fontsize=8)
     pf._theme_axes([ax], theme)
     pf._save(fig, "memory", None)
 

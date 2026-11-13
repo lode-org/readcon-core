@@ -3,6 +3,15 @@
 # The two documents import each other's labels through xr-hyper, so they are typeset in turns.
 set -euo pipefail
 cd "$(dirname "$0")/../src"
+# `bash build_tex.sh final` refuses a draft whose Zenodo macro is empty
+# or still the placeholder. The default build prints that placeholder.
+if [[ "${1:-draft}" == "final" ]]; then
+  doi=$(sed -n 's/.*\\newcommand{\\readconZenodoDOI}{\(.*\)}.*/\1/p' placeholders.tex)
+  if [[ -z "${doi}" || "${doi}" == *'DOI TO BE MINTED'* ]]; then
+    echo "final: \\readconZenodoDOI has no DOI" >&2
+    exit 1
+  fi
+fi
 # \today and the dates of both PDFs are the SOURCE_DATE_EPOCH of regen_paper.py, so every build gives the same bytes.
 SOURCE_DATE_EPOCH=$(sed -n 's/^SOURCE_DATE_EPOCH = "\([0-9]*\)"$/\1/p' ../scripts/regen_paper.py)
 [ -n "$SOURCE_DATE_EPOCH" ] || { echo "scripts/regen_paper.py sets no SOURCE_DATE_EPOCH" >&2; exit 1; }

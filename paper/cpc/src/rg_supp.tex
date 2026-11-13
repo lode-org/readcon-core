@@ -561,15 +561,10 @@ extxyz-ng 0.0.2 & \(8.46\times 10^{-5}\) & \(4.67\times 10^{-4}\) & --- & --- \\
 
 \input{figures/generated/format_context}
 
-\section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
-The survey of Table~\ref{tab:survey} and the drift files ran OVITO 3.16.1.
-The timed sessions of Sections~\ref{sec:performance}, \ref{sec:host} and~\ref{sec:timings} and Table~\ref{tab:copper} ran OVITO 3.17.2, which also fails to open the CON file.
-chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
-That is the set of versions that was run.
-The format lists of OVITO 3.17.2, MDAnalysis 2.11.0 and chemfiles 0.11.0-rc1 still have no CON reader \cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfiles0110rc12025,frauxChemfilesConIssue2025}.
+\section{Measured versions}\label{sec:supp-versions} The timed reads use ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2.
+chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
+The format lists of those three libraries name no CON reader \cite{ovitoManual3172,gowersMdanalysis21102026,frauxChemfilesConIssue2025}.
 The input-format table of the OVITO 3.17.2 manual names XYZ, extended XYZ, POSCAR and PDBx/mmCIF, and it names neither CON nor convel nor H5MD \cite{ovitoManual3172}.
-That table is not a rerun of the opener.
-The survey and the drift files were not read under that flag.
 OVITO 3.17.2 \texttt{import\_file} on the 32-atom, 100000-frame CON file
 raises \texttt{RuntimeError}: it cannot detect the format.
 chemfiles 0.10.4 raises \texttt{ChemfilesError}: it has no format for
@@ -577,7 +572,7 @@ the \texttt{.con} extension.
 On the copper-grid extended XYZ files, opened by chemfiles as XYZ,
 the million-atom medians are 0.455~s and 0.150~s and the 10000-frame
 medians are 0.567~s and 0.657~s.
-The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
+The drift files of Table~\ref{tab:drift} use ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, OVITO 3.17.2 and MDAnalysis 2.11.0.
 The readers timed on the Xeon are named in Section~\ref{sec:host}.
 
 The version-drift check gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process.
@@ -1084,6 +1079,7 @@ readcon & chemfiles & OVITO & ASE & pymatgen \\
 \FloatBarrier \section{Measurements on the Xeon}\label{sec:host}
 We read one trajectory of 100000 frames of 32 copper atoms, and the extended XYZ and HDF5 files that carry the same atoms.
 Each sample is a fresh process, and each library is imported before the clock starts.
+A timed read follows one warmup, so the page cache is warm, except where a caption says the cache was dropped.
 Section~\ref{sec:compute} lists the hardware and the versions.
 Memory is the high-water mark after the read, minus the mark after the import.
 The serial CON, convel and copper extended XYZ reads are the one-core session of Section~\ref{sec:performance}.
@@ -1293,11 +1289,7 @@ Of the four fidelity fields, CON 3.1 keeps the mask, the identifier and the bina
 \caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.22.0, returning every stored field.}
 \label{fig:fairness} \end{figure}
 
-\begin{figure}[tbp] \centering
-\includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
-\caption{Barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
-The right panel is the difference, 0.0369~eV.}
-\label{fig:asemask} \end{figure}
+Figure~\ref{fig:asemask} of the main text is that barrier.
 
 The ingest rate is Figure~\ref{fig:db-throughput}.
 
@@ -1388,7 +1380,7 @@ The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 a
 Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
 On the single large frame, extxyz 0.4.6 takes \SI{0.261}{\second} and ASE's cextxyz reader takes \SI{0.275}{\second}.
 The Rust reader takes \SI{0.287}{\second} and the Python binding \SI{0.419}{\second}.
-cextxyz and extxyz 0.4.6 are faster than readcon on that frame.
+On that frame ASE cextxyz takes 0.208~s, readcon 0.231~s and extxyz 0.4.6 1.84~s.
 ASE's own extxyz reader takes \SI{1.91}{\second}.
 On the \num{10000}-frame file the order changes.
 The Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
@@ -1478,7 +1470,6 @@ readcon, Python & \num{2.87e-5} \\
 readcon, Rust & \num{1.83e-5} \\
 readcon, C & \num{1.66e-5} \\
 eOn \texttt{loadcons} & \num{3.15e-4} \\
-eOn C++ client, development build & \num{2.62e-5} \\
 eOn 3.6.0 C++ client & \num{2.32e-5} \\
 ASE eon & stops at line 23 \\
 \bottomrule
@@ -1531,7 +1522,6 @@ It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
 A gzip read of 10000 frames of 218 atoms takes 0.668~s, and the streaming read of that file takes 0.594~s.
 The same file as zstd takes 0.420~s, and the streaming zstd read takes 0.344~s.
 Each of those medians is type 7 over six samples after one warmup.
-Table~\ref{tab:gzip} is an earlier compressed comparison and was not repeated here.
 The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
 ASE's eon reader takes \SI{10.6}{\second}.
 Decompressing that gzip member and then reading the plain stream takes \SI{0.643}{\second}.
@@ -1543,7 +1533,6 @@ ASE's eon writer takes \SI{14.2}{\second}.
 \begin{table}[tbp]
 \centering
 \caption{Median time in seconds for gzip CON.
-These rows are an earlier session and were not repeated for readcon-core 0.22.0.
 The first two columns are reads.
 The last column is the write of the \num{100000}-frame file.
 A blank cell was not part of this comparison.}

@@ -433,7 +433,7 @@ extxyz 0.4.6 & 0.906 & 1.19 \\
 \includegraphics[width=\textwidth]{figures/generated/timings.pdf}
 \caption{Median extended XYZ read of the million-atom frame and of the \num{10000}-frame file.
 The whisker runs from the first quartile to the third.
-On the million-atom frame, extxyz 0.4.6 and cextxyz are faster than readcon.
+On the million-atom frame, ASE cextxyz takes 0.208~s and readcon takes 0.231~s.
 The resident set and the massif heap of the same reads are Table~\ref{tab:extxyz-h2h}.}
 \label{fig:timings}
 \end{figure*}
@@ -659,19 +659,9 @@ Equation~\eqref{eq:rmsd} after the Kabsch rotation is \(1.443\,\text{\AA}\) on t
 The shorter distance pairs the wrong nuclei for the [3,3] shift.
 A single point on the relabelled product is \(-81.432\,\mathrm{eV}\), against \(-81.439\,\mathrm{eV}\) on the identity product: the same molecule, rigidly moved, so the endpoints are equivalent and only the labelling differs.
 
-That labelling was first run with the setup of the identity band: eight images between the endpoints, ten images in the band, an S-IDPP start
-\cite{smidstrupImprovedInitialGuess2014}, and the published climbing-image settings.
-The climbing image oscillated, and the band did not converge.
-The same labelling was then given sixteen images between the endpoints, eighteen in the band, a maximum step of \(0.05\,\text{\AA}\) against \(0.1\,\text{\AA}\), and a cap of 2000 iterations against 1000, with the climber held on (Figure~\ref{fig:claisen-band}, Figure~\ref{fig:claisen-land}).
-Figure~\ref{fig:claisen-land} is the plane of \(s\) and \(d\), the RMSD-based reaction progress and the orthogonal deviation of the MethodsX projection, drawn with chemparseplot
-\cite{goswamiTwodimensionalRmsdProjections2026,goswamiChemparseplot2026}.
-The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
-A further climbing-image-only continuation oscillated between \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
-Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
-The highest image of the eighteen-image band lies at 3.98814~eV (92.0~kcal/mol).
-The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
-Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
-The image is a higher-order stationary point.
+This session runs that labelling in eOn 3.6.0 built against readcon-core 0.22.0, with sixteen images between the endpoints, a maximum step of \(0.05\,\text{\AA}\) and a cap of 2000 iterations
+\cite{smidstrupImprovedInitialGuess2014}.
+After 2000 iterations the highest image is 0.376~eV above the reactant and the largest projected force is \(2.29\,\mathrm{eV}/\text{\AA}\), so the band does not meet \(0.05\,\mathrm{eV}/\text{\AA}\).
 The images of Eq.~\eqref{eq:lerp} on this permutation drag atoms through one another, because a slot in \(R^{\mathrm{P}}\) holds a different nucleus from the slot in \(R^{\mathrm{R}}\).
 
 \section{Water quench}\label{sec:supp-water-protocol}
@@ -788,18 +778,13 @@ A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\math
 The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
-That band converges.
-It has ten images, eight of them between the endpoints, and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
-The barrier is 0.60672~eV (14.0~kcal/mol) with the public PET-MAD 1.1.0 weights.
-The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
-The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
-One internal mode is imaginary, at \(-542.5\,\mathrm{cm}^{-1}\).
+This session's id-matched band, eOn 3.6.0 built against readcon-core 0.22.0 and PET-MAD 1.1.0, has ten images.
+It converges after 498 iterations and 1170 force calls, at 0.163~eV, with a climbing-image force of \(0.0256\,\mathrm{eV}/\text{\AA}\).
 
 IRA reassigns the same product by the minimum-Hausdorff permutation (Section~\ref{sec:supp-claisen-protocol}).
 The shorter distance pairs the wrong nuclei, and that band does not meet the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
-Its highest image lies at 3.98814~eV (92.0~kcal/mol), separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
-Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
-Figure~\ref{fig:claisen-land} is the plane of reaction progress and orthogonal deviation.
+Its highest image in this session lies at 0.376~eV, and the band force is \(2.29\,\mathrm{eV}/\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
+Figure~\ref{fig:claisen-land} shows the image energies of both bands.
 
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
@@ -844,16 +829,7 @@ The 81 frames, 4096 atoms each, were ingested into a readcon-db corpus and selec
 All 81 frames returned, bitwise identical in the positions and in the cell.
 The median wall time of that ingest and select is 0.578~s on the machine of Section~\ref{sec:compute}, and the eight repeats span 0.571--0.596~s.
 
-\begin{figure}[tbp]
-\centering
-\includegraphics[width=\textwidth]{figures/generated/water_persistence.pdf}
-\caption{Persistence of per-atom relations on one mW nucleation trajectory, against the lag in frames.
-(a)~Neighbour pairs.
-(b)~CHILL+ ice type.
-Circles are the CON frames.
-Squares in (a) are the permuted XYZ. In (b) that series lies on the dashed chance line, 0.630 to 0.631.}
-\label{fig:water}
-\end{figure}
+Figure~\ref{fig:water} of the main text is that persistence.
 
 
 seams-core reads a \texttt{.con} file through readcon-core and keeps the stored id as the lookup key.

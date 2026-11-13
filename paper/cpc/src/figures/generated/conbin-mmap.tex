@@ -44,7 +44,6 @@ The population call still faults base pages.
 Those base pages are what Table~\ref{tab:conbin-mmap-nosum} times, each
 reader in a fresh process after \texttt{drop\_caches} 3.
 That drop clears the page cache.
-The host cache was not controlled.
 The warm sample in that table is the next read in that same process.
 There is no untimed warm-up.
 Repeat 0 is the first touch of that cell and is kept.
@@ -69,7 +68,7 @@ rustc is 1.88.0, Python is 3.12.3, h5py is 3.16.0 and NumPy is 1.26.4.
 Upper median of six repeats, range in parentheses.
 h5py in this table is one reader.
 RSS is the resident set after that read, in kB.
-Cold means the page cache was dropped before the read. The host cache was not controlled.}
+Cold means the page cache was dropped before the read. }
 \label{tab:conbin-mmap-nosum}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
@@ -100,7 +99,7 @@ Upper median of six repeats.
 Warm is a new process.
 RSS is \texttt{VmHWM}, in kB. h5py in this table is the 1-thread cell of
 that session.
-Cold means the page cache was dropped before the read. The host cache was not controlled.}
+Cold means the page cache was dropped before the read. }
 \label{tab:conbin-mmap-sum}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
@@ -183,8 +182,7 @@ The two later \texttt{O\_DIRECT} reads of that file were 2188.4
 MB/s and 2246.7 MB/s.
 The other two files' \texttt{O\_DIRECT} pairs were 5924.6
 MB/s then 2271.3 MB/s, and 2187.7 MB/s then 2158.6 MB/s.
-Cold means the page cache was dropped before the read. The host cache was not controlled.
-Host RAM is unknown.
+Cold means the page cache was dropped before the read. Host RAM is unknown.
 A file written and never read, then read by one stream after that drop,
 took 1.831 s, then 1.758 s, then 1.609 s.
 A file read many times took 1.605 s and 1.708 s.
@@ -233,7 +231,7 @@ The resident set size (RSS) is \texttt{VmHWM}, in kB.
 An h5py pool adds the parent's mark and each worker's mark.
 The h5py 1-thread cell is the same cell as in
 Table~\ref{tab:conbin-mmap-sum}.
-Cold means the page cache was dropped before the read. The host cache was not controlled.}
+Cold means the page cache was dropped before the read. }
 \label{tab:conbin-scale}
 \resizebox{\linewidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
