@@ -1228,26 +1228,53 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
 
 const WIDE_ATOM_GRAIN: usize = 4096;
 
+/// Base of a contiguous `xyz` slab, three `f64`s per atom in order.
+///
+/// Parsed frames and the binding slab store coordinates that way. Owned
+/// boxes are separate allocations and stay on the pointer walk.
+fn coord_slab(atoms: &[crate::types::AtomDatum]) -> Option<*const f64> {
+    let n = atoms.len();
+    if n < 2 {
+        return None;
+    }
+    let base = atoms[0].coord_ptr();
+    if base.is_null() {
+        return None;
+    }
+    // Three probes. A contiguous slab (the parse buffer, the binding
+    // slab) hits all of them. Owned boxes miss the second atom.
+    let aligned = |index: usize| unsafe { atoms[index].coord_ptr() == base.add(index * 3) };
+    if aligned(1) && aligned(n / 2) && aligned(n - 1) {
+        Some(base)
+    } else {
+        None
+    }
+}
+
+fn load_xyz(atom: &crate::types::AtomDatum, slab: Option<*const f64>, index: usize) -> [f64; 3] {
+    if let Some(base) = slab {
+        unsafe {
+            let ptr = base.add(index * 3);
+            [*ptr, *ptr.add(1), *ptr.add(2)]
+        }
+    } else {
+        [atom.x(), atom.y(), atom.z()]
+    }
+}
+
 fn push_atom_motion(
     coord: &mut Vec<u8>,
     vel: Option<&mut Vec<u8>>,
     ryu: &mut ryu::Buffer,
     slots: &mut [FmtSlot; 3],
     vel_slots: &mut [FmtSlot; 3],
+    xyz: [f64; 3],
     atom: &crate::types::AtomDatum,
     prec: FloatFormat,
     spec_version: u32,
 ) {
     let fixed = written_fixed_flag(atom.fixed(), spec_version);
-    push_xyz_line(
-        coord,
-        ryu,
-        slots,
-        [atom.x(), atom.y(), atom.z()],
-        prec,
-        fixed,
-        atom.atom_id,
-    );
+    push_xyz_line(coord, ryu, slots, xyz, prec, fixed, atom.atom_id);
     if let Some(vel) = vel {
         let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
         // A separate column cache. Sharing the coordinate slots made every
@@ -1303,13 +1330,15 @@ fn append_coord_rows(
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
         let mut vel_slots = [FmtSlot::new(); 3];
-        for atom in atoms {
+        let slab = coord_slab(atoms);
+        for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
                 vel.as_deref_mut(),
                 ryu,
                 slots,
                 &mut vel_slots,
+                load_xyz(atom, slab, index),
                 atom,
                 prec,
                 spec_version,
@@ -1338,6 +1367,7 @@ fn append_coord_rows(
                     let mut slots = [FmtSlot::new(); 3];
                     let mut vel_slots = [FmtSlot::new(); 3];
                     let base = piece * chunk;
+                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (base + offset) as u64 {
                             bad_ids.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1348,6 +1378,7 @@ fn append_coord_rows(
                             &mut ryu,
                             &mut slots,
                             &mut vel_slots,
+                            load_xyz(atom, slab, offset),
                             atom,
                             prec,
                             spec_version,
@@ -1400,13 +1431,15 @@ fn append_coord_rows(
     {
         let _ = workers;
         let mut vel_slots = [FmtSlot::new(); 3];
-        for atom in atoms {
+        let slab = coord_slab(atoms);
+        for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
                 vel.as_deref_mut(),
                 ryu,
                 slots,
                 &mut vel_slots,
+                load_xyz(atom, slab, index),
                 atom,
                 prec,
                 spec_version,
@@ -1456,6 +1489,7 @@ fn stream_coord_rows(
                     let mut slots = [FmtSlot::new(); 3];
                     let mut vel_slots = [FmtSlot::new(); 3];
                     let base = index * chunk;
+                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (base + offset) as u64 {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1466,6 +1500,7 @@ fn stream_coord_rows(
                             &mut ryu,
                             &mut slots,
                             &mut vel_slots,
+                            load_xyz(atom, slab, offset),
                             atom,
                             prec,
                             spec_version,

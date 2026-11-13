@@ -12,80 +12,17 @@ use readcon_core::distrib_read::{
 use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
 
-fn atoms_from_lines(
-    slice: &[u8],
-    symbol: &std::sync::Arc<str>,
-) -> Vec<readcon_core::types::AtomDatum> {
-    let mut atoms = Vec::new();
-    let mut cursor = 0usize;
-    while cursor < slice.len() {
-        let start = cursor;
-        while cursor < slice.len() && slice[cursor] != b'\n' {
-            cursor += 1;
-        }
-        let line = &slice[start..cursor];
-        if cursor < slice.len() {
-            cursor += 1;
-        }
-        if line.iter().all(|byte| byte.is_ascii_whitespace()) {
-            continue;
-        }
-        let mut index = 0usize;
-        let mut xyz = [0.0f64; 3];
-        for value in &mut xyz {
-            while index < line.len() && line[index].is_ascii_whitespace() {
-                index += 1;
-            }
-            let (parsed, used) =
-                fast_float2::parse_partial::<f64, _>(&line[index..]).expect("coord");
-            *value = parsed;
-            index += used;
-        }
-        while index < line.len() && line[index].is_ascii_whitespace() {
-            index += 1;
-        }
-        let mut fixed_bits = 0u8;
-        let mut id = atoms.len() as u64;
-        if index < line.len() {
-            let (value, used) = parse_u64(&line[index..]);
-            fixed_bits = value as u8;
-            index += used;
-            while index < line.len() && line[index].is_ascii_whitespace() {
-                index += 1;
-            }
-            if index < line.len() {
-                let (value, _) = parse_u64(&line[index..]);
-                id = value;
-            }
-        }
-        let fixed = [
-            fixed_bits & 1 != 0,
-            fixed_bits & 2 != 0,
-            fixed_bits & 4 != 0,
-        ];
-        atoms.push(readcon_core::types::AtomDatum::coords(
-            std::sync::Arc::clone(symbol),
-            xyz[0],
-            xyz[1],
-            xyz[2],
-            fixed,
-            id,
-        ));
-    }
-    atoms
+struct RankAtoms {
+    _coords: Vec<f64>,
+    atoms: Vec<readcon_core::types::AtomDatum>,
 }
 
-fn parse_u64(bytes: &[u8]) -> (u64, usize) {
-    let mut value = 0u64;
-    let mut used = 0usize;
-    for byte in bytes {
-        if !byte.is_ascii_digit() {
-            break;
-        }
-        value = value * 10 + u64::from(byte - b'0');
-        used += 1;
+fn atoms_from_lines(slice: &[u8], symbol: &std::sync::Arc<str>) -> RankAtoms {
+    let (coords, atoms) = readcon_core::distrib_read::slab_atoms(slice, symbol).expect("coord");
+    RankAtoms {
+        _coords: coords,
+        atoms,
     }
-    (value, used)
 }
 
 fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
@@ -113,34 +50,41 @@ fn main() {
     let world = universe.world();
     let comm = Comm::dup_of(&world);
     let held = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("read");
-    let out = std::path::Path::new("/tmp/readcon-r7-mpi.con");
+    // Default stays on /tmp. READCON_MPI_OUT points the same collective at
+    // another directory so a tmpfs and a disk can be timed apart.
+    let out_buf = std::env::var("READCON_MPI_OUT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/readcon-r7-mpi.con"));
+    let out = out_buf.as_path();
     let file_bytes = std::fs::read(path).expect("map");
     let split = held.n_total == 1 && comm.size() > 1;
     let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
         let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
         let symbol = component_symbol(&file_bytes);
-        let atoms = atoms_from_lines(&file_bytes[range], &symbol);
+        let rows = atoms_from_lines(&file_bytes[range], &symbol);
         let header = if comm.rank() == 0 {
             file_bytes[..start].to_vec()
         } else {
             Vec::new()
         };
-        Some((header, atoms, start, end))
+        Some((header, rows, start, end))
     } else {
         None
     };
     world.barrier();
     if op == "write" {
-        if let Some((header, atoms, _, _)) = &prepared {
+        if let Some((header, rows, _, _)) = &prepared {
             let mut body = header.clone();
-            body.extend(readcon_core::writer::format_coordinate_lines(atoms).expect("format"));
+            body.extend(
+                readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+            );
             write_ranked_bytes(&comm, out, &body).expect("warmup write");
         } else {
             write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("warmup write");
         }
-    } else if let Some((_, atoms, _, _)) = &prepared {
-        std::hint::black_box(atoms.len());
+    } else if let Some((_, rows, _, _)) = &prepared {
+        std::hint::black_box(rows.atoms.len());
     } else {
         let _ = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("warmup read");
     }
@@ -150,9 +94,11 @@ fn main() {
         world.barrier();
         let started = Instant::now();
         if op == "write" {
-            if let Some((header, atoms, _, _)) = &prepared {
+            if let Some((header, rows, _, _)) = &prepared {
                 let mut body = header.clone();
-                body.extend(readcon_core::writer::format_coordinate_lines(atoms).expect("format"));
+                body.extend(
+                    readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+                );
                 write_ranked_bytes(&comm, out, &body).expect("write");
             } else {
                 write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("write");

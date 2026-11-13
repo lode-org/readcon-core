@@ -964,8 +964,86 @@ pub fn rank_line_range(
 
 /// Parse `x y z` from each non-empty line. The returned buffer is three
 /// floats per line, in file order.
+/// Atoms whose coordinates alias `coords`.
+///
+/// `coords` is the return value's buffer. Moving that `Vec` does not move
+/// the allocation, so the atoms stay valid. Reallocating it, or dropping
+/// it before the atoms, does not.
+pub fn slab_atoms(
+    slice: &[u8],
+    symbol: &std::sync::Arc<str>,
+) -> Result<(Vec<f64>, Vec<crate::types::AtomDatum>), String> {
+    let coords = parse_coord_lines(slice)?;
+    let n = coords.len() / 3;
+    let mut atoms = Vec::with_capacity(n);
+    let base = coords.as_ptr() as *mut f64;
+    let mut cursor = 0usize;
+    let mut index = 0usize;
+    while cursor < slice.len() && index < n {
+        let start = cursor;
+        while cursor < slice.len() && slice[cursor] != b'\n' {
+            cursor += 1;
+        }
+        let line = &slice[start..cursor];
+        if cursor < slice.len() {
+            cursor += 1;
+        }
+        if line.iter().all(|byte| byte.is_ascii_whitespace()) {
+            continue;
+        }
+        let mut at = 0usize;
+        for _ in 0..3 {
+            while at < line.len() && line[at].is_ascii_whitespace() {
+                at += 1;
+            }
+            let Some((_, next)) = crate::fast_dec::parse_f64_hot(line, at) else {
+                return Err("float".into());
+            };
+            at = next;
+        }
+        while at < line.len() && line[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let (fixed, id) = if at < line.len() {
+            let (value, used) = take_u64(line, at);
+            let bits = value as u8;
+            at += used;
+            while at < line.len() && line[at].is_ascii_whitespace() {
+                at += 1;
+            }
+            let id = if at < line.len() {
+                take_u64(line, at).0
+            } else {
+                index as u64
+            };
+            ([bits & 1 != 0, bits & 2 != 0, bits & 4 != 0], id)
+        } else {
+            ([false, false, false], index as u64)
+        };
+        atoms.push(crate::types::AtomDatum::at_slot(
+            std::sync::Arc::clone(symbol),
+            unsafe { base.add(index * 3) },
+            fixed,
+            id,
+        ));
+        index += 1;
+    }
+    Ok((coords, atoms))
+}
+
+fn take_u64(bytes: &[u8], mut at: usize) -> (u64, usize) {
+    let start = at;
+    let mut value = 0u64;
+    while at < bytes.len() && bytes[at].is_ascii_digit() {
+        value = value * 10 + u64::from(bytes[at] - b'0');
+        at += 1;
+    }
+    (value, at - start)
+}
+
 pub fn parse_coord_lines(slice: &[u8]) -> Result<Vec<f64>, String> {
-    let mut out = Vec::new();
+    let lines = memchr::memchr_iter(b'\n', slice).count();
+    let mut out = Vec::with_capacity(lines.saturating_mul(3));
     let mut cursor = 0usize;
     while cursor < slice.len() {
         let start = cursor;
@@ -987,13 +1065,10 @@ pub fn parse_coord_lines(slice: &[u8]) -> Result<Vec<f64>, String> {
             while index < line.len() && line[index].is_ascii_whitespace() {
                 index += 1;
             }
-            let (value, used) = fast_float2::parse_partial::<f64, _>(&line[index..])
-                .map_err(|_| "float".to_string())?;
-            if used == 0 {
-                return Err("float".to_string());
-            }
+            let (value, next) =
+                crate::fast_dec::parse_f64_hot(line, index).ok_or_else(|| "float".to_string())?;
             out.push(value);
-            index += used;
+            index = next;
         }
     }
     Ok(out)
@@ -1001,7 +1076,7 @@ pub fn parse_coord_lines(slice: &[u8]) -> Result<Vec<f64>, String> {
 
 #[cfg(test)]
 mod atom_range_tests {
-    use super::{frame_coord_span, parse_coord_lines, rank_line_range};
+    use super::{frame_coord_span, parse_coord_lines, rank_line_range, slab_atoms};
 
     #[test]
     fn one_frame_splits_across_ranks_without_dropping_a_line() {
@@ -1039,5 +1114,22 @@ mod atom_range_tests {
         let (span, n) = tiled.expect("a trailing newline is not another frame");
         assert_eq!(n, 3);
         assert_eq!(span, frame.len());
+    }
+
+    /// Rank writes alias one coordinate allocation instead of a box per atom.
+    #[test]
+    fn slab_atoms_alias_the_parsed_coordinates() {
+        let text = b"0.125 0.25 0.5 0 7\n1.5 2.5 3.5 1 8\n";
+        let symbol: std::sync::Arc<str> = std::sync::Arc::from("Cu");
+        let (coords, atoms) = slab_atoms(text, &symbol).unwrap();
+        assert_eq!(coords, vec![0.125, 0.25, 0.5, 1.5, 2.5, 3.5]);
+        assert_eq!(atoms[0].x(), 0.125);
+        assert_eq!(atoms[0].z(), 0.5);
+        assert_eq!(atoms[0].atom_id, 7);
+        assert_eq!(atoms[0].fixed(), [false, false, false]);
+        assert_eq!(atoms[1].x(), 1.5);
+        assert_eq!(atoms[1].atom_id, 8);
+        assert_eq!(atoms[1].fixed(), [true, false, false]);
+        assert!(std::ptr::eq(atoms[0].coord_ptr(), coords.as_ptr()));
     }
 }

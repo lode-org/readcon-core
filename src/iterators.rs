@@ -1213,6 +1213,16 @@ fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
     let compression = crate::compression::detect_compression(&magic[..n]);
     if matches!(compression, crate::compression::Compression::None) {
         let file_len = path.metadata().map(|m| m.len()).unwrap_or(0);
+        // A modest plain file is one buffer and the column-speed frame
+        // parser. The windowed reader stays for a long trajectory so the
+        // text is not resident beside every frame. 64 MiB covers the
+        // million-atom CON and leaves the 100k-frame file on the window.
+        if file_len > 0 && file_len <= 64 * 1024 * 1024 {
+            let mut buf = Vec::with_capacity(file_len as usize);
+            buf.extend_from_slice(&magic[..n]);
+            file.read_to_end(&mut buf).map_err(LoadError::Io)?;
+            return frames_from_bytes_located(&buf, Some(1)).map_err(LoadError::Parse);
+        }
         return stream_reader(&mut file, &magic[..n], file_len);
     }
     drop(file);
@@ -4295,7 +4305,8 @@ mod parallel_strong_scale_tests {
         let sequential = super::frames_from_text(&text, None).unwrap();
         assert_eq!(sequential.len(), frames.len());
         assert_eq!(
-            sequential[0].atom_data[0].x(), frames[0].atom_data[0].x(),
+            sequential[0].atom_data[0].x(),
+            frames[0].atom_data[0].x(),
             "default read changed a coordinate"
         );
     }

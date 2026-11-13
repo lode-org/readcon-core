@@ -950,6 +950,15 @@ impl AtomDatum {
         self.tail = (ptr as usize) | (self.tail & TAIL_MASK);
     }
 
+    /// Address of this atom's three coordinates.
+    ///
+    /// Parsed frames and the binding slab lay those triples out in order.
+    /// The writer uses that to format a run from one base pointer.
+    #[inline]
+    pub(crate) fn coord_ptr(&self) -> *const f64 {
+        self.xyz
+    }
+
     #[inline]
     pub fn x(&self) -> f64 {
         unsafe { *self.xyz }

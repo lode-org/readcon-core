@@ -170,26 +170,36 @@ pub(crate) fn parallel_coord_rows(
     let flags_ptr = flags.as_mut_ptr() as usize;
     let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
     let chunk = n.div_ceil(workers.max(1)).max(1);
-    let built = on_pool(workers, || {
-        use rayon::prelude::*;
+    let fill_group = |chunk_index: usize, group: &[(usize, usize)]| {
+        write_coord_group(
+            bytes,
+            group,
+            chunk_index * chunk,
+            spec_version,
+            start_id,
+            symbol,
+            xyz_ptr,
+            ids_ptr,
+            flags_ptr,
+            atoms_ptr,
+        )
+    };
+    // `workers < 2` stays on this thread. `par_chunks` would otherwise
+    // use the process pool even when the caller asked for one worker.
+    let built = if workers < 2 {
         ranges
-            .par_chunks(chunk)
+            .chunks(chunk)
             .enumerate()
-            .try_for_each(|(chunk_index, group)| {
-                write_coord_group(
-                    bytes,
-                    group,
-                    chunk_index * chunk,
-                    spec_version,
-                    start_id,
-                    symbol,
-                    xyz_ptr,
-                    ids_ptr,
-                    flags_ptr,
-                    atoms_ptr,
-                )
-            })
-    });
+            .try_for_each(|(chunk_index, group)| fill_group(chunk_index, group))
+    } else {
+        on_pool(workers, || {
+            use rayon::prelude::*;
+            ranges
+                .par_chunks(chunk)
+                .enumerate()
+                .try_for_each(|(chunk_index, group)| fill_group(chunk_index, group))
+        })
+    };
     if let Err(err) = built {
         std::mem::forget(atoms_raw);
         return Err(err);
@@ -2268,12 +2278,7 @@ where
         pos_flat.extend_from_slice(&xyz);
         let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::at_slot(
-            Arc::clone(symbol),
-            slot,
-            fixed,
-            atom_id,
-        ));
+        atom_data.push(AtomDatum::at_slot(Arc::clone(symbol), slot, fixed, atom_id));
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)

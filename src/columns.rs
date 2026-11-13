@@ -779,4 +779,26 @@ mod tests {
             bits_match_iterator(rel);
         }
     }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn a_wide_parallel_fill_matches_the_serial_column_walk() {
+        let n = 5000usize;
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125 0.25 0.5 0 {i}\n"));
+        }
+        let bytes = text.as_bytes();
+        let serial = positions_from_con_bytes(bytes).unwrap();
+        let parallel = positions_parallel(bytes, 8, false).unwrap();
+        assert_eq!(parallel.counts, serial.counts);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+        assert_eq!(parallel.wide_breaks[0].len(), n);
+    }
 }
