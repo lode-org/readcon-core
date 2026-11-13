@@ -1531,42 +1531,13 @@ where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
     let header = parse_frame_header(lines)?;
-    // A count the unread input can hold takes the same parse as before this
-    // bound existed. Anything larger must not reserve or bump an `Arc` by
-    // the declared total.
-    if frame_count_fits(&header.natms_per_type, max_rows) {
-        return parse_fitting_frame(lines, header);
-    }
-    parse_oversized_frame(lines, header, max_rows)
-}
-
-/// `true` when the per-type counts sum without wrapping and that sum is no
-/// larger than the atom lines the caller can account for.
-fn frame_count_fits(counts: &[usize], max_rows: Option<usize>) -> bool {
-    let mut total = 0usize;
-    for &count in counts {
-        let Some(sum) = total.checked_add(count) else {
-            return false;
-        };
-        total = sum;
-    }
-    // `with_capacity` panics above `isize::MAX`. A `u32::MAX` count is tens
-    // of GiB even when the iterator cannot say how many lines remain.
-    if total > (isize::MAX as usize) / 4 {
-        return false;
-    }
-    match max_rows {
-        Some(rows) => total <= rows,
-        None => total <= (1 << 20),
-    }
-}
-
-fn parse_fitting_frame<'a, L>(lines: &mut L, header: FrameHeader) -> Result<ConFrame, ParseError>
-where
-    L: LineStream<'a> + Iterator<Item = &'a str>,
-{
+    // A count the unread input can hold stays in this function, on the same
+    // reservation and `Arc` bump as before the bound existed. A count that
+    // cannot fit is a separate cold function so it does not shape this loop.
+    let Some(total_atoms) = fitting_atom_count(&header.natms_per_type, max_rows) else {
+        return parse_oversized_frame(lines, header, max_rows);
+    };
     let validate = header.strict_validation;
-    let total_atoms: usize = header.natms_per_type.iter().sum();
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
     let f64_positions = dt.positions == ElementKind::Float64;
@@ -1611,10 +1582,33 @@ where
     ))
 }
 
+/// Atom total when it can use [`Vec::with_capacity`] safely.
+///
+/// `None` means the counts wrap, exceed `isize::MAX / 4`, or exceed the
+/// unread atom lines. A `u32::MAX` count with no size hint is `None`: that
+/// reservation is tens of GiB.
+#[inline]
+fn fitting_atom_count(counts: &[usize], max_rows: Option<usize>) -> Option<usize> {
+    let mut total = 0usize;
+    for &count in counts {
+        total = total.checked_add(count)?;
+    }
+    if total > (isize::MAX as usize) / 4 {
+        return None;
+    }
+    match max_rows {
+        Some(rows) if total > rows => None,
+        None if total > (1 << 20) => None,
+        _ => Some(total),
+    }
+}
+
 /// A header declared more atoms than the rest of the input can hold.
 ///
 /// Reservations stay within `max_rows`. Rows are still read up to the
 /// declared count, so a short file is `IncompleteFrame`.
+#[cold]
+#[inline(never)]
 fn parse_oversized_frame<'a, L>(
     lines: &mut L,
     header: FrameHeader,
