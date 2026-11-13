@@ -33,6 +33,17 @@ N_FRAMES = 1
 # The paper's large trajectory is 100000 frames of 32 atoms.
 MF_ATOMS = 32
 MF_FRAMES = 100_000
+# Mixed alloy: four elements, one million atoms, distinct masses.
+# Changing-comment trajectory: 10000 frames of 96 oxygen and hydrogen atoms.
+CC_ATOMS = 96
+CC_FRAMES = 10_000
+ALLOY = (
+    ("Cu", 63.546),
+    ("Ag", 107.868),
+    ("Au", 196.967),
+    ("Ni", 58.693),
+)
+WATER = (("O", 15.999), ("H", 1.008), ("H", 1.008))
 REPEATS = 6
 MASS = 63.546
 # Integer lattice and binary-exact velocities, so a decimal writer that keeps
@@ -56,6 +67,9 @@ STORED = {
     "convel": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
     "extxyz": ("positions", "ids", "cell", "masses", "fixed", "velocities"),
     "pdb": ("positions", "cell"),
+    # Plain XYZ stores an element symbol and a coordinate. No cell, mass,
+    # id, fixed mask, or velocity.
+    "xyz": ("positions",),
 }
 
 ARMS = (
@@ -96,6 +110,15 @@ ARMS = (
     "mdanalysis-pdb-read",
     "mdanalysis-pdb-write",
     "mdanalysis-pdb-roundtrip",
+    "mdanalysis-xyz-read",
+    "mdanalysis-xyz-write",
+    "mdanalysis-xyz-roundtrip",
+    "mdtraj-pdb-read",
+    "mdtraj-pdb-write",
+    "mdtraj-pdb-roundtrip",
+    "mdtraj-xyz-read",
+    "mdtraj-xyz-write",
+    "mdtraj-xyz-roundtrip",
     "ovito-pdb-read",
     # eOn C++ client (libeonclib): reads and the three writers. No xyz reader.
     "eon-cpp-con-read",
@@ -115,19 +138,49 @@ ARMS = (
     "mf-eon-cpp-convel-read",
     "mf-chemfiles-extxyz-read",
     "mf-ovito-extxyz-read",
+    # One million atoms, four elements, a mass on every atom.
+    "alloy-readcon-extxyz-read",
+    "alloy-ase-extxyz-read",
+    "alloy-chemfiles-extxyz-read",
+    "alloy-ovito-extxyz-read",
+    # 10000 frames of 96 O/H atoms. energy and step change on every comment.
+    "cc-readcon-extxyz-read",
+    "cc-ase-extxyz-read",
+    "cc-chemfiles-extxyz-read",
+    "cc-ovito-extxyz-read",
 )
 
 
-def split_arm(arm: str) -> tuple[str, str, str, bool]:
-    multi = arm.startswith("mf-")
-    body = arm[3:] if multi else arm
+def split_arm(arm: str) -> tuple[str, str, str, bool, str]:
+    variant = "single"
+    body = arm
+    if body.startswith("mf-"):
+        variant = "mf"
+        body = body[3:]
+    elif body.startswith("alloy-"):
+        variant = "alloy"
+        body = body[6:]
+    elif body.startswith("cc-"):
+        variant = "cc"
+        body = body[3:]
     tool, fmt, op = body.rsplit("-", 2)
-    return tool, fmt, op, multi
+    multi = variant in ("mf", "cc")
+    return tool, fmt, op, multi, variant
 
 
-def _paths(fmt: str, multi: bool = False) -> Path:
-    suffix = {"con": ".con", "convel": ".convel", "extxyz": ".extxyz", "pdb": ".pdb"}[fmt]
-    if multi:
+def _paths(fmt: str, multi: bool = False, variant: str = "single") -> Path:
+    suffix = {
+        "con": ".con",
+        "convel": ".convel",
+        "extxyz": ".extxyz",
+        "pdb": ".pdb",
+        "xyz": ".xyz",
+    }[fmt]
+    if variant == "alloy":
+        return WORK / "inputs" / f"alloy-{N_ATOMS}x1{suffix}"
+    if variant == "cc":
+        return WORK / "inputs" / f"frames-{CC_FRAMES}x{CC_ATOMS}{suffix}"
+    if multi or variant == "mf":
         return WORK / "inputs" / f"frames-{MF_FRAMES}x{MF_ATOMS}{suffix}"
     return WORK / "inputs" / f"atoms-{N_ATOMS}x{N_FRAMES}{suffix}"
 
@@ -211,6 +264,56 @@ def mf_geometry() -> dict[str, np.ndarray]:
     return _MF
 
 
+_ALLOY: dict | None = None
+_CC: dict | None = None
+
+
+def alloy_geometry() -> dict:
+    """One frame, four elements, a mass on every atom."""
+    global _ALLOY
+    if _ALLOY is not None and int(_ALLOY["positions"].shape[0]) == N_ATOMS:
+        return _ALLOY
+    base = _geometry(N_ATOMS)
+    n = N_ATOMS
+    species = np.empty(n, dtype=object)
+    masses = np.empty(n, dtype=np.float64)
+    for index, (symbol, mass) in enumerate(ALLOY):
+        species[index::4] = symbol
+        masses[index::4] = mass
+    base["species"] = species
+    base["masses"] = masses
+    _ALLOY = base
+    return _ALLOY
+
+
+def cc_geometry() -> dict:
+    """10000 frames of 96 O/H atoms. Odd frames shift x by 0.125."""
+    global _CC
+    if _CC is not None:
+        return _CC
+    base = _geometry(CC_ATOMS)
+    n = CC_ATOMS
+    species = np.empty(n, dtype=object)
+    masses = np.empty(n, dtype=np.float64)
+    for index in range(n):
+        symbol, mass = WATER[index % 3]
+        species[index] = symbol
+        masses[index] = mass
+    frames = np.arange(CC_FRAMES, dtype=np.float64)[:, None]
+    positions = np.broadcast_to(base["positions"], (CC_FRAMES, n, 3)).copy()
+    positions[:, :, 0] += (frames % 2) * 0.125
+    _CC = {
+        "positions": positions,
+        "ids": np.broadcast_to(base["ids"], (CC_FRAMES, n)).copy(),
+        "cell": np.broadcast_to(base["cell"], (CC_FRAMES, 6)).copy(),
+        "masses": np.broadcast_to(masses, (CC_FRAMES, n)).copy(),
+        "fixed": np.broadcast_to(base["fixed"], (CC_FRAMES, n)).copy(),
+        "velocities": np.broadcast_to(base["velocities"], (CC_FRAMES, n, 3)).copy(),
+        "species": np.broadcast_to(species, (CC_FRAMES, n)).copy(),
+    }
+    return _CC
+
+
 def _write_con_text(path: Path, geom: dict, velocities: bool) -> None:
     span = float(geom["cell"][0])
     n_atoms = int(geom["positions"].shape[0])
@@ -273,12 +376,16 @@ def _write_extxyz(path: Path, geom: dict) -> None:
             "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
             'pbc="T T T"\n'
         )
+        species = geom.get("species")
+        masses = geom["masses"]
         chunk: list[str] = []
         for i in range(n_atoms):
             x, y, z = positions[i]
             vx, vy, vz = vels[i]
+            symbol = "Cu" if species is None else species[i]
+            mass = MASS if species is None else float(masses[i])
             chunk.append(
-                f"Cu {x:.1f} {y:.1f} {z:.1f} 63.546 "
+                f"{symbol} {x:.1f} {y:.1f} {z:.1f} {mass:.3f} "
                 f"{vx:.6f} {vy:.6f} {vz:.6f} {int(ids[i])} {int(flags[i])}\n"
             )
             if len(chunk) == 100_000:
@@ -301,6 +408,59 @@ def _pdb_line(serial: int, x: float, y: float, z: float) -> str:
     for offset, char in enumerate(tail):
         line[54 + offset] = char
     return "".join(line)
+
+
+def _write_xyz(path: Path, geom: dict) -> None:
+    positions = geom["positions"]
+    n_atoms = int(positions.shape[0])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"{n_atoms}\nxyz\n")
+        chunk: list[str] = []
+        for i in range(n_atoms):
+            x, y, z = positions[i]
+            chunk.append(f"Cu {x:.1f} {y:.1f} {z:.1f}\n")
+            if len(chunk) == 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
+def _write_comment_extxyz(path: Path, geom: dict) -> None:
+    """Each comment carries a different energy and step."""
+    positions = geom["positions"]
+    n_frames, n_atoms, _three = positions.shape
+    species = geom["species"]
+    masses = geom["masses"]
+    ids = geom["ids"]
+    flags = geom["fixed"]
+    vels = geom["velocities"]
+    cell = geom["cell"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        chunk: list[str] = []
+        for frame in range(n_frames):
+            span = float(cell[frame, 0])
+            energy = -100.0 + frame * 0.125
+            chunk.append(f"{n_atoms}\n")
+            chunk.append(
+                f'Lattice="{span:.1f} 0 0 0 {span:.1f} 0 0 0 {span:.1f}" '
+                "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
+                f'pbc="T T T" energy={energy:.3f} step={frame}\n'
+            )
+            for i in range(n_atoms):
+                x, y, z = positions[frame, i]
+                vx, vy, vz = vels[frame, i]
+                chunk.append(
+                    f"{species[frame, i]} {x:.6f} {y:.1f} {z:.1f} {float(masses[frame, i]):.3f} "
+                    f"{vx:.6f} {vy:.6f} {vz:.6f} {int(ids[frame, i])} {int(flags[frame, i])}\n"
+                )
+            if len(chunk) >= 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
 
 
 def _write_pdb(path: Path, geom: dict) -> None:
@@ -402,17 +562,28 @@ def prepare() -> None:
     mf_stamp = WORK / "mf-stamp"
     mf_needed = [_paths(fmt, True) for fmt in ("con", "convel", "extxyz")]
     mf_mark = f"{MF_FRAMES} {MF_ATOMS}\n"
-    if (
+    if not (
         mf_stamp.is_file()
         and mf_stamp.read_text(encoding="utf-8") == mf_mark
         and all(path.is_file() and path.stat().st_size > 0 for path in mf_needed)
     ):
-        return
-    print(f"prepare frames {MF_FRAMES} atoms {MF_ATOMS}", flush=True)
-    _write_many(_paths("con", True), "con")
-    _write_many(_paths("convel", True), "convel")
-    _write_many(_paths("extxyz", True), "extxyz")
-    mf_stamp.write_text(mf_mark, encoding="utf-8")
+        print(f"prepare frames {MF_FRAMES} atoms {MF_ATOMS}", flush=True)
+        _write_many(_paths("con", True), "con")
+        _write_many(_paths("convel", True), "convel")
+        _write_many(_paths("extxyz", True), "extxyz")
+        mf_stamp.write_text(mf_mark, encoding="utf-8")
+    xyz = _paths("xyz")
+    if not (xyz.is_file() and xyz.stat().st_size > 0):
+        print(f"prepare xyz {N_ATOMS}", flush=True)
+        _write_xyz(xyz, geometry())
+    alloy = _paths("extxyz", variant="alloy")
+    if not (alloy.is_file() and alloy.stat().st_size > 0):
+        print(f"prepare alloy {N_ATOMS}", flush=True)
+        _write_extxyz(alloy, alloy_geometry())
+    comment = _paths("extxyz", variant="cc")
+    if not (comment.is_file() and comment.stat().st_size > 0):
+        print(f"prepare comment frames {CC_FRAMES}", flush=True)
+        _write_comment_extxyz(comment, cc_geometry())
 
 
 def _max_abs(got: np.ndarray, ref: np.ndarray) -> float:
@@ -995,7 +1166,13 @@ def _ovito_read(path: Path) -> dict:
 
 
 def _out_path(arm: str, fmt: str) -> Path:
-    suffix = {"con": ".con", "convel": ".convel", "extxyz": ".extxyz", "pdb": ".pdb"}[fmt]
+    suffix = {
+        "con": ".con",
+        "convel": ".convel",
+        "extxyz": ".extxyz",
+        "pdb": ".pdb",
+        "xyz": ".xyz",
+    }[fmt]
     path = WORK / "outs" / f"{arm}{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
@@ -1038,6 +1215,14 @@ def _source(tool: str, fmt: str):
         import MDAnalysis as mda
 
         value = mda.Universe(os.fspath(_paths(fmt)))
+    elif tool == "mdtraj":
+        import mdtraj as md
+
+        path = _paths(fmt)
+        if fmt == "pdb":
+            value = md.load(os.fspath(path))
+        else:
+            value = md.load_xyz(os.fspath(path), top=_mdtraj_topology())
     else:
         raise RuntimeError(f"no source for {tool} {fmt}")
     _CACHE[key] = value
@@ -1126,6 +1311,12 @@ def _write_tool(tool: str, fmt: str, path: Path) -> None:
         with mda.Writer(os.fspath(path), source.atoms.n_atoms) as writer:
             writer.write(source.atoms)
         return
+    if tool == "mdtraj":
+        if fmt == "pdb":
+            source.save_pdb(os.fspath(path))
+        else:
+            source.save_xyz(os.fspath(path))
+        return
     raise RuntimeError(f"no writer for {tool} {fmt}")
 
 
@@ -1171,6 +1362,12 @@ def _raw_read(tool: str, fmt: str, path: Path):
         for _ts in universe.trajectory:
             blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
         return universe, blocks
+    if tool == "mdtraj":
+        import mdtraj as md
+
+        if fmt == "pdb":
+            return md.load(os.fspath(path))
+        return md.load_xyz(os.fspath(path), top=_mdtraj_topology())
     raise RuntimeError(f"no reader for {tool} {fmt}")
 
 
@@ -1235,7 +1432,68 @@ def _materialize(tool: str, fmt: str, raw) -> dict:
         dims = _universe.dimensions
         cell = None if dims is None else np.asarray(dims, dtype=np.float64)
         return _pack(positions[0], cell, n_frames=int(positions.shape[0]))
+    if tool == "mdtraj":
+        return _mdtraj_to_got(raw)
     raise RuntimeError(f"no unpack for {tool} {fmt}")
+
+
+_TOPS: dict[int, object] = {}
+
+
+def _mdtraj_topology(n_atoms: int | None = None):
+    if n_atoms is None:
+        n_atoms = N_ATOMS
+    cached = _TOPS.get(n_atoms)
+    if cached is not None:
+        return cached
+    import mdtraj as md
+
+    element = md.element.get_by_symbol("Cu")
+    topology = md.Topology()
+    chain = topology.add_chain()
+    residue = topology.add_residue("MOL", chain)
+    for _index in range(n_atoms):
+        topology.add_atom("Cu", element, residue)
+    _TOPS[n_atoms] = topology
+    return topology
+
+
+def _mdtraj_to_got(traj) -> dict:
+    # mdtraj keeps coordinates in nanometres. The files are angstroms.
+    positions = np.asarray(traj.xyz, dtype=np.float64) * 10.0
+    cell = None
+    if traj.unitcell_lengths is not None:
+        lengths = np.asarray(traj.unitcell_lengths, dtype=np.float64) * 10.0
+        angles = np.asarray(traj.unitcell_angles, dtype=np.float64)
+        cell = np.concatenate([lengths, angles], axis=1)
+    if positions.shape[0] == 1:
+        one = None if cell is None else cell[0]
+        return _pack(positions[0], one)
+    return _pack(positions, cell, stacked=True)
+
+
+def _read_xyz(path: Path) -> dict:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    frames = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].strip():
+            index += 1
+            continue
+        count = int(lines[index])
+        index += 2
+        block = np.empty((count, 3), dtype=np.float64)
+        for atom in range(count):
+            parts = lines[index].split()
+            block[atom, 0] = float(parts[-3])
+            block[atom, 1] = float(parts[-2])
+            block[atom, 2] = float(parts[-1])
+            index += 1
+        frames.append(block)
+    pos = np.stack(frames)
+    if pos.shape[0] == 1:
+        return _pack(pos[0], None)
+    return _pack(pos, None, stacked=True)
 
 
 def _one_frame_arrays(frame):
@@ -1630,10 +1888,10 @@ def _load_eon_dump(path: Path) -> dict:
 
 def once(arm: str):
     """One call, for the asv ``time_`` method. Fidelity stays outside the clock."""
-    tool, fmt, op, multi = split_arm(arm)
+    tool, fmt, op, multi, variant = split_arm(arm)
     if tool == "eon-cpp":
         return _eon_cpp_once(fmt, op, multi)
-    path = _paths(fmt, multi)
+    path = _paths(fmt, multi, variant)
     if op == "read":
         return _raw_read(tool, fmt, path)
     out = _out_path(arm, fmt)
@@ -1646,20 +1904,29 @@ def once(arm: str):
     raise RuntimeError(op)
 
 
-def _active_geom(multi: bool) -> dict:
-    return mf_geometry() if multi else geometry()
+def _active_geom(variant: str) -> dict:
+    if variant == "mf":
+        return mf_geometry()
+    if variant == "alloy":
+        return alloy_geometry()
+    if variant == "cc":
+        return cc_geometry()
+    return geometry()
 
 
 def _check(arm: str, result) -> dict:
-    tool, fmt, op, multi = split_arm(arm)
-    geom = _active_geom(multi)
+    tool, fmt, op, _multi, variant = split_arm(arm)
+    geom = _active_geom(variant)
     if tool == "eon-cpp" and op == "read":
         return judge(fmt, _load_eon_dump(result), geom)
     if op == "read":
         return judge(fmt, _materialize(tool, fmt, result), geom)
     out = result if op == "write" else _out_path(arm, fmt)
     file_fmt = "extxyz" if tool == "eon-cpp" and fmt == "extxyz" else fmt
-    file_got = read_file_with_readcon(file_fmt, Path(out))
+    if file_fmt == "xyz":
+        file_got = _read_xyz(Path(out))
+    else:
+        file_got = read_file_with_readcon(file_fmt, Path(out))
     file_judge = judge(fmt, file_got, geom)
     if op == "write":
         file_judge["source"] = "file"
@@ -1715,11 +1982,13 @@ def run(arm: str) -> dict:
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["NUMEXPR_NUM_THREADS"] = "1"
     prepare()
-    tool, fmt, op, _multi = split_arm(arm)
+    tool, fmt, op, _multi, _variant = split_arm(arm)
     if tool == "eon-cpp":
         _ensure_eon_binary()
-    elif tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "readcon") and op != "read":
+    elif tool in ("ase", "eon", "chemfiles", "ovito", "mdanalysis", "mdtraj", "readcon") and op != "read":
         _source(tool, fmt)
+    if tool == "mdtraj" and fmt == "xyz":
+        _mdtraj_topology()
     print(f"warmup {arm}", flush=True)
     once(arm)
     samples = []
@@ -1737,7 +2006,7 @@ def run(arm: str) -> dict:
     row = support.stats_block(samples)
     row.update(check)
     row["arm"] = arm
-    row["tool"], row["format"], row["operation"], row["multi"] = split_arm(arm)
+    row["tool"], row["format"], row["operation"], row["multi"], _variant = split_arm(arm)
     row["file"] = support.rel(_paths(fmt, row["multi"]))
     row["readcon_sha"] = os.environ.get("READCON_SHA", "").strip()
     command = [
@@ -1877,7 +2146,7 @@ def self_check() -> None:
         prepare()
         failed = []
         for arm in ARMS:
-            if arm.startswith("mf-") or arm.startswith("eon-cpp-"):
+            if arm.startswith(("mf-", "eon-cpp-", "alloy-", "cc-")):
                 continue
             row = run(arm)
             if arm.startswith("readcon-") and not row["correct"]:

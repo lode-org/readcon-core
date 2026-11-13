@@ -1,0 +1,41 @@
+git rev-parse HEAD
+c6669fc16bbf43adaeb47bddbe8859a927363ad7
+git rev-parse HEAD^{tree}
+53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt mdtraj-pdb-roundtrip
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 16.498557030
+sample 16.336928108
+sample 16.832592734
+sample 17.454911201
+sample 16.858169538
+sample 17.447095929
+median_s 16.845381136
+q25_s 16.582065956
+q75_s 17.299864331
+iqr_s 0.717798375
+n_atoms 1000000
+n_frames 1
+field positions max_abs 3.815e-06
+field ids not_in_format
+field cell ok
+field masses not_in_format
+field fixed not_in_format
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 0
+reason positions max abs 3.815e-06
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [16.498557030001393, 16.336928108001302, 16.832592734001082, 17.45491120100087, 16.858169537999856, 17.44709592899926], "n": 6, "median_s": 16.84538113600047, "q25_s": 16.582065956001315, "q75_s": 17.29986433124941, "iqr_s": 0.7177983752480941, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 3.815e-06", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "file_fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "positions max abs 3.815e-06", "arm": "mdtraj-pdb-roundtrip", "tool": "mdtraj", "format": "pdb", "operation": "roundtrip", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+exit 0

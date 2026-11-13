@@ -25,7 +25,7 @@ def _arm_class(arm: str):
 
         def setup(self):
             samefmt.prepare()
-            tool, fmt, op, _multi = samefmt.split_arm(arm)
+            tool, fmt, op, _multi, _variant = samefmt.split_arm(arm)
             self.arm = arm
             if op != "read":
                 samefmt._source(tool, fmt)
@@ -35,7 +35,7 @@ def _arm_class(arm: str):
 
         def track_n_atoms(self):
             raw = samefmt.once(self.arm)
-            tool, fmt, op, _multi = samefmt.split_arm(self.arm)
+            tool, fmt, op, _multi, _variant = samefmt.split_arm(self.arm)
             if tool == "eon-cpp" and op == "read":
                 got = samefmt._load_eon_dump(raw)
             elif op == "write":

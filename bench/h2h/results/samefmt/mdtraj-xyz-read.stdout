@@ -1,0 +1,41 @@
+git rev-parse HEAD
+c6669fc16bbf43adaeb47bddbe8859a927363ad7
+git rev-parse HEAD^{tree}
+53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt mdtraj-xyz-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.711833699
+sample 0.701064303
+sample 0.690641917
+sample 0.701592360
+sample 0.697823789
+sample 0.678132884
+median_s 0.699444046
+q25_s 0.692437385
+q75_s 0.701460346
+iqr_s 0.009022961
+n_atoms 1000000
+n_frames 1
+field positions max_abs 3.815e-06
+field ids not_in_format
+field cell not_in_format
+field masses not_in_format
+field fixed not_in_format
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 0
+reason positions max abs 3.815e-06
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [0.7118336990006355, 0.7010643029989296, 0.690641917000903, 0.7015923599992675, 0.6978237889998127, 0.6781328840006609], "n": 6, "median_s": 0.6994440459993712, "q25_s": 0.6924373850006305, "q75_s": 0.701460345749183, "iqr_s": 0.009022960748552578, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 3.815e-06", "ids": "not_in_format", "cell": "not_in_format", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "positions max abs 3.815e-06", "arm": "mdtraj-xyz-read", "tool": "mdtraj", "format": "xyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.xyz", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+exit 0

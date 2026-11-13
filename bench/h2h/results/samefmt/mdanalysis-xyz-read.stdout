@@ -1,0 +1,41 @@
+git rev-parse HEAD
+c6669fc16bbf43adaeb47bddbe8859a927363ad7
+git rev-parse HEAD^{tree}
+53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt mdanalysis-xyz-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 4.471305216
+sample 4.519721887
+sample 4.548337147
+sample 4.639554208
+sample 4.535069949
+sample 4.426222111
+median_s 4.527395918
+q25_s 4.483409384
+q75_s 4.545020347
+iqr_s 0.061610964
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids not_in_format
+field cell not_in_format
+field masses not_in_format
+field fixed not_in_format
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 1
+reason ok
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [4.471305216000474, 4.519721886999832, 4.548337146999984, 4.639554208000845, 4.53506994899908, 4.426222111000243], "n": 6, "median_s": 4.527395917999456, "q25_s": 4.483409383750313, "q75_s": 4.545020347499758, "iqr_s": 0.061610963749444636, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "not_in_format", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "arm": "mdanalysis-xyz-read", "tool": "mdanalysis", "format": "xyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.xyz", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+exit 0

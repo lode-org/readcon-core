@@ -602,8 +602,12 @@ for _arm in SAMEFMT_ARMS:
     _samefmt_rule(_arm)
 
 
-SAMEFMT_SINGLE = [arm for arm in SAMEFMT_ARMS if not arm.startswith("mf-")]
-SAMEFMT_MULTI = [arm for arm in SAMEFMT_ARMS if arm.startswith("mf-")]
+SAMEFMT_SINGLE = [
+    arm for arm in SAMEFMT_ARMS if not (arm.startswith("mf-") or arm.startswith("cc-"))
+]
+SAMEFMT_MULTI = [
+    arm for arm in SAMEFMT_ARMS if arm.startswith("mf-") or arm.startswith("cc-")
+]
 
 
 rule h2h_table_1e6:

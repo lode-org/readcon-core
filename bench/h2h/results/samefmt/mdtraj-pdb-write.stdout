@@ -1,0 +1,41 @@
+git rev-parse HEAD
+c6669fc16bbf43adaeb47bddbe8859a927363ad7
+git rev-parse HEAD^{tree}
+53d329a4a7ca1ce953cbd15f71e87fb36b7648bf
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt mdtraj-pdb-write
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 2.160002263
+sample 2.152787161
+sample 2.164966675
+sample 2.172819038
+sample 2.180679706
+sample 2.185094631
+median_s 2.168892856
+q25_s 2.161243366
+q75_s 2.178714539
+iqr_s 0.017471173
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids not_in_format
+field cell ok
+field masses not_in_format
+field fixed not_in_format
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 1
+reason ok
+readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
+{"samples": [2.1600022629991145, 2.152787160999651, 2.1649666749999597, 2.1728190379999432, 2.1806797059998644, 2.1850946310005384], "n": 6, "median_s": 2.1688928564999514, "q25_s": 2.1612433659993258, "q75_s": 2.178714538999884, "iqr_s": 0.017471173000558338, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "not_in_format", "cell": "ok", "masses": "not_in_format", "fixed": "not_in_format", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": true, "reason": "ok", "source": "file", "arm": "mdtraj-pdb-write", "tool": "mdtraj", "format": "pdb", "operation": "write", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.pdb", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+exit 0
