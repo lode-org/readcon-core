@@ -55,14 +55,14 @@ RULES = [
         OPEN_NEITHER,
     ),
     Rule(
-        "2.10.0",
+        "2.11.0",
         opener("MDAnalysis", "MDAnalysis"),
         OPENERS,
         "MDAnalysis version; opens neither file",
         OPEN_NEITHER,
     ),
     Rule(
-        "3.16.1",
+        "3.17.2",
         opener("OVITO", "ovito"),
         OPENERS,
         "OVITO version; opens neither file",

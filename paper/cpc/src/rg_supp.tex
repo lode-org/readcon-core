@@ -440,7 +440,6 @@ and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0
 The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, print the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
 The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.17.2, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.11.0 and Open Babel 3.2.1.
 The timed reads use that set.
-A drift cell that names OVITO 3.16.1 or MDAnalysis 2.10.0 was not repeated on it.
 On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals.
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
@@ -450,8 +449,7 @@ Velocities is how the file states the velocity unit.
 Metadata is the version or schema that another reader can apply.
 Indexed means frame \(k\) can be opened without a scan whose length is the number of earlier frames.
 Every row is a route measured in Table~\ref{tab:survey}.
-The cell ``no, periodicity'' is the measured OVITO 3.16.1 writer.
-OVITO 3.17.0 always writes \texttt{pbc}, so that cell is not a statement about 3.17.0.
+OVITO 3.17.2 writes the periodic flags into the extended XYZ comment, as \texttt{pbc="T T F"} for a cell that is periodic in \(x\) and \(y\) only.
 Tables~\ref{tab:spec-compare} and~\ref{tab:spec-compare-values} give, one row per format, the version, the atom identifiers, the per-component mask, the velocity time unit and the decimal round trip as each format's specification states them, for Table~\ref{tab:compare} and for other trajectory, structure and quantum-chemistry formats, with the source of every cell.
 The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2026,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
 GROMACS deprecates TNG in favour of H5MD, and the release of 2026-01-19 writes an experimental H5MD trajectory \cite{gromacsManual2026}.
@@ -472,7 +470,7 @@ Record & Restart-exact & Velocities & Metadata & Indexed \\
 \midrule
 CON 3.1 & yes & declared & versioned & offsets \\
 extended XYZ, ASE writer & no, 8 decimals & no unit & comment & scan \\
-extended XYZ, OVITO writer & no, periodicity (OVITO 3.16.1) & no unit & comment & scan \\
+extended XYZ, OVITO writer & no, 10 decimals & no unit & comment & scan \\
 ASE trajectory, identifiers as tags & yes, by convention & no unit & ULM and ASE versions & yes \\
 POSCAR, FixScaled & no, mask only & no unit & none & no \\
 H5MD (h5py), private mask dataset & yes, mask by convention & declared & versioned & yes \\
@@ -793,8 +791,7 @@ The heap in Table~\ref{tab:heap} is the massif increase, in mebibytes, for the w
 \centering
 \footnotesize
 \caption{Median extended XYZ read time, in seconds.
-The $10^{6}$-atom row is Table~\ref{tab:h2h-main}.
-readcon in that table is \texttt{read\_extxyz}, so the Rust cell of that row was not repeated.}
+The Rust cell of the \(10^{6}\)-atom row is blank because that readcon entry is the Python binding.}
 \label{tab:xyz}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
@@ -814,8 +811,7 @@ $10^{6}$ $\times$ 1 & -- & 0.231 & 1.56 & 0.208 & 1.84 \\
 \centering
 \footnotesize
 \caption{Quartiles of the two large extended XYZ reads, in seconds.
-The $10^{6}$-atom triples are the run of Table~\ref{tab:h2h-main}, and the Rust cell of that file was not repeated.
-The 10000-frame triples were not part of that run.}
+The Rust cell of the \(10^{6}\)-atom file is blank because readcon in Table~\ref{tab:h2h-main} is \texttt{read\_extxyz}.}
 \label{tab:xyzq}
 \begin{tabular}{@{}llrr@{}}
 \toprule
@@ -952,7 +948,7 @@ The resident set added by that read is Figure~\ref{fig:memory}.
 \label{fig:roofline}
 \end{figure}
 
-\section{Short-decimal session}
+\section{Short decimals}
 On the 160-frame file the medians are \SI{2.90}{\milli\second} for the Eisel--Lemire build, \SI{2.84}{\milli\second} for the short-decimal build, and \SI{8.83}{\milli\second} for the coordinate loop.
 On the 600-frame file they are \SI{16.3}{\milli\second}, \SI{15.5}{\milli\second} and \SI{52.3}{\milli\second}.
 The short path is $1.02$ and $1.05$ times the Eisel--Lemire build, and $3.11$ and $3.37$ times the coordinate loop.
@@ -1043,7 +1039,7 @@ $10^{6}$ atoms & 0.0518 (0.0012) & 0.0453 (0.00018) & 0.172 (0.0049) & 1.59 (0.0
 \centering
 \scriptsize
 \setlength{\tabcolsep}{4pt}
-\caption{Coordinate reads, C and Rust in one session.
+\caption{Coordinate reads, C and Rust on the same files.
 Core 0, one warmup and six repeats.
 Each entry is the type-7 median in seconds, with the interquartile range in parentheses.
 C calls \texttt{rkr\_read\_positions}.
@@ -1088,7 +1084,7 @@ Each sample is a fresh process, and each library is imported before the clock st
 A timed read follows one warmup, so the page cache is warm, except where a caption says the cache was dropped.
 Section~\ref{sec:compute} lists the hardware and the versions.
 Memory is the high-water mark after the read, minus the mark after the import.
-The serial CON, convel and copper extended XYZ reads are the one-core session of Section~\ref{sec:performance}.
+The serial CON, convel and copper extended XYZ reads are the one-core reads of Section~\ref{sec:performance}.
 
 \begin{table}[tbp]
 \centering
@@ -1216,7 +1212,6 @@ extxyz-ng 0.0.2 agrees on the 10-atom files.
 It reads a 230-atom frame of 8168 bytes and rejects a 231-atom frame
 of 8203 bytes, so it does not read the medium or large files.
 On the million-atom file the read times are Table~\ref{tab:h2h-main}.
-The massif heap was not repeated with that table.
 On the 10000-frame file the same five medians are 3.41, 0.937,
 0.740, 0.454 and 0.294~s.
 extxyz-ng 0.0.2 writes the 10-atom frame in \(1.03\times 10^{-4}\)~s.
@@ -1225,7 +1220,7 @@ that reader rejects.
 \texttt{write\_frames} rejects a Python iterator of frames, so the
 timed write calls \texttt{write\_frame} once per frame.
 \begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. The \(10^{6}\)-atom medians and interquartile ranges are Table~\ref{tab:h2h-main}; readcon there is \texttt{read\_extxyz}, so the Rust cell is blank, and the resident set was not repeated. The 10000-frame rows were not part of that run. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
+\caption{Extended XYZ reads. Six repeats after one warmup, type 7 median and interquartile range. readcon in Table~\ref{tab:h2h-main} is \texttt{read\_extxyz}, so the Rust cell of the \(10^{6}\)-atom row is blank. RSS is the high-water mark of a fresh process that only reads. Massif is that process's peak \texttt{mem\_heap\_B} from Valgrind 3.22.0. extxyz-ng 0.0.2 does not read these two files.}
 \label{tab:extxyz-h2h}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
@@ -1246,7 +1241,7 @@ ASE \texttt{cextxyz} & 10000 frames & 0.937 & 0.0685 & 237.9 & 155.1 \\
 \end{table}
 
 \begin{table}[tbp] \centering \footnotesize
-\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range. These write rows were not repeated with the reads of Table~\ref{tab:h2h-main}. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
+\caption{Extended XYZ writes. Six repeats after one warmup, type 7 median and interquartile range. RSS is the resident increase of the write above the loaded input, in a fresh process. Massif is the heap increase above the post-load snapshot. extxyz-ng 0.0.2 does not read these two files, so it has no write row here.}
 \label{tab:extxyz-h2h-write}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
@@ -1378,14 +1373,12 @@ The quartiles and the smaller files are in Tables~\ref{tab:xyz}--\ref{tab:copper
 \label{sec:xyz}
 The copper files are one frame of $10^{6}$ atoms and \num{10000} frames of 100 atoms.
 Figure~\ref{fig:timings} and Table~\ref{tab:xyzread} are the reads.
-On that frame the times are Table~\ref{tab:h2h-main}: readcon 0.231~s, ASE \texttt{extxyz} 1.56~s, ASE \texttt{cextxyz} 0.208~s, extxyz 0.4.6 1.84~s, chemfiles through its XYZ format 0.205~s, OVITO 0.0881~s and MDAnalysis 4.50~s.
-On the \num{10000}-frame file, which was not part of that run, the Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
+On that frame the times are Table~\ref{tab:h2h-main}.
+On the \num{10000}-frame file the Rust reader takes \SI{0.294}{\second}, the Python binding \SI{0.454}{\second}, extxyz 0.4.6 \SI{0.740}{\second}, cextxyz \SI{0.937}{\second} and ASE's extxyz reader \SI{3.41}{\second}.
 
 \begin{table}[tbp]
 \centering
-\caption{Median extended XYZ read time in seconds.
-The \(10^{6}\)-atom column is Table~\ref{tab:h2h-main}.
-The 10000-frame column was not part of that run.}
+\caption{Median extended XYZ read time in seconds.}
 \label{tab:xyzread}
 \begin{tabular}{@{}lrr@{}}
 \toprule
@@ -1406,9 +1399,8 @@ extxyz 0.4.6 takes \SI{0.906}{\second}, cextxyz \SI{0.948}{\second} and ASE's ex
 On \num{10000} frames the Python writer is again faster than Rust, \SI{0.411}{\second} against \SI{0.431}{\second}.
 The heap added by the million-atom write, above the loaded frame, is 61 MiB for Rust, 84 MiB for Python, 115 MiB for ASE extxyz, 172 MiB for cextxyz and 164 MiB for extxyz 0.4.6.
 
-chemfiles 0.10.4 reads the million-atom frame through its XYZ format in 0.205~s, and OVITO 3.17.2 reads it in 0.0881~s (Table~\ref{tab:h2h-main}).
+chemfiles 0.10.4 and OVITO 3.17.2 read the million-atom frame in Table~\ref{tab:h2h-main}.
 On that frame OVITO is the fastest of these readers.
-The 10000-frame times for those two readers were not repeated.
 
 \subsection{Trajectory XYZ}
 \label{sec:trajxyz}
@@ -1484,8 +1476,8 @@ The whisker is the interquartile range.}
 \label{fig:conread}
 \end{figure}
 
-A write of that coordinate file takes \SI{0.528}{\second} in Rust in the readcon-core 0.22.0 session of Table~\ref{tab:con-write}, and \SI{0.539}{\second} in the separate supplement session of Table~\ref{tab:conwrite}.
-The 0.22.0 session adds \SI{0.40}{\mebi\byte} to the resident set in Rust, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
+A write of that coordinate file takes \SI{0.528}{\second} in Rust for readcon-core 0.22.0 in Table~\ref{tab:con-write}, and \SI{0.539}{\second} in Table~\ref{tab:conwrite}.
+Table~\ref{tab:con-write} adds \SI{0.40}{\mebi\byte} to the resident set in Rust, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
 The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
 eOn streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 0.
 Table~\ref{tab:conwrite} gives that row and the final resident set above the Matter.
@@ -1577,7 +1569,6 @@ The heap of that zstd write matches the Rust writer.
 \centering
 \footnotesize
 \caption{Python compressed writes.
-These rows were not repeated with Tables~\ref{tab:gzip} and~\ref{tab:zstd}.
 Time is the type-7 median in seconds.
 RSS and massif are the increase above the loaded input, in mebibytes.}
 \label{tab:pywrite}
@@ -1637,18 +1628,18 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 
 
 
-\section{Round-6 scaling}\label{sec:r6}
-The medians are the type-7 median of six samples after one warmup, from commit \texttt{50bcbb74}, on the Xeon of Section~\ref{sec:compute}.
+\section{In-memory scaling}\label{sec:r6}
+The medians are the type-7 median of six samples after one warmup, on the Xeon of Section~\ref{sec:compute}.
 Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
 \input{figures/generated/r6_read_table}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/scaling-r6-full.pdf}
-\caption{Round-6 speedup and efficiency.
+\caption{Speedup and efficiency of the in-memory read.
 The upper two rows are threads.
 The lower two rows are MPI ranks.
-Commit \texttt{50bcbb74}.}
+The Xeon is Section~\ref{sec:compute}.}
 \label{fig:scaling-r6-full}
 \end{figure}
 

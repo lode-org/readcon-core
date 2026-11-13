@@ -132,7 +132,7 @@ eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
 \mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
-A permutation of the product rows gives the same band as the id-matched file after the read sorts by atom id (Section~\ref{sec:claisen}).
+A permutation of the product rows is a different band when the reader does not sort by atom id: the hydrogen hop is 0.0399~eV when the atoms match, and 15.6~eV when two copper positions are exchanged (Section~\ref{sec:claisen}).
 readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader.
 readcon-core is available under the MIT licence at
 \url{https://github.com/lode-org/readcon-core}.
@@ -289,6 +289,7 @@ H5MD stores an identifier, velocities with a unit and the box \cite{buylH5mdStru
 but defines no element for a per-component constraint, and MDAnalysis, pyh5md, ZnH5MD and zarrtraj write that kind of trajectory \cite{mdanalysisH5mdWriter211,debuylPyh5md,znh5md2025,woodsZarrtrajPythonPackage2026}.
 XTC, TRR, DCD and TNG store molecular-dynamics output with neither a mask nor a velocity unit, and the GROMACS trajectory that replaces TNG is still an H5MD file with no per-component constraint (Section~\ref{sec:supp-formats}).
 The ASE trajectory keeps the fields in the layout of its own Python code, while POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}.
+
 chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats but not CON at the versions tested in Section~\ref{sec:performance}, and ASE's eon reader stops at the velocity section of the frame in Section~\ref{sec:worked} \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}.
 A live stream of positions, velocities, forces and the box
 \cite{thirumalaiswamyStreamingMolecularDynamics2026},
@@ -320,7 +321,7 @@ row, and a time unit on any velocity section.
 Section~\ref{sec:fields} states the fields a restart must keep.
 Section~\ref{sec:implementation} describes the library and the programs that store and compare frames.
 Section~\ref{sec:conformance} is the conformance corpus.
-Section~\ref{sec:validation} tests the grammar on the Claisen rearrangement, on a water trajectory and on a resumed saddle search.
+Section~\ref{sec:validation} tests the grammar on a hydrogen hop, on a water trajectory and on a resumed saddle search.
 Section~\ref{sec:performance} compares the read time with the readers those codes already use.
 Section~\ref{sec:discussion} sets CON 3.1 beside H5MD, extended XYZ and POSCAR.
 
@@ -388,7 +389,7 @@ release.
 A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is
 read whole into memory, a larger one stays mapped, and a gzip or
 zstd file is decompressed into memory whatever its size.
-Equal-length frames, including a whitespace tail, split into equal spans, and on any other file the frame boundaries come from the counts in each header.
+The read stays on the calling thread until the caller asks for two or more workers, with no minimum file length for the pool: equal-length frames, including a whitespace tail, split into equal spans, and on any other file one thread walks the frame boundaries from the counts in each header before the pool parses the frames and returns them in file order (Figure~\ref{fig:scaling-r6}).
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step, Figure~\ref{fig:parser} is that read, and a coordinate row is three decimals, a mask and an optional identifier, with the short decimal and the Eisel--Lemire path in Section~\ref{sec:supp-cell}.
 
 
@@ -424,7 +425,7 @@ That hash is the xxHash3-128 of the CON text, an identity of bytes rather than o
 \texttt{find-by-atom-order} returns each stored frame with that hash and the permutation back to the query.
 A NEB image or an AKMC product whose rows were grouped by element is then the same geometry.
 seams-core selects from the corpus by element or by formula (Section~\ref{sec:connectivity}).
-amsel, an AKMC code with edge-weighted superbasins (\url{https://github.com/TheochemUI/eOn}), stores each process in readcon-db as its barrier, prefactor and mode with three frames: the reactant, the saddle and the product.
+amsel, an AKMC code with edge-weighted superbasins (\url{https://theochemui.github.io/eOn/user_guide/coarse_graining.html}), stores each process in readcon-db as its barrier, prefactor and mode with three frames: the reactant, the saddle and the product (\url{https://theochemui.github.io/eOn/user_guide/kdb.html}).
 The saddle carries a displacements section with the same fixed-flag column and the same \texttt{atom\_id} column as the coordinates.
 
 readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
@@ -452,9 +453,9 @@ Julia.
 A second corpus and an independent reader agree with readcon on every file both accept, bit for bit in the coordinates, velocities, cell, masks, identifiers, units and periodic flags (Section~\ref{sec:supp-corpora}), and Section~\ref{sec:supp-moved} gives the mutant construction, the extended XYZ drift and the comparison of the published wheels (Section~\ref{sec:supp-versions}).
 
 \section{Validation}\label{sec:validation}
-\subsection{Claisen}\label{sec:claisen}
+\subsection{Hydrogen hop}\label{sec:claisen}
 A lost field changes the calculation that reads the file, and Section~\ref{sec:supp-applications} gives the three studies in full.
-Allyl vinyl ether rearranges to pent-4-enal through a six-membered chair, and the improved NEB tangent at image \(i\) is built from the forward and backward differences
+A hydrogen adatom hops from one fourfold hollow of Cu(100) to the next under the effective-medium theory, and the improved NEB tangent at image \(i\) is built from the forward and backward differences
 \begin{equation}
 \label{eq:tangent}
 \tau_i^{+}=R_{i+1}-R_i,\qquad \tau_i^{-}=R_i-R_{i-1},
@@ -467,56 +468,46 @@ F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
 \end{equation}
 A permutation of one image makes those differences connect different atoms, so the band needs the stored ids.
 That pairing is the chemical map.
-The reactant is allyl vinyl ether, relaxed with PET-MAD 1.1.0 until the maximum force is \(0.015\,\mathrm{eV}/\text{\AA}\).
-C0--C5 is 4.375~\text{\AA}, the allyl C--O is 1.424~\text{\AA} and the vinyl C--O is 1.330~\text{\AA}.
-The product is pent-4-enal, minimised separately with the same atom ids.
-The carbonyl is 1.204~\text{\AA}, the new C0--C5 bond is 1.517~\text{\AA}, and the allyl C--O is broken at 4.708~\text{\AA}.
-The aldehyde lies 0.623~eV below the ether.
-A ten-image seed places a chair between them, C0--C5 at 2.35~\text{\AA} and the breaking C--O at 2.10~\text{\AA}, 1.09~eV above the ether.
-eOn 3.6.0 runs that seed with a climbing image, the off-path step and conjugate gradient.
-One product file keeps the id order and the other permutes only the product rows.
-The read sorts by \texttt{atom\_id}, and the two bands are the same path (Figure~\ref{fig:claisen-land}).
-The climb does not stay on the broken C--O.
-After 220 iterations the highest image is 0.318~eV above the ether, the allyl C--O is still 1.43~\text{\AA}, and the force is \(0.123\,\mathrm{eV}/\text{\AA}\).
-That image is a ring closure.
-The band has not met \(0.05\,\mathrm{eV}/\text{\AA}\), so this paper does not quote a Claisen barrier.
+The slab is three layers of a \(2\times 2\) cell with the bottom layer held, and the hydrogen sits in a hollow 1.399~\text{\AA} above the top layer.
+Each of the four Cu--H contacts is 2.318~\text{\AA} in the reactant and in the product.
+Seven images, with the climbing image and the improved tangent, converge to \(0.048\,\mathrm{eV}/\text{\AA}\).
+The highest image is the bridge, 0.0399~eV above the hollow, with the hydrogen 1.608~\text{\AA} above the top layer and two Cu--H contacts of 2.113~\text{\AA} (Figure~\ref{fig:claisen-land}).
+Its Hessian has one imaginary mode, \(147\,\mathrm{cm}^{-1}\), and the hydrogen carries that displacement along the hop.
+The second band uses the same reactant and a product in which two copper positions are exchanged, with no identifier sort.
+Its highest image is 15.6~eV, not the bridge (Figure~\ref{fig:claisen-struct-ids}).
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
-\caption{Energy above the ether for the ten-image seed and for the two eOn bands.
-The seed's chair, with the breaking C--O at 2.10~\text{\AA}, is 1.09~eV up.
-The id-matched band and the renumbered band coincide.
-Their highest image is a ring closure at 0.318~eV.}
+\caption{Energy above the hollow.
+Left, the id-matched hop, whose bridge is 0.0399~eV.
+Right, the same images after two copper positions in the product are exchanged, whose highest image is 15.6~eV.}
 \label{fig:claisen-land}
 \end{figure}
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_structures.pdf}
-\caption{Heavy atoms of a ring-closure geometry, projected on \(xy\).
-The allyl C--O is still about 1.49~\text{\AA}, so this is not the pent-4-enal saddle.
-Left, the identifiers of the ether.
-Right, one shared permutation of the same coordinates.}
+\caption{The bridge saddle and the highest image of the scrambled band.
+Left, the hydrogen on the bridge, 1.608~\text{\AA} above the top layer.
+Right, the highest image after two copper positions are exchanged.}
 \label{fig:claisen-struct-ids}
 \end{figure}
 
 \subsection{What a second reader keeps}\label{sec:fidelity}
 A band, an AKMC catalog and a dynamical step pair atoms rather than file slots: column 5 is the atom id, column 4 is the per-axis mask, the mass enters Eq.~\eqref{eq:lagrangian}, the cell is the minimum image, and a velocity is the momentum divided by that mass.
-Of these readers, readcon is the one that returns the identifier in file order together with the per-axis mask, the masses, the cell on every frame and the velocities.
-We read the same five files with readcon, with ASE's eon reader and with eOn's Python loader, on one core of the Xeon in Section~\ref{sec:compute}, and we report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
-Readcon keeps the identifier sequence, the per-axis mask, the masses and the cell on every frame, and it keeps the velocities when the file stores them.
+Of these readers, readcon returns the identifier in file order together with the per-axis mask, the masses, the cell on every frame and the velocities.
 Each of those fields matches the input.
 The eon reader in ASE builds the atom from the coordinates and from the mask column as one Boolean on every axis.
 On the platinum slab, where the adatom is held in height only, one atom therefore leaves the written file with every axis held, and the same reader stops when the next block is a force or a velocity section.
 The written cell stays inside the tolerance of six printed decimals.
 The eOn loader keeps the identifiers and sorts them on the Claisen file and on the slab, while a three-image band stays in file order.
 Velocities come back as the numbers in the file, under the natural time unit even when an older header names femtoseconds.
-On the Claisen product stored oxygen-first, with C5 shifted one cell along \(+x\), the index-wise displacement is 15.8~\text{\AA} at the oxygen slot, and because readcon keeps the identifier sequence the minimum-image step follows the nuclei.
-After the loader sorts the identifiers, that norm is 18~\text{\AA} and it falls on C5.
-The sorted file is a different path.
-The eon writer numbers the atoms from zero, and the identifier check then fails because the product atom numbered zero is oxygen where the reactant atom is carbon.
-The identifier-matched vinyl-ether bond on these endpoints is 1.360~\text{\AA} and the carbonyl is 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}.
+
+On the hydrogen hop of Section~\ref{sec:claisen} the four Cu--H contacts are 2.318~\text{\AA} in each hollow and 2.113~\text{\AA} at the bridge.
+Exchanging two copper positions in the product, with no identifier sort, moves the highest image to 15.6~eV (Figure~\ref{fig:claisen-struct-ids}).
+
+We read the same five files with readcon, with ASE's eon reader and with eOn's Python loader, on one core of the Xeon in Section~\ref{sec:compute}, and we report the median of six reads after one warmup (Table~\ref{tab:fidelity-time}).
 
 \begin{table}[tbp]
 \centering
@@ -579,15 +570,14 @@ The Morse barrier stays 1.37~eV on the round trip, and six decimals shift it by 
 \section{Performance}\label{sec:performance}
 
 \subsection{Computational details}\label{sec:compute}
-We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 47 GiB of memory.
+We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 49342816~KiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
 The reads use readcon-core 0.22.0 and Python 3.12.3.
 The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2, each run with one thread where that library was timed.
-The Claisen bands use eOn 3.6.0 built against that readcon-core, with PET-MAD 1.1.0.
+The hydrogen hop of Section~\ref{sec:claisen} uses the effective-medium theory in ASE.
 Each median is the type-7 median of six repeats after one warmup, on a warm page cache.
 Tables~\ref{tab:h2h-main} and~\ref{tab:conread} are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
-The log of that session records this Xeon, eight processors and 49342816~KiB.
-Figure~\ref{fig:scaling-r6} and Table~\ref{tab:r6-read} are the round-6 campaign at commit \texttt{50bcbb74}.
+Figure~\ref{fig:scaling-r6} and Table~\ref{tab:r6-read} are the in-memory thread reads on this machine.
 
 \texttt{rkr\_read\_positions} matches Rust \texttt{read\_positions} to within 1\% on the three coordinate files (Table~\ref{tab:c-positions}).
 The per-file matrices, the quartile triples and the rank-by-rank tables are in Sections~\ref{sec:si-timings}, \ref{sec:host} and~\ref{sec:stored}.
@@ -637,15 +627,16 @@ ASE eon & 10.777980, 10.819129, 10.856387 \\
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/scaling-r6.pdf}
-\caption{Round-6 thread reads into memory.
+\caption{Thread scaling of the in-memory read.
 The left panel is the speedup over one thread and the right panel is the efficiency.
-The medians are Table~\ref{tab:r6-read}.
-Commit \texttt{50bcbb74}, on the Xeon of Section~\ref{sec:compute}.}
+The medians are Table~\ref{tab:r6-read}, on the Xeon of Section~\ref{sec:compute}.}
 \label{fig:scaling-r6}
 \end{figure}
 
 On one thread the \num{100000}-frame CON read takes 0.369497~s, and at eight threads it takes 0.054797~s (Table~\ref{tab:r6-read}).
 The mixed-alloy extended XYZ read takes 0.093402~s and 0.015369~s at those two thread counts, and the extxyz-md trajectory takes 0.090881~s and 0.013174~s.
+At two threads that trajectory reaches an efficiency of 1.27: one thread parses its many short, equal-length frames one span at a time, and the second thread overlaps that memory latency.
+The convel whisker at one thread is the interquartile range of six samples that alternate between 0.432~s and 0.564~s.
 Section~\ref{sec:r6} gives the rank reads and the writes.
 
 \begin{figure}[tbp]
@@ -665,7 +656,7 @@ CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
 H5MD stores an identifier and a velocity unit and defines no per-component constraint.
 Extended XYZ can carry a mask or an identifier only under a column name the writer chooses, with neither a version nor a velocity unit.
 POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier.
-The identifier is what a band pairs, and the mask is what a search holds: the Claisen images follow the stored ids, and dropping the Pt(100) height hold selects the other saddle of Section~\ref{sec:cases}.
+The identifier is what a band pairs, and the mask is what a search holds: the hydrogen images follow the stored ids, and dropping the Pt(100) height hold selects the other saddle of Section~\ref{sec:cases}.
 
 On the million-atom extended XYZ of Table~\ref{tab:h2h-main}, ASE \texttt{extxyz} takes 1.942~s, chemfiles 0.5706~s and OVITO 0.2077~s, against 0.1695~s for readcon.
 
@@ -675,7 +666,8 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 The next step is a declared section for that optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
-A permutation of the product rows gives the same band as the id-matched file after the read sorts by atom id.
+The identifier is the pairing a band keeps.
+The hydrogen hop on Cu(100) is a 0.0399~eV bridge when the atoms match, and the same product with two copper positions exchanged peaks at 15.6~eV.
 readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The next step is a declared section for the optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
 
@@ -684,9 +676,13 @@ The next step is a declared section for the optimiser state, and to carry the pe
 readcon-core 0.22.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
 The Zenodo record for readcon-core 0.22.0 is \readconZenodoDOI.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.22.0.
-The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
-The round-6 figure is commit \texttt{50bcbb74}.
-The Claisen files of Section~\ref{sec:claisen} are the ether and pent-4-enal, on the Xeon of that section.
+The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
+The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:r6-read} are the Snakemake target \texttt{publication} in that same file.
+Its inputs are \texttt{frames-32x100000.con}, \texttt{frames-32x100000.convel} and \texttt{copper-32x100000.extxyz} in \texttt{bench/h2h/work/parallel-frames}, \texttt{con-1000000x1.con} in \texttt{bench/h2h/work/inputs}, and \texttt{alloy-1e6.extxyz} and \texttt{md-10k.extxyz} in \texttt{bench/h2h/work/r6}.
+
+The config is \texttt{bench/h2h/Snakefile}.
+
+The hydrogen-hop files of Section~\ref{sec:claisen} are \texttt{reactant.xyz}, \texttt{product.xyz} and \texttt{saddle.xyz} in \texttt{paper/data/hop}, on the Xeon of that section.
 The comparison in Section~\ref{sec:fidelity} uses readcon 0.22.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.2.6 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of that Xeon.
 It is the Snakemake target \texttt{fidelity} in \texttt{benchmarks/workflow/Snakefile}, and \texttt{asv.fidelity.conf.json} times one call of the same reads.
 Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents, and the supplementary material states the grammar, the corpora and the commands behind the tables.

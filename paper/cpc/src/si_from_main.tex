@@ -112,18 +112,16 @@ Section~\ref{sec:fast} compares the two builds.
 \section{Cross-library round trips}\label{sec:supp-rounds}
 The reads in Section~\ref{sec:host} use the library built for that host.
 We first wrote the survey frame of Listing~\ref{lst:frame} with one library and read it back with the same library or another, \(\surveyRoutes\) routes in all, \(\surveySameRows\) within one library and \(\surveyCrossRows\) across two (Table~\ref{tab:survey}).
-The libraries are ASE \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMdanalysismdanalysisRelease21002025}, h5py, OVITO \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}, at the versions of Section~\ref{sec:supp-versions}, and each stores each field through the mechanism its documentation gives.
+The libraries are ASE \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMdanalysis21102026}, h5py, OVITO \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}, at the versions of Section~\ref{sec:supp-versions}, and each stores each field through the mechanism its documentation gives.
 We grade a returned field as fixed by the format when the format's own specification defines its place in the file, and as a convention when only the documented layout of a library defines that place.
 The ASE trajectory, with the identifiers stored as ASE tags, and H5MD written and read with h5py also return every field bit for bit.
 The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our reader knows to read.
 Extended XYZ returns the mask and the identifiers through the column names of ASE, which chemfiles and OVITO also read.
 ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles 0.10.4 moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
-The tag chemfiles 0.11.0-rc1 is not the release on PyPI \cite{frauxChemfiles0110rc12025}.
-That tag stores one cell vector per row of the cell matrix, and chemfiles 0.10.4 stores one cell vector per column, so a reader that takes the columns of the matrix as the cell vectors does not see the cell this route stored.
-The tag records native XTC, TRR and DCD parsers and an XTC decoder taken from the routine proposed by libxtc \cite{krylovLibxtcEfficientLibrary2021}, and it does not add a CON or convel reader \cite{frauxChemfilesConIssue2025}.
-MDAnalysis 2.10.0 returns single precision on the H5MD file, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
-That float32 shift stays with the H5MD reader of release 2.10.0.
-Release 2.11.0, of 2026-10-21, reads one PDBx/mmCIF frame through gemmi and converts the positions and velocities of a GROMACS TPR file into its base units, which release 2.10.0 left in the native units of GROMACS \cite{gowersMdanalysis21102026}.
+chemfiles 0.10.4 stores one cell vector per column of the cell matrix.
+MDAnalysis 2.11.0 returns single precision on the H5MD file, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
+That float32 shift stays with the H5MD reader of release 2.11.0.
+Release 2.11.0, of 2026-10-21, reads one PDBx/mmCIF frame through gemmi and converts the positions and velocities of a GROMACS TPR file into its base units \cite{gowersMdanalysis21102026}.
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
 \section{The velocity unit of a misread}\label{sec:supp-velunit}

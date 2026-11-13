@@ -727,19 +727,14 @@ Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same re
 \section{The three applications in full}\label{sec:supp-applications}
 The Claisen landscape of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and the restart drift is Figure~\ref{fig:restartfmt}.
 \subsection{The three studies}
-\subsection{Claisen}
-Allyl vinyl ether rearranges to pent-4-enal by a [3,3] sigmatropic shift
-\cite{bakerLocationTransitionStates1996}.
-The reactant and the product are the same fourteen atoms.
-The path breaks one C--O bond and forms one C--C bond through a six-membered chair.
-The endpoints are the benchmark CON frames, used as written.
-Energies and forces are PET-MAD-S, version 1.1.0, through metatomic
-\cite{mazitovPETMADLightweight2025,bigiMetatensorMetatomicFoundational2026}.
-The band is an OCI-NEB with a climbing image
-\cite{henkelmanClimbingImageNudged2000}, run in eOn 3.6.0 on one CPU
-\cite{rohitgoswamiTheochemuieonV3602026}.
-A climbing image aligned to a Hessian eigenmode has the same pairing of the atoms
-\cite{goswamiEnhancedClimbingImage2026}.
+\subsection{Hydrogen hop}
+A hydrogen adatom hops between fourfold hollows of Cu(100).
+The reactant and the product are the same thirteen atoms, and the bottom layer is held.
+Energies and forces are the effective-medium theory in ASE.
+The band is a climbing-image NEB with the improved tangent, seven images, converged to \(0.048\,\mathrm{eV}/\text{\AA}\).
+The bridge is 0.0399~eV above the hollow.
+One imaginary mode, \(147\,\mathrm{cm}^{-1}\), displaces the hydrogen along the hop.
+The four Cu--H contacts are 2.318~\text{\AA} in each hollow and 2.113~\text{\AA} on the bridge, and the hydrogen is 1.399~\text{\AA} above the top layer in the hollow and 1.608~\text{\AA} at the bridge.
 
 Label the atoms once, in the reactant.
 The product coordinates \(R^{\mathrm{P}}\) in that same label enter the linear image
@@ -752,23 +747,23 @@ A second labelling \(\Pi\) of the product replaces the length by \(|\Pi R^{\math
 The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, then follow whatever nuclei the new slots happen to pair.
 
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
-Figure~\ref{fig:claisen-land} is the pent-4-enal seed and the two bands of Section~\ref{sec:claisen}.
-The renumbered file is one permutation of that aldehyde, and the read restores the id order.
-A constrained scan of the allyl C--O, with every other coordinate free, rises through 3.10~\text{\AA} and leaves C0--C5 near 4.58~\text{\AA}, so PET-MAD has no Claisen saddle on that coordinate.
+Figure~\ref{fig:claisen-land} is the id-matched hop and the scrambled band of Section~\ref{sec:claisen}.
+Figure~\ref{fig:claisen-struct-ids} is the bridge beside the highest image of that scrambled band.
+Exchanging two copper positions, with no identifier sort, moves that image to 15.6~eV.
 
 The minimum-Hausdorff assignment minimises a distance.
 The chemical map is the atom id, and that id has to travel with the coordinates.
 A CON row stores the id beside the position, and readcon-core 0.22.0 returns the id with the position.
 The oxygen-first product, with C5 one cell of \(18\,\text{\AA}\) along \(+x\), is the file of Section~\ref{sec:fidelity}.
 The index-wise oxygen step there is 15.7607~\text{\AA}.
-Pairing by id follows the vinyl-ether O--C4 bond, 1.360~\text{\AA}, to the C4\({=}\)O carbonyl of pent-4-enal, 1.210~\text{\AA}, a shortening of 0.150~\text{\AA}, and brings C5 back across the cell.
+Pairing by id follows the four Cu--H contacts of 2.318~\text{\AA} in the hollow to the two contacts of 2.113~\text{\AA} on the bridge.
 The unit test requires that index-wise oxygen step to exceed 5~\text{\AA} and checks the id-matched oxygen displacement of 0.150~\text{\AA}.
 A three-image band whose middle image exchanges the atoms of ids 0 and 5 stays consistent by id.
 The same test requires the file-slot step of that image to exceed 1.5~\text{\AA} and the id-matched step of atom 0 to stay under 0.1~\text{\AA}.
 Duplicating atom id 2 in the third image is reported as frame 2 and that atom id.
 Frame indices count from zero, so frame 2 is the third image.
 
-The chair is Figure~\ref{fig:claisen-struct-ids}.
+The bridge is Figure~\ref{fig:claisen-struct-ids}.
 
 
 
