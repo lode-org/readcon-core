@@ -9,7 +9,12 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-readcon-core = { path = "..", features = ["parallel", "grammar", "zstd", "chemfiles-from-sources"] }
+readcon-core = { path = "..", features = [
+  "parallel",
+  "grammar",
+  "zstd",
+  "chemfiles-from-sources",
+] }
 serde_json = "1"
 tempfile = "3"
 
