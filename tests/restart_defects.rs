@@ -24,7 +24,7 @@ fn multi_frame_with_empty_line1_reads_back() {
         .collect();
     assert_eq!(frames.len(), 3);
     assert!(frames.iter().all(|f| !f.has_velocities()));
-    assert_eq!(frames[2].atom_data[0].z, 0.75);
+    assert_eq!(frames[2].atom_data[0].z(), 0.75);
     assert_eq!(frame_start_offsets(&text).len(), 3);
     let mut it = ConFrameIterator::new(&text);
     assert_eq!(it.skip_frames(5).unwrap(), 3);
@@ -84,7 +84,7 @@ fn final_coordinate_line_without_newline_skips_and_parses() {
         .map(|r| r.expect("parse"))
         .collect();
     assert_eq!(frames.len(), 2);
-    assert_eq!(frames[1].atom_data[0].z, 1.0);
+    assert_eq!(frames[1].atom_data[0].z(), 1.0);
     let mut it = ConFrameIterator::new(&text);
     assert!(it.forward().unwrap().is_ok());
     assert!(it.forward().unwrap().is_ok());
@@ -151,7 +151,7 @@ Forces of Component 1
     assert_eq!(frames.len(), 2);
     assert!(frames[0].atom_data.iter().any(|a| a.force().is_some()));
     assert!(!frames[1].has_velocities());
-    assert_eq!(frames[1].atom_data[0].z, 0.5);
+    assert_eq!(frames[1].atom_data[0].z(), 0.5);
     let mut it = ConFrameIterator::new(&text);
     assert_eq!(it.skip_frames(2).unwrap(), 2);
     assert_eq!(frame_start_offsets(&text).len(), 2);
@@ -169,10 +169,10 @@ fn empty_line1_preserves_fixed_masks_across_frames() {
         .map(|r| r.expect("parse"))
         .collect();
     assert_eq!(frames.len(), 2);
-    assert_eq!(frames[0].atom_data[0].fixed, [true, true, true]);
-    assert_eq!(frames[0].atom_data[1].fixed, [false, false, false]);
-    assert_eq!(frames[1].atom_data[0].fixed, [false, false, false]);
-    assert_eq!(frames[1].atom_data[1].fixed, [true, true, true]);
+    assert_eq!(frames[0].atom_data[0].fixed(), [true, true, true]);
+    assert_eq!(frames[0].atom_data[1].fixed(), [false, false, false]);
+    assert_eq!(frames[1].atom_data[0].fixed(), [false, false, false]);
+    assert_eq!(frames[1].atom_data[1].fixed(), [true, true, true]);
 }
 
 /// A 3.0 velocity frame whose `units.time` says fs still stores natural-unit
@@ -211,7 +211,7 @@ Velocities of Component 1
         "3.0 must not scale by the fs label"
     );
     assert!(!frames[1].has_velocities());
-    assert_eq!(frames[1].atom_data[0].z, 0.5);
+    assert_eq!(frames[1].atom_data[0].z(), 0.5);
 }
 
 /// Zero-atom frames cannot declare sections — restart metadata must not claim any.

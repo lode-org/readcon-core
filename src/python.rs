@@ -204,10 +204,10 @@ impl PyAtomDatum {
         };
         PyAtomDatum {
             symbol: atom.symbol.to_string(),
-            x: atom.x,
-            y: atom.y,
-            z: atom.z,
-            fixed: atom.fixed,
+            x: atom.x(),
+            y: atom.y(),
+            z: atom.z(),
+            fixed: atom.fixed(),
             atom_id: atom.atom_id,
             mass: Some(mass),
             vx,
@@ -1101,7 +1101,8 @@ impl PyConFrame {
         ];
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
-        let metadata = json_map_to_py_dict(py, &frame.header.metadata)?;
+        let metadata_map = frame.header.metadata.to_map();
+        let metadata = json_map_to_py_dict(py, &metadata_map)?;
         Ok(PyConFrame {
             cell,
             angles,
@@ -1134,7 +1135,8 @@ impl PyConFrame {
         ];
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
-        let metadata = json_map_to_py_dict(py, &frame.header.metadata)?;
+        let metadata_map = frame.header.metadata.to_map();
+        let metadata = json_map_to_py_dict(py, &metadata_map)?;
         // Coordinates live in the slab. Moving the frame avoids cloning
         // every atom onto the GIL thread after the parallel parse.
         frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
@@ -1339,7 +1341,7 @@ fn frame_from_arrays(
             natms_per_type: vec![n],
             masses_per_type: vec![masses[0]],
             spec_version: 2,
-            metadata,
+            metadata: crate::types::FrameMeta::from_map(metadata),
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: true,
@@ -1354,39 +1356,47 @@ fn frame_from_arrays(
             crate::storage_dtype::ElementKind::Float64,
             0,
             3,
-        ),
+        )
+        .into(),
         forces: crate::storage_dtype::Array2Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
             3,
-        ),
+        )
+        .into(),
         atom_energies: crate::storage_dtype::Array1Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
-        ),
+        )
+        .into(),
         charges: crate::storage_dtype::Array1Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
-        ),
+        )
+        .into(),
         spins: crate::storage_dtype::Array1Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
-        ),
+        )
+        .into(),
         magmoms: crate::storage_dtype::Array2Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
             3,
-        ),
+        )
+        .into(),
         displacements: crate::storage_dtype::Array2Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
             3,
-        ),
+        )
+        .into(),
         spreads: crate::storage_dtype::Array2Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
             3,
-        ),
+        )
+        .into(),
         masses: crate::storage_dtype::Array1Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,

@@ -149,13 +149,13 @@ fn hash_frame(hasher: &mut Sha256, frame: &ConFrame) {
     feed_u64(hasher, frame.atom_data.len() as u64);
     for atom in &frame.atom_data {
         feed_str(hasher, atom.symbol.as_ref());
-        feed_f64(hasher, atom.x);
-        feed_f64(hasher, atom.y);
-        feed_f64(hasher, atom.z);
+        feed_f64(hasher, atom.x());
+        feed_f64(hasher, atom.y());
+        feed_f64(hasher, atom.z());
         hasher.update([
-            u8::from(atom.fixed[0]),
-            u8::from(atom.fixed[1]),
-            u8::from(atom.fixed[2]),
+            u8::from(atom.fixed()[0]),
+            u8::from(atom.fixed()[1]),
+            u8::from(atom.fixed()[2]),
         ]);
         feed_u64(hasher, atom.atom_id);
         feed_opt3(hasher, atom.velocity());
@@ -267,8 +267,8 @@ fn frame_json(frame: &ConFrame) -> Value {
         .map(|atom| {
             json!({
                 "symbol": atom.symbol.as_ref(),
-                "xyz": [atom.x, atom.y, atom.z],
-                "fixed": atom.fixed,
+                "xyz": [atom.x(), atom.y(), atom.z()],
+                "fixed": atom.fixed(),
                 "id": atom.atom_id,
                 "velocity": atom.velocity(),
             })

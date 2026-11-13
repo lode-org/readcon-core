@@ -89,7 +89,7 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
     let frame = &parsed[0];
     assert_eq!(frame.header.spec_version, 1);
     assert_eq!(frame.atom_data[0].atom_id, 0);
-    assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
+    assert_eq!(frame.atom_data[0].fixed(), [true, true, true]);
 
     let mut binding_buf = Vec::new();
     {
@@ -116,10 +116,10 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
     for atom in &frame.atom_data {
         builder.add_atom(
             &atom.symbol,
-            atom.x,
-            atom.y,
-            atom.z,
-            atom.fixed,
+            atom.x(),
+            atom.y(),
+            atom.z(),
+            atom.fixed(),
             atom.atom_id,
             mass,
         );

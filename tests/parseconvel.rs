@@ -22,7 +22,7 @@ fn test_convel_single_frame() {
     // Check coordinate data is still correct
     let first_atom = &frame.atom_data[0];
     assert_eq!(&*first_atom.symbol, "Cu");
-    assert!((first_atom.x - 0.6394).abs() < 1e-4);
+    assert!((first_atom.x() - 0.6394).abs() < 1e-4);
     assert!(first_atom.is_fixed());
 
     // Check velocity data
@@ -62,8 +62,8 @@ fn test_convel_multi_frame() {
     );
 
     // Frame 2 coordinates differ from frame 1
-    assert!((frames[0].atom_data[2].x - 8.6823).abs() < 1e-4);
-    assert!((frames[1].atom_data[2].x - 8.8549).abs() < 1e-4);
+    assert!((frames[0].atom_data[2].x() - 8.6823).abs() < 1e-4);
+    assert!((frames[1].atom_data[2].x() - 8.8549).abs() < 1e-4);
 }
 
 #[test]

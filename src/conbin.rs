@@ -1594,7 +1594,7 @@ pub fn write_from_con(
             ));
         }
         for atom in &frame.atom_data {
-            positions.extend_from_slice(&[atom.x, atom.y, atom.z]);
+            positions.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
             velocities.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
         }
         n_frames += 1;

@@ -27,3 +27,11 @@ rule figure:
         "bench/h2h/scaling/r8/scaling.pdf",
     shell:
         "python3 bench/h2h/plot_r6.py"
+
+
+rule mem_r1:
+    output:
+        "bench/h2h/scaling/mem-r1/rows.json",
+        "bench/h2h/scaling/mem-r1/hardware.json",
+    shell:
+        "python3 bench/h2h/mem_r1.py"

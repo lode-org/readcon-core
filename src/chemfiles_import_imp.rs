@@ -847,7 +847,7 @@ H -0.240  0.927  0.000
         assert_eq!(con.atom_data.len(), 3);
         assert_eq!(con.header.natm_types, 2);
         let positions_ok = con.atom_data.iter().any(|a| {
-            a.symbol.as_ref() == "O" && a.x.abs() < 1e-6 && a.y.abs() < 1e-6 && a.z.abs() < 1e-6
+            a.symbol.as_ref() == "O" && a.x().abs() < 1e-6 && a.y().abs() < 1e-6 && a.z().abs() < 1e-6
         });
         assert!(positions_ok, "expected O at origin in converted frame");
     }
@@ -921,7 +921,7 @@ water
             .find(|a| a.symbol.as_ref() == "H" || a.symbol.as_ref() == "HW")
             .expect("H");
         // 0.100 nm → 1.00 Å
-        assert!((hw.x - 1.0).abs() < 1e-6, "H.x={} (expected 1 Å)", hw.x);
+        assert!((hw.x() - 1.0).abs() < 1e-6, "H.x()={} (expected 1 Å)", hw.x());
         let residues = con
             .header
             .metadata
@@ -962,7 +962,7 @@ H  5.0 0.0 0.0
             .iter()
             .find(|a| a.symbol.as_ref() == "Cu")
             .expect("Cu");
-        assert!((cu.x - 2.0).abs() < 1e-12);
+        assert!((cu.x() - 2.0).abs() < 1e-12);
 
         let opts = ChemfilesReadOpts {
             start: 0,
@@ -982,8 +982,8 @@ H  5.0 0.0 0.0
             .iter()
             .find(|a| a.symbol.as_ref() == "Cu")
             .unwrap();
-        assert!((cu0.x - 0.0).abs() < 1e-12);
-        assert!((cu2.x - 4.0).abs() < 1e-12);
+        assert!((cu0.x() - 0.0).abs() < 1e-12);
+        assert!((cu2.x() - 4.0).abs() < 1e-12);
 
         let err = con_frame_from_trajectory_path_nth(&path, 99).unwrap_err();
         assert!(err.to_string().contains("out of range"), "{err}");

@@ -116,7 +116,7 @@ pub fn chemfiles_frame_from_con_frame(frame: &ConFrame) -> Result<Frame, Chemfil
         let mut ch_atom = Atom::new(display_name.as_str());
         ch_atom.set_atomic_type(atomic_type.as_str());
         let vel = atom.velocity();
-        chfl.add_atom(&ch_atom, [atom.x, atom.y, atom.z], vel);
+        chfl.add_atom(&ch_atom, [atom.x(), atom.y(), atom.z()], vel);
     }
 
     // Restore velocities explicitly if add_atom did not set them.
@@ -215,7 +215,7 @@ pub fn select_atom_indices(
 fn positions_for_atom_indices(frame: &ConFrame, indices: &[usize]) -> Vec<[f64; 3]> {
     indices
         .iter()
-        .filter_map(|&i| frame.atom_data.get(i).map(|a| [a.x, a.y, a.z]))
+        .filter_map(|&i| frame.atom_data.get(i).map(|a| [a.x(), a.y(), a.z()]))
         .collect()
 }
 
@@ -801,7 +801,7 @@ mod chemfiles_selection_cpp_regression {
             assert_eq!(slice.atom_indices, oracle_idxs);
             for (k, &idx) in oracle_idxs.iter().enumerate() {
                 let a = &frames[fi].atom_data[idx];
-                assert_eq!(slice.positions[k], [a.x, a.y, a.z]);
+                assert_eq!(slice.positions[k], [a.x(), a.y(), a.z()]);
             }
         }
 

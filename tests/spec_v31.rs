@@ -122,7 +122,7 @@ fn v31_example_parses() {
         frame
             .atom_data
             .iter()
-            .map(|atom| atom.fixed)
+            .map(|atom| atom.fixed())
             .collect::<Vec<_>>(),
         vec![
             [false, false, false],
@@ -180,7 +180,7 @@ fn v31_frame_as_v1_parses() {
         frame
             .atom_data
             .iter()
-            .map(|atom| atom.fixed)
+            .map(|atom| atom.fixed())
             .collect::<Vec<_>>(),
         vec![
             [false, false, false],

@@ -695,7 +695,7 @@ mod tests {
             let frame = frame.unwrap();
             counts.push(frame.atom_data.len());
             for atom in &frame.atom_data {
-                expected.extend_from_slice(&[atom.x, atom.y, atom.z]);
+                expected.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
             }
         }
         assert_eq!(got.counts, counts, "{rel}");

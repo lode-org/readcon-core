@@ -71,7 +71,7 @@ pub fn frame_positions_block(frame: &ConFrame) -> Result<TensorBlock, metatensor
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for atom in &frame.atom_data {
-        data.extend_from_slice(&[atom.x, atom.y, atom.z]);
+        data.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
     }
     let values = Array2::from_shape_vec((n, 3), data)
         .expect("array shape mismatch when building positions block")

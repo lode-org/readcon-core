@@ -25,7 +25,7 @@ fn byte_frames_preserve_order_identity_and_coordinates_at_every_worker_count() {
         assert_eq!(actual, expected, "workers={workers:?}");
         for (i, frame) in actual.iter().enumerate() {
             let atom = &frame.atom_data[0];
-            assert_eq!([atom.x, atom.y, atom.z], [i as f64 + 0.25, -2.5, 3.75]);
+            assert_eq!([atom.x(), atom.y(), atom.z()], [i as f64 + 0.25, -2.5, 3.75]);
             assert_eq!(atom.atom_id, 42);
         }
         assert!(frames_from_bytes(b" \r\n\t", workers).unwrap().is_empty());
@@ -62,7 +62,7 @@ fn mapped_file_reads_match_byte_buffers_for_all_worker_counts() {
         assert_eq!(frames.len(), 1024);
         assert!(frames.iter().all(|frame| frame.atom_data.len() == 1));
         assert!(frames.iter().all(|frame| frame.atom_data[0].atom_id == 42));
-        assert!(frames.iter().all(|frame| frame.atom_data[0].x == 1.25));
+        assert!(frames.iter().all(|frame| frame.atom_data[0].x() == 1.25));
     }
 }
 

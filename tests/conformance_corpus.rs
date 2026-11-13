@@ -306,8 +306,8 @@ fn assert_matches_golden(case_id: &str, frame: &ConFrame, golden: &serde_json::V
     assert_eq!(atom_ids.len(), n_atoms, "{case_id}: atom_ids length");
     assert_eq!(symbols.len(), n_atoms, "{case_id}: symbols length");
 
-    let got_fixed: Vec<[bool; 3]> = frame.atom_data.iter().map(|a| a.fixed).collect();
-    let got_positions: Vec<[f64; 3]> = frame.atom_data.iter().map(|a| [a.x, a.y, a.z]).collect();
+    let got_fixed: Vec<[bool; 3]> = frame.atom_data.iter().map(|a| a.fixed()).collect();
+    let got_positions: Vec<[f64; 3]> = frame.atom_data.iter().map(|a| [a.x(), a.y(), a.z()]).collect();
     let got_ids: Vec<u64> = frame.atom_data.iter().map(|a| a.atom_id).collect();
     let got_symbols: Vec<String> = frame
         .atom_data
@@ -385,7 +385,7 @@ fn conformance_corpus_matches_manifest() {
                     });
                 if let Some(want) = case.expect_fixed {
                     assert_eq!(
-                        frame.atom_data[0].fixed, want,
+                        frame.atom_data[0].fixed(), want,
                         "{}: column-4 decode mismatch",
                         case.id
                     );

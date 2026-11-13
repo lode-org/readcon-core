@@ -194,7 +194,7 @@ fn by_id(frame: &ConFrame, id: u64) -> usize {
 
 fn pos(frame: &ConFrame, i: usize) -> [f64; 3] {
     let atom = &frame.atom_data[i];
-    [atom.x, atom.y, atom.z]
+    [atom.x(), atom.y(), atom.z()]
 }
 
 #[test]
@@ -391,7 +391,7 @@ fn strict_mass_and_fixed_mask_are_optional() {
     );
     let mut other = reference.clone();
     other.masses.set_f64(1, 2.014);
-    other.atom_data[1].fixed = [true, false, false];
+    other.atom_data[1].set_fixed([true, false, false]);
     let strict = atom_id_permutation(&reference, &other, IdentityCheck::Strict).unwrap_err();
     assert!(matches!(
         strict,
@@ -403,7 +403,7 @@ fn strict_mass_and_fixed_mask_are_optional() {
     assert_eq!(strict.atom_index(), Some(1));
     // Mass is checked before the mask, so a mask-only frame is separate.
     let mut mask_only = reference.clone();
-    mask_only.atom_data[1].fixed = [true, false, false];
+    mask_only.atom_data[1].set_fixed([true, false, false]);
     let mask = atom_id_permutation(&reference, &mask_only, IdentityCheck::Strict).unwrap_err();
     assert!(matches!(
         mask,
@@ -661,16 +661,20 @@ fn a_short_section_is_rejected() {
         match section {
             "masses" => other.masses = FloatArray1::zeros(other.masses.kind(), 1),
             "positions" => other.positions = FloatArray2::zeros(other.positions.kind(), 1, 3),
-            "velocities" => other.velocities = FloatArray2::zeros(other.velocities.kind(), 1, 3),
-            "forces" => other.forces = FloatArray2::zeros(other.forces.kind(), 1, 3),
-            "energies" => other.atom_energies = FloatArray1::zeros(other.atom_energies.kind(), 1),
-            "charges" => other.charges = FloatArray1::zeros(other.charges.kind(), 1),
-            "spins" => other.spins = FloatArray1::zeros(other.spins.kind(), 1),
-            "magmoms" => other.magmoms = FloatArray2::zeros(other.magmoms.kind(), 1, 3),
-            "displacements" => {
-                other.displacements = FloatArray2::zeros(other.displacements.kind(), 1, 3);
+            "velocities" => {
+                other.velocities = FloatArray2::zeros(other.velocities.kind(), 1, 3).into();
             }
-            "spreads" => other.spreads = FloatArray2::zeros(other.spreads.kind(), 1, 3),
+            "forces" => other.forces = FloatArray2::zeros(other.forces.kind(), 1, 3).into(),
+            "energies" => {
+                other.atom_energies = FloatArray1::zeros(other.atom_energies.kind(), 1).into();
+            }
+            "charges" => other.charges = FloatArray1::zeros(other.charges.kind(), 1).into(),
+            "spins" => other.spins = FloatArray1::zeros(other.spins.kind(), 1).into(),
+            "magmoms" => other.magmoms = FloatArray2::zeros(other.magmoms.kind(), 1, 3).into(),
+            "displacements" => {
+                other.displacements = FloatArray2::zeros(other.displacements.kind(), 1, 3).into();
+            }
+            "spreads" => other.spreads = FloatArray2::zeros(other.spreads.kind(), 1, 3).into(),
             _ => unreachable!(),
         }
         let err = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap_err();
@@ -760,12 +764,12 @@ fn an_empty_frame_rebuilds_type_runs_and_rejects_a_stray_section() {
     assert!(ordered.header.masses_per_type.is_empty());
 
     let mut stray_rows = empty.clone();
-    stray_rows.velocities = FloatArray2::zeros(stray_rows.velocities.kind(), 1, 3);
+    stray_rows.velocities = FloatArray2::zeros(stray_rows.velocities.kind(), 1, 3).into();
     let err = reorder_like(&empty, &stray_rows, IdentityCheck::Strict).unwrap_err();
     expect_section(&err, "velocities", 1, 0);
 
     let mut stray_col = empty.clone();
-    stray_col.charges = FloatArray1::zeros(stray_col.charges.kind(), 1);
+    stray_col.charges = FloatArray1::zeros(stray_col.charges.kind(), 1).into();
     let err = reorder_like(&empty, &stray_col, IdentityCheck::Strict).unwrap_err();
     expect_section(&err, "charges", 1, 0);
 }
@@ -774,7 +778,8 @@ fn an_empty_frame_rebuilds_type_runs_and_rejects_a_stray_section() {
 fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
     let reference = cu_h();
     let mut other = reference.clone();
-    other.atom_data[0].x += 0.3;
+    let shifted = other.atom_data[0].x() + 0.3;
+    other.atom_data[0].set_x(shifted);
     let kind = reference.positions.kind();
     let mut reference = reference;
     reference.positions = FloatArray2::zeros(kind, 0, 3);
@@ -787,6 +792,6 @@ fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
 
     let ordered = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap();
     assert_eq!(ordered.positions.nrows(), 0);
-    assert!((ordered.atom_data[0].x - other.atom_data[0].x).abs() < 1e-12);
+    assert!((ordered.atom_data[0].x() - other.atom_data[0].x()).abs() < 1e-12);
     assert_eq!(ordered.atom_data[0].atom_id, 10);
 }

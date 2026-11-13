@@ -43,7 +43,7 @@ fn c_writer_preserves_finite_values_and_flushes_before_close() {
         for (frame, value) in frames.iter().zip(values) {
             let atom = &frame.atom_data[0];
             assert_eq!(
-                [atom.x, atom.y, atom.z].map(f64::to_bits),
+                [atom.x(), atom.y(), atom.z()].map(f64::to_bits),
                 [value, -value, -0.0].map(f64::to_bits)
             );
             assert_eq!(

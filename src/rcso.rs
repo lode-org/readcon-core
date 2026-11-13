@@ -70,7 +70,7 @@ impl Rcso {
         out.extend_from_slice(&0u32.to_le_bytes());
 
         for a in &frame.atom_data {
-            for c in [a.x, a.y, a.z] {
+            for c in [a.x(), a.y(), a.z()] {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
@@ -240,7 +240,7 @@ mod tests {
         assert!(got.forces.is_none());
         assert!(got.velocities.is_none());
         for (a, p) in frame.atom_data.iter().zip(&got.positions) {
-            assert_eq!([a.x, a.y, a.z], *p);
+            assert_eq!([a.x(), a.y(), a.z()], *p);
         }
     }
 

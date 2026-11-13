@@ -77,7 +77,7 @@ fn m2_column_four_is_an_integer_token() {
     assert_eq!(class_of(&signed), "InvalidFixedFlag");
 
     let x_only = parse_one(&v2_frame(r#"{"con_spec_version":2}"#, "1.0 2.0 3.0 1 4")).unwrap();
-    assert_eq!(x_only.atom_data[0].fixed, [true, false, false]);
+    assert_eq!(x_only.atom_data[0].fixed(), [true, false, false]);
 
     let legacy = "\
 PRE
@@ -95,7 +95,7 @@ Coordinates of Component 1
 ";
     let frame = parse_one(legacy).unwrap();
     assert_eq!(frame.header.spec_version, 1);
-    assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
+    assert_eq!(frame.atom_data[0].fixed(), [true, true, true]);
 }
 
 /// CON-frame.1, CON-frame.5, CON-mask.2.
@@ -120,7 +120,7 @@ Coordinates of component   1
     let frame = iter.next().unwrap().unwrap();
     assert!(iter.next().is_none());
     assert!(!frame.has_velocities());
-    assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
+    assert_eq!(frame.atom_data[0].fixed(), [true, true, true]);
 }
 
 /// CON-id.1, CON-id.6, CON-id.9, CON-error.3, CON-num.8.
@@ -267,8 +267,8 @@ fn m10_gzip_reads_every_member() {
     std::fs::write(&path, &bytes).unwrap();
     let frames = readcon_core::iterators::read_all_frames(&path).unwrap();
     assert_eq!(frames.len(), 2);
-    assert_eq!(frames[0].atom_data[0].x, 1.0);
-    assert_eq!(frames[1].atom_data[0].x, 2.0);
+    assert_eq!(frames[0].atom_data[0].x(), 1.0);
+    assert_eq!(frames[1].atom_data[0].x(), 2.0);
 }
 
 /// CON-compress.2.
@@ -432,9 +432,9 @@ fn float_accepts_sign_dot_and_exponent() {
     let text = v2_frame(r#"{"con_spec_version":2}"#, "+1.5 .25 1.0e-1 0 7");
     let frame = parse_one(&text).unwrap();
     let atom = &frame.atom_data[0];
-    assert!((atom.x - 1.5).abs() < 1e-15);
-    assert!((atom.y - 0.25).abs() < 1e-15);
-    assert_eq!(atom.z.to_bits(), 0.1_f64.to_bits());
+    assert!((atom.x() - 1.5).abs() < 1e-15);
+    assert!((atom.y() - 0.25).abs() < 1e-15);
+    assert_eq!(atom.z().to_bits(), 0.1_f64.to_bits());
     assert_eq!(atom.atom_id, 7);
 }
 
@@ -532,7 +532,7 @@ fn round_trip_is_the_writer_default_and_lattice_lines_follow_vectors() {
     ConFrameWriter::new(&mut buf).write_frame(&frame).unwrap();
     let text = String::from_utf8(buf).unwrap();
     let parsed = parse_one(&text).unwrap();
-    assert_eq!(parsed.atom_data[0].x.to_bits(), 1.25_f64.to_bits());
+    assert_eq!(parsed.atom_data[0].x().to_bits(), 1.25_f64.to_bits());
     assert!((parsed.header.boxl[0] - 2.0).abs() < 1e-12);
     assert!((parsed.header.boxl[1] - (0.5_f64 * 0.5 + 9.0).sqrt()).abs() < 1e-9);
     assert!((parsed.header.boxl[2] - 4.0).abs() < 1e-12);
@@ -691,10 +691,10 @@ fn digest(frames: &[ConFrame]) -> u64 {
         format!("{:?}", frame.header.metadata).hash(&mut hasher);
         for atom in &frame.atom_data {
             atom.symbol.hash(&mut hasher);
-            atom.x.to_bits().hash(&mut hasher);
-            atom.y.to_bits().hash(&mut hasher);
-            atom.z.to_bits().hash(&mut hasher);
-            atom.fixed.hash(&mut hasher);
+            atom.x().to_bits().hash(&mut hasher);
+            atom.y().to_bits().hash(&mut hasher);
+            atom.z().to_bits().hash(&mut hasher);
+            atom.fixed().hash(&mut hasher);
             atom.atom_id.hash(&mut hasher);
             atom.velocity()
                 .map(|v| v.map(f64::to_bits))
@@ -925,7 +925,7 @@ fn coordinates_and_masses_use_declared_units() {
     assert_eq!(v2.header.spec_version, 2);
     assert_eq!(v2.header.coordinate_length_unit(), "nm");
     assert_eq!(v2.header.mass_unit(), "u");
-    assert_eq!(v2.atom_data[0].x, 1.5);
+    assert_eq!(v2.atom_data[0].x(), 1.5);
     assert_eq!(v2.header.masses_per_type[0], 12.011);
 
     let bare = parse_one(&v2_frame(r#"{"con_spec_version":2}"#, "1 0 0 0 0")).unwrap();
@@ -939,7 +939,7 @@ fn coordinates_and_masses_use_declared_units() {
     .unwrap();
     assert_eq!(v3.header.coordinate_length_unit(), "nm");
     assert_eq!(v3.header.mass_unit(), "u");
-    assert_eq!(v3.atom_data[0].x, 2.5);
+    assert_eq!(v3.atom_data[0].x(), 2.5);
 }
 
 /// CON-units.8, CON-units.9, CON-units.10, CON-units.11.
@@ -1162,12 +1162,12 @@ fn later_minors_and_line_endings_are_accepted() {
 
     let crlf = v2_frame(r#"{"con_spec_version":2}"#, "1.25 0 0 0 4").replace('\n', "\r\n");
     let frame = parse_one(&crlf).unwrap();
-    assert_eq!(frame.atom_data[0].x, 1.25);
+    assert_eq!(frame.atom_data[0].x(), 1.25);
     assert_eq!(frame.atom_data[0].atom_id, 4);
 
     let spaced = v2_frame(r#"{"con_spec_version":2}"#, "1.5 2 3 0 5   \t");
     let frame = parse_one(&spaced).unwrap();
-    assert_eq!(frame.atom_data[0].x, 1.5);
+    assert_eq!(frame.atom_data[0].x(), 1.5);
     assert_eq!(frame.atom_data[0].atom_id, 5);
 }
 

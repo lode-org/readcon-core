@@ -508,10 +508,13 @@ impl<W: Write> ConFrameWriter<W> {
             .as_ref()
             .map(|item| item.spec)
             .unwrap_or(frame.header.spec_version);
-        let metadata = bound
-            .as_ref()
-            .map(|item| &item.meta)
-            .unwrap_or(&frame.header.metadata);
+        let owned_meta;
+        let metadata = if let Some(item) = bound.as_ref() {
+            &item.meta
+        } else {
+            owned_meta = frame.header.metadata.to_map();
+            &owned_meta
+        };
         if spec_version >= 2 {
             self.refresh_metadata_cache(
                 spec_version,
@@ -686,7 +689,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [fx, fy, fz],
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -714,7 +717,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             e,
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -739,7 +742,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             q,
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -764,7 +767,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             s,
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -789,7 +792,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [mx, my, mz],
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -814,7 +817,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [dx, dy, dz],
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -850,7 +853,7 @@ impl<W: Write> ConFrameWriter<W> {
                             slots,
                             [sx, sy, sz],
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
+                            written_fixed_flag(atom.fixed(), spec_version),
                             atom.atom_id,
                         );
                     }
@@ -1235,12 +1238,12 @@ fn push_atom_motion(
     prec: FloatFormat,
     spec_version: u32,
 ) {
-    let fixed = written_fixed_flag(atom.fixed, spec_version);
+    let fixed = written_fixed_flag(atom.fixed(), spec_version);
     push_xyz_line(
         coord,
         ryu,
         slots,
-        [atom.x, atom.y, atom.z],
+        [atom.x(), atom.y(), atom.z()],
         prec,
         fixed,
         atom.atom_id,
@@ -1603,7 +1606,7 @@ pub(crate) fn stamp_legacy_velocity_time(
 /// absent. A parsed frame does not carry that key unless the file did.
 /// The stamp lives on the header. The atoms stay where the parser put them.
 pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
-    let mut meta = frame.header.metadata.clone();
+    let mut meta = frame.header.metadata.to_map();
     meta.remove(meta::CON_SPEC_VERSION);
     meta.remove(meta::SECTIONS);
     let has_velocity = frame.has_velocities();
@@ -1625,7 +1628,7 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
 /// Same bytes as a binding rewrite, without rebuilding each atom.
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
-    out.header.metadata = binding_metadata(frame);
+    out.header.metadata = crate::types::FrameMeta::from_map(binding_metadata(frame));
     // A parsed spec 1 frame keeps line 2 as free text. The builder emits
     // the current spec as JSON, so the rewrite does too.
     if out.header.spec_version < crate::CON_SPEC_VERSION {
@@ -2120,7 +2123,7 @@ mod float_format_tests {
             .collect();
         let mut values = Vec::new();
         for atom in &frames[0].atom_data {
-            values.extend([atom.x, atom.y, atom.z]);
+            values.extend([atom.x(), atom.y(), atom.z()]);
         }
         for atom in &frames[0].atom_data {
             if let Some(v) = atom.velocity() {

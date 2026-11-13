@@ -23,18 +23,18 @@ fn test_cuh2_parsing() {
         // Check the first atom
         let first_atom = &frame.atom_data[0];
         assert_eq!(&*first_atom.symbol, "Cu");
-        assert_eq!(first_atom.x, 0.639_4);
-        assert_eq!(first_atom.y, 0.904_5);
-        assert_eq!(first_atom.z, -0.00009999999999977);
+        assert_eq!(first_atom.x(), 0.639_4);
+        assert_eq!(first_atom.y(), 0.904_5);
+        assert_eq!(first_atom.z(), -0.00009999999999977);
         assert!(first_atom.is_fixed());
         assert_eq!(first_atom.atom_id, 0);
 
         // Check the last atom
         let last_atom = &frame.atom_data.last().unwrap();
         assert_eq!(&*last_atom.symbol, "H");
-        assert_eq!(last_atom.x, 7.942_1);
-        assert_eq!(last_atom.y, 9.947);
-        assert_eq!(last_atom.z, 4.757_600_000_000_001);
+        assert_eq!(last_atom.x(), 7.942_1);
+        assert_eq!(last_atom.y(), 9.947);
+        assert_eq!(last_atom.z(), 4.757_600_000_000_001);
         assert!(!last_atom.is_fixed());
         assert_eq!(last_atom.atom_id, 217);
     }
@@ -65,17 +65,17 @@ fn test_multi_parsing() {
 
     let first_atom = &first_frame.atom_data[0];
     assert_eq!(&*first_atom.symbol, "Cu");
-    assert_eq!(first_atom.x, 0.6394);
-    assert_eq!(first_atom.y, 0.9045);
-    assert_eq!(first_atom.z, 6.9753);
+    assert_eq!(first_atom.x(), 0.6394);
+    assert_eq!(first_atom.y(), 0.9045);
+    assert_eq!(first_atom.z(), 6.9753);
     assert!(first_atom.is_fixed());
     assert_eq!(first_atom.atom_id, 0);
 
     let last_atom = &first_frame.atom_data.last().unwrap();
     assert_eq!(&*last_atom.symbol, "H");
-    assert_eq!(last_atom.x, 7.9421);
-    assert_eq!(last_atom.y, 9.947);
-    assert_eq!(last_atom.z, 11.733);
+    assert_eq!(last_atom.x(), 7.9421);
+    assert_eq!(last_atom.y(), 9.947);
+    assert_eq!(last_atom.z(), 11.733);
     assert!(!last_atom.is_fixed());
     assert_eq!(last_atom.atom_id, 3);
 
@@ -87,9 +87,9 @@ fn test_multi_parsing() {
 
     let second_atom = &second_frame.atom_data[1];
     assert_eq!(&*second_atom.symbol, "Cu");
-    assert_eq!(second_atom.x, 3.1969);
-    assert_eq!(second_atom.y, 0.9045);
-    assert_eq!(second_atom.z, 6.9752);
+    assert_eq!(second_atom.x(), 3.1969);
+    assert_eq!(second_atom.y(), 0.9045);
+    assert_eq!(second_atom.z(), 6.9752);
     assert!(second_atom.is_fixed());
     assert_eq!(second_atom.atom_id, 1);
 }
@@ -119,9 +119,9 @@ fn test_iterator_forward() {
     assert_eq!(second_frame.atom_data.len(), 4);
     let second_atom = &second_frame.atom_data[1];
     assert_eq!(&*second_atom.symbol, "Cu");
-    assert_eq!(second_atom.x, 3.1969);
-    assert_eq!(second_atom.y, 0.9045);
-    assert_eq!(second_atom.z, 6.9752);
+    assert_eq!(second_atom.x(), 3.1969);
+    assert_eq!(second_atom.y(), 0.9045);
+    assert_eq!(second_atom.z(), 6.9752);
     assert!(second_atom.is_fixed());
     assert_eq!(second_atom.atom_id, 1);
     assert!(
@@ -171,7 +171,7 @@ fn test_read_first_frame_multi() {
     let frame = iterators::read_first_frame(&path).expect("read_first_frame should succeed");
     assert_eq!(frame.atom_data.len(), 4);
     assert_eq!(&*frame.atom_data[0].symbol, "Cu");
-    assert_eq!(frame.atom_data[0].x, 0.6394);
+    assert_eq!(frame.atom_data[0].x(), 0.6394);
 }
 
 #[test]

@@ -90,7 +90,7 @@ fn iterator_positions(bytes: &[u8]) -> Result<Vec<f64>, String> {
     for frame in ConFrameIterator::from_bytes(bytes) {
         let frame = frame.map_err(|err| err.to_string())?;
         for atom in &frame.atom_data {
-            out.extend_from_slice(&[atom.x, atom.y, atom.z]);
+            out.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
         }
     }
     Ok(out)
@@ -152,7 +152,7 @@ fn assert_file(path: &Path) {
             let mut flat = Vec::new();
             for frame in &frames {
                 for atom in &frame.atom_data {
-                    flat.extend_from_slice(&[atom.x, atom.y, atom.z]);
+                    flat.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
                 }
             }
             bits(want, &flat);
@@ -227,9 +227,9 @@ fn parallel_frames_match_the_serial_reader_on_a_multi_frame_file() {
         for (left, right) in serial.iter().zip(&parallel) {
             assert_eq!(left.atom_data.len(), right.atom_data.len());
             for (a, b) in left.atom_data.iter().zip(&right.atom_data) {
-                assert_eq!(a.x.to_bits(), b.x.to_bits());
-                assert_eq!(a.y.to_bits(), b.y.to_bits());
-                assert_eq!(a.z.to_bits(), b.z.to_bits());
+                assert_eq!(a.x().to_bits(), b.x().to_bits());
+                assert_eq!(a.y().to_bits(), b.y().to_bits());
+                assert_eq!(a.z().to_bits(), b.z().to_bits());
                 assert_eq!(a.atom_id, b.atom_id);
                 assert_eq!(a.symbol.as_ref(), b.symbol.as_ref());
             }

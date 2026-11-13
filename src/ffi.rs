@@ -1519,13 +1519,13 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
             let [fx, fy, fz] = atom_datum.force().unwrap_or([0.0; 3]);
             CAtom {
                 atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
-                x: atom_datum.x,
-                y: atom_datum.y,
-                z: atom_datum.z,
+                x: atom_datum.x(),
+                y: atom_datum.y(),
+                z: atom_datum.z(),
                 is_fixed: atom_datum.is_fixed(),
-                fixed_x: atom_datum.fixed[0],
-                fixed_y: atom_datum.fixed[1],
-                fixed_z: atom_datum.fixed[2],
+                fixed_x: atom_datum.fixed()[0],
+                fixed_y: atom_datum.fixed()[1],
+                fixed_z: atom_datum.fixed()[2],
                 atom_id: atom_datum.atom_id,
                 mass,
                 vx,
@@ -5342,9 +5342,9 @@ fn copy_array2_f64(
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
     for (i, a) in frame.atom_data.iter().enumerate() {
-        dest[i * 3] = a.x;
-        dest[i * 3 + 1] = a.y;
-        dest[i * 3 + 2] = a.z;
+        dest[i * 3] = a.x();
+        dest[i * 3 + 1] = a.y();
+        dest[i * 3 + 2] = a.z();
     }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
@@ -5493,7 +5493,7 @@ fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
     for a in &frame.atom_data {
-        data.extend_from_slice(&[a.x, a.y, a.z]);
+        data.extend_from_slice(&[a.x(), a.y(), a.z()]);
     }
     ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)))
@@ -7092,9 +7092,9 @@ Coordinates of Component 1
         {
             let fr = unsafe { &mut *(built as *mut ConFrame) };
             for a in fr.atom_data.iter_mut() {
-                a.x = -99.0;
-                a.y = -99.0;
-                a.z = -99.0;
+                a.set_x(-99.0);
+                a.set_y(-99.0);
+                a.set_z(-99.0);
             }
         }
         assert_eq!(
@@ -7103,9 +7103,9 @@ Coordinates of Component 1
         );
         {
             let fr = unsafe { &*(built as *const ConFrame) };
-            assert!((fr.atom_data[0].x - 0.0).abs() < 1e-12);
-            assert!((fr.atom_data[0].y - 0.0).abs() < 1e-12);
-            assert!((fr.atom_data[0].z - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].x() - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].y() - 0.0).abs() < 1e-12);
+            assert!((fr.atom_data[0].z() - 0.0).abs() < 1e-12);
         }
         // Re-export must match ingested coordinates (not zeros / garbage)
         let mut again: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();

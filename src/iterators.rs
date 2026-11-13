@@ -981,7 +981,7 @@ mod aos_soa_agreement_tests {
         }
         for (i, a) in fr.atom_data.iter().enumerate() {
             let p = fr.positions.as_f64_row(i);
-            assert_eq!([a.x, a.y, a.z], p);
+            assert_eq!([a.x(), a.y(), a.z()], p);
             if let Some(v) = a.velocity() {
                 assert_eq!(v, fr.velocities.as_f64_row(i));
             }
@@ -1068,9 +1068,9 @@ mod aos_soa_agreement_tests {
         for i in 0..n {
             let atom = &frame.atom_data[i];
             let pos = frame.positions.as_f64_row(i);
-            assert_eq!(pos[0].to_bits(), atom.x.to_bits());
-            assert_eq!(pos[1].to_bits(), atom.y.to_bits());
-            assert_eq!(pos[2].to_bits(), atom.z.to_bits());
+            assert_eq!(pos[0].to_bits(), atom.x().to_bits());
+            assert_eq!(pos[1].to_bits(), atom.y().to_bits());
+            assert_eq!(pos[2].to_bits(), atom.z().to_bits());
             let vel = atom.velocity().unwrap();
             let soa_v = frame.velocities.as_f64_row(i);
             assert_eq!(soa_v[0].to_bits(), vel[0].to_bits());
@@ -1092,9 +1092,10 @@ mod aos_soa_agreement_tests {
 
 /// Reads all frames from a file.
 ///
-/// The bytes are read into one owned buffer and parsed on the calling
-/// thread. A worker pool runs only when [`read_all_frames_with_threads`]
-/// is asked for two or more threads.
+/// A plain file is parsed from a window on the calling thread, so the
+/// file is not resident together with the finished frames. Compressed
+/// input is read into one buffer. A worker pool runs only when
+/// [`read_all_frames_with_threads`] is asked for two or more threads.
 pub fn read_all_frames(path: &Path) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     read_all_frames_with_threads(path, None)
 }
@@ -1143,14 +1144,151 @@ pub fn frames_from_text(
 /// Its line is the cursor that failed and its frame is the 0-based index.
 /// The path is not opened again.
 ///
-/// A plain file of 64 KiB or more stays mapped. Smaller files and
-/// compressed input are read into one buffer.
+/// One thread reads a plain file in windows. Two or more threads map
+/// the file. Compressed input is read into one buffer.
 pub fn read_all_frames_with_threads(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
-    let bytes = crate::compression::read_bytes_owned(path)?;
-    Ok(frames_from_bytes_located(bytes.as_slice(), num_threads)?)
+    if matches!(num_threads, Some(n) if n >= 2) {
+        let bytes = crate::compression::read_bytes_owned(path)?;
+        return Ok(frames_from_bytes_located(bytes.as_slice(), num_threads)?);
+    }
+    stream_frames(path).map_err(public_load_error)
+}
+
+fn public_load_error(err: LoadError) -> Box<dyn std::error::Error> {
+    match err {
+        LoadError::Parse(located) => Box::new(located),
+        other => Box::new(other),
+    }
+}
+
+/// Read plain text in windows and parse each complete frame before the next
+/// window. The window is a few mebibytes, so the file is not resident with
+/// the finished frames.
+fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(LoadError::Io)?;
+    let mut magic = [0u8; 4];
+    let n = file.read(&mut magic).map_err(LoadError::Io)?;
+    let compression = crate::compression::detect_compression(&magic[..n]);
+    if !matches!(compression, crate::compression::Compression::None) {
+        drop(file);
+        let bytes = crate::compression::read_bytes_owned(path).map_err(load_error_from_box)?;
+        return frames_from_bytes_located(bytes.as_slice(), Some(1)).map_err(LoadError::Parse);
+    }
+    let mut buf = Vec::with_capacity(8 << 20);
+    buf.extend_from_slice(&magic[..n]);
+    let mut frames = Vec::new();
+    let mut sized = false;
+    let file_len = path.metadata().map(|m| m.len()).unwrap_or(0);
+    let mut line_base = 0u32;
+    let mut eof = n == 0;
+    let mut read_more = |buf: &mut Vec<u8>, eof: &mut bool| -> Result<(), LoadError> {
+        if *eof {
+            return Ok(());
+        }
+        let start = buf.len();
+        buf.resize(start + (8 << 20), 0);
+        let got = file.read(&mut buf[start..]).map_err(LoadError::Io)?;
+        buf.truncate(start + got);
+        if got == 0 {
+            *eof = true;
+        }
+        Ok(())
+    };
+    if buf.len() < (8 << 20) {
+        read_more(&mut buf, &mut eof)?;
+    }
+    loop {
+        if buf.is_empty() {
+            break;
+        }
+        let end = if eof {
+            buf.len()
+        } else {
+            match buf.iter().rposition(|byte| *byte == b'\n') {
+                Some(i) => i + 1,
+                None => {
+                    read_more(&mut buf, &mut eof)?;
+                    continue;
+                }
+            }
+        };
+        let text = std::str::from_utf8(&buf[..end]).map_err(LoadError::Utf8)?;
+        let (parsed, consumed) = take_complete_frames(text, eof, line_base, frames.len() as u64)?;
+        if consumed == 0 && !eof {
+            let before = buf.len();
+            read_more(&mut buf, &mut eof)?;
+            if buf.len() == before && !eof {
+                eof = true;
+            }
+            continue;
+        }
+        frames.extend(parsed);
+        if !sized && consumed > 0 && !frames.is_empty() && file_len > 0 {
+            let per = (consumed / frames.len()).max(1);
+            let guess = (file_len as usize) / per + 8;
+            if guess > frames.capacity() {
+                frames.reserve_exact(guess - frames.len());
+            }
+            sized = true;
+        }
+        line_base += buf[..consumed]
+            .iter()
+            .filter(|byte| **byte == b'\n')
+            .count() as u32;
+        buf.drain(..consumed);
+        if buf.is_empty() && eof {
+            break;
+        }
+        if !eof && buf.len() < (8 << 20) {
+            read_more(&mut buf, &mut eof)?;
+        }
+    }
+    Ok(frames)
+}
+
+fn take_complete_frames(
+    text: &str,
+    eof: bool,
+    line_base: u32,
+    frame_base: u64,
+) -> Result<(Vec<types::ConFrame>, usize), LoadError> {
+    let mut iter = ConFrameIterator::new(text);
+    iter.lines.line_no = line_base;
+    let mut frames = Vec::new();
+    loop {
+        // A finished frame may have peeked the next user line. That peek
+        // moves `pos` past the line. Rewind before recording the resume point.
+        iter.lines.clear_peek();
+        let start = iter.lines.pos;
+        if !eof && text[start..].trim().is_empty() {
+            // A trailing blank line is the next frame's user line, not the
+            // end of the file. Leave it for the next window.
+            return Ok((frames, start));
+        }
+        match iter.next() {
+            Some(Ok(frame)) => frames.push(frame),
+            Some(Err(error)) => {
+                if eof {
+                    return Err(LoadError::Parse(error::LocatedParseError::new(
+                        error,
+                        iter.lines.line_no(),
+                        frame_base + frames.len() as u64,
+                    )));
+                }
+                return Ok((frames, start));
+            }
+            None => {
+                if eof {
+                    return Ok((frames, text.len()));
+                }
+                return Ok((frames, start));
+            }
+        }
+    }
 }
 
 /// Positions of every frame, one row-major `f64` buffer.
@@ -1431,7 +1569,7 @@ fn columns_from_frames(frames: &[types::ConFrame]) -> CoordColumns {
         let mut frame_runs: Vec<(String, usize)> = Vec::new();
         for atom in &frame.atom_data {
             atom_ids.push(atom.atom_id);
-            let mask = crate::types::encode_fixed_bitmask(atom.fixed);
+            let mask = crate::types::encode_fixed_bitmask(atom.fixed());
             if mask != 0 && mask != 7 {
                 partial_fixed = true;
             }
@@ -3040,9 +3178,12 @@ pub fn read_all_frames_located(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, LoadError> {
-    let contents = load_text(path)?;
-    let text = contents.as_str().map_err(LoadError::Utf8)?;
-    frames_from_text_located(text, num_threads).map_err(LoadError::Parse)
+    if matches!(num_threads, Some(n) if n >= 2) {
+        let contents = load_text(path)?;
+        let text = contents.as_str().map_err(LoadError::Utf8)?;
+        return frames_from_text_located(text, num_threads).map_err(LoadError::Parse);
+    }
+    stream_frames(path)
 }
 
 /// Read the first frame from `path`, with a line number on failure.
@@ -3388,6 +3529,29 @@ pub fn read_all_frames_phased(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
+    if !matches!(num_threads, Some(n) if n >= 2) {
+        let t_all = std::time::Instant::now();
+        let frames = stream_frames(path).map_err(public_load_error)?;
+        let elapsed = t_all.elapsed().as_secs_f64();
+        let n_frames = frames.len() as u64;
+        return Ok(PhasedFrames {
+            frames,
+            n_bytes: 0,
+            chunk_s: vec![elapsed],
+            scan_kind: SCAN_SERIAL,
+            worker_minflt: Vec::new(),
+            share_frames: vec![n_frames],
+            share_bytes: Vec::new(),
+            phases: ReadPhaseTimes {
+                worker_parse_s: elapsed,
+                worker_sum_s: elapsed,
+                worker_max_s: elapsed,
+                ..ReadPhaseTimes::default()
+            },
+            #[cfg(feature = "parallel")]
+            pool: None,
+        });
+    }
     let t_all = std::time::Instant::now();
     let t_open = std::time::Instant::now();
     let contents = crate::compression::read_file_contents(path)?;
@@ -3964,7 +4128,7 @@ mod parallel_strong_scale_tests {
         let atoms: Vec<_> = f
             .atom_data
             .iter()
-            .map(|a| (a.symbol.to_string(), a.x, a.y, a.z))
+            .map(|a| (a.symbol.to_string(), a.x(), a.y(), a.z()))
             .collect();
         (f.atom_data.len(), atoms)
     }
@@ -4044,7 +4208,7 @@ mod parallel_strong_scale_tests {
         let sequential = super::frames_from_text(&text, None).unwrap();
         assert_eq!(sequential.len(), frames.len());
         assert_eq!(
-            sequential[0].atom_data[0].x, frames[0].atom_data[0].x,
+            sequential[0].atom_data[0].x(), frames[0].atom_data[0].x(),
             "default read changed a coordinate"
         );
     }
@@ -4189,10 +4353,10 @@ mod parallel_header_scan_tests {
                 assert_eq!(parsed.len(), serial.len());
                 let seq = frames_from_text(&wide, Some(1)).expect("serial parse");
                 assert_eq!(parsed.len(), seq.len());
-                assert_eq!(parsed[0].atom_data[0].x, seq[0].atom_data[0].x);
+                assert_eq!(parsed[0].atom_data[0].x(), seq[0].atom_data[0].x());
                 assert_eq!(
-                    parsed.last().unwrap().atom_data.last().unwrap().z,
-                    seq.last().unwrap().atom_data.last().unwrap().z
+                    parsed.last().unwrap().atom_data.last().unwrap().z(),
+                    seq.last().unwrap().atom_data.last().unwrap().z()
                 );
             }
         }
@@ -4842,7 +5006,7 @@ mod frame_equality_tests {
                 frames[frame_i].atom_data[row].velocity().unwrap()
             } else {
                 let atom = &frames[frame_i].atom_data[row];
-                [atom.x, atom.y, atom.z]
+                [atom.x(), atom.y(), atom.z()]
             };
             for k in 0..3 {
                 assert_eq!(aos[k].to_bits(), got[k].to_bits());

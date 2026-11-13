@@ -229,6 +229,58 @@ pub enum Array2Storage {
 /// Back-compat name.
 pub type FloatArray2 = Array2Storage;
 
+/// An absent 2-D section. Empty stays a null pointer instead of a 56-byte header.
+#[derive(Clone, Debug)]
+pub struct Optional2 {
+    inner: Option<Box<Array2Storage>>,
+}
+
+impl Optional2 {
+    pub fn new(array: Array2Storage) -> Self {
+        if array.nrows() == 0 {
+            Self { inner: None }
+        } else {
+            Self { inner: Some(Box::new(array)) }
+        }
+    }
+}
+
+impl std::ops::Deref for Optional2 {
+    type Target = Array2Storage;
+    fn deref(&self) -> &Array2Storage {
+        match self.inner.as_deref() {
+            Some(array) => array,
+            None => empty_rows_static(),
+        }
+    }
+}
+
+impl std::ops::DerefMut for Optional2 {
+    fn deref_mut(&mut self) -> &mut Array2Storage {
+        if self.inner.is_none() {
+            self.inner = Some(Box::new(empty_rows_static().clone()));
+        }
+        self.inner.as_mut().unwrap()
+    }
+}
+
+impl PartialEq for Optional2 {
+    fn eq(&self, other: &Self) -> bool {
+        std::ops::Deref::deref(self) == std::ops::Deref::deref(other)
+    }
+}
+
+impl From<Array2Storage> for Optional2 {
+    fn from(array: Array2Storage) -> Self {
+        Self::new(array)
+    }
+}
+
+fn empty_rows_static() -> &'static Array2Storage {
+    static EMPTY: std::sync::OnceLock<Array2Storage> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(|| Array2Storage::zeros(ElementKind::Float64, 0, 3))
+}
+
 impl PartialEq for Array2Storage {
     fn eq(&self, other: &Self) -> bool {
         self.kind() == other.kind()
@@ -636,6 +688,58 @@ pub enum Array1Storage {
 }
 
 pub type FloatArray1 = Array1Storage;
+
+/// An absent 1-D section. Empty stays a null pointer instead of a matrix header.
+#[derive(Clone, Debug)]
+pub struct Optional1 {
+    inner: Option<Box<Array1Storage>>,
+}
+
+impl Optional1 {
+    pub fn new(array: Array1Storage) -> Self {
+        if array.len() == 0 {
+            Self { inner: None }
+        } else {
+            Self { inner: Some(Box::new(array)) }
+        }
+    }
+}
+
+impl std::ops::Deref for Optional1 {
+    type Target = Array1Storage;
+    fn deref(&self) -> &Array1Storage {
+        match self.inner.as_deref() {
+            Some(array) => array,
+            None => empty_col_static(),
+        }
+    }
+}
+
+impl std::ops::DerefMut for Optional1 {
+    fn deref_mut(&mut self) -> &mut Array1Storage {
+        if self.inner.is_none() {
+            self.inner = Some(Box::new(empty_col_static().clone()));
+        }
+        self.inner.as_mut().unwrap()
+    }
+}
+
+impl PartialEq for Optional1 {
+    fn eq(&self, other: &Self) -> bool {
+        std::ops::Deref::deref(self) == std::ops::Deref::deref(other)
+    }
+}
+
+impl From<Array1Storage> for Optional1 {
+    fn from(array: Array1Storage) -> Self {
+        Self::new(array)
+    }
+}
+
+fn empty_col_static() -> &'static Array1Storage {
+    static EMPTY: std::sync::OnceLock<Array1Storage> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(|| Array1Storage::zeros(ElementKind::Float64, 0))
+}
 
 impl PartialEq for Array1Storage {
     fn eq(&self, other: &Self) -> bool {

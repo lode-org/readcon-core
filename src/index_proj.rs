@@ -514,8 +514,8 @@ mod tests {
         let mut it = ConFrameIterator::new(&text);
         let fa = it.next().unwrap().unwrap();
         let fb = it.next().unwrap().unwrap();
-        assert_eq!(a.atom_data[0].x, fa.atom_data[0].x);
-        assert_eq!(b.atom_data[0].x, fb.atom_data[0].x);
+        assert_eq!(a.atom_data[0].x(), fa.atom_data[0].x());
+        assert_eq!(b.atom_data[0].x(), fb.atom_data[0].x());
         assert!(parse_frame_at(&text, 9).is_err());
     }
 

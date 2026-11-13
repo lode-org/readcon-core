@@ -93,9 +93,9 @@ fn test_builder_roundtrip() {
     assert_eq!(rt.header.natm_types, 2);
     assert_eq!(rt.header.natms_per_type, vec![2, 1]);
     // Verify precision 17 roundtrip preserves coordinates
-    assert_eq!(rt.atom_data[0].x, 0.639400000000001);
-    assert_eq!(rt.atom_data[0].y, 0.904500000000000);
-    assert_eq!(rt.atom_data[2].x, 8.682_3);
+    assert_eq!(rt.atom_data[0].x(), 0.639400000000001);
+    assert_eq!(rt.atom_data[0].y(), 0.904500000000000);
+    assert_eq!(rt.atom_data[2].x(), 8.682_3);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn test_writer_precision_default_vs_high() {
     let s6 = String::from_utf8(buf6).unwrap();
     let frames6: Vec<_> = ConFrameIterator::new(&s6).map(|r| r.unwrap()).collect();
     assert_eq!(
-        frames6[0].atom_data[0].x.to_bits(),
+        frames6[0].atom_data[0].x().to_bits(),
         1.234_567_890_123_456_7_f64.to_bits()
     );
 
@@ -134,7 +134,7 @@ fn test_writer_precision_default_vs_high() {
     let s17 = String::from_utf8(buf17).unwrap();
     let frames17: Vec<_> = ConFrameIterator::new(&s17).map(|r| r.unwrap()).collect();
     // 17 decimal places preserves the full f64
-    assert!((frames17[0].atom_data[0].x - 1.234_567_890_123_456_7).abs() < 1e-14);
+    assert!((frames17[0].atom_data[0].x() - 1.234_567_890_123_456_7).abs() < 1e-14);
 }
 
 #[test]

@@ -39,9 +39,9 @@ fn test_forces_only() {
     assert_eq!(
         frame.positions.as_f64_row(0),
         [
-            frame.atom_data[0].x,
-            frame.atom_data[0].y,
-            frame.atom_data[0].z
+            frame.atom_data[0].x(),
+            frame.atom_data[0].y(),
+            frame.atom_data[0].z()
         ]
     );
 

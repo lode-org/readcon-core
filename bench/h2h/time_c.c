@@ -62,6 +62,22 @@ int main(int argc, char **argv) {
                 printf("read %.9f\n", now_s() - t0);
             }
         }
+    } else if (strcmp(op, "frames") == 0) {
+        for (i = 0; i < repeats + 1; i++) {
+            uintptr_t nframes = 0;
+            struct RKRConFrame **frames;
+            double t0 = now_s();
+            frames = rkr_read_all_frames_n_threads(path, &nframes, 1);
+            if (frames == NULL || nframes == 0) {
+                fprintf(stderr, "read failed\n");
+                return 1;
+            }
+            free_rkr_frame_array(frames, nframes);
+            if (i > 0) {
+                printf("read %.9f\n", now_s() - t0);
+            }
+        }
+        printf("hwm_kib %ld\n", vm_hwm_kib());
     } else {
         uintptr_t nframes = 0;
         struct RKRConFrame **frames = rkr_read_all_frames(path, &nframes);

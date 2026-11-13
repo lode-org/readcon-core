@@ -22,7 +22,7 @@ fn corpus_coordinate_rows_match_std_parse() {
         let mut from_atoms = Vec::new();
         for frame in &frames {
             for atom in &frame.atom_data {
-                from_atoms.push((atom.x.to_bits(), atom.y.to_bits(), atom.z.to_bits()));
+                from_atoms.push((atom.x().to_bits(), atom.y().to_bits(), atom.z().to_bits()));
             }
         }
         let mut from_std = Vec::new();
@@ -95,8 +95,8 @@ fn round_trip_writer_preserves_binary64_bits() {
         .expect("parse");
     assert_eq!(back.atom_data.len(), values.len());
     for (atom, value) in back.atom_data.iter().zip(values.iter().copied()) {
-        assert_eq!(atom.x.to_bits(), value.to_bits(), "{value:e}");
-        assert_eq!(atom.y.to_bits(), (-value).to_bits(), "{value:e}");
-        assert_eq!(atom.z.to_bits(), 0.0f64.to_bits());
+        assert_eq!(atom.x().to_bits(), value.to_bits(), "{value:e}");
+        assert_eq!(atom.y().to_bits(), (-value).to_bits(), "{value:e}");
+        assert_eq!(atom.z().to_bits(), 0.0f64.to_bits());
     }
 }

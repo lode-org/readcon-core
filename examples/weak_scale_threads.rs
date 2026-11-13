@@ -162,9 +162,9 @@ fn frame_fingerprint(frames: &[readcon_core::types::ConFrame]) -> u64 {
         for atom in &frame.atom_data {
             acc = acc
                 .wrapping_mul(0x100000001b3)
-                .wrapping_add(atom.x.to_bits())
-                .wrapping_add(atom.y.to_bits())
-                .wrapping_add(atom.z.to_bits())
+                .wrapping_add(atom.x().to_bits())
+                .wrapping_add(atom.y().to_bits())
+                .wrapping_add(atom.z().to_bits())
                 .wrapping_add(atom.atom_id);
         }
     }

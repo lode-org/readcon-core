@@ -6,7 +6,6 @@ use crate::types::{
     SECTION_VELOCITIES, meta,
 };
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -354,14 +353,8 @@ fn write_coord_group(
             *((ids_ptr as *mut u64).add(row_index)) = atom_id;
             *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
             if let Some(shares) = shares.as_mut() {
-                let atom = crate::types::AtomDatum::coords(
-                    shares.take(),
-                    row[0],
-                    row[1],
-                    row[2],
-                    fixed,
-                    atom_id,
-                );
+                let slot = (xyz_ptr as *mut f64).add(row_index * 3);
+                let atom = crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
                 (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
                     .add(row_index))
                 .write(atom);
@@ -1607,11 +1600,11 @@ pub fn parse_frame_header<'a>(
     // One JSON object and nothing else (CON-line2.1). serde_json::from_str
     // rejects trailing junk after the value.
     let trimmed = prebox2_raw.trim();
-    let (spec_version, metadata, sections, validate, sections_declared) =
+    let (spec_version, sections, validate, sections_declared) =
         if trimmed == "{\"con_spec_version\":2}" {
             // The line written by every stock trajectory. Same object the
             // JSON parser would build: major 2, no extra keys.
-            (2, BTreeMap::new(), Vec::new(), false, false)
+            (2, Vec::new(), false, false)
         } else if trimmed.starts_with('{') {
             let json_val: serde_json::Value = serde_json::from_str(trimmed)
                 .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
@@ -1653,7 +1646,6 @@ pub fn parse_frame_header<'a>(
             // validate flag, copy the rest into metadata. Folds the previous
             // pre-extract get(validate) + re-iterate pattern into one walk.
             let mut sections: Vec<String> = Vec::new();
-            let mut metadata = BTreeMap::new();
             let mut sections_declared = false;
             let mut validate = false;
             for (k, v) in json_obj {
@@ -1665,11 +1657,9 @@ pub fn parse_frame_header<'a>(
                                 "con_spec_minor must be a JSON integer >= 0",
                             ));
                         }
-                        metadata.insert(k.clone(), v.clone());
                     }
                     meta::SECTION_ARITY => {
                         validate_section_arity_value(v)?;
-                        metadata.insert(k.clone(), v.clone());
                     }
                     meta::SECTIONS => {
                         sections_declared = true;
@@ -1689,11 +1679,8 @@ pub fn parse_frame_header<'a>(
                             Value::Bool(b) => *b,
                             _ => return Err(metadata_json_error("validate must be a boolean")),
                         };
-                        metadata.insert(k.clone(), v.clone());
                     }
-                    _ => {
-                        metadata.insert(k.clone(), v.clone());
-                    }
+                    _ => {}
                 }
             }
 
@@ -1703,10 +1690,10 @@ pub fn parse_frame_header<'a>(
                 validate_metadata_schema(json_obj)?;
             }
 
-            (ver, metadata, sections, validate, sections_declared)
+            (ver, sections, validate, sections_declared)
         } else {
             // Legacy file: no JSON metadata line.
-            (1_u32, BTreeMap::new(), Vec::new(), false, false)
+            (1_u32, Vec::new(), false, false)
         };
     let prebox2 = prebox2_raw.to_string();
 
@@ -1747,10 +1734,12 @@ pub fn parse_frame_header<'a>(
         validate_header_geometry(&boxl_vec, &angles_vec)?;
         validate_masses(&masses_per_type)?;
     }
+    let shared_line: std::sync::Arc<str> = std::sync::Arc::from(prebox2);
+    let metadata = crate::types::FrameMeta::from_shared(std::sync::Arc::clone(&shared_line));
     Ok(FrameHeader {
         prebox_header: PreboxHeader {
             user: prebox1,
-            metadata_line: prebox2,
+            metadata_line: shared_line,
         },
         boxl: boxl_vec.try_into().unwrap(),
         angles: angles_vec.try_into().unwrap(),
@@ -1917,8 +1906,8 @@ where
     let header = parse_frame_header(lines)?;
     let validate = header.strict_validation;
     let total_atoms: usize = header.natms_per_type.iter().sum();
-    use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
-    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    use crate::storage_dtype::{ElementKind, FloatArray2};
+    let dt = header.metadata.dtypes();
     let f64_positions = dt.positions == ElementKind::Float64;
     let shell = take_coord_shell(total_atoms);
     let (mut pos_flat, mut ids, mut atom_data) = match shell {
@@ -2009,13 +1998,13 @@ where
         if let Some(pos) = positions_other.as_mut() {
             pos.set_f64_row(ids.len(), xyz);
         }
+        let index = pos_flat.len() / 3;
         pos_flat.extend_from_slice(&xyz);
+        let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::coords(
+        atom_data.push(AtomDatum::at_slot(
             Arc::clone(symbol),
-            xyz[0],
-            xyz[1],
-            xyz[2],
+            slot,
             fixed,
             atom_id,
         ));
@@ -2045,13 +2034,21 @@ where
 {
     let workers = wide_workers();
     if workers >= 2 && n >= 4096 {
-        if let Some(block) =
+        if let Some(mut block) =
             lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
         {
-            if pos_flat.is_empty() {
+            let base = pos_flat.len();
+            // Keep a reservation that covers the whole frame. Replacing it
+            // with a shorter block makes the next species group reallocate
+            // under live pointers.
+            if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
                 *pos_flat = block.xyz;
             } else {
                 pos_flat.extend_from_slice(&block.xyz);
+            }
+            let ptr = pos_flat.as_mut_ptr();
+            for (i, atom) in block.atoms.iter_mut().enumerate() {
+                atom.retarget(unsafe { ptr.add(base + i * 3) });
             }
             if ids.is_empty() {
                 *ids = block.ids;
@@ -2070,11 +2067,11 @@ where
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         let sym = shares.take();
+        let index = pos_flat.len() / 3;
         pos_flat.extend_from_slice(&xyz);
+        let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::coords(
-            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
-        ));
+        atom_data.push(AtomDatum::at_slot(sym, slot, fixed, atom_id));
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
@@ -2269,7 +2266,7 @@ fn validate_section_atom_identity(
         ))
     })?;
 
-    if atom.fixed != fixed {
+    if atom.fixed() != fixed {
         return Err(ParseError::ValidationError(format!(
             "{section} row {atom_idx} fixed mask mismatch for atom_id {}",
             atom.atom_id
@@ -2290,11 +2287,7 @@ fn validate_section_atom_identity(
 /// A blank line followed only by whitespace to EOF does not open a section
 /// (CON-frame.5). The lines stay in the stream.
 fn frame_minor(header: &FrameHeader) -> u64 {
-    header
-        .metadata
-        .get(meta::CON_SPEC_MINOR)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0)
+    header.metadata.spec_minor()
 }
 
 fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
@@ -3236,7 +3229,7 @@ mod tests {
         let mut line_it = lines.iter().copied();
         let frame = parse_single_frame(&mut line_it).unwrap();
         assert_eq!(frame.header.spec_version, 2);
-        assert_eq!(frame.atom_data[0].fixed, [true, false, false]);
+        assert_eq!(frame.atom_data[0].fixed(), [true, false, false]);
     }
 
     #[test]
@@ -3258,7 +3251,7 @@ mod tests {
         let mut line_it = lines.iter().copied();
         let frame = parse_single_frame(&mut line_it).unwrap();
         assert_eq!(frame.header.spec_version, 1);
-        assert_eq!(frame.atom_data[0].fixed, [true, true, true]);
+        assert_eq!(frame.atom_data[0].fixed(), [true, true, true]);
     }
 
     #[test]
@@ -3512,7 +3505,7 @@ Velocities of Component 1
 
         assert!(frame.has_velocities());
         assert_eq!(frame.atom_data[0].atom_id, 0);
-        assert_eq!(frame.atom_data[0].fixed, [true, false, true]);
+        assert_eq!(frame.atom_data[0].fixed(), [true, false, true]);
     }
 
     #[test]

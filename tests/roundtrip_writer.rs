@@ -62,7 +62,7 @@ fn round_trip_preserves_every_numeric_section() {
             assert!(frames.next().is_none());
             assert_eq!(actual, frame, "value {value:e}, canonical {canonical}");
             let atom = &actual.atom_data[0];
-            let stored = [atom.x, atom.y, atom.z];
+            let stored = [atom.x(), atom.y(), atom.z()];
             let expected = [value, -value, -0.0];
             for vector in [
                 stored,

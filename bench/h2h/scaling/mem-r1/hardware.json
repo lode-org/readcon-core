@@ -1,0 +1,17 @@
+{
+  "host": "cursor Intel(R) Xeon(R) Processor MemTotal:       49342816 kB Linux-6.12.113+-x86_64-with-glibc2.39",
+  "stream": "n 167772160\nrepeats 8\nparallel_threads 8\nparallel_triad_gbs 15.612339\nparallel_triad_iqr 0.015455\narray_kib 1310720\ncopy_gbs 15.531815\ncopy_iqr 0.172212\nscale_gbs 15.881997\nscale_iqr 0.080393\nadd_gbs 16.734176\nadd_iqr 0.140692\ntriad_gbs 15.226073\ntriad_iqr 0.131865\n",
+  "disk_bytes": 268435456,
+  "disk_median_s": 0.2888955500002339,
+  "disk_iqr_s": 0.026008051500184592,
+  "disk_samples_s": [
+    0.2880874490001588,
+    0.28265446400018845,
+    0.32543101200008095,
+    0.28970365100030904,
+    0.2856271269993158,
+    0.31976579499951185
+  ],
+  "disk_Bps": 929178230.678121,
+  "protocol": "serial warmup=1 samples=6 percentile=type7"
+}

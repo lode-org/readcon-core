@@ -72,10 +72,10 @@ pub fn fill_frame_builder(
     for (k, atom) in frame.atom_data.iter().enumerate() {
         let mut ab = atoms_builder.reborrow().get(k as u32);
         ab.set_symbol(atom.symbol.as_ref());
-        ab.set_x(atom.x);
-        ab.set_y(atom.y);
-        ab.set_z(atom.z);
-        ab.set_fixed_mask(encode_fixed_bitmask(atom.fixed));
+        ab.set_x(atom.x());
+        ab.set_y(atom.y());
+        ab.set_z(atom.z());
+        ab.set_fixed_mask(encode_fixed_bitmask(atom.fixed()));
         ab.set_atom_id(atom.atom_id);
 
         if let Some([vx, vy, vz]) = atom.velocity() {
@@ -332,7 +332,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
     let header = FrameHeader {
         prebox_header: PreboxHeader {
             user: prebox_user,
-            metadata_line: prebox_metadata_line,
+            metadata_line: std::sync::Arc::from(prebox_metadata_line),
         },
         boxl,
         angles,
@@ -382,8 +382,8 @@ mod tests {
         assert_eq!(back.header.spec_version, frame.header.spec_version);
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
             assert_eq!(a.symbol, b.symbol);
-            assert!((a.x - b.x).abs() < 1e-12);
-            assert_eq!(a.fixed, b.fixed);
+            assert!((a.x() - b.x()).abs() < 1e-12);
+            assert_eq!(a.fixed(), b.fixed());
             assert_eq!(a.atom_id, b.atom_id);
             assert_eq!(a.charge(), b.charge());
             assert_eq!(a.spin(), b.spin());
@@ -457,7 +457,7 @@ mod tests {
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
             assert_eq!(a.velocity(), b.velocity());
             assert_eq!(a.force(), b.force());
-            assert_eq!(encode_fixed_bitmask(a.fixed), encode_fixed_bitmask(b.fixed));
+            assert_eq!(encode_fixed_bitmask(a.fixed()), encode_fixed_bitmask(b.fixed()));
         }
     }
 }
