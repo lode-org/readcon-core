@@ -1,0 +1,40 @@
+git rev-parse HEAD
+5f3a28adeeda0ec4cd1c504697b4dbe5297aa830
+git rev-parse HEAD^{tree}
+8a7a470463dea39ccc321c1e9aa4e886575b72ce
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt eon-cpp-con-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.369405000
+sample 0.381684000
+sample 0.376573000
+sample 0.375636000
+sample 0.375766000
+sample 0.374035000
+median_s 0.375701000
+q25_s 0.374435250
+q75_s 0.376371250
+iqr_s 0.001936000
+n_atoms 1000000
+n_frames 1
+field positions max_abs 1.000e+00
+field ids mismatch
+field cell ok
+field masses ok
+field fixed mismatch
+field velocities not_in_format
+id_map_ok 1
+reordered 1
+correct 0
+reason positions max abs 1.000e+00; ids mismatch; fixed mismatch
+{"samples": [0.369405, 0.381684, 0.376573, 0.375636, 0.375766, 0.374035], "n": 6, "median_s": 0.375701, "q25_s": 0.37443525, "q75_s": 0.37637125, "iqr_s": 0.0019359999999999933, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 1.000e+00", "ids": "mismatch", "cell": "ok", "masses": "ok", "fixed": "mismatch", "velocities": "not_in_format"}, "id_map_ok": true, "reordered": true, "correct": false, "reason": "positions max abs 1.000e+00; ids mismatch; fixed mismatch", "arm": "eon-cpp-con-read", "tool": "eon-cpp", "format": "con", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.con"}
+exit 0

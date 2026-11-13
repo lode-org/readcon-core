@@ -1,0 +1,40 @@
+git rev-parse HEAD
+5f3a28adeeda0ec4cd1c504697b4dbe5297aa830
+git rev-parse HEAD^{tree}
+8a7a470463dea39ccc321c1e9aa4e886575b72ce
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt mf-ase-con-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 10.707187496
+sample 10.897099814
+sample 10.773825446
+sample 10.847813603
+sample 10.859244717
+sample 10.790444994
+median_s 10.819129299
+q25_s 10.777980333
+q75_s 10.856386938
+iqr_s 0.078406605
+n_atoms 32
+n_frames 100000
+field positions ok
+field ids missing
+field cell ok
+field masses ok
+field fixed missing
+field velocities not_in_format
+id_map_ok 0
+reordered 0
+correct 0
+reason ids missing; fixed missing
+{"samples": [10.707187496000188, 10.897099813999375, 10.773825446000046, 10.847813603000759, 10.859244716999456, 10.7904449939997], "n": 6, "median_s": 10.81912929850023, "q25_s": 10.77798033299996, "q75_s": 10.856386938499782, "iqr_s": 0.07840660549982204, "n_atoms": 32, "n_frames": 100000, "fields": {"positions": "ok", "ids": "missing", "cell": "ok", "masses": "ok", "fixed": "missing", "velocities": "not_in_format"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "ids missing; fixed missing", "arm": "mf-ase-con-read", "tool": "ase", "format": "con", "operation": "read", "multi": true, "file": "bench/h2h/work/samefmt/inputs/frames-100000x32.con"}
+exit 0

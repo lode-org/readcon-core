@@ -1,0 +1,40 @@
+git rev-parse HEAD
+5f3a28adeeda0ec4cd1c504697b4dbe5297aa830
+git rev-parse HEAD^{tree}
+8a7a470463dea39ccc321c1e9aa4e886575b72ce
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt eon-cpp-extxyz-write
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.430315000
+sample 0.429372000
+sample 0.436714000
+sample 0.434565000
+sample 0.446108000
+sample 0.435514000
+median_s 0.435039500
+q25_s 0.431377500
+q75_s 0.436414000
+iqr_s 0.005036500
+n_atoms 1000000
+n_frames 1
+field positions max_abs 1.000e+00
+field ids missing
+field cell ok
+field masses max_abs nan
+field fixed missing
+field velocities missing
+id_map_ok 0
+reordered 0
+correct 0
+reason positions max abs 1.000e+00; ids missing; masses max abs nan; fixed missing; velocities missing
+{"samples": [0.430315, 0.429372, 0.436714, 0.434565, 0.446108, 0.435514], "n": 6, "median_s": 0.4350395, "q25_s": 0.43137749999999997, "q75_s": 0.43641399999999997, "iqr_s": 0.005036499999999999, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "max_abs 1.000e+00", "ids": "missing", "cell": "ok", "masses": "max_abs nan", "fixed": "missing", "velocities": "missing"}, "id_map_ok": false, "reordered": false, "correct": false, "reason": "positions max abs 1.000e+00; ids missing; masses max abs nan; fixed missing; velocities missing", "source": "file", "arm": "eon-cpp-extxyz-write", "tool": "eon-cpp", "format": "extxyz", "operation": "write", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz"}
+exit 0
