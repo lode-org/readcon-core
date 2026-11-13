@@ -1006,146 +1006,293 @@ fn assemble_tables(
 }
 
 fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
-    if let Some(tables) = fast_species_pos(bytes) {
+    // One pass for species plus real columns, including mixed symbols and
+    // a comment that changes every frame. The uniform-symbol walker is not
+    // used: a file of one element must take the same path as an alloy.
+    if let Some(tables) = tables_stream(bytes) {
         return Ok(tables);
     }
     tables_general(bytes)
 }
 
-/// `species:S:1:pos:R:3` rows, with or without a following `masses:R:1`.
-///
-/// The general scanner allocates a token vector and a species string for
-/// every atom, then copies both columns. This walk parses the three
-/// floats with the same `fast_float2` call and records one symbol.
-/// Anything else returns `None` and the general scanner runs.
-fn fast_species_pos(bytes: &[u8]) -> Option<XyzTables> {
-    let (mut cursor, count_line) = line_span(bytes, 0)?;
-    if trim(count_line).is_empty() {
-        return None;
-    }
-    let count = parse_f64(trim(count_line)).ok()? as usize;
-    if count == 0 {
-        return None;
-    }
-    let (comment_end, comment) = line_span(bytes, cursor)?;
-    let props = quoted_after(comment, b"Properties=")?;
-    let nfloat = if props == b"species:S:1:pos:R:3" {
-        3
-    } else if props == b"species:S:1:pos:R:3:masses:R:1" {
-        4
-    } else {
-        return None;
-    };
-    let _ = comment_end;
-    let mut positions = Vec::<f64>::new();
-    let mut mass_values = if nfloat == 4 {
-        Some(Vec::<f64>::new())
-    } else {
-        None
-    };
+const POW10: [f64; 19] = [
+    1.0,
+    10.0,
+    100.0,
+    1_000.0,
+    10_000.0,
+    100_000.0,
+    1_000_000.0,
+    10_000_000.0,
+    100_000_000.0,
+    1_000_000_000.0,
+    10_000_000_000.0,
+    100_000_000_000.0,
+    1_000_000_000_000.0,
+    10_000_000_000_000.0,
+    100_000_000_000_000.0,
+    1_000_000_000_000_000.0,
+    10_000_000_000_000_000.0,
+    100_000_000_000_000_000.0,
+    1_000_000_000_000_000_000.0,
+];
+
+/// `species:S:1` followed by real columns. Symbols are interned. Numeric
+/// columns are written straight into their arrays. A layout this does not
+/// understand returns `None` and the general scanner runs.
+fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
+    let mut cursor = 0usize;
+    let mut specs: Vec<ColumnSpec> = Vec::new();
+    let mut props: &[u8] = b"";
+    let mut n_atoms = 0usize;
+    let mut positions = Vec::new();
+    let mut masses = Vec::new();
+    let mut mass_slot: Option<usize> = None;
+    let mut pos_slot: Option<usize> = None;
+    let mut extras: Vec<Vec<f64>> = Vec::new();
+    let mut extra_slot: Vec<Option<usize>> = Vec::new();
+    let mut pool = Vec::new();
+    let mut ids = Vec::new();
     let mut cell = Vec::new();
-    let mut symbol: &[u8] = b"";
     let mut n_frames = 0usize;
-    cursor = 0;
     while cursor < bytes.len() {
         let (line_end, line) = line_span(bytes, cursor)?;
-        if trim(line).is_empty() {
-            return None;
+        let count_line = trim(line);
+        if count_line.is_empty() {
+            cursor = line_end;
+            continue;
         }
-        let this_count = parse_f64(trim(line)).ok()? as usize;
-        if this_count != count {
+        let count = parse_f64(count_line).ok()? as usize;
+        if count == 0 {
             return None;
         }
         let (comment_end, comment) = line_span(bytes, line_end)?;
-        if quoted_after(comment, b"Properties=")? != props {
-            return None;
-        }
+        let properties = quoted_after(comment, b"Properties=")?;
         let lattice = quoted_after(comment, b"Lattice=")?;
         let frame_cell = lattice_cell(lattice).ok()?;
+        if n_frames == 0 {
+            specs = property_columns(properties).ok()?;
+            if !stream_layout(&specs) {
+                return None;
+            }
+            props = properties;
+            n_atoms = count;
+            extra_slot = vec![None; specs.len()];
+            let mut extra_index = 0usize;
+            for (index, spec) in specs.iter().enumerate() {
+                if spec.name == "pos" {
+                    pos_slot = Some(index);
+                } else if spec.name == "masses" || spec.name == "mass" {
+                    mass_slot = Some(index);
+                } else if spec.kind != b'S' {
+                    extra_slot[index] = Some(extra_index);
+                    extras.push(Vec::new());
+                    extra_index += 1;
+                }
+            }
+            positions.reserve(count.saturating_mul(3));
+            if mass_slot.is_some() {
+                masses.reserve(count);
+            }
+            ids.reserve(count);
+        } else if count != n_atoms || properties != props {
+            return None;
+        }
         cell.extend_from_slice(&frame_cell);
         cursor = comment_end;
-        positions.reserve(count * 3);
-        if let Some(values) = mass_values.as_mut() {
-            values.reserve(count);
-        }
         for _ in 0..count {
             let (next, line) = line_span(bytes, cursor)?;
             cursor = next;
-            let (sym, xyz, mass) = species_pos_fields(line, nfloat)?;
-            if symbol.is_empty() {
-                symbol = sym;
-            } else if sym != symbol {
+            if !push_stream_atom(
+                line,
+                &specs,
+                &mut pool,
+                &mut ids,
+                &mut positions,
+                &mut masses,
+                mass_slot,
+                &mut extras,
+                &extra_slot,
+            ) {
                 return None;
-            }
-            positions.extend_from_slice(&xyz);
-            if let Some(mass) = mass {
-                mass_values.as_mut()?.push(mass);
             }
         }
         n_frames += 1;
-        if cursor >= bytes.len() {
-            break;
-        }
     }
-    if n_frames == 0 || symbol.is_empty() {
+    if n_frames == 0 || pos_slot.is_none() {
         return None;
     }
-    let n = n_frames * count;
-    if positions.len() != n * 3 {
+    let n = n_frames * n_atoms;
+    if positions.len() != n * 3 || ids.len() != n {
         return None;
     }
-    let species_text = String::from_utf8_lossy(symbol).into_owned();
-    let masses = mass_values.unwrap_or_else(|| vec![f64::NAN; n]);
-    if masses.len() != n {
+    if mass_slot.is_some() && masses.len() != n {
         return None;
     }
-    let mut columns = vec![
-        XyzColumn {
-            name: "species".to_string(),
-            kind: b'S',
-            width: 1,
-            text: Vec::new(),
-            real: Vec::new(),
-        },
-        XyzColumn {
-            name: "pos".to_string(),
-            kind: b'R',
-            width: 3,
-            text: Vec::new(),
-            real: Vec::new(),
-        },
-    ];
-    if nfloat == 4 {
+    if mass_slot.is_none() {
+        masses = vec![f64::NAN; n];
+    }
+    let mut columns = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate() {
+        let real = if spec.kind == b'S' || Some(index) == pos_slot || Some(index) == mass_slot {
+            Vec::new()
+        } else if let Some(extra) = extra_slot[index] {
+            std::mem::take(&mut extras[extra])
+        } else {
+            Vec::new()
+        };
         columns.push(XyzColumn {
-            name: "masses".to_string(),
-            kind: b'R',
-            width: 1,
+            name: spec.name.clone(),
+            kind: spec.kind,
+            width: spec.width,
             text: Vec::new(),
-            real: Vec::new(),
+            real,
         });
     }
     Some(XyzTables {
         n_frames,
-        n_atoms: count,
+        n_atoms,
         positions,
         masses,
         cell,
         species: Vec::new(),
-        uniform_species: Some(species_text),
-        species_pool: Vec::new(),
-        species_ids: Vec::new(),
+        uniform_species: None,
+        species_pool: pool,
+        species_ids: ids,
         columns,
     })
+}
+
+fn stream_layout(specs: &[ColumnSpec]) -> bool {
+    if specs.is_empty()
+        || specs[0].name != "species"
+        || specs[0].kind != b'S'
+        || specs[0].width != 1
+    {
+        return false;
+    }
+    specs[1..]
+        .iter()
+        .all(|spec| spec.kind == b'R' || spec.kind == b'I')
+}
+
+fn push_stream_atom(
+    line: &[u8],
+    specs: &[ColumnSpec],
+    pool: &mut Vec<String>,
+    ids: &mut Vec<u32>,
+    positions: &mut Vec<f64>,
+    masses: &mut Vec<f64>,
+    mass_slot: Option<usize>,
+    extras: &mut [Vec<f64>],
+    extra_slot: &[Option<usize>],
+) -> bool {
+    let mut index = 0usize;
+    while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
+        index += 1;
+    }
+    let start = index;
+    while index < line.len() && line[index] != b' ' && line[index] != b'\t' {
+        index += 1;
+    }
+    if start == index {
+        return false;
+    }
+    ids.push(intern_symbol(pool, &line[start..index]));
+    for (slot, spec) in specs.iter().enumerate().skip(1) {
+        for _ in 0..spec.width {
+            let Some(value) = next_number(line, &mut index) else {
+                return false;
+            };
+            if spec.name == "pos" {
+                positions.push(value);
+            } else if Some(slot) == mass_slot {
+                masses.push(value);
+            } else if let Some(extra) = extra_slot[slot] {
+                extras[extra].push(value);
+            }
+        }
+    }
+    while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
+        index += 1;
+    }
+    index == line.len()
+}
+
+#[inline(always)]
+fn next_number(line: &[u8], index: &mut usize) -> Option<f64> {
+    let bytes = line;
+    let mut i = *index;
+    while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
+        i += 1;
+    }
+    if i >= bytes.len() {
+        return None;
+    }
+    let number_at = i;
+    let negative = if bytes[i] == b'-' {
+        i += 1;
+        true
+    } else if bytes[i] == b'+' {
+        i += 1;
+        false
+    } else {
+        false
+    };
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return None;
+    }
+    let mut magnitude: u64 = 0;
+    let mut places = 0u32;
+    loop {
+        if i >= bytes.len() {
+            break;
+        }
+        let byte = bytes[i];
+        if byte.is_ascii_digit() {
+            if places >= 18 {
+                return None;
+            }
+            magnitude = magnitude * 10 + (byte - b'0') as u64;
+            places += 1;
+            i += 1;
+        } else if byte == b'.' {
+            i += 1;
+            let mut scale = 0u32;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                if places >= 18 {
+                    return None;
+                }
+                magnitude = magnitude * 10 + (bytes[i] - b'0') as u64;
+                places += 1;
+                scale += 1;
+                i += 1;
+            }
+            let value = magnitude as f64 / POW10[scale as usize];
+            *index = i;
+            return Some(if negative { -value } else { value });
+        } else if byte == b'e' || byte == b'E' {
+            let (value, consumed) =
+                fast_float2::parse_partial::<f64, _>(&bytes[number_at..]).ok()?;
+            if !value.is_finite() {
+                return None;
+            }
+            *index = number_at + consumed;
+            return Some(value);
+        } else {
+            break;
+        }
+    }
+    *index = i;
+    let value = magnitude as f64;
+    Some(if negative { -value } else { value })
 }
 
 fn line_span(bytes: &[u8], start: usize) -> Option<(usize, &[u8])> {
     if start >= bytes.len() {
         return None;
     }
-    let mut end = start;
-    while end < bytes.len() && bytes[end] != b'\n' {
-        end += 1;
-    }
+    let end = start + memchr::memchr(b'\n', &bytes[start..]).unwrap_or(bytes.len() - start);
     let mut line_end = end;
     if line_end > start && bytes[line_end - 1] == b'\r' {
         line_end -= 1;
@@ -1864,6 +2011,13 @@ pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
             }
         }
     }
+    for column in &mut owned {
+        if column.name == "pos" && column.real.is_empty() {
+            column.real.clone_from(&tables.positions);
+        } else if (column.name == "masses" || column.name == "mass") && column.real.is_empty() {
+            column.real.clone_from(&tables.masses);
+        }
+    }
     let columns: Vec<&(dyn ExtxyzSource + Sync)> = owned
         .iter()
         .map(|column| column as &(dyn ExtxyzSource + Sync))
@@ -1898,7 +2052,7 @@ mod tests {
     }
 
     #[test]
-    fn fast_species_pos_matches_the_general_scanner_bit_for_bit() {
+    fn the_stream_matches_the_general_scanner_bit_for_bit() {
         let text = "\
 3
 Lattice=\"4.0 0.0 0.0 0.0 5.5 0.0 0.0 0.0 6.25\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
@@ -1985,6 +2139,47 @@ H 1.0e-3 0.0 8.0 1.008
     }
 
     #[test]
+    fn a_single_element_with_the_campaign_columns_still_visits_every_atom() {
+        // One element, the same property list as the 1e6 copper file.
+        // `uniform_species` stays empty: the symbols are interned per atom,
+        // and vel, id, and fixed match the general scanner bit for bit.
+        let text = "\
+2
+Lattice=\"100.0 0 0 0 100.0 0 0 0 100.0\" Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 pbc=\"T T T\"
+Cu 0.0 1.0 2.0 63.546 0.125000 -0.250000 0.500000 2 0
+Cu 3.0 4.0 5.0 63.546 -0.125000 0.000000 -0.0 1.0e-3 7
+2
+Lattice=\"100.0 0 0 0 100.0 0 0 0 100.0\" Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 energy=-99.875 step=1 pbc=\"T T T\"
+Ag 0.0 0.0 0.0 107.868 0.0 0.25 0.5 3 1
+Au 1.0 0.0 0.0 196.967 0.125 0.0 0.0 4 4
+";
+        let got = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let general = tables_general(text.as_bytes()).unwrap();
+        assert!(got.uniform_species.is_none());
+        assert_eq!(got.species_ids.len(), got.n_frames * got.n_atoms);
+        assert_eq!(expanded_species(&got), expanded_species(&general));
+        for (left, right) in got.positions.iter().zip(&general.positions) {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+        for (left, right) in got.masses.iter().zip(&general.masses) {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+        for (left, right) in got.cell.iter().zip(&general.cell) {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+        for (left, right) in got.columns.iter().zip(&general.columns) {
+            assert_eq!(left.name, right.name);
+            if left.name == "species" || left.name == "pos" || left.name == "masses" {
+                continue;
+            }
+            assert_eq!(left.real.len(), right.real.len(), "{}", left.name);
+            for (a, b) in left.real.iter().zip(&right.real) {
+                assert_eq!(a.to_bits(), b.to_bits(), "{} {a} vs {b}", left.name);
+            }
+        }
+    }
+
+    #[test]
     fn a_blank_line_between_frames_is_not_treated_as_a_tile() {
         let text = "\
 1
@@ -2023,6 +2218,13 @@ H 1.0 0.0 0.0
             .find(|column| column.name == "species")
         {
             column.text = serial_symbols;
+        }
+        if let Some(column) = serial
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "pos")
+        {
+            column.real.clone_from(&serial.positions);
         }
         let serial_bytes = extxyz_bytes(
             serial.n_frames,
