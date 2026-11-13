@@ -179,19 +179,19 @@ pub(crate) fn parallel_coord_rows(
     workers: usize,
     symbol: Option<&std::sync::Arc<str>>,
 ) -> Result<CoordRows, ParseError> {
-    let newlines = newline_index(bytes, workers);
-    if n > 0 && newlines.len() < n.saturating_sub(1) {
-        return Err(ParseError::IncompleteFrame);
+    if n == 0 {
+        return Ok(CoordRows {
+            xyz: Vec::new(),
+            ids: Vec::new(),
+            flags: Vec::new(),
+            atoms: Vec::new(),
+            consumed: 0,
+        });
     }
-    let consumed = if n == 0 {
-        0
-    } else if n - 1 < newlines.len() {
-        newlines[n - 1] + 1
-    } else if newlines.last().copied().unwrap_or(0) < bytes.len() {
-        bytes.len()
-    } else {
-        return Err(ParseError::IncompleteFrame);
-    };
+    // Same chunking as the column reader: count newlines, then each worker
+    // walks its own run. An offset per line was a serial pass the plain
+    // read does not pay.
+    let (chunks, consumed) = plan_coord_chunks(bytes, 0, n, workers.max(1))?;
     let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
     let mut ids = Vec::<u64>::with_capacity(n);
     let mut flags = Vec::<[bool; 3]>::with_capacity(n);
@@ -204,60 +204,43 @@ pub(crate) fn parallel_coord_rows(
     let ids_ptr = ids.as_mut_ptr() as usize;
     let flags_ptr = flags.as_mut_ptr() as usize;
     let atoms_ptr = atoms_raw.as_mut_ptr() as usize;
-    let chunk = n.div_ceil(workers.max(1)).max(1);
-    let fill_worker = |worker: usize| -> Result<(), ParseError> {
-        let first = worker.saturating_mul(chunk);
-        if first >= n {
-            return Ok(());
-        }
-        let last = (first + chunk).min(n);
-        let mut shares = symbol.map(|symbol| symbol_shares(symbol, last - first));
-        for row_index in first..last {
-            let start = if row_index == 0 {
-                0
-            } else {
-                newlines[row_index - 1] + 1
-            };
-            let end = if row_index < newlines.len() {
-                newlines[row_index] + 1
-            } else {
-                bytes.len()
-            };
-            if end < start || end > bytes.len() {
-                return Err(ParseError::IncompleteFrame);
-            }
-            let default_id = start_id + row_index as u64;
-            let ((row, fixed, atom_id), _) =
-                parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
+    let mut row0 = Vec::with_capacity(chunks.len());
+    let mut acc = 0usize;
+    for (_, nrows) in &chunks {
+        row0.push(acc);
+        acc += *nrows;
+    }
+    let fill_chunk = |index: usize| -> Result<(), ParseError> {
+        let (start, nrows) = chunks[index];
+        let mut row = row0[index];
+        let mut pos = start;
+        let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
+        for _ in 0..nrows {
+            let ((xyz, fixed, atom_id), next) =
+                parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    row.as_ptr(),
-                    (xyz_ptr as *mut f64).add(row_index * 3),
-                    3,
-                );
-                *((ids_ptr as *mut u64).add(row_index)) = atom_id;
-                *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
+                std::ptr::copy_nonoverlapping(xyz.as_ptr(), (xyz_ptr as *mut f64).add(row * 3), 3);
+                *((ids_ptr as *mut u64).add(row)) = atom_id;
+                *((flags_ptr as *mut [bool; 3]).add(row)) = fixed;
                 if let Some(shares) = shares.as_mut() {
-                    let slot = (xyz_ptr as *mut f64).add(row_index * 3);
+                    let slot = (xyz_ptr as *mut f64).add(row * 3);
                     let atom =
                         crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
-                    (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
-                        .add(row_index))
-                    .write(atom);
+                    (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>).add(row))
+                        .write(atom);
                 }
             }
+            pos = next;
+            row += 1;
         }
         Ok(())
     };
-    let groups = n.div_ceil(chunk.max(1));
-    // `workers < 2` stays on this thread. A pool would otherwise run
-    // even when the caller asked for one worker.
-    let built = if workers < 2 {
-        fill_worker(0)
+    let built = if workers < 2 || chunks.len() < 2 {
+        (0..chunks.len()).try_for_each(fill_chunk)
     } else {
         on_pool(workers, || {
             use rayon::prelude::*;
-            (0..groups).into_par_iter().try_for_each(fill_worker)
+            (0..chunks.len()).into_par_iter().try_for_each(fill_chunk)
         })
     };
     if let Err(err) = built {
@@ -290,6 +273,45 @@ pub(crate) fn parallel_coord_rows(
         atoms,
         consumed,
     })
+}
+
+/// Walk `nrows` coordinate lines starting at byte `start`.
+///
+/// `row_base` is the first row's index in `xyz` / `ids` / `flags` / `atoms`.
+/// This is the per-member kernel of [`fill_rows_from_chunks`], so a worker
+/// can parse a slice as soon as that slice has been inflated.
+#[cfg(feature = "parallel")]
+pub(crate) fn parse_coord_run(
+    bytes: &[u8],
+    start: usize,
+    nrows: usize,
+    spec_version: u32,
+    row_base: usize,
+    symbol: Option<&std::sync::Arc<str>>,
+    xyz: *mut f64,
+    ids: *mut u64,
+    flags: *mut [bool; 3],
+    atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+) -> Result<usize, ParseError> {
+    let mut pos = start;
+    let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
+    for step in 0..nrows {
+        let row = row_base + step;
+        let ((xyz_row, fixed, atom_id), next) =
+            parse_coord_row_at(bytes, pos, spec_version, row as u64)?;
+        unsafe {
+            let dest = xyz.add(row * 3);
+            std::ptr::copy_nonoverlapping(xyz_row.as_ptr(), dest, 3);
+            *ids.add(row) = atom_id;
+            *flags.add(row) = fixed;
+            if let Some(shares) = shares.as_mut() {
+                let atom = crate::types::AtomDatum::at_slot(shares.take(), dest, fixed, atom_id);
+                (*atoms.add(row)).write(atom);
+            }
+        }
+        pos = next;
+    }
+    Ok(pos)
 }
 
 #[cfg(feature = "parallel")]

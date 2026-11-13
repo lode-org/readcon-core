@@ -441,16 +441,20 @@ pub fn gzip_writer(path: &Path) -> io::Result<flate2::write::GzEncoder<std::fs::
 /// How many independent compression members a payload of `nbytes` uses.
 ///
 /// Below 1 MiB the file stays one member, so small fixtures keep a single
-/// gzip stream. Larger payloads use one member per core, capped at 8.
+/// gzip stream. Larger payloads use about 2 MiB of plain text per member,
+/// and at least four members per core, so a read can keep every worker
+/// busy instead of waiting on one fat member. Capped at 64.
 pub fn compression_workers(nbytes: usize) -> usize {
     const MIN_CHUNKED: usize = 1 << 20;
+    const PLAIN_PER_MEMBER: usize = 2 << 20;
     if nbytes < MIN_CHUNKED {
         return 1;
     }
-    std::thread::available_parallelism()
+    let threads = std::thread::available_parallelism()
         .map(|n| n.get())
-        .unwrap_or(1)
-        .clamp(1, 8)
+        .unwrap_or(1);
+    let by_size = (nbytes / PLAIN_PER_MEMBER).max(1);
+    by_size.max(threads.saturating_mul(4)).clamp(1, 64)
 }
 
 fn split_chunks(data: &[u8], workers: usize) -> Vec<&[u8]> {
@@ -488,6 +492,121 @@ fn split_chunks(data: &[u8], workers: usize) -> Vec<&[u8]> {
         .filter(|span| span[1] > span[0])
         .map(|span| &data[span[0]..span[1]])
         .collect()
+}
+
+/// `(first coordinate row, row count)` for each plain slice.
+///
+/// `None` when the text is not one coordinate block after a header, so
+/// the reader keeps the full-frame parser. Old indexes omit this table
+/// and still decode.
+fn coord_member_rows(data: &[u8], parts: &[&[u8]]) -> Option<Vec<(u32, u32)>> {
+    if parts.len() < 2 || data.is_empty() {
+        return None;
+    }
+    let mut line_at = Vec::new();
+    let mut pos = 0usize;
+    while let Some(rel) = memchr::memchr(b'\n', &data[pos..]) {
+        line_at.push(pos);
+        pos += rel + 1;
+        if line_at.len() > 64 && line_at.len() > 9 {
+            break;
+        }
+    }
+    if line_at.len() < 9 {
+        return None;
+    }
+    let line = |index: usize| -> Option<&[u8]> {
+        let start = *line_at.get(index)?;
+        let end = line_at.get(index + 1).copied().unwrap_or(data.len());
+        let end = end.saturating_sub(usize::from(end > start && data[end - 1] == b'\n'));
+        Some(&data[start..end])
+    };
+    let types_text = std::str::from_utf8(line(6)?).ok()?;
+    let natm_types = crate::parser::parse_count_line(types_text, 1).ok()?[0];
+    // Species headers sit between coordinate groups. A member can be one
+    // contiguous coordinate run only when the frame has a single species;
+    // anything else keeps the full-frame parser.
+    if natm_types != 1 {
+        return None;
+    }
+    let counts_text = std::str::from_utf8(line(7)?).ok()?;
+    let counts = crate::parser::parse_count_line(counts_text, natm_types).ok()?;
+    let natoms: usize = counts.iter().sum();
+    if natoms == 0 {
+        return None;
+    }
+    let header_lines = 9 + natm_types * 2;
+    // A per-newline callback over a million rows is slower than the
+    // deflate it is trying to index. Count bytes in each slice instead.
+    let mut counts = Vec::with_capacity(parts.len());
+    for part in parts {
+        counts.push(count_newlines(part) as u32);
+    }
+    if counts[0] < header_lines as u32 {
+        return None;
+    }
+    counts[0] -= header_lines as u32;
+    let total: u32 = counts.iter().copied().sum();
+    if total as usize != natoms {
+        return None;
+    }
+    if let Some(last_nl) = memchr::memrchr(b'\n', data) {
+        if data[last_nl + 1..]
+            .iter()
+            .any(|byte| !byte.is_ascii_whitespace())
+        {
+            return None;
+        }
+    }
+    let mut row = 0u32;
+    let mut table = Vec::with_capacity(parts.len());
+    for count in counts {
+        table.push((row, count));
+        row = row.saturating_add(count);
+    }
+    if row as usize != natoms {
+        return None;
+    }
+    Some(table)
+}
+
+fn count_newlines(data: &[u8]) -> usize {
+    #[cfg(target_arch = "x86_64")]
+    {
+        static AVX2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *AVX2.get_or_init(|| is_x86_feature_detected!("avx2")) {
+            return unsafe { count_newlines_avx2(data) };
+        }
+    }
+    data.iter().filter(|byte| **byte == b'\n').count()
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn count_newlines_avx2(data: &[u8]) -> usize {
+    use std::arch::x86_64::*;
+    let mut n = 0usize;
+    let mut i = 0usize;
+    let nl = _mm256_set1_epi8(b'\n' as i8);
+    while i + 128 <= data.len() {
+        let mut mask_n = 0usize;
+        for lane in 0..4 {
+            let v = _mm256_loadu_si256(data.as_ptr().add(i + lane * 32) as *const _);
+            mask_n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
+        }
+        n += mask_n;
+        i += 128;
+    }
+    while i + 32 <= data.len() {
+        let v = _mm256_loadu_si256(data.as_ptr().add(i) as *const _);
+        n += _mm256_movemask_epi8(_mm256_cmpeq_epi8(v, nl)).count_ones() as usize;
+        i += 32;
+    }
+    while i < data.len() {
+        n += usize::from(*data.get_unchecked(i) == b'\n');
+        i += 1;
+    }
+    n
 }
 
 fn gzip_member(data: &[u8]) -> io::Result<Vec<u8>> {
@@ -528,7 +647,8 @@ pub fn write_gzip_members_limited(
     let plain: Vec<usize> = parts.iter().map(|part| part.len()).collect();
     let mut encoded = encode_parts(&parts, threads, gzip_member)?;
     if encoded.len() > 1 {
-        stamp_gzip_index(&mut encoded, &plain);
+        let rows = coord_member_rows(data, &parts);
+        stamp_gzip_index(&mut encoded, &plain, rows.as_deref());
     }
     let count = encoded.len();
     write_members(path, &encoded)?;
@@ -537,9 +657,25 @@ pub fn write_gzip_members_limited(
 
 /// `RC` extra-field payload: `RCZ1`, member count, compressed starts,
 /// then each member's plain length.
-fn stamp_gzip_index(members: &mut [Vec<u8>], plain: &[usize]) {
+fn row_table(data: &[u8], count: usize) -> Option<Vec<(u32, u32)>> {
+    let at = 6 + 16 * count;
+    if data.len() < at + 8 * count {
+        return None;
+    }
+    let mut rows = Vec::with_capacity(count);
+    for index in 0..count {
+        let off = at + 8 * index;
+        let base = u32::from_le_bytes(data[off..off + 4].try_into().ok()?);
+        let n = u32::from_le_bytes(data[off + 4..off + 8].try_into().ok()?);
+        rows.push((base, n));
+    }
+    Some(rows)
+}
+
+fn stamp_gzip_index(members: &mut [Vec<u8>], plain: &[usize], rows: Option<&[(u32, u32)]>) {
     let count = members.len();
-    let extra_len = 4 + 2 + 16 * count;
+    let row_bytes = usize::from(rows.is_some()) * 8 * count;
+    let extra_len = 4 + 2 + 16 * count + row_bytes;
     let inserted = 2 + 4 + extra_len;
     let mut starts = Vec::with_capacity(count);
     let mut offset = inserted;
@@ -557,6 +693,12 @@ fn stamp_gzip_index(members: &mut [Vec<u8>], plain: &[usize]) {
     for len in plain {
         payload.extend_from_slice(&(*len as u64).to_le_bytes());
     }
+    if let Some(rows) = rows {
+        for (base, n) in rows {
+            payload.extend_from_slice(&base.to_le_bytes());
+            payload.extend_from_slice(&n.to_le_bytes());
+        }
+    }
     let mut extra = Vec::with_capacity(inserted);
     extra.extend_from_slice(&((4 + payload.len()) as u16).to_le_bytes());
     extra.extend_from_slice(b"RC");
@@ -571,6 +713,9 @@ fn stamp_gzip_index(members: &mut [Vec<u8>], plain: &[usize]) {
 struct MemberPlan {
     starts: Vec<usize>,
     plain: Option<Vec<usize>>,
+    /// `(first coordinate row, row count)` per member, when the payload is
+    /// one coordinate block after a single header.
+    rows: Option<Vec<(u32, u32)>>,
 }
 
 fn gzip_member_starts(bytes: &[u8]) -> Option<MemberPlan> {
@@ -607,7 +752,12 @@ fn gzip_member_starts(bytes: &[u8]) -> Option<MemberPlan> {
             } else {
                 None
             };
-            return Some(MemberPlan { starts, plain });
+            let rows = row_table(data, count);
+            return Some(MemberPlan {
+                starts,
+                plain,
+                rows,
+            });
         }
         cursor += 4 + len;
     }
@@ -850,9 +1000,20 @@ where
     let slots: Vec<std::sync::Mutex<Option<io::Result<Vec<u8>>>>> = (0..parts.len())
         .map(|_| std::sync::Mutex::new(None))
         .collect();
-    par_ranges(parts.len(), threads, |begin, end| {
-        for index in begin..end {
-            *slots[index].lock().unwrap() = Some(encode(parts[index]));
+    // One OS thread per worker, as the original member writer did. The
+    // pinned pool is the parser's; sharing it with deflate left the
+    // eight-thread gzip write slower than four.
+    let ranges = worker_ranges(parts.len(), threads);
+    std::thread::scope(|scope| {
+        for (_worker, (begin, end)) in ranges.into_iter().enumerate() {
+            let slots = &slots;
+            let parts = &parts;
+            let encode = &encode;
+            scope.spawn(move || {
+                for index in begin..end {
+                    *slots[index].lock().unwrap() = Some(encode(parts[index]));
+                }
+            });
         }
     });
     let mut out = Vec::with_capacity(parts.len());
@@ -926,7 +1087,8 @@ pub fn write_zstd_members_limited(
     let count = encoded.len();
     let mut file = std::fs::File::create(path)?;
     if count > 1 {
-        file.write_all(&zstd_index_frame(&encoded, &plain))?;
+        let rows = coord_member_rows(data, &parts);
+        file.write_all(&zstd_index_frame(&encoded, &plain, rows.as_deref()))?;
     }
     for frame in &encoded {
         file.write_all(frame)?;
@@ -963,8 +1125,9 @@ fn zstd_compress_part(part: &[u8]) -> io::Result<Vec<u8>> {
 }
 
 #[cfg(feature = "zstd")]
-fn zstd_index_frame(frames: &[Vec<u8>], plain: &[usize]) -> Vec<u8> {
-    let payload_len = 4 + 2 + 16 * frames.len();
+fn zstd_index_frame(frames: &[Vec<u8>], plain: &[usize], rows: Option<&[(u32, u32)]>) -> Vec<u8> {
+    let row_bytes = usize::from(rows.is_some()) * 8 * frames.len();
+    let payload_len = 4 + 2 + 16 * frames.len() + row_bytes;
     let mut starts = Vec::with_capacity(frames.len());
     let mut offset = 8 + payload_len;
     for frame in frames {
@@ -979,6 +1142,12 @@ fn zstd_index_frame(frames: &[Vec<u8>], plain: &[usize]) -> Vec<u8> {
     }
     for len in plain {
         payload.extend_from_slice(&(*len as u64).to_le_bytes());
+    }
+    if let Some(rows) = rows {
+        for (base, n) in rows {
+            payload.extend_from_slice(&base.to_le_bytes());
+            payload.extend_from_slice(&n.to_le_bytes());
+        }
     }
     let mut bytes = Vec::with_capacity(8 + payload.len());
     bytes.extend_from_slice(&0x184D_2A50u32.to_le_bytes());
@@ -1020,7 +1189,12 @@ fn zstd_frame_starts(bytes: &[u8]) -> Option<MemberPlan> {
     } else {
         None
     };
-    Some(MemberPlan { starts, plain })
+    let rows = row_table(payload, count);
+    Some(MemberPlan {
+        starts,
+        plain,
+        rows,
+    })
 }
 
 #[cfg(feature = "zstd")]
@@ -1121,7 +1295,8 @@ pub fn codec_deflate(
         let lens: Vec<usize> = parts.iter().map(|part| part.len()).collect();
         let mut encoded = encode_parts(&parts, threads, gzip_member)?;
         if encoded.len() > 1 {
-            stamp_gzip_index(&mut encoded, &lens);
+            let rows = coord_member_rows(plain, &parts);
+            stamp_gzip_index(&mut encoded, &lens, rows.as_deref());
         }
         let mut out = Vec::new();
         for part in encoded {
@@ -1136,7 +1311,8 @@ pub fn codec_deflate(
         let encoded = encode_parts(&parts, threads, zstd_compress_part)?;
         let mut out = Vec::new();
         if encoded.len() > 1 {
-            out.extend(zstd_index_frame(&encoded, &lens));
+            let rows = coord_member_rows(plain, &parts);
+            out.extend(zstd_index_frame(&encoded, &lens, rows.as_deref()));
         }
         for part in encoded {
             out.extend(part);
@@ -1147,6 +1323,63 @@ pub fn codec_deflate(
     {
         let _ = (plain, members, threads);
         Err(zstd_unsupported())
+    }
+}
+
+/// Indexed members whose plain lengths and coordinate-row spans are known.
+pub(crate) struct IndexedMembers {
+    pub starts: Vec<usize>,
+    pub plain: Vec<usize>,
+    pub rows: Vec<(u32, u32)>,
+    pub gzip: bool,
+}
+
+pub(crate) fn indexed_members(bytes: &[u8]) -> Option<IndexedMembers> {
+    if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        let plan = gzip_member_starts(bytes)?;
+        let plain = plan.plain?;
+        let rows = plan.rows?;
+        if plain.len() != plan.starts.len() || rows.len() != plan.starts.len() || plain.len() < 2 {
+            return None;
+        }
+        return Some(IndexedMembers {
+            starts: plan.starts,
+            plain,
+            rows,
+            gzip: true,
+        });
+    }
+    #[cfg(feature = "zstd")]
+    if is_zstd_magic(bytes) {
+        let plan = zstd_frame_starts(bytes)?;
+        let plain = plan.plain?;
+        let rows = plan.rows?;
+        if plain.len() != plan.starts.len() || rows.len() != plan.starts.len() || plain.len() < 2 {
+            return None;
+        }
+        return Some(IndexedMembers {
+            starts: plan.starts,
+            plain,
+            rows,
+            gzip: false,
+        });
+    }
+    None
+}
+
+pub(crate) fn inflate_member(gzip: bool, src: &[u8], dst: &mut [u8]) -> io::Result<()> {
+    if gzip {
+        gzip_into(src, dst)
+    } else {
+        #[cfg(feature = "zstd")]
+        {
+            zstd_into(src, dst)
+        }
+        #[cfg(not(feature = "zstd"))]
+        {
+            let _ = (src, dst);
+            Err(zstd_unsupported())
+        }
     }
 }
 

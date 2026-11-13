@@ -3668,12 +3668,318 @@ pub struct PhasedFrames {
 ///
 /// A parse failure is the [`error::LocatedParseError`] from the parse
 /// that failed. The path is not opened again.
+/// Inflate each indexed member and parse its coordinate rows on that same
+/// worker, with no barrier between the two. Old indexes without a row
+/// table return `None` and the caller keeps the full-buffer parser.
+#[cfg(feature = "parallel")]
+fn piped_stock_frames(
+    file: &[u8],
+    threads: usize,
+) -> Result<Option<Vec<types::ConFrame>>, Box<dyn std::error::Error>> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let Some(index) = crate::compression::indexed_members(file) else {
+        return Ok(None);
+    };
+    if threads < 2 {
+        return Ok(None);
+    }
+    let natoms: u32 = index.rows.iter().map(|(_, count)| *count).sum();
+    if natoms == 0 {
+        return Ok(None);
+    }
+    let n = natoms as usize;
+    let total: usize = index.plain.iter().sum();
+    let mut plain = Vec::<u8>::new();
+    plain.reserve(total);
+    unsafe { plain.set_len(total) };
+    let mut offset = Vec::with_capacity(index.plain.len());
+    let mut cursor = 0usize;
+    for len in &index.plain {
+        offset.push(cursor);
+        cursor += *len;
+    }
+    let mut ends = index.starts[1..].to_vec();
+    ends.push(file.len());
+    let header: std::sync::Mutex<Option<types::FrameHeader>> = std::sync::Mutex::new(None);
+    let symbols: std::sync::Mutex<Vec<(std::sync::Arc<str>, usize)>> =
+        std::sync::Mutex::new(Vec::new());
+    let ready = AtomicBool::new(false);
+    let failed = AtomicBool::new(false);
+    let spec = std::sync::atomic::AtomicU32::new(0);
+    let row_origin = std::sync::atomic::AtomicUsize::new(0);
+    let mut xyz = Vec::<f64>::new();
+    xyz.reserve(n.saturating_mul(3));
+    unsafe { xyz.set_len(n.saturating_mul(3)) };
+    let mut ids = Vec::<u64>::new();
+    ids.reserve(n);
+    unsafe { ids.set_len(n) };
+    let mut flags = vec![[false; 3]; n];
+    let mut atoms: Vec<std::mem::MaybeUninit<types::AtomDatum>> = Vec::new();
+    atoms.reserve(n);
+    unsafe { atoms.set_len(n) };
+    let error: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    let ranges = {
+        let threads = threads.min(index.plain.len()).max(1);
+        let mut ranges = Vec::new();
+        let mut start = 0usize;
+        for worker in 0..threads {
+            let end = if worker + 1 == threads {
+                index.plain.len()
+            } else {
+                (worker + 1) * index.plain.len() / threads
+            };
+            if end > start {
+                ranges.push((start, end));
+                start = end;
+            }
+        }
+        ranges
+    };
+    let xyz_addr = xyz.as_mut_ptr() as usize;
+    let ids_addr = ids.as_mut_ptr() as usize;
+    let flags_addr = flags.as_mut_ptr() as usize;
+    let atoms_addr = atoms.as_mut_ptr() as usize;
+    let plain_addr = plain.as_mut_ptr() as usize;
+    let nworkers = ranges.len();
+    crate::parser::on_pool(nworkers, || {
+        rayon::scope(|scope| {
+            for (worker, (begin, end)) in ranges.into_iter().enumerate() {
+                let index = &index;
+                let offset = &offset;
+                let ends = &ends;
+                let header = &header;
+                let symbols = &symbols;
+                let error = &error;
+                let ready = &ready;
+                let failed = &failed;
+                let spec = &spec;
+                let row_origin = &row_origin;
+                scope.spawn(move |_| {
+                    let xyz_ptr = xyz_addr as *mut f64;
+                    let ids_ptr = ids_addr as *mut u64;
+                    let flags_ptr = flags_addr as *mut [bool; 3];
+                    let atoms_ptr = atoms_addr as *mut std::mem::MaybeUninit<types::AtomDatum>;
+                    let plain_ptr = plain_addr as *mut u8;
+                    crate::parser::pin_worker(worker);
+                    for member in begin..end {
+                        let src = &file[index.starts[member]..ends[member]];
+                        let dst = unsafe {
+                            std::slice::from_raw_parts_mut(
+                                plain_ptr.add(offset[member]),
+                                index.plain[member],
+                            )
+                        };
+                        if let Err(err) = crate::compression::inflate_member(index.gzip, src, dst) {
+                            *error.lock().unwrap() = Some(err.to_string());
+                            failed.store(true, Ordering::Release);
+                            return;
+                        }
+                        if member == 0 {
+                            match stock_header(dst) {
+                                Some((parsed, syms, origin)) => {
+                                    spec.store(parsed.spec_version, Ordering::Release);
+                                    row_origin.store(origin, Ordering::Release);
+                                    *symbols.lock().unwrap() = syms;
+                                    *header.lock().unwrap() = Some(parsed);
+                                    ready.store(true, Ordering::Release);
+                                }
+                                None => {
+                                    *error.lock().unwrap() =
+                                        Some("indexed member is not one coordinate block".into());
+                                    failed.store(true, Ordering::Release);
+                                    return;
+                                }
+                            }
+                        }
+                        let (base, count) = index.rows[member];
+                        if count == 0 {
+                            continue;
+                        }
+                        while !ready.load(Ordering::Acquire) {
+                            if failed.load(Ordering::Acquire) {
+                                return;
+                            }
+                            std::thread::yield_now();
+                        }
+                        let spec_v = spec.load(Ordering::Acquire);
+                        let origin = row_origin.load(Ordering::Acquire);
+                        let local = if offset[member] >= origin {
+                            0
+                        } else {
+                            origin - offset[member]
+                        };
+                        let slice = unsafe {
+                            std::slice::from_raw_parts(
+                                plain_ptr.add(offset[member]),
+                                index.plain[member],
+                            )
+                        };
+                        let syms = symbols.lock().unwrap().clone();
+                        let mut row = base as usize;
+                        let mut left = count as usize;
+                        let mut at = local;
+                        while left > 0 {
+                            let (symbol, type_end) = symbol_covering(&syms, row);
+                            let take = left.min(type_end.saturating_sub(row));
+                            if take == 0 {
+                                break;
+                            }
+                            match crate::parser::parse_coord_run(
+                                slice,
+                                at,
+                                take,
+                                spec_v,
+                                row,
+                                Some(symbol),
+                                xyz_ptr,
+                                ids_ptr,
+                                flags_ptr,
+                                atoms_ptr,
+                            ) {
+                                Ok(next) => at = next,
+                                Err(err) => {
+                                    *error.lock().unwrap() = Some(err.to_string());
+                                    failed.store(true, Ordering::Release);
+                                    return;
+                                }
+                            }
+                            row += take;
+                            left -= take;
+                        }
+                        if left != 0 {
+                            *error.lock().unwrap() =
+                                Some("coordinate rows stopped before the index count".into());
+                            failed.store(true, Ordering::Release);
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    });
+    if let Some(err) = error.into_inner().unwrap_or(None) {
+        std::mem::forget(atoms);
+        unsafe {
+            xyz.set_len(0);
+            ids.set_len(0);
+            plain.set_len(0);
+        }
+        return Err(err.into());
+    }
+    let Some(header) = header.into_inner().unwrap_or(None) else {
+        std::mem::forget(atoms);
+        unsafe {
+            xyz.set_len(0);
+            ids.set_len(0);
+            plain.set_len(0);
+        }
+        return Ok(None);
+    };
+    let old = xyz.as_ptr();
+    let positions = crate::storage_dtype::FloatArray2::from_f64_row_major(n, 3, xyz);
+    let atoms_raw = atoms.as_mut_ptr() as *mut types::AtomDatum;
+    std::mem::forget(atoms);
+    let mut atoms = unsafe { Vec::from_raw_parts(atoms_raw, n, n) };
+    if let Some(slice) = positions.f64_slice() {
+        let new_ptr = slice.as_ptr() as *mut f64;
+        if new_ptr != old as *mut f64 {
+            for (index, atom) in atoms.iter_mut().enumerate() {
+                atom.retarget(unsafe { new_ptr.add(index * 3) });
+            }
+        }
+    }
+    let frame = crate::types::con_frame_coords_only_with_ids(header, atoms, positions, ids);
+    Ok(Some(vec![frame]))
+}
+
+#[cfg(feature = "parallel")]
+fn stock_header(
+    bytes: &[u8],
+) -> Option<(types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize)> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let mut lines = text.lines();
+    let header = crate::parser::parse_frame_header(&mut lines).ok()?;
+    if header.natm_types != 1 || header.natms_per_type.len() != 1 {
+        return None;
+    }
+    let mut symbols = Vec::with_capacity(header.natm_types);
+    for &count in &header.natms_per_type {
+        let symbol = lines.next()?.trim();
+        let _label = lines.next()?;
+        if symbol.is_empty() || count == 0 {
+            return None;
+        }
+        symbols.push((std::sync::Arc::from(symbol), count));
+    }
+    let header_lines = 9 + header.natm_types * 2;
+    let mut seen = 0usize;
+    let mut origin = 0usize;
+    for index in memchr::memchr_iter(b'\n', bytes) {
+        seen += 1;
+        if seen == header_lines {
+            origin = index + 1;
+            break;
+        }
+    }
+    if seen != header_lines {
+        return None;
+    }
+    Some((header, symbols, origin))
+}
+
+#[cfg(feature = "parallel")]
+fn symbol_covering(
+    symbols: &[(std::sync::Arc<str>, usize)],
+    row: usize,
+) -> (&std::sync::Arc<str>, usize) {
+    let mut acc = 0usize;
+    for (symbol, count) in symbols {
+        let end = acc + *count;
+        if row < end {
+            return (symbol, end);
+        }
+        acc = end;
+    }
+    let (symbol, count) = symbols.last().expect("species");
+    (symbol, acc + *count)
+}
+
 fn read_compressed_phased(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PhasedFrames, Box<dyn std::error::Error>> {
     let file = std::fs::read(path)?;
     let t_all = std::time::Instant::now();
+    let piped_threads = match num_threads {
+        Some(n) if n >= 2 => n,
+        _ => {
+            let budget = crate::compression::decode_thread_budget();
+            if budget >= 2 { budget } else { 1 }
+        }
+    };
+    #[cfg(feature = "parallel")]
+    if piped_threads >= 2 {
+        if let Some(frames) = piped_stock_frames(&file, piped_threads)? {
+            let elapsed = t_all.elapsed().as_secs_f64();
+            let n_frames = frames.len() as u64;
+            return Ok(PhasedFrames {
+                frames,
+                n_bytes: 0,
+                chunk_s: vec![elapsed],
+                scan_kind: SCAN_SERIAL,
+                worker_minflt: Vec::new(),
+                share_frames: vec![n_frames],
+                share_bytes: Vec::new(),
+                phases: ReadPhaseTimes {
+                    worker_parse_s: elapsed,
+                    worker_sum_s: elapsed,
+                    worker_max_s: elapsed,
+                    ..ReadPhaseTimes::default()
+                },
+                pool: None,
+            });
+        }
+    }
     crate::compression::with_inflated_plain(&file, |plain| {
         let open_mmap_s = t_all.elapsed().as_secs_f64();
         let n_bytes = plain.len();
@@ -4991,6 +5297,101 @@ mod phased_read_tests {
         let serial = frames_from_text(&text, Some(1)).expect("serial");
         let parallel = frames_from_bytes_phased(text.as_bytes(), Some(4)).expect("parallel");
         assert_eq!(parallel.frames, serial);
+    }
+
+    fn one_species_frame(n: usize) -> String {
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("{i}.125000 0.250000 0.500000 0 {i}\n"));
+        }
+        text
+    }
+
+    fn two_species_frame(n_cu: usize, n_h: usize) -> String {
+        let mut text = String::new();
+        text.push_str(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n2\n",
+        );
+        text.push_str(&format!("{n_cu} {n_h}\n63.546 1.008\n"));
+        text.push_str("Cu\nCoordinates of Component 1\n");
+        for i in 0..n_cu {
+            text.push_str(&format!("{i}.125000 0.250000 0.500000 0 {i}\n"));
+        }
+        text.push_str("H\nCoordinates of Component 2\n");
+        for i in 0..n_h {
+            text.push_str(&format!("1.500000 2.250000 {i}.125000 0 {}\n", n_cu + i));
+        }
+        text
+    }
+
+    /// Drop the coordinate-row table from a gzip RC extra field.
+    ///
+    /// The plain lengths stay, which is the index written before the row
+    /// spans existed. Member starts move back by the bytes removed.
+    fn strip_gzip_row_table(bytes: &mut Vec<u8>) {
+        assert_eq!(&bytes[0..2], b"\x1f\x8b");
+        let xlen = u16::from_le_bytes([bytes[10], bytes[11]]) as usize;
+        assert_eq!(&bytes[12..14], b"RC");
+        let sub = u16::from_le_bytes([bytes[14], bytes[15]]) as usize;
+        assert!(bytes[16..].starts_with(b"RCZ1"));
+        let count = u16::from_le_bytes([bytes[20], bytes[21]]) as usize;
+        let row_bytes = 8 * count;
+        let payload_at = 16usize;
+        assert_eq!(sub, xlen - 4);
+        assert!(sub >= 6 + 16 * count + row_bytes);
+        let row_at = payload_at + sub - row_bytes;
+        bytes.drain(row_at..row_at + row_bytes);
+        let new_sub = (sub - row_bytes) as u16;
+        let new_xlen = (xlen - row_bytes) as u16;
+        bytes[10..12].copy_from_slice(&new_xlen.to_le_bytes());
+        bytes[14..16].copy_from_slice(&new_sub.to_le_bytes());
+        for index in 1..count {
+            let at = payload_at + 6 + 8 * index;
+            let start = u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
+            let start = start - row_bytes as u64;
+            bytes[at..at + 8].copy_from_slice(&start.to_le_bytes());
+        }
+    }
+
+    #[test]
+    fn indexed_gzip_read_matches_the_serial_frame() {
+        let text = one_species_frame(5000);
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con.gz");
+        let members = crate::compression::write_gzip_members_n(&path, text.as_bytes(), 4).unwrap();
+        assert!(members > 1);
+        let piped = read_all_frames_phased(&path, Some(4)).expect("piped");
+        assert_eq!(piped.frames, serial);
+        let mixed = two_species_frame(3000, 2000);
+        let mixed_serial = frames_from_text(&mixed, Some(1)).expect("mixed serial");
+        let mixed_path = dir.path().join("mixed.con.gz");
+        crate::compression::write_gzip_members_n(&mixed_path, mixed.as_bytes(), 4).unwrap();
+        let mixed_read = read_all_frames_phased(&mixed_path, Some(4)).expect("mixed");
+        assert_eq!(mixed_read.frames, mixed_serial);
+        let mut old = std::fs::read(&path).unwrap();
+        strip_gzip_row_table(&mut old);
+        let old_path = dir.path().join("old.con.gz");
+        std::fs::write(&old_path, &old).unwrap();
+        let fallback = read_all_frames_phased(&old_path, Some(4)).expect("old index");
+        assert_eq!(fallback.frames, serial);
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn indexed_zstd_read_matches_the_serial_frame() {
+        let text = one_species_frame(5000);
+        let serial = frames_from_text(&text, Some(1)).expect("serial");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con.zst");
+        let members = crate::compression::write_zstd_members_n(&path, text.as_bytes(), 4).unwrap();
+        assert!(members > 1);
+        let piped = read_all_frames_phased(&path, Some(4)).expect("piped");
+        assert_eq!(piped.frames, serial);
     }
 
     #[test]

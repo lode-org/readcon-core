@@ -3685,7 +3685,14 @@ fn write_con(
                 let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
                 let members = compression_members
                     .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
+                // Member count is the compress width, as it was before
+                // `n_threads` also selected formatter workers. A smaller
+                // `n_threads` still formats on fewer cores; it does not
+                // serialize the members.
+                let threads = n_threads
+                    .filter(|count| *count >= 2)
+                    .map(|count| count.max(members))
+                    .unwrap_or(members);
                 crate::compression::write_gzip_members_limited(
                     Path::new(path),
                     &plain,
@@ -3717,7 +3724,10 @@ fn write_con(
                     let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                    let threads = n_threads.filter(|count| *count >= 1).unwrap_or(members);
+                    let threads = n_threads
+                        .filter(|count| *count >= 2)
+                        .map(|count| count.max(members))
+                        .unwrap_or(members);
                     crate::compression::write_zstd_members_limited(
                         Path::new(path),
                         &plain,
