@@ -22,7 +22,7 @@ WORK = BENCH / "work"
 OUT = Path(os.environ.get("READCON_SCALE_OUT", str(BENCH / "scaling" / "r8")))
 LOG = Path(os.environ.get("READCON_SCALE_LOG", str(BENCH / "logs" / "scale-r8")))
 THREADS = (1, 2, 4, 8)
-REPEATS = 6
+REPEATS = int(os.environ.get("READCON_CAMPAIGN_REPEATS", "6"))
 
 
 def write_samefmt_extxyz(path: Path) -> None:
@@ -659,7 +659,7 @@ def weak(paths: dict[str, Path]) -> None:
     threads_out = OUT / "weak-threads.json"
     binary = ROOT / "target" / "release" / "examples" / "weak_scale_threads"
     if binary.exists() and not threads_out.exists():
-        run([str(binary), str(threads_out), "8000"])
+        run([str(binary), str(threads_out), "8000", str(REPEATS)])
     mpi_bin = ROOT / "target" / "release" / "examples" / "weak_scale_mpi"
     if not mpi_bin.exists():
         return
@@ -693,7 +693,7 @@ def weak(paths: dict[str, Path]) -> None:
                 str(mpi_bin),
                 str(sized),
                 str(dest),
-                "6",
+                str(REPEATS),
             ]
         )
 

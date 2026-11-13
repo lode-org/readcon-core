@@ -65,3 +65,194 @@ rule release:
 rule campaign:
     input:
         "bench/h2h/scaling/rel1/DONE",
+
+
+# Final paper campaign. One target rebuilds the bindings from this
+# checkout and reruns every campaign. Default output is
+# bench/h2h/scaling/rel1 with n=6. A smoke run does not touch that
+# directory:
+#   snakemake -s bench/h2h/Snakefile --cores 1 \
+#     --config out=/tmp/readcon-final-smoke repeats=1 final_campaign
+# Each rule: one warmup, serial samples, type-7 median and IQR, raw
+# samples in the JSON, unlink+create on writes, STREAM / fdatasync /
+# raw pwrite ceilings, and the HEAD sha stamped into every output.
+# final_check fails if any file under the output directory was produced
+# on a commit other than HEAD. On the default path that directory is
+# bench/h2h/scaling/rel1.
+FINAL_OUT = config.get("out", "bench/h2h/scaling/rel1")
+FINAL_REPEATS = int(config.get("repeats", 6))
+
+
+rule final_bindings:
+    output:
+        f"{FINAL_OUT}/bindings.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py bindings --out {params.out} --repeats {params.repeats}"
+
+
+rule final_ceilings:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/hardware.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py ceilings --out {params.out} --repeats {params.repeats}"
+
+
+rule final_strong_threads:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/strong-threads.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py strong-threads --out {params.out} --repeats {params.repeats}"
+
+
+rule final_strong_mpi:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/strong-mpi.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py strong-mpi --out {params.out} --repeats {params.repeats}"
+
+
+rule final_weak:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/weak-threads.json",
+        f"{FINAL_OUT}/weak-ranks-1.json",
+        f"{FINAL_OUT}/weak-ranks-2.json",
+        f"{FINAL_OUT}/weak-ranks-4.json",
+        f"{FINAL_OUT}/weak-ranks-8.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py weak --out {params.out} --repeats {params.repeats}"
+
+
+rule final_langs:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/langs.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py langs --out {params.out} --repeats {params.repeats}"
+
+
+rule final_compressed:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/compressed.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py compressed --out {params.out} --repeats {params.repeats}"
+
+
+rule final_table2:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/h2h.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py table2 --out {params.out} --repeats {params.repeats}"
+
+
+rule final_con_h2h:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/con-h2h.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py con-h2h --out {params.out} --repeats {params.repeats}"
+
+
+rule final_db:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/db.log",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py db --out {params.out} --repeats {params.repeats}"
+
+
+rule final_fidelity:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+    output:
+        f"{FINAL_OUT}/fidelity.json",
+        f"{FINAL_OUT}/fidelity-timing.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/final_campaign.py fidelity --out {params.out} --repeats {params.repeats}"
+
+
+rule final_check:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
+        f"{FINAL_OUT}/strong-threads.json",
+        f"{FINAL_OUT}/strong-mpi.json",
+        f"{FINAL_OUT}/weak-threads.json",
+        f"{FINAL_OUT}/weak-ranks-1.json",
+        f"{FINAL_OUT}/weak-ranks-2.json",
+        f"{FINAL_OUT}/weak-ranks-4.json",
+        f"{FINAL_OUT}/weak-ranks-8.json",
+        f"{FINAL_OUT}/langs.json",
+        f"{FINAL_OUT}/compressed.json",
+        f"{FINAL_OUT}/h2h.json",
+        f"{FINAL_OUT}/con-h2h.json",
+        f"{FINAL_OUT}/db.log",
+        f"{FINAL_OUT}/fidelity.json",
+        f"{FINAL_OUT}/fidelity-timing.json",
+    output:
+        f"{FINAL_OUT}/COMMIT_OK",
+    params:
+        out=FINAL_OUT,
+    shell:
+        "python3 bench/h2h/final_campaign.py check --out {params.out}"
+
+
+rule final_campaign:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",

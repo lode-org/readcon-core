@@ -29,7 +29,7 @@ RESULTS = HERE / "results"
 LOGS = HERE / "logs"
 
 WARMUP = 1
-REPEATS = 6
+REPEATS = int(os.environ.get("READCON_CAMPAIGN_REPEATS", "6"))
 NATURAL = "(amu*angstrom^2/eV)^0.5"
 
 # Tolerances are the writer's documented rounding, not a fit to the output.

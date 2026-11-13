@@ -7,11 +7,12 @@
 //!
 //! ```text
 //! cargo run --release --example weak_scale_threads --features parallel -- \
-//!     OUT.json [FRAMES_PER_WORKER]
+//!     OUT.json [FRAMES_PER_WORKER] [REPEATS]
 //! ```
 //!
 //! The ladder is every power of two from 1 through the physical core count,
-//! plus that count when it is not a power of two. The repeat count is 6.
+//! plus that count when it is not a power of two. The repeat count defaults
+//! to 6. One untimed call warms up each rung before those samples.
 //! A rung above the physical cores exits 2 and writes `"complete": false`
 //! with no samples. Physical cores are `lscpu` cores per socket times
 //! sockets. The host string matches `benches/cpu_model.py`. The machine
@@ -203,8 +204,12 @@ fn main() {
         .next()
         .map(|text| text.parse::<usize>().expect("frames_per_worker"))
         .unwrap_or(64);
-    if frames_per_worker < 1 {
-        write_refusal(&out_path, "frames_per_worker must be positive");
+    let repeats = args
+        .next()
+        .map(|text| text.parse::<usize>().expect("repeats"))
+        .unwrap_or(REPEATS);
+    if frames_per_worker < 1 || repeats < 1 {
+        write_refusal(&out_path, "frames_per_worker and repeats must be positive");
         std::process::exit(2);
     }
     let ncpus = online_cpus();
@@ -231,8 +236,8 @@ fn main() {
             std::process::exit(2);
         }
         let _ = time_one(&text, workers, n_frames);
-        let mut samples = Vec::with_capacity(REPEATS);
-        for _ in 0..REPEATS {
+        let mut samples = Vec::with_capacity(repeats);
+        for _ in 0..repeats {
             samples.push(time_one(&text, workers, n_frames));
         }
         if index > 0 {
@@ -253,7 +258,7 @@ fn main() {
     }
 
     let body = format!(
-        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"resources/test/cuh2.con\",\n  \"repeats\": {REPEATS},\n  \"serial_match\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"physical_cores\": {physical},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
+        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"resources/test/cuh2.con\",\n  \"repeats\": {repeats},\n  \"serial_match\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"physical_cores\": {physical},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
         json_escape(&record_cpu()),
         json_escape(&git_head()),
         json_escape(&date_utc()),

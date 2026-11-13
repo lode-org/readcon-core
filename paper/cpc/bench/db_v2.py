@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 OUT = HERE / "results" / "v2"
 WORK = HERE / "work" / "v2"
-REPEATS = 6
+REPEATS = int(os.environ.get("READCON_CAMPAIGN_REPEATS", "6"))
 # lode-org/readcon-db. The Python package is the python/ subdirectory.
 READCON_DB_REV = "39ee7bbc72638a8999cb4571ff160d346e7de4b8"
 
@@ -182,7 +182,7 @@ def main() -> None:
     lines.append("exit_code 0")
     text = "\n".join(line.rstrip() for line in lines) + "\n"
     (OUT / "db.log").write_text(text)
-    log = HERE.parent / "logs" / "db.log"
+    log = Path(os.environ.get("READCON_DB_LOG", str(HERE.parent / "logs" / "db.log")))
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(text)
 
