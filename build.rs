@@ -40,8 +40,54 @@ fn check_package_version_file() {
     }
 }
 
+fn cxx_runtime() -> Option<(&'static str, Option<PathBuf>)> {
+    // zstd-sys is C, and a from-source chemfiles build is C++. The final
+    // Rust archive has to name the C++ runtime or the link drops it.
+    // Linux uses libstdc++; macOS and iOS use libc++. MSVC pulls its own.
+    let needs = env::var_os("CARGO_FEATURE_ZSTD").is_some()
+        || env::var_os("CARGO_FEATURE_CHEMFILES").is_some();
+    if !needs {
+        return None;
+    }
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let env_name = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    match (os.as_str(), env_name.as_str()) {
+        ("linux" | "android", _) => Some(("stdc++", linux_libstdcxx_dir())),
+        ("macos" | "ios", _) => Some(("c++", None)),
+        ("windows", "gnu") => Some(("stdc++", None)),
+        _ => None,
+    }
+}
+
+fn linux_libstdcxx_dir() -> Option<PathBuf> {
+    let output = std::process::Command::new("g++")
+        .args(["-print-file-name=libstdc++.so"])
+        .output()
+        .ok()?;
+    let path = String::from_utf8(output.stdout).ok()?;
+    let path = path.trim();
+    if path.is_empty() || path == "libstdc++.so" {
+        return None;
+    }
+    Path::new(path).parent().map(Path::to_path_buf)
+}
+
+fn link_cxx_runtime() {
+    let Some((lib, search)) = cxx_runtime() else {
+        return;
+    };
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rustc-link-lib=dylib={lib}");
+    if let Some(dir) = search {
+        if dir.is_dir() {
+            println!("cargo:rustc-link-search=native={}", dir.display());
+        }
+    }
+}
+
 fn main() {
     check_package_version_file();
+    link_cxx_runtime();
 
     // Cap'n Proto schema compilation (behind rpc feature)
     #[cfg(feature = "rpc")]

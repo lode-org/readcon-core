@@ -42,14 +42,22 @@ if _rv_bits.length() < 2 or not _rv_bits[1].version_compare('>= 1.88.0')
 endif
 
 _rust_sys_deps = []
+_cargo_features = get_option('cargo_features')
+_needs_cxx = 'zstd' in _cargo_features or 'chemfiles' in _cargo_features
 if host_machine.system() == 'linux'
     _rust_sys_deps += [
         dependency('threads'),
         cc.find_library('dl', required: true),
         cc.find_library('m', required: true),
     ]
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('stdc++', required: true)
+    endif
 elif host_machine.system() == 'darwin'
     _rust_sys_deps += [dependency('threads')]
+    if _needs_cxx
+        _rust_sys_deps += cc.find_library('c++', required: true)
+    endif
 elif host_machine.system() == 'windows'
     _rust_sys_deps += [
         cc.find_library('ws2_32', required: true),

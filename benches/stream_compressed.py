@@ -27,12 +27,14 @@ import hashlib
 import json
 import os
 import random
-import statistics
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+import numpy as np
 
 import readcon
 
@@ -86,6 +88,10 @@ def trajectory(frames, seed):
     return ("\n".join(out) + "\n").encode()
 
 
+def type7(values: list[float]) -> float:
+    return float(np.percentile(np.asarray(values, dtype=float), 50, method="linear"))
+
+
 def run_child(path, mode, verify=False):
     cmd = [sys.executable, __file__, "--child", str(path), mode]
     if verify:
@@ -100,7 +106,8 @@ def main():
         return
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", type=int, default=10000)
-    ap.add_argument("--repeats", type=int, default=5)
+    ap.add_argument("--repeats", type=int, default=6)
+    ap.add_argument("--warmup", type=int, default=1)
     ap.add_argument("--seed", type=int, default=20261102)
     ap.add_argument("--modes", default="default,mmap,stream")
     ap.add_argument("--out", type=Path)
@@ -112,33 +119,54 @@ def main():
         files = {"plain": Path(tmp) / "long.con", "gzip": Path(tmp) / "long.con.gz"}
         files["plain"].write_bytes(text)
         files["gzip"].write_bytes(gzip.compress(text, compresslevel=6))
+        zstd_bin = shutil.which("zstd")
+        if zstd_bin:
+            zpath = Path(tmp) / "long.con.zst"
+            subprocess.check_call(
+                [zstd_bin, "-q", "-3", "-f", "-o", str(zpath), str(files["plain"])]
+            )
+            files["zstd"] = zpath
         del text
         cases = [
             (kind, mode)
             for kind in files
             for mode in modes
-            if not (kind == "gzip" and mode == "mmap")
+            if not (kind in {"gzip", "zstd"} and mode == "mmap")
         ]
 
         digests = {f"{k}/{m}": run_child(files[k], m, verify=True) for k, m in cases}
-        assert (
-            len({(d["frames"], d["atoms"], d["sha256"]) for d in digests.values()}) == 1
-        ), digests
+        plain_digest = digests["plain/default"]
+        for name, doc in digests.items():
+            if (doc["frames"], doc["atoms"], doc["sha256"]) != (
+                plain_digest["frames"],
+                plain_digest["atoms"],
+                plain_digest["sha256"],
+            ):
+                raise SystemExit(f"{name} did not match the plain read: {doc}")
 
+        timed = cases + [("plain", "import_only")]
+        for _ in range(args.warmup):
+            for kind, mode in timed:
+                run_child(files[kind], mode)
         results = {}
         for _ in range(args.repeats):
-            for kind, mode in cases + [("plain", "import_only")]:
+            for kind, mode in timed:
                 results.setdefault(f"{kind}/{mode}", []).append(
                     run_child(files[kind], mode)
                 )
+
+        def iqr(samples: list[float]) -> float:
+            arr = np.asarray(samples, dtype=float)
+            return float(
+                np.percentile(arr, 75, method="linear")
+                - np.percentile(arr, 25, method="linear")
+            )
+
         summary = {
             name: {
-                "wall_s_median": statistics.median(r["wall_s"] for r in runs),
-                "wall_s_min": min(r["wall_s"] for r in runs),
-                "peak_rss_mib_median": statistics.median(
-                    r["peak_rss_kib"] for r in runs
-                )
-                / 1024,
+                "wall_s_median": type7([r["wall_s"] for r in runs]),
+                "wall_s_iqr": iqr([r["wall_s"] for r in runs]),
+                "peak_rss_mib_median": type7([r["peak_rss_kib"] for r in runs]) / 1024,
                 "peak_rss_mib_max": max(r["peak_rss_kib"] for r in runs) / 1024,
                 "runs": runs,
             }
@@ -146,12 +174,15 @@ def main():
         }
         report = {
             "frames": args.frames,
-            "atoms_per_frame": next(iter(digests.values()))["atoms"] // args.frames,
+            "atoms_per_frame": plain_digest["atoms"] // args.frames,
             "plain_bytes": os.path.getsize(files["plain"]),
             "gzip_bytes": os.path.getsize(files["gzip"]),
-            "frames_sha256": next(iter(digests.values()))["sha256"],
+            "zstd_bytes": os.path.getsize(files["zstd"]) if "zstd" in files else None,
+            "frames_sha256": plain_digest["sha256"],
             "seed": args.seed,
+            "warmup": args.warmup,
             "repeats": args.repeats,
+            "percentile": "numpy method=linear type=7",
             "readcon": readcon.__version__,
             "python": sys.version.split()[0],
             "results": summary,

@@ -87,13 +87,27 @@ def main(argv: list[str]) -> int:
         cmd.extend(["--features", features.strip()])
     env = os.environ.copy()
     rustc_extra: list[str] = []
+    def cxx_link_args(text: str) -> list[str]:
+        names = {part.strip() for part in text.split(",") if part.strip()}
+        if "zstd" not in names and not any(name.startswith("chemfiles") for name in names):
+            return []
+        if sys.platform.startswith("linux"):
+            return ["-Clink-arg=-lstdc++"]
+        if sys.platform == "darwin":
+            return ["-Clink-arg=-lc++"]
+        return []
+
     if sys.platform.startswith("linux"):
         rustc_extra.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
     elif sys.platform == "darwin":
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
+    rustc_extra.extend(cxx_link_args(features))
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
-    for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
+    static_extra = [
+        arg for arg in rustc_extra if arg.startswith("-Clink-arg=-l")
+    ]
+    for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", static_extra)):
         crate_cmd = cmd + ["--crate-type", crate_type]
         if extra:
             crate_cmd += ["--", *extra]
