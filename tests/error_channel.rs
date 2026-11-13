@@ -36,6 +36,23 @@ fn one_atom(coord: &str) -> String {
     )
 }
 
+#[test]
+fn trailing_non_utf8_keeps_the_earlier_invalid_count() {
+    let mut bytes = format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame()).into_bytes();
+    let pad = (64 * 1024usize).saturating_sub(bytes.len());
+    bytes.extend(std::iter::repeat(b' ').take(pad));
+    bytes.push(0xff);
+    let path = path_for("tail-ff");
+    fs::write(&path, &bytes).unwrap();
+    let err = read_all_frames_located(path.as_ref(), None).unwrap_err();
+    let LoadError::Parse(located) = err else {
+        panic!("{err}");
+    };
+    assert_eq!(located.frame_index, 1, "{located:?}");
+    assert_eq!(located.line, 20, "{located:?}");
+    let _ = fs::remove_file(&path);
+}
+
 fn bad_count_frame() -> String {
     "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n".into()
 }

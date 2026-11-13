@@ -1151,8 +1151,21 @@ impl PyConFrame {
         let spec_version = frame.header.spec_version;
         let metadata_map = frame.header.metadata.to_map();
         let metadata = json_map_to_py_dict(py, &metadata_map)?;
-        // Coordinates live in the slab. Moving the frame avoids cloning
-        // every atom onto the GIL thread after the parallel parse.
+        // Coordinates live in the slab. Atom slots still alias the parse
+        // buffer, so point them at this frame's row before that buffer goes.
+        if n_atoms > 0 {
+            let origin = {
+                let bound = slab.bind(py);
+                let contiguous = unsafe { bound.as_slice() }.map_err(|err| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "coordinate slab is not contiguous: {err}"
+                    ))
+                })?;
+                let stride = n_atoms.saturating_mul(3);
+                unsafe { contiguous.as_ptr().add(index.saturating_mul(stride)) as *mut f64 }
+            };
+            retarget_frames_to_slab(std::slice::from_mut(&mut frame), origin, n_atoms);
+        }
         frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
         Ok(PyConFrame {
             cell,

@@ -1220,8 +1220,46 @@ fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
     // the decoder and the parser no longer shared a hot buffer, and the
     // pure-Rust inflater was the part that missed the old gzip time.
     let contents = crate::compression::read_file_contents(path).map_err(load_error_from_box)?;
-    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let text = utf8_text(contents.as_bytes(), true)?;
     frames_from_text_located(text, Some(1)).map_err(LoadError::Parse)
+}
+
+/// Decode `bytes`. At end of input, a hard parse error in the valid prefix
+/// wins over a trailing non-UTF-8 byte, so that byte does not hide it.
+fn utf8_text(bytes: &[u8], eof: bool) -> Result<&str, LoadError> {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok(text),
+        Err(err) if eof => earlier_parse_or_utf8(bytes, err),
+        Err(err) => Err(LoadError::Utf8(err)),
+    }
+}
+
+fn error_needs_more_input(error: &error::ParseError) -> bool {
+    matches!(
+        error,
+        error::ParseError::IncompleteHeader
+            | error::ParseError::IncompleteFrame
+            | error::ParseError::IncompleteVelocitySection
+            | error::ParseError::IncompleteForceSection
+            | error::ParseError::IncompleteEnergySection
+            | error::ParseError::IncompleteSection(_)
+    )
+}
+
+fn earlier_parse_or_utf8(bytes: &[u8], err: std::str::Utf8Error) -> Result<&str, LoadError> {
+    let valid = err.valid_up_to();
+    if valid > 0 {
+        if let Ok(prefix) = std::str::from_utf8(&bytes[..valid]) {
+            if let Err(located) = frames_from_text_located(prefix, Some(1)) {
+                // A frame cut off by the bad byte is still the UTF-8 error.
+                // A finished frame that already failed is the error to keep.
+                if !error_needs_more_input(&located.error) {
+                    return Err(LoadError::Parse(located));
+                }
+            }
+        }
+    }
+    Err(LoadError::Utf8(err))
 }
 
 fn stream_reader(
@@ -1266,7 +1304,7 @@ fn stream_reader(
                 }
             }
         };
-        let text = std::str::from_utf8(&buf[..end]).map_err(LoadError::Utf8)?;
+        let text = utf8_text(&buf[..end], eof)?;
         let (parsed, consumed) = take_complete_frames(text, eof, line_base, frames.len() as u64)?;
         if consumed == 0 && !eof {
             let before = buf.len();
@@ -1322,7 +1360,10 @@ fn take_complete_frames(
         match iter.next() {
             Some(Ok(frame)) => frames.push(frame),
             Some(Err(error)) => {
-                if eof {
+                // A complete line that is already illegal will not become
+                // legal when the next window arrives. An unfinished frame
+                // might: the window stopped at a newline before its rows.
+                if eof || !error_needs_more_input(&error) {
                     return Err(LoadError::Parse(error::LocatedParseError::new(
                         error,
                         iter.lines.line_no(),
@@ -2892,7 +2933,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
 /// 0-based index, including when the failure is after the first frame.
 pub fn count_frames(path: &Path) -> Result<usize, LoadError> {
     let contents = load_text(path)?;
-    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let text = utf8_text(contents.as_bytes(), true)?;
     let mut n = 0usize;
     let mut iter = ConFrameIterator::new(text);
     loop {
@@ -3227,7 +3268,7 @@ pub fn read_all_frames_located(
 ) -> Result<Vec<types::ConFrame>, LoadError> {
     if matches!(num_threads, Some(n) if n >= 2) {
         let contents = load_text(path)?;
-        let text = contents.as_str().map_err(LoadError::Utf8)?;
+        let text = utf8_text(contents.as_bytes(), true)?;
         return frames_from_text_located(text, num_threads).map_err(LoadError::Parse);
     }
     stream_frames(path)
@@ -3236,7 +3277,7 @@ pub fn read_all_frames_located(
 /// Read the first frame from `path`, with a line number on failure.
 pub fn read_first_frame_located(path: &Path) -> Result<types::ConFrame, LoadError> {
     let contents = load_text(path)?;
-    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let text = utf8_text(contents.as_bytes(), true)?;
     let mut iter = ConFrameIterator::new(text);
     match iter.next() {
         Some(Ok(frame)) => Ok(frame),
@@ -3252,7 +3293,7 @@ pub fn read_first_frame_located(path: &Path) -> Result<types::ConFrame, LoadErro
 /// Skip `index` frames, then parse one, with a line number on failure.
 pub fn read_nth_frame_located(path: &Path, index: usize) -> Result<types::ConFrame, LoadError> {
     let contents = load_text(path)?;
-    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    let text = utf8_text(contents.as_bytes(), true)?;
     let mut iter = ConFrameIterator::new(text);
     match iter.skip_frames_counted(index) {
         Ok(skipped) if skipped == index => {}

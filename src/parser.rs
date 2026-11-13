@@ -2186,8 +2186,8 @@ where
         .iter()
         .fold(0usize, |sum, &n| sum.saturating_add(n));
     let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
-    use crate::storage_dtype::{FloatArray2, StorageDtypes};
-    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    use crate::storage_dtype::FloatArray2;
+    let dt = header.metadata.dtypes();
     let mut pos_flat = Vec::new();
     let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
     let mut ids = Vec::new();
