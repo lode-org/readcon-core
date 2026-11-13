@@ -1,7 +1,7 @@
 git rev-parse HEAD
-c625bd7e9f75c2c2418fa9922839c78c7353f59b
+118f06075542b897e4ac69d4c0fe7a6721925cd2
 git rev-parse HEAD^{tree}
-5ba56017ce5d983123f59af3662ea0bc360e6047
+da29a952c9d3a3cec2b15110116cd602137cf965
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -13,17 +13,17 @@ serial 1
 quantile type-7
 warmup 1
 cache warm
-versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.224252577
-sample 0.239828499
-sample 0.211195262
-sample 0.204131806
-sample 0.201470264
-sample 0.201045786
-median_s 0.207663534
-q25_s 0.202135649
-q75_s 0.220988248
-iqr_s 0.018852599
+versions readcon 0.22.0 extxyz 0.4.6 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.207476209
+sample 0.223328727
+sample 0.203981117
+sample 0.203143181
+sample 0.202077561
+sample 0.202185103
+median_s 0.203562149
+q25_s 0.202424623
+q75_s 0.206602436
+iqr_s 0.004177813
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,6 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-readcon_sha 2e4f37cb8067ff5d3978dd943d576aed541f74e1
-{"samples": [0.2242525769997883, 0.23982849900130532, 0.2111952619998192, 0.20413180600007763, 0.20147026399899914, 0.20104578599966771], "n": 6, "median_s": 0.2076635339999484, "q25_s": 0.20213564949926877, "q75_s": 0.22098824824979602, "iqr_s": 0.01885259875052725, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "ovito-extxyz-read", "tool": "ovito", "format": "extxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "2e4f37cb8067ff5d3978dd943d576aed541f74e1"}
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [0.20747620899965113, 0.2233287269991706, 0.20398111699978472, 0.20314318099917728, 0.20207756099989638, 0.2021851030003745], "n": 6, "median_s": 0.203562148999481, "q25_s": 0.2024246225000752, "q75_s": 0.20660243599968453, "iqr_s": 0.004177813499609329, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "ovito-extxyz-read", "tool": "ovito", "format": "extxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
 exit 0

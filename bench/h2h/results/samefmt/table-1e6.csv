@@ -1,4 +1,4 @@
-# mdtraj positions and cell are compared after converting nanometres to angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions.
+# mdtraj positions and cell are compared after converting nanometres to angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions. MDAnalysis cannot open a .extxyz path. Its extxyz row reads atoms-1000000x1.extxyz-bytes.xyz, a byte copy of the 1e6-atom extxyz file.
 tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,readcon_sha
 readcon,con,read,1000000,1,6,4.099727750e-02,3.622012500e-04,4.074316475e-02,4.110536600e-02,1,0,1,ok,ok,ok,ok,ok,not_in_format,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 readcon,con,write,1000000,1,6,7.802942950e-02,1.108989600e-02,7.258070200e-02,8.367059800e-02,1,0,1,ok,ok,ok,ok,ok,not_in_format,50bcbb747b6b6c14ec34e631bd27f831daaa941f
@@ -15,18 +15,21 @@ readcon,convel,roundtrip,1000000,1,6,2.521245470e-01,1.317665050e-02,2.497408395
 eon,convel,read,1000000,1,6,3.573558194e+00,5.188840475e-02,3.552164454e+00,3.604052859e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,max_abs 5.000e-01,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 eon,convel,write,1000000,1,6,4.934210163e+00,2.454161175e-02,4.929449845e+00,4.953991457e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 eon,convel,roundtrip,1000000,1,6,9.080068997e+00,6.670218525e-02,9.048414543e+00,9.115116728e+00,0,1,1,max_abs 1.000e+00,mismatch,ok,ok,mismatch,max_abs 5.000e-01,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
-readcon,extxyz,read,1000000,1,6,1.806539530e-01,4.819894750e-03,1.796499703e-01,1.844698650e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
+readcon,extxyz,read,1000000,1,6,1.856652245e-01,3.560712000e-03,1.836836210e-01,1.872443330e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 readcon,extxyz,write,1000000,1,6,5.594210595e-01,9.209598749e-03,5.555816303e-01,5.647912290e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 readcon,extxyz,roundtrip,1000000,1,6,7.285529145e-01,4.884811999e-03,7.271397178e-01,7.320245297e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
-ase,extxyz,read,1000000,1,6,1.942319957e+00,4.946593050e-02,1.921164668e+00,1.970630598e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+ase,extxyz,read,1000000,1,6,1.882514656e+00,2.221579525e-02,1.872125762e+00,1.894341558e+00,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 ase,extxyz,write,1000000,1,6,4.962183033e+00,1.334345857e-01,4.912002269e+00,5.045436855e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 ase,extxyz,roundtrip,1000000,1,6,7.048511250e+00,9.572371850e-02,7.038227275e+00,7.133950994e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
-chemfiles,extxyz,read,1000000,1,6,5.706137535e-01,2.924674525e-02,5.625648445e-01,5.918115898e-01,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+chemfiles,extxyz,read,1000000,1,6,5.600839020e-01,2.607910750e-02,5.536343148e-01,5.797134222e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 chemfiles,extxyz,write,1000000,1,6,1.004923098e+00,1.026183750e-03,1.004296340e+00,1.005322524e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 chemfiles,extxyz,roundtrip,1000000,1,6,1.555356944e+00,2.819854425e-02,1.551628428e+00,1.579826972e+00,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
-ovito,extxyz,read,1000000,1,6,2.076635340e-01,1.885259875e-02,2.021356495e-01,2.209882482e-01,1,0,1,ok,ok,ok,ok,ok,ok,2e4f37cb8067ff5d3978dd943d576aed541f74e1
+ovito,extxyz,read,1000000,1,6,2.035621490e-01,4.177813500e-03,2.024246225e-01,2.066024360e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 ovito,extxyz,write,1000000,1,6,7.530067520e-01,2.213237925e-02,7.428714627e-01,7.650038420e-01,1,0,1,ok,ok,ok,ok,ok,ok,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 ovito,extxyz,roundtrip,1000000,1,6,9.717886045e-01,4.358712625e-02,9.446829350e-01,9.882700613e-01,1,0,1,ok,ok,ok,ok,ok,ok,2e4f37cb8067ff5d3978dd943d576aed541f74e1
+ase,cextxyz,read,1000000,1,6,2.064830120e-01,5.297930500e-03,2.032961085e-01,2.085940390e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
+extxyz,cextxyz,read,1000000,1,6,1.394665570e-01,1.941413675e-02,1.329390262e-01,1.523531630e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f
+mdanalysis,extxyz,read,1000000,1,6,5.064895063e+00,7.884307825e-02,5.009332411e+00,5.088175489e+00,0,0,0,ok,missing,missing,missing,missing,missing,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 readcon,pdb,read,1000000,1,6,6.606823100e-02,3.545178001e-03,6.447891425e-02,6.802409225e-02,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 ase,pdb,read,1000000,1,6,3.919922671e+00,4.323428450e-02,3.897293721e+00,3.940528006e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format,68dfb7c307e0923044d4a9f41159b7a2ed2dd605
 ase,pdb,write,1000000,1,6,1.875199931e+00,6.265917000e-01,1.844809075e+00,2.471400775e+00,1,0,0,ok,not_in_format,ok,not_in_format,not_in_format,not_in_format,68dfb7c307e0923044d4a9f41159b7a2ed2dd605

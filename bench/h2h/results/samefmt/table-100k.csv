@@ -1,4 +1,4 @@
-# mdtraj positions and cell are compared after converting nanometres to angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions.
+# mdtraj positions and cell are compared after converting nanometres to angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions. MDAnalysis cannot open a .extxyz path. Its extxyz row reads atoms-1000000x1.extxyz-bytes.xyz, a byte copy of the 1e6-atom extxyz file.
 tool,format,operation,n_atoms,n_frames,n,median_s,iqr_s,q25_s,q75_s,correct,reordered,id_map_ok,positions,ids,cell,masses,fixed,velocities,readcon_sha
 readcon,con,read,32,100000,6,4.694582710e-01,1.105788222e-01,4.089532845e-01,5.195321067e-01,1,0,1,ok,ok,ok,ok,ok,not_in_format,50bcbb747b6b6c14ec34e631bd27f831daaa941f
 readcon,convel,read,32,100000,6,5.964450905e-01,1.695821950e-02,5.917584615e-01,6.087166810e-01,1,0,1,ok,ok,ok,ok,ok,ok,50bcbb747b6b6c14ec34e631bd27f831daaa941f

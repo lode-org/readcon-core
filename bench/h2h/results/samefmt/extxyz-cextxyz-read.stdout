@@ -1,0 +1,41 @@
+git rev-parse HEAD
+118f06075542b897e4ac69d4c0fe7a6721925cd2
+git rev-parse HEAD^{tree}
+da29a952c9d3a3cec2b15110116cd602137cf965
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 python bench/h2h/asv/drive.py samefmt extxyz-cextxyz-read
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+warmup 1
+cache warm
+versions readcon 0.22.0 extxyz 0.4.6 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.156611990
+sample 0.174726784
+sample 0.130799891
+sample 0.139356432
+sample 0.130498911
+sample 0.139576682
+median_s 0.139466557
+q25_s 0.132939026
+q75_s 0.152353163
+iqr_s 0.019414137
+n_atoms 1000000
+n_frames 1
+field positions ok
+field ids ok
+field cell ok
+field masses ok
+field fixed ok
+field velocities ok
+id_map_ok 1
+reordered 0
+correct 1
+reason ok
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [0.1566119900016929, 0.1747267840000859, 0.1307998909996968, 0.13935643199874903, 0.13049891099944944, 0.13957668199873297], "n": 6, "median_s": 0.139466556998741, "q25_s": 0.13293902624945986, "q75_s": 0.15235316300095292, "iqr_s": 0.01941413675149306, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "extxyz-cextxyz-read", "tool": "extxyz", "format": "cextxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
+exit 0

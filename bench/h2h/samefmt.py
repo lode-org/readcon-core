@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -104,6 +105,12 @@ ARMS = (
     "ovito-extxyz-read",
     "ovito-extxyz-write",
     "ovito-extxyz-roundtrip",
+    # Same 1e6-atom extxyz file. cextxyz is ase-extxyz. extxyz-cextxyz is
+    # extxyz 0.4.6 iread_dicts(use_cextxyz=True). MDAnalysis reads a byte
+    # copy of that file under a .xyz name.
+    "ase-cextxyz-read",
+    "extxyz-cextxyz-read",
+    "mdanalysis-extxyz-read",
     "readcon-pdb-read",
     "ase-pdb-read",
     "ase-pdb-write",
@@ -601,6 +608,7 @@ def prepare() -> None:
     if not (comment.is_file() and comment.stat().st_size > 0):
         print(f"prepare comment frames {CC_FRAMES}", flush=True)
         _write_comment_extxyz(comment, cc_geometry())
+    _copy_extxyz_bytes()
 
 
 def _max_abs(got: np.ndarray, ref: np.ndarray) -> float:
@@ -908,6 +916,26 @@ def read_file_with_readcon(fmt: str, path: Path) -> dict:
     if fmt == "pdb":
         return _pdb_from_readcon(path)
     raise ValueError(fmt)
+
+
+def extxyz_bytes_xyz(src: Path | None = None) -> Path:
+    """Plain .xyz name whose bytes are the extxyz file."""
+    src = _paths("extxyz") if src is None else src
+    return src.with_name(src.stem + ".extxyz-bytes.xyz")
+
+
+def _copy_extxyz_bytes() -> None:
+    src = _paths("extxyz")
+    if not src.is_file():
+        return
+    dest = extxyz_bytes_xyz(src)
+    if (
+        dest.is_file()
+        and dest.stat().st_size == src.stat().st_size
+        and dest.stat().st_mtime >= src.stat().st_mtime
+    ):
+        return
+    shutil.copyfile(src, dest)
 
 
 def _eon_root() -> Path | None:
@@ -1437,11 +1465,21 @@ def _raw_read(tool: str, fmt: str, path: Path):
     if tool == "mdanalysis":
         import MDAnalysis as mda
 
-        universe = mda.Universe(os.fspath(path))
+        # .extxyz is not a Universe format. The bytes are the same file.
+        read_path = extxyz_bytes_xyz(path) if fmt == "extxyz" else path
+        universe = mda.Universe(os.fspath(read_path))
         blocks = []
         for _ts in universe.trajectory:
             blocks.append(np.array(universe.atoms.positions, dtype=np.float64).copy())
         return universe, blocks
+    if tool == "extxyz":
+        import extxyz
+
+        frames = []
+        for frame in extxyz.iread_dicts(os.fspath(path), use_cextxyz=True):
+            _ = frame.arrays["pos"]
+            frames.append(frame)
+        return frames
     if tool == "mdtraj":
         import mdtraj as md
 
@@ -1514,6 +1552,8 @@ def _materialize(tool: str, fmt: str, raw) -> dict:
         return _pack(positions[0], cell, n_frames=int(positions.shape[0]))
     if tool == "mdtraj":
         return _mdtraj_to_got(raw)
+    if tool == "extxyz":
+        return _extxyz_pkg_to_got(raw)
     raise RuntimeError(f"no unpack for {tool} {fmt}")
 
 
@@ -1536,6 +1576,42 @@ def _mdtraj_topology(n_atoms: int | None = None):
         topology.add_atom("Cu", element, residue)
     _TOPS[n_atoms] = topology
     return topology
+
+
+def _cell6(matrix) -> np.ndarray:
+    lattice = np.asarray(matrix, dtype=np.float64).reshape(3, 3)
+    lengths = np.linalg.norm(lattice, axis=1)
+
+    def angle(left, right) -> float:
+        cosine = float(np.dot(left, right) / (np.linalg.norm(left) * np.linalg.norm(right)))
+        return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+    return np.array(
+        [
+            lengths[0],
+            lengths[1],
+            lengths[2],
+            angle(lattice[1], lattice[2]),
+            angle(lattice[0], lattice[2]),
+            angle(lattice[0], lattice[1]),
+        ],
+        dtype=np.float64,
+    )
+
+
+def _extxyz_pkg_to_got(frames) -> dict:
+    frame = frames[0]
+    arrays = frame.arrays
+    positions = np.asarray(arrays["pos"], dtype=np.float64)
+    masses = np.asarray(arrays["masses"], dtype=np.float64) if "masses" in arrays else None
+    velocities = None
+    for key in ("vel", "velocities", "velo"):
+        if key in arrays:
+            velocities = np.asarray(arrays[key], dtype=np.float64)
+            break
+    ids = arrays["id"] if "id" in arrays else None
+    fixed = arrays["fixed"] if "fixed" in arrays else None
+    return _pack(positions, _cell6(frame.cell), masses, ids, fixed, velocities, n_frames=len(frames))
 
 
 def _mdtraj_to_got(traj) -> dict:
@@ -2043,6 +2119,9 @@ def _versions() -> str:
         import readcon
 
         parts.append(f"readcon {getattr(readcon, '__version__', '0.22.0')}")
+        import extxyz
+
+        parts.append(f"extxyz {extxyz.__version__}")
     except Exception:
         parts.append("readcon missing")
     for name in ("ase", "ase_extxyz", "chemfiles", "MDAnalysis", "ovito"):
@@ -2096,7 +2175,8 @@ def run(arm: str) -> dict:
     row.update(check)
     row["arm"] = arm
     row["tool"], row["format"], row["operation"], row["multi"], _variant = split_arm(arm)
-    row["file"] = support.rel(_paths(fmt, row["multi"], _variant))
+    recorded = extxyz_bytes_xyz() if tool == "mdanalysis" and fmt == "extxyz" else _paths(fmt, row["multi"], _variant)
+    row["file"] = support.rel(recorded)
     row["readcon_sha"] = os.environ.get("READCON_SHA", "").strip()
     command = [
         "taskset",
@@ -2161,7 +2241,9 @@ def _row_from_log(arm: str) -> dict:
 
 TABLE_NOTE = (
     "# mdtraj positions and cell are compared after converting nanometres to "
-    "angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions.\n"
+    "angstroms, at tolerance 1e-5. Other rows use 1e-12 for positions. "
+    "MDAnalysis cannot open a .extxyz path. Its extxyz row reads "
+    "atoms-1000000x1.extxyz-bytes.xyz, a byte copy of the 1e6-atom extxyz file.\n"
 )
 
 

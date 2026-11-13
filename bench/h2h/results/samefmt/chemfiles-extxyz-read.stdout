@@ -1,7 +1,7 @@
 git rev-parse HEAD
-68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+118f06075542b897e4ac69d4c0fe7a6721925cd2
 git rev-parse HEAD^{tree}
-0b41eb7cf69d32f7b01e77eeaede952a2080e010
+da29a952c9d3a3cec2b15110116cd602137cf965
 git rev-parse HEAD:src
 acb56e4e689ba9cf961b62f190b6ea380768e882
 command
@@ -13,17 +13,17 @@ serial 1
 quantile type-7
 warmup 1
 cache warm
-versions readcon 0.22.0 ase 3.29.0 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
-sample 0.533779986
-sample 0.847549296
-sample 0.572999912
-sample 0.598082149
-sample 0.560677261
-sample 0.568227595
-median_s 0.570613754
-q25_s 0.562564845
-q75_s 0.591811590
-iqr_s 0.029246745
+versions readcon 0.22.0 extxyz 0.4.6 ase 3.29.0 ase_extxyz 0.1.1 chemfiles 0.10.4 MDAnalysis 2.11.0 ovito (3, 17, 2) eon 579738a9387e8d0ea55496f45dd057812cfab892
+sample 0.402833929
+sample 0.697584975
+sample 0.564085271
+sample 0.584922806
+sample 0.552818242
+sample 0.556082533
+median_s 0.560083902
+q25_s 0.553634315
+q75_s 0.579713422
+iqr_s 0.026079107
 n_atoms 1000000
 n_frames 1
 field positions ok
@@ -36,5 +36,6 @@ id_map_ok 1
 reordered 0
 correct 1
 reason ok
-{"samples": [0.5337799859998995, 0.84754929599967, 0.5729999120003413, 0.5980821490002199, 0.5606772609999098, 0.5682275950002804], "n": 6, "median_s": 0.5706137535003108, "q25_s": 0.5625648445000024, "q75_s": 0.5918115897502503, "iqr_s": 0.02924674525024784, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "chemfiles-extxyz-read", "tool": "chemfiles", "format": "extxyz", "operation": "read", "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz"}
+readcon_sha 50bcbb747b6b6c14ec34e631bd27f831daaa941f
+{"samples": [0.40283392899982573, 0.6975849749996996, 0.5640852710002946, 0.5849228059996676, 0.552818242000285, 0.5560825329994259], "n": 6, "median_s": 0.5600839019998602, "q25_s": 0.5536343147500702, "q75_s": 0.5797134222498244, "iqr_s": 0.026079107499754173, "n_atoms": 1000000, "n_frames": 1, "fields": {"positions": "ok", "ids": "ok", "cell": "ok", "masses": "ok", "fixed": "ok", "velocities": "ok"}, "id_map_ok": true, "reordered": false, "correct": true, "reason": "ok", "arm": "chemfiles-extxyz-read", "tool": "chemfiles", "format": "extxyz", "operation": "read", "multi": false, "file": "bench/h2h/work/samefmt/inputs/atoms-1000000x1.extxyz", "readcon_sha": "50bcbb747b6b6c14ec34e631bd27f831daaa941f"}
 exit 0
