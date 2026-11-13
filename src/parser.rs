@@ -174,6 +174,18 @@ pub fn parse_line_of_range_f64_stack(
             .position(|b| b.is_ascii_whitespace())
             .map(|k| i + k)
             .unwrap_or(n);
+        // The line is already UTF-8. A plain decimal is accepted here, so the
+        // general parser (and its UTF-8 check of the token) runs only when
+        // this scan refuses the token.
+        if let Some((val, next)) = crate::fast_dec::parse_f64_hot(bytes, i)
+            && next == end
+            && val.is_finite()
+        {
+            out[found] = val;
+            found += 1;
+            i = next;
+            continue;
+        }
         let token = std::str::from_utf8(&bytes[i..end]).unwrap_or("");
         if is_nonfinite_spelling(token) {
             return Err(ParseError::NonFiniteValue(token.to_string()));
@@ -610,7 +622,13 @@ fn parse_coord_fields_fast(
         if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
             return None;
         }
-        let (val, next) = crate::fast_dec::parse_f64_hot(bytes, i)?;
+        // A 20-digit fixed-point dump does not fit the 19-digit hot scan.
+        // Resolve that token here so the other two fields stay on the hot scan
+        // instead of the whole row falling through to the general parser.
+        let (val, next) = match crate::fast_dec::parse_f64_hot(bytes, i) {
+            Some(parsed) => parsed,
+            None => crate::fast_dec::parse_f64_long(bytes, i)?,
+        };
         if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
             return None;
         }

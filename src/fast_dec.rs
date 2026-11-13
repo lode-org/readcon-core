@@ -1,10 +1,16 @@
 //! Decimal scan for coordinate and vector rows.
 //!
 //! The common CON number is an optional sign, digits, one dot, and more
-//! digits, with no exponent. That form is turned into an `f64` here. Anything
-//! else (an exponent, a non-finite spelling, more than 19 digits) returns
-//! `None` and the caller uses the general parser, which also builds the
-//! error text.
+//! digits, with no exponent. That form is turned into an `f64` here. An
+//! exponent or a non-finite spelling returns `None` and the caller uses the
+//! general parser, which also builds the error text.
+//!
+//! A fixed-point dump such as `{:.17}` is often 20 digits once the integer
+//! part has three places (`125.9324…`). Those digits do not fit in one `u64`,
+//! so the scan keeps the leading 19 and accepts the value only when moving
+//! the last digit by one does not change the rounded `f64`. A leading zero
+//! that would push a significant digit out of that window still returns
+//! `None`.
 
 /// `5^q` approximations for `q` in `-22..=22`, same words the general
 /// decimal conversion uses for that exponent window.
@@ -167,6 +173,115 @@ pub(crate) fn parse_f64_hot(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
     Some((val, p))
 }
 
+/// More than 19 digits. Kept out of [`parse_f64_hot`] so the common
+/// coordinate loop does not carry this state.
+#[cold]
+#[inline(never)]
+pub(crate) fn parse_f64_long(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
+    if i >= bytes.len() {
+        return None;
+    }
+    let mut p = i;
+    let mut neg = false;
+    match bytes[p] {
+        b'+' => p += 1,
+        b'-' => {
+            neg = true;
+            p += 1;
+        }
+        _ => {}
+    }
+    if p >= bytes.len() {
+        return None;
+    }
+    let lead = bytes[p];
+    if !lead.is_ascii_digit() && lead != b'.' {
+        return None;
+    }
+    // A leading zero would fill the 19-digit window and drop a later
+    // significant digit. Leave that token to the general parser.
+    let fragile = lead == b'0' || (lead == b'.' && (p + 1 >= bytes.len() || bytes[p + 1] == b'0'));
+
+    let mut mant: u64 = 0;
+    let mut exp: i32 = 0;
+    let mut ndigits: u32 = 0;
+    let mut many = false;
+    let mut sticky = false;
+    let mut extra = 0u32;
+
+    while p < bytes.len() && bytes[p].is_ascii_digit() {
+        if ndigits == 19 {
+            if fragile || extra == 40 {
+                return None;
+            }
+            many = true;
+            extra += 1;
+            if bytes[p] != b'0' {
+                sticky = true;
+            }
+            exp += 1;
+            p += 1;
+            continue;
+        }
+        mant = mant * 10 + u64::from(bytes[p] - b'0');
+        ndigits += 1;
+        p += 1;
+    }
+    if p < bytes.len() && bytes[p] == b'.' {
+        p += 1;
+        if !many {
+            while p + 8 <= bytes.len() && ndigits + 8 <= 19 {
+                let word = read_u64(bytes, p);
+                if !is_8digits(word) {
+                    break;
+                }
+                mant = mant
+                    .wrapping_mul(100_000_000)
+                    .wrapping_add(parse_8digits(word));
+                ndigits += 8;
+                exp -= 8;
+                p += 8;
+            }
+        }
+        while p < bytes.len() && bytes[p].is_ascii_digit() {
+            if ndigits == 19 {
+                if fragile || extra == 40 {
+                    return None;
+                }
+                many = true;
+                extra += 1;
+                if bytes[p] != b'0' {
+                    sticky = true;
+                }
+                p += 1;
+                continue;
+            }
+            mant = mant * 10 + u64::from(bytes[p] - b'0');
+            ndigits += 1;
+            exp -= 1;
+            p += 1;
+        }
+    }
+    if ndigits == 0 || !many {
+        return None;
+    }
+    if p < bytes.len() && (bytes[p] == b'e' || bytes[p] == b'E') {
+        return None;
+    }
+    if sticky {
+        // The unread tail sits strictly between `mant` and `mant + 1` at this
+        // scale. When both round to the same `f64`, that is the only result
+        // the general parser can return.
+        let low = finish(neg, mant, exp)?;
+        let high = finish(neg, mant.checked_add(1)?, exp)?;
+        if low.to_bits() != high.to_bits() {
+            return None;
+        }
+        return Some((low, p));
+    }
+    finish(neg, mant, exp).map(|val| (val, p))
+}
+
 #[inline(always)]
 fn finish(neg: bool, mant: u64, exp: i32) -> Option<f64> {
     if mant == 0 {
@@ -270,7 +385,7 @@ fn product(q: i64, w: u64) -> (u64, u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_f64_hot;
+    use super::{parse_f64_hot, parse_f64_long};
 
     fn bits_of(text: &str) -> Option<u64> {
         let (val, n) = parse_f64_hot(text.as_bytes(), 0)?;
@@ -346,13 +461,48 @@ mod tests {
                     }
                 }
                 None => {
-                    // Exponents, non-finite spellings, and more than 19 digits
-                    // stay on the general parser. It must still accept the token.
+                    // Exponents, non-finite spellings, and a long mantissa whose
+                    // rounding is ambiguous stay on the general parser.
                     let _ = reference(text);
                 }
             }
         }
         assert!(saw_long, "17-digit coordinates must stay on the hot path");
+    }
+
+    #[test]
+    fn fixed_width_coordinates_match_fast_float() {
+        // `{:.17}` with a 3-digit integer part is 20 digits. The row used to
+        // leave the hot scan there and reparse every field.
+        let mut accepted = 0usize;
+        let mut total = 0usize;
+        for i in 0..200 {
+            let x = (i % 50) as f64 * 2.557 + 0.6394;
+            let y = ((i / 50) % 50) as f64 * 3.617 + 0.9045 + 100.0;
+            let z = -((i / 2500) as f64) * 2.087 - 0.0001;
+            for value in [x, y, z] {
+                let plain = format!("{value:.17}");
+                let scientific = format!("{value:.17}e0");
+                assert!(
+                    parse_f64_hot(scientific.as_bytes(), 0).is_none(),
+                    "{scientific}"
+                );
+                total += 1;
+                let fell = agree(plain.as_bytes(), 0);
+                if !fell {
+                    accepted += 1;
+                }
+            }
+        }
+        assert!(
+            accepted * 10 > total * 8,
+            "accepted {accepted} of {total} fixed-point coordinates"
+        );
+        // Trailing zeros past the 19th digit are exact, not a rounding tie.
+        assert!(!agree(b"125.93240000000000000", 0));
+        assert!(!agree(b"12345678901234567890", 0));
+        // A leading zero that would hide a significant digit must decline.
+        assert!(parse_f64_hot(b"0000000000000000000123", 0).is_none());
     }
 
     #[test]
@@ -495,7 +645,7 @@ mod tests {
     }
 
     fn agree(bytes: &[u8], at: usize) -> bool {
-        let hot = parse_f64_hot(bytes, at);
+        let hot = parse_f64_hot(bytes, at).or_else(|| parse_f64_long(bytes, at));
         let reference = fast_float2::parse_partial::<f64, _>(&bytes[at..]);
         match (hot, reference) {
             (Some((got, end)), Ok((want, n))) => {
@@ -558,10 +708,6 @@ mod tests {
             let digits = text.bytes().filter(|b| b.is_ascii_digit()).count();
             if digits >= 20 && !text.bytes().any(|b| b == b'e' || b == b'E') {
                 saw_twenty = true;
-                assert!(
-                    parse_f64_hot(text.as_bytes(), 0).is_none(),
-                    "20-digit mantissa must fall back: {text}"
-                );
             }
             if text.bytes().any(|b| b == b'e' || b == b'E')
                 || text.bytes().filter(|b| *b == b'0').count() > 24
@@ -592,8 +738,8 @@ mod tests {
             "accepted {accepted}, expected the hot path to take a large share"
         );
         assert!(
-            fallback > 200_000,
-            "fallback {fallback}, expected exponents, long mantissas, and non-finite spellings"
+            fallback > 100_000,
+            "fallback {fallback}, expected exponents, ambiguous long mantissas, and non-finite spellings"
         );
     }
 
