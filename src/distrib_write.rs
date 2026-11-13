@@ -656,19 +656,61 @@ mod ranked_sink_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    /// Truncating a same-length file used to drop the bytes (and the
-    /// pages) before the rewrite. The ranked prepare leaves them.
+    /// Resident pages of `path`. `mincore` does not fault.
+    fn resident_pages(path: &std::path::Path) -> usize {
+        let file = std::fs::File::open(path).unwrap();
+        let len = file.metadata().unwrap().len() as usize;
+        assert!(len > 0);
+        let map = unsafe { memmap2::Mmap::map(&file).unwrap() };
+        let pages = len.div_ceil(4096);
+        let mut present = vec![0u8; pages];
+        let rc =
+            unsafe { libc::mincore(map.as_ptr() as *mut libc::c_void, len, present.as_mut_ptr()) };
+        assert_eq!(rc, 0, "mincore: {}", std::io::Error::last_os_error());
+        present.iter().filter(|byte| *byte & 1 == 1).count()
+    }
+
+    /// A same-length ranked rewrite used to truncate the file on rank 0.
+    /// That dropped every page, then the ranks faulted them back. The
+    /// bytes of the previous write have to stay until the new bytes land,
+    /// and a shorter file still truncates.
     #[test]
-    fn a_same_length_file_keeps_its_bytes() {
+    fn a_same_length_rewrite_keeps_pages_and_bytes() {
         let path =
             std::path::PathBuf::from(format!("/dev/shm/readcon-reuse-{}", std::process::id()));
-        std::fs::write(&path, b"abcdefghijklmnop").unwrap();
-        super::prepare_ranked_file(&path, 16).unwrap();
-        let got = std::fs::read(&path).unwrap();
-        assert_eq!(got, b"abcdefghijklmnop");
+        let first = vec![0xABu8; 8192];
+        std::fs::write(&path, &first).unwrap();
+        // Fault the pages. A later mincore then sees the resident set.
+        assert_eq!(std::fs::read(&path).unwrap(), first);
+        let resident = resident_pages(&path);
+        assert_eq!(resident, 2, "the first write should be fully resident");
+
+        super::prepare_ranked_file(&path, first.len() as u64).unwrap();
+        assert_eq!(
+            resident_pages(&path),
+            resident,
+            "a same-length prepare must not drop the pages"
+        );
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            first,
+            "the previous bytes stay until the rewrite stores new ones"
+        );
+
+        let second = vec![0xCDu8; first.len()];
+        {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap();
+            copy_mapped(&file, &second, 0).unwrap();
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), second);
+        assert_eq!(resident_pages(&path), resident);
+
         super::prepare_ranked_file(&path, 8).unwrap();
-        let got = std::fs::read(&path).unwrap();
-        assert_eq!(got.len(), 8);
+        assert_eq!(std::fs::read(&path).unwrap().len(), 8);
         let _ = std::fs::remove_file(&path);
     }
 

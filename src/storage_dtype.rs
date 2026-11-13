@@ -236,6 +236,10 @@ pub struct Optional2 {
 }
 
 impl Optional2 {
+    pub(crate) fn is_present(&self) -> bool {
+        self.inner.is_some()
+    }
+
     pub fn new(array: Array2Storage) -> Self {
         if array.nrows() == 0 {
             Self { inner: None }
@@ -728,6 +732,10 @@ pub struct Optional1 {
 }
 
 impl Optional1 {
+    pub(crate) fn is_present(&self) -> bool {
+        self.inner.is_some()
+    }
+
     pub fn new(array: Array1Storage) -> Self {
         if array.len() == 0 {
             Self { inner: None }

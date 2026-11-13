@@ -674,14 +674,33 @@ impl<W: Write> ConFrameWriter<W> {
             // still emitted after every coordinate block, so the bytes
             // match a second scan.
             let save_velocity = frame.has_velocities();
-            let mut velocity_rows = Vec::new();
+            // One buffer per component, kept on this thread. A fresh Vec
+            // for every frame was an allocation on the velocity write.
+            std::thread_local! {
+                static VEL_ROWS: std::cell::RefCell<Vec<Vec<u8>>> =
+                    const { std::cell::RefCell::new(Vec::new()) };
+            }
+            struct RestoreRows(Vec<Vec<u8>>);
+            impl Drop for RestoreRows {
+                fn drop(&mut self) {
+                    let rows = std::mem::take(&mut self.0);
+                    VEL_ROWS.with(|cell| *cell.borrow_mut() = rows);
+                }
+            }
+            let mut velocity_rows = RestoreRows(VEL_ROWS.with(|cell| cell.take()));
+            let ntypes = frame.header.natms_per_type.len();
+            if velocity_rows.0.len() < ntypes {
+                velocity_rows.0.resize_with(ntypes, Vec::new);
+            }
+            for row in &mut velocity_rows.0 {
+                row.clear();
+            }
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
                 push_str_line(buf, symbol);
                 push_component_line(buf, "Coordinates of Component", type_idx);
 
-                let mut vel_buf = Vec::new();
                 let mapped = self.force_map
                     || (self.atom_workers >= 2 && num_atoms_in_type >= WIDE_ATOM_GRAIN);
                 append_coord_rows(
@@ -696,14 +715,11 @@ impl<W: Write> ConFrameWriter<W> {
                     self.force_map,
                     stream_out.as_mut().map(|out| &mut out.file),
                     if save_velocity {
-                        Some(&mut vel_buf)
+                        Some(&mut velocity_rows.0[type_idx])
                     } else {
                         None
                     },
                 )?;
-                if save_velocity {
-                    velocity_rows.push(vel_buf);
-                }
                 atom_idx_offset += num_atoms_in_type;
             }
 
@@ -717,7 +733,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let symbol = &frame.atom_data[vel_idx_offset].symbol;
                     push_str_line(buf, symbol);
                     push_component_line(buf, "Velocities of Component", type_idx);
-                    buf.extend_from_slice(&velocity_rows[type_idx]);
+                    buf.extend_from_slice(&velocity_rows.0[type_idx]);
                     vel_idx_offset += num_atoms_in_type;
                 }
             }
@@ -2541,32 +2557,121 @@ pub fn write_frame_refs_with_threads(
 /// neighbour and leaves the other workers short.
 pub(crate) fn frame_byte_weight(frame: &ConFrame) -> usize {
     let atoms = frame.atom_data.len().max(1);
+    // Declared sections are the line blocks. Absent SoA columns are a
+    // null check. Walking every atom for a coordinate-only frame was a
+    // pointer chase per frame, about 5 ms on a 100 000-frame write.
+    if !frame.header.sections.is_empty() {
+        return atoms.saturating_mul(1 + frame.header.sections.len());
+    }
     let mut blocks = 1usize;
-    if frame.has_velocities() {
+    if frame.velocities.is_present() {
         blocks += 1;
     }
-    if frame.has_forces() {
+    if frame.forces.is_present() {
         blocks += 1;
     }
-    if frame.has_energies() {
+    if frame.atom_energies.is_present() {
         blocks += 1;
     }
-    if frame.has_charges() {
+    if frame.charges.is_present() {
         blocks += 1;
     }
-    if frame.has_spins() {
+    if frame.spins.is_present() {
         blocks += 1;
     }
-    if frame.has_magmoms() {
+    if frame.magmoms.is_present() {
         blocks += 1;
     }
-    if frame.has_displacements() {
+    if frame.displacements.is_present() {
         blocks += 1;
     }
-    if frame.has_spreads() {
+    if frame.spreads.is_present() {
         blocks += 1;
+    }
+    if blocks == 1
+        && let Some(atom) = frame.atom_data.first()
+    {
+        if atom.has_velocity() {
+            blocks += 1;
+        }
+        if atom.has_forces() {
+            blocks += 1;
+        }
+        if atom.has_energy() {
+            blocks += 1;
+        }
+        if atom.has_charge() {
+            blocks += 1;
+        }
+        if atom.has_spin() {
+            blocks += 1;
+        }
+        if atom.has_magmom() {
+            blocks += 1;
+        }
+        if atom.has_displacement() {
+            blocks += 1;
+        }
+        if atom.has_spread() {
+            blocks += 1;
+        }
     }
     atoms.saturating_mul(blocks)
+}
+
+fn equal_frame_ranges(n: usize, groups: usize) -> Vec<(usize, usize)> {
+    let groups = groups.max(1).min(n.max(1));
+    let mut out = Vec::with_capacity(groups);
+    if n == 0 {
+        return out;
+    }
+    for group in 0..groups {
+        let start = group * n / groups;
+        let end = (group + 1) * n / groups;
+        if start < end {
+            out.push((start, end));
+        }
+    }
+    out
+}
+
+/// Equal slices when sampled frames share a weight. A mixed file is
+/// packed from every frame's byte weight.
+///
+/// Walking every frame of a uniform 100 000-frame trajectory before
+/// formatting it cost several milliseconds on the 8-thread write, and
+/// the equal split is the same one the weights would have produced.
+pub(crate) fn group_frame_ranges(frames: &[&ConFrame], groups: usize) -> Vec<(usize, usize)> {
+    let n = frames.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let groups = groups.max(1).min(n);
+    if n == 1 || !sampled_weights_vary(frames) {
+        return equal_frame_ranges(n, groups);
+    }
+    let weights: Vec<usize> = frames
+        .iter()
+        .map(|frame| frame_byte_weight(frame))
+        .collect();
+    pack_frames_by_weight(&weights, groups)
+}
+
+fn sampled_weights_vary(frames: &[&ConFrame]) -> bool {
+    let anchor = frame_byte_weight(frames[0]);
+    let last = frames.len() - 1;
+    let samples = 16.min(frames.len());
+    for i in 0..samples {
+        let index = if samples == 1 {
+            0
+        } else {
+            i * last / (samples - 1)
+        };
+        if frame_byte_weight(frames[index]) != anchor {
+            return true;
+        }
+    }
+    false
 }
 
 /// Contiguous groups whose weights are as equal as a frame boundary allows.
@@ -2671,28 +2776,11 @@ fn pipeline_frame_groups(
         })();
         return commit_temporary(&tmp, path, result);
     }
-    // Touching every frame on the caller was a serial 5 ms before the
-    // formatters started. The same workers weigh the frames first.
-    let mut weights = vec![0usize; frames.len()];
-    let weighers = workers.max(1).min(frames.len());
-    std::thread::scope(|scope| {
-        let chunk = frames.len().div_ceil(weighers);
-        for (index, slot) in weights.chunks_mut(chunk).enumerate() {
-            let start = index * chunk;
-            let end = start + slot.len();
-            let frames = &frames[start..end];
-            scope.spawn(move || {
-                for (weight, frame) in slot.iter_mut().zip(frames.iter()) {
-                    *weight = frame_byte_weight(frame);
-                }
-            });
-        }
-    });
     // Several groups per worker so the first one finishes early and the
-    // copy overlaps the rest. Weights, not frame counts: a velocity
-    // frame is not glued to a light neighbour.
+    // copy overlaps the rest. Uniform frames skip the weight scan;
+    // a mixed trajectory is packed by byte weight.
     let groups = workers.saturating_mul(4).max(workers);
-    let ranges = pack_frames_by_weight(&weights, groups);
+    let ranges = group_frame_ranges(frames, groups);
     let pieces: Vec<&[&ConFrame]> = ranges
         .iter()
         .map(|&(start, end)| &frames[start..end])
@@ -3328,6 +3416,65 @@ mod parallel_write_tests {
         super::write_frame_refs_to_path(&path, &refs, 2, None, false, true).unwrap();
         let got = std::fs::read(&path).unwrap();
         assert_eq!(got, serial);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Light frames then velocity frames. Equal frame counts put the
+    /// heavy half in its own groups, more than 10% above the mean.
+    /// Byte weights keep the heaviest group within 10% of that mean,
+    /// and the file is still the serial byte stream.
+    #[test]
+    fn mixed_con_and_convel_groups_stay_within_ten_percent() {
+        let con = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.con"
+        ))
+        .unwrap();
+        let vel = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/tiny_cuh2.convel"
+        ))
+        .unwrap();
+        let text = format!("{}{}", con.repeat(24), vel.repeat(24));
+        let frames = crate::iterators::frames_from_text(&text, Some(1)).unwrap();
+        assert_eq!(frames.len(), 48);
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let weights: Vec<usize> = refs.iter().map(|frame| frame_byte_weight(frame)).collect();
+        let groups = 4usize;
+        let ranges = super::group_frame_ranges(&refs, groups);
+        let group_weight = |ranges: &[(usize, usize)]| -> Vec<u64> {
+            ranges
+                .iter()
+                .map(|&(start, end)| weights[start..end].iter().map(|w| *w as u64).sum())
+                .collect()
+        };
+        let weighted = group_weight(&ranges);
+        let total: u64 = weighted.iter().sum();
+        let mean = total as f64 / weighted.len() as f64;
+        let max = *weighted.iter().max().unwrap() as f64;
+        assert!(
+            max <= mean * 1.10,
+            "heaviest group {max} mean {mean} weights {weighted:?}"
+        );
+        let equal = group_weight(&super::equal_frame_ranges(frames.len(), groups));
+        let equal_max = *equal.iter().max().unwrap() as f64;
+        let equal_mean = total as f64 / equal.len() as f64;
+        assert!(
+            equal_max > equal_mean * 1.10,
+            "equal frame counts should miss the 10% band: {equal:?}"
+        );
+
+        let mut serial = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut serial);
+            for frame in &frames {
+                writer.write_frame_bound(frame).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        let path = std::env::temp_dir().join(format!("rc-mix-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), serial);
         let _ = std::fs::remove_file(&path);
     }
 }

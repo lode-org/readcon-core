@@ -818,6 +818,67 @@ mod tests {
         assert_eq!(super::fold_slice_parts(data.len() as u64, &parts), whole);
     }
 
+    /// Rank slices, including an empty rank and a one-byte rank, fold to
+    /// the hash of the whole buffer. The sidecar written from that hash
+    /// matches a sidecar fingerprinted from the file.
+    #[test]
+    fn rank_slices_hash_matches_the_full_file() {
+        let data: Vec<u8> = (0..HASH_BLOCK * 2 + 64).map(|i| (i % 251) as u8).collect();
+        let whole = content_hash(&data);
+        let layouts: [&[usize]; 4] = [
+            &[0, data.len()],
+            &[0, 1, data.len()],
+            &[0, 1, 1, HASH_BLOCK - 1, HASH_BLOCK, data.len()],
+            &[
+                0,
+                3,
+                HASH_BLOCK / 2,
+                HASH_BLOCK,
+                HASH_BLOCK + 7,
+                2 * HASH_BLOCK,
+                data.len(),
+            ],
+        ];
+        for cuts in layouts {
+            let mut parts = Vec::new();
+            for span in cuts.windows(2) {
+                parts.push(super::slice_block_parts(
+                    span[0] as u64,
+                    &data[span[0]..span[1]],
+                ));
+                // An empty rank at this offset contributes nothing.
+                parts.push(super::slice_block_parts(span[1] as u64, &[]));
+            }
+            assert_eq!(
+                super::fold_slice_parts(data.len() as u64, &parts),
+                whole,
+                "cuts {cuts:?}"
+            );
+        }
+
+        let dir = std::env::temp_dir().join(format!("rcidx-ranks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.con");
+        std::fs::write(&path, &data).unwrap();
+        let idx = FrameIndex {
+            offsets: vec![0],
+            data_len: data.len() as u64,
+        };
+        let mut rank_parts = Vec::new();
+        let mid = HASH_BLOCK + 3;
+        rank_parts.push(super::slice_block_parts(0, &data[..mid]));
+        rank_parts.push(super::slice_block_parts(mid as u64, &[]));
+        rank_parts.push(super::slice_block_parts(mid as u64, &data[mid..]));
+        let folded = super::fold_slice_parts(data.len() as u64, &rank_parts);
+        assert_eq!(folded, whole);
+        super::write_sidecar_known(&path, &idx, folded).unwrap();
+        let from_ranks = std::fs::read(sidecar_path(&path)).unwrap();
+        write_sidecar(&path, &idx).unwrap();
+        let from_file = std::fs::read(sidecar_path(&path)).unwrap();
+        assert_eq!(from_ranks, from_file);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn known_hash_sidecar_matches_a_file_fingerprint() {
         let dir = std::env::temp_dir().join(format!("rcidx-known-{}", std::process::id()));

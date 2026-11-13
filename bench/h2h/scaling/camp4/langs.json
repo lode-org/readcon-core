@@ -1,0 +1,72 @@
+{
+  "rows": [
+    {
+      "lang": "rust",
+      "op": "read",
+      "line": "warmup 0.042007681\nread 0.038333650\nread 0.038108318\nread 0.038110973\nread 0.038230114\nread 0.041510676\nread 0.038217259\nkind=pos workers=1 median=0.038224 samples=0.038334,0.038108,0.038111,0.038230,0.041511,0.038217"
+    },
+    {
+      "lang": "rust",
+      "op": "write",
+      "line": "warmup 0.060942413\nwrite 0.045025010\nwrite 0.042674254\nwrite 0.042093165\nwrite 0.042181225\nwrite 0.042965039\nwrite 0.043538671\nkind=write workers=1 median=0.042820 samples=0.045025,0.042674,0.042093,0.042181,0.042965,0.043539"
+    },
+    {
+      "lang": "c",
+      "op": "read",
+      "line": "warmup 0.042119885\nread 0.038387041\nread 0.038265437\nread 0.038116032\nread 0.038039437\nread 0.038293425\nread 0.038279861\nhwm_kib 77480\n"
+    },
+    {
+      "lang": "c",
+      "op": "write",
+      "line": "warmup 0.052025161\nwrite 0.047530514\nwrite 0.046194248\nwrite 0.045311977\nwrite 0.044541221\nwrite 0.044902001\nwrite 0.044694922\nhwm_kib 126724\n"
+    },
+    {
+      "lang": "c++",
+      "op": "read",
+      "line": "warmup 0.042289286\nread 0.038783225\nread 0.038410959\nread 0.038389503\nread 0.037940510\nread 0.038190282\nread 0.038023927\n"
+    },
+    {
+      "lang": "c++",
+      "op": "write",
+      "line": "warmup 0.051577667\nwrite 0.047424435\nwrite 0.044780222\nwrite 0.043718711\nwrite 0.043913963\nwrite 0.044595330\nwrite 0.044142712\n"
+    },
+    {
+      "lang": "fortran",
+      "op": "read",
+      "line": "warmup      0.062942489\nread      0.038441036\nread      0.038324341\nread      0.038480300\nread      0.038288485\nread      0.040091779\nread      0.038824785\nhwm_kib 78076\n"
+    },
+    {
+      "lang": "fortran",
+      "op": "write",
+      "line": "warmup      0.057403002\nwrite      0.047773031\nwrite      0.045516016\nwrite      0.044802864\nwrite      0.045166780\nwrite      0.045811633\nwrite      0.045307567\nn_frames 1\nn_atoms 1000000\natom_count_mismatch 0\ncell   1.0000000000000000E+02   1.0000000000000000E+02   1.0000000000000000E+02   9.0000000000000000E+01   9.0000000000000000E+01   9.0000000000000000E+01\nmax_abs   1.0000000000000001+300\nhwm_kib 306984\n"
+    },
+    {
+      "lang": "python",
+      "op": "read",
+      "line": "median=0.042765 iqr=0.000786 samples=0.042216,0.042279,0.043294,0.042954,0.042576,0.043201"
+    },
+    {
+      "lang": "python",
+      "op": "write",
+      "line": "median=0.046027 iqr=0.002273 samples=0.048201,0.047682,0.046766,0.045288,0.045144,0.044968"
+    }
+  ],
+  "commit": "f3ee0f471234e112209e6ad7623b2b6e5ce8a673",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  },
+  "ceilings": {
+    "stream": "n 167772160\nrepeats 8\nparallel_threads 8\nparallel_triad_gbs 111.353330\nparallel_triad_iqr 2.933512\narray_kib 1310720\ncopy_gbs 16.535801\ncopy_iqr 0.047957\nscale_gbs 16.912937\nscale_iqr 0.037632\nadd_gbs 17.260654\nadd_iqr 0.102588\ntriad_gbs 17.235279\ntriad_iqr 0.083288\n",
+    "fdatasync_median_s": 0.3151541270017333,
+    "fdatasync_iqr_s": 0.004414797747813282,
+    "pwrite_median_s": 0.11254630099938367,
+    "pwrite_iqr_s": 0.003251701256886008,
+    "disk_sync": "fdatasync",
+    "pwrite": "raw",
+    "bytes": 268435456
+  }
+}

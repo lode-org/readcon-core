@@ -162,8 +162,21 @@ fn rank_child() {
             written, fingerprinted,
             "the ranked sidecar must match a fingerprint of the file"
         );
+    }
+    // Same length as the file just written. Rank 0 must not truncate
+    // it; the bytes are the serial writer again.
+    write_block(&comm, &out, mine, WriteMode::MpiIo, None).expect("rewrite");
+    comm.raw().barrier();
+    if comm.rank() == 0 {
+        let rewritten = fs::read(&out).expect("rewritten");
+        assert_eq!(
+            rewritten,
+            serial,
+            "same-length rewrite ranks {}",
+            comm.size()
+        );
         let _ = fs::remove_file(&out);
-        let _ = fs::remove_file(&side);
+        let _ = fs::remove_file(readcon_core::frame_index::sidecar_path(&out));
     }
 }
 
