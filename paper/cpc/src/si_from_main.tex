@@ -31,7 +31,6 @@ The view median is 4.0 microseconds and the copy median is 32 microseconds.}
 The two readers read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds, each made by inserting, deleting or replacing characters and tokens at one to three random places.
 They agree on \(\mutantSame\) of them, with the same frame count or error class.
 The count-line rule accounts for all 15 differences.
-The record leaves no differing case outside that group.
 
 The release runs 140 differential cases mutated from its test files and its conformance corpus.
 Every case is read from a string, from bytes, from a plain and a gzip file at one to sixteen threads, through the column readers and through the stream reader, and each read returns the frame count, coordinates and section presence of the one-thread string read or stops with its error at the same line.

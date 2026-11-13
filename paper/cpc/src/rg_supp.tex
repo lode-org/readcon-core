@@ -125,7 +125,6 @@ The relative difference between the parsed natural time unit and the eOn constan
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
 The distributed text cites an informative parsing expression grammar (PEG), the surface grammar, and the clauses in this section are the specification.
-The reader-compatibility notes and the references of the source are omitted, because they describe other programs.
 
 \input{figures/generated/spec_normative}
 
@@ -348,15 +347,15 @@ Binary image: payload-offset check & \texttt{\srcRcbinCrc} \\
 \end{tabular}
 \end{table}
 
-\FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
+\FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31}
 The corpus writer produces the \cthreeoneFiles{} files of that corpus byte for byte, and the manifest names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
-The corpus run records the outcome of every file at one, two and eight threads and the default, from the corpus report of readcon-core, and the build that read the files.
+All \cthreeoneMatch{} files return the outcome of their entry at one, two and eight threads and at the default.
 The path check reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
 The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
 Every file takes \cpathsReadKinds{} reads, except that the \cpathsNotText{} files that are not UTF-8 take no \texttt{read\_con\_string} read.
 All \cpathsMatch{} of the \cpathsReads{} reads return the outcome of the manifest entry of their file, with its frame count or error class (Table~\ref{tab:corpus-paths}).
 The default build and the parallel build both return that verdict.
-The path count runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each logged once as given and once padded.
+The path count runs the \everyPathTestFiles{} reader-path test files of readcon-core with the \texttt{zstd} and \texttt{parallel} features, \everyPathTests{} tests in all, and counts the \everyPathInputs{} inputs that passed every path, each read once as given and once padded.
 Table~\ref{tab:corpus31-open} lists the \cthreeoneNotExplicit{} entries whose outcome no clause decides by name, each with the reading that its manifest entry records and that readcon-core follows.
 Table~\ref{tab:corpus-crosscheck} is the cross-check over both corpora, beside the independent reader, and it records the outcome of every reader on every file.
 
@@ -452,7 +451,7 @@ OVITO 3.17.2 writes the periodic flags into the extended XYZ comment, as \texttt
 Tables~\ref{tab:spec-compare} and~\ref{tab:spec-compare-values} give, one row per format, the version, the atom identifiers, the per-component mask, the velocity time unit and the decimal round trip as each format's specification states them, for Table~\ref{tab:compare} and for other trajectory, structure and quantum-chemistry formats, with the source of every cell.
 The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2026,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
 GROMACS deprecates TNG in favour of H5MD, and the release of 2026-01-19 writes an experimental H5MD trajectory \cite{gromacsManual2026}.
-Other records sit beside a saddle search without being measured here: the archives of the Protein Data Bank (PDB), wwPDB and mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000}; the column files of LAMMPS and the Atomsk converter \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015}; the quantum-chemistry objects of cclib, IOData, TREXIO and QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021}; the published geometries of OPTIMADE, the Novel Materials Discovery (NOMAD) laboratory, Catalysis-Hub, Transition1x and OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}; the analysis tools MDTraj, Visual Molecular Dynamics (VMD), d-SEAMS, essential dynamics and parallel H5MD analysis over the Message Passing Interface (MPI) \cite{mcgibbonMDTrajModernOpen2015,humphreyVmdVisualMolecular1996,goswamiDseamsDeferredStructural2020,meyerEssentialDynamicsTool2006,jakupovicMpiparallelMolecularDynamics2021}; the array stores Zarr and ADIOS2 and portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993}; the initial boxes of PACKMOL \cite{martinezPackmolPackageBuilding2009}; the program checkpoints of PLUMED and ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019}; and the live steps of i-PI and the MolSSI Driver Interface (MDI) \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
+Other records that sit beside a saddle search are the archives of the Protein Data Bank (PDB), wwPDB and mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000}; the column files of LAMMPS and the Atomsk converter \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015}; the quantum-chemistry objects of cclib, IOData, TREXIO and QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021}; the published geometries of OPTIMADE, the Novel Materials Discovery (NOMAD) laboratory, Catalysis-Hub, Transition1x and OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}; the analysis tools MDTraj, Visual Molecular Dynamics (VMD), d-SEAMS, essential dynamics and parallel H5MD analysis over the Message Passing Interface (MPI) \cite{mcgibbonMDTrajModernOpen2015,humphreyVmdVisualMolecular1996,goswamiDseamsDeferredStructural2020,meyerEssentialDynamicsTool2006,jakupovicMpiparallelMolecularDynamics2021}; the array stores Zarr and ADIOS2 and portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993}; the initial boxes of PACKMOL \cite{martinezPackmolPackageBuilding2009}; the program checkpoints of PLUMED and ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019}; and the live steps of i-PI and the MolSSI Driver Interface (MDI) \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
 Zarrtraj 0.3.4 reads and writes an H5MD trajectory stored as Zarr, under the name zarrmd, and it also reads H5MD stored as HDF5 \cite{woodsZarrtrajPythonPackage2026}.
 A zarrmd file follows the H5MD specification, except that the step and time of the box and of the positions are equal arrays rather than hard links, which Zarr cannot store.
 It adds no per-component mask.
@@ -917,10 +916,9 @@ $10^{6}$ $\times$ 1 & 0.4545 & 0.1501 \\
 \section{Comparison of readers}
 The extended XYZ timings run every reader in one process, one arm after another.
 The harness is a Snakemake rule called from an asv class.
-The files larger than ten atoms are generated for the timings and are not stored in the tree.
-No CPU governor is visible on the Xeon.
+The timing rule generates the files larger than ten atoms.
 
-The figures below are readcon-core 0.22.0.
+Figures~\ref{fig:timing}, \ref{fig:ratios} and~\ref{fig:roofline} are readcon-core 0.22.0.
 Those arms return full frames, so the times differ from the one-core reads, which return arrays.
 
 \begin{figure}[htbp]
@@ -938,7 +936,7 @@ The scale is logarithmic.}
 \label{fig:ratios}
 \end{figure}
 
-The resident set added by that read is Figure~\ref{fig:memory}.
+The resident set added by the readcon read is \SI{236}{\mebi\byte} (Figure~\ref{fig:memory}).
 
 \begin{figure}[htbp]
 \centering
@@ -1270,7 +1268,7 @@ readcon-db ingests 40 frames in \SI{0.00427}{\second} and the ASE database in \S
 Both stores keep all 40 frames.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
-The figures below are the database campaigns on the Intel Xeon processor.
+Figures~\ref{fig:db-throughput}, \ref{fig:db-bandwidth}, \ref{fig:db-query}, \ref{fig:db-disk} and~\ref{fig:db-dedup} are the database campaigns on the Intel Xeon processor.
 On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and 33.1~MB/s.
 ASE's database ingests at 199 frames/s and 0.216~MB/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s and 1.68~MB/s.
 A separate 40-frame ingest takes 0.00427~s in readcon-db and 0.0474~s in the ASE database.

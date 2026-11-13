@@ -478,7 +478,7 @@ In each hollow the hydrogen is 1.399~\text{\AA} above the top layer and the four
 Paired by atom id, the highest image is the bridge.
 It lies 0.0399~eV above the hollow, the force is \(0.048\,\mathrm{eV}/\text{\AA}\), and the hydrogen is 1.608~\text{\AA} above the top layer with two Cu--H contacts of 2.113~\text{\AA} (Figure~\ref{fig:claisen-land}).
 The mode is \(147\mathrm{i}\,\mathrm{cm}^{-1}\), along the hop.
-Exchanging the CON rows of two copper atoms and pairing by file row moves the highest image to 15.6~eV (Figure~\ref{fig:claisen-struct-ids}).
+Exchanging the CON rows of two copper atoms and pairing by file row moves the highest image to 15.6~eV (Figures~\ref{fig:claisen-land} and~\ref{fig:claisen-struct-ids}).
 
 \begin{figure}[tbp]
 \centering
@@ -630,7 +630,7 @@ ASE eon & 10.777980, 10.819129, 10.856387 \\
 \includegraphics[width=\textwidth]{figures/generated/scaling-r6.pdf}
 \caption{Thread scaling of the in-memory read.
 The left panel is the speedup over one thread and the right panel is the efficiency.
-The medians are Table~\ref{tab:r6-read}, on the Xeon of Section~\ref{sec:compute}.}
+Medians on the Xeon of Section~\ref{sec:compute} (Table~\ref{tab:r6-read}).}
 \label{fig:scaling-r6}
 \end{figure}
 
@@ -667,8 +667,7 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
 readcon takes 0.4031~s on \num{100000} CON frames of 32 atoms, against 10.82~s for ASE's eon reader.
 On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
-Optimiser state stays outside the frame.
-The next step is a declared section for that optimiser state, and to carry the per-axis mask and the column-5 identifier through ASE's eon reader.
+The next steps are a declared section for that optimiser state and a patch to ASE's eon reader that carries the per-axis mask and the column-5 identifier.
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}

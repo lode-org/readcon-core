@@ -803,14 +803,14 @@ R5, versioned grammar & Any second reader & One file, four answers from five rea
 
 Section~\ref{sec:supp-requirements} states what each requirement is.
 A resume can match the coordinates and still take a different next step, because an optimiser may keep a history the file does not store.
-The subsections below measure that on one band.
+Sections~\ref{sec:climb-band}, \ref{sec:mask-prefactor} and~\ref{sec:morse-resume} measure that on one band.
 
 Table~\ref{tab:survey} records \(\surveyRoutes\) round trips.
 Only the CON 3.1 route returns every field from places that its own specification defines.
 Extended XYZ returns the mask and the identifiers through ASE's column name, which no grammar reserves (Table~\ref{tab:spec-compare}).
 The other routes are in Section~\ref{sec:supp-rounds}.
 
-\subsubsection{A climbing-image band through every route}
+\subsubsection{A climbing-image band through every route}\label{sec:climb-band}
 The protocol, the fixed parameters and the route-by-route results are Sections~\ref{sec:supp-protocol} and~\ref{sec:supp-restart}, Table~\ref{tab:params} and Table~\ref{tab:restartfmt} (Section~\ref{sec:supp-restart-tables}).
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and
 \(\rfCallsUnint\) force calls, with barrier
@@ -851,7 +851,8 @@ linear-algebra builds of four host generations agree, or as their range
 (Section~\ref*{sec:supp-restart}).
 
 
-\subsubsection{The mask and the prefactor} A barrier
+\subsubsection{The mask and the prefactor}\label{sec:mask-prefactor}
+A barrier
 is one number, and the harmonic prefactor needs the free modes at the
 saddle.
 The rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor of Eq.~\eqref{eq:vineyard}.
@@ -877,13 +878,13 @@ A misread of the natural unit as \(\text{\AA}/\mathrm{fs}\) scales the kinetic e
 The route-by-route prefactors are Table~\ref{tab:prefactor-routes} (Section~\ref{sec:supp-restart-tables}).
 
 
-\subsubsection{eOn resuming a Morse band}
+\subsubsection{eOn resuming a Morse band}\label{sec:morse-resume}
 eOn's L-BFGS memory is stored in no geometry file, so a restart cannot repeat that path from the geometry alone (Section~\ref{sec:supp-morse}).
 The uninterrupted Morse barrier is 1.37~eV, the round trip shifts it by 0, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}).
 
 
 \section{Atom correspondence}\label{sec:identity}
-A rare-event method compares two geometries atom by atom, and the argument below is the one used for the bands in Section~\ref{sec:claisen}.
+A rare-event method compares two geometries atom by atom, and Section~\ref{sec:identity} is the argument used for the bands in Section~\ref{sec:claisen}.
 The path, the tangent, the displacement, the Hessian and the rate are defined only when atom \(i\) in image A is atom \(i\) in image B.
 Write the \(3N\) Cartesian coordinates of an image, in one fixed order, as the vector \(R\).
 The tangent and the spring are Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring} in Section~\ref{sec:claisen}.
