@@ -106,6 +106,10 @@ pub struct ConFrameWriter<W: Write> {
     /// Wide-frame rows are formatted on several threads and written to this
     /// file as each chunk finishes, so the disk write overlaps the format.
     stream_file: Option<File>,
+    /// Leave the frame text in `scratch` instead of copying it into `writer`.
+    /// The format-only path reads `scratch` back, so the copy was a second
+    /// pass over the same bytes.
+    keep_scratch: bool,
 }
 
 struct BoundHeader {
@@ -276,7 +280,13 @@ impl<W: Write> ConFrameWriter<W> {
             atom_workers: 1,
             bound: None,
             stream_file: None,
+            keep_scratch: false,
         }
+    }
+
+    fn retain_scratch(mut self, on: bool) -> Self {
+        self.keep_scratch = on;
+        self
     }
 
     /// Format a wide coordinate block on `n` workers.
@@ -477,7 +487,15 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
-        ensure_unique_ids(&frame.atom_data)?;
+        #[cfg(feature = "parallel")]
+        let checked_with_rows = self.stream_file.is_none()
+            && self.atom_workers >= 2
+            && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
+        #[cfg(not(feature = "parallel"))]
+        let checked_with_rows = false;
+        if !checked_with_rows {
+            ensure_unique_ids(&frame.atom_data, 1)?;
+        }
         let prec = self.float_format;
         let mut stream_file = self.stream_file.take();
         let bound = self.bound.take();
@@ -535,7 +553,9 @@ impl<W: Write> ConFrameWriter<W> {
         }
         self.scratch
             .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
-        self.scratch.clear();
+        if !self.keep_scratch {
+            self.scratch.clear();
+        }
         push_str_line(&mut self.scratch, &frame.header.prebox_header.user);
         if spec_version < 2 {
             // Spec 1 line 2 is free text. Do not re-emit JSON major 0 or 1 (D15).
@@ -593,12 +613,18 @@ impl<W: Write> ConFrameWriter<W> {
             buf.push(b'\n');
 
             // --- Write the Atom Data ---
+            // Velocities are formatted in this same pass. The section is
+            // still emitted after every coordinate block, so the bytes
+            // match a second scan.
+            let save_velocity = frame.has_velocities();
+            let mut velocity_rows = Vec::new();
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
                 push_str_line(buf, symbol);
                 push_component_line(buf, "Coordinates of Component", type_idx);
 
+                let mut vel_buf = Vec::new();
                 append_coord_rows(
                     buf,
                     ryu,
@@ -608,7 +634,15 @@ impl<W: Write> ConFrameWriter<W> {
                     spec_version,
                     self.atom_workers,
                     stream_file.as_mut(),
+                    if save_velocity {
+                        Some(&mut vel_buf)
+                    } else {
+                        None
+                    },
                 )?;
+                if save_velocity {
+                    velocity_rows.push(vel_buf);
+                }
                 atom_idx_offset += num_atoms_in_type;
             }
 
@@ -622,20 +656,7 @@ impl<W: Write> ConFrameWriter<W> {
                     let symbol = &frame.atom_data[vel_idx_offset].symbol;
                     push_str_line(buf, symbol);
                     push_component_line(buf, "Velocities of Component", type_idx);
-
-                    for i in 0..num_atoms_in_type {
-                        let atom = &frame.atom_data[vel_idx_offset + i];
-                        let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
-                        push_xyz_line(
-                            buf,
-                            ryu,
-                            slots,
-                            [vx, vy, vz],
-                            prec,
-                            written_fixed_flag(atom.fixed, spec_version),
-                            atom.atom_id,
-                        );
-                    }
+                    buf.extend_from_slice(&velocity_rows[type_idx]);
                     vel_idx_offset += num_atoms_in_type;
                 }
             }
@@ -833,6 +854,9 @@ impl<W: Write> ConFrameWriter<W> {
             }
         }
 
+        if self.keep_scratch {
+            return Ok(());
+        }
         if let Some(mut file) = stream_file {
             if !self.scratch.is_empty() {
                 file.write_all(&self.scratch)?;
@@ -872,17 +896,45 @@ impl<W: Write> ConFrameWriter<W> {
     }
 }
 
-fn ensure_unique_ids(atoms: &[crate::types::AtomDatum]) -> Result<(), WriteError> {
+fn ids_are_dense(atoms: &[crate::types::AtomDatum], workers: usize) -> bool {
+    let n = atoms.len();
+    if workers < 2 || n < WIDE_ATOM_GRAIN {
+        return atoms
+            .iter()
+            .enumerate()
+            .all(|(index, atom)| atom.atom_id == index as u64);
+    }
+    #[cfg(feature = "parallel")]
+    {
+        let chunk = n.div_ceil(workers);
+        return crate::parser::on_pool(workers, || {
+            use rayon::prelude::*;
+            atoms.par_chunks(chunk).enumerate().all(|(index, group)| {
+                let base = index * chunk;
+                group
+                    .iter()
+                    .enumerate()
+                    .all(|(offset, atom)| atom.atom_id == (base + offset) as u64)
+            })
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = workers;
+        atoms
+            .iter()
+            .enumerate()
+            .all(|(index, atom)| atom.atom_id == index as u64)
+    }
+}
+
+fn ensure_unique_ids(atoms: &[crate::types::AtomDatum], workers: usize) -> Result<(), WriteError> {
     let n = atoms.len();
     if n == 0 {
         return Ok(());
     }
     // Trajectory frames usually number atoms 0..n-1. That needs no set.
-    if atoms
-        .iter()
-        .enumerate()
-        .all(|(i, atom)| atom.atom_id == i as u64)
-    {
+    if ids_are_dense(atoms, workers) {
         return Ok(());
     }
     let mut seen_ids = std::collections::HashSet::with_capacity(n);
@@ -1007,11 +1059,129 @@ fn push_round_trip(
 }
 
 fn write_finite(buf: &mut Vec<u8>, value: f64) {
+    if let Some((bytes, n)) = encode_fixed_decimal_into(value) {
+        buf.extend_from_slice(&bytes[..n]);
+        return;
+    }
     buf.reserve(24);
     // `format64` writes at most 24 bytes and does not handle non-finite values.
     let n = unsafe { ryu::raw::format64(value, buf.as_mut_ptr().add(buf.len())) };
     debug_assert!(n <= 24);
     unsafe { buf.set_len(buf.len() + n) };
+}
+
+/// Shortest fixed decimal that matches `ryu`, when the value is an exact
+/// integer or an exact fraction of at most six digits and ryu would not
+/// switch to scientific form. `None` leaves the general formatter to run.
+fn encode_fixed_decimal_into(value: f64) -> Option<([u8; 32], usize)> {
+    let mut out = [0u8; 32];
+    let n = encode_fixed_decimal(value, &mut out)?;
+    Some((out, n))
+}
+
+fn encode_fixed_decimal(value: f64, out: &mut [u8; 32]) -> Option<usize> {
+    let bits = value.to_bits();
+    let sign = bits >> 63 != 0;
+    let mag = f64::from_bits(bits & !(1u64 << 63));
+    if mag == 0.0 {
+        let text: &[u8] = if sign { b"-0.0" } else { b"0.0" };
+        out[..text.len()].copy_from_slice(text);
+        return Some(text.len());
+    }
+    if mag <= 1e16 && mag.fract() == 0.0 {
+        let n = mag as u64;
+        if n < 10u64.pow(16) && n as f64 == mag {
+            return Some(write_fixed_digits(out, sign, n, 0));
+        }
+    }
+    let mut scale = 10.0f64;
+    for d in 1u32..=6 {
+        let scaled = mag * scale;
+        if !scaled.is_finite() || scaled > 1e16 {
+            break;
+        }
+        let nearest = scaled.round();
+        let n = nearest as u64;
+        if nearest == n as f64 && (n as f64) / scale == mag {
+            let mut n = n;
+            let mut places = d;
+            while places > 0 && n.is_multiple_of(10) {
+                n /= 10;
+                places -= 1;
+            }
+            if places == 0 {
+                if n >= 10u64.pow(16) {
+                    return None;
+                }
+                return Some(write_fixed_digits(out, sign, n, 0));
+            }
+            let digits = count_digits(n);
+            let kk = digits as i32 - places as i32;
+            if !(kk > -5 && kk <= 16) {
+                return None;
+            }
+            return Some(write_fixed_digits(out, sign, n, places));
+        }
+        scale *= 10.0;
+    }
+    None
+}
+
+fn count_digits(mut n: u64) -> u32 {
+    let mut digits = 1u32;
+    while n >= 10 {
+        n /= 10;
+        digits += 1;
+    }
+    digits
+}
+
+fn write_fixed_digits(out: &mut [u8; 32], sign: bool, mut n: u64, places: u32) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut i = tmp.len();
+    if n == 0 {
+        tmp[i - 1] = b'0';
+        i -= 1;
+    } else {
+        while n > 0 {
+            i -= 1;
+            tmp[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+        }
+    }
+    let digs = &tmp[i..];
+    let mut at = 0usize;
+    if sign {
+        out[at] = b'-';
+        at += 1;
+    }
+    if places == 0 {
+        out[at..at + digs.len()].copy_from_slice(digs);
+        at += digs.len();
+        out[at] = b'.';
+        out[at + 1] = b'0';
+        return at + 2;
+    }
+    let kk = digs.len() as i32 - places as i32;
+    if kk > 0 {
+        let cut = kk as usize;
+        out[at..at + cut].copy_from_slice(&digs[..cut]);
+        at += cut;
+        out[at] = b'.';
+        at += 1;
+        out[at..at + digs.len() - cut].copy_from_slice(&digs[cut..]);
+        at += digs.len() - cut;
+        return at;
+    }
+    out[at] = b'0';
+    out[at + 1] = b'.';
+    at += 2;
+    for _ in 0..(-kk) {
+        out[at] = b'0';
+        at += 1;
+    }
+    out[at..at + digs.len()].copy_from_slice(digs);
+    at + digs.len()
 }
 
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
@@ -1050,6 +1220,34 @@ fn push_f64_prec(buf: &mut Vec<u8>, v: f64, prec: usize) {
 
 const WIDE_ATOM_GRAIN: usize = 4096;
 
+fn push_atom_motion(
+    coord: &mut Vec<u8>,
+    vel: Option<&mut Vec<u8>>,
+    ryu: &mut ryu::Buffer,
+    slots: &mut [FmtSlot; 3],
+    vel_slots: &mut [FmtSlot; 3],
+    atom: &crate::types::AtomDatum,
+    prec: FloatFormat,
+    spec_version: u32,
+) {
+    let fixed = written_fixed_flag(atom.fixed, spec_version);
+    push_xyz_line(
+        coord,
+        ryu,
+        slots,
+        [atom.x, atom.y, atom.z],
+        prec,
+        fixed,
+        atom.atom_id,
+    );
+    if let Some(vel) = vel {
+        let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
+        // A separate column cache. Sharing the coordinate slots made every
+        // velocity miss and then evict the coordinate spelling.
+        push_xyz_line(vel, ryu, vel_slots, [vx, vy, vz], prec, fixed, atom.atom_id);
+    }
+}
+
 fn append_coord_rows(
     buf: &mut Vec<u8>,
     ryu: &mut ryu::Buffer,
@@ -1059,24 +1257,32 @@ fn append_coord_rows(
     spec_version: u32,
     workers: usize,
     stream: Option<&mut File>,
+    mut vel: Option<&mut Vec<u8>>,
 ) -> Result<(), WriteError> {
+    let want_vel = vel.is_some();
     if let Some(file) = stream {
         if workers >= 2 && atoms.len() >= WIDE_ATOM_GRAIN {
             file.write_all(buf).map_err(WriteError::Io)?;
             buf.clear();
-            return stream_coord_rows(file, atoms, workers, prec, spec_version);
+            let vel_bytes = stream_coord_rows(file, atoms, workers, prec, spec_version, want_vel)?;
+            if let Some(dest) = vel.as_mut() {
+                dest.extend_from_slice(&vel_bytes);
+            }
+            return Ok(());
         }
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
+        let mut vel_slots = [FmtSlot::new(); 3];
         for atom in atoms {
-            push_xyz_line(
+            push_atom_motion(
                 buf,
+                vel.as_deref_mut(),
                 ryu,
                 slots,
-                [atom.x, atom.y, atom.z],
+                &mut vel_slots,
+                atom,
                 prec,
-                written_fixed_flag(atom.fixed, spec_version),
-                atom.atom_id,
+                spec_version,
             );
         }
         return Ok(());
@@ -1085,58 +1291,89 @@ fn append_coord_rows(
     {
         let chunk = atoms.len().div_ceil(workers).max(1);
         let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
-        let parts: Vec<std::sync::Mutex<Vec<u8>>> = (0..pieces.len())
-            .map(|_| std::sync::Mutex::new(Vec::new()))
-            .collect();
-        let next_job = std::sync::atomic::AtomicUsize::new(0);
-        std::thread::scope(|scope| {
-            for _ in 0..workers.min(pieces.len()) {
-                let pieces = &pieces;
-                let next_job = &next_job;
-                let parts = &parts;
-                scope.spawn(move || {
-                    loop {
-                        let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if index >= pieces.len() {
-                            break;
+        let bad_ids = std::sync::atomic::AtomicBool::new(false);
+        let parts: Vec<(Vec<u8>, Vec<u8>)> = crate::parser::on_pool(workers, || {
+            use rayon::prelude::*;
+            pieces
+                .par_iter()
+                .enumerate()
+                .map(|(piece, group)| {
+                    let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut local_vel = if want_vel {
+                        Vec::with_capacity(group.len().saturating_mul(48))
+                    } else {
+                        Vec::new()
+                    };
+                    let mut ryu = ryu::Buffer::new();
+                    let mut slots = [FmtSlot::new(); 3];
+                    let mut vel_slots = [FmtSlot::new(); 3];
+                    let base = piece * chunk;
+                    for (offset, atom) in group.iter().enumerate() {
+                        if atom.atom_id != (base + offset) as u64 {
+                            bad_ids.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
-                        let group = pieces[index];
-                        let mut local = Vec::with_capacity(group.len().saturating_mul(48));
-                        let mut ryu = ryu::Buffer::new();
-                        let mut slots = [FmtSlot::new(); 3];
-                        for atom in group {
-                            push_xyz_line(
-                                &mut local,
-                                &mut ryu,
-                                &mut slots,
-                                [atom.x, atom.y, atom.z],
-                                prec,
-                                written_fixed_flag(atom.fixed, spec_version),
-                                atom.atom_id,
-                            );
-                        }
-                        *parts[index].lock().expect("part") = local;
+                        push_atom_motion(
+                            &mut local,
+                            if want_vel { Some(&mut local_vel) } else { None },
+                            &mut ryu,
+                            &mut slots,
+                            &mut vel_slots,
+                            atom,
+                            prec,
+                            spec_version,
+                        );
                     }
+                    (local, local_vel)
+                })
+                .collect()
+        });
+        if bad_ids.load(std::sync::atomic::Ordering::Relaxed) {
+            ensure_unique_ids(atoms, 1)?;
+        }
+        let coord_len: usize = parts.iter().map(|(coord, _)| coord.len()).sum();
+        let vel_len: usize = parts.iter().map(|(_, rows)| rows.len()).sum();
+        let coord_at = buf.len();
+        buf.reserve(coord_len);
+        // Every byte is overwritten by the copies below. Zeroing it first
+        // was a serial pass over the whole block.
+        unsafe { buf.set_len(coord_at + coord_len) };
+        if let Some(dest) = vel.as_deref_mut() {
+            dest.reserve(vel_len);
+        }
+        let coord_ptr = buf.as_mut_ptr() as usize;
+        std::thread::scope(|scope| {
+            let mut at = coord_at;
+            for (coord, _) in &parts {
+                let dest = coord_ptr + at;
+                let src = coord.as_ptr() as usize;
+                let n = coord.len();
+                scope.spawn(move || unsafe {
+                    std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, n);
                 });
+                at += n;
             }
         });
-        for part in parts {
-            buf.extend_from_slice(&part.into_inner().unwrap_or_default());
+        if let Some(dest) = vel.as_deref_mut() {
+            for (_, rows) in &parts {
+                dest.extend_from_slice(rows);
+            }
         }
         return Ok(());
     }
     #[cfg(not(feature = "parallel"))]
     {
         let _ = workers;
+        let mut vel_slots = [FmtSlot::new(); 3];
         for atom in atoms {
-            push_xyz_line(
+            push_atom_motion(
                 buf,
+                vel.as_deref_mut(),
                 ryu,
                 slots,
-                [atom.x, atom.y, atom.z],
+                &mut vel_slots,
+                atom,
                 prec,
-                written_fixed_flag(atom.fixed, spec_version),
-                atom.atom_id,
+                spec_version,
             );
         }
         return Ok(());
@@ -1149,11 +1386,12 @@ fn stream_coord_rows(
     workers: usize,
     prec: FloatFormat,
     spec_version: u32,
-) -> Result<(), WriteError> {
+    want_vel: bool,
+) -> Result<Vec<u8>, WriteError> {
     let groups = workers.saturating_mul(4).max(workers);
     let chunk = atoms.len().div_ceil(groups).max(1);
     let nparts = atoms.len().div_ceil(chunk);
-    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>)>(2);
+    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Vec<u8>, Vec<u8>)>(2);
     let format_threads = workers.saturating_sub(1).max(1);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
@@ -1170,37 +1408,50 @@ fn stream_coord_rows(
                     }
                     let group = pieces[index];
                     let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                    let mut local_vel = if want_vel {
+                        Vec::with_capacity(group.len().saturating_mul(48))
+                    } else {
+                        Vec::new()
+                    };
                     let mut ryu = ryu::Buffer::new();
                     let mut slots = [FmtSlot::new(); 3];
+                    let mut vel_slots = [FmtSlot::new(); 3];
                     for atom in group {
-                        push_xyz_line(
+                        push_atom_motion(
                             &mut local,
+                            if want_vel { Some(&mut local_vel) } else { None },
                             &mut ryu,
                             &mut slots,
-                            [atom.x, atom.y, atom.z],
+                            &mut vel_slots,
+                            atom,
                             prec,
-                            written_fixed_flag(atom.fixed, spec_version),
-                            atom.atom_id,
+                            spec_version,
                         );
                     }
-                    tx.send((index, local)).ok();
+                    tx.send((index, local, local_vel)).ok();
                 }
             });
         }
         drop(tx);
         let mut next = 0usize;
-        let mut pending = BTreeMap::<usize, Vec<u8>>::new();
+        let mut pending = BTreeMap::<usize, (Vec<u8>, Vec<u8>)>::new();
+        let mut vel_parts = vec![Vec::new(); nparts];
         while next < nparts {
-            let (index, part) = rx
+            let (index, part, vel) = rx
                 .recv()
                 .map_err(|err| WriteError::Io(io::Error::other(err.to_string())))?;
-            pending.insert(index, part);
-            while let Some(part) = pending.remove(&next) {
+            pending.insert(index, (part, vel));
+            while let Some((part, vel)) = pending.remove(&next) {
                 file.write_all(&part).map_err(WriteError::Io)?;
+                vel_parts[next] = vel;
                 next += 1;
             }
         }
-        Ok(())
+        let mut vel_bytes = Vec::new();
+        for part in vel_parts {
+            vel_bytes.extend_from_slice(&part);
+        }
+        Ok(vel_bytes)
     })
 }
 
@@ -1470,6 +1721,9 @@ pub fn write_frame_refs_to_path(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    if workers >= 2 && frames.len() >= 2 {
+        return pipeline_frame_groups(path, frames, workers, precision, canonical, bind);
+    }
     if workers >= 2 && frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN {
         let mut writer = match precision {
             Some(precision) => ConFrameWriter::with_precision(Vec::<u8>::new(), precision),
@@ -1512,6 +1766,60 @@ pub fn write_frame_refs_with_threads(
     Ok(out)
 }
 
+/// Format frame groups on `workers - 1` threads and write each group as
+/// it finishes, in file order. Formatting the next group overlaps the
+/// disk write of the one before it.
+fn pipeline_frame_groups(
+    path: &std::path::Path,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    let groups = workers.saturating_mul(4).max(workers);
+    let chunk = frames.len().div_ceil(groups).max(1);
+    let pieces: Vec<&[&ConFrame]> = frames.chunks(chunk).collect();
+    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
+    let format_threads = workers.saturating_sub(1).max(1);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..format_threads {
+            let tx = tx.clone();
+            let pieces = &pieces;
+            let next_job = &next_job;
+            scope.spawn(move || {
+                loop {
+                    let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= pieces.len() {
+                        break;
+                    }
+                    let message = format_group_bytes(pieces[index], 1, precision, canonical, bind);
+                    if tx.send((index, message)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        let mut file = File::create(path).map_err(WriteError::Io)?;
+        let mut next = 0usize;
+        let mut pending = BTreeMap::<usize, Vec<u8>>::new();
+        while next < pieces.len() {
+            let (index, part) = rx
+                .recv()
+                .map_err(|err| WriteError::Io(io::Error::other(err.to_string())))?;
+            pending.insert(index, part?);
+            while let Some(part) = pending.remove(&next) {
+                file.write_all(&part).map_err(WriteError::Io)?;
+                next += 1;
+            }
+        }
+        file.flush().map_err(WriteError::Io)?;
+        Ok(())
+    })
+}
+
 fn write_group<W: Write>(
     writer: &mut ConFrameWriter<W>,
     group: &[&ConFrame],
@@ -1526,6 +1834,27 @@ fn write_group<W: Write>(
     writer.extend(group.iter().copied())
 }
 
+fn format_group_bytes(
+    group: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<u8>, WriteError> {
+    let mut buffer = Vec::new();
+    let mut writer = match precision {
+        Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+        None => ConFrameWriter::new(&mut buffer),
+    }
+    .canonical(canonical)
+    .retain_scratch(true);
+    if workers >= 2 {
+        writer = writer.parallel_atoms(workers);
+    }
+    write_group(&mut writer, group, bind)?;
+    Ok(std::mem::take(&mut writer.scratch))
+}
+
 fn formatted_parts(
     frames: &[&ConFrame],
     workers: usize,
@@ -1535,71 +1864,32 @@ fn formatted_parts(
 ) -> Result<Vec<Vec<u8>>, WriteError> {
     let wide = frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN;
     if workers < 2 || (frames.len() < 2 && !wide) {
-        let mut buffer = Vec::new();
-        {
-            let mut writer = match precision {
-                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
-                None => ConFrameWriter::new(&mut buffer),
-            }
-            .canonical(canonical);
-            write_group(&mut writer, frames, bind)?;
-        }
-        return Ok(vec![buffer]);
+        return Ok(vec![format_group_bytes(
+            frames, 1, precision, canonical, bind,
+        )?]);
     }
     if wide {
-        let mut buffer = Vec::new();
-        {
-            let mut writer = match precision {
-                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
-                None => ConFrameWriter::new(&mut buffer),
-            }
-            .canonical(canonical)
-            .parallel_atoms(workers);
-            write_group(&mut writer, frames, bind)?;
-        }
-        // The row runs were formatted on `workers` threads and joined in
-        // order. The file write splits this buffer by offset; it does not
-        // copy it into another set of parts.
-        return Ok(vec![buffer]);
+        return Ok(vec![format_group_bytes(
+            frames, workers, precision, canonical, bind,
+        )?]);
     }
     #[cfg(feature = "parallel")]
     {
         let chunk = frames.len().div_ceil(workers).max(1);
-        let run = || {
+        return crate::parser::on_pool(workers, || {
             use rayon::prelude::*;
             frames
                 .par_chunks(chunk)
-                .map(|group| {
-                    let mut buffer = Vec::new();
-                    let mut writer = match precision {
-                        Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
-                        None => ConFrameWriter::new(&mut buffer),
-                    }
-                    .canonical(canonical);
-                    write_group(&mut writer, group, bind)?;
-                    drop(writer);
-                    Ok(buffer)
-                })
+                .map(|group| format_group_bytes(group, 1, precision, canonical, bind))
                 .collect()
-        };
-        match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => run(),
-        }
+        });
     }
     #[cfg(not(feature = "parallel"))]
     {
         let _ = workers;
-        let mut buffer = Vec::new();
-        {
-            let mut writer = match precision {
-                Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
-                None => ConFrameWriter::new(&mut buffer),
-            }
-            .canonical(canonical);
-            write_group(&mut writer, frames, bind)?;
-        }
-        Ok(vec![buffer])
+        Ok(vec![format_group_bytes(
+            frames, 1, precision, canonical, bind,
+        )?])
     }
 }
 
@@ -1721,7 +2011,7 @@ impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
 
 #[cfg(test)]
 mod float_format_tests {
-    use super::{push_f64_prec, push_u64};
+    use super::{encode_fixed_decimal_into, push_f64_prec, push_u64, write_finite};
 
     fn formatted(v: f64, prec: usize) -> String {
         let mut buf = Vec::new();
@@ -1822,6 +2112,60 @@ mod float_format_tests {
     }
 
     #[test]
+    fn fixed_decimal_matches_ryu_or_falls_back_to_it() {
+        let mut values = vec![
+            0.0,
+            -0.0,
+            1.0,
+            -2.0,
+            10.0,
+            99.0,
+            100.0,
+            0.1,
+            0.01,
+            0.001,
+            0.0001,
+            0.0002,
+            -0.0001,
+            1.5,
+            0.25,
+            0.125,
+            63.546,
+            12.0,
+            90.0,
+            3.25,
+            0.5,
+            -0.5,
+            1.0e-4,
+            1.25,
+            218.0,
+            6.975_299_999_999_995,
+            1.008,
+            15.3456,
+            -1.23456789,
+            1e-6,
+            1e16,
+            1e20,
+        ];
+        for i in 0..200 {
+            values.push(i as f64);
+            values.push((i as f64) * 0.001);
+            values.push((i as f64) * 0.0001);
+            values.push(-(i as f64) * 0.001);
+        }
+        let mut ryu = ryu::Buffer::new();
+        for value in values {
+            let mut buf = Vec::new();
+            write_finite(&mut buf, value);
+            let expect = ryu.format_finite(value);
+            assert_eq!(std::str::from_utf8(&buf).unwrap(), expect, "{value:?}");
+            if encode_fixed_decimal_into(value).is_none() {
+                continue;
+            }
+        }
+    }
+
+    #[test]
     fn u64_matches_decimal_display() {
         let mut values = vec![0, 1, 9, 10, 11, 99, 100, 101, 999, 1000, 50000, u64::MAX];
         values.extend(0..200);
@@ -1877,6 +2221,15 @@ mod parallel_write_tests {
         let wide = frames_from_text(&wide_text(5000), Some(1)).unwrap();
         let serial = write_frames_to_vec(&wide).unwrap();
         let parallel = write_frames_to_vec_with_threads(&wide, 4, None, false).unwrap();
+        assert_eq!(parallel, serial);
+        let mut with_vel = wide_text(5000);
+        with_vel.push_str("\nCu\nVelocities of Component 1\n");
+        for i in 0..5000 {
+            with_vel.push_str(&format!("{}.0001 0.0002 -0.0001 0 {i}\n", i % 7));
+        }
+        let moving = frames_from_text(&with_vel, Some(1)).unwrap();
+        let serial = write_frames_to_vec(&moving).unwrap();
+        let parallel = write_frames_to_vec_with_threads(&moving, 4, None, false).unwrap();
         assert_eq!(parallel, serial);
         let one = frames_from_text(
             &std::fs::read_to_string(concat!(

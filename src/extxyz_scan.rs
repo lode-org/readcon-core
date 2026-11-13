@@ -4,6 +4,7 @@
 //! One byte buffer, fixed token walks, and plain arrays. The comment
 //! line supplies the lattice and the column layout.
 
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
@@ -32,6 +33,11 @@ pub struct XyzTables {
     /// Every atom in every frame is this symbol. `species` is then empty
     /// so a million-atom copper frame does not allocate a string per atom.
     pub uniform_species: Option<String>,
+    /// Distinct species strings. Empty when `species` or `uniform_species`
+    /// already names every atom.
+    pub species_pool: Vec<String>,
+    /// One index into `species_pool` per atom, frame by frame.
+    pub species_ids: Vec<u32>,
     /// Every per-atom column named by `Properties`, including species,
     /// positions, masses and forces.
     pub columns: Vec<XyzColumn>,
@@ -48,20 +54,6 @@ fn trim(bytes: &[u8]) -> &[u8] {
         .map(|index| index + 1)
         .unwrap_or(start);
     &bytes[start..end]
-}
-
-fn next_token(line: &[u8], mut index: usize) -> Option<(usize, usize)> {
-    while index < line.len() && line[index].is_ascii_whitespace() {
-        index += 1;
-    }
-    if index >= line.len() {
-        return None;
-    }
-    let start = index;
-    while index < line.len() && !line[index].is_ascii_whitespace() {
-        index += 1;
-    }
-    Some((start, index))
 }
 
 fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
@@ -192,34 +184,59 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
     Ok([la, lb, lc, alpha, beta, gamma])
 }
 
-fn tokens(line: &[u8]) -> Vec<&[u8]> {
-    let mut found = Vec::new();
-    let mut index = 0;
-    while let Some((start, end)) = next_token(line, index) {
-        found.push(&line[start..end]);
-        index = end;
+fn next_field<'a>(line: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
+    while *index < line.len() && line[*index].is_ascii_whitespace() {
+        *index += 1;
     }
-    found
+    if *index >= line.len() {
+        return None;
+    }
+    let start = *index;
+    while *index < line.len() && !line[*index].is_ascii_whitespace() {
+        *index += 1;
+    }
+    Some(&line[start..*index])
 }
 
-fn push_atom(line: &[u8], specs: &[ColumnSpec], columns: &mut [XyzColumn]) -> Result<(), String> {
-    let words = tokens(line);
-    let need = specs
-        .last()
-        .map(|spec| spec.offset + spec.width)
-        .unwrap_or(0);
-    if words.len() < need {
-        return Err("atom".to_string());
+fn intern_symbol(pool: &mut Vec<String>, token: &[u8]) -> u32 {
+    for (index, known) in pool.iter().enumerate() {
+        if known.as_bytes() == token {
+            return index as u32;
+        }
     }
+    pool.push(String::from_utf8_lossy(token).into_owned());
+    (pool.len() - 1) as u32
+}
+
+fn parse_token_f64(token: &[u8]) -> Result<f64, String> {
+    let (value, _) =
+        fast_float2::parse_partial::<f64, _>(token).map_err(|_| "float".to_string())?;
+    Ok(value)
+}
+
+/// One atom row, walked in place. Species symbols are interned. Numeric
+/// fields use the same `fast_float2` call as the token parser, so the bits
+/// match, and no token vector is built.
+fn push_atom(
+    line: &[u8],
+    specs: &[ColumnSpec],
+    columns: &mut [XyzColumn],
+    pool: &mut Vec<String>,
+    ids: &mut Vec<u32>,
+) -> Result<(), String> {
+    let mut index = 0usize;
     for (spec, column) in specs.iter().zip(columns.iter_mut()) {
-        for slot in 0..spec.width {
-            let token = words[spec.offset + slot];
+        for _ in 0..spec.width {
+            let token = next_field(line, &mut index).ok_or_else(|| "atom".to_string())?;
             match spec.kind {
+                b'S' if spec.name == "species" && spec.width == 1 => {
+                    ids.push(intern_symbol(pool, token));
+                }
                 b'S' => column
                     .text
                     .push(String::from_utf8_lossy(token).into_owned()),
                 b'L' => column.real.push(logical_value(token)),
-                _ => column.real.push(parse_f64(token)?),
+                _ => column.real.push(parse_token_f64(token)?),
             }
         }
     }
@@ -333,81 +350,105 @@ pub fn tables_from_extxyz_bytes_with_threads(
         .collect();
     let spec_ref = &specs;
     let line_ref = &lines;
-    let failed = std::thread::scope(|scope| {
-        let mut handles = Vec::new();
-        for worker in 0..workers {
-            let from = worker * chunk;
-            if from >= n_frames {
-                break;
-            }
-            let to = (from + chunk).min(n_frames);
-            let column_ptrs = &column_ptrs;
-            let starts = &starts;
-            let cell_ptr = cell_ptr;
-            handles.push(scope.spawn(move || -> Result<(), String> {
-                for frame in from..to {
-                    let comment = line_ref[starts[frame] - 1];
-                    let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
-                    let frame_cell = lattice_cell(lattice)?;
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            frame_cell.as_ptr(),
-                            (cell_ptr as *mut f64).add(frame * 6),
-                            6,
-                        );
-                    }
-                    let base_atom = frame * n_atoms;
-                    for (atom, line) in line_ref[starts[frame]..starts[frame] + n_atoms]
-                        .iter()
-                        .enumerate()
-                    {
-                        let words = tokens(line);
-                        for (col, spec) in spec_ref.iter().enumerate() {
-                            let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
-                            for slot in 0..width {
-                                let token = words.get(spec.offset + slot).copied().ok_or("atom")?;
-                                let index = (base_atom + atom) * width + slot;
-                                if kind == b'S' {
-                                    let text = String::from_utf8_lossy(token).into_owned();
-                                    unsafe {
-                                        std::ptr::write((text_ptr as *mut String).add(index), text);
-                                    }
-                                } else {
-                                    let value = if kind == b'L' {
-                                        logical_value(token)
-                                    } else {
-                                        parse_f64(token)?
-                                    };
-                                    unsafe {
-                                        *((real_ptr as *mut f64).add(index)) = value;
+    let worker_species =
+        std::thread::scope(|scope| -> Result<Vec<(Vec<String>, Vec<u32>)>, String> {
+            let mut handles = Vec::new();
+            for worker in 0..workers {
+                let from = worker * chunk;
+                if from >= n_frames {
+                    break;
+                }
+                let to = (from + chunk).min(n_frames);
+                let column_ptrs = &column_ptrs;
+                let starts = &starts;
+                let cell_ptr = cell_ptr;
+                handles.push(
+                    scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
+                        let mut pool = Vec::new();
+                        let mut ids = Vec::new();
+                        for frame in from..to {
+                            let comment = line_ref[starts[frame] - 1];
+                            let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
+                            let frame_cell = lattice_cell(lattice)?;
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    frame_cell.as_ptr(),
+                                    (cell_ptr as *mut f64).add(frame * 6),
+                                    6,
+                                );
+                            }
+                            let base_atom = frame * n_atoms;
+                            for (atom, line) in line_ref[starts[frame]..starts[frame] + n_atoms]
+                                .iter()
+                                .enumerate()
+                            {
+                                let mut cursor = 0usize;
+                                for (col, spec) in spec_ref.iter().enumerate() {
+                                    let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
+                                    for slot in 0..width {
+                                        let token = next_field(line, &mut cursor).ok_or("atom")?;
+                                        let index = (base_atom + atom) * width + slot;
+                                        if kind == b'S' && spec.name == "species" && width == 1 {
+                                            ids.push(intern_symbol(&mut pool, token));
+                                        } else if kind == b'S' {
+                                            let text = String::from_utf8_lossy(token).into_owned();
+                                            unsafe {
+                                                std::ptr::write(
+                                                    (text_ptr as *mut String).add(index),
+                                                    text,
+                                                );
+                                            }
+                                        } else {
+                                            let value = if kind == b'L' {
+                                                logical_value(token)
+                                            } else {
+                                                parse_token_f64(token)?
+                                            };
+                                            unsafe {
+                                                *((real_ptr as *mut f64).add(index)) = value;
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
+                        Ok((pool, ids))
+                    }),
+                );
+            }
+            let mut chunks = Vec::new();
+            for handle in handles {
+                match handle.join() {
+                    Ok(Ok(chunk)) => chunks.push(chunk),
+                    Ok(Err(err)) => {
+                        for column in &mut columns {
+                            std::mem::forget(std::mem::take(&mut column.text));
+                        }
+                        return Err(err);
+                    }
+                    Err(_) => {
+                        for column in &mut columns {
+                            std::mem::forget(std::mem::take(&mut column.text));
+                        }
+                        return Err("atom".to_string());
                     }
                 }
-                Ok(())
-            }));
-        }
-        handles
-            .into_iter()
-            .find_map(|handle| handle.join().ok().and_then(|result| result.err()))
-    });
-    if let Some(err) = failed {
-        for column in &mut columns {
-            // Slots were written with `ptr::write` and `len` is still 0.
-            // Forgetting the buffer drops nothing and leaks only on error.
-            std::mem::forget(std::mem::take(&mut column.text));
-        }
-        return Err(err);
-    }
+            }
+            Ok(chunks)
+        })?;
     for column in &mut columns {
-        if column.kind == b'S' {
+        if column.kind == b'S' && column.name != "species" {
             let n = n_frames * n_atoms * column.width;
             unsafe { column.text.set_len(n) };
         }
     }
-    assemble_tables(n_frames, n_atoms, cell, columns)
+    let mut tables = assemble_tables(n_frames, n_atoms, cell, columns)?;
+    let (pool, ids) = merge_species_chunks(worker_species);
+    if !ids.is_empty() {
+        tables.species_pool = pool;
+        tables.species_ids = ids;
+    }
+    Ok(tables)
 }
 
 /// A file of identical frames: `count` lines, one comment, `count` atom
@@ -578,7 +619,23 @@ fn species_pos_width(specs: &[ColumnSpec]) -> Option<usize> {
 
 enum SpeciesChunk {
     Uniform { symbol: String, atoms: usize },
-    Mixed(Vec<String>),
+    Mixed { pool: Vec<String>, ids: Vec<u32> },
+}
+
+fn merge_species_chunks(chunks: Vec<(Vec<String>, Vec<u32>)>) -> (Vec<String>, Vec<u32>) {
+    let mut pool = Vec::new();
+    let mut ids = Vec::new();
+    for (local, local_ids) in chunks {
+        if local.is_empty() {
+            continue;
+        }
+        let mut map = vec![0u32; local.len()];
+        for (index, symbol) in local.into_iter().enumerate() {
+            map[index] = intern_symbol(&mut pool, symbol.as_bytes());
+        }
+        ids.extend(local_ids.into_iter().map(|id| map[id as usize]));
+    }
+    (pool, ids)
 }
 
 /// Species and positions (and an optional mass) with no per-atom string
@@ -654,15 +711,16 @@ fn fill_species_pos_parallel(
                     }
                 }
                 if mixed {
-                    let mut texts = Vec::with_capacity((to - from) * n_atoms);
+                    let mut pool = Vec::new();
+                    let mut ids = Vec::with_capacity((to - from) * n_atoms);
                     for frame in from..to {
                         for atom in 0..n_atoms {
                             let line = lines[starts[frame] + atom];
                             let sym = species_pos_fields(line, nfloat).ok_or("atom")?.0;
-                            texts.push(String::from_utf8_lossy(sym).into_owned());
+                            ids.push(intern_symbol(&mut pool, sym));
                         }
                     }
-                    return Ok(SpeciesChunk::Mixed(texts));
+                    return Ok(SpeciesChunk::Mixed { pool, ids });
                 }
                 let text = String::from_utf8_lossy(symbol.as_deref().unwrap_or(b"")).into_owned();
                 Ok(SpeciesChunk::Uniform {
@@ -690,16 +748,28 @@ fn fill_species_pos_parallel(
         tables.uniform_species = shared;
         return Ok(tables);
     }
-    let mut species = Vec::with_capacity(n_frames * n_atoms);
+    let mut pool = Vec::new();
+    let mut ids = Vec::with_capacity(n_frames * n_atoms);
     for chunk in chunks {
         match chunk {
             SpeciesChunk::Uniform { symbol, atoms } => {
-                species.extend(std::iter::repeat_n(symbol, atoms));
+                let id = intern_symbol(&mut pool, symbol.as_bytes());
+                ids.extend(std::iter::repeat_n(id, atoms));
             }
-            SpeciesChunk::Mixed(texts) => species.extend(texts),
+            SpeciesChunk::Mixed {
+                pool: local,
+                ids: local_ids,
+            } => {
+                let mut map = vec![0u32; local.len()];
+                for (index, symbol) in local.into_iter().enumerate() {
+                    map[index] = intern_symbol(&mut pool, symbol.as_bytes());
+                }
+                ids.extend(local_ids.into_iter().map(|id| map[id as usize]));
+            }
         }
     }
-    tables.species = species;
+    tables.species_pool = pool;
+    tables.species_ids = ids;
     Ok(tables)
 }
 
@@ -737,6 +807,8 @@ fn assemble_tables(
         cell,
         species,
         uniform_species: None,
+        species_pool: Vec::new(),
+        species_ids: Vec::new(),
         columns,
     })
 }
@@ -868,6 +940,8 @@ fn fast_species_pos(bytes: &[u8]) -> Option<XyzTables> {
         cell,
         species: Vec::new(),
         uniform_species: Some(species_text),
+        species_pool: Vec::new(),
+        species_ids: Vec::new(),
         columns,
     })
 }
@@ -960,6 +1034,8 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
     let mut cell = Vec::new();
     let mut columns: Vec<XyzColumn> = Vec::new();
     let mut specs: Vec<ColumnSpec> = Vec::new();
+    let mut pool = Vec::new();
+    let mut ids = Vec::new();
     let mut mark = 0;
     let mut n_atoms = 0;
     let mut n_frames = 0;
@@ -1003,8 +1079,16 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         if mark + count > lines.len() {
             return Err("atoms".to_string());
         }
+        if n_frames == 0 {
+            for column in &mut columns {
+                if column.kind != b'S' {
+                    column.real.reserve(count.saturating_mul(column.width));
+                }
+            }
+            ids.reserve(count);
+        }
         for line in &lines[mark..mark + count] {
-            push_atom(line, &specs, &mut columns)?;
+            push_atom(line, &specs, &mut columns, &mut pool, &mut ids)?;
         }
         cell.extend_from_slice(&frame_cell);
         mark += count;
@@ -1015,7 +1099,7 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
     }
     let mut positions = Vec::new();
     let mut masses = vec![f64::NAN; n_frames * n_atoms];
-    let mut species = vec![String::new(); n_frames * n_atoms];
+    let mut species = Vec::new();
     for column in &columns {
         if column.name == "pos" {
             positions.clone_from(&column.real);
@@ -1023,9 +1107,12 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
             if column.width == 1 {
                 masses.clone_from(&column.real);
             }
-        } else if column.name == "species" && column.width == 1 {
+        } else if column.name == "species" && column.width == 1 && pool.is_empty() {
             species.clone_from(&column.text);
         }
+    }
+    if species.is_empty() && pool.is_empty() {
+        species = vec![String::new(); n_frames * n_atoms];
     }
     if positions.len() != n_frames * n_atoms * 3 {
         return Err("pos".to_string());
@@ -1038,6 +1125,8 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         cell,
         species,
         uniform_species: None,
+        species_pool: pool,
+        species_ids: ids,
         columns,
     })
 }
@@ -1048,10 +1137,27 @@ pub fn tables_from_extxyz_path(path: &Path) -> Result<XyzTables, String> {
 }
 
 fn format_number(value: f64) -> String {
+    let mut buf = Vec::new();
+    push_number(&mut buf, value);
+    String::from_utf8(buf).unwrap_or_else(|_| "nan".to_string())
+}
+
+/// `format!("{value}")`, written straight into `out`. NaN stays `nan`.
+fn push_number(out: &mut Vec<u8>, value: f64) {
     if value.is_nan() {
-        return "nan".to_string();
+        out.extend_from_slice(b"nan");
+        return;
     }
-    format!("{value}")
+    let _ = write!(AppendBuf(out), "{value}");
+}
+
+struct AppendBuf<'a>(&'a mut Vec<u8>);
+
+impl std::fmt::Write for AppendBuf<'_> {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        self.0.extend_from_slice(text.as_bytes());
+        Ok(())
+    }
 }
 
 fn cos_sin(degrees: f64) -> (f64, f64) {
@@ -1118,8 +1224,7 @@ impl ExtxyzSource for XyzColumn {
             if self.kind == b'S' {
                 out.extend_from_slice(self.text[base + slot].as_bytes());
             } else {
-                let text = format_number(self.real[base + slot]);
-                out.extend_from_slice(text.as_bytes());
+                push_number(out, self.real[base + slot]);
             }
         }
     }
@@ -1261,8 +1366,27 @@ fn format_extxyz_range(
 
 /// Write species, the lattice, `pbc`, and every per-atom column.
 pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
-    let columns: Vec<&(dyn ExtxyzSource + Sync)> = tables
-        .columns
+    let mut species_text = None;
+    if tables.species.is_empty() && !tables.species_ids.is_empty() {
+        species_text = Some(
+            tables
+                .species_ids
+                .iter()
+                .map(|id| tables.species_pool[*id as usize].clone())
+                .collect::<Vec<String>>(),
+        );
+    } else if let Some(symbol) = &tables.uniform_species {
+        species_text = Some(vec![symbol.clone(); tables.n_frames * tables.n_atoms]);
+    }
+    let mut owned = tables.columns.clone();
+    if let Some(text) = species_text {
+        if let Some(column) = owned.iter_mut().find(|column| column.name == "species") {
+            if column.text.is_empty() {
+                column.text = text;
+            }
+        }
+    }
+    let columns: Vec<&(dyn ExtxyzSource + Sync)> = owned
         .iter()
         .map(|column| column as &(dyn ExtxyzSource + Sync))
         .collect();
@@ -1282,10 +1406,17 @@ mod tests {
     use super::*;
 
     fn expanded_species(tables: &XyzTables) -> Vec<String> {
-        match &tables.uniform_species {
-            Some(symbol) => vec![symbol.clone(); tables.n_frames * tables.n_atoms],
-            None => tables.species.clone(),
+        if let Some(symbol) = &tables.uniform_species {
+            return vec![symbol.clone(); tables.n_frames * tables.n_atoms];
         }
+        if !tables.species_ids.is_empty() {
+            return tables
+                .species_ids
+                .iter()
+                .map(|id| tables.species_pool[*id as usize].clone())
+                .collect();
+        }
+        tables.species.clone()
     }
 
     #[test]
@@ -1306,7 +1437,7 @@ Cu 5.5 6.5 7.5
         let general = tables_general(text.as_bytes()).unwrap();
         assert_eq!(fast.n_frames, general.n_frames);
         assert_eq!(fast.n_atoms, general.n_atoms);
-        assert_eq!(expanded_species(&fast), general.species);
+        assert_eq!(expanded_species(&fast), expanded_species(&general));
         assert_eq!(fast.cell.len(), general.cell.len());
         for (left, right) in fast.cell.iter().zip(general.cell.iter()) {
             assert_eq!(left.to_bits(), right.to_bits());
@@ -1316,7 +1447,7 @@ Cu 5.5 6.5 7.5
             assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
         }
         let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
-        assert_eq!(expanded_species(&parallel), general.species);
+        assert_eq!(expanded_species(&parallel), expanded_species(&general));
         for (left, right) in parallel.positions.iter().zip(general.positions.iter()) {
             assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
         }
@@ -1328,7 +1459,10 @@ H 1.0 0.0 0.0
 ";
         let mixed_fast = tables_from_extxyz_bytes(mixed.as_bytes()).unwrap();
         let mixed_general = tables_general(mixed.as_bytes()).unwrap();
-        assert_eq!(expanded_species(&mixed_fast), mixed_general.species);
+        assert_eq!(
+            expanded_species(&mixed_fast),
+            expanded_species(&mixed_general)
+        );
         for (left, right) in mixed_fast
             .positions
             .iter()
@@ -1336,6 +1470,40 @@ H 1.0 0.0 0.0
         {
             assert_eq!(left.to_bits(), right.to_bits());
         }
+    }
+
+    #[test]
+    fn a_mixed_frame_with_a_changing_comment_matches_on_one_and_many_threads() {
+        let text = "\
+3
+Lattice=\"10 0 0 0 12 0 0 0 14\" Properties=species:S:1:pos:R:3:masses:R:1 energy=-1.5 step=3 pbc=\"T T T\"
+Cu 1.25 -2.5 3.125 63.546
+H 0.1 0.2 0.3 1.008
+Ni 4.0 5.0 6.0 58.6934
+3
+Lattice=\"10.5 0 0 0 12 0 0 0 14\" Properties=species:S:1:pos:R:3:masses:R:1 energy=-2.25 step=4 pbc=\"T T T\"
+Al 0.0 -0.0 1.0 26.9815385
+Cu 2.0 3.0 4.0 63.546
+H 1.0e-3 0.0 8.0 1.008
+";
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
+        assert!(serial.uniform_species.is_none());
+        let names = expanded_species(&serial);
+        assert_eq!(
+            names,
+            ["Cu", "H", "Ni", "Al", "Cu", "H"].map(str::to_string)
+        );
+        assert_eq!(expanded_species(&parallel), expanded_species(&serial));
+        assert_eq!(parallel.positions.len(), serial.positions.len());
+        for (left, right) in parallel.positions.iter().zip(serial.positions.iter()) {
+            assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
+        }
+        for (left, right) in parallel.masses.iter().zip(serial.masses.iter()) {
+            assert_eq!(left.to_bits(), right.to_bits(), "{left} vs {right}");
+        }
+        assert!((serial.cell[0] - 10.0).abs() < 1e-12);
+        assert!((serial.cell[6] - 10.5).abs() < 1e-12);
     }
 
     #[test]
@@ -1353,7 +1521,7 @@ H 1.0 0.0 0.0
         let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
         assert_eq!(parallel.n_frames, 2);
         assert_eq!(parallel.positions, serial.positions);
-        assert_eq!(parallel.species, serial.species);
+        assert_eq!(expanded_species(&parallel), expanded_species(&serial));
     }
 
     #[test]
@@ -1367,8 +1535,17 @@ H 1.0 0.0 0.0
         let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 4).unwrap();
         assert_eq!(parallel.n_frames, serial.n_frames);
         assert_eq!(parallel.positions, serial.positions);
-        assert_eq!(parallel.species, serial.species);
+        assert_eq!(expanded_species(&parallel), expanded_species(&serial));
         assert_eq!(parallel.cell, serial.cell);
+        let serial_symbols = expanded_species(&serial);
+        let mut serial = serial;
+        if let Some(column) = serial
+            .columns
+            .iter_mut()
+            .find(|column| column.name == "species")
+        {
+            column.text = serial_symbols;
+        }
         let serial_bytes = extxyz_bytes(
             serial.n_frames,
             serial.n_atoms,
@@ -1382,13 +1559,14 @@ H 1.0 0.0 0.0
         .unwrap();
         // The parallel read moved species out of the column. Put it back
         // so the writer sees the same symbols as the serial table.
+        let symbols = expanded_species(&parallel);
         let mut parallel = parallel;
         if let Some(column) = parallel
             .columns
             .iter_mut()
             .find(|column| column.name == "species")
         {
-            column.text.clone_from(&parallel.species);
+            column.text = symbols;
         }
         if let Some(column) = parallel
             .columns
@@ -1456,7 +1634,11 @@ Cu 4.0 5.0 6.0 63.546
         let tables = tables_from_extxyz_path(&path).unwrap();
         assert_eq!(tables.n_frames, 1);
         assert_eq!(tables.n_atoms, 10);
-        assert!(tables.species.iter().all(|symbol| symbol == "Cu"));
+        assert!(
+            expanded_species(&tables)
+                .iter()
+                .all(|symbol| symbol == "Cu")
+        );
         let forces = tables
             .columns
             .iter()
@@ -1481,7 +1663,7 @@ Cu 4.0 5.0 6.0 63.546
         let tables = tables_from_extxyz_path(&path).unwrap();
         let bytes = tables_to_extxyz_bytes(&tables).unwrap();
         let again = tables_from_extxyz_bytes(&bytes).unwrap();
-        assert_eq!(again.species, tables.species);
+        assert_eq!(expanded_species(&again), expanded_species(&tables));
         assert_eq!(again.positions, tables.positions);
         assert_eq!(again.masses, tables.masses);
         let forces = |item: &XyzTables| {

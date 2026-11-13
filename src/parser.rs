@@ -45,15 +45,16 @@ std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
 }
 
-/// Fill `n` coordinate rows whose newlines are `breaks_rel` (positions
-/// of `\n` relative to `bytes`, length `n`).
+/// Fill `n` coordinate rows.
 ///
-/// `xyz` receives `n * 3` values. `ids` and `flags` may be null when the
-/// caller does not want them. `flags` is the packed column-4 mask.
+/// `breaks[i]` is the absolute index of that row's `\n`. Row 0 begins at
+/// `row0`. `xyz` receives `n * 3` values. `ids` and `flags` may be null
+/// when the caller does not want them. `flags` is the packed column-4 mask.
 #[cfg(feature = "parallel")]
 pub(crate) fn fill_rows_from_breaks(
     bytes: &[u8],
-    breaks_rel: &[usize],
+    breaks: &[usize],
+    row0: usize,
     spec_version: u32,
     start_id: u64,
     workers: usize,
@@ -61,7 +62,7 @@ pub(crate) fn fill_rows_from_breaks(
     ids: *mut u64,
     flags: *mut u8,
 ) -> Result<(), ParseError> {
-    let n = breaks_rel.len();
+    let n = breaks.len();
     if n == 0 {
         return Ok(());
     }
@@ -77,11 +78,11 @@ pub(crate) fn fill_rows_from_breaks(
             let last = (first + chunk).min(n);
             for row_index in first..last {
                 let start = if row_index == 0 {
-                    0
+                    row0
                 } else {
-                    breaks_rel[row_index - 1] + 1
+                    breaks[row_index - 1] + 1
                 };
-                let end = breaks_rel[row_index] + 1;
+                let end = breaks[row_index] + 1;
                 if end > bytes.len() || start > end {
                     return Err(ParseError::IncompleteFrame);
                 }
@@ -111,15 +112,33 @@ pub(crate) fn fill_rows_from_breaks(
     on_pool(workers, fill)
 }
 
+/// Run `body` on a pool of `workers` threads.
+///
+/// The pool for a given size is kept for the process. Building one per
+/// call was a serial pause on the wide-frame read and the row formatter.
 #[cfg(feature = "parallel")]
-fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
+pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
     if workers < 2 {
         return body();
     }
-    match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
-        Ok(pool) => pool.install(body),
-        Err(_) => body(),
-    }
+    let pool = {
+        use std::sync::{Mutex, OnceLock};
+        static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> = OnceLock::new();
+        let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
+        let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
+        if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
+            *pool
+        } else {
+            let built = match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+                Ok(pool) => pool,
+                Err(_) => return body(),
+            };
+            let pool: &'static rayon::ThreadPool = Box::leak(Box::new(built));
+            guard.push((workers, pool));
+            pool
+        }
+    };
+    pool.install(body)
 }
 
 /// Coordinate rows in `bytes`, which begins at the first row.
@@ -242,8 +261,16 @@ fn coord_line_ranges(
 /// scans on the calling thread.
 #[cfg(feature = "parallel")]
 pub(crate) fn newline_index(bytes: &[u8], workers: usize) -> Vec<usize> {
+    newline_index_at(bytes, 0, workers)
+}
+
+/// [`newline_index`] with `base` added to every stored offset.
+#[cfg(feature = "parallel")]
+pub(crate) fn newline_index_at(bytes: &[u8], base: usize, workers: usize) -> Vec<usize> {
     if bytes.is_empty() || workers < 2 || bytes.len() < (1 << 20) {
-        return memchr::memchr_iter(b'\n', bytes).collect();
+        return memchr::memchr_iter(b'\n', bytes)
+            .map(|index| base + index)
+            .collect();
     }
     let workers = workers.min(bytes.len());
     let mut cuts = Vec::with_capacity(workers + 1);
@@ -290,7 +317,7 @@ pub(crate) fn newline_index(bytes: &[u8], workers: usize) -> Vec<usize> {
             let mut at = slot[index];
             for rel in memchr::memchr_iter(b'\n', &bytes[from..to]) {
                 unsafe {
-                    *((out_ptr as *mut usize).add(at)) = from + rel;
+                    *((out_ptr as *mut usize).add(at)) = base + from + rel;
                 }
                 at += 1;
             }

@@ -4512,6 +4512,34 @@ fn py_text_frames<'py>(
     Ok(frames)
 }
 
+fn indexed_symbol_frames<'py>(
+    py: Python<'py>,
+    pool: &[String],
+    ids: &[u32],
+    n_frames: usize,
+    n_atoms: usize,
+) -> PyResult<Bound<'py, PyList>> {
+    let symbols: Vec<pyo3::Py<pyo3::types::PyString>> = pool
+        .iter()
+        .map(|symbol| pyo3::types::PyString::new(py, symbol).unbind())
+        .collect();
+    let mut rows: Vec<pyo3::Py<pyo3::types::PyTuple>> = Vec::with_capacity(n_frames);
+    for frame in 0..n_frames {
+        let row = &ids[frame * n_atoms..(frame + 1) * n_atoms];
+        if frame > 0 && row == &ids[(frame - 1) * n_atoms..frame * n_atoms] {
+            rows.push(rows[frame - 1].clone_ref(py));
+            continue;
+        }
+        let tuple = pyo3::types::PyTuple::new(
+            py,
+            row.iter().map(|id| symbols[*id as usize].clone_ref(py)),
+        )?
+        .unbind();
+        rows.push(tuple);
+    }
+    pyo3::types::PyList::new(py, rows)
+}
+
 fn uniform_symbol_frames<'py>(
     py: Python<'py>,
     symbol: &str,
@@ -4596,9 +4624,18 @@ fn read_extxyz<'py>(
     let species = match shared_species {
         Some(found) => found,
         None => {
-            let built = match tables.uniform_species.as_deref() {
-                Some(symbol) => uniform_symbol_frames(py, symbol, n_frames, n_atoms)?,
-                None => py_text_frames(py, &tables.species, n_atoms, 1)?,
+            let built = if let Some(symbol) = tables.uniform_species.as_deref() {
+                uniform_symbol_frames(py, symbol, n_frames, n_atoms)?
+            } else if !tables.species_ids.is_empty() {
+                indexed_symbol_frames(
+                    py,
+                    &tables.species_pool,
+                    &tables.species_ids,
+                    n_frames,
+                    n_atoms,
+                )?
+            } else {
+                py_text_frames(py, &tables.species, n_atoms, 1)?
             };
             arrays.set_item("species", &built)?;
             built

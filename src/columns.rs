@@ -200,10 +200,6 @@ fn fill_frame_rows(
     let spec = frame_spec(bytes, out.spans[frame].start)?;
     if out.wide_breaks.get(frame).map(|item| item.len()) == Some(count) {
         let breaks = &out.wide_breaks[frame];
-        let mut relative = Vec::with_capacity(count);
-        for &absolute in breaks {
-            relative.push(absolute - head);
-        }
         let ids_ptr = if rich {
             unsafe { ids.add(dest) }
         } else {
@@ -215,8 +211,9 @@ fn fill_frame_rows(
             std::ptr::null_mut()
         };
         return crate::parser::fill_rows_from_breaks(
-            &bytes[head..],
-            &relative,
+            bytes,
+            breaks,
+            head,
             spec,
             0,
             workers,
@@ -397,15 +394,14 @@ fn parse_one_frame(
             }
         } else if counts.len() == 1 && *count >= 4096 && workers >= 2 {
             let start = *pos;
-            let index = crate::parser::newline_index(&bytes[start..], workers);
+            let mut index = crate::parser::newline_index_at(&bytes[start..], start, workers);
             if index.len() < *count {
                 return Err(ParseError::IncompleteFrame);
             }
-            out.wide_breaks
-                .last_mut()
-                .expect("frame breaks")
-                .extend(index.iter().take(*count).map(|rel| start + rel));
-            *pos = start + index[*count - 1] + 1;
+            let end = index[*count - 1] + 1;
+            index.truncate(*count);
+            *out.wide_breaks.last_mut().expect("frame breaks") = index;
+            *pos = end;
             out.masses.extend(std::iter::repeat_n(*mass, *count));
             n += *count;
         } else {
