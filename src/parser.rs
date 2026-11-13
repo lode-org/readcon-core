@@ -1605,6 +1605,11 @@ pub fn parse_frame_header<'a>(
             // The line written by every stock trajectory. Same object the
             // JSON parser would build: major 2, no extra keys.
             (2, Vec::new(), false, false)
+        } else if let Some(ver) = simple_metadata_version(trimmed) {
+            // A header whose only keys are the spec version, an optional
+            // minor, and a units object. Every byte is still read. Any
+            // other key falls through to the general parser.
+            (ver, Vec::new(), false, false)
         } else if trimmed.starts_with('{') {
             let json_val: serde_json::Value = serde_json::from_str(trimmed)
                 .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
@@ -1753,6 +1758,147 @@ pub fn parse_frame_header<'a>(
         strict_validation: validate,
         sections_declared,
     })
+}
+
+/// Spec line limited to `con_spec_version`, optional `con_spec_minor`, and `units`.
+///
+/// Returns the major version when the object is exactly that shape and, for
+/// version 3 or newer, `length` and `energy` are valid units. Anything else
+/// is `None` so the general JSON parser can accept or reject it.
+fn simple_metadata_version(line: &str) -> Option<u32> {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    let skip = |i: &mut usize| {
+        while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
+            *i += 1;
+        }
+    };
+    let eat = |i: &mut usize, byte: u8| -> bool {
+        skip(i);
+        if *i < bytes.len() && bytes[*i] == byte {
+            *i += 1;
+            true
+        } else {
+            false
+        }
+    };
+    let quoted = |i: &mut usize| -> Option<&str> {
+        skip(i);
+        if *i >= bytes.len() || bytes[*i] != b'"' {
+            return None;
+        }
+        *i += 1;
+        let start = *i;
+        while *i < bytes.len() && bytes[*i] != b'"' {
+            if bytes[*i] == b'\\' {
+                return None;
+            }
+            *i += 1;
+        }
+        if *i >= bytes.len() {
+            return None;
+        }
+        let text = std::str::from_utf8(&bytes[start..*i]).ok()?;
+        *i += 1;
+        Some(text)
+    };
+    let integer = |i: &mut usize| -> Option<u64> {
+        skip(i);
+        let start = *i;
+        if *i < bytes.len() && bytes[*i] == b'-' {
+            return None;
+        }
+        while *i < bytes.len() && bytes[*i].is_ascii_digit() {
+            *i += 1;
+        }
+        if start == *i || (bytes[start] == b'0' && *i > start + 1) {
+            return None;
+        }
+        std::str::from_utf8(&bytes[start..*i]).ok()?.parse().ok()
+    };
+    if !eat(&mut i, b'{') {
+        return None;
+    }
+    let mut version = None;
+    let mut saw_minor = false;
+    let mut length = None;
+    let mut energy = None;
+    let mut extra_unit = false;
+    loop {
+        skip(&mut i);
+        if i < bytes.len() && bytes[i] == b'}' {
+            i += 1;
+            break;
+        }
+        if version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit {
+            if !eat(&mut i, b',') {
+                return None;
+            }
+        }
+        let key = quoted(&mut i)?;
+        if !eat(&mut i, b':') {
+            return None;
+        }
+        match key {
+            "con_spec_version" if version.is_none() => version = Some(integer(&mut i)?),
+            "con_spec_minor" if !saw_minor => {
+                integer(&mut i)?;
+                saw_minor = true;
+            }
+            "units" if length.is_none() && energy.is_none() && !extra_unit => {
+                if !eat(&mut i, b'{') {
+                    return None;
+                }
+                loop {
+                    skip(&mut i);
+                    if i < bytes.len() && bytes[i] == b'}' {
+                        i += 1;
+                        break;
+                    }
+                    if length.is_some() || energy.is_some() || extra_unit {
+                        if !eat(&mut i, b',') {
+                            return None;
+                        }
+                    }
+                    let ukey = quoted(&mut i)?;
+                    if !eat(&mut i, b':') {
+                        return None;
+                    }
+                    let value = quoted(&mut i)?;
+                    match ukey {
+                        "length" if length.is_none() => length = Some(value),
+                        "energy" if energy.is_none() => energy = Some(value),
+                        "mass" | "time" | "velocity" | "force" => {
+                            if crate::units::validate_unit_for_quantity(ukey, value).is_err() {
+                                return None;
+                            }
+                            extra_unit = true;
+                        }
+                        _ => return None,
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+    skip(&mut i);
+    if i != bytes.len() {
+        return None;
+    }
+    let ver = u32::try_from(version?).ok()?;
+    if ver == 0 || ver == 1 || ver > crate::CON_SPEC_VERSION {
+        return None;
+    }
+    if ver >= 3 {
+        let length = length?;
+        let energy = energy?;
+        if length.trim().is_empty() || energy.trim().is_empty() {
+            return None;
+        }
+        crate::units::validate_unit_for_quantity("length", length).ok()?;
+        crate::units::validate_unit_for_quantity("energy", energy).ok()?;
+    }
+    Some(ver)
 }
 
 /// Parses a complete frame from a `.con` file, including its header and atomic data.

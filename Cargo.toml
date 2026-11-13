@@ -84,7 +84,7 @@ half = "1.8"
 ndarray = "0.17"
 fast-float2 = "0.2"
 ryu = "1.0"
-flate2 = "1"
+flate2 = { version = "1", default-features = false, features = ["zlib-ng"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 memchr = "2"
 memmap2 = "0.9"

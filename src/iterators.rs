@@ -1166,32 +1166,44 @@ fn public_load_error(err: LoadError) -> Box<dyn std::error::Error> {
 
 /// Read plain text in windows and parse each complete frame before the next
 /// window. The window is a few mebibytes, so the file is not resident with
-/// the finished frames.
+/// the finished frames. Gzip and zstd are inflated into the same window.
 fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
     use std::io::Read;
     let mut file = std::fs::File::open(path).map_err(LoadError::Io)?;
     let mut magic = [0u8; 4];
     let n = file.read(&mut magic).map_err(LoadError::Io)?;
     let compression = crate::compression::detect_compression(&magic[..n]);
-    if !matches!(compression, crate::compression::Compression::None) {
-        drop(file);
-        let bytes = crate::compression::read_bytes_owned(path).map_err(load_error_from_box)?;
-        return frames_from_bytes_located(bytes.as_slice(), Some(1)).map_err(LoadError::Parse);
+    if matches!(compression, crate::compression::Compression::None) {
+        let file_len = path.metadata().map(|m| m.len()).unwrap_or(0);
+        return stream_reader(&mut file, &magic[..n], file_len);
     }
+    drop(file);
+    // Inflate into one string and parse it. A windowed inflate was slower:
+    // the decoder and the parser no longer shared a hot buffer, and the
+    // pure-Rust inflater was the part that missed the old gzip time.
+    let contents = crate::compression::read_file_contents(path).map_err(load_error_from_box)?;
+    let text = contents.as_str().map_err(LoadError::Utf8)?;
+    frames_from_text_located(text, Some(1)).map_err(LoadError::Parse)
+}
+
+fn stream_reader(
+    reader: &mut dyn std::io::Read,
+    prefix: &[u8],
+    file_len: u64,
+) -> Result<Vec<types::ConFrame>, LoadError> {
     let mut buf = Vec::with_capacity(8 << 20);
-    buf.extend_from_slice(&magic[..n]);
+    buf.extend_from_slice(prefix);
     let mut frames = Vec::new();
     let mut sized = false;
-    let file_len = path.metadata().map(|m| m.len()).unwrap_or(0);
     let mut line_base = 0u32;
-    let mut eof = n == 0;
+    let mut eof = false;
     let mut read_more = |buf: &mut Vec<u8>, eof: &mut bool| -> Result<(), LoadError> {
         if *eof {
             return Ok(());
         }
         let start = buf.len();
         buf.resize(start + (8 << 20), 0);
-        let got = file.read(&mut buf[start..]).map_err(LoadError::Io)?;
+        let got = reader.read(&mut buf[start..]).map_err(LoadError::Io)?;
         buf.truncate(start + got);
         if got == 0 {
             *eof = true;
@@ -2611,7 +2623,6 @@ fn finish_results(
 }
 
 /// Header walk on the calling thread.
-#[cfg(feature = "parallel")]
 pub const SCAN_SERIAL: u8 = 0;
 /// Newline index in chunks, then a header walk on the calling thread.
 ///
@@ -2619,10 +2630,8 @@ pub const SCAN_SERIAL: u8 = 0;
 /// bytes are split across the pool. The header walk is not, because a
 /// later frame start is the end of the skip, and that end is not known
 /// until the skip runs.
-#[cfg(feature = "parallel")]
 pub const SCAN_INDEXED: u8 = 1;
 /// Equal-length frames. Each worker boundary is checked.
-#[cfg(feature = "parallel")]
 pub const SCAN_EQUAL_SPAN: u8 = 2;
 
 /// Frame starts when every frame occupies the same number of bytes.

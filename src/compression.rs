@@ -172,6 +172,20 @@ pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error
     }
 }
 
+/// Uncompressed size in the last four bytes of one gzip member, when it fits.
+fn gzip_member_isize(path: &Path) -> Option<usize> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    if len < 8 {
+        return None;
+    }
+    file.seek(SeekFrom::End(-4)).ok()?;
+    let mut buf = [0u8; 4];
+    file.read_exact(&mut buf).ok()?;
+    Some(u32::from_le_bytes(buf) as usize)
+}
+
 fn read_contents(
     path: &Path,
     map_large: bool,
@@ -189,8 +203,15 @@ fn read_contents(
     let contents = match compression {
         Compression::Gzip => {
             // Every gzip member, in order (CON-compress.1, D16).
-            let mut decoder = flate2::read::MultiGzDecoder::new(stream);
+            // A large input buffer keeps zlib-ng from refilling a few
+            // kilobytes at a time. The gzip ISIZE, when it fits in 32 bits,
+            // is the uncompressed length of one member and only a reserve.
+            let reader = io::BufReader::with_capacity(8 << 20, stream);
+            let mut decoder = flate2::bufread::MultiGzDecoder::new(reader);
             let mut contents = String::new();
+            if let Some(hint) = gzip_member_isize(path) {
+                contents.reserve(hint);
+            }
             decoder.read_to_string(&mut contents)?;
             FileContents::Owned(contents)
         }

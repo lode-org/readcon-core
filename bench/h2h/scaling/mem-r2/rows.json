@@ -1,0 +1,26 @@
+{
+  "base": "92f7bda9e7b7b97c2c164cf1e952473f8441a4b1",
+  "protocol": "serial warmup=1 samples=6 percentile=type7",
+  "gzip": {
+    "median_s": 0.3954550435,
+    "iqr_s": 0.023056048500000037,
+    "samples_s": [
+      0.403223404,
+      0.411171339,
+      0.385608848,
+      0.384182954,
+      0.422560167,
+      0.387686683
+    ],
+    "frames": 100000,
+    "peak_rss_kib": 548248
+  },
+  "path_peak_rss_kib": {
+    "rust": 429560,
+    "c": 428348,
+    "c++": 486468,
+    "fortran": 431424,
+    "python": 496824,
+    "rust_gzip": 548248
+  }
+}
