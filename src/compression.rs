@@ -457,6 +457,19 @@ pub fn compression_workers(nbytes: usize) -> usize {
     by_size.max(threads.saturating_mul(4)).clamp(1, 64)
 }
 
+/// Deflate workers for a write that did not ask for a thread count.
+///
+/// The member count stays wide so a read can split the file. Running one
+/// thread per member oversubscribes an 8-core host once that count hits
+/// 32. The cap is `available_parallelism`.
+pub fn default_deflate_threads(members: usize) -> usize {
+    let cores = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1)
+        .max(1);
+    members.max(1).min(cores)
+}
+
 fn split_chunks(data: &[u8], workers: usize) -> Vec<&[u8]> {
     if data.is_empty() || workers <= 1 {
         return vec![data];
@@ -1958,6 +1971,17 @@ mod tests {
         let auto = dir.path().join("auto.con.gz");
         assert_eq!(write_gzip_members(&auto, &data).unwrap(), 1);
         assert_eq!(std::fs::read(&auto).unwrap(), direct);
+    }
+
+    #[test]
+    fn default_deflate_threads_stay_within_the_machine() {
+        let cores = std::thread::available_parallelism()
+            .map(|count| count.get())
+            .unwrap_or(1)
+            .max(1);
+        assert_eq!(default_deflate_threads(1), 1);
+        assert_eq!(default_deflate_threads(cores.saturating_mul(4)), cores);
+        assert!(default_deflate_threads(64) <= cores);
     }
 
     #[test]
