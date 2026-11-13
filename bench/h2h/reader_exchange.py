@@ -175,8 +175,8 @@ def sample_arm(arm: str, path: Path) -> dict:
     env.pop("PYTHONPATH", None)
     if arm == "eon":
         env["PYTHONPATH"] = str(br.EON_PY)
-        env["LD_LIBRARY_PATH"] = str(br.EON_LIB) + os.pathsep + env.get(
-            "LD_LIBRARY_PATH", ""
+        env["LD_LIBRARY_PATH"] = (
+            str(br.EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         )
     if arm == "eon_py":
         env["EON_PKG"] = str(br.EON_PKG)
@@ -221,7 +221,9 @@ def sample_arm(arm: str, path: Path) -> dict:
     proc.stdin.write("\n")
     proc.stdin.close()
     out, err = proc.communicate()
-    lines = [ln for ln in out.splitlines() if ln.startswith("{") or ln.startswith("READY")]
+    lines = [
+        ln for ln in out.splitlines() if ln.startswith("{") or ln.startswith("READY")
+    ]
     if proc.returncode != 0 or not lines or not lines[-1].startswith("{"):
         text = (err or out)[-300:].replace("\n", " ")
         return {
