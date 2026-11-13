@@ -128,7 +128,22 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
         if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
             *pool
         } else {
-            let built = match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
+            let next_core = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let built = match rayon::ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .spawn_handler(move |thread| {
+                    // One worker per physical core. Leaving the placement to
+                    // the kernel put two of these on one core and left
+                    // another idle, which is the whole 8-thread gap.
+                    let core = next_core.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    std::thread::Builder::new().spawn(move || {
+                        pin_worker(core);
+                        thread.run();
+                    })?;
+                    Ok(())
+                })
+                .build()
+            {
                 Ok(pool) => pool,
                 Err(_) => return body(),
             };
@@ -138,6 +153,15 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
         }
     };
     pool.install(body)
+}
+
+pub(crate) fn pin_worker(core: usize) {
+    unsafe {
+        let mut set: libc::cpu_set_t = std::mem::zeroed();
+        libc::CPU_ZERO(&mut set);
+        libc::CPU_SET(core, &mut set);
+        libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set);
+    }
 }
 
 /// Coordinate rows in `bytes`, which begins at the first row.
