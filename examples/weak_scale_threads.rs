@@ -172,6 +172,12 @@ fn frame_fingerprint(frames: &[readcon_core::types::ConFrame]) -> u64 {
     acc
 }
 
+/// Timed interval for every worker count: parse, then drop those frames.
+///
+/// `release_parsed_frames` is the drop. One worker frees on this thread.
+/// Two or more free on the pool that allocated the frames. The
+/// serial-match parses above this call are not in the interval, and
+/// every count drops that match with `drop`.
 fn time_one(text: &str, workers: usize, n_frames: usize) -> f64 {
     let started = Instant::now();
     let frames = frames_from_text(text, Some(workers)).expect("parse");
@@ -230,10 +236,7 @@ fn main() {
         drop(serial);
         let parallel = frames_from_text(&text, Some(workers)).expect("parallel parse");
         let parallel_fp = frame_fingerprint(&parallel);
-        // The match parse allocated on the worker heaps. Dropping it here
-        // would free those blocks on this thread and the timed samples
-        // would allocate cold.
-        readcon_core::iterators::release_parsed_frames(parallel, workers);
+        drop(parallel);
         if serial_fp != parallel_fp {
             write_refusal(&out_path, "serial-match output failed");
             std::process::exit(2);
