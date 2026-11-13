@@ -225,6 +225,16 @@ rule final_table2:
         "python3 bench/h2h/final_campaign.py table2 --out {params.out} --repeats {params.repeats}"
 
 
+# Same compressed .con/.extxyz files, readcon vs ASE vs eOn.
+rule compressed_h2h:
+    output:
+        "bench/h2h/scaling/rel1/compressed-h2h.json",
+        "bench/h2h/scaling/rel1/compressed-h2h.log",
+        "bench/h2h/scaling/rel1/compressed-h2h-lscpu.txt",
+    shell:
+        "python3 bench/h2h/compressed_h2h.py --out bench/h2h/scaling/rel1 --repeats 6"
+
+
 rule final_con_h2h:
     input:
         f"{FINAL_OUT}/bindings.json",

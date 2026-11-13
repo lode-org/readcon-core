@@ -6041,6 +6041,17 @@ fn read_extxyz<'py>(
         .detach(move || -> Result<_, String> {
             use std::io::Read;
             let mut file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
+            let mut magic = [0u8; 4];
+            let nmagic = file.read(&mut magic).map_err(|_| "read".to_string())?;
+            if !matches!(
+                crate::compression::detect_compression(&magic[..nmagic]),
+                crate::compression::Compression::None
+            ) {
+                drop(file);
+                let bytes = crate::compression::read_file_bytes(std::path::Path::new(&path_owned))
+                    .map_err(|err| err.to_string())?;
+                return crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers);
+            }
             let meta = file.metadata().map_err(|_| "read".to_string())?;
             // A pipe has no map. A proc file can report size 0 and still
             // return bytes from read; mapping it fails or yields an empty
@@ -6056,6 +6067,7 @@ fn read_extxyz<'py>(
                 }
             }
             let mut bytes = Vec::new();
+            bytes.extend_from_slice(&magic[..nmagic]);
             file.read_to_end(&mut bytes)
                 .map_err(|_| "read".to_string())?;
             crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
@@ -6447,6 +6459,56 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
         })
         .collect();
     let workers = n_threads.unwrap_or(1);
+    let codec = crate::compression::detect_compression_from_extension(std::path::Path::new(path));
+    if !matches!(codec, crate::compression::Compression::None) {
+        if let Some(parent) = std::path::Path::new(path).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
+        }
+        let bytes = crate::extxyz_scan::extxyz_bytes_with_threads(
+            n_frames, n_atoms, cell, &sources, workers,
+        )
+        .map_err(PyValueError::new_err)?;
+        let members = crate::compression::compression_workers(bytes.len());
+        let threads = match n_threads {
+            Some(count) if count >= 1 => count,
+            _ => crate::compression::default_deflate_threads(members),
+        };
+        let written = match codec {
+            crate::compression::Compression::Gzip => {
+                crate::compression::write_gzip_members_limited(
+                    std::path::Path::new(path),
+                    &bytes,
+                    members,
+                    threads,
+                )
+            }
+            crate::compression::Compression::Zstd => {
+                #[cfg(feature = "zstd")]
+                {
+                    crate::compression::write_zstd_members_limited(
+                        std::path::Path::new(path),
+                        &bytes,
+                        members,
+                        threads,
+                    )
+                }
+                #[cfg(not(feature = "zstd"))]
+                {
+                    let _ = (members, threads);
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Unsupported,
+                        "zstd compression requires readcon built with the zstd feature",
+                    ))
+                }
+            }
+            crate::compression::Compression::None => unreachable!("plain extxyz already returned"),
+        };
+        return written
+            .map(|_| ())
+            .map_err(|err| PyValueError::new_err(err.to_string()));
+    }
     if workers >= 2 {
         if let Some(parent) = std::path::Path::new(path).parent()
             && !parent.as_os_str().is_empty()
