@@ -196,6 +196,25 @@ def read_readcon(path: str) -> dict:
     }
 
 
+def write_xyz_for_readcon(path: Path, spec: dict) -> None:
+    """XYZ that libchemfiles reads, without the chemfiles Python package.
+
+    The comment carries the orthorhombic cell the way chemfiles writes
+    ``Lattice`` (column-major, zeros off the diagonal). ``read_chemfiles``
+    turns that back into box lengths and 90 degree angles.
+    """
+    lines: list[str] = []
+    for frame_index in range(spec["n_frames"]):
+        lengths = spec["cell"][frame_index, :3]
+        lattice = f"{lengths[0]:g} 0 0 0 {lengths[1]:g} 0 0 0 {lengths[2]:g}"
+        lines.append(str(spec["n_atoms"]))
+        lines.append(f'Lattice="{lattice}"')
+        for atom_index, name in enumerate(spec["symbols"]):
+            x, y, z = spec["positions"][frame_index, atom_index]
+            lines.append(f"{name} {x:.8f} {y:.8f} {z:.8f}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def write_chemfiles_xyz(path: Path, spec: dict) -> None:
     import chemfiles
 
@@ -473,8 +492,6 @@ ARM_IO = {
 
 
 def _try_zstd(spec: dict, directory: Path) -> bool:
-    import readcon
-
     dest = directory / "zstd-probe.con.zst"
     try:
         write_readcon(dest, spec, "zstd")
@@ -646,9 +663,8 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         write_chemfiles_xyz(path, spec)
         return path
     if arm_id == "readcon-chemfiles":
-        path = directory / "chemfiles.xyz"
-        if not path.is_file():
-            write_chemfiles_xyz(path, spec)
+        path = directory / "readcon-chemfiles.xyz"
+        write_xyz_for_readcon(path, spec)
         return path
     if arm_id == "ase-extxyz":
         path = directory / "ase.extxyz"

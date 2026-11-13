@@ -42,8 +42,8 @@ BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 sys.path.insert(0, str(BENCH))
 
-from campaign_protocol import type7
-from sample_protocol import (
+from campaign_protocol import type7  # noqa: E402
+from sample_protocol import (  # noqa: E402
     core_list,
     host_snapshot,
     pin_cores,
@@ -163,19 +163,30 @@ def worker_main() -> None:
         workers = int(job["workers"])
         chunks, serial, total = sink_parts(frame, workers)
         if job["mode"] == "concurrent":
-            once = lambda: pwrite_chunks(dest, chunks, total)
+
+            def once() -> None:
+                pwrite_chunks(dest, chunks, total)
+
         elif job["mode"] == "serial":
-            once = lambda: pwrite_chunks(dest, [(serial, 0)], total)
+
+            def once() -> None:
+                pwrite_chunks(dest, [(serial, 0)], total)
+
         else:
             raise SystemExit(f"unknown sink mode {job['mode']}")
     elif op in ("weak", "strong"):
         ensure_module()
         frames = load_frames(int(job["copies"]))
         workers = int(job["workers"])
-        once = lambda: weak_once(frames, workers, dest)
+
+        def once() -> None:
+            weak_once(frames, workers, dest)
+
     elif op == "probe":
         produced = Path(job["payload"]).read_bytes()
-        once = lambda: pwrite_chunks(dest, [(produced, 0)], len(produced))
+
+        def once() -> None:
+            pwrite_chunks(dest, [(produced, 0)], len(produced))
     else:
         raise SystemExit(f"unknown op {op}")
     once()
