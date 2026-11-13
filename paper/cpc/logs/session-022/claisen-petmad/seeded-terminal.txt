@@ -1,0 +1,108 @@
+---
+pid: 40464
+cwd: "/tmp/rc022-run"
+command: "python3 /tmp/claisen_neb.py"
+title: "Claisen bands holding the stored crest"
+status: failed   
+started_at: 2026-11-13T01:25:03.023Z
+running_for_ms: 1415810  
+---
+/home/ubuntu/.local/lib/python3.12/site-packages/ase/mep/neb.py:329: UserWarning: The default method has changed from 'aseneb' to 'improvedtangent'. The 'aseneb' method is an unpublished, custom implementation that is not recommended as it frequently results in very poor bands. Please explicitly set method='improvedtangent' to silence this warning, or set method='aseneb' if you strictly require the old behavior (results may vary). See: https://gitlab.com/ase/ase/-/merge_requests/3952
+  warnings.warn(
+/home/ubuntu/.local/lib/python3.12/site-packages/metatrain/utils/io.py:211: UserWarning: trying to upgrade an old model checkpoint with unknown version, this might fail and require manual modifications
+  warnings.warn(
+/home/ubuntu/.local/lib/python3.12/site-packages/metatomic/torch/ase_calculator.py:1482: UserWarning: `compute_requested_neighbors_from_options` is deprecated and will be removed in a future version. Please use `neighbor_lists_for_model` to get the calculators and call them directly.
+  vesin.metatomic.compute_requested_neighbors_from_options(
+identity held step 0 raw_fmax 7.4905 barrier 5.95046 rel 0.000 0.902 3.315 5.885 5.950 3.769 1.773 0.607 0.696 -0.611
+identity held step 1 raw_fmax 7.3366 barrier 5.91525 rel 0.000 0.897 3.291 5.841 5.915 3.744 1.764 0.607 0.679 -0.611
+identity held step 20 raw_fmax 1.2622 barrier 1.47716 rel 0.000 0.241 0.720 1.139 1.477 0.659 0.563 0.607 -0.408 -0.611
+identity held step 40 raw_fmax 0.8812 barrier 0.94854 rel 0.000 0.057 0.212 0.487 0.949 0.397 0.347 0.607 -0.508 -0.611
+identity held step 60 raw_fmax 0.6574 barrier 0.61668 rel 0.000 0.020 0.118 0.327 0.617 0.361 0.315 0.607 -0.533 -0.611
+identity held step 80 raw_fmax 0.3911 barrier 0.60672 rel 0.000 -0.000 0.061 0.195 0.346 0.328 0.299 0.607 -0.549 -0.611
+identity held step 100 raw_fmax 0.2939 barrier 0.60672 rel 0.000 -0.008 0.035 0.129 0.253 0.294 0.291 0.607 -0.557 -0.611
+identity held step 120 raw_fmax 0.2494 barrier 0.60672 rel 0.000 -0.013 0.017 0.084 0.207 0.248 0.283 0.607 -0.563 -0.611
+identity held step 140 raw_fmax 0.2359 barrier 0.60672 rel 0.000 -0.015 0.006 0.059 0.187 0.208 0.276 0.607 -0.568 -0.611
+identity held step 160 raw_fmax 0.2244 barrier 0.60672 rel 0.000 -0.017 -0.001 0.040 0.176 0.167 0.265 0.607 -0.571 -0.611
+identity held step 180 raw_fmax 0.1976 barrier 0.60672 rel 0.000 -0.017 -0.005 0.030 0.168 0.138 0.254 0.607 -0.573 -0.611
+identity held step 200 raw_fmax 0.1781 barrier 0.60672 rel 0.000 -0.018 -0.008 0.023 0.162 0.110 0.237 0.607 -0.576 -0.611
+identity held step 220 raw_fmax 0.1655 barrier 0.60672 rel 0.000 -0.018 -0.010 0.019 0.158 0.091 0.220 0.607 -0.577 -0.611
+identity held step 240 raw_fmax 0.1553 barrier 0.60672 rel 0.000 -0.019 -0.011 0.015 0.156 0.073 0.200 0.607 -0.578 -0.611
+identity held step 260 raw_fmax 0.1468 barrier 0.60672 rel 0.000 -0.019 -0.012 0.013 0.155 0.059 0.181 0.607 -0.580 -0.611
+identity held step 280 raw_fmax 0.1400 barrier 0.60672 rel 0.000 -0.019 -0.012 0.012 0.155 0.049 0.164 0.607 -0.581 -0.611
+identity held step 300 raw_fmax 0.1330 barrier 0.60672 rel 0.000 -0.019 -0.013 0.011 0.157 0.038 0.147 0.607 -0.581 -0.611
+identity held step 320 raw_fmax 0.1283 barrier 0.60672 rel 0.000 -0.019 -0.013 0.010 0.159 0.032 0.136 0.607 -0.582 -0.611
+identity held step 340 raw_fmax 0.1424 barrier 0.60672 rel 0.000 -0.020 -0.014 0.010 0.162 0.024 0.122 0.607 -0.583 -0.611
+identity held step 360 raw_fmax 0.1191 barrier 0.60672 rel 0.000 -0.020 -0.014 0.010 0.164 0.020 0.114 0.607 -0.583 -0.611
+identity held step 380 raw_fmax 0.1148 barrier 0.60672 rel 0.000 -0.020 -0.014 0.010 0.167 0.016 0.104 0.607 -0.584 -0.611
+identity climb step 0 raw_fmax 0.1132 barrier 0.60672 rel 0.000 -0.020 -0.014 0.009 0.169 0.014 0.101 0.607 -0.584 -0.611
+identity climb step 1 raw_fmax 0.1132 barrier 0.60672 rel 0.000 -0.020 -0.014 0.009 0.169 0.014 0.101 0.607 -0.584 -0.611
+identity climb step 20 raw_fmax 0.1124 barrier 0.60664 rel 0.000 -0.020 -0.014 0.009 0.169 0.013 0.099 0.607 -0.584 -0.611
+identity climb step 40 raw_fmax 0.1193 barrier 0.60518 rel 0.000 -0.020 -0.014 0.009 0.171 0.011 0.095 0.605 -0.585 -0.611
+identity climb step 60 raw_fmax 0.4706 barrier 0.57205 rel 0.000 -0.020 -0.014 0.009 0.173 0.009 0.092 0.572 -0.585 -0.611
+identity climb step 80 raw_fmax 0.2757 barrier 0.49086 rel 0.000 -0.020 -0.015 0.009 0.177 0.005 0.093 0.491 -0.587 -0.611
+identity climb step 100 raw_fmax 0.2445 barrier 0.44573 rel 0.000 -0.020 -0.015 0.010 0.186 -0.001 0.096 0.446 -0.589 -0.611
+identity climb step 120 raw_fmax 0.2087 barrier 0.41889 rel 0.000 -0.020 -0.015 0.012 0.196 -0.002 0.098 0.419 -0.591 -0.611
+identity climb step 140 raw_fmax 0.1795 barrier 0.39412 rel 0.000 -0.021 -0.015 0.014 0.209 0.000 0.100 0.394 -0.592 -0.611
+identity climb step 160 raw_fmax 0.1847 barrier 0.37418 rel 0.000 -0.021 -0.015 0.016 0.222 0.009 0.102 0.374 -0.592 -0.611
+identity climb step 180 raw_fmax 0.2397 barrier 0.35700 rel 0.000 -0.021 -0.015 0.019 0.236 0.026 0.102 0.357 -0.593 -0.611
+identity climb step 200 raw_fmax 0.3162 barrier 0.34230 rel 0.000 -0.021 -0.015 0.022 0.250 0.057 0.100 0.342 -0.593 -0.611
+identity climb step 220 raw_fmax 0.4456 barrier 0.32931 rel 0.000 -0.021 -0.015 0.026 0.269 0.123 0.092 0.329 -0.593 -0.611
+identity climb step 240 raw_fmax 0.7219 barrier 0.32078 rel 0.000 -0.021 -0.015 0.031 0.288 0.251 0.079 0.321 -0.593 -0.611
+identity climb step 260 raw_fmax 1.1414 barrier 0.45650 rel 0.000 -0.021 -0.015 0.033 0.301 0.457 0.065 0.327 -0.592 -0.611
+identity climb step 280 raw_fmax 1.4295 barrier 0.86121 rel 0.000 -0.021 -0.015 0.039 0.275 0.861 0.042 0.317 -0.582 -0.611
+identity climb step 300 raw_fmax 0.8595 barrier 0.65914 rel 0.000 -0.021 -0.015 0.057 0.168 0.659 0.042 0.297 -0.578 -0.611
+identity climb step 320 raw_fmax 0.5466 barrier 0.43566 rel 0.000 -0.021 -0.015 0.067 0.129 0.436 0.054 0.291 -0.581 -0.611
+identity climb step 340 raw_fmax 0.4534 barrier 0.28595 rel 0.000 -0.022 -0.015 0.072 0.108 0.262 0.071 0.286 -0.584 -0.611
+identity climb step 360 raw_fmax 0.3913 barrier 0.28305 rel 0.000 -0.022 -0.015 0.071 0.118 0.149 0.078 0.283 -0.585 -0.611
+identity climb step 380 raw_fmax 0.2261 barrier 0.27898 rel 0.000 -0.022 -0.016 0.054 0.168 0.044 0.091 0.279 -0.584 -0.611
+identity climb step 400 raw_fmax 0.1557 barrier 0.27475 rel 0.000 -0.022 -0.017 0.029 0.231 0.013 0.087 0.275 -0.584 -0.611
+identity climb step 420 raw_fmax 0.1290 barrier 0.27148 rel 0.000 -0.022 -0.017 0.018 0.261 0.009 0.079 0.271 -0.583 -0.611
+identity climb step 440 raw_fmax 0.1287 barrier 0.26805 rel 0.000 -0.022 -0.018 0.014 0.265 0.013 0.068 0.268 -0.582 -0.611
+identity climb step 460 raw_fmax 0.1396 barrier 0.26530 rel 0.000 -0.022 -0.018 0.015 0.247 0.020 0.058 0.265 -0.582 -0.611
+identity climb step 480 raw_fmax 0.1455 barrier 0.26300 rel 0.000 -0.022 -0.019 0.015 0.222 0.028 0.049 0.263 -0.581 -0.611
+identity climb step 500 raw_fmax 0.1490 barrier 0.26125 rel 0.000 -0.022 -0.019 0.014 0.199 0.035 0.040 0.261 -0.580 -0.611
+identity climb step 520 raw_fmax 0.1502 barrier 0.26015 rel 0.000 -0.022 -0.019 0.012 0.181 0.040 0.034 0.260 -0.579 -0.611
+identity climb step 540 raw_fmax 0.1454 barrier 0.25955 rel 0.000 -0.022 -0.020 0.009 0.164 0.046 0.027 0.260 -0.578 -0.611
+identity climb step 560 raw_fmax 0.1411 barrier 0.25956 rel 0.000 -0.022 -0.020 0.007 0.154 0.048 0.022 0.260 -0.577 -0.611
+identity climb step 580 raw_fmax 0.1357 barrier 0.26019 rel 0.000 -0.022 -0.020 0.004 0.144 0.050 0.016 0.260 -0.576 -0.611
+identity climb step 600 raw_fmax 0.1321 barrier 0.26112 rel 0.000 -0.022 -0.020 0.002 0.137 0.051 0.013 0.261 -0.575 -0.611
+identity done held 391 climb 609 converged False neb_fmax 0.0867 barrier 0.26189
+/home/ubuntu/.local/lib/python3.12/site-packages/ase/mep/neb.py:329: UserWarning: The default method has changed from 'aseneb' to 'improvedtangent'. The 'aseneb' method is an unpublished, custom implementation that is not recommended as it frequently results in very poor bands. Please explicitly set method='improvedtangent' to silence this warning, or set method='aseneb' if you strictly require the old behavior (results may vary). See: https://gitlab.com/ase/ase/-/merge_requests/3952
+  warnings.warn(
+/home/ubuntu/.local/lib/python3.12/site-packages/metatrain/utils/io.py:211: UserWarning: trying to upgrade an old model checkpoint with unknown version, this might fail and require manual modifications
+  warnings.warn(
+/home/ubuntu/.local/lib/python3.12/site-packages/metatomic/torch/ase_calculator.py:1482: UserWarning: `compute_requested_neighbors_from_options` is deprecated and will be removed in a future version. Please use `neighbor_lists_for_model` to get the calculators and call them directly.
+  vesin.metatomic.compute_requested_neighbors_from_options(
+renumbered held step 0 raw_fmax 9.9124 barrier 9.26593 rel 0.000 0.865 3.703 6.958 9.266 8.916 6.813 4.791 3.988 4.360 5.124 5.922 6.128 5.071 3.078 1.221 -0.152 -0.605
+renumbered held step 1 raw_fmax 9.7126 barrier 9.24778 rel 0.000 0.853 3.664 6.924 9.248 8.901 6.798 4.784 3.988 4.348 5.105 5.910 6.113 5.042 3.045 1.189 -0.162 -0.605
+renumbered held step 20 raw_fmax 4.7756 barrier 5.82136 rel 0.000 0.088 0.401 1.277 5.612 5.821 5.015 4.159 3.988 4.047 4.235 4.688 4.002 1.963 0.237 -0.360 -0.556 -0.605
+renumbered held step 40 raw_fmax 3.3477 barrier 4.61040 rel 0.000 0.046 0.246 0.793 4.194 4.255 4.610 4.053 3.988 4.015 4.071 4.001 3.395 1.465 0.088 -0.433 -0.578 -0.605
+renumbered held step 60 raw_fmax 2.3539 barrier 3.99765 rel 0.000 0.032 0.203 0.723 3.588 3.387 3.971 3.991 3.988 3.998 3.929 2.541 3.305 1.361 0.114 -0.446 -0.583 -0.605
+renumbered held step 80 raw_fmax 2.3255 barrier 3.98814 rel 0.000 0.029 0.197 0.708 3.387 3.030 3.835 3.962 3.988 3.983 3.211 1.252 3.402 1.509 0.157 -0.451 -0.586 -0.605
+renumbered held step 100 raw_fmax 2.6381 barrier 3.98814 rel 0.000 0.028 0.199 0.699 3.297 2.721 3.740 3.949 3.988 3.964 2.186 0.715 3.055 1.928 0.247 -0.455 -0.590 -0.605
+renumbered held step 120 raw_fmax 2.8232 barrier 3.98814 rel 0.000 0.028 0.205 0.698 3.211 2.448 3.562 3.942 3.988 3.909 1.354 0.219 2.405 2.451 0.412 -0.454 -0.594 -0.605
+renumbered held step 140 raw_fmax 2.5899 barrier 3.98814 rel 0.000 0.028 0.210 0.716 2.558 2.328 3.253 3.933 3.988 3.705 0.984 -0.106 1.860 2.669 0.535 -0.449 -0.596 -0.605
+renumbered held step 160 raw_fmax 2.6257 barrier 3.98814 rel 0.000 0.029 0.235 0.840 1.741 2.207 2.757 3.926 3.988 3.000 0.591 -0.398 1.132 2.962 0.751 -0.421 -0.599 -0.605
+renumbered held step 180 raw_fmax 2.6114 barrier 3.98814 rel 0.000 0.032 0.256 0.837 1.660 2.137 2.688 3.921 3.988 2.674 0.455 -0.410 0.793 3.169 0.911 -0.390 -0.600 -0.605
+renumbered held step 200 raw_fmax 2.6166 barrier 3.98814 rel 0.000 0.036 0.275 0.809 1.621 1.906 2.660 3.917 3.988 2.460 0.351 -0.370 0.533 3.222 1.123 -0.348 -0.600 -0.605
+renumbered held step 220 raw_fmax 2.6713 barrier 3.98814 rel 0.000 0.039 0.290 0.782 1.593 1.549 2.632 3.914 3.988 2.404 0.303 -0.357 0.353 2.894 1.355 -0.295 -0.601 -0.605
+renumbered held step 240 raw_fmax 2.9820 barrier 3.98814 rel 0.000 0.041 0.296 0.770 1.568 1.032 2.565 3.911 3.988 2.462 0.330 -0.373 0.303 2.732 1.497 -0.263 -0.601 -0.605
+renumbered held step 260 raw_fmax 3.1582 barrier 3.98814 rel 0.000 0.042 0.300 0.772 1.544 0.744 2.484 3.907 3.988 2.571 0.389 -0.374 0.279 2.618 1.592 -0.238 -0.601 -0.605
+renumbered held step 280 raw_fmax 3.1400 barrier 3.98814 rel 0.000 0.042 0.302 0.785 1.521 0.536 2.454 3.902 3.988 2.696 0.462 -0.352 0.261 2.519 1.628 -0.226 -0.602 -0.605
+renumbered held step 300 raw_fmax 3.0649 barrier 3.98814 rel 0.000 0.041 0.304 0.807 1.502 0.352 2.424 3.896 3.988 2.773 0.512 -0.327 0.265 2.487 1.625 -0.224 -0.603 -0.605
+renumbered held step 320 raw_fmax 2.9639 barrier 3.98814 rel 0.000 0.040 0.305 0.859 1.460 0.044 2.333 3.890 3.988 2.852 0.564 -0.296 0.283 2.483 1.602 -0.227 -0.604 -0.605
+renumbered held step 340 raw_fmax 2.8444 barrier 3.98814 rel 0.000 0.040 0.308 0.952 1.206 -0.230 2.170 3.889 3.988 2.918 0.607 -0.268 0.306 2.499 1.562 -0.236 -0.605 -0.605
+renumbered held step 360 raw_fmax 2.7712 barrier 3.98814 rel 0.000 0.040 0.312 1.030 0.789 -0.346 2.077 3.880 3.988 2.959 0.630 -0.252 0.322 2.519 1.521 -0.245 -0.606 -0.605
+renumbered held step 380 raw_fmax 2.7625 barrier 3.98814 rel 0.000 0.041 0.323 1.020 0.482 -0.402 2.052 3.878 3.988 2.983 0.642 -0.245 0.329 2.535 1.477 -0.257 -0.607 -0.605
+renumbered held step 400 raw_fmax 2.7578 barrier 3.98814 rel 0.000 0.045 0.335 1.040 0.396 -0.440 2.022 3.877 3.988 2.990 0.641 -0.249 0.326 2.544 1.436 -0.269 -0.608 -0.605
+renumbered climb step 0 raw_fmax 2.7578 barrier 3.98814 rel 0.000 0.045 0.335 1.040 0.396 -0.440 2.022 3.877 3.988 2.990 0.641 -0.249 0.326 2.544 1.436 -0.269 -0.608 -0.605
+renumbered climb step 1 raw_fmax 2.7578 barrier 3.98813 rel 0.000 0.045 0.335 1.040 0.396 -0.440 2.022 3.877 3.988 2.990 0.641 -0.249 0.326 2.544 1.436 -0.269 -0.608 -0.605
+renumbered climb step 20 raw_fmax 2.7627 barrier 3.98632 rel 0.000 0.047 0.339 1.058 0.378 -0.452 1.997 3.876 3.986 2.993 0.638 -0.253 0.321 2.544 1.422 -0.274 -0.608 -0.605
+renumbered climb step 40 raw_fmax 2.7744 barrier 3.98223 rel 0.000 0.054 0.349 1.135 0.353 -0.482 1.887 3.876 3.982 3.000 0.625 -0.272 0.297 2.534 1.388 -0.287 -0.608 -0.605
+renumbered climb step 60 raw_fmax 2.7791 barrier 3.97913 rel 0.000 0.061 0.355 1.217 0.358 -0.501 1.776 3.875 3.979 2.991 0.611 -0.292 0.267 2.512 1.370 -0.297 -0.609 -0.605
+
+---
+exit_code: unknown
+elapsed_ms: 1415810
+ended_at: 2026-11-13T01:48:38.833Z
+---

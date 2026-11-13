@@ -725,7 +725,6 @@ readcon-core 0.22.0, returning every stored field.}
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
 \end{table}
 The frame layout is Figure~\ref{fig:layout} of the main text.
-Strong scaling of that read is omitted while a parallel read and write fix is in progress (Figure~\ref{fig:threads}).
 \begin{figure}[htbp]
 \centering
 \scriptsize
@@ -772,53 +771,6 @@ The Fortran rows call \texttt{rkr\_frame\_add\_atom\_full} in the C header order
 \texttt{builder\%add\_atom} and \texttt{builder\%add\_atom\_full} pass the fixed flags before the atom id and the mass, matching \texttt{rkr\_frame\_add\_atom\_full}.
 The round-trip test writes a frame through the builder and reads the same fields back.
 \input{figures/generated/restart_pairs}
-
-\section{MPI ranks}
-\label{sec:supp-mpi}
-Strong scaling across MPI ranks and weak scaling are omitted from this draft while a parallel read and write fix is in progress.
-Tables~\ref{tab:mpi-strong} and~\ref{tab:mpi-weak} keep the labels for that later measurement.
-
-\begin{table}[tbp]
-\centering
-\caption{Strong scaling, warm page cache. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-strong}
-\readconScalingPlaceholder{Strong scaling across MPI ranks, warm page cache.}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Strong scaling, cold page cache. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-strong-cold}
-\readconScalingPlaceholder{Strong scaling across MPI ranks, cold page cache.}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Strong scaling, warm page cache, every rank count. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-strong-full}
-\readconScalingPlaceholder{Strong scaling across MPI ranks, every rank count.}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Weak scaling, warm page cache. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-weak}
-\readconScalingPlaceholder{Weak scaling across MPI ranks, warm page cache.}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Weak scaling, cold page cache. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-weak-cold}
-\readconScalingPlaceholder{Weak scaling across MPI ranks, cold page cache.}
-\end{table}
-
-\begin{table}[tbp]
-\centering
-\caption{Weak scaling, warm page cache, every rank count. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-weak-full}
-\readconScalingPlaceholder{Weak scaling across MPI ranks, every rank count.}
-\end{table}
 
 \clearpage
 \clearpage
@@ -920,15 +872,13 @@ A size check that repeats one copper grid is a synthetic lattice.
 The C and Fortran reads of \num{100000} frames of 32 atoms are Table~\ref{tab:conread}.
 Table~\ref{tab:conwrite} is the write.
 For readcon and ASE the second number is the increase in the resident set, in mebibytes.
-The eOn row is the streaming write on core 0, one warmup and six repeats, and it states its own units.
+eOn streams that write on one core.
 
 
 \begin{table}[htbp]
 \centering
-\caption{Supplement write of the 32-atom, \num{100000}-frame file, a separate session from the plain-text write in the main text (0.539~s here, 0.528~s there).
-For readcon and ASE the entry is the time in seconds, then the resident-set increase in mebibytes.
-The eOn streaming row is core 0, one warmup and six repeats.
-Its high-water mark is from the read.}
+\caption{Write of the 32-atom, \num{100000}-frame file.
+The entry is the time in seconds, then the resident-set increase in mebibytes.}
 \label{tab:conwrite}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -1329,19 +1279,8 @@ The mapped binary file reads the frames in \SI{0.0076}{\second}.
 readcon-db ingests 40 frames in \SI{0.00427}{\second} and the ASE database in \SI{0.0474}{\second}.
 Both stores keep all 40 frames.
 
-The distributed read of 4000 frames of 64 copper atoms is omitted from this draft while a parallel read and write fix is in progress (Figure~\ref{fig:mpi-host}, Table~\ref{tab:mpi-host}).
-
-\begin{table}[tbp]
-\centering
-\caption{Distributed read of 4000 frames of 64 copper atoms. Omitted while a parallel read and write fix is in progress.}
-\label{tab:mpi-host}
-\readconScalingPlaceholder{Strong scaling of the distributed read, shared mode and scatter mode.}
-\end{table}
-
-The same distributed read is Figure~\ref{fig:mpi-host}.
-
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
-The figures below are the database campaigns on the Intel Xeon processor. The MPI scaling figures are omitted while a parallel read and write fix is in progress.
+The figures below are the database campaigns on the Intel Xeon processor.
 On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and 33.1~MB/s.
 ASE's database ingests at 199 frames/s and 0.216~MB/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s and 1.68~MB/s.
 A separate 40-frame ingest takes 0.00427~s in readcon-db and 0.0474~s in the ASE database.
@@ -1349,36 +1288,16 @@ The composition query on 1000 frames has cold medians of 0.00131~s for readcon-d
 The deduplication record stores 24000 frames and 7 unique frame hashes.
 One CON frame is 3826 bytes: preamble 280, coordinates 1429, mask 112, identifier 92, velocity header 30, velocity numbers 1860 and time unit 23.
 Of the four fidelity fields, CON 3.1 keeps the mask, the identifier and the binary64 coordinates exact and carries no time unit; the velocity file keeps all four exact; six decimals and extended XYZ keep the mask and the identifier and approximate the coordinates; the ASE trajectory and JSON keep the mask and the coordinates and lose the identifier; POSCAR, XYZ and CIF lose the mask and the identifier and approximate the coordinates.
-Strong scaling across MPI ranks and weak scaling are Table~\ref{tab:mpi-strong} and Table~\ref{tab:mpi-weak}, and both are omitted while a parallel read and write fix is in progress.
-
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf}
 \caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.22.0, returning every stored field.}
 \label{fig:fairness} \end{figure}
 
 \begin{figure}[tbp] \centering
-\readconScalingPlaceholder{Frame rate of the full, field and coordinate Python reads at one and eight threads.}
-\caption{Strong scaling of the full, field and coordinate Python reads.
-This figure is omitted while a parallel read and write fix is in progress.}
-\label{fig:layers} \end{figure}
-
-\begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/ase_mask.pdf}
 \caption{Barrier with the adatom height held, 0.6446~eV, and freed, 0.6815~eV.
 The right panel is the difference, 0.0369~eV.}
 \label{fig:asemask} \end{figure}
-
-\begin{figure}[tbp] \centering
-\readconScalingPlaceholder{MPI read speedup against rank count.}
-\caption{Strong scaling of an MPI read.
-This figure is omitted while a parallel read and write fix is in progress.}
-\label{fig:mpi-strong} \end{figure}
-
-\begin{figure}[tbp] \centering
-\readconScalingPlaceholder{MPI ingest time against rank count.}
-\caption{Weak scaling of an MPI ingest.
-This figure is omitted while a parallel read and write fix is in progress.}
-\label{fig:mpi-weak} \end{figure}
 
 The ingest rate is Figure~\ref{fig:db-throughput}.
 

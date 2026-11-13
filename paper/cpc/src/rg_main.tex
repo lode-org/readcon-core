@@ -134,7 +134,7 @@ eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
 \mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
-On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids converges to a 0.607~eV barrier, while the same band after renumbering the product does not.
+On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids has its climbing image 0.60672~eV above the reactant, while the same band after renumbering the product does not.
 A readcon read of \num{100000} CON frames of 32 atoms takes 0.184~s, against 11.3~s for ASE's eon reader.
 readcon-core is available under the MIT licence at
 \url{https://github.com/lode-org/readcon-core}.
@@ -296,7 +296,7 @@ same double
 the reader rounds each decimal to the nearest double \cite{clingerHowReadFloating1990}.
 Two readers given the same bytes must then return the same fields, and
 that takes a versioned grammar rather than the convention of one reader.
-The chair on allyl vinyl ether is the band that keeps the atom ids: it reaches 0.607~eV, and the band whose product was renumbered does not
+The chair on allyl vinyl ether is the band that keeps the atom ids: its climbing image is 0.60672~eV above the reactant, and the band whose product was renumbered does not meet the force criterion
 (Section~\ref{sec:claisen}).
 The same reader carries a 4096-molecule water trajectory into d-SEAMS \cite{goswamiDseamsDeferredStructural2020}
 (Section~\ref{sec:connectivity}) and resumes a saddle search from the
@@ -482,7 +482,11 @@ F_i^{\parallel}=k\big(|R_{i+1}-R_i|-|R_i-R_{i-1}|\big)\,\hat\tau_i.
 \end{equation}
 A permutation of one image makes those differences connect different atoms, so the band needs the stored ids.
 That pairing is the chemical map.
-The band that follows the atom ids stored on the CON rows converges to 0.607~eV, while the minimum-Hausdorff renumbering of the same product does not meet the convergence criterion and reaches 3.988~eV at two separated fragments (Figure~\ref{fig:claisen-land}).
+The band that follows the atom ids stored on the CON rows has its climbing image 0.60672~eV above the reactant.
+The minimum-Hausdorff renumbering of the same product does not meet the convergence criterion, and its highest stored image lies 3.98814~eV above the reactant, at two separated fragments (Figure~\ref{fig:claisen-land}).
+This session reads the endpoints with readcon-core 0.22.0 and evaluates those two images with the public PET-MAD 1.1.0 weights.
+An ASE MDMin reoptimization that holds the id-matched image and then releases it leaves the crest and finishes at 0.262~eV, with the band force at 0.087~eV/\text{\AA}.
+The same optimiser on the renumbered band, after holding the stored image for 400 steps, is at 3.979~eV after 60 climbing steps, and the interior force is still 2.78~eV/\text{\AA}.
 The same endpoints, stored oxygen-first with C5 shifted one cell along \(+x\), give an index-wise oxygen step of 15.8~\text{\AA} when the rows are paired by position (Section~\ref{sec:fidelity}), and the enhanced climbing-image band keeps the identifier order with readcon-core \cite{goswamiEnhancedClimbingImage2026}.
 
 \begin{figure}[tbp]
@@ -491,7 +495,7 @@ The same endpoints, stored oxygen-first with C5 shifted one cell along \(+x\), g
 \caption{The two Claisen bands on the plane of reaction progress \(s\) and orthogonal deviation \(d\) \cite{goswamiTwodimensionalRmsdProjections2026}.
 The colour is a surface fitted to every stored iteration. Each panel has its own colour scale, and both bands stay at \(d\le 0.74\,\text{\AA}\).
 Faint points are those iterations, and the bold path is the final band.
-The final identity-order band reaches 0.607~eV.
+The final identity-order band reaches 0.60672~eV.
 The renumbered final band reaches images near 4~eV, because its endpoint has a different atom assignment.
 Drawn with chemparseplot \cite{goswamiChemparseplot2026}.
 The printed \(\sigma^{2}\) values are the variance of the fitted surface.}
@@ -582,22 +586,16 @@ Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one c
 On the \num{100000}-frame CON file the coordinate read takes 0.184~s, against 11.3~s for ASE's eon reader, and \texttt{read\_con} of that file takes 0.513~s.
 On one million copper atoms the Python read takes 0.0553~s, the C reader 0.0898~s, ASE's eon reader 1.69~s and the eOn C++ client 0.311~s.
 On the extended XYZ file of that frame, readcon takes 0.218~s, ASE \texttt{extxyz} 1.17~s, ASE \texttt{cextxyz} 0.168~s and extxyz 0.4.6 1.27~s, and OVITO reads a separate extended XYZ of the same atoms in 0.126~s (Table~\ref{tab:h2h-main}).
-Rust, Python and the C reader are the readcon-core bindings, ASE is the eon reader on CON and the extended XYZ reader on the copper file, and chemfiles, OVITO and pymatgen read that extended XYZ file, while MDAnalysis reads the plain XYZ sizes of Figure~\ref{fig:trajxyz}.
 The Fortran read of the million-atom frame takes 0.0877~s, and the C, Fortran and Python writes of that frame take 0.102~s, 0.108~s and 0.161~s.
+On the \num{100000}-frame file the C reader takes 0.184~s and the Fortran reader takes 0.748~s (Table~\ref{tab:conread}).
+eOn reads that file through readcon-core in 1.469~s.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Serial reads on one core of an Intel Xeon (eight cores, 47 GiB).
-readcon-core 0.22.0.
-Each CON entry is the type-7 median in seconds, with the interquartile range in parentheses.
-A dash is an arm this session did not run.
-ASE eon is ASE 3.29.0's eon reader.
-\texttt{loadcons} is eOn's Python reader, a development build of eOn 3.6.0, and not the C++ client of Table~\ref{tab:conread}.
-The C column is readcon's \texttt{rkr\_read\_all\_frames}.
-ASE's eon reader does not read convel.
-The extended XYZ row is the copper trajectory, readcon against chemfiles 0.10.4, OVITO 3.17.2, ASE 3.29.0 and pymatgen.}
+\caption{Serial reads on one core of an Intel Xeon (eight cores, 47 GiB), readcon-core 0.22.0.
+Each entry is the type-7 median in seconds, with the interquartile range in parentheses.}
 \label{tab:h2h-main}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrrr@{}}
@@ -622,34 +620,20 @@ extended XYZ (s) & 0.697 & 1.55 & --- & 10.2 & --- \\
 
 \begin{table}[tbp]
 \centering
-\caption{CON read of \num{100000} frames of 32 atoms on the same Xeon.
-The eOn row is readcon-core 0.22.0 linked into eOn at commit \texttt{579738a}, one warmup and six samples, type-7 quartiles.
-The resident set is the peak of the fresh process, in mebibytes.
-The readcon C and Fortran rows were not repeated in this session.}
+\caption{CON read of \num{100000} frames of 32 atoms on the same Xeon, readcon-core 0.22.0.
+The resident set is the peak of a fresh process, in mebibytes.
+The triple is the first quartile, the median and the third quartile, in seconds.}
 \label{tab:conread}
 \begin{tabular}{@{}lrl@{}}
 \toprule
 Reader & Resident set & First, median, third \\
 \midrule
-readcon C & 553.8 & 0.3613, 0.3747, 0.3936 \\
-readcon Fortran & 554.2 & 0.4850, 0.5044, 0.5364 \\
+readcon C & 248.0 & 0.1824, 0.1844, 0.1868 \\
+readcon Fortran & 780.5 & 0.7371, 0.7484, 0.7660 \\
 eOn C++ client & 1069 & 1.456, 1.469, 1.484 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-Strong scaling across cores and across MPI ranks, and weak scaling, are omitted from this draft while a parallel read and write fix is in progress (Figure~\ref{fig:threads}, Figure~\ref{fig:mpi-host}, Section~\ref{sec:supp-mpi}).
-
-\begin{figure}[tbp]
-\centering
-\readconScalingPlaceholder{Strong scaling across cores for the read that returns every stored field.}
-\caption{Strong scaling across cores.
-This figure is omitted while a parallel read and write fix is in progress.
-The rank-by-rank tables are Section~\ref{sec:supp-mpi}.}
-\label{fig:threads}
-\end{figure}
-
-The distributed read is Figure~\ref{fig:mpi-host}, with the remaining performance figures in Section~\ref{sec:supp-perf-figures}.
 
 \begin{figure}[tbp]
 \centering
@@ -663,7 +647,7 @@ The per-file resident set and massif heap are Tables~\ref{tab:extxyz-h2h} and~\r
 On a thousand frames, readcon-db ingests and answers a composition query faster than the ASE database and faster than a directory of the same files (Figures~\ref{fig:db-throughput} and~\ref{fig:db-query}).
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
-We find that a band restarted with the stored atom ids converges to a 0.607~eV chair on the Claisen rearrangement of allyl vinyl ether, while the same band after renumbering the product reaches 3.988~eV at two separated fragments and does not meet the force criterion.
+We find that a band restarted with the stored atom ids has its climbing image 0.60672~eV above the reactant on the Claisen rearrangement of allyl vinyl ether, while the same band after renumbering the product has its highest image 3.98814~eV above the reactant, at two separated fragments, and does not meet the force criterion.
 An oxygen-first copy of those endpoints gives an index-wise step of 15.8~\text{\AA} at the oxygen, and once the identifiers are sorted that step is 18~\text{\AA} and falls on C5.
 A readcon read of \num{100000} CON frames of 32 atoms takes 0.184~s on one core, against 11.3~s for ASE's eon reader, and on 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
 The geometry file stores no optimiser history, so a search that keeps a Hessian or a set of previous steps takes a different path after a restart even when every coordinate matches.

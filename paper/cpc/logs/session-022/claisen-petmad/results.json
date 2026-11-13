@@ -1,0 +1,37 @@
+{
+  "calculator": "PET-MAD 1.1.0 via pet-mad 1.4.4",
+  "readcon": "0.22.0",
+  "single_point_eV": {
+    "reactant": -80.82737731933594,
+    "identity_climbing_image": -80.22065734863281,
+    "identity_barrier": 0.606719970703125,
+    "renumbered_highest_image": -76.83924102783203,
+    "renumbered_barrier": 3.9881362915039062,
+    "product_raw": -81.43861389160156,
+    "product_ira": -81.43218994140625
+  },
+  "ase_mdmin": {
+    "spring_k_eV_per_A2": 5.0,
+    "interpolation": "IDPP on each leg through the stored highest image",
+    "identity": {
+      "n_images": 10,
+      "maxstep_A": 0.1,
+      "step_cap": 1000,
+      "held_steps": 391,
+      "climb_steps": 609,
+      "converged_to_0.05": false,
+      "neb_fmax_eV_per_A": 0.08674042417224018,
+      "barrier_eV": 0.2618865966796875
+    },
+    "renumbered": {
+      "n_images": 18,
+      "maxstep_A": 0.05,
+      "step_cap": 2000,
+      "held_steps": 400,
+      "climb_steps_completed": 60,
+      "stopped": "band force still 2.78 eV/A and not falling",
+      "barrier_eV_at_stop": 3.97913,
+      "interior_force_eV_per_A_at_stop": 2.7791
+    }
+  }
+}

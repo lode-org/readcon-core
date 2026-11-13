@@ -1,0 +1,38 @@
+---
+pid: 40310
+cwd: "/tmp/rc022-run"
+command: "python3 /tmp/claisen_neb.py"
+title: "Two-stage Claisen NEB, plain then climb"
+status: running  
+started_at: 2026-11-13T01:17:40.129Z
+running_for_ms: 385027   
+---
+reactant ids [0, 1, 2, 4, 5, 3, 6, 7, 8, 9, 10, 11, 12, 13]
+raw ids [0, 1, 2, 4, 5, 3, 6, 7, 8, 9, 10, 11, 12, 13]
+ira ids [0, 1, 2, 4, 5, 3, 6, 7, 8, 9, 10, 11, 12, 13]
+/home/ubuntu/.local/lib/python3.12/site-packages/metatrain/utils/io.py:211: UserWarning: trying to upgrade an old model checkpoint with unknown version, this might fail and require manual modifications
+  warnings.warn(
+/home/ubuntu/.local/lib/python3.12/site-packages/metatomic/torch/ase_calculator.py:1482: UserWarning: `compute_requested_neighbors_from_options` is deprecated and will be removed in a future version. Please use `neighbor_lists_for_model` to get the calculators and call them directly.
+  vesin.metatomic.compute_requested_neighbors_from_options(
+identity plain step 0 neb_fmax 6.0604 barrier 7.15163 rel 0.000 2.000 4.834 6.358 7.152 6.605 6.434 5.826 2.734 -0.611
+identity plain step 1 neb_fmax 5.7448 barrier 6.97968 rel 0.000 1.887 4.654 6.211 6.980 6.472 6.322 5.752 2.686 -0.611
+identity plain step 20 neb_fmax 1.6464 barrier 3.26351 rel 0.000 0.191 0.468 0.627 1.115 3.140 3.264 3.159 0.248 -0.611
+identity plain step 40 neb_fmax 1.8912 barrier 2.65121 rel 0.000 0.059 0.195 0.317 0.348 1.580 2.651 2.533 -0.388 -0.611
+identity plain step 60 neb_fmax 1.3919 barrier 2.09319 rel 0.000 0.018 0.096 0.192 0.206 0.242 2.093 2.047 -0.554 -0.611
+identity plain step 80 neb_fmax 0.3904 barrier 1.83174 rel 0.000 0.005 0.060 0.144 0.159 0.159 1.832 1.823 -0.587 -0.611
+identity plain step 100 neb_fmax 0.4744 barrier 1.72878 rel 0.000 -0.001 0.038 0.113 0.131 0.131 1.729 1.726 -0.598 -0.611
+identity plain step 120 neb_fmax 0.2285 barrier 1.67681 rel 0.000 -0.004 0.026 0.093 0.115 0.119 1.677 1.670 -0.603 -0.611
+identity plain step 140 neb_fmax 0.3756 barrier 1.62177 rel 0.000 -0.006 0.018 0.077 0.103 0.111 1.591 1.622 -0.606 -0.611
+identity plain step 160 neb_fmax 0.7183 barrier 1.57140 rel 0.000 -0.007 0.012 0.064 0.092 0.106 0.513 1.571 -0.609 -0.611
+identity plain step 180 neb_fmax 0.2521 barrier 1.50684 rel 0.000 -0.008 0.008 0.055 0.085 0.103 0.290 1.507 -0.611 -0.611
+identity plain step 200 neb_fmax 0.5015 barrier 1.33768 rel 0.000 -0.009 0.005 0.045 0.077 0.099 0.226 1.338 -0.613 -0.611
+identity plain step 220 neb_fmax 0.7209 barrier 0.52879 rel 0.000 -0.009 0.003 0.039 0.072 0.097 0.209 0.529 -0.612 -0.611
+identity plain step 240 neb_fmax 0.2954 barrier 0.20160 rel 0.000 -0.010 0.002 0.034 0.068 0.095 0.202 -0.003 -0.611 -0.611
+identity plain step 260 neb_fmax 0.1589 barrier 0.19672 rel 0.000 -0.010 0.001 0.030 0.064 0.094 0.197 -0.184 -0.611 -0.611
+identity plain step 280 neb_fmax 0.2147 barrier 0.19505 rel 0.000 -0.010 -0.000 0.027 0.060 0.093 0.195 -0.272 -0.611 -0.611
+identity plain step 300 neb_fmax 0.1044 barrier 0.19467 rel 0.000 -0.011 -0.001 0.024 0.057 0.093 0.195 -0.318 -0.611 -0.611
+identity plain-done step 310 neb_fmax 0.0997 barrier 0.19463 rel 0.000 -0.011 -0.001 0.023 0.056 0.093 0.195 -0.335 -0.612 -0.611
+identity climb step 0 neb_fmax 0.0785 barrier 0.19463 rel 0.000 -0.011 -0.001 0.023 0.056 0.093 0.195 -0.335 -0.612 -0.611
+identity climb step 1 neb_fmax 0.0784 barrier 0.19463 rel 0.000 -0.011 -0.001 0.023 0.056 0.093 0.195 -0.335 -0.612 -0.611
+identity climb step 20 neb_fmax 0.1300 barrier 0.19273 rel 0.000 -0.011 -0.001 0.022 0.053 0.092 0.193 -0.353 -0.613 -0.611
+identity climb step 40 neb_fmax 0.0614 barrier 0.19130 rel 0.000 -0.011 -0.002 0.020 0.051 0.091 0.191 -0.360 -0.613 -0.611

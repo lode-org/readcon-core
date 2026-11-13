@@ -440,14 +440,6 @@ The resident set and the massif heap of the same reads are Table~\ref{tab:extxyz
 
 \begin{figure}[tbp]
 \centering
-\readconScalingPlaceholder{Strong scaling of a distributed read of 4000 frames of 64 copper atoms, shared mode and scatter mode.}
-\caption{Distributed read of 4000 frames of 64 copper atoms.
-This figure is omitted while a parallel read and write fix is in progress.}
-\label{fig:mpi-host}
-\end{figure}
-
-\begin{figure}[tbp]
-\centering
 \includegraphics[width=0.72\textwidth]{figures/generated/db_ingest_throughput.pdf}
 \caption{Ingest rate on 1000 frames.
 The bandwidth and the disk footprint of the same copies are Figures~\ref{fig:db-bandwidth} and~\ref{fig:db-disk}.}
@@ -676,7 +668,7 @@ Figure~\ref{fig:claisen-land} is the plane of \(s\) and \(d\), the RMSD-based re
 The band force reached \(0.189\,\mathrm{eV/\text{\AA}}\) at iteration 362 and no lower.
 A further climbing-image-only continuation oscillated between \(0.19\,\mathrm{eV/\text{\AA}}\) and several \(\mathrm{eV/\text{\AA}}\) and did not reach \(0.05\,\mathrm{eV/\text{\AA}}\).
 Neither setup meets the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
-The highest image of the eighteen-image band lies at 3.988~eV (92.0~kcal/mol).
+The highest image of the eighteen-image band lies at 3.98814~eV (92.0~kcal/mol).
 The atoms have separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
 Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
 The image is a higher-order stationary point.
@@ -798,14 +790,14 @@ The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, t
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
 That band converges.
 It has ten images, eight of them between the endpoints, and takes 453 force calls, and the climbing-image force is \(0.042\,\mathrm{eV/\text{\AA}}\).
-The barrier is 0.607~eV (14.0~kcal/mol).
+The barrier is 0.60672~eV (14.0~kcal/mol) with the public PET-MAD 1.1.0 weights.
 The highest image is a connected six-membered chair (Figure~\ref{fig:claisen-struct}).
 The forming distance C5--C0 is \(2.046\,\text{\AA}\) and the breaking distance C2--O is \(1.488\,\text{\AA}\).
 One internal mode is imaginary, at \(-542.5\,\mathrm{cm}^{-1}\).
 
 IRA reassigns the same product by the minimum-Hausdorff permutation (Section~\ref{sec:supp-claisen-protocol}).
 The shorter distance pairs the wrong nuclei, and that band does not meet the \(0.05\,\mathrm{eV/\text{\AA}}\) criterion.
-Its highest image lies at 3.988~eV (92.0~kcal/mol), separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
+Its highest image lies at 3.98814~eV (92.0~kcal/mol), separated into C0--C1--C2\({=}\)O and a detached C4--C5, with O--C4 at \(2.874\,\text{\AA}\) (Figure~\ref{fig:claisen-struct}).
 Three internal modes are imaginary, at \(-251\), \(-135\) and \(-123\,\mathrm{cm}^{-1}\).
 Figure~\ref{fig:claisen-land} is the plane of reaction progress and orthogonal deviation.
 

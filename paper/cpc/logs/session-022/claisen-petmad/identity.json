@@ -1,0 +1,32 @@
+{
+  "name": "identity",
+  "calculator": "PET-MAD 1.1.0 via pet-mad",
+  "optimizer": "ASE MDMin",
+  "initial_path": "IDPP through the stored highest image",
+  "climb": true,
+  "spring_k_eV_per_A2": 5.0,
+  "readcon": "0.22.0",
+  "n_images": 10,
+  "saddle_index": 7,
+  "maxstep_A": 0.1,
+  "step_cap": 1000,
+  "held_steps": 391,
+  "climb_steps": 609,
+  "steps": 1000,
+  "converged_to_0.05": false,
+  "neb_fmax_eV_per_A": 0.08674042417224018,
+  "barrier_eV": 0.2618865966796875,
+  "energies_eV": [
+    -80.82737731933594,
+    -80.84980010986328,
+    -80.84769439697266,
+    -80.82606506347656,
+    -80.69361114501953,
+    -80.77554321289062,
+    -80.81684875488281,
+    -80.56549072265625,
+    -81.40205383300781,
+    -81.43861389160156
+  ],
+  "endpoint_delta_eV": -0.611236572265625
+}
