@@ -1046,4 +1046,21 @@ H -0.240  0.927  0.000
             Some(3)
         );
     }
+
+    #[test]
+    fn extended_xyz_lattice_becomes_box_lengths() {
+        let xyz = "\
+1
+Properties=species:S:1:pos:R:3 Lattice=\"2 0 0 0 2.5 0 0 0 3\"
+Cu 0.00000000 0.00000000 0.00000000
+";
+        let frames = con_frames_from_memory(xyz, "XYZ").expect("xyz");
+        let boxl = frames[0].header.boxl;
+        assert!((boxl[0] - 2.0).abs() < 1e-6, "{boxl:?}");
+        assert!((boxl[1] - 2.5).abs() < 1e-6, "{boxl:?}");
+        assert!((boxl[2] - 3.0).abs() < 1e-6, "{boxl:?}");
+        for angle in frames[0].header.angles {
+            assert!((angle - 90.0).abs() < 1e-6, "{angle}");
+        }
+    }
 }

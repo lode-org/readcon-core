@@ -208,7 +208,8 @@ def write_xyz_for_readcon(path: Path, spec: dict) -> None:
         lengths = spec["cell"][frame_index, :3]
         lattice = f"{lengths[0]:g} 0 0 0 {lengths[1]:g} 0 0 0 {lengths[2]:g}"
         lines.append(str(spec["n_atoms"]))
-        lines.append(f'Lattice="{lattice}"')
+        # libchemfiles reads Lattice only from an extended XYZ comment.
+        lines.append(f'Properties=species:S:1:pos:R:3 Lattice="{lattice}"')
         for atom_index, name in enumerate(spec["symbols"]):
             x, y, z = spec["positions"][frame_index, atom_index]
             lines.append(f"{name} {x:.8f} {y:.8f} {z:.8f}")
