@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -154,7 +156,27 @@ def _install_worker() -> None:
     worker = br.WORKER
     if ready not in worker or timed not in worker:
         raise SystemExit("bench_readers worker no longer has the expected timer")
-    br.WORKER = worker.replace(ready, ready_new, 1).replace(timed, timed_new, 1)
+    conbin = (
+        "    def parse():\n"
+        "        positions, _velocities, n_atoms = readcon.read_conbin(path)\n"
+        "        return positions.reshape(-1, n_atoms, 3)\n"
+    )
+    conbin_new = (
+        "    def parse():\n"
+        "        reps = int(os.environ.get('READER_EXCHANGE_INNER', '1'))\n"
+        "        last = None\n"
+        "        for _ in range(max(1, reps)):\n"
+        "            positions, _velocities, n_atoms = readcon.read_conbin(path)\n"
+        "            last = positions.reshape(-1, n_atoms, 3)\n"
+        "        return last\n"
+    )
+    if conbin not in worker:
+        raise SystemExit("bench_readers worker no longer has the conbin parse")
+    br.WORKER = (
+        worker.replace(ready, ready_new, 1)
+        .replace(timed, timed_new, 1)
+        .replace(conbin, conbin_new, 1)
+    )
 
 
 def _prime(path: Path) -> None:
@@ -295,7 +317,8 @@ def run(out: Path, frames: int, repeats: int) -> None:
         f"atoms {br.N_ATOMS}",
         f"repeats {repeats}",
         "warmup 1",
-        "schedule warm phase then cold phase, arms rotated inside each phase",
+        "schedule each arm warmup then its repeats back-to-back; warm phase then cold phase",
+        "settle drop_caches plus 2 s after any arm whose sample is at least 5 s",
         "process fresh",
         f"affinity taskset -c {core_list()}",
         "serial 1",
@@ -366,24 +389,49 @@ def run(out: Path, frames: int, repeats: int) -> None:
             f"error={doc.get('error', '')}"
         )
 
-    # Warm repeats finish before any cold repeat. A cold sample drops
-    # the page cache for the whole machine; doing that between warm
-    # samples made one repeat slow for every arm.
+    # Each arm's repeats run back-to-back after its own warmup, so a
+    # slow arm cannot change the allocator state seen by the next
+    # sample of a different arm. readcon_base's 2.5 s cluster versus
+    # its 3.2–3.5 s samples was that effect: those slow samples ran
+    # immediately after the 50 s MDAnalysis pass. The 0.17.3 reader
+    # builds a Python object per atom, so it feels that state. The
+    # current readcon_tip reader does not. After an arm whose sample
+    # exceeds 5 s, drop the page cache and wait before the next arm.
     taken: dict[str, dict[str, list[dict]]] = {
         name: {"warm": [], "cold": []} for name in names
     }
+    os.environ["READER_EXCHANGE_INNER"] = "1"
+    calib = take("conbin", "warm")
+    single = calib.get("seconds") or 0.01
+    conbin_inner = max(1, math.ceil(0.5 / single))
+    lines.append(f"conbin_inner {conbin_inner} single_s {single}")
+
+    def settle(after: str) -> None:
+        from fair_h2h import drop_page_cache
+
+        drop_page_cache()
+        time.sleep(2.0)
+        lines.append(f"settle after {after}")
+
     for cache in ("warm", "cold"):
         lines.append(f"phase {cache}")
-        lines.append(f"warmup round cache={cache}")
         for name in names:
+            if name == "conbin" and cache == "warm":
+                os.environ["READER_EXCHANGE_INNER"] = str(conbin_inner)
+            else:
+                os.environ["READER_EXCHANGE_INNER"] = "1"
+            lines.append(f"arm {name} cache={cache}")
             record(name, cache, None, take(name, cache))
-        for rep in range(repeats):
-            order = names[rep % len(names) :] + names[: rep % len(names)]
-            lines.append(f"order cache={cache} " + " ".join(order))
-            for name in order:
+            last = 0.0
+            for rep in range(repeats):
                 doc = take(name, cache)
                 taken[name][cache].append(doc)
                 record(name, cache, rep, doc)
+                if doc.get("seconds"):
+                    last = float(doc["seconds"])
+            os.environ["READER_EXCHANGE_INNER"] = "1"
+            if last >= 5.0:
+                settle(f"{name} cache={cache}")
     payload_arms: dict[str, dict] = {}
     for name in names:
         warm = taken[name]["warm"]
