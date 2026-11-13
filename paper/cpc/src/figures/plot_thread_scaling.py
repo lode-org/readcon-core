@@ -5,7 +5,9 @@ The legend sits outside the axes. Tick labels are 8 pt.
 
 from __future__ import annotations
 
+import argparse
 import json
+import subprocess
 from pathlib import Path
 
 import matplotlib
@@ -15,8 +17,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[4]
-ROWS = ROOT / "bench" / "h2h" / "scaling" / "r6" / "rows.json"
 OUT = Path(__file__).resolve().parents[1] / "figures" / "generated"
+# Same pin as paper/cpc/Snakefile FINAL_COMMIT. The figure is the rel1 campaign.
+PIN = "ee7662a955e173ea7faffcae614b4d0a78dd7682"
 WORKERS = (1, 2, 4, 8)
 
 
@@ -75,8 +78,24 @@ def finish(fig, axes, dest):
     print(dest)
 
 
+def load_rows(commit: str) -> list:
+    """Strong-scaling rows from the pinned release tree, threads and MPI."""
+    rows = []
+    for name in ("strong-threads.json", "strong-mpi.json"):
+        text = subprocess.check_output(
+            ["git", "show", f"{commit}:bench/h2h/scaling/rel1/{name}"],
+            cwd=ROOT,
+            text=True,
+        )
+        rows.extend(json.loads(text)["rows"])
+    return rows
+
+
 def main():
-    rows = json.loads(ROWS.read_text())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--commit", default=PIN)
+    args = parser.parse_args()
+    rows = load_rows(args.commit)
     plt.rcParams.update({
         "font.size": 9,
         "axes.labelsize": 9,

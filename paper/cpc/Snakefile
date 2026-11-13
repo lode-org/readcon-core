@@ -154,6 +154,13 @@ rule final_campaign:
     shell:
         "python3 scripts/make_tables.py --commit " + FINAL_COMMIT + " --cross-commit " + CROSS_COMMIT + " --out src/campaign/final"
 
+rule scaling_figures:
+    output:
+        "src/figures/generated/scaling-r6.pdf",
+        "src/figures/generated/scaling-r6-full.pdf",
+    shell:
+        "python3 src/figures/plot_thread_scaling.py --commit " + FINAL_COMMIT
+
 rule reader_figures:
     input:
         "logs/reader-exchange.log",

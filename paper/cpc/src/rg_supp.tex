@@ -920,13 +920,15 @@ The extended XYZ timings run every reader in one process, one arm after another.
 The harness is a Snakemake rule called from an asv class.
 The timing rule generates the files larger than ten atoms.
 
-Figures~\ref{fig:timing}, \ref{fig:ratios} and~\ref{fig:roofline} are readcon-core 0.22.0.
+Figures~\ref{fig:timing} and~\ref{fig:ratios} are the reader-exchange log: readcon-core 0.17.3, one file of 100000 frames and 32 atoms, six repeats, on an Intel Xeon with 8 CPUs.
 Those arms return full frames, so the times differ from the one-core reads, which return arrays.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{readcon-core 0.22.0, returning every stored field: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
+\caption{All-frame CON readers of one file, 100000 frames of 32 atoms, six repeats.
+The readcon release in the log is 0.17.3.
+The host is an Intel Xeon with 8 CPUs.
 The scale is logarithmic.}
 \label{fig:timing}
 \end{figure}
@@ -934,11 +936,24 @@ The scale is logarithmic.}
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{readcon-core 0.22.0, returning every stored field. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
+\caption{Wall time of each other all-frame CON reader divided by the readcon tip.
+One file of 100000 frames and 32 atoms, six repeats.
+The readcon release in the log is 0.17.3.
+The host is an Intel Xeon with 8 CPUs.}
 \label{fig:ratios}
 \end{figure}
 
-The resident set added by the readcon read is \SI{236}{\mebi\byte} (Figure~\ref{fig:memory}).
+The resident set added by the readcon read is \SI{236}{\mebi\byte} (Figure~\ref{fig:reader-rss}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/memory.pdf}
+\caption{Resident set added by each all-frame CON reader, in mebibytes above the import.
+One file of 100000 frames and 32 atoms, six repeats.
+The readcon release in the log is 0.17.3, and its median increase is 236~MiB.
+The host is an Intel Xeon with 8 CPUs.}
+\label{fig:reader-rss}
+\end{figure}
 
 \begin{figure}[htbp]
 \centering
@@ -1595,6 +1610,7 @@ The address-sanitizer build sets \texttt{asan\_run} and links the system allocat
 \caption{Speedup and efficiency of the in-memory read.
 The upper two rows are threads.
 The lower two rows are MPI ranks.
+Each point is a type-7 median of six samples.
 The Xeon is Section~\ref{sec:compute}.}
 \label{fig:scaling-r6-full}
 \end{figure}
