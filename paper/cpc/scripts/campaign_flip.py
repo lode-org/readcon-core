@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the campaign TeX from five rel1 files at one commit.
+"""Regenerate the campaign TeX from six rel1 files at one commit.
 
 Sources, and no others:
 
@@ -8,10 +8,12 @@ Sources, and no others:
   bench/h2h/scaling/rel1/table2-h2h.tsv
   bench/h2h/scaling/rel1/h2h.json
   bench/h2h/scaling/rel1/compressed.json
+  bench/h2h/scaling/rel1/db.log
 
 Every number written into the TeX must be a rounding of a value in those
-files. Anything else is an error. ``--dry-run`` prints the TeX values that
-would change and does not write.
+files, or of the type-7 median of a db.log sample list. Anything else is
+an error. ``--dry-run`` prints the TeX values that would change and does
+not write.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ SOURCES = (
     f"{REL1}/table2-h2h.tsv",
     f"{REL1}/h2h.json",
     f"{REL1}/compressed.json",
+    f"{REL1}/db.log",
 )
 NUMBER = re.compile(r"(?<![A-Za-z])\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?![A-Za-z])")
 READERS = (
@@ -59,11 +62,35 @@ def load(commit: str) -> dict[str, str]:
     return {path: git_show(commit, path) for path in SOURCES}
 
 
+def type7(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def db_samples(text: str) -> dict[str, list[float]]:
+    samples: dict[str, list[float]] = {"readcon-db": [], "ase.db": []}
+    for line in text.splitlines():
+        if not line.startswith("repeat ") or " kind " not in line or " seconds " not in line:
+            continue
+        kind = line.split(" kind ", 1)[1].split(" ", 1)[0]
+        seconds = line.split(" seconds ", 1)[1].split(" ", 1)[0]
+        if kind in samples and seconds != "None":
+            samples[kind].append(float(seconds))
+    if not samples["readcon-db"] or not samples["ase.db"]:
+        raise SystemExit("db.log has no readcon-db or ase.db samples")
+    return samples
+
+
 def source_values(blobs: dict[str, str]) -> list[float]:
     found = []
     for text in blobs.values():
         for token in NUMBER.findall(text):
             found.append(float(token))
+    for samples in db_samples(blobs[SOURCES[5]]).values():
+        found.append(type7(samples))
     return found
 
 
@@ -225,6 +252,17 @@ def render(blobs: dict[str, str]) -> dict[str, str]:
             + "}"
         )
     out["macros.tex"] = "\n".join(lines) + "\n"
+    medians = {kind: type7(samples) for kind, samples in db_samples(blobs[SOURCES[5]]).items()}
+    out["rcdb.tex"] = table(
+        "Ingest recorded in db.log. Each entry is the median of the recorded seconds.",
+        "tab:rcdb",
+        "@{}lr@{}",
+        r"Store & Median (s)",
+        [
+            f"readcon-db & {medians['readcon-db']:.6f} \\\\",
+            f"ase.db & {medians['ase.db']:.6f} \\\\",
+        ],
+    )
     return out
 
 
@@ -240,38 +278,6 @@ def parse_table_rows(text: str) -> dict[str, list[str]]:
     return found
 
 
-def db_note(commit: str) -> list[str]:
-    """db.log is not one of the five sources, so its medians are not written."""
-    path = f"{REL1}/db.log"
-    try:
-        text = git_show(commit, path)
-    except SystemExit:
-        return []
-    samples: dict[str, list[float]] = {"readcon-db": [], "ase.db": []}
-    for line in text.splitlines():
-        if not line.startswith("repeat ") or " kind " not in line or " seconds " not in line:
-            continue
-        kind = line.split(" kind ", 1)[1].split(" ", 1)[0]
-        seconds = line.split(" seconds ", 1)[1].split(" ", 1)[0]
-        if kind in samples and seconds != "None":
-            samples[kind].append(float(seconds))
-    if not samples["readcon-db"] or not samples["ase.db"]:
-        return []
-    def median(values: list[float]) -> float:
-        ordered = sorted(values)
-        mid = len(ordered) // 2
-        if len(ordered) % 2:
-            return ordered[mid]
-        return (ordered[mid - 1] + ordered[mid]) / 2
-    readcon = median(samples["readcon-db"])
-    ase = median(samples["ase.db"])
-    return [
-        "readcon-db / ase.db (db.log, not one of the five sources, not written):",
-        f"  readcon-db {readcon:.6f} s",
-        f"  ase.db {ase:.6f} s",
-    ]
-
-
 def changes(current: Path, fresh: dict[str, str]) -> list[str]:
     report = []
     pairs = {
@@ -279,6 +285,7 @@ def changes(current: Path, fresh: dict[str, str]) -> list[str]:
         "s61.tex": "perf6 reads",
         "writes.tex": "perf7 writes",
         "compressed.tex": "compressed rows",
+        "rcdb.tex": "readcon-db / ase.db",
     }
     for name, title in pairs.items():
         path = current / name
@@ -316,7 +323,6 @@ def main() -> None:
         check_tex(name, text, values)
     current = REPO / "paper" / "cpc" / "src" / "campaign" / "rel1"
     report = changes(current, fresh)
-    report.extend(db_note(args.commit))
     sys.stdout.write("\n".join(report) + ("\n" if report else "no TeX values would change\n"))
     if args.dry_run:
         return
