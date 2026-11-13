@@ -3,13 +3,19 @@
 //! Times a collective read or write of one fixed file. One warmup, then
 //! `repeats` samples. Rank 0 prints the samples. The timer is inside the
 //! process, after `mpirun` has started.
+//!
+//! A single wide frame is formatted per rank and written with one
+//! `pwrite` at the exclusive-scan offset. A shared mapping of that slice
+//! was slower on the page cache: the faulting copy sat on the same core
+//! as the format. `READCON_MPI_SYNC` fdatasyncs on rank 0 before the
+//! sample ends.
 
 use mpi::traits::*;
 use readcon_core::distrib::Comm;
 use readcon_core::distrib_read::{
     ReadMode, frame_coord_span, parse_coord_lines, rank_line_range, read_block,
 };
-use readcon_core::distrib_write::{WriteMode, write_block};
+use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
 
 struct RankAtoms {
@@ -25,26 +31,37 @@ fn atoms_from_lines(slice: &[u8], symbol: &std::sync::Arc<str>) -> RankAtoms {
     }
 }
 
-/// Rank 0's header plus that rank's coordinate slice.
-struct RankPieces {
-    header: Vec<u8>,
-    pieces: Vec<RankAtoms>,
+fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
+    let marker = b"\nCoordinates of Component 1\n";
+    let at = memchr::memmem::find(bytes, marker).unwrap_or(0);
+    let start = bytes[..at]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let symbol = std::str::from_utf8(&bytes[start..at]).unwrap_or("X");
+    std::sync::Arc::from(symbol)
 }
 
-fn write_mapped(comm: &Comm, path: &std::path::Path, prepared: &RankPieces) {
+fn is_tmpfs(path: &std::path::Path) -> bool {
+    let parent = path
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .unwrap_or(path);
+    let bytes = std::os::unix::ffi::OsStrExt::as_bytes(parent.as_os_str());
+    let Ok(text) = std::ffi::CString::new(bytes) else {
+        return false;
+    };
+    let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
+    let rc = unsafe { libc::statfs(text.as_ptr(), &mut stat) };
+    // TMPFS_MAGIC. A shared mapping beat pwrite here and lost on ext4,
+    // where the faulting store was slower than pwrite.
+    rc == 0 && stat.f_type == 0x0102_1994
+}
+
+fn write_mapped_body(comm: &Comm, path: &std::path::Path, body: &[u8]) {
     let world = comm.raw();
-    // One contiguous slice per rank. The formatted length is the byte count;
-    // a second counting pass would format twice.
-    let piece = prepared.pieces.first().expect("rank slice");
-    let mut buf = readcon_core::writer::format_coordinate_lines(&piece.atoms).expect("format");
-    if comm.rank() == 0 && !prepared.header.is_empty() {
-        let mut with_header = Vec::with_capacity(prepared.header.len() + buf.len());
-        with_header.extend_from_slice(&prepared.header);
-        with_header.append(&mut buf);
-        readcon_core::writer::recycle_format_buffer(buf);
-        buf = with_header;
-    }
-    let len = buf.len() as u64;
+    let len = body.len() as u64;
     let mut local_off = 0u64;
     world.exclusive_scan_into(
         &len,
@@ -66,52 +83,43 @@ fn write_mapped(comm: &Comm, path: &std::path::Path, prepared: &RankPieces) {
         file.set_len(total).expect("truncate");
     }
     world.barrier();
-    if !buf.is_empty() {
+    if !body.is_empty() {
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .open(path)
             .expect("open");
-        // Map only this rank's bytes. The offset has to be page aligned.
         let page = 4096u64;
         let aligned = local_off & !(page - 1);
         let delta = (local_off - aligned) as usize;
-        let span = delta + buf.len();
         let mut map = unsafe {
             memmap2::MmapOptions::new()
                 .offset(aligned)
-                .len(span)
+                .len(delta + body.len())
                 .map_mut(&file)
                 .expect("mmap")
         };
-        map[delta..delta + buf.len()].copy_from_slice(&buf);
+        map[delta..delta + body.len()].copy_from_slice(body);
         drop(map);
-        drop(file);
-    }
-    readcon_core::writer::recycle_format_buffer(buf);
-    if std::env::var_os("READCON_MPI_SYNC").is_some() {
-        world.barrier();
-        if comm.rank() == 0 {
-            let file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(path)
-                .expect("sync open");
-            file.sync_data().expect("sync");
-        }
     }
     world.barrier();
 }
 
-fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
-    let marker = b"\nCoordinates of Component 1\n";
-    let at = memchr::memmem::find(bytes, marker).unwrap_or(0);
-    let start = bytes[..at]
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map(|index| index + 1)
-        .unwrap_or(0);
-    let symbol = std::str::from_utf8(&bytes[start..at]).unwrap_or("X");
-    std::sync::Arc::from(symbol)
+fn write_rank(comm: &Comm, out: &std::path::Path, body: &[u8]) {
+    if is_tmpfs(out) {
+        write_mapped_body(comm, out, body);
+    } else {
+        write_ranked_bytes(comm, out, body).expect("pwrite");
+    }
+    maybe_sync(comm, out);
+}
+
+fn maybe_sync(comm: &Comm, out: &std::path::Path) {
+    if std::env::var_os("READCON_MPI_SYNC").is_some() && comm.rank() == 0 {
+        if let Ok(file) = std::fs::File::open(out) {
+            let _ = file.sync_data();
+        }
+    }
 }
 
 fn main() {
@@ -134,31 +142,35 @@ fn main() {
         .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/readcon-r7-mpi.con"));
     let out = out_buf.as_path();
     let file_bytes = std::fs::read(path).expect("map");
-    // One rank keeps the serial writer. The shared mapping was slower there.
     let split = held.n_total == 1 && comm.size() > 1;
     let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
-        let symbol = component_symbol(&file_bytes);
         let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
-        let pieces = vec![atoms_from_lines(&file_bytes[range], &symbol)];
+        let symbol = component_symbol(&file_bytes);
+        let rows = atoms_from_lines(&file_bytes[range], &symbol);
         let header = if comm.rank() == 0 {
             file_bytes[..start].to_vec()
         } else {
             Vec::new()
         };
-        Some((RankPieces { header, pieces }, start, end))
+        Some((header, rows, start, end))
     } else {
         None
     };
     world.barrier();
     if op == "write" {
-        if let Some((pieces, _, _)) = &prepared {
-            write_mapped(&comm, out, pieces);
+        if let Some((header, rows, _, _)) = &prepared {
+            let mut body = header.clone();
+            body.extend(
+                readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+            );
+            write_rank(&comm, out, &body);
         } else {
             write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("warmup write");
+            maybe_sync(&comm, out);
         }
-    } else if let Some((pieces, _, _)) = &prepared {
-        std::hint::black_box(pieces.pieces.len());
+    } else if let Some((_, rows, _, _)) = &prepared {
+        std::hint::black_box(rows.atoms.len());
     } else {
         let _ = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("warmup read");
     }
@@ -168,12 +180,17 @@ fn main() {
         world.barrier();
         let started = Instant::now();
         if op == "write" {
-            if let Some((pieces, _, _)) = &prepared {
-                write_mapped(&comm, out, pieces);
+            if let Some((header, rows, _, _)) = &prepared {
+                let mut body = header.clone();
+                body.extend(
+                    readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
+                );
+                write_rank(&comm, out, &body);
             } else {
                 write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("write");
+                maybe_sync(&comm, out);
             }
-        } else if let Some((_, start, end)) = &prepared {
+        } else if let Some((_, _, start, end)) = &prepared {
             let range = rank_line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
             let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
             std::hint::black_box(coords.len());
