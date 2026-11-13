@@ -125,10 +125,17 @@ that range is written from the stored frames, with the same header stamp as
 
 ``tables["positions"]`` has shape ``(frames, atoms, 3)``,
 ``tables["masses"]`` is ``(frames, atoms)``, ``tables["cell"]`` is
-``(frames, 6)``, and ``tables["species"]`` is one tuple of symbols per frame.
-``tables["arrays"]`` holds every per-atom column. A repeated symbol is one
-string object, and a frame whose symbols match the previous frame is that
-same tuple. ``tables["arrays"]["pos"]`` is ``tables["positions"]``.
+``(frames, 6)``, and ``tables["species"]`` is one symbol sequence per frame.
+A frame of fewer than 4096 atoms is a tuple. A wider frame is a
+``SpeciesRow`` in a ``SpeciesFrames`` sequence, an immutable view of
+interned strings. ``tables["species"].ids()`` is the ``(frames, atoms)``
+array of those ids, zeros when the file is one symbol. A row supports
+``len``, indexing, iteration, slicing, equality with a tuple or a list of
+the same symbols, pickling, and ``hash`` when that tuple would be
+hashable. ``tables["arrays"]`` holds every per-atom column. A repeated
+symbol is one string object, and a frame whose symbols match the previous
+frame is that same tuple when the frame is under 4096 atoms.
+``tables["arrays"]["pos"]`` is ``tables["positions"]``.
 ``tables["arrays"]["masses"]`` is ``tables["masses"]``.
 ``tables["arrays"]["species"]`` is ``tables["species"]``.
 ``n_threads`` of 2 or more splits frames, or the atoms of one wide frame.

@@ -7,7 +7,7 @@ use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PyTuple};
+use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PySequence, PySlice, PyString, PyTuple};
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -4593,6 +4593,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SpeciesFrames>()?;
     m.add_class::<SpeciesRow>()?;
     m.add_class::<SpeciesIter>()?;
+    m.add_class::<SpeciesFramesIter>()?;
     m.add_function(wrap_pyfunction!(read_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(write_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
@@ -4917,47 +4918,172 @@ fn species_index(index: isize, len: usize) -> PyResult<usize> {
 /// Wide-frame species: one interned string per distinct symbol, and the
 /// per-atom ids. A frame below 4096 atoms is still a tuple. A wide frame
 /// is this view, so the read does not build a million-item tuple.
-#[pyclass(name = "SpeciesFrames")]
+///
+/// ``len(frames)`` is the frame count. ``frames[i]`` is a
+/// :class:`SpeciesRow`. ``frames.ids()`` is a ``uint32`` array of shape
+/// ``(frames, atoms)``. The sequence compares equal to a list or tuple of
+/// per-frame symbol sequences, slices to a tuple of rows, pickles, and
+/// hashes as that tuple of rows.
+#[pyclass(module = "readcon", name = "SpeciesFrames")]
 struct SpeciesFrames {
     n_frames: usize,
     n_atoms: usize,
-    pool: Vec<Py<pyo3::types::PyString>>,
+    pool: Vec<Py<PyString>>,
     /// Empty when every atom uses `pool[0]`.
     ids: Vec<u32>,
 }
 
-#[pyclass(name = "SpeciesRow")]
+/// One frame of interned species symbols.
+///
+/// Behaves as a tuple of strings: ``len``, index, iteration, a slice that
+/// is a tuple, equality with a tuple or a list, pickle, and hash.
+#[pyclass(module = "readcon", name = "SpeciesRow")]
 struct SpeciesRow {
     parent: Py<SpeciesFrames>,
     frame: usize,
 }
 
-#[pyclass]
+#[pyclass(module = "readcon")]
 struct SpeciesIter {
     parent: Py<SpeciesFrames>,
     frame: usize,
     index: usize,
 }
 
+#[pyclass(module = "readcon")]
+struct SpeciesFramesIter {
+    parent: Py<SpeciesFrames>,
+    index: usize,
+}
+
 #[pymethods]
 impl SpeciesFrames {
+    #[new]
+    fn new(
+        py: Python<'_>,
+        symbols: Vec<String>,
+        ids: Vec<u32>,
+        n_frames: usize,
+        n_atoms: usize,
+    ) -> Self {
+        let mut pool = Vec::with_capacity(symbols.len().max(1));
+        for symbol in symbols {
+            pool.push(PyString::new(py, &symbol).unbind());
+        }
+        if pool.is_empty() {
+            pool.push(PyString::new(py, "").unbind());
+        }
+        let ids = if pool.len() == 1 { Vec::new() } else { ids };
+        Self {
+            n_frames,
+            n_atoms,
+            pool,
+            ids,
+        }
+    }
+
     fn __len__(&self) -> usize {
         self.n_frames
     }
 
-    fn __getitem__(slf: &Bound<'_, Self>, index: isize) -> PyResult<Py<SpeciesRow>> {
+    fn __getitem__(slf: &Bound<'_, Self>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        let frame = species_index(index, slf.borrow().n_frames)?;
+        let n_frames = slf.borrow().n_frames;
+        if let Ok(index) = key.extract::<isize>() {
+            let frame = species_index(index, n_frames)?;
+            let row = Py::new(
+                py,
+                SpeciesRow {
+                    parent: slf.clone().unbind(),
+                    frame,
+                },
+            )?;
+            return Ok(row.into_any());
+        }
+        let slice = key
+            .cast::<PySlice>()
+            .map_err(|_| PyTypeError::new_err("species index"))?;
+        let indices = slice.indices(n_frames as isize)?;
+        let mut rows = Vec::with_capacity(indices.slicelength);
+        let mut cursor = indices.start;
+        for _ in 0..indices.slicelength {
+            let frame = species_index(cursor, n_frames)?;
+            rows.push(Py::new(
+                py,
+                SpeciesRow {
+                    parent: slf.clone().unbind(),
+                    frame,
+                },
+            )?);
+            cursor += indices.step;
+        }
+        Ok(PyTuple::new(py, rows)?.into_any().unbind())
+    }
+
+    fn __iter__(slf: &Bound<'_, Self>) -> PyResult<Py<SpeciesFramesIter>> {
         Py::new(
-            py,
-            SpeciesRow {
+            slf.py(),
+            SpeciesFramesIter {
                 parent: slf.clone().unbind(),
-                frame,
+                index: 0,
             },
         )
     }
 
-    /// Per-atom species ids, shape `(frames, atoms)`. Empty when the file
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let py = slf.py();
+        if slf.is(other) {
+            return Ok(true);
+        }
+        if let Ok(frames) = other.cast::<SpeciesFrames>() {
+            return frames_equal(py, slf, frames);
+        }
+        if !other.is_instance_of::<PyList>() && !other.is_instance_of::<PyTuple>() {
+            return Ok(false);
+        }
+        let seq = other.cast::<PySequence>()?;
+        let n_frames = slf.borrow().n_frames;
+        if seq.len()? != n_frames {
+            return Ok(false);
+        }
+        for frame in 0..n_frames {
+            let row = seq.get_item(frame)?;
+            if !frame_matches(py, slf, frame, &row)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn __hash__(slf: &Bound<'_, Self>) -> PyResult<isize> {
+        let py = slf.py();
+        let borrowed = slf.borrow();
+        let mut rows = Vec::with_capacity(borrowed.n_frames);
+        for frame in 0..borrowed.n_frames {
+            rows.push(row_tuple(py, &borrowed, frame)?);
+        }
+        drop(borrowed);
+        PyTuple::new(py, rows)?.hash()
+    }
+
+    fn __reduce__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyTuple>)> {
+        let cls = slf.get_type().into_any();
+        let this = slf.borrow();
+        let mut symbols = Vec::with_capacity(this.pool.len());
+        for symbol in &this.pool {
+            symbols.push(symbol.bind(py).to_str()?.to_string());
+        }
+        let symbols = symbols.into_py_any(py)?;
+        let ids = this.ids.clone().into_py_any(py)?;
+        let n_frames = this.n_frames.into_py_any(py)?;
+        let n_atoms = this.n_atoms.into_py_any(py)?;
+        Ok((cls, PyTuple::new(py, [symbols, ids, n_frames, n_atoms])?))
+    }
+
+    /// Per-atom species ids, shape `(frames, atoms)`. Zeros when the file
     /// is one symbol.
     fn ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<u32>>> {
         if self.ids.is_empty() {
@@ -4973,6 +5099,22 @@ impl SpeciesFrames {
 }
 
 impl SpeciesFrames {
+    fn id_at(&self, frame: usize, atom: usize) -> u32 {
+        if self.ids.is_empty() {
+            0
+        } else {
+            self.ids[frame * self.n_atoms + atom]
+        }
+    }
+
+    fn symbol_at(&self, py: Python<'_>, frame: usize, atom: usize) -> PyResult<Py<PyString>> {
+        let id = self.id_at(frame, atom) as usize;
+        self.pool
+            .get(id)
+            .map(|symbol| symbol.clone_ref(py))
+            .ok_or_else(|| PyValueError::new_err("species id"))
+    }
+
     fn owned_text(&self, py: Python<'_>) -> PyResult<OwnedText> {
         let mut symbols = Vec::with_capacity(self.pool.len());
         for symbol in &self.pool {
@@ -4988,25 +5130,144 @@ impl SpeciesFrames {
     }
 }
 
+fn row_tuple<'py>(
+    py: Python<'py>,
+    frames: &SpeciesFrames,
+    frame: usize,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let mut items = Vec::with_capacity(frames.n_atoms);
+    for atom in 0..frames.n_atoms {
+        items.push(frames.symbol_at(py, frame, atom)?);
+    }
+    PyTuple::new(py, items)
+}
+
+fn frame_symbol<'py>(
+    py: Python<'py>,
+    frames: &Bound<'py, SpeciesFrames>,
+    frame: usize,
+    atom: usize,
+) -> PyResult<Py<PyString>> {
+    frames.borrow().symbol_at(py, frame, atom)
+}
+
+fn frame_matches(
+    py: Python<'_>,
+    frames: &Bound<'_, SpeciesFrames>,
+    frame: usize,
+    other: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    let n_atoms = frames.borrow().n_atoms;
+    if let Ok(row) = other.cast::<SpeciesRow>() {
+        if row.is(frames) {
+            return Ok(false);
+        }
+        let (parent, other_frame) = {
+            let borrowed = row.borrow();
+            (borrowed.parent.clone_ref(py), borrowed.frame)
+        };
+        if parent.bind(py).is(frames) {
+            let table = frames.borrow();
+            if table.n_atoms != n_atoms {
+                return Ok(false);
+            }
+            for atom in 0..n_atoms {
+                if table.id_at(frame, atom) != table.id_at(other_frame, atom) {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+        let other_atoms = parent.bind(py).borrow().n_atoms;
+        if other_atoms != n_atoms {
+            return Ok(false);
+        }
+        for atom in 0..n_atoms {
+            let left = frame_symbol(py, frames, frame, atom)?;
+            let right = parent.bind(py).borrow().symbol_at(py, other_frame, atom)?;
+            if left.bind(py).to_str()? != right.bind(py).to_str()? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+    if !other.is_instance_of::<PyList>() && !other.is_instance_of::<PyTuple>() {
+        return Ok(false);
+    }
+    let seq = other.cast::<PySequence>()?;
+    if seq.len()? != n_atoms {
+        return Ok(false);
+    }
+    for atom in 0..n_atoms {
+        let symbol = frame_symbol(py, frames, frame, atom)?;
+        let item = seq.get_item(atom)?;
+        if !PyAnyMethods::eq(&item, symbol.bind(py))? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn frames_equal(
+    py: Python<'_>,
+    left: &Bound<'_, SpeciesFrames>,
+    right: &Bound<'_, SpeciesFrames>,
+) -> PyResult<bool> {
+    let (left_frames, left_atoms) = {
+        let borrowed = left.borrow();
+        (borrowed.n_frames, borrowed.n_atoms)
+    };
+    let (right_frames, right_atoms) = {
+        let borrowed = right.borrow();
+        (borrowed.n_frames, borrowed.n_atoms)
+    };
+    if left_frames != right_frames || left_atoms != right_atoms {
+        return Ok(false);
+    }
+    for frame in 0..left_frames {
+        for atom in 0..left_atoms {
+            let a = frame_symbol(py, left, frame, atom)?;
+            let b = frame_symbol(py, right, frame, atom)?;
+            if a.bind(py).to_str()? != b.bind(py).to_str()? {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
 #[pymethods]
 impl SpeciesRow {
+    #[new]
+    fn new(parent: Py<SpeciesFrames>, frame: usize) -> Self {
+        Self { parent, frame }
+    }
+
     fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
         Ok(self.parent.bind(py).borrow().n_atoms)
     }
 
-    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<pyo3::types::PyString>> {
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let frames = self.parent.bind(py).borrow();
-        let atom = species_index(index, frames.n_atoms)?;
-        let id = if frames.ids.is_empty() {
-            0
-        } else {
-            frames.ids[self.frame * frames.n_atoms + atom]
-        };
-        frames
-            .pool
-            .get(id as usize)
-            .map(|symbol| symbol.clone_ref(py))
-            .ok_or_else(|| PyValueError::new_err("species id"))
+        let n_atoms = frames.n_atoms;
+        if let Ok(index) = key.extract::<isize>() {
+            let atom = species_index(index, n_atoms)?;
+            let symbol = frames.symbol_at(py, self.frame, atom)?;
+            return Ok(symbol.into_any());
+        }
+        let slice = key
+            .cast::<PySlice>()
+            .map_err(|_| PyTypeError::new_err("species index"))?;
+        let indices = slice.indices(n_atoms as isize)?;
+        let mut items = Vec::with_capacity(indices.slicelength);
+        let mut cursor = indices.start;
+        for _ in 0..indices.slicelength {
+            let atom = species_index(cursor, n_atoms)?;
+            items.push(frames.symbol_at(py, self.frame, atom)?);
+            cursor += indices.step;
+        }
+        drop(frames);
+        Ok(PyTuple::new(py, items)?.into_any().unbind())
     }
 
     fn __iter__(&self, py: Python<'_>) -> PyResult<Py<SpeciesIter>> {
@@ -5018,6 +5279,59 @@ impl SpeciesRow {
                 index: 0,
             },
         )
+    }
+
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let py = slf.py();
+        if slf.is(other) {
+            return Ok(true);
+        }
+        let (parent, frame) = {
+            let this = slf.borrow();
+            (this.parent.clone_ref(py), this.frame)
+        };
+        frame_matches(py, &parent.bind(py), frame, other)
+    }
+
+    fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
+        let frames = self.parent.bind(py).borrow();
+        let row = row_tuple(py, &frames, self.frame)?;
+        drop(frames);
+        row.hash()
+    }
+
+    fn __reduce__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyTuple>)> {
+        let cls = slf.get_type().into_any();
+        let this = slf.borrow();
+        let parent = this.parent.clone_ref(py).into_any();
+        let frame = this.frame.into_py_any(py)?;
+        Ok((cls, PyTuple::new(py, [parent, frame])?))
+    }
+}
+
+#[pymethods]
+impl SpeciesFramesIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<SpeciesRow>>> {
+        let n_frames = self.parent.bind(py).borrow().n_frames;
+        if self.index >= n_frames {
+            return Ok(None);
+        }
+        let frame = self.index;
+        self.index += 1;
+        Ok(Some(Py::new(
+            py,
+            SpeciesRow {
+                parent: self.parent.clone_ref(py),
+                frame,
+            },
+        )?))
     }
 }
 
@@ -5080,8 +5394,11 @@ fn species_view<'py>(
 /// A text column is a list of tuples. A repeated symbol is one string
 /// object, and a frame whose symbols match the previous frame is that
 /// same tuple when the frame has fewer than 4096 atoms. A wider frame is
-/// an immutable sequence over interned symbols and their ids, not one
-/// Python tuple per atom. ``arrays['species']`` is ``species``.
+/// a ``SpeciesRow`` inside ``SpeciesFrames``: an immutable sequence over
+/// interned symbols. ``species.ids()`` is the ``(frames, atoms)`` id
+/// array. A row supports len, index, iteration, slicing, equality with a
+/// tuple or a list, pickling, and hashing. ``arrays['species']`` is
+/// ``species``.
 /// ``arrays['pos']`` and ``arrays['masses']`` are the top-level slabs.
 /// `n_threads` of `None` or `1` is the serial scan. `n >= 2` splits frames.
 #[pyfunction]

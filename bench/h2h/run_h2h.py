@@ -300,9 +300,46 @@ def timed_load(libs, code: str, path: Path, mode: str):
     raise ValueError(code)
 
 
+def species_match(species, images) -> bool:
+    """Compare every symbol with the ASE image. A species view is not a skip."""
+    rows = list(species)
+    if len(rows) != len(images):
+        return False
+    for row, image in zip(rows, images):
+        symbols = image.get_chemical_symbols()
+        if len(row) != len(symbols):
+            return False
+        for got, expect in zip(row, symbols):
+            if got != expect:
+                return False
+    return True
+
+
 def extract_loaded(code: str, loaded):
     if code == "readcon" and isinstance(loaded, tuple):
         return loaded
+    if code == "readcon" and isinstance(loaded, dict) and "positions" in loaded:
+        pos = np.asarray(loaded["positions"], dtype=np.float64)
+        mass = (
+            np.asarray(loaded["masses"], dtype=np.float64)
+            if loaded.get("masses") is not None
+            else None
+        )
+        cell = (
+            np.asarray(loaded["cell"], dtype=np.float64)
+            if loaded.get("cell") is not None
+            else None
+        )
+        species = loaded.get("species")
+        if species is None or len(species) != pos.shape[0]:
+            raise RuntimeError("species frames")
+        for frame in species:
+            if len(frame) != pos.shape[1]:
+                raise RuntimeError("species atoms")
+            for symbol in frame:
+                if not isinstance(symbol, str) or symbol == "":
+                    raise RuntimeError("species symbol")
+        return pos, mass, cell
     if code == "readcon":
         return stack_readcon(loaded)
     if code == "ase":
@@ -478,6 +515,14 @@ def worker(args) -> int:
     after = mem_bytes("VmRSS")
     try:
         pos, mass, cell = extract_loaded(args.code, loaded)
+        if args.mode == "extxyz" and isinstance(loaded, dict):
+            from ase.io import read as ase_read
+
+            images = ase_read(args.input, index=":")
+            if not isinstance(images, list):
+                images = [images]
+            if not species_match(loaded["species"], images):
+                raise RuntimeError("species mismatch")
     except BaseException as exc:
         emit(
             {

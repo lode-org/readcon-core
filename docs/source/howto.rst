@@ -488,9 +488,15 @@ Extended XYZ
 
 ``read_extxyz`` returns a dict. ``positions`` has shape ``(frames, atoms, 3)``,
 ``masses`` is ``(frames, atoms)``, ``cell`` is ``(frames, 6)``, and ``species`` is
-one tuple of symbols per frame. ``arrays`` holds every per-atom column.
+one symbol sequence per frame. A frame of fewer than 4096 atoms is a tuple.
+A wider frame is a ``SpeciesRow`` in a ``SpeciesFrames`` sequence, an
+immutable view of interned strings, with ``species.ids()`` the
+``(frames, atoms)`` id array. A row supports ``len``, indexing, iteration,
+slicing, equality with a tuple or a list, pickling, and ``hash``.
+``arrays`` holds every per-atom column.
 A repeated symbol is one string, and a frame whose symbols match the
-previous frame is that same tuple. ``arrays["pos"]`` is ``positions``.
+previous frame is that same tuple when the frame is under 4096 atoms.
+``arrays["pos"]`` is ``positions``.
 ``write_extxyz`` writes that dict back. A caller that unpacked a tuple
 from an older ``read_extxyz`` should index the dict.
 

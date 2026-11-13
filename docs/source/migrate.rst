@@ -48,8 +48,10 @@ that described a 48 KiB automatic pool do not match this reader.
 
 ``read_extxyz`` returns a dict with ``positions``, ``masses``, ``cell``, ``species``,
 and ``arrays``. It used to return a tuple of the three numeric arrays.
-Index the dict. ``species`` rows are tuples, and a repeated symbol is one
-string object.
+Index the dict. A frame of fewer than 4096 atoms keeps a tuple of symbols,
+and a repeated symbol is one string object. A wider frame is a
+``SpeciesRow`` over interned strings. It compares equal to that tuple or
+to a list of the same symbols, and ``species.ids()`` is the id array.
 
 ``write_con`` streams one frame at a time and flushes before it returns.
 ``append=True`` extends an uncompressed file. ``.gz`` and ``.zst`` select the

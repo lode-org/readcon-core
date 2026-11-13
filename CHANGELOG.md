@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file. See [conven
   one wide frame, across the requested workers. A uniform extended XYZ file is
   one scan. Mixed symbols, or a header that changes from frame to frame, stay
   on the general scan.
+- An extended XYZ frame of 4096 atoms or more returns `species` as
+  `SpeciesFrames`, an immutable sequence of `SpeciesRow` views over interned
+  symbols. `species.ids()` is the `(frames, atoms)` id array. A row supports
+  len, index, iteration, slicing, equality with a tuple or a list, pickling,
+  and hashing. A shorter frame is still a tuple.
 
 
 ## v0.22.0 - 2026-11-12
