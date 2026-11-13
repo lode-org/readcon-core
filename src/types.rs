@@ -329,8 +329,34 @@ impl FrameMeta {
         if let Some(map) = self.map.get() {
             return f(map);
         }
-        let parsed = metadata_map_from_line(&self.raw);
-        f(&parsed)
+        // A write looks up lattice vectors once per frame. Storing the map on
+        // the frame kept about a kilobyte for every frame the caller still
+        // held. The line is usually the same across a trajectory, so a few
+        // shared parses answer the repeat lookups.
+        META_LINE_CACHE.with(|cell| {
+            let mut cache = cell.borrow_mut();
+            if let Some(index) = cache.iter().position(|entry| {
+                std::sync::Arc::ptr_eq(&entry.raw, &self.raw) || *entry.raw == *self.raw
+            }) {
+                if index != 0 {
+                    let entry = cache.remove(index);
+                    cache.insert(0, entry);
+                }
+                return f(&cache[0].map);
+            }
+            let parsed = metadata_map_from_line(&self.raw);
+            if cache.len() == META_LINE_CACHE_CAP {
+                cache.pop();
+            }
+            cache.insert(
+                0,
+                ParsedMetaLine {
+                    raw: std::sync::Arc::clone(&self.raw),
+                    map: parsed,
+                },
+            );
+            f(&cache[0].map)
+        })
     }
 
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
@@ -424,6 +450,18 @@ fn minor_from_line(line: &str) -> u64 {
         .find(|c: char| !c.is_ascii_digit())
         .unwrap_or(rest.len());
     rest[..end].parse().unwrap_or(0)
+}
+
+struct ParsedMetaLine {
+    raw: std::sync::Arc<str>,
+    map: BTreeMap<String, serde_json::Value>,
+}
+
+const META_LINE_CACHE_CAP: usize = 4;
+
+std::thread_local! {
+    static META_LINE_CACHE: std::cell::RefCell<Vec<ParsedMetaLine>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json::Value> {
@@ -664,9 +702,9 @@ impl FrameHeader {
     /// Exact 3x3 lattice vector matrix (row-major, angstroms).
     /// When present, takes precedence over the length/angle values on lines 3-4.
     pub fn lattice_vectors(&self) -> Option<[[f64; 3]; 3]> {
-        // Do not cache the map. Writers call this once per frame, and the
-        // cached map stays reachable for as long as the caller holds the
-        // trajectory.
+        // Shared across frames. A per-frame map stays reachable for as long
+        // as the caller holds the trajectory, which a streaming write must
+        // not do.
         self.metadata.with_map(|map| {
             let arr = map.get(meta::LATTICE_VECTORS)?.as_array()?;
             if arr.len() != 3 {

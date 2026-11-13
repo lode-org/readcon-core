@@ -3587,4 +3587,48 @@ Coordinates of Component 1
         assert!(frame.header.metadata.has_cached_map());
         assert_eq!(frame.header.lattice_vectors().unwrap()[1][1], 20.0);
     }
+
+    /// Five different lines share one small cache. Each lookup still answers
+    /// that line, and none of the frames grows its own map.
+    #[test]
+    fn repeated_lattice_lookups_share_a_bounded_cache() {
+        let mut frames = Vec::new();
+        for side in [10.0, 11.0, 12.0, 13.0, 14.0] {
+            let text = format!(
+                "grid\n{{\"con_spec_version\":2,\"lattice_vectors\":[[{side},0,0],[0,{side},0],[0,0,{side}]]}}\n5 5 5\n90 90 90\n0 0\n0 0\n1\n1\n1.0\nCu\nCoordinates of Component 1\n0 0 0 0 1\n"
+            );
+            frames.push(frames_from_text(&text, Some(1)).unwrap().remove(0));
+        }
+        for _ in 0..2 {
+            for (index, frame) in frames.iter().enumerate() {
+                let side = 10.0 + index as f64;
+                let vecs = frame.header.lattice_vectors().unwrap();
+                assert_eq!(vecs[0][0], side);
+                assert_eq!(vecs[2][2], side);
+                assert!(!frame.header.metadata.has_cached_map());
+            }
+        }
+        // The last line is at the front. An older line is still cached
+        // behind it, and a freshly parsed copy of the front line is a
+        // content hit rather than a shared allocation.
+        let older = frames[1].header.lattice_vectors().unwrap();
+        assert_eq!(older[0][0], 11.0);
+        let text = "\
+grid
+{\"con_spec_version\":2,\"lattice_vectors\":[[14,0,0],[0,14,0],[0,0,14]]}
+5 5 5
+90 90 90
+0 0
+0 0
+1
+1
+1.0
+Cu
+Coordinates of Component 1
+0 0 0 0 1
+";
+        let twin = frames_from_text(text, Some(1)).unwrap().remove(0);
+        assert_eq!(twin.header.lattice_vectors().unwrap()[0][0], 14.0);
+        assert!(!twin.header.metadata.has_cached_map());
+    }
 }
