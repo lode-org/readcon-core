@@ -770,18 +770,16 @@ fn fixed_flag(digit: u8, spec_version: u32) -> Option<[bool; 3]> {
 
 /// One coordinate row whose three values use a dot and 16 or 17 fraction digits.
 ///
-/// The line end was found once, before this function. Fields are then read in
-/// a single left-to-right pass. Anything else returns `None` so the general
-/// row parser can take the line.
+/// `bytes` starts at the row and may include the rest of the file. The row
+/// end is found in the same pass as the fields. The returned index is just
+/// past the newline, or at the end of `bytes` when the file has none.
+/// Anything else returns `None` so the general row parser can take the line.
 #[inline(never)]
 fn parse_fixed_line(
-    mut line: &[u8],
+    line: &[u8],
     spec_version: u32,
     default_id: Option<u64>,
-) -> Option<ParsedCoord> {
-    if line.last() == Some(&b'\r') {
-        line = &line[..line.len() - 1];
-    }
+) -> Option<(ParsedCoord, usize)> {
     let mut i = skip_row_spaces(line, 0);
     let mut xyz = [0.0f64; 3];
     for slot in &mut xyz {
@@ -819,10 +817,16 @@ fn parse_fixed_line(
         (val, j)
     };
     i = skip_row_spaces(line, next);
-    if i != line.len() {
-        return None;
+    if i < line.len() && line[i] == b'\r' {
+        i += 1;
     }
-    Some((xyz, fixed, atom_id))
+    if i < line.len() && line[i] == b'\n' {
+        return Some(((xyz, fixed, atom_id), i + 1));
+    }
+    if i == line.len() {
+        return Some(((xyz, fixed, atom_id), i));
+    }
+    None
 }
 
 pub(crate) struct CoordBlock<'a> {
@@ -863,6 +867,30 @@ pub(crate) fn fill_coord_block(
             return Err(ParseError::IncompleteFrame);
         }
         let rest = &bytes[cursor.pos..];
+        // The fixed row parser stops at the newline, so the common line is
+        // not scanned twice. A short or odd row still uses memchr.
+        if rest.len() >= 48 {
+            if let Some(((xyz, fixed, atom_id), consumed)) =
+                parse_fixed_line(rest, spec_version, Some(cursor.atom_id))
+            {
+                let index = frame_base + i;
+                store_coord(
+                    out,
+                    index,
+                    xyz,
+                    fixed,
+                    atom_id,
+                    shares.as_mut().map(|shares| shares.take()),
+                );
+                cursor.atom_id = cursor.atom_id.saturating_add(1);
+                cursor.lines = cursor.lines.saturating_add(1);
+                cursor.pos += consumed;
+                if consumed == rest.len() && i + 1 < n {
+                    return Err(ParseError::IncompleteFrame);
+                }
+                continue;
+            }
+        }
         let nl = memchr::memchr(b'\n', rest);
         let (raw, next) = match nl {
             Some(cut) => (&rest[..cut], cursor.pos + cut + 1),
@@ -874,16 +902,8 @@ pub(crate) fn fill_coord_block(
         } else {
             raw
         };
-        let row = if line.len() >= 48 {
-            parse_fixed_line(line, spec_version, Some(cursor.atom_id))
-        } else {
-            None
-        };
-        let (xyz, fixed, atom_id) = if let Some(row) = row {
-            row
-        } else {
-            parse_coord_fields(line, 0, spec_version, Some(cursor.atom_id))?.0
-        };
+        let (xyz, fixed, atom_id) =
+            parse_coord_fields(line, 0, spec_version, Some(cursor.atom_id))?.0;
         let index = frame_base + i;
         store_coord(
             out,
