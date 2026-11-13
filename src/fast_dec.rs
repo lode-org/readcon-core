@@ -97,9 +97,11 @@ fn parse_8digits(mut v: u64) -> u64 {
 
 #[inline(always)]
 fn read_u64(bytes: &[u8], i: usize) -> u64 {
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&bytes[i..i + 8]);
-    u64::from_le_bytes(buf)
+    // The caller has checked `i + 8 <= bytes.len()`. One unaligned load
+    // is the 8-digit word; a stack copy is the same bytes.
+    debug_assert!(i + 8 <= bytes.len());
+    let ptr = bytes.as_ptr().wrapping_add(i);
+    u64::from_le(unsafe { (ptr as *const u64).read_unaligned() })
 }
 
 #[inline(always)]
@@ -388,6 +390,10 @@ fn finish(neg: bool, mant: u64, exp: i32) -> Option<f64> {
     if !(-22..=22).contains(&exp) {
         return None;
     }
+    // The short division above needs a mantissa that fits in an `f64`.
+    // A wider one is `round(w) + (w - round(w))` over the exact power of
+    // ten. The residual of that division is an `fma`, so the common
+    // 16/17-digit fixed spelling does not take the general product.
     let adjusted = compute_float(i64::from(exp), mant);
     if adjusted.power2 < 0 {
         return None;
@@ -471,7 +477,7 @@ fn product(q: i64, w: u64) -> (u64, u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_f64_hot, parse_f64_long};
+    use super::{finish, parse_f64_hot, parse_f64_long};
 
     fn bits_of(text: &str) -> Option<u64> {
         let (val, n) = parse_f64_hot(text.as_bytes(), 0)?;
@@ -889,5 +895,86 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn expect_fixed(text: &str) {
+        let bytes = text.as_bytes();
+        let Some((val, n)) = super::parse_fixed_decimal(bytes, 0) else {
+            return;
+        };
+        let spelled = &text[..n];
+        let (expect, used) = fast_float2::parse_partial::<f64, _>(spelled).unwrap();
+        assert_eq!(used, spelled.len(), "{spelled}");
+        assert_eq!(val.to_bits(), expect.to_bits(), "{spelled}");
+    }
+
+    /// Corpus spellings, random 17-digit values in `[-1e4, 1e4]`, and edges.
+    #[test]
+    fn fixed_17_digits_match_the_general_parser() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        for dir in [
+            "resources/conformance/valid",
+            "resources/test",
+            "resources/examples",
+        ] {
+            let dir = root.join(dir);
+            if !dir.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                let name = path.file_name().unwrap().to_string_lossy();
+                if !(name.ends_with(".con") || name.ends_with(".convel")) {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                for raw in text.split_whitespace() {
+                    if raw.contains('.') && raw.len() >= 18 {
+                        expect_fixed(raw);
+                    }
+                }
+            }
+        }
+        let mut state = 0xc0ff_ee00_1234_5678u64;
+        for _ in 0..2_000_000 {
+            state = state.wrapping_mul(0x5851_f42d_4c95_7f2d).wrapping_add(1);
+            // 17 significant digits, magnitude inside [-1e4, 1e4].
+            let digits = state % 100_000_000_000_000_000;
+            let scale = ((state >> 17) % 8) as i32;
+            let mag = (digits as f64) / 10f64.powi(13 + scale);
+            let value = if state & 1 == 0 { mag } else { -mag };
+            if !(-1e4..=1e4).contains(&value) {
+                continue;
+            }
+            expect_fixed(&format!("{value:.17}"));
+            expect_fixed(&format!("{value:.16}"));
+        }
+        // Halfway values, signed zero, a subnormal, and the exponent window.
+        for text in [
+            "-0.0",
+            "-0.00000000000000000",
+            "0.00000000000000000",
+            "0.5",
+            "1.00000000000000000",
+            "2.2250738585072014e-308",
+            "1.7976931348623157e308",
+            "999.9999999999999999",
+            "-999.9999999999999999",
+            "5.00000000000000000",
+            "1.0000000000000002",
+            "9007199254740992.0",
+            "9007199254740993.0",
+        ] {
+            let _ = expect_fixed(text);
+            let bytes = text.as_bytes();
+            if let Some((val, n)) = parse_f64_hot(bytes, 0) {
+                if n == bytes.len() {
+                    let (expect, _) = fast_float2::parse_partial::<f64, _>(text).unwrap();
+                    assert_eq!(val.to_bits(), expect.to_bits(), "{text}");
+                }
+            }
+        }
+        assert_eq!(finish(true, 0, 0).unwrap().to_bits(), (-0.0f64).to_bits());
+        assert_eq!(finish(false, 0, -17).unwrap().to_bits(), 0.0f64.to_bits());
     }
 }
