@@ -48,6 +48,9 @@ if host_machine.system() == 'linux'
         cc.find_library('dl', required: true),
         cc.find_library('m', required: true),
     ]
+    if 'zstd' in get_option('cargo_features')
+        _rust_sys_deps += cc.find_library('stdc++', required: true)
+    endif
 elif host_machine.system() == 'darwin'
     _rust_sys_deps += [dependency('threads')]
 elif host_machine.system() == 'windows'

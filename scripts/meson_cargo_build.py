@@ -89,11 +89,14 @@ def main(argv: list[str]) -> int:
     rustc_extra: list[str] = []
     if sys.platform.startswith("linux"):
         rustc_extra.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
+        if "zstd" in features:
+            rustc_extra.append("-Clink-arg=-lstdc++")
     elif sys.platform == "darwin":
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
-    for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
+    static_extra = ["-Clink-arg=-lstdc++"] if "zstd" in features and sys.platform.startswith("linux") else []
+    for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", static_extra)):
         crate_cmd = cmd + ["--crate-type", crate_type]
         if extra:
             crate_cmd += ["--", *extra]

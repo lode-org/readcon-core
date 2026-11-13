@@ -1,0 +1,18 @@
+{
+  "cpu_model": "Intel Xeon Processor",
+  "cpu_model_raw": "Intel(R) Xeon(R) Processor",
+  "cpu_family": "6",
+  "cpu_model_id": "207",
+  "stepping": "2",
+  "platform": "Linux-x86_64-with-glibc2.39",
+  "ncpus": 8,
+  "physical_cores": 8,
+  "cores_per_socket": 8,
+  "sockets": 1,
+  "threads_per_core": 1,
+  "hypervisor": "KVM",
+  "virtualization": "full",
+  "topology_note": "Hypervisor vendor is KVM. lscpu model name is Intel(R) Xeon(R) Processor. Thread(s) per core is 1. Physical cores are Core(s) per socket times Socket(s). Logical CPUs are not the worker cap. A model name without a SKU means KVM is hiding the host processor identity.",
+  "mpi": "mpirun (Open MPI) 4.1.6",
+  "gpu": "absent"
+}

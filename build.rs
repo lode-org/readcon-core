@@ -33,8 +33,35 @@ fn check_package_version_file() {
     }
 }
 
+fn link_libstdcxx() {
+    // The zstd feature pulls zstd-sys, and a chemfiles build beside it is
+    // C++. Both need libstdc++ on the final link when the system c++ is
+    // clang addressed by the Rust target triple.
+    if std::env::var_os("CARGO_FEATURE_ZSTD").is_none() {
+        return;
+    }
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
+        return;
+    }
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rustc-link-lib=dylib=stdc++");
+    let printed = std::process::Command::new("g++")
+        .args(["-print-file-name=libstdc++.so"])
+        .output();
+    if let Ok(output) = printed {
+        let path = String::from_utf8_lossy(&output.stdout);
+        let path = path.trim();
+        if let Some(dir) = Path::new(path).parent() {
+            if dir.is_dir() {
+                println!("cargo:rustc-link-search=native={}", dir.display());
+            }
+        }
+    }
+}
+
 fn main() {
     check_package_version_file();
+    link_libstdcxx();
 
     // Cap'n Proto schema compilation (behind rpc feature)
     #[cfg(feature = "rpc")]

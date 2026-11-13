@@ -2,4 +2,4 @@ readcon-core reads and writes CON 3.1, a versioned grammar for atomistic checkpo
 Every frame keeps atom ids, per-axis masks, masses and a declared velocity time unit.
 One Rust core serves C, C++, Fortran, Julia and Python; eOn reads CON through it.
 readcon-db stores CON corpora in LMDB; readcon-ops matches frames by atom identity.
-Stored atom ids keep NEB, dimer and AKMC images paired across restarts and codes.
+Atom identifiers keep NEB, dimer and AKMC images paired across restarts and codes.

@@ -1,0 +1,12 @@
+{
+  "calculator": "ASE EMT",
+  "readcon": "0.22.0",
+  "images": 10,
+  "climb": true,
+  "method": "improvedtangent",
+  "fmax": 0.05,
+  "steps": 200,
+  "barrier_eV": 0.0,
+  "endpoint_delta_eV": -0.030965254683448684,
+  "note": "The stored 0.60672 eV barrier is PET-MAD-S v1.1.0 in eOn, not this EMT band."
+}

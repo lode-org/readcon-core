@@ -1,0 +1,37 @@
+git rev-parse HEAD
+68dfb7c307e0923044d4a9f41159b7a2ed2dd605
+git rev-parse HEAD^{tree}
+0b41eb7cf69d32f7b01e77eeaede952a2080e010
+git rev-parse HEAD:src
+acb56e4e689ba9cf961b62f190b6ea380768e882
+command
+taskset -c 0 bench/h2h/work/eon_time warm bench/h2h/work/inputs/tiny10.con bench/h2h/work/outs/eon-tiny10.dump
+hardware Intel Xeon Processor uname_m x86_64 nproc 8 memory_kib 49342816
+pinned taskset -c 0
+repeat 6
+serial 1
+quantile type-7
+sample 0.000033197
+sample 0.000043375
+sample 0.000026110
+sample 0.000028763
+sample 0.000026291
+sample 0.000027852
+median_s 0.000028307
+q25_s 0.000026681
+q75_s 0.000032089
+iqr_s 0.000005407
+n_atoms 10
+n_frames 1
+cell 3.000000000 3.000000000 3.000000000 90.000000000 90.000000000 90.000000000
+max_abs 0.000e+00
+n_atoms_ok 1
+cell_ok 1
+coords_ok 1
+correct 1
+reason ok
+file bench/h2h/work/inputs/tiny10.con
+format con
+eon_commit 579738a9387e8d0ea55496f45dd057812cfab892
+{"samples": [3.3197e-05, 4.3375e-05, 2.611e-05, 2.8763e-05, 2.6291e-05, 2.7852e-05], "n": 6, "median_s": 2.83075e-05, "q25_s": 2.668125e-05, "q75_s": 3.20885e-05, "iqr_s": 5.4072500000000015e-06, "n_atoms": 10, "n_frames": 1, "cell": [3.0, 3.0, 3.0, 90.0, 90.0, 90.0], "max_abs": 0.0, "n_atoms_ok": true, "cell_ok": true, "coords_ok": true, "correct": true, "reason": "ok", "eon_commit": "579738a9387e8d0ea55496f45dd057812cfab892"}
+exit 0

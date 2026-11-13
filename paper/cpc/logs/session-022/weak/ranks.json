@@ -1,0 +1,69 @@
+{
+  "kind": "ranks",
+  "relation": "n_frames = frames_per_worker * workers",
+  "frames_per_worker": 64,
+  "fixture": "resources/test/cuh2.con",
+  "repeats": 6,
+  "serial_match": true,
+  "host": "Intel Xeon Processor",
+  "ncpus": 8,
+  "physical_cores": 8,
+  "mpi": "mpirun (Open MPI) 4.1.6",
+  "gpu": "absent",
+  "commit": "68dfb7c307e0923044d4a9f41159b7a2ed2dd605",
+  "date_utc": "2026-11-13T00:23Z",
+  "points": [
+    {
+      "workers": 1,
+      "n_frames": 64,
+      "bytes": 1073344,
+      "samples_s": [
+        0.001026773,
+        0.000906566,
+        0.000929079,
+        0.000903559,
+        0.000901826,
+        0.000903989
+      ]
+    },
+    {
+      "workers": 2,
+      "n_frames": 128,
+      "bytes": 2146688,
+      "samples_s": [
+        0.001442479,
+        0.001473847,
+        0.001204935,
+        0.001201303,
+        0.001255827,
+        0.001161225
+      ]
+    },
+    {
+      "workers": 4,
+      "n_frames": 256,
+      "bytes": 4293376,
+      "samples_s": [
+        0.000967788,
+        0.0010105,
+        0.000945145,
+        0.000923626,
+        0.000911502,
+        0.000956873
+      ]
+    },
+    {
+      "workers": 8,
+      "n_frames": 512,
+      "bytes": 8586752,
+      "samples_s": [
+        0.000999233,
+        0.00095214,
+        0.001002176,
+        0.000927989,
+        0.000929094,
+        0.001149452
+      ]
+    }
+  ]
+}

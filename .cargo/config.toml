@@ -4,3 +4,8 @@
 # that pull the optional `chemfiles` feature.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+# /usr/bin/c++ is clang on some images. chemfiles-sys and zstd-sys forward
+# the Rust target triple as --target, and that clang link does not search
+# the host libstdc++. g++ does.
+CC = "gcc"
+CXX = "g++"

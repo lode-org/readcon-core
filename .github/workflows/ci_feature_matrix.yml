@@ -35,3 +35,13 @@ jobs:
       - name: Lib tests for this feature set
         # shellcheck disable=SC2086
         run: cargo test --release --features ${{ matrix.features }} --lib
+
+  zstd:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install a C++ compiler that finds libstdc++
+        run: sudo apt-get update && sudo apt-get install -y g++
+      - name: Build with the zstd feature
+        run: bash scripts/check_zstd_build.sh

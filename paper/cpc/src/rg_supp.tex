@@ -120,7 +120,7 @@ It also keeps the figures that compare readers and the shortest-decimal checks, 
 \end{abstract} \end{frontmatter}
 
 \section{Normative specification}\label{sec:spec-normative}
-This section states the CON 3.1 specification as readcon-core 0.18.1 distributes it.
+This section states the CON 3.1 specification as readcon-core 0.22.0 distributes it.
 The relative difference between the parsed natural time unit and the eOn constant is \(2.07\times 10^{-8}\).
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
@@ -318,7 +318,7 @@ The test-run record keeps the commands, the toolchain and what the program print
 
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
-\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core 0.18.1.
+\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core 0.22.0.
 The anchor step finds each range from the anchors of \texttt{src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
@@ -587,7 +587,7 @@ On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
-The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.18.1.
+The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core 0.22.0.
 Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 The provenance step writes the digests of the readcon module and of the library sources into each record.
 The version history of Table~\ref{tab:versions} is read from the specification at each release tag and runs no readcon-core code, so the table does not list it.
@@ -619,10 +619,10 @@ The chemfiles build and then the head-to-head step write the head-to-head record
 For the conformance records, the corpus step runs the corpus report of readcon-core over the CON 3.1 corpus, the path step reads both corpora through the readcon module and through the C library in the default build and the parallel build, the path-count step runs the reader-path tests and counts their inputs, the cross-check step runs the three readers of Table~\ref{tab:corpus-crosscheck}, the probe step runs the probes, the mutant step reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and the clause step lists what names each clause.
 The version-drift step reads each of four published wheels in its own process, the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3.
 
-\begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.18.1.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
+\begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.22.0.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=full,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
 cd readcon-core
-git checkout v0.18.1
+git checkout v0.22.0
 conda create -n readcon-cpc --file the recorded environment
 conda activate readcon-cpc
 python3 -m pip install --no-deps -r the recorded requirements
@@ -671,20 +671,20 @@ The error is the largest difference between a coordinate read and the binary64 s
 \footnotesize
 \caption{C++ reads of the coordinates and velocity campaigns at one thread, by the column reader and the frame iterator of readcon-core and by chemfiles.
 A time is the median of the runs of a cell, with their IQR, and a ratio is the readcon-core median over the chemfiles median.
-readcon-core 0.18.0, returning every stored field.}
+readcon-core 0.22.0, returning every stored field.}
 \label{tab:h2h-cpp}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_cpp}}
 \end{table}
 
-These head-to-head tables are readcon-core 0.18.0 and return every stored field.
+These head-to-head tables are readcon-core 0.22.0 and return every stored field.
 They return velocities and every stored field, which is why they are slower than the reads that return coordinate arrays.
 
 \begin{table}[tbp]
 \centering
 \footnotesize
 \caption{Python reads of the two head-to-head campaigns, with the peak heap of each read.
-readcon-core 0.18.0, returning every stored field.}
+readcon-core 0.22.0, returning every stored field.}
 \label{tab:h2h-python}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/h2h_python}}
@@ -704,14 +704,14 @@ readcon-core 0.18.0, returning every stored field.}
 \caption{C++ reads of the trajectory, each run a fresh process timed from the signal of the parent until it frees its frames.
 A time is the median of the runs of a cell, with their IQR.
 The last column is readcon-core time at one thread over the time of the reader of that row.
-readcon-core 0.18.0, returning every stored field.}
+readcon-core 0.22.0, returning every stored field.}
 \label{tab:cpp}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_cpp}}
 \end{table}
 \input{figures/generated/r0174_macros}
 
-The 2.62~s and 1.35~s rows are that same 0.18.0 read of every stored field, with and without velocities.
+The 2.62~s and 1.35~s rows are that same 0.22.0 read of every stored field, with and without velocities.
 
 \begin{table}[tbp]
 \centering
@@ -719,7 +719,7 @@ The 2.62~s and 1.35~s rows are that same 0.18.0 read of every stored field, with
 \caption{Python reads of the trajectory.
 A time is the median of the runs of a cell, with their IQR, and the peak heap is the median of the captures of the cell.
 The last column is readcon-core time over the time of the reader of that row.
-readcon-core 0.18.0, returning every stored field.}
+readcon-core 0.22.0, returning every stored field.}
 \label{tab:perf}
 \scriptsize
 \resizebox{0.95\linewidth}{!}{\input{figures/generated/r0174_table}}
@@ -974,13 +974,13 @@ The harness is a Snakemake rule called from an asv class.
 The files larger than ten atoms are generated for the timings and are not stored in the tree.
 No CPU governor is visible on the Xeon.
 
-The figures below are readcon-core 0.18.0.
+The figures below are readcon-core 0.22.0.
 Those arms return full frames, so the times differ from the one-core reads, which return arrays.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/timing.pdf}
-\caption{readcon-core 0.18.0, returning every stored field: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
+\caption{readcon-core 0.22.0, returning every stored field: \texttt{read\_con} and \texttt{read\_positions} on one 100000-frame CON file.
 The scale is logarithmic.}
 \label{fig:timing}
 \end{figure}
@@ -988,7 +988,7 @@ The scale is logarithmic.}
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/ratios.pdf}
-\caption{readcon-core 0.18.0, returning every stored field. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
+\caption{readcon-core 0.22.0, returning every stored field. Time of each remaining reader divided by \texttt{read\_positions} at one thread.}
 \label{fig:ratios}
 \end{figure}
 
@@ -1053,7 +1053,7 @@ Each entry is the type-7 median, with the interquartile range in parentheses.
 On the \num{100000}-frame CON file Rust and Python both take \SI{0.179}{\second}.
 \texttt{rkr\_read\_all\_frames} builds a frame object for each frame and takes \SI{0.345}{\second}.
 ASE's eon reader takes \SI{10.8}{\second} and \texttt{loadcons}, eOn's own Python reader, takes \SI{10.3}{\second}.
-In the readcon-core 0.18.0 comparison, eOn's C++ client, which embeds readcon-core, reads that file in 0.85~s.
+In the readcon-core 0.22.0 comparison, eOn's C++ client, which embeds readcon-core, reads that file in 0.85~s.
 The Rust resident set on that file is \SI{117}{\mebi\byte} above the file size.
 On the convel file Python takes \SI{0.216}{\second}, Rust \SI{0.241}{\second} and \texttt{rkr\_read\_all\_frames} \SI{0.430}{\second}.
 eOn \texttt{loadcons} takes \SI{11.0}{\second}.
@@ -1171,7 +1171,7 @@ The final resident set is \SI{1.9}{\mebi\byte} above the Matter, and the
 high-water mark of \SI{458}{\mebi\byte} is from the read.
 
 \begin{table}[tbp] \centering \footnotesize
-\caption{Plain-text write of the 32-atom, 100000-frame file, readcon-core 0.18.1.
+\caption{Plain-text write of the 32-atom, 100000-frame file, readcon-core 0.22.0.
 The resident and heap columns are the increase above the loaded input.}
 \label{tab:con-write}
 \begin{tabular}{@{}llrrrr@{}}
@@ -1353,7 +1353,7 @@ Strong scaling across MPI ranks and weak scaling are Table~\ref{tab:mpi-strong} 
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf}
-\caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.18.0, returning every stored field.}
+\caption{Wall-time ratio of readcon-core to each peer. readcon-core 0.22.0, returning every stored field.}
 \label{fig:fairness} \end{figure}
 
 \begin{figure}[tbp] \centering
@@ -1436,7 +1436,7 @@ per-type-zero & InvalidCount \\
 \label{fig:supp-restart} \end{figure}
 
 \begin{figure}[tbp] \centering
-\caption{Hashed images in each run of the 0.18.0 measurements.}
+\caption{Hashed images in each run of the 0.22.0 measurements.}
 \label{fig:supp-dedup}
 \begin{tabular}{@{}lr@{}}
 \toprule
@@ -1577,8 +1577,8 @@ The whisker is the interquartile range.}
 \label{fig:conread}
 \end{figure}
 
-A write of that coordinate file takes \SI{0.528}{\second} in Rust in the readcon-core 0.18.1 session of Table~\ref{tab:con-write}, and \SI{0.539}{\second} in the separate supplement session of Table~\ref{tab:conwrite}.
-The 0.18.1 session adds \SI{0.40}{\mebi\byte} to the resident set in Rust, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
+A write of that coordinate file takes \SI{0.528}{\second} in Rust in the readcon-core 0.22.0 session of Table~\ref{tab:con-write}, and \SI{0.539}{\second} in the separate supplement session of Table~\ref{tab:conwrite}.
+The 0.22.0 session adds \SI{0.40}{\mebi\byte} to the resident set in Rust, \SI{0.583}{\second} and \SI{0.26}{\mebi\byte} in Python, and \SI{14.7}{\second} and \SI{6.4}{\mebi\byte} in ASE's eon writer.
 The same file with a velocity block takes \SI{0.938}{\second} and \SI{0.34}{\mebi\byte} in Rust and \SI{1.25}{\second} and \SI{0.26}{\mebi\byte} in Python.
 eOn streams that 32-atom, \num{100000}-frame file in \SI{9.71}{\second} on core 0.
 Table~\ref{tab:conwrite} gives that row and the final resident set above the Matter.
@@ -1609,8 +1609,9 @@ readcon-con & 1.72 (0.0632) & 1.15 (0.0193) \\
 A thermal copper trajectory, 2048 atoms and 1200 frames at \SI{306}{\kelvin} with the Heinz 12-6 potential, is the compression check.
 Shuffle followed by zstd is 2.33 times smaller than the text, and the size of gzip or zstd of that text.
 It decodes in \SI{0.0985}{\second}, and the text reads in \SI{0.106}{\second}.
-A gzip read of 10000 frames of 218 atoms takes 0.710~s, and the streaming read of that file takes 0.638~s.
-The zstd-linked build did not compile in this session, so the zstd rows were not repeated.
+A gzip read of 10000 frames of 218 atoms takes 0.668~s, and the streaming read of that file takes 0.594~s.
+The same file as zstd takes 0.420~s, and the streaming zstd read takes 0.344~s.
+Each of those medians is type 7 over six samples after one warmup.
 Table~\ref{tab:gzip} is an earlier compressed comparison and was not repeated here.
 The Rust reader opens the \num{100000}-frame gzip file in \SI{0.412}{\second} and the Python binding in \SI{0.439}{\second}.
 ASE's eon reader takes \SI{10.6}{\second}.

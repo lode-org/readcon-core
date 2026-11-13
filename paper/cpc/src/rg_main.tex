@@ -79,7 +79,7 @@ Elsevier%
 \input{figures/generated/db_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
-% The 0.22.0 release and the 0.18.x timing archive are named in Data availability.
+% The 0.22.0 release is named in Data availability.
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros
 % are defined first.
@@ -123,8 +123,7 @@ Rare-event methods, the nudged elastic band, the dimer and adaptive
 kinetic Monte Carlo, restart from saved geometries and must pair atoms
 across frames, so the file has to carry identity and constraints exactly.
 CON is the format they exchange, and it had no specification.
-Here, we introduce readcon-core, the reference reader and writer of
-CON 3.1, a versioned grammar for that text.
+readcon-core is the reference implementation of that grammar: it reads and writes CON 3.1.
 Two conformance corpora, 165 files in all, define which files a
 conforming reader accepts.
 The writer prints the shortest decimal that reads back as the same
@@ -133,7 +132,7 @@ One Rust core serves C, C++, Fortran, Julia and Python and exports
 coordinate arrays through DLPack.
 eOn and an ASE plugin read and write CON through that core.
 The package readcon-chemfiles imports XYZ, PDB, GRO and LAMMPS dump text into a CON frame.
-readcon-db stores the corpora, and readcon-ops compares frames, aligns
+\mbox{readcon-db} stores the corpora, and readcon-ops compares frames, aligns
 them and builds a Wulff construction.
 On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids converges to a 0.607~eV barrier, while the same band after renumbering the product does not.
 A readcon read of \num{100000} CON frames of 32 atoms takes 0.184~s, against 11.3~s for ASE's eon reader.
@@ -152,7 +151,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 \item Every frame keeps atom ids, per-axis masks, masses and a declared velocity time unit.
 \item One Rust core serves C, C++, Fortran, Julia and Python; eOn reads CON through it.
 \item readcon-db stores CON corpora in LMDB; readcon-ops matches frames by atom identity.
-\item Stored atom ids keep NEB, dimer and AKMC images paired across restarts and codes.
+\item Atom identifiers keep NEB, dimer and AKMC images paired across restarts and codes.
 \end{highlights}
 
 \begin{graphicalabstract}
@@ -297,7 +296,7 @@ same double
 the reader rounds each decimal to the nearest double \cite{clingerHowReadFloating1990}.
 Two readers given the same bytes must then return the same fields, and
 that takes a versioned grammar rather than the convention of one reader.
-On the Claisen rearrangement of allyl vinyl ether, a band restarted with the stored atom ids converges to a 0.607~eV chair, while the same band after renumbering the product does not
+The chair on allyl vinyl ether is the band that keeps the atom ids: it reaches 0.607~eV, and the band whose product was renumbered does not
 (Section~\ref{sec:claisen}).
 The same reader carries a 4096-molecule water trajectory into d-SEAMS \cite{goswamiDseamsDeferredStructural2020}
 (Section~\ref{sec:connectivity}) and resumes a saddle search from the
@@ -313,8 +312,7 @@ H5MD stores an identifier, velocities with a unit and the box \cite{buylH5mdStru
 but defines no element for a per-component constraint, and MDAnalysis, pyh5md, ZnH5MD and zarrtraj write that kind of trajectory \cite{mdanalysisH5mdWriter211,debuylPyh5md,znh5md2025,woodsZarrtrajPythonPackage2026}.
 XTC, TRR, DCD and TNG store molecular-dynamics output with neither a mask nor a velocity unit, and the GROMACS trajectory that replaces TNG is still an H5MD file with no per-component constraint (Section~\ref{sec:supp-formats}).
 The ASE trajectory keeps the fields in the layout of its own Python code, while POSCAR stores a per-component hold as selective-dynamics flags and stores no atom identifier \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}.
-chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}
-and leave a CON file unread, at the versions of Section~\ref{sec:performance}, and ASE's eon reader opens CON only up to the velocity section of the frame in Section~\ref{sec:worked}.
+chemfiles, MDAnalysis, the Open Visualization Tool (OVITO) and Open Babel read these formats but not CON at the versions tested in Section~\ref{sec:performance}, and ASE's eon reader stops at the velocity section of the frame in Section~\ref{sec:worked} \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023,gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011,stukowskiVisualizationAnalysisAtomistic2010,oboyleOpenBabelOpen2011}.
 A live stream of positions, velocities, forces and the box
 \cite{thirumalaiswamyStreamingMolecularDynamics2026},
 a ReaxFF analysis path
@@ -338,8 +336,7 @@ returns the same fields from it.
 A versioned specification and a corpus of files with known verdicts turn
 that condition into a test of any reader.
 
-Here, we introduce readcon-core, the reference reader and writer of
-CON 3.1, a versioned grammar for that checkpoint.
+Here, we describe the grammar, the library and the checks that keep a restart file paired across frames.
 The grammar places a version, the units and the periodic flags on a JSON
 header line, a three-bit mask and an atom identifier on each coordinate
 row, and a time unit on any velocity section.
@@ -348,7 +345,7 @@ Of the readers in Section~\ref{sec:fidelity}, readcon is the one that returns th
 
 \section{The CON 3.1 format}
 \subsection{Stored fields}\label{sec:fields}
-CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit. A band, a dimer and an AKMC comparison use that identifier after a file reorders the rows.
+CON 3.1 stores, on each frame, the coordinates, the full \(3\times 3\) cell including the axes the periodic flags leave open, a mass on each atom, a three-bit mask, an atom id and a velocity section with its own time unit. The nudged elastic band, the dimer and AKMC pair images by that identifier, so a reader must return it even after a file reorders the rows.
 The mask is an integer from 0 to 7, Eq.~\eqref{eq:mask}, and dropping the hold on the Pt(100) adatom selects another saddle, \(0.68\,\mathrm{eV}\) with a prefactor 37 times larger (Section~\ref{sec:prefactor}).
 The mass enters the Lagrangian, Eq.~\eqref{eq:lagrangian}, and because the velocity section names its time unit, the same digits read as \(\text{\AA}/\mathrm{fs}\) scale the kinetic energy by \(\velFactorSq\), Eq.~\eqref{eq:tau}.
 On one restarted band a round trip through this grammar returns the uninterrupted barrier, while a file that moves a coordinate or drops the mask returns a different barrier (Section~\ref{sec:cases}), and Section~\ref{sec:supp-fields} compares what each other format keeps of these fields.
@@ -583,7 +580,8 @@ The per-file matrices, the quartile triples and the rank-by-rank tables are in S
 
 Table~\ref{tab:h2h-main} is the head-to-head on the three CON files and on one copper extended XYZ file.
 On the \num{100000}-frame CON file the coordinate read takes 0.184~s, against 11.3~s for ASE's eon reader, and \texttt{read\_con} of that file takes 0.513~s.
-On one million copper atoms the Python read takes 0.0553~s, the C reader 0.0898~s and ASE's eon reader 1.69~s, and OVITO is the fastest reader of the extended XYZ file of that frame, at 0.126~s (Table~\ref{tab:h2h-main}).
+On one million copper atoms the Python read takes 0.0553~s, the C reader 0.0898~s, ASE's eon reader 1.69~s and the eOn C++ client 0.311~s.
+On the extended XYZ file of that frame, readcon takes 0.218~s, ASE \texttt{extxyz} 1.17~s, ASE \texttt{cextxyz} 0.168~s and extxyz 0.4.6 1.27~s, and OVITO reads a separate extended XYZ of the same atoms in 0.126~s (Table~\ref{tab:h2h-main}).
 Rust, Python and the C reader are the readcon-core bindings, ASE is the eon reader on CON and the extended XYZ reader on the copper file, and chemfiles, OVITO and pymatgen read that extended XYZ file, while MDAnalysis reads the plain XYZ sizes of Figure~\ref{fig:trajxyz}.
 The Fortran read of the million-atom frame takes 0.0877~s, and the C, Fortran and Python writes of that frame take 0.102~s, 0.108~s and 0.161~s.
 
@@ -624,13 +622,10 @@ extended XYZ (s) & 0.697 & 1.55 & --- & 10.2 & --- \\
 
 \begin{table}[tbp]
 \centering
-\caption{CON read of \num{100000} frames of 32 atoms on the same Xeon, readcon-core 0.18.0.
-Every row returns the stored fields, not the coordinate arrays of Table~\ref{tab:h2h-main}.
+\caption{CON read of \num{100000} frames of 32 atoms on the same Xeon.
+The eOn row is readcon-core 0.22.0 linked into eOn at commit \texttt{579738a}, one warmup and six samples, type-7 quartiles.
 The resident set is the peak of the fresh process, in mebibytes.
-The triple is the first quartile, the median and the third quartile, in seconds.
-Both eOn rows are the C++ client, which embeds readcon-core.
-The development-build row is the client used for this comparison, and the eOn 3.6.0 row is that tagged client.
-Neither row is the Python \texttt{loadcons} of Table~\ref{tab:h2h-main}.}
+The readcon C and Fortran rows were not repeated in this session.}
 \label{tab:conread}
 \begin{tabular}{@{}lrl@{}}
 \toprule
@@ -638,8 +633,7 @@ Reader & Resident set & First, median, third \\
 \midrule
 readcon C & 553.8 & 0.3613, 0.3747, 0.3936 \\
 readcon Fortran & 554.2 & 0.4850, 0.5044, 0.5364 \\
-eOn C++ client, development build & 921.2 & 0.8397, 0.8544, 0.8646 \\
-eOn 3.6.0 C++ client & 1532.5 & 0.9797, 1.010, 1.039 \\
+eOn C++ client & 1069 & 1.456, 1.469, 1.484 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -678,8 +672,7 @@ ASE's own eon reader still stores the per-axis mask as one Boolean and drops the
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
 readcon-core 0.22.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
-The Zenodo concept record \url{https://doi.org/10.5281/zenodo.18753567} archives the readcon-core 0.18.0 and 0.18.1 builds.
-The Zenodo version DOI for readcon-core 0.22.0 is \readconZenodoDOI.
+The Zenodo record for readcon-core 0.22.0 is \readconZenodoDOI.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.22.0.
 The comparison in Section~\ref{sec:fidelity} uses readcon 0.22.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.2.6 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of an Intel Xeon processor with eight cores and 47 GiB of memory.
 It is the Snakemake target \texttt{fidelity} in \texttt{benchmarks/workflow/Snakefile}, and \texttt{asv.fidelity.conf.json} times one call of the same reads.

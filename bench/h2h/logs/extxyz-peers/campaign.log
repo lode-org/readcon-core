@@ -1,0 +1,15 @@
+repo lode-org/readcon-core
+nproc 8
+cpu_model Intel Xeon Processor
+atoms 1000000
+warmup 1
+samples 6
+percentile numpy method=linear type=7
+file /agent/repos/readcon-core/bench/h2h/work/extxyz-peers/cu-1000000.extxyz
+readcon 0.22.0
+extxyz 0.4.6
+sample reader=readcon median_s=2.178072105e-01 iqr_s=2.466125250e-03 samples_s=2.182104840e-01,2.209808150e-01,2.166757700e-01,2.174039370e-01,2.166912400e-01,2.197105580e-01
+sample reader=ase_extxyz median_s=1.173529399e+00 iqr_s=1.482402300e-02 samples_s=1.195778013e+00,1.179823934e+00,1.176961582e+00,1.170097216e+00,1.162346692e+00,1.152206331e+00
+sample reader=ase_cextxyz median_s=1.683809855e-01 iqr_s=1.653115500e-03 samples_s=1.699579710e-01,1.687303010e-01,1.680316700e-01,1.679866940e-01,1.676701870e-01,1.703721210e-01
+sample reader=extxyz_0_4_6 median_s=1.271283603e+00 iqr_s=2.150134775e-02 samples_s=1.268176259e+00,1.319533942e+00,1.271438991e+00,1.296741131e+00,1.247823948e+00,1.271128216e+00
+exit_code 0
