@@ -13,3 +13,10 @@ extxyz-md	ase-extxyz	2.34	0.126
 extxyz-md	cextxyz	0.286	0.00246
 extxyz-md	extxyz	4.55	0.108
 extxyz-md	mdanalysis	0.518	0.00768
+extxyz-same	readcon	0.165	0.00269
+extxyz-same	ovito	0.203	0.00236
+extxyz-same	chemfiles	0.664	0.0119
+extxyz-same	ase-extxyz	1.91	0.034
+extxyz-same	cextxyz	0.143	0.00163
+extxyz-same	extxyz	2.56	0.0227
+extxyz-same	mdanalysis	5.84	0.28

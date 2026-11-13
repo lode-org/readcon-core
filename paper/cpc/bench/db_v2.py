@@ -16,6 +16,25 @@ ROOT = HERE.parents[1]
 OUT = HERE / "results" / "v2"
 WORK = HERE / "work" / "v2"
 REPEATS = 6
+# lode-org/readcon-db. The Python package is the python/ subdirectory.
+READCON_DB_REV = "39ee7bbc72638a8999cb4571ff160d346e7de4b8"
+
+
+def _readcon_db_version() -> str:
+    try:
+        import readcon_db
+    except ModuleNotFoundError as exc:
+        pin = (
+            "readcon-db @ git+https://github.com/lode-org/readcon-db.git"
+            f"@{READCON_DB_REV}#subdirectory=python"
+        )
+        raise SystemExit(
+            f"readcon_db is not installed ({exc}). pip install '{pin}'"
+        ) from exc
+    from importlib.metadata import version
+
+    del readcon_db
+    return version("readcon-db")
 
 
 def cpu_name() -> str:
@@ -48,6 +67,8 @@ def header() -> list[str]:
         "pwd .",
         "tmpdir paper/cpc/bench/work/v2",
         f"repeats {REPEATS}",
+        f"readcon_db_rev {READCON_DB_REV}",
+        f"readcon_db_version {_readcon_db_version()}",
     ]
 
 
@@ -159,7 +180,7 @@ def main() -> None:
             )
             shutil.rmtree(WORK / f"{kind}-{repeat}", ignore_errors=True)
     lines.append("exit_code 0")
-    text = "\n".join(lines) + "\n"
+    text = "\n".join(line.rstrip() for line in lines) + "\n"
     (OUT / "db.log").write_text(text)
     log = HERE.parent / "logs" / "db.log"
     log.parent.mkdir(parents=True, exist_ok=True)

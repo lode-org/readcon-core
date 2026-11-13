@@ -224,6 +224,9 @@ def main() -> None:
     env["READCON_SCALE_LOG"] = str(LOG)
     env.pop("RAYON_NUM_THREADS", None)
     env.pop("CARGO_TARGET_DIR", None)
+    eon = env.get("EON_ROOT", "/tmp/eOn")
+    if (Path(eon) / "eon" / "fileio.py").is_file():
+        env["EON_ROOT"] = eon
     subprocess.run(
         [sys.executable, str(ROOT / "bench" / "h2h" / "scale_r6.py")],
         cwd=ROOT,

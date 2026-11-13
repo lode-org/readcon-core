@@ -24,6 +24,46 @@ THREADS = (1, 2, 4, 8)
 REPEATS = 6
 
 
+def write_samefmt_extxyz(path: Path) -> None:
+    """One million copper atoms, the feat/h2h-same-format extxyz geometry.
+
+    Integer lattice points on a 100^3 cell, the same masses, ids, fixed
+    mask, and velocities as ``bench/h2h/samefmt.py`` on that branch.
+    """
+    n_atoms = 1_000_000
+    side = 100
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"{n_atoms}\n")
+        handle.write(
+            'Lattice="100.0 0 0 0 100.0 0 0 0 100.0" '
+            "Properties=species:S:1:pos:R:3:masses:R:1:vel:R:3:id:R:1:fixed:R:1 "
+            'pbc="T T T"\n'
+        )
+        chunk: list[str] = []
+        written = 0
+        flags = (0, 1, 2, 4, 7)
+        for z in range(side):
+            for y in range(side):
+                for x in range(side):
+                    index = written
+                    vx = ((index % 5) - 2) * 0.125
+                    vy = ((index % 3) - 1) * 0.25
+                    vz = ((index % 4) - 1) * 0.5
+                    atom_id = (index ^ 1) + 1
+                    fixed = flags[index % 5]
+                    chunk.append(
+                        f"Cu {x:.1f} {y:.1f} {z:.1f} 63.546 "
+                        f"{vx:.6f} {vy:.6f} {vz:.6f} {atom_id} {fixed}\n"
+                    )
+                    written += 1
+                    if len(chunk) == 100_000:
+                        handle.write("".join(chunk))
+                        chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
 def type7(values: list[float]) -> tuple[float, float]:
     arr = np.asarray(values, dtype=float)
     q25, median, q75 = np.percentile(arr, [25, 50, 75], method="linear")
@@ -55,12 +95,16 @@ def ensure_inputs() -> dict[str, Path]:
     }
     alloy = folder / "alloy-1e6.extxyz"
     md = folder / "md-10k.extxyz"
+    same = folder / "atoms-1000000x1.extxyz"
+    if not same.is_file() or same.stat().st_size == 0:
+        write_samefmt_extxyz(same)
     if not alloy.exists() and Path("/tmp/h2h-general/alloy-1e6.extxyz").exists():
         alloy.write_bytes(Path("/tmp/h2h-general/alloy-1e6.extxyz").read_bytes())
     if not md.exists() and Path("/tmp/h2h-general/md-10k.extxyz").exists():
         md.write_bytes(Path("/tmp/h2h-general/md-10k.extxyz").read_bytes())
     paths["extxyz-alloy"] = alloy
     paths["extxyz-md"] = md
+    paths["extxyz-same"] = same
     missing = [name for name, path in paths.items() if not path.exists()]
     if missing:
         raise SystemExit("missing " + " ".join(missing))
@@ -191,7 +235,11 @@ def h2h(paths: dict[str, Path]) -> None:
     from ovito.io import import_file
 
     out = []
-    targets = ("extxyz-alloy", "extxyz-md")
+    log = OUT / "h2h.json"
+    if log.exists():
+        out = json.loads(log.read_text())
+    done = {(row["file"], row["reader"]) for row in out}
+    targets = ("extxyz-alloy", "extxyz-md", "extxyz-same")
     readers = (
         "readcon",
         "ovito",
@@ -204,6 +252,8 @@ def h2h(paths: dict[str, Path]) -> None:
     for name in targets:
         path = os.fspath(paths[name])
         for reader in readers:
+            if (name, reader) in done:
+                continue
 
             def once(reader=reader, path=path):
                 if reader == "readcon":
@@ -559,8 +609,7 @@ def main() -> None:
         hardware(rows)
     build_tools()
     python_threads(paths, rows)
-    if not (OUT / "h2h.json").exists():
-        h2h(paths)
+    h2h(paths)
     langs(paths)
     mpi_strong(paths, rows)
     weak(paths)
