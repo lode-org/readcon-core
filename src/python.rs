@@ -4461,8 +4461,21 @@ fn py_text_frames<'py>(
     if n_atoms == 0 || width == 0 || text.is_empty() {
         return Ok(frames);
     }
-    let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
     let stride = n_atoms.saturating_mul(width);
+    if width == 1 && text.len().is_multiple_of(stride) {
+        let symbol = text[0].as_str();
+        if text.iter().all(|item| item == symbol) {
+            let py_symbol = pyo3::types::PyString::new(py, symbol).unbind();
+            let row = pyo3::types::PyTuple::new(py, (0..n_atoms).map(|_| py_symbol.clone_ref(py)))?
+                .unbind();
+            let n_frames = text.len() / stride;
+            return Ok(pyo3::types::PyList::new(
+                py,
+                (0..n_frames).map(|_| row.clone_ref(py)),
+            )?);
+        }
+    }
+    let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
     let mut prev: Option<&[String]> = None;
     let mut prev_row: Option<Py<pyo3::types::PyTuple>> = None;
     for frame in text.chunks(stride) {

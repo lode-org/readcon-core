@@ -247,6 +247,12 @@ pub fn tables_from_extxyz_bytes_with_threads(
     let mut starts = Vec::new();
     let mut mark = 0usize;
     let mut n_atoms = 0usize;
+    if let Some(tiled) = uniform_extxyz_frames(&lines, workers) {
+        specs = tiled.0;
+        n_atoms = tiled.1;
+        starts = tiled.2;
+        mark = lines.len();
+    }
     while mark < lines.len() {
         let count_line = trim(lines[mark]);
         if count_line.is_empty() {
@@ -279,6 +285,7 @@ pub fn tables_from_extxyz_bytes_with_threads(
     if n_frames == 0 {
         return Err("no frames".to_string());
     }
+    let fast_nfloat = species_pos_width(&specs);
     let mut cell = vec![0.0f64; n_frames * 6];
     let cell_ptr = cell.as_mut_ptr() as usize;
     let mut columns: Vec<XyzColumn> = specs
@@ -289,7 +296,7 @@ pub fn tables_from_extxyz_bytes_with_threads(
                 name: spec.name.clone(),
                 kind: spec.kind,
                 width: spec.width,
-                text: if spec.kind == b'S' {
+                text: if spec.kind == b'S' && fast_nfloat.is_none() {
                     Vec::with_capacity(n)
                 } else {
                     Vec::new()
@@ -306,6 +313,11 @@ pub fn tables_from_extxyz_bytes_with_threads(
             }
         })
         .collect();
+    if let Some(nfloat) = fast_nfloat {
+        return fill_species_pos_parallel(
+            n_frames, n_atoms, nfloat, workers, &lines, &starts, cell, columns,
+        );
+    }
     let chunk = n_frames.div_ceil(workers).max(1);
     // The columns are disjoint by frame. Each worker writes its frames.
     let column_ptrs: Vec<(usize, usize, u8, usize)> = columns
@@ -398,6 +410,67 @@ pub fn tables_from_extxyz_bytes_with_threads(
     assemble_tables(n_frames, n_atoms, cell, columns)
 }
 
+/// A file of identical frames: `count` lines, one comment, `count` atom
+/// lines, repeated with no blank lines. The frame starts are arithmetic.
+/// A parallel check rejects a file that only looks tiled.
+fn uniform_extxyz_frames(
+    lines: &[&[u8]],
+    workers: usize,
+) -> Option<(Vec<ColumnSpec>, usize, Vec<usize>)> {
+    if lines.len() < 2 {
+        return None;
+    }
+    let count = parse_f64(trim(lines[0])).ok()? as usize;
+    if count == 0 {
+        return None;
+    }
+    let stride = 2 + count;
+    if !lines.len().is_multiple_of(stride) {
+        return None;
+    }
+    let n_frames = lines.len() / stride;
+    let properties = quoted_after(lines[1], b"Properties=")?;
+    let specs = property_columns(properties).ok()?;
+    let ok = std::thread::scope(|scope| {
+        let chunk = n_frames.div_ceil(workers.max(1)).max(1);
+        let mut handles = Vec::new();
+        for worker in 0..workers.max(1) {
+            let from = worker * chunk;
+            if from >= n_frames {
+                break;
+            }
+            let to = (from + chunk).min(n_frames);
+            handles.push(scope.spawn(move || {
+                for frame in from..to {
+                    if frame == 0 {
+                        continue;
+                    }
+                    let base = frame * stride;
+                    let Ok(parsed) = parse_f64(trim(lines[base])) else {
+                        return false;
+                    };
+                    if parsed as usize != count {
+                        return false;
+                    }
+                    match quoted_after(lines[base + 1], b"Properties=") {
+                        Some(props) if props == properties => {}
+                        _ => return false,
+                    }
+                }
+                true
+            }));
+        }
+        handles
+            .into_iter()
+            .all(|handle| handle.join().unwrap_or(false))
+    });
+    if !ok {
+        return None;
+    }
+    let starts = (0..n_frames).map(|frame| frame * stride + 2).collect();
+    Some((specs, count, starts))
+}
+
 fn split_lines_fast(bytes: &[u8], workers: usize) -> Vec<&[u8]> {
     #[cfg(feature = "parallel")]
     {
@@ -472,6 +545,162 @@ fn split_lines(bytes: &[u8]) -> Vec<&[u8]> {
         }
     }
     lines
+}
+
+fn species_pos_width(specs: &[ColumnSpec]) -> Option<usize> {
+    match specs {
+        [species, pos]
+            if species.name == "species"
+                && species.kind == b'S'
+                && species.width == 1
+                && pos.name == "pos"
+                && pos.kind == b'R'
+                && pos.width == 3 =>
+        {
+            Some(3)
+        }
+        [species, pos, mass]
+            if species.name == "species"
+                && species.kind == b'S'
+                && species.width == 1
+                && pos.name == "pos"
+                && pos.kind == b'R'
+                && pos.width == 3
+                && (mass.name == "masses" || mass.name == "mass")
+                && mass.kind == b'R'
+                && mass.width == 1 =>
+        {
+            Some(4)
+        }
+        _ => None,
+    }
+}
+
+enum SpeciesChunk {
+    Uniform { symbol: String, atoms: usize },
+    Mixed(Vec<String>),
+}
+
+/// Species and positions (and an optional mass) with no per-atom string
+/// until a frame actually mixes symbols.
+fn fill_species_pos_parallel(
+    n_frames: usize,
+    n_atoms: usize,
+    nfloat: usize,
+    workers: usize,
+    lines: &[&[u8]],
+    starts: &[usize],
+    mut cell: Vec<f64>,
+    columns: Vec<XyzColumn>,
+) -> Result<XyzTables, String> {
+    let cell_ptr = cell.as_mut_ptr() as usize;
+    let pos_ptr = columns
+        .iter()
+        .find(|column| column.name == "pos")
+        .map(|column| column.real.as_ptr() as usize)
+        .ok_or("pos")?;
+    let mass_ptr = columns
+        .iter()
+        .find(|column| column.name == "masses" || column.name == "mass")
+        .map(|column| column.real.as_ptr() as usize);
+    let chunk = n_frames.div_ceil(workers).max(1);
+    let chunks = std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for worker in 0..workers {
+            let from = worker * chunk;
+            if from >= n_frames {
+                break;
+            }
+            let to = (from + chunk).min(n_frames);
+            handles.push(scope.spawn(move || -> Result<SpeciesChunk, String> {
+                let mut symbol: Option<Vec<u8>> = None;
+                let mut mixed = false;
+                for frame in from..to {
+                    let comment = lines[starts[frame] - 1];
+                    let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
+                    let frame_cell = lattice_cell(lattice)?;
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            frame_cell.as_ptr(),
+                            (cell_ptr as *mut f64).add(frame * 6),
+                            6,
+                        );
+                    }
+                    let base = frame * n_atoms;
+                    for atom in 0..n_atoms {
+                        let line = lines[starts[frame] + atom];
+                        let Some((sym, xyz, mass)) = species_pos_fields(line, nfloat) else {
+                            return Err("atom".to_string());
+                        };
+                        if let Some(prev) = &symbol {
+                            if sym != prev.as_slice() {
+                                mixed = true;
+                            }
+                        } else {
+                            symbol = Some(sym.to_vec());
+                        }
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                xyz.as_ptr(),
+                                (pos_ptr as *mut f64).add((base + atom) * 3),
+                                3,
+                            );
+                        }
+                        if let (Some(mass), Some(dest)) = (mass, mass_ptr) {
+                            unsafe {
+                                *((dest as *mut f64).add(base + atom)) = mass;
+                            }
+                        }
+                    }
+                }
+                if mixed {
+                    let mut texts = Vec::with_capacity((to - from) * n_atoms);
+                    for frame in from..to {
+                        for atom in 0..n_atoms {
+                            let line = lines[starts[frame] + atom];
+                            let sym = species_pos_fields(line, nfloat).ok_or("atom")?.0;
+                            texts.push(String::from_utf8_lossy(sym).into_owned());
+                        }
+                    }
+                    return Ok(SpeciesChunk::Mixed(texts));
+                }
+                let text = String::from_utf8_lossy(symbol.as_deref().unwrap_or(b"")).into_owned();
+                Ok(SpeciesChunk::Uniform {
+                    symbol: text,
+                    atoms: (to - from) * n_atoms,
+                })
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or_else(|_| Err("atom".to_string())))
+            .collect::<Result<Vec<_>, String>>()
+    })?;
+    let mut tables = assemble_tables(n_frames, n_atoms, cell, columns)?;
+    let shared = match chunks.first() {
+        Some(SpeciesChunk::Uniform { symbol, .. }) => Some(symbol.clone()),
+        _ => None,
+    };
+    let same = shared.as_ref().is_some_and(|symbol| {
+        chunks.iter().all(
+            |chunk| matches!(chunk, SpeciesChunk::Uniform { symbol: got, .. } if got == symbol),
+        )
+    });
+    if same {
+        tables.uniform_species = shared;
+        return Ok(tables);
+    }
+    let mut species = Vec::with_capacity(n_frames * n_atoms);
+    for chunk in chunks {
+        match chunk {
+            SpeciesChunk::Uniform { symbol, atoms } => {
+                species.extend(std::iter::repeat_n(symbol, atoms));
+            }
+            SpeciesChunk::Mixed(texts) => species.extend(texts),
+        }
+    }
+    tables.species = species;
+    Ok(tables)
 }
 
 fn assemble_tables(
@@ -1107,6 +1336,24 @@ H 1.0 0.0 0.0
         {
             assert_eq!(left.to_bits(), right.to_bits());
         }
+    }
+
+    #[test]
+    fn a_blank_line_between_frames_is_not_treated_as_a_tile() {
+        let text = "\
+1
+Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+Cu 0.0 0.0 0.0
+
+1
+Lattice=\"2 0 0 0 2 0 0 0 2\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"
+H 1.0 0.0 0.0
+";
+        let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 2).unwrap();
+        assert_eq!(parallel.n_frames, 2);
+        assert_eq!(parallel.positions, serial.positions);
+        assert_eq!(parallel.species, serial.species);
     }
 
     #[test]

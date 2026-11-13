@@ -2064,7 +2064,14 @@ where
                 crate::parser::set_wide_workers(workers);
             }
             let mut iter = ConFrameIterator::from_bytes(&bytes[byte_start..byte_end]);
-            OWNED_RANGES.with(|ranges| ranges.borrow_mut().push((start, end)));
+            OWNED_RANGES.with(|ranges| {
+                let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
+                let mut owned = ranges.borrow_mut();
+                if owned.first().map(|(seen, _, _)| *seen) != Some(generation) {
+                    owned.clear();
+                }
+                owned.push((generation, start, end));
+            });
             let mut known_atoms = 0usize;
             for i in start..end {
                 let frame = match iter.next() {
@@ -2278,9 +2285,15 @@ fn slot_cache()
 
 #[cfg(feature = "parallel")]
 thread_local! {
-    static OWNED_RANGES: std::cell::RefCell<Vec<(usize, usize)>> =
+    static OWNED_RANGES: std::cell::RefCell<Vec<(usize, usize, usize)>> =
         const { std::cell::RefCell::new(Vec::new()) };
 }
+
+/// Bumped at the start of each parallel parse. Workers record it with
+/// their frame ranges. Releasing frames only frees ranges from this
+/// generation, so a parse does not have to wake every pool thread first.
+#[cfg(feature = "parallel")]
+static PARSE_GEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
 
 /// Drop `frames` on the threads that allocated them.
 ///
@@ -2296,10 +2309,14 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
                     frames.into_iter().map(Some).collect();
                 let ptr = slots.as_mut_ptr() as usize;
                 let len = slots.len();
+                let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
                 pool.broadcast(|_| {
                     let ranges =
                         OWNED_RANGES.with(|ranges| std::mem::take(&mut *ranges.borrow_mut()));
-                    for (start, end) in ranges {
+                    for (seen, start, end) in ranges {
+                        if seen != generation {
+                            continue;
+                        }
                         let end = end.min(len);
                         let start = start.min(end);
                         for index in start..end {
@@ -2645,9 +2662,7 @@ fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
             match shared_pool(n) {
                 Some(pool) => {
                     let built = t_pool.elapsed().as_secs_f64();
-                    pool.broadcast(|_| {
-                        OWNED_RANGES.with(|ranges| ranges.borrow_mut().clear());
-                    });
+                    PARSE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let t_wake = std::time::Instant::now();
                     let (wake, body) = pool.install(|| {
                         let wake = t_wake.elapsed().as_secs_f64();

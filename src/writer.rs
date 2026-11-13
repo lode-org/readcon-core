@@ -1084,35 +1084,44 @@ fn append_coord_rows(
     #[cfg(feature = "parallel")]
     {
         let chunk = atoms.len().div_ceil(workers).max(1);
-        let format = || {
-            use rayon::prelude::*;
-            atoms
-                .par_chunks(chunk)
-                .map(|group| {
-                    let mut local = Vec::with_capacity(group.len().saturating_mul(48));
-                    let mut ryu = ryu::Buffer::new();
-                    let mut slots = [FmtSlot::new(); 3];
-                    for atom in group {
-                        push_xyz_line(
-                            &mut local,
-                            &mut ryu,
-                            &mut slots,
-                            [atom.x, atom.y, atom.z],
-                            prec,
-                            written_fixed_flag(atom.fixed, spec_version),
-                            atom.atom_id,
-                        );
+        let pieces: Vec<&[crate::types::AtomDatum]> = atoms.chunks(chunk).collect();
+        let parts: Vec<std::sync::Mutex<Vec<u8>>> = (0..pieces.len())
+            .map(|_| std::sync::Mutex::new(Vec::new()))
+            .collect();
+        let next_job = std::sync::atomic::AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..workers.min(pieces.len()) {
+                let pieces = &pieces;
+                let next_job = &next_job;
+                let parts = &parts;
+                scope.spawn(move || {
+                    loop {
+                        let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if index >= pieces.len() {
+                            break;
+                        }
+                        let group = pieces[index];
+                        let mut local = Vec::with_capacity(group.len().saturating_mul(48));
+                        let mut ryu = ryu::Buffer::new();
+                        let mut slots = [FmtSlot::new(); 3];
+                        for atom in group {
+                            push_xyz_line(
+                                &mut local,
+                                &mut ryu,
+                                &mut slots,
+                                [atom.x, atom.y, atom.z],
+                                prec,
+                                written_fixed_flag(atom.fixed, spec_version),
+                                atom.atom_id,
+                            );
+                        }
+                        *parts[index].lock().expect("part") = local;
                     }
-                    local
-                })
-                .collect::<Vec<Vec<u8>>>()
-        };
-        let parts = match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
-            Ok(pool) => pool.install(format),
-            Err(_) => format(),
-        };
+                });
+            }
+        });
         for part in parts {
-            buf.extend_from_slice(&part);
+            buf.extend_from_slice(&part.into_inner().unwrap_or_default());
         }
         return Ok(());
     }

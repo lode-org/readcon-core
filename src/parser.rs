@@ -1839,7 +1839,11 @@ thread_local! {
 /// reservations inside the parse mixed the allocator with the float
 /// parse and made eight threads slower than the bytes they write.
 pub(crate) fn prestash_coord_shells(n_frames: usize, n_atoms: usize) {
-    if n_frames == 0 || n_atoms == 0 {
+    // Small frames (the 32-atom strong-scaling files) are cheaper to
+    // allocate inside the parse. A burst of shells ahead of those frames
+    // made eight threads slower. Wide atoms, as in the weak-scaling
+    // fixture, are the case the burst is for.
+    if n_frames == 0 || n_atoms < 128 {
         return;
     }
     COORD_SHELLS.with(|pool| {
