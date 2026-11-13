@@ -969,14 +969,12 @@ impl<'a> Iterator for ConFrameIterator<'a> {
         // Optional sections mutate AoS; only re-sync section SoA when needed.
         // Plain .con assembly already filled positions/ids/masses (no O(N)
         // post-scan when no velocity/force sections were applied).
-        let sections =
-            match parse_declared_sections(&mut self.lines, &mut frame.header, &mut frame.atom_data)
-            {
-                Ok(n) => n,
-                // A section line that failed UTF-8 makes `next_line` return
-                // `None`. That must not surface as `IncompleteSection`.
-                Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
-            };
+        let sections = match parse_declared_sections(&mut self.lines, &mut frame) {
+            Ok(n) => n,
+            // A section line that failed UTF-8 makes `next_line` return
+            // `None`. That must not surface as `IncompleteSection`.
+            Err(e) => return Some(Err(self.lines.prefer_utf8(e))),
+        };
         if sections > 0 {
             // One flat fill per section that was actually parsed. The full
             // sync walks every absent section and writes each row through
@@ -1217,9 +1215,9 @@ fn stream_frames(path: &Path) -> Result<Vec<types::ConFrame>, LoadError> {
         // read does. Copying it into a buffer first was a visible share of
         // a million-atom frame read. The windowed reader stays for a long
         // trajectory so the text is not resident beside every frame.
-        // 64 MiB covers the million-atom CON and leaves the 100k-frame
-        // file on the window.
-        if file_len > 0 && file_len <= 64 * 1024 * 1024 {
+        // 128 MiB covers a million-atom frame with velocities and forces.
+        // The 100k-frame, 32-atom trajectory is larger and stays on the window.
+        if file_len > 0 && file_len <= 128 * 1024 * 1024 {
             drop(file);
             let source = crate::compression::read_bytes_owned(path).map_err(load_error_from_box)?;
             return frames_from_bytes_located(source.as_slice(), Some(1)).map_err(LoadError::Parse);
@@ -1318,6 +1316,19 @@ fn stream_reader(
         let text = utf8_text(&buf[..end], eof)?;
         let (parsed, consumed) = take_complete_frames(text, eof, line_base, frames.len() as u64)?;
         if consumed == 0 && !eof {
+            // The window holds the start of one frame and nothing else.
+            // Parsing again after every 8 MiB rereads that prefix. Pull
+            // the rest of a single oversized frame, then parse it once.
+            if frames.is_empty() && file_len > 0 && file_len <= 512 * 1024 * 1024 {
+                while !eof {
+                    let before = buf.len();
+                    read_more(&mut buf, &mut eof)?;
+                    if buf.len() == before {
+                        break;
+                    }
+                }
+                continue;
+            }
             let before = buf.len();
             read_more(&mut buf, &mut eof)?;
             if buf.len() == before && !eof {

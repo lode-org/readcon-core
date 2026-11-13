@@ -2944,14 +2944,16 @@ fn open_section<'a>(lines: &mut impl LineStream<'a>) -> Result<bool, ParseError>
 /// `vx vy vz fixed atomID`).
 ///
 /// This function peeks at the next line. If it is blank (or contains only whitespace),
-/// it consumes the blank line and parses velocity data into the existing `atom_data`.
-/// If the next line is not blank (or is absent), no velocities are parsed.
+/// it consumes the blank line and writes each velocity into `column` (row-major
+/// `n * 3` `f64`s, one allocation). If the next line is not blank (or is absent),
+/// no velocities are parsed and `column` is left untouched.
 ///
 /// Returns `Ok(true)` if velocities were found and parsed, `Ok(false)` otherwise.
 pub fn parse_velocity_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
+    column: &mut Vec<f64>,
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
     // A blank line followed only by whitespace to EOF is not a velocity
@@ -2972,6 +2974,9 @@ pub fn parse_velocity_section<'a>(
         _ => return Ok(false),
     }
 
+    let n = atom_data.len();
+    column.clear();
+    column.resize(n.saturating_mul(3), 0.0);
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         // Symbol line
@@ -3005,8 +3010,11 @@ pub fn parse_velocity_section<'a>(
             if validate {
                 validate_section_atom_identity("velocities", atom_idx, fixed, atom_id, atom_data)?;
             }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].set_velocity(Some(vals));
+            if atom_idx < n {
+                let base = atom_idx * 3;
+                column[base] = vals[0];
+                column[base + 1] = vals[1];
+                column[base + 2] = vals[2];
             }
             atom_idx += 1;
         }
@@ -3026,12 +3034,16 @@ pub fn parse_force_section<'a>(
     lines: &mut impl LineStream<'a>,
     header: &FrameHeader,
     atom_data: &mut [AtomDatum],
+    column: &mut Vec<f64>,
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
     if !open_section(lines)? {
         return Ok(false);
     }
 
+    let n = atom_data.len();
+    column.clear();
+    column.resize(n.saturating_mul(3), 0.0);
     let mut atom_idx: usize = 0;
     for (type_idx, &num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol = lines
@@ -3057,8 +3069,11 @@ pub fn parse_force_section<'a>(
             if validate {
                 validate_section_atom_identity("forces", atom_idx, fixed, atom_id, atom_data)?;
             }
-            if atom_idx < atom_data.len() {
-                atom_data[atom_idx].set_force(Some(vals));
+            if atom_idx < n {
+                let base = atom_idx * 3;
+                column[base] = vals[0];
+                column[base + 1] = vals[1];
+                column[base + 2] = vals[2];
             }
             atom_idx += 1;
         }
@@ -3134,104 +3149,120 @@ pub fn parse_energy_section<'a>(
 /// blank-separator velocity detection.
 pub fn parse_declared_sections<'a>(
     lines: &mut impl LineStream<'a>,
-    header: &mut FrameHeader,
-    atom_data: &mut [AtomDatum],
+    frame: &mut ConFrame,
 ) -> Result<usize, ParseError> {
     let mut applied = 0usize;
     // A zero-atom frame has no coordinate block and no section block.
     // The legacy velocity fallback must not run (CON-count.1).
-    if header.natm_types == 0 {
-        if !header.sections.is_empty() {
+    if frame.header.natm_types == 0 {
+        if !frame.header.sections.is_empty() {
             return Err(ParseError::InvalidCount(
                 "a zero-atom frame cannot declare sections".into(),
             ));
         }
         return Ok(0);
     }
-    if !header.sections_declared && header.sections.is_empty() {
+    if !frame.header.sections_declared && frame.header.sections.is_empty() {
         // Legacy: try velocity detection via blank separator. A blank
         // line can also be the empty line 1 of the next frame, so look for
         // the velocity label before committing (CON-frame.5).
-        let found =
-            lines.blank_opens_velocity_block() && parse_velocity_section(lines, header, atom_data)?;
+        let mut column = Vec::new();
+        let found = lines.blank_opens_velocity_block()
+            && parse_velocity_section(lines, &frame.header, &mut frame.atom_data, &mut column)?;
         if found {
-            header.sections.push(SECTION_VELOCITIES.into());
+            frame.adopt_velocity_column(column);
+            frame.header.sections.push(SECTION_VELOCITIES.into());
             applied = 1;
         }
     } else {
-        let sections = std::mem::take(&mut header.sections);
+        let sections = std::mem::take(&mut frame.header.sections);
         for section in &sections {
             match section.as_str() {
                 SECTION_VELOCITIES => {
-                    let found = parse_velocity_section(lines, header, atom_data)?;
+                    let mut column = Vec::new();
+                    let found = parse_velocity_section(
+                        lines,
+                        &frame.header,
+                        &mut frame.atom_data,
+                        &mut column,
+                    )?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_VELOCITIES.into()));
                     }
+                    frame.adopt_velocity_column(column);
                     applied += 1;
                 }
                 SECTION_FORCES => {
-                    let found = parse_force_section(lines, header, atom_data)?;
+                    let mut column = Vec::new();
+                    let found = parse_force_section(
+                        lines,
+                        &frame.header,
+                        &mut frame.atom_data,
+                        &mut column,
+                    )?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_FORCES.into()));
                     }
+                    frame.adopt_force_column(column);
                     applied += 1;
                 }
                 SECTION_ENERGIES => {
-                    let found = parse_energy_section(lines, header, atom_data)?;
+                    let found = parse_energy_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_ENERGIES.into()));
                     }
                     applied += 1;
                 }
                 SECTION_CHARGES => {
-                    let found = parse_charge_section(lines, header, atom_data)?;
+                    let found = parse_charge_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_CHARGES.into()));
                     }
                     applied += 1;
                 }
                 SECTION_SPINS => {
-                    let found = parse_spin_section(lines, header, atom_data)?;
+                    let found = parse_spin_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_SPINS.into()));
                     }
                     applied += 1;
                 }
                 SECTION_MAGMOMS => {
-                    let found = parse_magmom_section(lines, header, atom_data)?;
+                    let found = parse_magmom_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_MAGMOMS.into()));
                     }
                     applied += 1;
                 }
                 SECTION_DISPLACEMENTS => {
-                    let found = parse_displacement_section(lines, header, atom_data)?;
+                    let found =
+                        parse_displacement_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_DISPLACEMENTS.into()));
                     }
                     applied += 1;
                 }
                 SECTION_SPREADS => {
-                    let found = parse_spread_section(lines, header, atom_data)?;
+                    let found = parse_spread_section(lines, &frame.header, &mut frame.atom_data)?;
                     if !found {
                         return Err(ParseError::IncompleteSection(SECTION_SPREADS.into()));
                     }
                     applied += 1;
                 }
                 other => {
-                    if frame_minor(header) > u64::from(crate::CON_SPEC_MINOR)
-                        && let Some(arity) = section_row_arity(header, other)
+                    if frame_minor(&frame.header) > u64::from(crate::CON_SPEC_MINOR)
+                        && let Some(arity) = section_row_arity(&frame.header, other)
                     {
-                        skip_unknown_section(lines, header, other, arity)?;
+                        skip_unknown_section(lines, &frame.header, other, arity)?;
                         continue;
                     }
                     return Err(ParseError::UnknownSection(other.to_string()));
                 }
             }
         }
-        header.sections = sections;
+        frame.header.sections = sections;
     }
-    reject_velocities_without_time(header)?;
+    reject_velocities_without_time(&frame.header)?;
     Ok(applied)
 }
 
@@ -3960,9 +3991,16 @@ mod tests {
         assert!(!frame.has_velocities());
 
         // Now parse the velocity section
-        let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
-            .expect("velocity parsing should succeed");
+        let mut column = Vec::new();
+        let has_vel = parse_velocity_section(
+            &mut line_it,
+            &frame.header,
+            &mut frame.atom_data,
+            &mut column,
+        )
+        .expect("velocity parsing should succeed");
         assert!(has_vel);
+        frame.adopt_velocity_column(column);
         assert_eq!(frame.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
         assert_eq!(frame.atom_data[1].velocity(), Some([0.4, 0.5, 0.6]));
     }
@@ -4365,10 +4403,145 @@ Coordinates of Component 1
         ];
         let mut line_it = lines.iter().copied().peekable();
         let mut frame = parse_single_frame(&mut line_it).expect("parse should succeed");
-        let has_vel = parse_velocity_section(&mut line_it, &frame.header, &mut frame.atom_data)
-            .expect("should succeed with no velocities");
+        let mut column = Vec::new();
+        let has_vel = parse_velocity_section(
+            &mut line_it,
+            &frame.header,
+            &mut frame.atom_data,
+            &mut column,
+        )
+        .expect("should succeed with no velocities");
         assert!(!has_vel);
+        assert!(column.is_empty());
         assert_eq!(frame.atom_data[0].velocity(), None);
+    }
+
+    /// The velocity column is the storage `atom.velocity` reads. Writing the
+    /// atom updates that buffer in place, and the bytes match the file.
+    #[test]
+    fn velocity_column_aliases_soa_bytes() {
+        let text = "\
+bulk
+{\"con_spec_version\":2}
+4.0 5.0 6.0
+90.0 90.0 90.0
+0 0
+0 0
+1
+2
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 7 0
+1.0 0.0 0.0 0 1
+
+Cu
+Velocities of Component 1
+0.125 -0.25 0.5 7 0
+-0.125 0.25 -0.5 0 1
+";
+        let mut frame = ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let soa = frame.velocities.f64_slice().expect("f64 column");
+        let mut packed = Vec::with_capacity(soa.len());
+        for atom in &frame.atom_data {
+            packed.extend_from_slice(&atom.velocity().expect("velocity"));
+        }
+        assert_eq!(soa, packed.as_slice());
+        assert_eq!(soa, &[0.125, -0.25, 0.5, -0.125, 0.25, -0.5][..]);
+        assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
+        frame.atom_data[0].set_velocity(Some([9.0, 8.0, 7.0]));
+        assert_eq!(frame.velocities.as_f64_row(0), [9.0, 8.0, 7.0]);
+        assert_eq!(frame.velocities.as_f64_row(1), [-0.125, 0.25, -0.5]);
+    }
+
+    #[test]
+    fn force_column_aliases_soa_bytes() {
+        let text = "\
+bulk
+{\"con_spec_version\":2,\"sections\":[\"forces\"]}
+4.0 5.0 6.0
+90.0 90.0 90.0
+0 0
+0 0
+1
+2
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+1.0 1.0 1.0 7 1
+
+Cu
+Forces of Component 1
+0.1 0.2 0.3 0 0
+-0.4 0.5 -0.6 7 1
+";
+        let mut frame = ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let soa = frame.forces.f64_slice().expect("f64 column");
+        let mut packed = Vec::with_capacity(soa.len());
+        for atom in &frame.atom_data {
+            packed.extend_from_slice(&atom.force().expect("force"));
+        }
+        assert_eq!(soa, packed.as_slice());
+        assert_eq!(soa, &[0.1, 0.2, 0.3, -0.4, 0.5, -0.6][..]);
+        assert_eq!(frame.atom_data[0].force_slot(), soa.as_ptr());
+        frame.atom_data[1].set_force(Some([1.0, 2.0, 3.0]));
+        assert_eq!(frame.forces.as_f64_row(1), [1.0, 2.0, 3.0]);
+    }
+
+    /// Million-atom `.convel` parse. Release builds must stay under the
+    /// per-atom box path (about 0.7 s on this host).
+    #[test]
+    #[ignore = "times a million-atom convel parse"]
+    fn microbench_convel_column_parse() {
+        let n = 1_000_000usize;
+        let mut text = String::with_capacity(n * 64);
+        text.push_str("bench\n{\"con_spec_version\":2}\n4 5 6\n90 90 90\n0 0\n0 0\n1\n");
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            text.push_str(&format!("0 0 0 0 {i}\n"));
+        }
+        text.push_str("\nCu\nVelocities of Component 1\n");
+        for i in 0..n {
+            let v = (i % 1000) as f64 * 0.001;
+            text.push_str(&format!("{v} 0 0 0 {i}\n"));
+        }
+        let started = std::time::Instant::now();
+        let frame = ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let elapsed = started.elapsed().as_secs_f64();
+        eprintln!("convel column parse {n} atoms {elapsed:.4} s");
+        let soa = frame.velocities.f64_slice().expect("f64");
+        assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
+        assert_eq!(frame.atom_data[n - 1].velocity().unwrap()[0], 0.999);
+        assert_eq!(soa[(n - 1) * 3], 0.999);
+        if !cfg!(debug_assertions) {
+            assert!(elapsed < 0.35, "convel parse {elapsed:.4} s");
+        }
+        let real = std::path::Path::new("bench/h2h/work/r6/con-h2h.convel");
+        if let Ok(bytes) = std::fs::read(real) {
+            let started = std::time::Instant::now();
+            let frame = ConFrameIterator::from_bytes(&bytes)
+                .next()
+                .expect("frame")
+                .expect("parse");
+            let elapsed = started.elapsed().as_secs_f64();
+            eprintln!("real convel column parse {elapsed:.4} s");
+            let soa = frame.velocities.f64_slice().expect("f64");
+            assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
+            assert_eq!(
+                frame.atom_data[0].velocity().unwrap(),
+                frame.velocities.as_f64_row(0)
+            );
+        }
     }
 
     #[test]

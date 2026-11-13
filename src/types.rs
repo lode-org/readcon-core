@@ -332,12 +332,7 @@ impl std::ops::Index<&str> for FrameMeta {
 }
 
 impl FrameMeta {
-
-    pub fn insert(
-        &mut self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Option<serde_json::Value> {
+    pub fn insert(&mut self, key: String, value: serde_json::Value) -> Option<serde_json::Value> {
         if key == meta::CON_SPEC_MINOR {
             self.minor = value.as_u64().unwrap_or(0);
         }
@@ -824,11 +819,50 @@ enum AtomSections {
     Present(Box<HeapTail>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[repr(align(16))]
-enum HeapTail {
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+#[repr(align(32))]
+pub enum HeapTail {
     Velocity([f64; 3]),
     Full(Box<AtomTail>),
+    /// Pointers into the frame's velocity and force columns. The columns
+    /// own the floats. This tail lives in the frame's arena, not a per-atom box.
+    Column {
+        vel: *mut f64,
+        force: *mut f64,
+    },
+}
+
+// The column pointers address the frame that owns the arena. Moving the
+// frame moves both, the same way an atom's coordinate slot does.
+unsafe impl Send for HeapTail {}
+unsafe impl Sync for HeapTail {}
+
+impl PartialEq for HeapTail {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Velocity(left), Self::Velocity(right)) => left == right,
+            (Self::Full(left), Self::Full(right)) => left == right,
+            (
+                Self::Column {
+                    vel: left_vel,
+                    force: left_force,
+                },
+                Self::Column {
+                    vel: right_vel,
+                    force: right_force,
+                },
+            ) => column_values_eq(*left_vel, *right_vel) && column_values_eq(*left_force, *right_force),
+            _ => false,
+        }
+    }
+}
+
+fn column_values_eq(left: *mut f64, right: *mut f64) -> bool {
+    if left.is_null() || right.is_null() {
+        return left.is_null() && right.is_null();
+    }
+    unsafe { [*left, *left.add(1), *left.add(2)] == [*right, *right.add(1), *right.add(2)] }
 }
 
 impl AtomSections {
@@ -846,6 +880,7 @@ impl AtomSections {
             Self::Present(tail) => match tail.as_ref() {
                 HeapTail::Velocity(v) => Some(*v),
                 HeapTail::Full(full) => full.velocity,
+                HeapTail::Column { .. } => None,
             },
         }
     }
@@ -854,12 +889,11 @@ impl AtomSections {
         match self {
             Self::Present(tail) => match tail.as_ref() {
                 HeapTail::Full(full) => Some(full),
-                HeapTail::Velocity(_) => None,
+                HeapTail::Velocity(_) | HeapTail::Column { .. } => None,
             },
             Self::Empty => None,
         }
     }
-
 }
 
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
@@ -912,12 +946,14 @@ pub struct AtomDatum {
     /// Three coordinates. Either the frame's position buffer or an owned box.
     xyz: *mut f64,
     /// Bits 0-2 are fixed flags. Bit 3 marks an owned coordinate box.
-    /// The rest is a `Box<HeapTail>` or null. `HeapTail` is 16-byte aligned.
+    /// Bit 4 marks a tail that lives in the frame arena, not a `Box`.
+    /// The rest is a `HeapTail` pointer or null. `HeapTail` is 32-byte aligned.
     tail: usize,
 }
 
 const TAIL_OWNED: usize = 0b1000;
-const TAIL_MASK: usize = 0b1111;
+const TAIL_EXTERNAL: usize = 0b1_0000;
+const TAIL_MASK: usize = 0b1_1111;
 
 impl AtomDatum {
     fn tail_ptr(&self) -> *mut HeapTail {
@@ -1022,10 +1058,20 @@ impl Clone for AtomDatum {
             xyz: Self::owned_xyz(self.x(), self.y(), self.z()),
             tail: (self.tail & 0b111) | TAIL_OWNED,
         };
+        let external = self.tail & TAIL_EXTERNAL != 0;
         let ptr = self.tail_ptr();
-        if !ptr.is_null() {
+        if !external && !ptr.is_null() {
             let tail = unsafe { (*ptr).clone() };
             cloned.set_tail_ptr(Box::into_raw(Box::new(tail)));
+        }
+        // An arena tail belongs to the source frame. The clone owns a copy.
+        if external {
+            if let Some(value) = self.velocity() {
+                cloned.set_velocity(Some(value));
+            }
+            if let Some(value) = self.force() {
+                cloned.set_force(Some(value));
+            }
         }
         cloned
     }
@@ -1037,7 +1083,7 @@ impl Drop for AtomDatum {
             unsafe { drop(Box::from_raw(self.xyz as *mut [f64; 3])) };
         }
         let ptr = self.tail_ptr();
-        if !ptr.is_null() {
+        if self.tail & TAIL_EXTERNAL == 0 && !ptr.is_null() {
             unsafe { drop(Box::from_raw(ptr)) };
         }
     }
@@ -1092,14 +1138,33 @@ impl AtomDatum {
 
     fn install(&mut self, section: AtomSections) {
         let old = self.tail_ptr();
-        if !old.is_null() {
+        if self.tail & TAIL_EXTERNAL == 0 && !old.is_null() {
             unsafe { drop(Box::from_raw(old)) };
         }
+        self.tail &= !TAIL_EXTERNAL;
         let ptr = match section {
             AtomSections::Empty => std::ptr::null_mut(),
             AtomSections::Present(boxed) => Box::into_raw(boxed),
         };
         self.set_tail_ptr(ptr);
+    }
+
+    /// `slot` is an arena element. The frame owns it. This atom does not free it.
+    pub(crate) fn bind_external_tail(&mut self, slot: *mut HeapTail) {
+        if self.tail & TAIL_EXTERNAL == 0 {
+            let old = self.tail_ptr();
+            if !old.is_null() {
+                unsafe { drop(Box::from_raw(old)) };
+            }
+        }
+        debug_assert!(slot as usize & TAIL_MASK == 0);
+        self.tail = (slot as usize) | (self.tail & 0b1111) | TAIL_EXTERNAL;
+    }
+
+    fn detach_external_tail(&mut self) {
+        if self.tail & TAIL_EXTERNAL != 0 {
+            self.tail &= 0b1111;
+        }
     }
 
     fn heap(&self) -> Option<&HeapTail> {
@@ -1174,17 +1239,71 @@ impl AtomDatum {
         atom
     }
 
+    fn read3(ptr: *const f64) -> [f64; 3] {
+        unsafe { [*ptr, *ptr.add(1), *ptr.add(2)] }
+    }
+
+    fn write3(ptr: *mut f64, value: [f64; 3]) {
+        unsafe {
+            *ptr = value[0];
+            *ptr.add(1) = value[1];
+            *ptr.add(2) = value[2];
+        }
+    }
+
+    pub(crate) fn velocity_slot(&self) -> *const f64 {
+        match self.heap() {
+            Some(HeapTail::Column { vel, .. }) => *vel,
+            _ => std::ptr::null(),
+        }
+    }
+
+    pub(crate) fn force_slot(&self) -> *const f64 {
+        match self.heap() {
+            Some(HeapTail::Column { force, .. }) => *force,
+            _ => std::ptr::null(),
+        }
+    }
+
+    fn column_pair(&self) -> (Option<[f64; 3]>, Option<[f64; 3]>) {
+        match self.heap() {
+            Some(HeapTail::Column { vel, force }) => (
+                if vel.is_null() {
+                    None
+                } else {
+                    Some(Self::read3(*vel))
+                },
+                if force.is_null() {
+                    None
+                } else {
+                    Some(Self::read3(*force))
+                },
+            ),
+            _ => (None, None),
+        }
+    }
+
     fn ensure_tail(&mut self) -> &mut AtomTail {
+        let (slotted_vel, slotted_force) = self.column_pair();
+        self.detach_external_tail();
         let needs_full = !matches!(self.heap(), Some(HeapTail::Full(_)));
         if needs_full {
-            let velocity = match self.heap() {
+            let velocity = slotted_vel.or(match self.heap() {
                 Some(HeapTail::Velocity(v)) => Some(*v),
                 _ => None,
-            };
+            });
             self.install(AtomSections::from_full(AtomTail {
                 velocity,
+                force: slotted_force,
                 ..AtomTail::default()
             }));
+        } else if let Some(HeapTail::Full(full)) = self.heap_mut() {
+            if slotted_vel.is_some() {
+                full.velocity = slotted_vel;
+            }
+            if slotted_force.is_some() {
+                full.force = slotted_force;
+            }
         }
         match self.heap_mut() {
             Some(HeapTail::Full(full)) => full,
@@ -1218,15 +1337,17 @@ impl AtomDatum {
     #[inline]
     pub fn velocity(&self) -> Option<[f64; 3]> {
         match self.heap() {
+            Some(HeapTail::Column { vel, .. }) if !vel.is_null() => Some(Self::read3(*vel)),
             Some(HeapTail::Velocity(v)) => Some(*v),
             Some(HeapTail::Full(full)) => full.velocity,
-            None => None,
+            _ => None,
         }
     }
     /// Force vector `[fx, fy, fz]`.
     #[inline]
     pub fn force(&self) -> Option<[f64; 3]> {
         match self.heap() {
+            Some(HeapTail::Column { force, .. }) if !force.is_null() => Some(Self::read3(*force)),
             Some(HeapTail::Full(full)) => full.force,
             _ => None,
         }
@@ -1281,6 +1402,20 @@ impl AtomDatum {
     }
 
     pub fn set_velocity(&mut self, value: Option<[f64; 3]>) {
+        let slot = match self.heap() {
+            Some(HeapTail::Column { vel, .. }) if !vel.is_null() => Some(*vel),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            if let Some(v) = value {
+                Self::write3(slot, v);
+                return;
+            }
+            if let Some(HeapTail::Column { vel, .. }) = self.heap_mut() {
+                *vel = std::ptr::null_mut();
+            }
+            return;
+        }
         if matches!(self.heap(), Some(HeapTail::Full(_))) {
             self.ensure_tail().velocity = value;
             self.shrink_tail();
@@ -1292,6 +1427,20 @@ impl AtomDatum {
         });
     }
     pub fn set_force(&mut self, value: Option<[f64; 3]>) {
+        let slot = match self.heap() {
+            Some(HeapTail::Column { force, .. }) if !force.is_null() => Some(*force),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            if let Some(v) = value {
+                Self::write3(slot, v);
+                return;
+            }
+            if let Some(HeapTail::Column { force, .. }) = self.heap_mut() {
+                *force = std::ptr::null_mut();
+            }
+            return;
+        }
         if value.is_none() && self.tail_ptr().is_null() {
             return;
         }
@@ -1500,6 +1649,10 @@ pub struct ConFrame {
     pub header: FrameHeader,
     /// AoS projection for CON serialization and symbol/fixed metadata.
     pub atom_data: Vec<AtomDatum>,
+    /// Arena for velocity and force column tails. Empty on a coordinate-only
+    /// frame, so those atoms stay the same size as a file with no sections.
+    #[doc(hidden)]
+    pub column_tails: Vec<HeapTail>,
     /// Primary positions `(N, 3)`, type-grouped order (f32 or f64 storage).
     pub positions: crate::storage_dtype::FloatArray2,
     /// Velocities `(N, 3)` when present; else `(0, 3)`.
@@ -1527,6 +1680,9 @@ pub struct ConFrame {
 impl ConFrame {
     /// Apply [`crate::storage_dtype::StorageDtypes`] from metadata (or argument) to SoA fields.
     pub fn project_storage_dtypes(&mut self, dtypes: &crate::storage_dtype::StorageDtypes) {
+        // Projection replaces the column allocation. Copy slot values into
+        // owned tails first so the atoms do not keep the old pointer.
+        self.materialise_section_slots();
         self.positions.project_to(dtypes.positions);
         if self.velocities.nrows() > 0 {
             self.velocities.project_to(dtypes.velocities);
@@ -1611,6 +1767,134 @@ impl ConFrame {
         }
     }
 
+    /// Take ownership of a flat `(n, 3)` velocity buffer and point each atom at its row.
+    pub(crate) fn adopt_velocity_column(&mut self, data: Vec<f64>) {
+        let n = self.atom_data.len();
+        let kind = self.header.metadata.dtypes().velocities;
+        self.velocities = store_rows(kind, n, data).into();
+        self.bind_velocity_slots();
+    }
+
+    /// Take ownership of a flat `(n, 3)` force buffer and point each atom at its row.
+    pub(crate) fn adopt_force_column(&mut self, data: Vec<f64>) {
+        let n = self.atom_data.len();
+        let kind = self.header.metadata.dtypes().forces;
+        self.forces = store_rows(kind, n, data).into();
+        self.bind_force_slots();
+    }
+
+    fn bind_velocity_slots(&mut self) {
+        let n = self.atom_data.len();
+        if self.velocities.nrows() != n || n == 0 {
+            return;
+        }
+        let Some(ptr) = self
+            .velocities
+            .f64_slice()
+            .map(|slice| slice.as_ptr() as *mut f64)
+        else {
+            for i in 0..n {
+                let row = self.velocities.as_f64_row(i);
+                self.atom_data[i].set_velocity(Some(row));
+            }
+            return;
+        };
+        self.point_column(
+            |tail, slot| {
+                if let HeapTail::Column { vel, .. } = tail {
+                    *vel = slot;
+                }
+            },
+            ptr,
+        );
+    }
+
+    fn bind_force_slots(&mut self) {
+        let n = self.atom_data.len();
+        if self.forces.nrows() != n || n == 0 {
+            return;
+        }
+        let Some(ptr) = self
+            .forces
+            .f64_slice()
+            .map(|slice| slice.as_ptr() as *mut f64)
+        else {
+            for i in 0..n {
+                let row = self.forces.as_f64_row(i);
+                self.atom_data[i].set_force(Some(row));
+            }
+            return;
+        };
+        self.point_column(
+            |tail, slot| {
+                if let HeapTail::Column { force, .. } = tail {
+                    *force = slot;
+                }
+            },
+            ptr,
+        );
+    }
+
+    fn point_column(&mut self, set: impl Fn(&mut HeapTail, *mut f64), base: *mut f64) {
+        let n = self.atom_data.len();
+        if self.column_tails.len() != n {
+            self.column_tails.clear();
+            self.column_tails.resize(
+                n,
+                HeapTail::Column {
+                    vel: std::ptr::null_mut(),
+                    force: std::ptr::null_mut(),
+                },
+            );
+            let tails = self.column_tails.as_mut_ptr();
+            for (i, atom) in self.atom_data.iter_mut().enumerate() {
+                atom.bind_external_tail(unsafe { tails.add(i) });
+            }
+        }
+        for (i, tail) in self.column_tails.iter_mut().enumerate() {
+            set(tail, unsafe { base.add(i * 3) });
+        }
+    }
+
+    fn materialise_section_slots(&mut self) {
+        if self.column_tails.is_empty() {
+            return;
+        }
+        let n = self.atom_data.len();
+        for i in 0..n {
+            let velocity = self.atom_data[i].velocity();
+            let force = self.atom_data[i].force();
+            self.atom_data[i].detach_external_tail();
+            if velocity.is_some() {
+                self.atom_data[i].set_velocity(velocity);
+            }
+            if force.is_some() {
+                self.atom_data[i].set_force(force);
+            }
+        }
+        self.column_tails.clear();
+    }
+
+    fn velocity_column_live(&self) -> bool {
+        let n = self.atom_data.len();
+        n > 0
+            && self.velocities.nrows() == n
+            && self
+                .velocities
+                .f64_slice()
+                .is_some_and(|slice| self.atom_data[0].velocity_slot() == slice.as_ptr())
+    }
+
+    fn force_column_live(&self) -> bool {
+        let n = self.atom_data.len();
+        n > 0
+            && self.forces.nrows() == n
+            && self
+                .forces
+                .f64_slice()
+                .is_some_and(|slice| self.atom_data[0].force_slot() == slice.as_ptr())
+    }
+
     /// Fill SoA blocks for sections named on the header.
     ///
     /// The iterator calls this after a section parse. Each present section is
@@ -1626,10 +1910,16 @@ impl ConFrame {
         for name in &sections {
             match name.as_str() {
                 SECTION_VELOCITIES => {
+                    if self.velocity_column_live() {
+                        continue;
+                    }
                     let data = pack_rows(n, |i| self.atom_data[i].velocity().unwrap_or([0.0; 3]));
                     self.velocities = store_rows(dt.velocities, n, data).into();
                 }
                 SECTION_FORCES => {
+                    if self.force_column_live() {
+                        continue;
+                    }
                     let data = pack_rows(n, |i| self.atom_data[i].force().unwrap_or([0.0; 3]));
                     self.forces = store_rows(dt.forces, n, data).into();
                 }
@@ -1673,6 +1963,8 @@ impl ConFrame {
         if n == 0 {
             return;
         }
+        // Replacing a column drops the allocation the slots address.
+        self.materialise_section_slots();
         use crate::storage_dtype::{FloatArray1, FloatArray2};
         let dt = self.header.metadata.dtypes();
         let has_vel = self.atom_data.iter().any(|a| a.has_velocity());
@@ -3633,6 +3925,7 @@ impl ConFrameBuilder {
             ConFrame {
                 header,
                 atom_data,
+                column_tails: Vec::new(),
                 positions: pos,
                 velocities: vel.into(),
                 forces: frc.into(),
@@ -3778,6 +4071,7 @@ pub(crate) fn con_frame_coords_only_with_ids(
     ConFrame {
         header,
         atom_data,
+        column_tails: Vec::new(),
         positions,
         velocities: FloatArray2::zeros(dt.velocities, 0, 3).into(),
         forces: FloatArray2::zeros(dt.forces, 0, 3).into(),
@@ -3872,6 +4166,7 @@ pub fn con_frame_from_atom_data_with_positions(
     ConFrame {
         header,
         atom_data,
+        column_tails: Vec::new(),
         positions: pos,
         velocities: vel.into(),
         forces: frc.into(),
