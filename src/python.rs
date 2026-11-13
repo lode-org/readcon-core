@@ -3052,6 +3052,64 @@ fn con_frame_list_stored(
 /// The bytes match a binding rewrite. Compression then splits a large
 /// payload into independent members; formatting itself still follows
 /// `n_threads`.
+/// One wide frame is split across members. Many frames stay one stream so
+/// the plaintext of every frame is not resident at once.
+fn chunk_wide_frame(frames: &Bound<'_, PyAny>, compression_members: Option<usize>) -> bool {
+    if matches!(compression_members, Some(1)) {
+        return false;
+    }
+    let atoms = if let Ok(list) = frames.cast::<ConFrameList>() {
+        if list.borrow().len_frames() != 1 {
+            return false;
+        }
+        let borrowed = list.borrow();
+        let slots = borrowed.frames.lock().expect("frames");
+        slots
+            .first()
+            .and_then(|slot| slot.as_ref())
+            .map(|frame| frame.atom_data.len())
+            .unwrap_or(0)
+    } else if frames.len().ok() == Some(1) {
+        // A one-element Python list still goes through the chunk path only
+        // when the formatted text is large. `plain_binding_bytes` decides
+        // the member count from that size, so a single small frame is one
+        // member. Many frames never reach this arm.
+        return true;
+    } else {
+        return false;
+    };
+    atoms >= 4096 || compression_members.is_some_and(|count| count > 1)
+}
+
+fn write_bound_frames<W: std::io::Write>(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    writer: &mut ConFrameWriter<W>,
+) -> PyResult<()> {
+    if let Ok(list) = frames.cast::<ConFrameList>() {
+        let all_stored = {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            slots.iter().all(|slot| slot.is_some())
+        };
+        if all_stored {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            for slot in slots.iter() {
+                writer
+                    .write_frame_bound(slot.as_ref().expect("stored frame"))
+                    .map_err(|err| write_err_to_py(py, err))?;
+            }
+            return Ok(());
+        }
+    }
+    stream_frames(py, frames, |frame| {
+        writer
+            .write_frame_bound(frame)
+            .map_err(|err| write_err_to_py(py, err))
+    })
+}
+
 fn plain_binding_bytes(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
@@ -3167,25 +3225,56 @@ fn write_con(
 
     match codec {
         OutputCodec::Gzip => {
-            let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-            let members = compression_members
-                .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-            crate::compression::write_gzip_members_n(Path::new(path), &plain, members).map_err(
-                |err| PyIOError::new_err(format!("failed to create gzip writer: {err}")),
-            )?;
-            Ok(())
+            if chunk_wide_frame(frames, compression_members) {
+                let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+                let members = compression_members
+                    .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
+                crate::compression::write_gzip_members_n(Path::new(path), &plain, members)
+                    .map_err(|err| {
+                        PyIOError::new_err(format!("failed to create gzip writer: {err}"))
+                    })?;
+                return Ok(());
+            }
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
+                    .map_err(|err| {
+                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
+                })?,
+                None => ConFrameWriter::from_path_gzip(path).map_err(|err| {
+                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
+                })?,
+            }
+            .canonical(canonical);
+            write_bound_frames(py, frames, &mut writer)?;
+            flush_writer(&mut writer)
         }
         OutputCodec::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-                let members = compression_members
-                    .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                crate::compression::write_zstd_members_n(Path::new(path), &plain, members)
+                if chunk_wide_frame(frames, compression_members) {
+                    let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+                    let members = compression_members
+                        .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
+                    crate::compression::write_zstd_members_n(Path::new(path), &plain, members)
+                        .map_err(|err| {
+                            PyIOError::new_err(format!("failed to create zstd writer: {err}"))
+                        })?;
+                    return Ok(());
+                }
+                let mut writer = match precision {
+                    Some(precision) => ConFrameWriter::from_path_zstd_with_precision(
+                        path, precision,
+                    )
                     .map_err(|err| {
                         PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                    })?;
-                Ok(())
+                    })?,
+                    None => ConFrameWriter::from_path_zstd(path).map_err(|err| {
+                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
+                    })?,
+                }
+                .canonical(canonical);
+                write_bound_frames(py, frames, &mut writer)?;
+                flush_writer(&mut writer)
             }
             #[cfg(not(feature = "zstd"))]
             {

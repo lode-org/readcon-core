@@ -1132,4 +1132,56 @@ mod tests {
         assert!(zstd_frame_starts(&std::fs::read(&path).unwrap()).is_none());
         assert_eq!(read_file_text(&path).unwrap(), text);
     }
+
+    fn cli_stdout(program: &str, args: &[&str]) -> std::process::Output {
+        std::process::Command::new(program)
+            .args(args)
+            .output()
+            .unwrap_or_else(|err| panic!("{program} failed to start: {err}"))
+    }
+
+    #[test]
+    fn gzip_cli_decodes_one_member_and_an_indexed_file() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let wide = b"Cu 1.0 2.0 3.0 0 1\n".repeat(80_000);
+        let dir = tempfile::tempdir().unwrap();
+        let one = dir.path().join("one.con.gz");
+        {
+            let mut writer = gzip_writer(&one).unwrap();
+            writer.write_all(text.as_bytes()).unwrap();
+            writer.finish().unwrap();
+        }
+        let many = dir.path().join("wide.con.gz");
+        write_gzip_members(&many, &wide).unwrap();
+        for (path, expect) in [(&one, text.as_bytes()), (&many, wide.as_slice())] {
+            let out = cli_stdout("gzip", &["-dc", path.to_str().unwrap()]);
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert_eq!(out.stdout, expect);
+        }
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn zstd_cli_decodes_one_frame_and_an_indexed_file() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let wide = b"0.0 1.0 2.0 0 0\n".repeat(80_000);
+        let dir = tempfile::tempdir().unwrap();
+        let one = dir.path().join("one.con.zst");
+        std::fs::write(&one, zstd::stream::encode_all(text.as_bytes(), 3).unwrap()).unwrap();
+        let many = dir.path().join("wide.con.zst");
+        write_zstd_members(&many, &wide).unwrap();
+        for (path, expect) in [(&one, text.as_bytes()), (&many, wide.as_slice())] {
+            let out = cli_stdout("zstd", &["-dc", path.to_str().unwrap()]);
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert_eq!(out.stdout, expect);
+        }
+    }
 }

@@ -606,6 +606,12 @@ CON-compress.2 \:\: MUST
 CON-compress.3 \:\: SHOULD
     Readers SHOULD detect gzip and zstd by magic bytes, not only by the extension.
 
+CON-compress.4 \:\: MAY
+    A writer MAY split one frame across gzip members at the same deflate level. The first member then sets the FEXTRA flag. Its extra field contains subfield id ``RC`` whose data is the ASCII magic ``RCZ1``, a little-endian ``u16`` member count, and that many little-endian ``u64`` file offsets of the members. A reader MAY inflate those slices concurrently. A gzip file without that subfield, including one member and a multi-member file from another writer, MUST still be read in order. ``gzip -d`` reads both.
+
+CON-compress.5 \:\: MAY
+    A writer MAY split one frame across zstd frames at the same level. A skippable frame (magic ``50 2a 4d 18``) then precedes them and carries the same ``RCZ1`` index. A decoder MUST ignore an unknown skippable frame. A one-frame zstd file has no index. ``zstd -d`` reads both.
+
 Errors
 ------
 
