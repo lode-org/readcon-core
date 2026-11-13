@@ -12,6 +12,7 @@
 !logs/db.log
 !logs/install.log
 !logs/reader-exchange.log
+logs/mw-work/
 !logs/dlpack-exchange.log
 !logs/build.log
 !logs/eon-build.log

@@ -73,6 +73,7 @@ Elsevier%
 \input{figures/generated/e5_macros}
 \input{figures/generated/velocity_case}
 \input{figures/generated/hop_macros}
+\input{figures/generated/mw_macros}
 \input{figures/generated/worked_macros}
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
@@ -527,8 +528,7 @@ On the convel files, readcon returns the velocities as the numbers in the file.
 \subsection{Connectivity in d-SEAMS}\label{sec:connectivity}
 A LAMMPS dump sorted by id already carries an atom id and a box, and H5MD carries an id and a velocity unit.
 Neither is the checkpoint eOn writes: this grammar carries the per-component mask, the id and the time unit in one file that eOn, ASE and d-SEAMS read \cite{goswamiDseamsDeferredStructural2020}.
-% UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
-On 4096 molecules of mW water, neighbour pairs persist at 0.955 when the id is kept and at 0.001 when the file order is not that id (Figure~\ref{fig:water}).
+On \mwMolecules\ molecules of mW water, neighbour pairs at a lag of one frame persist at \mwConOne\ when the id is kept and at \mwXyzOne\ when the file order is not that id (Figure~\ref{fig:water}).
 Section~\ref{sec:supp-applications} defines the quench and gives the persistence at lags of 1, 5, 10 and 25 frames.
 
 \begin{figure}[tbp]
@@ -656,8 +656,7 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 % UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
 Losing the identifier changes the result from \hopBarrier~eV to \hopSwapped~eV on an EMT model.
 readcon takes \conReadconMedian~s on the million-atom CON frame, against \conAseMedian~s for ASE.
-% UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
-On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.
+On \mwMolecules\ molecules of mW water the neighbour pairs at a lag of one frame persist at \mwConOne\ when the stored identifier is kept and at \mwXyzOne\ when the file order replaces it.
 The next steps are a declared section for that optimiser state and a patch to ASE's eon reader that carries the per-axis mask and the column-5 identifier.
 
 

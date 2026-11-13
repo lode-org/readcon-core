@@ -7,6 +7,7 @@ A missing face is a failed figure.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -646,12 +647,14 @@ def _by_id(atoms, aid: int) -> np.ndarray:
 def water_persistence() -> None:
     """Neighbour-pair and ice-type persistence for the mW nucleation window."""
     use_latin_modern()
-    lag = np.array([1, 5, 10, 25], dtype=float)
-    neigh_con = np.array([0.955, 0.939, 0.927, 0.897])
-    neigh_xyz = np.full(4, 0.001)
-    ice_con = np.array([0.800, 0.790, 0.785, 0.771])
+    record = json.loads((HERE.parents[1] / "logs" / "mw-persistence.json").read_text())
+    lag = np.array(record["lags"], dtype=float)
+    neigh_con = np.array([record["neighbour_con"][str(int(item))] for item in lag])
+    neigh_xyz = np.array([record["neighbour_xyz"][str(int(item))] for item in lag])
+    ice_con = np.array([record["ice_con"][str(int(item))] for item in lag])
+    chance_line = float(record["ice_chance"])
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_CM / 2.54, 6.6 / 2.54), sharey=True)
-    from chemparseplot.plot.palette import RUHI_CYCLE
+    cycle = (TEAL, CORAL, SKY)
 
     series = (
         (axes[0], neigh_con, neigh_xyz, False, "(a)"),
@@ -661,7 +664,7 @@ def water_persistence() -> None:
         ax.plot(
             lag,
             con,
-            color=RUHI_CYCLE[0],
+            color=cycle[0],
             marker="o",
             markersize=4.2,
             markerfacecolor="white",
@@ -674,7 +677,7 @@ def water_persistence() -> None:
             ax.plot(
                 lag,
                 xyz,
-                color=RUHI_CYCLE[1],
+                color=cycle[1],
                 marker="s",
                 markersize=3.6,
                 markerfacecolor="white",
@@ -684,8 +687,8 @@ def water_persistence() -> None:
                 zorder=2,
             )
         if chance:
-            ax.axhline(0.6305, color=RUHI_CYCLE[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, zorder=1)
-            ax.plot([], [], color=RUHI_CYCLE[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, label="Chance")
+            ax.axhline(chance_line, color=cycle[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, zorder=1)
+            ax.plot([], [], color=cycle[2], linestyle=(0, (2.2, 1.4)), linewidth=0.8, label="Chance")
         ax.set_xlabel(r"Lag $\tau$ (frames)")
         ax.set_xlim(0, 27)
         ax.set_ylim(-0.02, 1.05)

@@ -1,0 +1,30 @@
+units metal
+atom_style atomic
+boundary p p p
+read_data mw.data
+pair_style sw
+pair_coeff * * mW.sw mW
+neighbor 1.0 bin
+neigh_modify every 1 delay 0 check yes
+timestep 0.01
+fix relax all npt temp 180.0 180.0 0.200 iso 0.0 0.0 1.0
+thermo 3000
+run 3000
+unfix relax
+variable zcut equal (1.0-0.22)*lz
+region top block INF INF INF INF ${zcut} INF
+group top region top
+group bot subtract all top
+velocity top create 420.0 20261113
+fix hold bot setforce 0.0 0.0 0.0
+fix melt top nvt temp 420.0 420.0 0.200
+run 2500
+unfix hold
+unfix melt
+velocity all scale 250.0
+fix holdnvt all nvt temp 250.0 250.0 0.200
+run 1000
+reset_timestep 0
+dump trj all custom 100 coexist.dump id x y z
+dump_modify trj sort id
+run 8000

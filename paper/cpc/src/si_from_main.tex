@@ -131,10 +131,11 @@ After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982},
 A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
 
 \section{The mW nucleation window}\label{sec:supp-water}
-The trajectory is mW water, 4096 molecules, with a 10~fs step.
-It is equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K with a 200~fs damping time, in the LAMMPS build of 22~July~2025.
-The analysed window is 81 frames, from 659~ps to 739~ps after the quench.
-The neighbour cutoff is \(3.5\,\text{\AA}\), primitive rings run up to seven members, and the ice label is CHILL+.
+The trajectory is an ice Ih slab of \mwMolecules\ mW molecules, with a 10~fs step.
+It is relaxed for \mwRelaxPs~ps in the NPT ensemble at \mwRelaxK~K and zero pressure.
+The upper \mwMeltFrac\ of the slab is melted for \mwMeltPs~ps at \mwMeltK~K while the rest is held fixed, and the system then runs in the NVT ensemble at \mwHoldK~K with a 200~fs damping time, in \mwLammps.
+The analysed window is 81 frames, one per picosecond, from that NVT segment.
+The neighbour cutoff is \(3.5\,\text{\AA}\), and the ice label is the CHILL+ class from the \(q_3\) bond correlation.
 The CON frames store the orthorhombic cell, three dump-box lengths and right angles, and the XYZ comment line repeats that cell.
 Figure~\ref{fig:water} is rebuilt from the four lags by
 {\small\begin{verbatim}

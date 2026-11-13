@@ -634,12 +634,16 @@ The images of Eq.~\eqref{eq:lerp} on the slot pairing drag those two copper atom
 \texttt{reorder\_like} puts the swapped file back into the identifier order of the reactant.
 
 \section{Water quench}\label{sec:supp-water-protocol}
-The trajectory of Section~\ref{sec:connectivity} is mW water, 4096 molecules
-\cite{molineroWaterModeledIntermediate2009}, equilibrated in the NVT ensemble at 350~K and then quenched in the NVT ensemble at 180~K, with a 10~fs step and a 200~fs damping time, in the LAMMPS build of 22~July~2025
+The trajectory of Section~\ref{sec:connectivity} is an ice Ih slab of \mwMolecules\ mW molecules
+\cite{molineroWaterModeledIntermediate2009}.
+The crystal is relaxed for \mwRelaxPs~ps in the NPT ensemble at \mwRelaxK~K and zero pressure.
+The upper \mwMeltFrac\ of the slab is melted for \mwMeltPs~ps at \mwMeltK~K while the rest is held fixed, and the whole system then runs in the NVT ensemble at \mwHoldK~K.
+The step is 10~fs and the damping time is 200~fs, in \mwLammps\
 \cite{thompsonLammpsFlexibleSimulation2022}.
-An 81-frame window, from 659~ps to 739~ps after the quench, brackets the frame at 705~ps in which a 50-molecule CHILL+ ice core is present
+The analysed window is 81 frames, one per picosecond, from that NVT segment
 \cite{nguyenIdentificationClathrateHydrates2015}.
-The neighbour cutoff is \(3.5\,\text{\AA}\), primitive rings are counted up to seven members, and the ice label is the CHILL+ class, the published d-SEAMS settings
+The neighbour cutoff is \(3.5\,\text{\AA}\).
+The ice label is the CHILL+ class from the \(q_3\) bond correlation: a bond is staggered below \(-0.8\) and eclipsed from \(-0.35\) to \(0.25\)
 \cite{goswamiDseamsDeferredStructural2020}.
 The same frames were written as CON and as XYZ.
 A LAMMPS dump written without \texttt{dump\_modify sort} lists atoms in per-processor order, and that order changes as atoms migrate between subdomains.
@@ -748,7 +752,7 @@ Losing the identifier is the difference between \hopBarrier~eV and \hopSwapped~e
 
 \subsection{Connectivity tracking in d-SEAMS}
 One trajectory suffices because the comparison is between two encodings of the same frames.
-The system is mW water, 4096 molecules, and an 81-frame window around a CHILL+ ice core.
+The system is an ice Ih slab of \mwMolecules\ mW molecules with a liquid layer, and an 81-frame window of the \mwHoldK~K run.
 The same frames were written as CON and as XYZ with the atom order permuted independently in every frame.
 The quench, the cutoff and the command that rebuilds Figure~\ref{fig:water} are in Sections~\ref{sec:supp-water-protocol} and~\ref{sec:supp-water}.
 
@@ -759,15 +763,15 @@ P(\tau)=\left\langle\frac{|A(t)\cap A(t+\tau)|}{|A(t)|}\right\rangle_{t},
 \end{equation}
 with \(A(t)\) the set of neighbour pairs, or of molecule labels, at frame \(t\) (Figure~\ref{fig:water}).
 A neighbour drawn uniformly among the other molecules has chance at \(z/(N-1)\), with \(N=4096\).
-Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}\), 0.630 to 0.631, where \(p_k\) is the fraction of molecules of class \(k\).
-Neighbour pairs on the CON frames persist at 0.955, 0.939, 0.927 and 0.897 for lags of 1, 5, 10 and 25 frames, and at 0.001 on the permuted XYZ at every lag.
-The CHILL+ type of a molecule persists at 0.800, 0.790, 0.785 and 0.771 on CON, and at 0.630--0.631 on the permuted XYZ.
+Two independent draws of the CHILL+ label agree with chance \(\sum_k p_k^{2}=\mwChance\), where \(p_k\) is the fraction of molecules of class \(k\).
+Neighbour pairs on the CON frames persist at \mwConOne, \mwConFive, \mwConTen\ and \mwConTwentyFive\ for lags of 1, 5, 10 and 25 frames, and at \mwXyzOne, \mwXyzFive, \mwXyzTen\ and \mwXyzTwentyFive\ on the permuted XYZ.
+The CHILL+ type of a molecule persists at \mwIceConOne, \mwIceConFive, \mwIceConTen\ and \mwIceConTwentyFive\ on CON, and at \mwIceXyzOne, \mwIceXyzFive, \mwIceXyzTen\ and \mwIceXyzTwentyFive\ on the permuted XYZ.
 Six-ring membership is 0.996--0.997 on CON and 0.995 on the permuted XYZ, because almost every molecule already sits in a six-ring, so it does not separate them.
 Ring counts and ice counts match on every frame of the two files.
 A whole-frame total survives the new order.
 Following one molecule as it joins the ice nucleus uses the atom id.
 
-The 81 frames, 4096 atoms each, were ingested into a readcon-db corpus and selected back by the formula \texttt{O:4096}.
+The 81 frames, \mwMolecules\ atoms each, were ingested into a readcon-db corpus and selected back by the formula \texttt{O:\mwMolecules}.
 All 81 frames returned, bitwise identical in the positions and in the cell.
 The median wall time of that ingest and select is 0.578~s on the machine of Section~\ref{sec:compute}, and the eight repeats span 0.571--0.596~s.
 
