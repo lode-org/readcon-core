@@ -889,6 +889,18 @@ impl AtomDatum {
         self.shrink_tail();
     }
 
+    pub(crate) fn sections_empty(&self) -> bool {
+        matches!(self.tail, AtomSections::Empty)
+    }
+
+    pub(crate) fn set_coords(&mut self, xyz: [f64; 3], fixed: [bool; 3], atom_id: u64) {
+        self.x = xyz[0];
+        self.y = xyz[1];
+        self.z = xyz[2];
+        self.fixed = fixed;
+        self.atom_id = atom_id;
+    }
+
     /// Returns `true` if any direction is fixed.
     pub fn is_fixed(&self) -> bool {
         self.fixed[0] || self.fixed[1] || self.fixed[2]
@@ -1068,6 +1080,53 @@ pub struct ConFrame {
     pub masses: crate::storage_dtype::FloatArray1,
     /// Per-atom ids `(N,)` u64 (always).
     pub atom_ids: ndarray::ArcArray1<u64>,
+}
+
+thread_local! {
+    static ATOM_BUF: std::cell::RefCell<Option<Vec<AtomDatum>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Below this, recycling the atom `Vec` costs more than allocating it.
+pub(crate) const ATOM_REUSE_MIN: usize = 32;
+
+pub(crate) fn take_atom_buf(n: usize) -> Vec<AtomDatum> {
+    if n < ATOM_REUSE_MIN {
+        return Vec::with_capacity(n);
+    }
+    ATOM_BUF.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some(mut buf) = slot.take() {
+            if buf.capacity() >= n {
+                if buf.len() != n {
+                    buf.clear();
+                }
+                return buf;
+            }
+        }
+        Vec::with_capacity(n)
+    })
+}
+
+fn stash_atom_buf(buf: Vec<AtomDatum>) {
+    if buf.len() < ATOM_REUSE_MIN {
+        return;
+    }
+    ATOM_BUF.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(buf);
+        }
+    });
+}
+
+impl Drop for ConFrame {
+    fn drop(&mut self) {
+        // Only a large frame is worth keeping. A short frame drops its atoms
+        // in place, with no pool lookup.
+        if self.atom_data.len() >= ATOM_REUSE_MIN {
+            stash_atom_buf(std::mem::take(&mut self.atom_data));
+        }
+    }
 }
 
 impl ConFrame {

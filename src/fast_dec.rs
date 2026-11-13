@@ -102,6 +102,92 @@ fn read_u64(bytes: &[u8], i: usize) -> u64 {
     u64::from_le_bytes(buf)
 }
 
+#[inline(always)]
+pub(crate) fn decimal_f64(neg: bool, mant: u64, exp: i32) -> Option<f64> {
+    finish(neg, mant, exp)
+}
+
+/// Plain decimal with a dot and 16 fraction digits, plus an optional 17th.
+///
+/// Returns `None` as soon as the shape does not match, before a second scan.
+/// A third integer digit and a 17th fraction digit is 20 digits: the extra
+/// digit stays out of the mantissa and only confirms the rounding.
+#[inline(always)]
+pub(crate) fn parse_fixed_decimal(bytes: &[u8], mut i: usize) -> Option<(f64, usize)> {
+    if i >= bytes.len() {
+        return None;
+    }
+    let mut neg = false;
+    match bytes[i] {
+        b'+' => i += 1,
+        b'-' => {
+            neg = true;
+            i += 1;
+        }
+        _ => {}
+    }
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return None;
+    }
+    let mut mant = u64::from(bytes[i] - b'0');
+    let mut nd = 1u32;
+    i += 1;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        if nd == 3 {
+            return None;
+        }
+        mant = mant * 10 + u64::from(bytes[i] - b'0');
+        nd += 1;
+        i += 1;
+    }
+    if i >= bytes.len() || bytes[i] != b'.' || i + 16 >= bytes.len() {
+        return None;
+    }
+    i += 1;
+    let w0 = read_u64(bytes, i);
+    if !is_8digits(w0) {
+        return None;
+    }
+    let w1 = read_u64(bytes, i + 8);
+    if !is_8digits(w1) {
+        return None;
+    }
+    mant = mant
+        .wrapping_mul(100_000_000)
+        .wrapping_add(parse_8digits(w0))
+        .wrapping_mul(100_000_000)
+        .wrapping_add(parse_8digits(w1));
+    i += 16;
+    let mut exp = -16i32;
+    let mut sticky = false;
+    if i < bytes.len() && bytes[i].is_ascii_digit() {
+        if i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            return None;
+        }
+        if nd + 17 > 19 {
+            sticky = bytes[i] != b'0';
+        } else {
+            mant = mant * 10 + u64::from(bytes[i] - b'0');
+            exp = -17;
+        }
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] != b' ' {
+        return None;
+    }
+    let low = decimal_f64(neg, mant, exp)?;
+    let val = if sticky {
+        let high = decimal_f64(neg, mant.checked_add(1)?, exp)?;
+        if low.to_bits() != high.to_bits() {
+            return None;
+        }
+        low
+    } else {
+        low
+    };
+    Some((val, i))
+}
+
 /// Parse one decimal at `i`. The returned index is the first byte after the
 /// number. `None` means the general parser must handle this token.
 #[inline(always)]

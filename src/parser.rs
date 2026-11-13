@@ -52,6 +52,34 @@ pub trait LineStream<'a> {
         parse_coord_row(line, spec_version, default_id)
     }
 
+    /// Parse `n` coordinate rows straight into reserved buffers.
+    ///
+    /// `Ok(None)` means this stream has no block cursor; the caller reads
+    /// one row at a time. `Ok(Some(next_id))` means the rows were stored.
+    fn ingest_known_coords(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        global_atom_idx: u64,
+        symbol: &Arc<str>,
+        reuse: bool,
+        pos_flat: &mut Vec<f64>,
+        ids: &mut Vec<u64>,
+        atom_data: &mut Vec<AtomDatum>,
+    ) -> Result<Option<u64>, ParseError> {
+        let _ = (
+            n,
+            spec_version,
+            global_atom_idx,
+            symbol,
+            reuse,
+            pos_flat,
+            ids,
+            atom_data,
+        );
+        Ok(None)
+    }
+
     /// One vector-section row (xyz, flag, required id), fused with the line
     /// scan when the stream can do it. End of input is [`ParseError::IncompleteFrame`];
     /// callers that are inside a named section map that to `IncompleteSection`.
@@ -588,6 +616,202 @@ fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
 
 /// One parsed coordinate row: xyz, fixed flags, and the atom id.
 type ParsedCoord = ([f64; 3], [bool; 3], u64);
+
+fn skip_row_spaces(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && bytes[i] == b' ' {
+        i += 1;
+    }
+    i
+}
+
+fn fixed_flag(digit: u8, spec_version: u32) -> Option<[bool; 3]> {
+    if spec_version < 2 {
+        match digit {
+            0 => Some([false, false, false]),
+            1 => Some([true, true, true]),
+            _ => None,
+        }
+    } else if digit <= 7 {
+        Some([digit & 1 != 0, digit & 2 != 0, digit & 4 != 0])
+    } else {
+        None
+    }
+}
+
+/// One coordinate row whose three values use a dot and 16 or 17 fraction digits.
+///
+/// The line end was found once, before this function. Fields are then read in
+/// a single left-to-right pass. Anything else returns `None` so the general
+/// row parser can take the line.
+#[inline(never)]
+fn parse_fixed_line(
+    mut line: &[u8],
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Option<ParsedCoord> {
+    if line.last() == Some(&b'\r') {
+        line = &line[..line.len() - 1];
+    }
+    let mut i = skip_row_spaces(line, 0);
+    let mut xyz = [0.0f64; 3];
+    for slot in &mut xyz {
+        let (val, next) = crate::fast_dec::parse_fixed_decimal(line, i)?;
+        *slot = val;
+        i = skip_row_spaces(line, next);
+    }
+    let digit = *line.get(i)?;
+    if !digit.is_ascii_digit() {
+        return None;
+    }
+    let flag = digit - b'0';
+    if i + 1 < line.len() && line[i + 1].is_ascii_digit() {
+        return None;
+    }
+    let fixed = fixed_flag(flag, spec_version)?;
+    i = skip_row_spaces(line, i + 1);
+    let (atom_id, next) = if i >= line.len() {
+        (default_id?, i)
+    } else {
+        let mut j = i;
+        let mut val = 0u64;
+        let mut digits = 0u32;
+        if !line[j].is_ascii_digit() {
+            return None;
+        }
+        while j < line.len() && line[j].is_ascii_digit() {
+            digits += 1;
+            if digits > 18 {
+                return None;
+            }
+            val = val * 10 + u64::from(line[j] - b'0');
+            j += 1;
+        }
+        (val, j)
+    };
+    i = skip_row_spaces(line, next);
+    if i != line.len() {
+        return None;
+    }
+    Some((xyz, fixed, atom_id))
+}
+
+pub(crate) struct CoordBlock<'a> {
+    pub pos_flat: &'a mut Vec<f64>,
+    pub ids: &'a mut Vec<u64>,
+    pub atom_data: &'a mut Vec<AtomDatum>,
+}
+
+pub(crate) struct BlockCursor {
+    pub pos: usize,
+    pub lines: u32,
+    pub atom_id: u64,
+}
+
+/// Read `n` coordinate rows, finding each newline once for the whole block.
+pub(crate) fn fill_coord_block(
+    bytes: &[u8],
+    n: usize,
+    spec_version: u32,
+    symbol: &Arc<str>,
+    reuse: bool,
+    cursor: &mut BlockCursor,
+    out: &mut CoordBlock<'_>,
+) -> Result<(), ParseError> {
+    let mut shares = if reuse {
+        None
+    } else {
+        Some(symbol_shares(symbol, n))
+    };
+    let frame_base = cursor.atom_id as usize;
+    out.pos_flat.reserve(n.saturating_mul(3));
+    out.ids.reserve(n);
+    if !reuse {
+        out.atom_data.reserve(n);
+    }
+    for i in 0..n {
+        if cursor.pos >= bytes.len() {
+            return Err(ParseError::IncompleteFrame);
+        }
+        let rest = &bytes[cursor.pos..];
+        let nl = memchr::memchr(b'\n', rest);
+        let (raw, next) = match nl {
+            Some(cut) => (&rest[..cut], cursor.pos + cut + 1),
+            None => (rest, bytes.len()),
+        };
+        cursor.lines = cursor.lines.saturating_add(1);
+        let line = if raw.last() == Some(&b'\r') {
+            &raw[..raw.len() - 1]
+        } else {
+            raw
+        };
+        let row = if line.len() >= 48 {
+            parse_fixed_line(line, spec_version, Some(cursor.atom_id))
+        } else {
+            None
+        };
+        let (xyz, fixed, atom_id) = if let Some(row) = row {
+            row
+        } else {
+            parse_coord_fields(line, 0, spec_version, Some(cursor.atom_id))?.0
+        };
+        let index = frame_base + i;
+        store_coord(
+            out,
+            index,
+            xyz,
+            fixed,
+            atom_id,
+            shares.as_mut().map(|shares| shares.take()),
+        );
+        cursor.atom_id = cursor.atom_id.saturating_add(1);
+        cursor.pos = next;
+        if nl.is_none() && i + 1 < n {
+            return Err(ParseError::IncompleteFrame);
+        }
+    }
+    Ok(())
+}
+
+fn store_coord(
+    out: &mut CoordBlock<'_>,
+    index: usize,
+    xyz: [f64; 3],
+    fixed: [bool; 3],
+    atom_id: u64,
+    symbol: Option<Arc<str>>,
+) {
+    let pos_at = index * 3;
+    debug_assert!(out.pos_flat.capacity() >= pos_at + 3);
+    debug_assert!(out.ids.capacity() > index);
+    unsafe {
+        let p = out.pos_flat.as_mut_ptr().add(pos_at);
+        p.write(xyz[0]);
+        p.add(1).write(xyz[1]);
+        p.add(2).write(xyz[2]);
+        out.ids.as_mut_ptr().add(index).write(atom_id);
+        if out.pos_flat.len() < pos_at + 3 {
+            out.pos_flat.set_len(pos_at + 3);
+        }
+        if out.ids.len() <= index {
+            out.ids.set_len(index + 1);
+        }
+    }
+    match symbol {
+        Some(sym) => {
+            let atom = AtomDatum::coords(sym, xyz[0], xyz[1], xyz[2], fixed, atom_id);
+            if index == out.atom_data.len() {
+                out.atom_data.reserve(1);
+                unsafe {
+                    out.atom_data.as_mut_ptr().add(index).write(atom);
+                    out.atom_data.set_len(index + 1);
+                }
+            } else {
+                out.atom_data[index] = atom;
+            }
+        }
+        None => out.atom_data[index].set_coords(xyz, fixed, atom_id),
+    }
+}
 
 /// One coordinate or vector row starting at `i`.
 ///
@@ -1555,6 +1779,23 @@ where
     let Some(total_atoms) = fitting_atom_count(&header.natms_per_type, max_rows) else {
         return parse_oversized_frame(lines, header, max_rows);
     };
+    // One compare per frame. Short frames never enter the block parser or
+    // the atom-record pool.
+    if total_atoms < crate::types::ATOM_REUSE_MIN {
+        return parse_short_frame(lines, header, total_atoms);
+    }
+    parse_long_frame(lines, header, total_atoms)
+}
+
+#[inline(never)]
+fn parse_short_frame<'a, L>(
+    lines: &mut L,
+    header: FrameHeader,
+    total_atoms: usize,
+) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
     let validate = header.strict_validation;
     use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
@@ -1566,12 +1807,89 @@ where
         Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
     let mut ids = Vec::with_capacity(total_atoms);
-    let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(total_atoms);
-
+    let mut atom_data = Vec::with_capacity(total_atoms);
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
         let symbol: Arc<str> = Arc::from(symbol_line.trim());
+        let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        if validate {
+            validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
+        }
+        global_atom_idx = if positions_other.is_none() {
+            ingest_fresh_coords(
+                lines,
+                *num_atoms,
+                header.spec_version,
+                global_atom_idx,
+                &symbol,
+                &mut pos_flat,
+                &mut ids,
+                &mut atom_data,
+            )?
+        } else {
+            ingest_coord_rows(
+                lines,
+                *num_atoms,
+                header.spec_version,
+                global_atom_idx,
+                &symbol,
+                false,
+                CoordSink {
+                    pos_flat: &mut pos_flat,
+                    ids: &mut ids,
+                    positions_other: &mut positions_other,
+                    atom_data: &mut atom_data,
+                },
+            )?
+        };
+    }
+    let positions = if f64_positions {
+        FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat)
+    } else {
+        positions_other.expect("non-f64 positions allocated")
+    };
+    Ok(crate::types::con_frame_coords_only_with_ids(
+        header, atom_data, positions, ids,
+    ))
+}
+
+#[inline(never)]
+fn parse_long_frame<'a, L>(
+    lines: &mut L,
+    header: FrameHeader,
+    total_atoms: usize,
+) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
+    let validate = header.strict_validation;
+    use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let f64_positions = dt.positions == ElementKind::Float64;
+    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
+    let mut positions_other = if f64_positions {
+        None
+    } else {
+        Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
+    };
+    let mut ids = Vec::with_capacity(total_atoms);
+    let mut atom_data = crate::types::take_atom_buf(total_atoms);
+    let mut global_atom_idx: u64 = 0;
+    for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let sym_str = symbol_line.trim();
+        let offset = global_atom_idx as usize;
+        let reuse = atom_data.len() == total_atoms
+            && offset + num_atoms <= atom_data.len()
+            && atom_data[offset..offset + num_atoms]
+                .iter()
+                .all(|atom| atom.sections_empty() && atom.symbol.as_ref() == sym_str);
+        let symbol: Arc<str> = if reuse {
+            atom_data[offset].symbol.clone()
+        } else {
+            Arc::from(sym_str)
+        };
         let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
         if validate {
             validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
@@ -1582,6 +1900,7 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
+            reuse,
             CoordSink {
                 pos_flat: &mut pos_flat,
                 ids: &mut ids,
@@ -1690,6 +2009,7 @@ fn ingest_coord_rows<'a, L>(
     spec_version: u32,
     global_atom_idx: u64,
     symbol: &Arc<str>,
+    reuse: bool,
     sink: CoordSink<'_>,
 ) -> Result<u64, ParseError>
 where
@@ -1702,12 +2022,28 @@ where
         atom_data,
     } = sink;
     if positions_other.is_none() {
+        // A short group that is appending new atoms uses the original loop.
+        // The fixed-line block path is a separate function, so this one
+        // does not pay for that dispatch.
+        if n < 16 && !reuse && atom_data.len() == global_atom_idx as usize {
+            return ingest_fresh_coords(
+                lines,
+                n,
+                spec_version,
+                global_atom_idx,
+                symbol,
+                pos_flat,
+                ids,
+                atom_data,
+            );
+        }
         return ingest_coord_rows_f64(
             lines,
             n,
             spec_version,
             global_atom_idx,
             symbol,
+            reuse,
             pos_flat,
             ids,
             atom_data,
@@ -1734,13 +2070,12 @@ where
     Ok(global_atom_idx)
 }
 
-/// Coordinate rows for the f64 storage path.
+/// Append coordinate rows into empty tail capacity.
 ///
-/// The symbol `Arc` is bumped once for the whole block. Cloning it per atom
-/// was a visible share of the coordinate parse.
+/// This is the path every short row takes. It does not call the fixed-line
+/// block parser.
 #[inline(never)]
-#[allow(clippy::too_many_arguments)]
-fn ingest_coord_rows_f64<'a, L>(
+fn ingest_fresh_coords<'a, L>(
     lines: &mut L,
     n: usize,
     spec_version: u32,
@@ -1782,6 +2117,89 @@ where
             pos_flat.set_len(pos0 + (i + 1) * 3);
             ids.set_len(id0 + i + 1);
             atom_data.set_len(atom0 + i + 1);
+        }
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+/// Coordinate rows for the f64 storage path.
+///
+/// The symbol `Arc` is bumped once for the whole block. Cloning it per atom
+/// was a visible share of the coordinate parse. Groups of 16 or more rows
+/// are parsed as one block; a recycled frame overwrites coordinates in place.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn ingest_coord_rows_f64<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    reuse: bool,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    if n >= 16 {
+        if let Some(next) = lines.ingest_known_coords(
+            n,
+            spec_version,
+            global_atom_idx,
+            symbol,
+            reuse,
+            pos_flat,
+            ids,
+            atom_data,
+        )? {
+            return Ok(next);
+        }
+    }
+    let pos0 = pos_flat.len();
+    let id0 = ids.len();
+    pos_flat.reserve(n.saturating_mul(3));
+    ids.reserve(n);
+    if reuse {
+        for i in 0..n {
+            let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+            unsafe {
+                let p = pos_flat.as_mut_ptr().add(pos0 + i * 3);
+                p.write(xyz[0]);
+                p.add(1).write(xyz[1]);
+                p.add(2).write(xyz[2]);
+                ids.as_mut_ptr().add(id0 + i).write(atom_id);
+                pos_flat.set_len(pos0 + (i + 1) * 3);
+                ids.set_len(id0 + i + 1);
+            }
+            let at = global_atom_idx as usize;
+            atom_data[at].set_coords(xyz, fixed, atom_id);
+            global_atom_idx += 1;
+        }
+        return Ok(global_atom_idx);
+    }
+    let mut shares = symbol_shares(symbol, n);
+    atom_data.reserve(n);
+    for i in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        let sym = shares.take();
+        let at = global_atom_idx as usize;
+        unsafe {
+            let p = pos_flat.as_mut_ptr().add(pos0 + i * 3);
+            p.write(xyz[0]);
+            p.add(1).write(xyz[1]);
+            p.add(2).write(xyz[2]);
+            ids.as_mut_ptr().add(id0 + i).write(atom_id);
+            pos_flat.set_len(pos0 + (i + 1) * 3);
+            ids.set_len(id0 + i + 1);
+        }
+        let atom = AtomDatum::coords(sym, xyz[0], xyz[1], xyz[2], fixed, atom_id);
+        if at == atom_data.len() {
+            atom_data.push(atom);
+        } else {
+            atom_data[at] = atom;
         }
         global_atom_idx += 1;
     }

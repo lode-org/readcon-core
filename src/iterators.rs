@@ -245,6 +245,52 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
         self.pos = pos;
         Ok(row)
     }
+    #[inline(never)]
+    fn ingest_known_coords(
+        &mut self,
+        n: usize,
+        spec_version: u32,
+        global_atom_idx: u64,
+        symbol: &std::sync::Arc<str>,
+        reuse: bool,
+        pos_flat: &mut Vec<f64>,
+        ids: &mut Vec<u64>,
+        atom_data: &mut Vec<crate::types::AtomDatum>,
+    ) -> Result<Option<u64>, crate::error::ParseError> {
+        if n < 16 || self.peeked.is_some() || self.newlines.is_some() || self.utf8_bad {
+            return Ok(None);
+        }
+        // Short rows stay on the general parser. The fixed-point path pays
+        // off only once a coordinate line is long.
+        let rest = &self.bytes[self.pos..];
+        let first = memchr::memchr(b'\n', rest).unwrap_or(rest.len());
+        if first < 48 {
+            return Ok(None);
+        }
+        let mut cursor = crate::parser::BlockCursor {
+            pos: self.pos,
+            lines: 0,
+            atom_id: global_atom_idx,
+        };
+        let mut out = crate::parser::CoordBlock {
+            pos_flat,
+            ids,
+            atom_data,
+        };
+        let parsed = crate::parser::fill_coord_block(
+            self.bytes,
+            n,
+            spec_version,
+            symbol,
+            reuse,
+            &mut cursor,
+            &mut out,
+        );
+        self.pos = cursor.pos;
+        self.line_no = self.line_no.saturating_add(cursor.lines);
+        parsed?;
+        Ok(Some(cursor.atom_id))
+    }
     #[inline]
     fn next_vector_row(
         &mut self,
