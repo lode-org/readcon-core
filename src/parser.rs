@@ -1541,13 +1541,26 @@ where
     let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
     use crate::storage_dtype::{FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
-    // A failed reservation only means the vectors grow as rows arrive.
-    let mut pos_flat = Vec::new();
-    let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
-    let mut ids = Vec::new();
-    let _ = ids.try_reserve_exact(reserve_atoms);
-    let mut atom_data: Vec<AtomDatum> = Vec::new();
-    let _ = atom_data.try_reserve_exact(reserve_atoms);
+    // A declared count the input can hold uses the same `with_capacity` as a
+    // normal frame. A larger count only reserves what the unread bytes can
+    // hold, and a failed reservation means the vectors grow as rows arrive.
+    let (mut pos_flat, mut ids, mut atom_data) = if reserve_atoms == total_atoms
+        && total_atoms <= (isize::MAX as usize) / 4
+    {
+        (
+            Vec::with_capacity(total_atoms.saturating_mul(3)),
+            Vec::with_capacity(total_atoms),
+            Vec::with_capacity(total_atoms),
+        )
+    } else {
+        let mut pos_flat = Vec::new();
+        let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
+        let mut ids = Vec::new();
+        let _ = ids.try_reserve_exact(reserve_atoms);
+        let mut atom_data = Vec::new();
+        let _ = atom_data.try_reserve_exact(reserve_atoms);
+        (pos_flat, ids, atom_data)
+    };
     // Non-f64 storage is built after the rows exist. Allocating it from the
     // declared count panicked when that count was larger than the input.
     let mut positions_other = None;
@@ -1669,21 +1682,36 @@ fn ingest_coord_rows_f64<'a, L>(
 where
     L: LineStream<'a>,
 {
-    let shared = n.min(share_limit);
-    let mut shares = symbol_shares(symbol, shared);
-    for i in 0..n {
-        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-        let sym = if i < shared {
-            shares.take()
-        } else {
-            Arc::clone(symbol)
-        };
-        pos_flat.extend_from_slice(&xyz);
-        ids.push(atom_id);
-        atom_data.push(AtomDatum::coords(
-            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
-        ));
-        global_atom_idx += 1;
+    // The common path is one `Arc` bump and a branch-free take per row.
+    // A declared count the unread input cannot hold clones instead, so the
+    // strong count is not wrapped by a number of rows that will not be read.
+    if n <= share_limit {
+        let mut shares = symbol_shares(symbol, n);
+        for _ in 0..n {
+            let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+            let sym = shares.take();
+            pos_flat.extend_from_slice(&xyz);
+            ids.push(atom_id);
+            atom_data.push(AtomDatum::coords(
+                sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+            ));
+            global_atom_idx += 1;
+        }
+    } else {
+        for _ in 0..n {
+            let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+            pos_flat.extend_from_slice(&xyz);
+            ids.push(atom_id);
+            atom_data.push(AtomDatum::coords(
+                Arc::clone(symbol),
+                xyz[0],
+                xyz[1],
+                xyz[2],
+                fixed,
+                atom_id,
+            ));
+            global_atom_idx += 1;
+        }
     }
     Ok(global_atom_idx)
 }
