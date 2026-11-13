@@ -1,0 +1,16 @@
+% Draft only. The manuscript does not input this file.
+% \campaignid stays published and REL1_COMMIT stays where it is.
+% The eight-thread read efficiencies are the s61-strong.tsv values.
+% The write sentences wait on perf8.
+
+On eight threads the retimed in-memory reads are at least 0.8 efficient (Table~\ref{tab:r6-read}).
+The million-atom CON read is \effReadConOneE, the alloy extended XYZ read is \effReadAlloy, the molecular-dynamics extended XYZ read is \effReadExtxyzMd, and the same-format million-atom extended XYZ read is \effReadExtxyzSame.
+The \num{100000}-frame CON read is \effReadConHundredK.
+The convel read, \effReadConvel, and the copper extended XYZ read, \effReadExtxyzCu, were not part of that retime.
+
+The writes are not final.
+At eight threads the disk-write efficiency is \perfEightDiskWrite and the in-memory write efficiency is \perfEightMemWrite.
+Those two replace this sentence when perf8 is recorded.
+
+\newcommand{\perfEightDiskWrite}{\textbf{PERF8}}
+\newcommand{\perfEightMemWrite}{\textbf{PERF8}}
