@@ -1,0 +1,22 @@
+protocol warmup=1 samples=6 percentile=type7 serial=1 core=0 unlink_create=1
+input bench/h2h/work/inputs/con-1000000x1.con
+writes unlink then create
+coordinate reads: rust scale_probe pos, c rkr_read_positions, c++ readcon::read_positions, fortran read_positions, python read_positions
+each log has one warmup line and six sample lines
+
+binding op median_s iqr_s vs_rust_pct
+rust read 0.038628 0.000172 +0.00
+c read 0.038491 0.000177 -0.35
+c++ read 0.038881 0.000363 +0.65
+fortran read 0.038141 0.000524 -1.26
+python read 0.040952 0.000060 +6.02
+rust write 0.047715 0.000551 +0.00
+c write 0.045779 0.000893 -4.06
+c++ write 0.046328 0.001625 -2.91
+fortran write 0.046416 0.001352 -2.72
+python write 0.046842 0.000512 -1.83
+
+C++ and Fortran reads are the new coordinate-column entry points, not
+read_all_frames. They sit with the C and Rust column walks. Python
+read_positions hands that same buffer to NumPy. The remaining Python
+read gap is the extension call, about two milliseconds on this host.
