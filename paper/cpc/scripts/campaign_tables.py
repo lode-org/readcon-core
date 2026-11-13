@@ -3,7 +3,7 @@
 
 ``--campaign published`` writes the numbers already in the manuscript.
 ``--campaign rel1`` reads the pinned readcon-core commit (``--commit``,
-default ``b73ff2ea``) and writes a second set. The manuscript selects
+default ``ea955e47``) and writes a second set. The manuscript selects
 the set with ``\\campaignid`` in ``src/campaign.tex``. ``--draft`` builds
 ``rg_main_rel1.pdf`` and ``rg_supp_rel1.pdf`` without changing that switch.
 """
@@ -26,13 +26,15 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
 SRC = REPO / "paper" / "cpc" / "src"
-REL1_COMMIT = "b73ff2ea"
+REL1_COMMIT = "ea955e473f558d51c016ded882e16073bfacb740"
 REL1_FILES = {
     "table2": "bench/h2h/scaling/rel1/table2-h2h.tsv",
     "table3": "bench/h2h/scaling/rel1/table3-bindings.tsv",
     "s61": "bench/h2h/scaling/rel1/s61-strong.tsv",
     "memory": "bench/h2h/scaling/rel1/s-memory.tsv",
     "compressed": "bench/h2h/scaling/rel1/compressed.json",
+    "hardware": "bench/h2h/scaling/rel1/hardware.json",
+    "pwrite": "bench/h2h/scaling/rel1/perf3-samples.json",
     "db": "bench/h2h/scaling/rel1/db.log",
     "weak_threads": "bench/h2h/scaling/rel1/weak-threads.json",
     "fidelity": "bench/fidelity/results/timing.csv",
@@ -273,6 +275,29 @@ def emit_published(out: Path) -> None:
         write(out, name, text)
 
 
+def reject_zeroed(rows: list[dict]) -> None:
+    """The 2,627,778-byte gzip and 422,654-byte zstd rows are a zeroed file."""
+    for row in rows:
+        size = int(row.get("bytes") or 0)
+        if size in (2627778, 422654):
+            raise SystemExit(f"refusing zeroed-coordinate compressed size {size}")
+        if (
+            row.get("codec") == "gzip"
+            and row.get("op") == "write"
+            and abs(float(row["median_s"]) - 0.11987449049956922) < 1e-6
+        ):
+            raise SystemExit("refusing zeroed-coordinate gzip write 0.120 s")
+
+
+def stream_gbs(text: str) -> dict[str, float]:
+    rates = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].endswith("_gbs"):
+            rates[parts[0]] = float(parts[1])
+    return rates
+
+
 def cell_status(status: str, median: str) -> str:
     if status == "ok" and median:
         return sigfigs(float(median), 4)
@@ -290,6 +315,9 @@ def emit_rel1(out: Path, commit: str) -> None:
     s61 = list(csv.DictReader(io.StringIO(git_show(commit, REL1_FILES["s61"])), delimiter="\t"))
     memory = list(csv.DictReader(io.StringIO(git_show(commit, REL1_FILES["memory"])), delimiter="\t"))
     compressed = json.loads(git_show(commit, REL1_FILES["compressed"]))
+    reject_zeroed(compressed)
+    hardware = json.loads(git_show(commit, REL1_FILES["hardware"]))
+    pwrite = json.loads(git_show(commit, REL1_FILES["pwrite"]))
     weak = json.loads(git_show(commit, REL1_FILES["weak_threads"]))
     ranks = [json.loads(git_show(commit, path)) for path in WEAK_RANKS]
     fidelity = list(csv.DictReader(io.StringIO(git_show(commit, REL1_FILES["fidelity"]))))
@@ -432,61 +460,103 @@ def emit_rel1(out: Path, commit: str) -> None:
             ),
         )
     )
+    plain = int(compressed[0]["plain_bytes"])
+    rates = stream_gbs(hardware["stream"])
+    disk_bps = float(hardware["disk_Bps"])
+    pwrite_s = float(pwrite["raw_write_23589082"]["eight_concurrent_pwrites_s"])
+    fdatasync_s = plain / disk_bps
+    stream_1 = plain / (rates["triad_gbs"] * 1e9)
+    stream_8 = plain / (rates["parallel_triad_gbs"] * 1e9)
+    mpi_disk = [
+        row for row in s61
+        if row["kind"] == "mpi" and row["op"] == "write" and row["sink"] == "disk"
+    ]
+    strong_rows = []
+    for row in mpi_disk:
+        ceiling = f"{pwrite_s:.3f}" if row["file"] == "con-1e6" else ""
+        strong_rows.append(
+            f"{row['file']} & {row['workers']} & {row['median_s']} & {ceiling} \\\\"
+        )
+    strong_rows.append(
+        rf"\multicolumn{{4}}{{@{{}}l@{{}}}}{{Concurrent raw pwrite of the {plain}-byte frame, 8 threads: {pwrite_s:.3f}~s.}} \\"
+    )
+    strong_rows.append(
+        rf"\multicolumn{{4}}{{@{{}}l@{{}}}}{{fdatasync ceiling of that frame, {hardware['disk_sync']}: {sigfigs(fdatasync_s, 4)}~s.}} \\"
+    )
+    strong_rows.append(
+        rf"\multicolumn{{4}}{{@{{}}l@{{}}}}{{STREAM triad ceiling of that frame: {sigfigs(stream_1, 4)}~s at 1 thread, {sigfigs(stream_8, 4)}~s at 8 threads.}} \\"
+    )
+    scaling += "\n" + table_env(
+        "MPI disk writes from the pinned campaign. "
+        "The pwrite column is the concurrent raw-pwrite ceiling of the "
+        f"{plain}-byte frame. "
+        "The fdatasync and STREAM lines are that frame divided by the host rates.",
+        "tab:strong-ceilings",
+        tabular(
+            r"File & Ranks & Median (s) & Pwrite ceiling (s)",
+            strong_rows,
+            "@{}lrrr@{}",
+        ),
+        resize=True,
+    )
     write(out, "scaling.tex", scaling)
 
-    by_codec: dict[str, dict[str, dict]] = {}
+    comp_header = r"Op & Threads & Members & Level & Median (s) & Bytes & Ratio"
+    comp_rows: dict[str, list[str]] = {"gzip": [], "zstd": []}
     for row in compressed:
-        by_codec.setdefault(row["codec"], {})[row["op"]] = row
-    comp_rows = []
-    for codec in ("gzip", "zstd"):
-        read = by_codec[codec]["read"]
-        written = by_codec[codec]["write"]
-        comp_rows.append(
-            f"{codec} & {read['file']} & {sigfigs(read['median_s'], 4)} "
-            f"& {sigfigs(written['median_s'], 4)} \\\\"
+        ratio = row.get("ratio")
+        ratio_cell = sigfigs(float(ratio), 4) if ratio else ""
+        comp_rows[row["codec"]].append(
+            f"{row['op']} & {row['threads']} & {row['members']} & {row['level']} "
+            f"& {sigfigs(float(row['median_s']), 4)} & {row['bytes']} & {ratio_cell} \\\\"
         )
-    # Keep both labels the supplement already cites.
-    gzip_only = [row for row in comp_rows if row.startswith("gzip")]
-    zstd_only = [row for row in comp_rows if row.startswith("zstd")]
     compressed_tex = (
         table_env(
-            "Gzip read and write of the million-atom frame from the pinned campaign. "
-            "Each entry is the median in seconds.",
+            "Gzip of the million-atom frame from the pinned campaign. "
+            "Level 6. Threads and members are the recorded widths. "
+            "Ratio is the plain size divided by the stored size.",
             "tab:gzip",
-            tabular(r"Codec & File & Read & Write", gzip_only, "@{}llrr@{}"),
+            tabular(comp_header, comp_rows["gzip"], "@{}lrrrrrr@{}"),
+            resize=True,
         )
         + "\n"
         + table_env(
-            "Zstd read and write of the same frame from the pinned campaign.",
+            "Zstd of the same frame from the pinned campaign. Level 3. "
+            "Threads, members, bytes and ratio are the recorded values.",
             "tab:zstd",
-            tabular(r"Codec & File & Read & Write", zstd_only, "@{}llrr@{}"),
+            tabular(comp_header, comp_rows["zstd"], "@{}lrrrrrr@{}"),
+            resize=True,
         )
     )
     write(out, "compressed.tex", compressed_tex)
 
-    ase = []
-    readcon_missing = "ModuleNotFoundError" in db_log and "readcon_db" in db_log
+    samples: dict[str, list[float]] = {"readcon-db": [], "ase.db": []}
     for line in db_log.splitlines():
-        if not line.startswith("repeat ") or "kind ase.db " not in line:
+        if not line.startswith("repeat ") or " kind " not in line:
             continue
+        kind = line.split(" kind ", 1)[1].split(" ", 1)[0]
         seconds = line.split("seconds ", 1)[1].split(" ", 1)[0]
-        if seconds != "None":
-            ase.append(float(seconds))
-    ase_median = type7(ase)
-    missing = "readcon-db did not run" if readcon_missing else "readcon-db"
+        if kind in samples and seconds != "None":
+            samples[kind].append(float(seconds))
+    if samples["readcon-db"]:
+        readcon_cell = sigfigs(type7(samples["readcon-db"]), 4)
+        readcon_note = "readcon-db returned a time on every repeat"
+    else:
+        readcon_cell = "did not run"
+        readcon_note = "readcon-db did not run"
     write(
         out,
         "rcdb.tex",
         table_env(
             "Forty-frame ingest from the pinned campaign log. "
-            f"{missing}. "
-            "The ASE database entry is the type-7 median of the six samples in that log.",
+            f"{readcon_note}. "
+            "Each entry is the type-7 median of the samples in that log.",
             "tab:rcdb",
             tabular(
                 r"Store & Median (s)",
                 [
-                    f"readcon-db & {missing} \\\\",
-                    f"ASE database & {sigfigs(ase_median, 4)} \\\\",
+                    f"readcon-db & {readcon_cell} \\\\",
+                    f"ASE database & {sigfigs(type7(samples['ase.db']), 4)} \\\\",
                 ],
                 "@{}lr@{}",
             ),

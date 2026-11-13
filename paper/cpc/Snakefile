@@ -143,7 +143,7 @@ rule reader_figures:
 
 # Pinned campaign. Change REL1_COMMIT when a later release rerun lands.
 # The manuscript switch is \campaignid in src/campaign.tex (published by default).
-REL1_COMMIT = "b73ff2ea"
+REL1_COMMIT = "ea955e473f558d51c016ded882e16073bfacb740"
 
 rule campaign:
     output:

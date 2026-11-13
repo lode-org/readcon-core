@@ -1,27 +1,39 @@
 \begin{table}[tbp]
 \centering
 \footnotesize
-\caption{Gzip read and write of the million-atom frame from the pinned campaign. Each entry is the median in seconds.}
+\caption{Gzip of the million-atom frame from the pinned campaign. Level 6. Threads and members are the recorded widths. Ratio is the plain size divided by the stored size.}
 \label{tab:gzip}
-\begin{tabular}{@{}llrr@{}}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Codec & File & Read & Write \\
+Op & Threads & Members & Level & Median (s) & Bytes & Ratio \\
 \midrule
-gzip & con-1e6 & 0.04675 & 0.1199 \\
+write & 1 & 1 & 6 & 0.3393 & 2648282 & 8.907 \\
+read & 1 & 1 & 6 & 0.05474 & 2648282 & 8.907 \\
+write & 8 & 8 & 6 & 0.07758 & 2651751 & 8.896 \\
+read & 1 & 8 & 6 & 0.05415 & 2651751 & 8.896 \\
+read & 8 & 8 & 6 & 0.04514 & 2651751 & 8.896 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \begin{table}[tbp]
 \centering
 \footnotesize
-\caption{Zstd read and write of the same frame from the pinned campaign.}
+\caption{Zstd of the same frame from the pinned campaign. Level 3. Threads, members, bytes and ratio are the recorded values.}
 \label{tab:zstd}
-\begin{tabular}{@{}llrr@{}}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Codec & File & Read & Write \\
+Op & Threads & Members & Level & Median (s) & Bytes & Ratio \\
 \midrule
-zstd & con-1e6 & 0.04803 & 0.06953 \\
+write & 1 & 1 & 3 & 0.06403 & 763332 & 30.9 \\
+read & 1 & 1 & 3 & 0.05284 & 763332 & 30.9 \\
+write & 8 & 8 & 3 & 0.04082 & 810219 & 29.11 \\
+read & 1 & 8 & 3 & 0.05361 & 810219 & 29.11 \\
+read & 8 & 8 & 3 & 0.04545 & 810219 & 29.11 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
