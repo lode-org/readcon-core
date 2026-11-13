@@ -1,0 +1,647 @@
+warmup 1 samples 6 percentile type7 serial 1
+fresh process per sample, taskset -c 0,1,2,3,4,5,6,7, rotate order each sample
+loadavg 0.17 0.33 0.55 1/305 46527
+governor {"0": "absent", "1": "absent", "2": "absent", "3": "absent", "4": "absent", "5": "absent", "6": "absent", "7": "absent"}
+cpu_mhz 2700.0
+chemfiles has no CON format; CON is not read by the chemfiles library.
+note chemfiles has no CON format; CON is not read by the chemfiles library.
+note readcon-chemfiles is not built; has_chemfiles_support() is false.
+note this chemfiles build reads XYZ as text and does not decompress .gz, .bz2, .xz, or .zst.
+order read 1k readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz
+order read 1k readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order read 1k readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order read 1k chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order read 1k ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order read 1k ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+order write 1k readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz
+order write 1k readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order write 1k readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order write 1k chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order write 1k ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order write 1k ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+read 1k readcon-con 0.000124 0.000006 rss 39761920 bytes 36958 loses none
+sample 0.000121533
+sample 0.000122231
+sample 0.000119413
+sample 0.000126149
+sample 0.000127977
+sample 0.000128338
+write 1k readcon-con 0.000192 0.000020 rss 42991616 bytes 36958 loses none
+sample 0.000214779
+sample 0.000187537
+sample 0.000183614
+sample 0.000190300
+sample 0.000212995
+sample 0.000192991
+read 1k readcon-con-gz 0.000156 0.000006 rss 39892992 bytes 5677 loses none
+sample 0.000156911
+sample 0.000162052
+sample 0.000164727
+sample 0.000155010
+sample 0.000154470
+sample 0.000155762
+write 1k readcon-con-gz 0.000634 0.000012 rss 43499520 bytes 5677 loses none
+sample 0.000643666
+sample 0.000628258
+sample 0.000620767
+sample 0.000632775
+sample 0.000634893
+sample 0.000643791
+read 1k readcon-con-zst 0.000200 0.000003 rss 44318720 bytes 2876 loses none
+sample 0.000203294
+sample 0.000222604
+sample 0.000200987
+sample 0.000199695
+sample 0.000195508
+sample 0.000199557
+write 1k readcon-con-zst 0.000447 0.000021 rss 42332160 bytes 2876 loses none
+sample 0.000460813
+sample 0.000440108
+sample 0.000452908
+sample 0.000468403
+sample 0.000436682
+sample 0.000419997
+read 1k chemfiles-xyz 0.000220 0.000016 rss 33705984 bytes 9069 loses masses,velocities,constraints
+sample 0.000217846
+sample 0.000234724
+sample 0.000243524
+sample 0.000212241
+sample 0.000221642
+sample 0.000214057
+write 1k chemfiles-xyz 0.008449 0.000167 rss 34850816 bytes 9069 loses masses,velocities,constraints
+sample 0.008606182
+sample 0.008687318
+sample 0.008467807
+sample 0.008431018
+sample 0.008291408
+sample 0.008395566
+read 1k ase-extxyz 0.002148 0.000021 rss 83200000 bytes 125134 loses none
+sample 0.002158408
+sample 0.002152160
+sample 0.002109769
+sample 0.002143645
+sample 0.002158832
+sample 0.002132919
+write 1k ase-extxyz 0.004471 0.000041 rss 82876416 bytes 125134 loses none
+sample 0.004517636
+sample 0.004462577
+sample 0.004470583
+sample 0.004393459
+sample 0.004470612
+sample 0.004686812
+read 1k ase-extxyz-gz 0.002543 0.000059 rss 83419136 bytes 3024 loses none
+sample 0.002546122
+sample 0.002572273
+sample 0.002539635
+sample 0.002485872
+sample 0.002495848
+sample 0.014713123
+write 1k ase-extxyz-gz 0.009272 0.000042 rss 83302400 bytes 3024 loses none
+sample 0.009695953
+sample 0.009320789
+sample 0.009277021
+sample 0.009267829
+sample 0.009240089
+sample 0.009267381
+read 1k mda-pdb 0.006886 0.000010 rss 84551680 bytes 81162 loses velocities,constraints
+sample 0.007017302
+sample 0.006888184
+sample 0.006883361
+sample 0.006883131
+sample 0.006894253
+sample 0.006822163
+write 1k mda-pdb 0.007284 0.000056 rss 83785728 bytes 81162 loses velocities,constraints
+sample 0.007321503
+sample 0.007254223
+sample 0.007174373
+sample 0.007273473
+sample 0.007391822
+sample 0.007295000
+read 1k mda-dcd 0.000223 0.000010 rss 83326976 bytes 12436 loses masses,velocities,constraints
+sample 0.000221646
+sample 0.000223812
+sample 0.000227699
+sample 0.000215113
+sample 0.000213236
+sample 0.000239117
+write 1k mda-dcd 0.001565 0.000066 rss 83529728 bytes 12436 loses masses,velocities,constraints
+sample 0.001536052
+sample 0.001622480
+sample 0.001651980
+sample 0.001567521
+sample 0.000806869
+sample 0.001563236
+read 1k mda-xtc 0.000939 0.000057 rss 83499008 bytes 3696 loses masses,velocities,constraints
+sample 0.001015340
+sample 0.000988492
+sample 0.000948954
+sample 0.000919836
+sample 0.000906461
+sample 0.000928475
+write 1k mda-xtc 0.001558 0.000098 rss 83554304 bytes 3696 loses masses,velocities,constraints
+sample 0.001698499
+sample 0.001633675
+sample 0.001524281
+sample 0.001525608
+sample 0.001519137
+sample 0.001590800
+read 1k mda-ncdf 0.000330 0.000013 rss 83023872 bytes 12868 loses masses,velocities,constraints
+sample 0.000349560
+sample 0.000326662
+sample 0.000343531
+sample 0.000330506
+sample 0.000329509
+sample 0.000310982
+write 1k mda-ncdf 0.001235 0.000036 rss 83474432 bytes 12868 loses masses,velocities,constraints
+sample 0.001269888
+sample 0.001219277
+sample 0.001222688
+sample 0.001242816
+sample 0.001265147
+sample 0.001228012
+read 1k ovito-xyz 0.000784 0.000062 rss 93112320 bytes 15097 loses masses,velocities,constraints
+sample 0.000781266
+sample 0.000723012
+sample 0.000705014
+sample 0.000867298
+sample 0.000804571
+sample 0.000785866
+write 1k ovito-xyz 0.000974 0.000083 rss 86753280 bytes 15097 loses masses,velocities,constraints
+sample 0.000956766
+sample 0.000894268
+sample 0.000991363
+sample 0.000997132
+sample 0.000847083
+sample 0.000993861
+note PDB is skipped at 100000 atoms; the atom serial is five digits.
+order read 100k readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz
+order read 100k readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order read 100k readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order read 100k chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order read 100k ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order read 100k ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+order write 100k readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz
+order write 100k readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order write 100k readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order write 100k chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order write 100k ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order write 100k ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+read 100k readcon-con 0.008289 0.000197 rss 62849024 bytes 4303070 loses none
+sample 0.008096377
+sample 0.008493064
+sample 0.008194809
+sample 0.008249701
+sample 0.008328286
+sample 0.008431945
+write 100k readcon-con 0.019548 0.004314 rss 111360000 bytes 4303070 loses none
+sample 0.017946824
+sample 0.020190809
+sample 0.023590349
+sample 0.018904659
+sample 0.023270073
+sample 0.017285221
+read 100k readcon-con-gz 0.018265 0.006848 rss 102559744 bytes 647854 loses none
+sample 0.021934998
+sample 0.021349613
+sample 0.015343374
+sample 0.012889610
+sample 0.021185833
+sample 0.014166315
+write 100k readcon-con-gz 0.047158 0.004837 rss 103555072 bytes 647854 loses none
+sample 0.052669299
+sample 0.048323059
+sample 0.049869089
+sample 0.044196520
+sample 0.043706087
+sample 0.045992048
+read 100k readcon-con-zst 0.008751 0.000177 rss 73375744 bytes 436801 loses none
+sample 0.008689880
+sample 0.008768499
+sample 0.008958401
+sample 0.009140464
+sample 0.008734450
+sample 0.008733418
+write 100k readcon-con-zst 0.019023 0.006671 rss 106362880 bytes 436801 loses none
+sample 0.022540051
+sample 0.022866786
+sample 0.021816301
+sample 0.015508289
+sample 0.016229253
+sample 0.015425058
+read 100k chemfiles-xyz 0.019689 0.000318 rss 53487616 bytes 1135081 loses masses,velocities,constraints
+sample 0.019542775
+sample 0.019102869
+sample 0.019887287
+sample 0.019569650
+sample 0.021709423
+sample 0.019807609
+write 100k chemfiles-xyz 0.831073 0.007426 rss 63408128 bytes 1135081 loses masses,velocities,constraints
+sample 0.852833136
+sample 0.831968983
+sample 0.834458118
+sample 0.825154900
+sample 0.830176060
+sample 0.818069752
+read 100k ase-extxyz 0.198026 0.003948 rss 141293568 bytes 12500136 loses none
+sample 0.197845797
+sample 0.192406526
+sample 0.198205208
+sample 0.202893755
+sample 0.201013799
+sample 0.195869303
+write 100k ase-extxyz 0.423521 0.006354 rss 117843968 bytes 12500136 loses none
+sample 0.418342247
+sample 0.431951916
+sample 0.425060211
+sample 0.421982322
+sample 0.417872482
+sample 0.425787734
+read 100k ase-extxyz-gz 0.223252 0.007751 rss 141701120 bytes 249713 loses none
+sample 0.215832839
+sample 0.232913488
+sample 0.221542060
+sample 0.220152171
+sample 0.224962353
+sample 0.229346736
+write 100k ase-extxyz-gz 0.781459 0.005686 rss 118267904 bytes 249713 loses none
+sample 0.786022250
+sample 0.779071996
+sample 0.786011330
+sample 0.779135408
+sample 0.782516530
+sample 0.780402125
+read 100k mda-dcd 0.004343 0.000188 rss 92506112 bytes 1200436 loses masses,velocities,constraints
+sample 0.004140454
+sample 0.004124154
+sample 0.004389169
+sample 0.004875170
+sample 0.004340538
+sample 0.004346222
+write 100k mda-dcd 0.022017 0.000348 rss 107599872 bytes 1200436 loses masses,velocities,constraints
+sample 0.022286360
+sample 0.022024502
+sample 0.021488143
+sample 0.023033290
+sample 0.022009740
+sample 0.021827634
+read 100k mda-xtc 0.009062 0.000155 rss 90415104 bytes 369516 loses masses,velocities,constraints
+sample 0.009039154
+sample 0.009225892
+sample 0.008954711
+sample 0.009153338
+sample 0.009084304
+sample 0.008961150
+write 100k mda-xtc 0.023880 0.000359 rss 107937792 bytes 369516 loses masses,velocities,constraints
+sample 0.023620798
+sample 0.023773849
+sample 0.024084412
+sample 0.023985456
+sample 0.023351069
+sample 0.024028485
+read 100k mda-ncdf 0.002873 0.000168 rss 88836096 bytes 1200868 loses masses,velocities,constraints
+sample 0.002856119
+sample 0.002703770
+sample 0.002868747
+sample 0.003077762
+sample 0.003083045
+sample 0.002876973
+write 100k mda-ncdf 0.024434 0.000753 rss 112424960 bytes 1200868 loses masses,velocities,constraints
+sample 0.025132988
+sample 0.024526455
+sample 0.025237604
+sample 0.023671019
+sample 0.024342268
+sample 0.024190335
+read 100k ovito-xyz 0.008766 0.000153 rss 104122368 bytes 1735109 loses masses,velocities,constraints
+sample 0.008621987
+sample 0.008814970
+sample 0.008749352
+sample 0.009217591
+sample 0.008783583
+sample 0.008590340
+write 100k ovito-xyz 0.021736 0.000366 rss 106416128 bytes 1735109 loses masses,velocities,constraints
+sample 0.022769034
+sample 0.021710503
+sample 0.021977482
+sample 0.021506735
+sample 0.021760720
+sample 0.021450858
+note PDB is skipped at 1000000 atoms; the atom serial is five digits.
+order read 1M readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz
+order read 1M readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order read 1M readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order read 1M chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order read 1M ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order read 1M ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+order write 1M readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz
+order write 1M readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order write 1M readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order write 1M chemfiles-xyz ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order write 1M ase-extxyz ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order write 1M ase-extxyz-gz mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+read 1M readcon-con 0.090300 0.001273 rss 284309504 bytes 45378064 loses none
+sample 0.090687737
+sample 0.091121597
+sample 0.096241811
+sample 0.089682924
+sample 0.089911518
+sample 0.089640843
+write 1M readcon-con 0.178846 0.001467 rss 533837824 bytes 45378064 loses none
+sample 0.178762378
+sample 0.179437968
+sample 0.176722745
+sample 0.186109701
+sample 0.177537562
+sample 0.178930131
+read 1M readcon-con-gz 0.128509 0.014438 rss 379416576 bytes 5419616 loses none
+sample 0.123016901
+sample 0.095998369
+sample 0.122159637
+sample 0.147893801
+sample 0.137748303
+sample 0.134001177
+write 1M readcon-con-gz 0.448454 0.004152 rss 444198912 bytes 5419616 loses none
+sample 0.444257759
+sample 0.449993754
+sample 0.452013848
+sample 0.450385634
+sample 0.446914943
+sample 0.445876483
+read 1M readcon-con-zst 0.091729 0.000696 rss 293537792 bytes 1414782 loses none
+sample 0.091729238
+sample 0.099421657
+sample 0.091728427
+sample 0.089975391
+sample 0.092588401
+sample 0.091660941
+write 1M readcon-con-zst 0.131578 0.003573 rss 442851328 bytes 1414782 loses none
+sample 0.127801717
+sample 0.130667902
+sample 0.132487623
+sample 0.132761354
+sample 0.128603684
+sample 0.133005802
+read 1M chemfiles-xyz 0.202652 0.002525 rss 233408512 bytes 11700075 loses masses,velocities,constraints
+sample 0.200490044
+sample 0.200102844
+sample 0.203371487
+sample 0.204274064
+sample 0.203376684
+sample 0.201932650
+write 1M chemfiles-xyz 8.274082 0.070333 rss 322619392 bytes 11700075 loses masses,velocities,constraints
+sample 8.479172737
+sample 8.314670963
+sample 8.223492631
+sample 8.277980565
+sample 8.183947310
+sample 8.270183228
+read 1M ase-extxyz 2.064020 0.037949 rss 669722624 bytes 125000140 loses none
+sample 2.060126543
+sample 2.067912717
+sample 1.961471057
+sample 2.075142884
+sample 2.074869138
+sample 2.026866488
+write 1M ase-extxyz 4.178498 0.079351 rss 431710208 bytes 125000140 loses none
+sample 4.122426732
+sample 4.334056052
+sample 4.205397680
+sample 4.151598816
+sample 4.210295499
+sample 4.119084663
+read 1M ase-extxyz-gz 2.299240 0.028606 rss 670193664 bytes 2775716 loses none
+sample 2.271999616
+sample 2.306846442
+sample 2.291632623
+sample 2.318788773
+sample 2.285719217
+sample 2.342262466
+write 1M ase-extxyz-gz 8.978432 0.086113 rss 437719040 bytes 2775716 loses none
+sample 9.003476456
+sample 9.046087055
+sample 8.953388154
+sample 8.947966179
+sample 8.931410584
+sample 9.071131002
+read 1M mda-dcd 0.030382 0.001015 rss 179040256 bytes 12000436 loses masses,velocities,constraints
+sample 0.037905600
+sample 0.029547198
+sample 0.031010274
+sample 0.030207913
+sample 0.029772544
+sample 0.030555502
+write 1M mda-dcd 0.215076 0.002609 rss 327223296 bytes 12000436 loses masses,velocities,constraints
+sample 0.215794130
+sample 0.211982665
+sample 0.219254162
+sample 0.217087461
+sample 0.214087738
+sample 0.214358382
+read 1M mda-xtc 0.070885 0.000311 rss 155260928 bytes 3720100 loses masses,velocities,constraints
+sample 0.070808426
+sample 0.070856191
+sample 0.070914689
+sample 0.070696371
+sample 0.071203598
+sample 0.071668980
+write 1M mda-xtc 0.232635 0.001114 rss 330989568 bytes 3720100 loses masses,velocities,constraints
+sample 0.233338911
+sample 0.232376013
+sample 0.231550930
+sample 0.235503456
+sample 0.232893055
+sample 0.232026475
+read 1M mda-ncdf 0.013797 0.000683 rss 142710784 bytes 12000868 loses masses,velocities,constraints
+sample 0.013622694
+sample 0.013610806
+sample 0.014405137
+sample 0.013202692
+sample 0.013972076
+sample 0.014944652
+write 1M mda-ncdf 0.240893 0.012337 rss 375160832 bytes 12000868 loses masses,velocities,constraints
+sample 0.249882254
+sample 0.243994384
+sample 0.233707930
+sample 0.254018495
+sample 0.237790965
+sample 0.235500136
+read 1M ovito-xyz 0.085278 0.000503 rss 172886016 bytes 17700103 loses masses,velocities,constraints
+sample 0.085052193
+sample 0.085542410
+sample 0.086677997
+sample 0.084695897
+sample 0.085022311
+sample 0.085503104
+write 1M ovito-xyz 0.205031 0.002555 rss 286134272 bytes 17700103 loses masses,velocities,constraints
+sample 0.206166912
+sample 0.202838070
+sample 0.205412321
+sample 0.204650671
+sample 0.205990726
+sample 0.202207224
+order read traj readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz
+order read traj readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order read traj readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order read traj chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order read traj ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order read traj ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+order write traj readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz
+order write traj readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con
+order write traj readcon-con-zst chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz
+order write traj chemfiles-xyz ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst
+order write traj ase-extxyz ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz
+order write traj ase-extxyz-gz mda-pdb mda-dcd mda-xtc mda-ncdf ovito-xyz readcon-con readcon-con-gz readcon-con-zst chemfiles-xyz ase-extxyz
+read traj readcon-con 0.000750 0.000027 rss 42035200 bytes 302664 loses none
+sample 0.000758892
+sample 0.000768823
+sample 0.000740535
+sample 0.000728585
+sample 0.000739103
+sample 0.000768972
+write traj readcon-con 0.001531 0.000787 rss 52062208 bytes 302664 loses none
+sample 0.001535745
+sample 0.002544051
+sample 0.001526365
+sample 0.001497873
+sample 0.001496961
+sample 0.002555554
+read traj readcon-con-gz 0.000951 0.000034 rss 46161920 bytes 44174 loses none
+sample 0.000930974
+sample 0.000951313
+sample 0.000943755
+sample 0.000992618
+sample 0.000989086
+sample 0.000950816
+write traj readcon-con-gz 0.005660 0.000062 rss 48390144 bytes 44174 loses none
+sample 0.005659351
+sample 0.005659951
+sample 0.005710118
+sample 0.005865663
+sample 0.005615744
+sample 0.005627586
+read traj readcon-con-zst 0.002142 0.000187 rss 50900992 bytes 9766 loses none
+sample 0.002040442
+sample 0.002060469
+sample 0.002223773
+sample 0.002555066
+sample 0.002234719
+sample 0.001204671
+write traj readcon-con-zst 0.001304 0.000023 rss 47667200 bytes 9766 loses none
+sample 0.001346775
+sample 0.001292379
+sample 0.001288654
+sample 0.001296680
+sample 0.001317485
+sample 0.001311373
+read traj chemfiles-xyz 0.001384 0.000036 rss 34164736 bytes 93552 loses masses,velocities,constraints
+sample 0.001380577
+sample 0.001417345
+sample 0.001414444
+sample 0.001366690
+sample 0.001387357
+sample 0.001369301
+write traj chemfiles-xyz 0.066035 0.000319 rss 35469312 bytes 93552 loses masses,velocities,constraints
+sample 0.066354363
+sample 0.065466096
+sample 0.066049827
+sample 0.066019417
+sample 0.066728452
+sample 0.065939820
+read traj ase-extxyz 0.015287 0.000121 rss 84822016 bytes 1001072 loses none
+sample 0.015389895
+sample 0.015226506
+sample 0.015107563
+sample 0.015351486
+sample 0.015233182
+sample 0.015341582
+write traj ase-extxyz 0.033846 0.000456 rss 84131840 bytes 1001072 loses none
+sample 0.033755259
+sample 0.034258309
+sample 0.034252165
+sample 0.033704549
+sample 0.033935905
+sample 0.033553239
+read traj ase-extxyz-gz 0.021158 0.000190 rss 85006336 bytes 23257 loses none
+sample 0.021277584
+sample 0.021146077
+sample 0.021032082
+sample 0.020985873
+sample 0.021170007
+sample 0.023015413
+write traj ase-extxyz-gz 0.079075 0.003514 rss 84400128 bytes 23257 loses none
+sample 0.082837418
+sample 0.077712708
+sample 0.078244326
+sample 0.083998494
+sample 0.078936567
+sample 0.079213717
+read traj mda-pdb 0.015526 0.000436 rss 86226944 bytes 648316 loses velocities,constraints
+sample 0.015554868
+sample 0.015497626
+sample 0.015887907
+sample 0.015826619
+sample 0.015264189
+sample 0.015240970
+write traj mda-pdb 0.053175 0.000498 rss 84342784 bytes 648316 loses velocities,constraints
+sample 0.052261158
+sample 0.053209988
+sample 0.056168151
+sample 0.053140430
+sample 0.053305258
+sample 0.052664731
+read traj mda-dcd 0.000463 0.000012 rss 83660800 bytes 96996 loses masses,velocities,constraints
+sample 0.000498505
+sample 0.000462158
+sample 0.000464635
+sample 0.000457474
+sample 0.000460138
+sample 0.000475092
+write traj mda-dcd 0.001981 0.000081 rss 84045824 bytes 96996 loses masses,velocities,constraints
+sample 0.002040829
+sample 0.002036543
+sample 0.001937601
+sample 0.001967323
+sample 0.001993967
+sample 0.001914581
+read traj mda-xtc 0.001329 0.000031 rss 83828736 bytes 29568 loses masses,velocities,constraints
+sample 0.001370250
+sample 0.001331289
+sample 0.001362676
+sample 0.001307619
+sample 0.001323646
+sample 0.001325949
+write traj mda-xtc 0.002098 0.000053 rss 84236288 bytes 29568 loses masses,velocities,constraints
+sample 0.002113169
+sample 0.002082329
+sample 0.002189955
+sample 0.001343631
+sample 0.002139994
+sample 0.002079171
+read traj mda-ncdf 0.000448 0.000022 rss 83382272 bytes 97232 loses masses,velocities,constraints
+sample 0.000436953
+sample 0.000465571
+sample 0.000449636
+sample 0.000487262
+sample 0.000446940
+sample 0.000437252
+write traj mda-ncdf 0.002740 0.000044 rss 84162560 bytes 97232 loses masses,velocities,constraints
+sample 0.003070183
+sample 0.002735321
+sample 0.002697672
+sample 0.002763748
+sample 0.002707945
+sample 0.002744742
+read traj ovito-xyz 0.002395 0.000739 rss 93734912 bytes 127776 loses masses,velocities,constraints
+sample 0.002258376
+sample 0.003184410
+sample 0.002531521
+sample 0.002227993
+sample 0.002210924
+sample 0.003122834
+write traj ovito-xyz 0.005307 0.000763 rss 87613440 bytes 127776 loses masses,velocities,constraints
+sample 0.004651304
+sample 0.005785772
+sample 0.005148284
+sample 0.004873986
+sample 0.005945066
+sample 0.005466193

@@ -2,7 +2,7 @@
 """Fair CON and extended-XYZ head-to-head.
 
 One warmup, then serial samples. The median and IQR are type-7. Each
-sample is a fresh process pinned to the same core, with that warmup
+sample is a fresh process pinned to the same CPU set, with that warmup
 inside the process and outside the clock. Arms are interleaved: sample
 ``i`` rotates which tool runs first, instead of finishing one tool's
 block before the next. Python startup stays outside the clock. The eOn
@@ -26,6 +26,14 @@ import time
 from pathlib import Path
 
 import numpy as np
+from sample_protocol import (
+    THREAD_ENV,
+    core_list,
+    cpu_mhz,
+    host_snapshot,
+    pin_cores,
+    rotate,
+)
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
@@ -33,16 +41,6 @@ WORK = BENCH / "work"
 EON_BIN = WORK / "eon_time"
 ABS_TOL = 1e-8
 CELL_TOL = 1e-6
-THREAD_ENV = (
-    "OMP_NUM_THREADS",
-    "OPENBLAS_NUM_THREADS",
-    "MKL_NUM_THREADS",
-    "NUMEXPR_NUM_THREADS",
-    "VECLIB_MAXIMUM_THREADS",
-)
-# Every arm uses this core. A shared mask keeps the cache and the
-# scheduler the same; it is not a per-tool core.
-CORE = "0"
 
 
 def serial_threads() -> None:
@@ -55,53 +53,6 @@ def serial_threads() -> None:
         threadpoolctl.threadpool_limits(limits=1)
     except Exception:
         return
-
-
-def pin_cores() -> None:
-    os.sched_setaffinity(0, {int(part) for part in CORE.split(",") if part})
-
-
-def cpu_mhz() -> float | None:
-    try:
-        text = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-    for line in text.splitlines():
-        if line.lower().startswith("cpu mhz"):
-            return float(line.split(":", 1)[1])
-    return None
-
-
-def host_snapshot() -> dict:
-    """Load, governor, and lscpu for this machine, taken outside the clock."""
-    pin_cores()
-    governors = {}
-    for cpu in range(os.cpu_count() or 1):
-        path = Path(f"/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor")
-        governors[str(cpu)] = (
-            path.read_text(encoding="utf-8").strip() if path.is_file() else "absent"
-        )
-    lscpu = subprocess.run(
-        ["lscpu"],
-        check=False,
-        text=True,
-        capture_output=True,
-    )
-    return {
-        "loadavg": Path("/proc/loadavg").read_text(encoding="utf-8").strip(),
-        "affinity": sorted(os.sched_getaffinity(0)),
-        "core": CORE,
-        "governor": governors,
-        "cpu_mhz": cpu_mhz(),
-        "lscpu": lscpu.stdout,
-    }
-
-
-def rotate(items: list, shift: int) -> list:
-    if not items:
-        return []
-    step = shift % len(items)
-    return items[step:] + items[:step]
 
 
 def type7(values: list[float]) -> tuple[float, float]:
@@ -445,7 +396,14 @@ def run_python_sample(job: dict) -> dict:
     result_path = Path(job["result"])
     result_path.parent.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(
-        ["taskset", "-c", CORE, sys.executable, str(Path(__file__).resolve()), "worker"],
+        [
+            "taskset",
+            "-c",
+            core_list(),
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "worker",
+        ],
         input=json.dumps(job),
         text=True,
         capture_output=True,
@@ -461,20 +419,44 @@ def run_python_sample(job: dict) -> dict:
 
 
 def run_eon_sample(op: str, cache: str, src: Path, dest: Path) -> dict:
-    completed = subprocess.run(
-        ["taskset", "-c", CORE, str(EON_BIN), op, cache, os.fspath(src), os.fspath(dest)],
-        check=False,
-        text=True,
-        capture_output=True,
-    )
     payload = None
-    for line in (completed.stdout or "").splitlines():
-        if line.startswith("{") and line.endswith("}"):
-            payload = json.loads(line)
-    if payload is None or payload.get("status") != "ok" or completed.returncode != 0:
-        raise SystemExit(
-            f"eon {op} failed {completed.returncode} {completed.stdout} {completed.stderr}"
+    completed = None
+    # A cold drop is not always visible to mincore on the first try.
+    # The retry is outside the clock: wall_s comes from a clean drop.
+    for _ in range(40):
+        completed = subprocess.run(
+            [
+                "taskset",
+                "-c",
+                core_list(),
+                str(EON_BIN),
+                op,
+                cache,
+                os.fspath(src),
+                os.fspath(dest),
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
         )
+        payload = None
+        for line in (completed.stdout or "").splitlines():
+            if line.startswith("{") and line.endswith("}"):
+                payload = json.loads(line)
+        if payload is not None and payload.get("status") == "cache_fault":
+            time.sleep(0.05)
+            continue
+        break
+    if (
+        payload is None
+        or payload.get("status") != "ok"
+        or completed is None
+        or completed.returncode != 0
+    ):
+        stdout = completed.stdout if completed is not None else ""
+        stderr = completed.stderr if completed is not None else ""
+        code = completed.returncode if completed is not None else 1
+        raise SystemExit(f"eon {op} failed {code} {stdout} {stderr}")
     payload["wall_s"] = float(payload["wall_s"])
     payload["loadavg"] = Path("/proc/loadavg").read_text(encoding="utf-8").split()[0]
     payload["cpu_mhz"] = cpu_mhz()
@@ -889,7 +871,7 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
         f"versions {json.dumps(versions, sort_keys=True)}",
         "startup excluded",
         f"warmup 1 samples {repeats} percentile type7 serial 1",
-        f"fresh process per sample, taskset -c {CORE}, rotate order each sample",
+        f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
         "cache warm and cold use the same prepare_cache for every reader",
         f"loadavg {host['loadavg']}",
         f"governor {json.dumps(host['governor'], sort_keys=True)}",
@@ -1018,7 +1000,7 @@ def run_table2(paths: dict[str, Path], out: Path, repeats: int) -> None:
         "startup": "excluded",
         "process": "fresh subprocess per sample",
         "interleave": "rotate-per-sample",
-        "affinity": f"taskset -c {CORE}",
+        "affinity": f"taskset -c {core_list()}",
         "fields": "positions masses cell species, plus vel and fixed when the file declares them",
     }
     (out / "h2h.json").write_text(json.dumps(payload) + "\n")
@@ -1340,7 +1322,7 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
         f"versions {json.dumps(versions, sort_keys=True)}",
         "startup excluded",
         f"warmup 1 samples {repeats} percentile type7 serial 1",
-        f"fresh process per sample, taskset -c {CORE}, rotate order each sample",
+        f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
         "writes unlink then create",
         "eon corpus mirror is not in the timed read or write",
         f"loadavg {host['loadavg']}",
@@ -1465,7 +1447,9 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
                 and max_abs(check["fixed"], source["fixed"]) <= ABS_TOL
             )
             if expect_vel:
-                ok = ok and max_abs(check["velocities"], source["velocities"]) <= ABS_TOL
+                ok = (
+                    ok and max_abs(check["velocities"], source["velocities"]) <= ABS_TOL
+                )
             rows.append(
                 {
                     "file": name,
@@ -1498,7 +1482,7 @@ def run_con_h2h(paths: dict[str, Path], out: Path, repeats: int) -> None:
         "startup": "excluded",
         "process": "fresh subprocess per sample",
         "interleave": "rotate-per-sample",
-        "affinity": f"taskset -c {CORE}",
+        "affinity": f"taskset -c {core_list()}",
         "skipped": [
             {
                 "file": "con-h2h",

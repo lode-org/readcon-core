@@ -226,6 +226,18 @@ rule final_table2:
 
 
 # Same compressed .con/.extxyz files, readcon vs ASE vs eOn.
+# Same structures in each library's own format. readcon is CON
+# (plain, gz, zst). Chemfiles has no CON reader; the other arms are
+# extxyz, XYZ, PDB, DCD, XTC, and NetCDF where that library imports.
+rule cross_format:
+    output:
+        "bench/h2h/scaling/rel1/cross-format.json",
+        "bench/h2h/scaling/rel1/cross-format.log",
+        "bench/h2h/scaling/rel1/cross-format.tsv",
+    shell:
+        "python3 bench/h2h/cross_format.py --out bench/h2h/scaling/rel1 --repeats 6"
+
+
 rule compressed_h2h:
     output:
         "bench/h2h/scaling/rel1/compressed-h2h.json",

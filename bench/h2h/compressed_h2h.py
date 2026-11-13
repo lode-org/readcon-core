@@ -7,6 +7,12 @@ handles CON. Writes time readcon's default and explicit thread counts
 against ASE writing into a gzip or zstd stream at the same levels
 (gzip 6, zstd 3). Sizes are the 1k, 100k and 1M single-frame grids from
 the existing head-to-head generator.
+
+Each sample is a fresh process pinned to the same CPU set. One warmup
+runs inside that process, outside the clock. Sample order rotates so
+no tool's repeats form a block. The timed read copies positions, masses,
+and cell, and does not build a chemical formula. The formula check stays
+outside the clock.
 """
 
 from __future__ import annotations
@@ -23,6 +29,14 @@ import urllib.request
 from pathlib import Path
 
 import numpy as np
+from sample_protocol import (
+    core_list,
+    host_snapshot,
+    pin_cores,
+    result_line,
+    rotate,
+    spawn_worker,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = Path(__file__).resolve().parent
@@ -53,15 +67,66 @@ def type7(values: list[float]) -> tuple[float, float]:
     return float(median), float(q75 - q25)
 
 
-def time_call(fn, repeats: int) -> tuple[float, float, list[float]]:
-    fn()
-    samples = []
-    for _ in range(repeats):
-        started = time.perf_counter()
-        fn()
-        samples.append(time.perf_counter() - started)
-    median, iqr = type7(samples)
-    return median, iqr, samples
+def _read_payload(kind: str, source: str):
+    import readcon
+
+    if kind == "con":
+        return readcon.read_con(source, n_threads=1)
+    return readcon.read_extxyz(source, n_threads=1)
+
+
+def _once(job: dict):
+    """Timed call. Write inputs are loaded before this returns."""
+    if job["op"] == "read":
+        path = job["path"]
+        kind = job["kind"]
+        tool = job["tool"]
+        if tool == "readcon" and kind == "con":
+            return lambda: touch_readcon_con(path)
+        if tool == "readcon":
+            return lambda: touch_readcon_extxyz(path)
+        if tool == "ase":
+            return lambda: touch_ase(path, kind)
+        if tool == "eon":
+            return lambda: touch_eon(path)
+        raise SystemExit(f"unknown reader {tool}")
+    dest = Path(job["dest"])
+    kind = job["kind"]
+    if job["tool"] == "readcon":
+        payload = _read_payload(kind, job["source"])
+        threads = job["threads"]
+        codec = job["codec"]
+        return lambda: write_readcon(dest, kind, payload, threads, codec)
+    images = ase_images(job["source"], kind)
+    return lambda: write_ase(dest, kind, images)
+
+
+def worker_main() -> None:
+    pin_cores()
+    serial_threads()
+    once = _once(json.loads(sys.stdin.read()))
+    once()
+    started = time.perf_counter()
+    once()
+    result_line(time.perf_counter() - started)
+
+
+def interleaved(arms: list[dict], repeats: int, lines: list[str], tag: str) -> dict:
+    """One fresh process per sample. Sample ``i`` rotates which arm is first."""
+    found = {arm["name"]: [] for arm in arms}
+    loads = {arm["name"]: [] for arm in arms}
+    script = Path(__file__).resolve()
+    for index in range(repeats):
+        order = rotate(arms, index)
+        names = [arm["name"] for arm in order]
+        lines.append(f"order {tag} {' '.join(names)}")
+        print(f"  sample {index} {' '.join(names)}", flush=True)
+        for arm in order:
+            result = spawn_worker(script, arm["job"])
+            found[arm["name"]].append(float(result["wall_s"]))
+            loads[arm["name"]].append(result.get("loadavg"))
+            print(f"    {arm['name']} {result['wall_s']:.4f}", flush=True)
+    return {"samples": found, "loadavg": loads}
 
 
 def ensure_eon() -> None:
@@ -290,11 +355,10 @@ def write_ase(path: Path, kind: str, images) -> None:
             ase_write(handle, images, format=fmt)
         return
     compressor = zstandard.ZstdCompressor(level=ZSTD_LEVEL)
-    with path.open("wb") as raw:
-        with compressor.stream_writer(raw) as stream:
-            text = io.StringIO()
-            ase_write(text, images, format=fmt)
-            stream.write(text.getvalue().encode("utf-8"))
+    with path.open("wb") as raw, compressor.stream_writer(raw) as stream:
+        text = io.StringIO()
+        ase_write(text, images, format=fmt)
+        stream.write(text.getvalue().encode("utf-8"))
 
 
 def prepare_inputs() -> dict[str, dict]:
@@ -364,10 +428,12 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=6)
     args = parser.parse_args()
     serial_threads()
+    pin_cores()
     ensure_eon()
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
-    lscpu = subprocess.check_output(["lscpu"], text=True)
+    host = host_snapshot()
+    lscpu = host["lscpu"]
     (out / "compressed-h2h-lscpu.txt").write_text(lscpu)
     sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -377,9 +443,13 @@ def main() -> None:
     lines = [
         f"commit {sha}",
         f"warmup 1 samples {args.repeats} percentile type7 serial 1",
+        f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
         "levels gzip 6 zstd 3",
         "shared files are readcon's default compressed write",
         "timed read copies positions, masses, and cell; no reader builds a formula",
+        f"loadavg {host['loadavg']}",
+        f"governor {json.dumps(host['governor'], sort_keys=True)}",
+        f"cpu_mhz {host['cpu_mhz']}",
     ]
 
     def add(row: dict) -> None:
@@ -402,15 +472,8 @@ def main() -> None:
                     ),
                     "ase": lambda path, kind=kind: read_ase(path, kind),
                 }
-                timers = {
-                    "readcon": (
-                        touch_readcon_con if kind == "con" else touch_readcon_extxyz
-                    ),
-                    "ase": lambda path, kind=kind: touch_ase(path, kind),
-                }
                 if kind == "con":
                     checkers["eon"] = read_eon
-                    timers["eon"] = touch_eon
                 views = {}
                 for name, fn in checkers.items():
                     views[name] = fn(os.fspath(path))
@@ -422,106 +485,139 @@ def main() -> None:
                 ext_ref = views["readcon"] if kind == "extxyz" else reference
                 if kind == "extxyz":
                     same(ext_ref, views["ase"], f"check {file_id} ase")
-                for name, fn in timers.items():
-
-                    def once(fn=fn, path=path):
-                        fn(os.fspath(path))
-
-                    median, iqr, samples = time_call(once, args.repeats)
+                read_arms = [
+                    {
+                        "name": name,
+                        "job": {
+                            "op": "read",
+                            "tool": name,
+                            "kind": kind,
+                            "path": os.fspath(path),
+                        },
+                    }
+                    for name in checkers
+                ]
+                print(f"compressed read {file_id}", flush=True)
+                timed = interleaved(read_arms, args.repeats, lines, f"read {file_id}")
+                for arm in read_arms:
+                    samples = timed["samples"][arm["name"]]
+                    median, iqr = type7(samples)
                     add(
                         {
                             "op": "read",
                             "file": file_id,
-                            "tool": name,
+                            "tool": arm["name"],
                             "threads": None,
                             "atoms": case["atoms"],
                             "median_s": median,
                             "iqr_s": iqr,
                             "samples_s": samples,
+                            "sample_loadavg": timed["loadavg"][arm["name"]],
                         }
                     )
                     lines.append(
-                        f"read {file_id} {name} {median:.6f} {iqr:.6f} "
+                        f"read {file_id} {arm['name']} {median:.6f} {iqr:.6f} "
                         + " ".join(f"{sample:.6f}" for sample in samples)
                     )
 
-                images = None
                 if kind == "con":
-                    images = read_ase(os.fspath(path), "con")["images"]
+                    images = ase_images(os.fspath(path), "con")
+                    source = os.fspath(case["plain"])
                 else:
-                    images = read_ase(os.fspath(path), "extxyz")["images"]
+                    images = ase_images(os.fspath(path), "extxyz")
+                    source = os.fspath(WORK / "compressed-h2h" / f"{label}.extxyz")
                 payload = case["frames"] if kind == "con" else case["extxyz"]
                 suffix = ".gz" if codec == "gzip" else ".zst"
+                check_reader = (
+                    read_readcon_con if kind == "con" else read_readcon_extxyz
+                )
+                expect = ext_ref if kind == "extxyz" else reference
+                write_arms = []
                 for threads in (None, *THREADS):
                     dest = out / "compressed-h2h-tmp" / f"{file_id}-t{threads}{suffix}"
                     dest.parent.mkdir(parents=True, exist_ok=True)
-
-                    def once_write(
-                        dest=dest,
-                        threads=threads,
-                        kind=kind,
-                        payload=payload,
-                        codec=codec,
-                    ):
-                        write_readcon(dest, kind, payload, threads, codec)
-
-                    once_write()
-                    check_reader = (
-                        read_readcon_con if kind == "con" else read_readcon_extxyz
-                    )
+                    write_readcon(dest, kind, payload, threads, codec)
                     same(
-                        ext_ref if kind == "extxyz" else reference,
+                        expect,
                         check_reader(os.fspath(dest)),
                         f"rewrite {file_id} {threads}",
                     )
-                    median, iqr, samples = time_call(once_write, args.repeats)
+                    thread_name = "default" if threads is None else str(threads)
+                    write_arms.append(
+                        {
+                            "name": f"readcon-{thread_name}",
+                            "tool": "readcon",
+                            "threads": thread_name,
+                            "job": {
+                                "op": "write",
+                                "tool": "readcon",
+                                "kind": kind,
+                                "source": source,
+                                "dest": os.fspath(dest),
+                                "threads": threads,
+                                "codec": codec,
+                            },
+                        }
+                    )
+                dest = out / "compressed-h2h-tmp" / f"{file_id}-ase{suffix}"
+                write_ase(dest, kind, images)
+                write_arms.append(
+                    {
+                        "name": "ase",
+                        "tool": "ase",
+                        "threads": None,
+                        "job": {
+                            "op": "write",
+                            "tool": "ase",
+                            "kind": kind,
+                            "source": os.fspath(path),
+                            "dest": os.fspath(dest),
+                            "codec": codec,
+                        },
+                    }
+                )
+                print(f"compressed write {file_id}", flush=True)
+                timed = interleaved(write_arms, args.repeats, lines, f"write {file_id}")
+                for arm in write_arms:
+                    samples = timed["samples"][arm["name"]]
+                    median, iqr = type7(samples)
+                    if arm["tool"] == "ase":
+                        head = f"write {file_id} ase"
+                    else:
+                        shown = None if arm["threads"] == "default" else arm["threads"]
+                        head = f"write {file_id} readcon {shown}"
                     add(
                         {
                             "op": "write",
                             "file": file_id,
-                            "tool": "readcon",
-                            "threads": "default" if threads is None else threads,
+                            "tool": arm["tool"],
+                            "threads": arm["threads"],
                             "atoms": case["atoms"],
                             "median_s": median,
                             "iqr_s": iqr,
                             "samples_s": samples,
+                            "sample_loadavg": timed["loadavg"][arm["name"]],
                         }
                     )
                     lines.append(
-                        f"write {file_id} readcon {threads} {median:.6f} {iqr:.6f} "
+                        f"{head} {median:.6f} {iqr:.6f} "
                         + " ".join(f"{sample:.6f}" for sample in samples)
                     )
-                dest = out / "compressed-h2h-tmp" / f"{file_id}-ase{suffix}"
 
-                def once_ase(dest=dest, kind=kind, images=images):
-                    write_ase(dest, kind, images)
-
-                once_ase()
-                median, iqr, samples = time_call(once_ase, args.repeats)
-                add(
-                    {
-                        "op": "write",
-                        "file": file_id,
-                        "tool": "ase",
-                        "threads": None,
-                        "atoms": case["atoms"],
-                        "median_s": median,
-                        "iqr_s": iqr,
-                        "samples_s": samples,
-                    }
-                )
-                lines.append(
-                    f"write {file_id} ase {median:.6f} {iqr:.6f} "
-                    + " ".join(f"{sample:.6f}" for sample in samples)
-                )
-
+    host_end = host_snapshot()
+    lines.append(f"loadavg_end {host_end['loadavg']}")
     payload = {
         "commit": sha,
         "lscpu": lscpu,
+        "host": host,
+        "host_end": host_end,
         "warmup": 1,
         "repeats": args.repeats,
         "percentile": "type7",
         "serial": True,
+        "process": "fresh subprocess per sample",
+        "interleave": "rotate-per-sample",
+        "affinity": f"taskset -c {core_list()}",
         "rows": rows,
     }
     (out / "compressed-h2h.json").write_text(json.dumps(payload, indent=2) + "\n")
@@ -530,4 +626,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "worker":
+        worker_main()
+    else:
+        main()

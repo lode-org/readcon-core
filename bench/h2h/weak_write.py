@@ -10,9 +10,11 @@ The fraction of the ceiling is ``max(format alone, sink(N)) / T(N)``.
 
 One warmup, then six serial samples. The median and the interquartile
 range use the type-7 percentile (NumPy ``linear``). Each sample unlinks
-the destination before creating it. Page cache is the ext4 filesystem
-that holds ``/tmp``. The second ceiling is the same 8-thread sink on
-tmpfs (``/dev/shm``).
+the destination before creating it, and each sample is a fresh process
+pinned to the same CPU set. Sample order rotates across the arms in a
+group so no arm's repeats form a block. Page cache is the ext4
+filesystem that holds ``/tmp``. The second ceiling is the same 8-thread
+sink on tmpfs (``/dev/shm``).
 """
 
 from __future__ import annotations
@@ -40,7 +42,15 @@ BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 sys.path.insert(0, str(BENCH))
 
-from campaign_protocol import type7  # noqa: E402
+from campaign_protocol import type7
+from sample_protocol import (
+    core_list,
+    host_snapshot,
+    pin_cores,
+    result_line,
+    rotate,
+    spawn_worker,
+)
 
 WIDTHS = (1, 2, 4, 8)
 WARMUP = 1
@@ -138,20 +148,72 @@ def pwrite_chunks(path: Path, chunks: list[tuple[bytes, int]], total: int) -> No
         os.close(fd)
 
 
-def timed(once, log, label: str, repeats: int = REPEATS) -> dict:
+def _script() -> Path:
+    return Path(__file__).resolve()
+
+
+def worker_main() -> None:
+    """One warmup outside the clock, then one measured sample."""
+    pin_cores()
+    job = json.loads(sys.stdin.read())
+    op = job["op"]
+    dest = Path(job["dest"])
+    if op == "sink":
+        frame = Path(job["frame"]).read_bytes()
+        workers = int(job["workers"])
+        chunks, serial, total = sink_parts(frame, workers)
+        if job["mode"] == "concurrent":
+            once = lambda: pwrite_chunks(dest, chunks, total)
+        elif job["mode"] == "serial":
+            once = lambda: pwrite_chunks(dest, [(serial, 0)], total)
+        else:
+            raise SystemExit(f"unknown sink mode {job['mode']}")
+    elif op in ("weak", "strong"):
+        ensure_module()
+        frames = load_frames(int(job["copies"]))
+        workers = int(job["workers"])
+        once = lambda: weak_once(frames, workers, dest)
+    elif op == "probe":
+        produced = Path(job["payload"]).read_bytes()
+        once = lambda: pwrite_chunks(dest, [(produced, 0)], len(produced))
+    else:
+        raise SystemExit(f"unknown op {op}")
     once()
-    log.write(f"{label} warmup\n")
-    log.flush()
-    samples: list[float] = []
+    started = time.perf_counter()
+    once()
+    result_line(time.perf_counter() - started)
+
+
+def interleaved_timed(arms: list[dict], log, repeats: int = REPEATS) -> dict[str, dict]:
+    """Fresh process per sample. Sample ``i`` rotates which arm is first."""
+    pin_cores()
+    store = {arm["name"]: [] for arm in arms}
+    loads = {arm["name"]: [] for arm in arms}
+    script = _script()
     for index in range(repeats):
-        started = time.perf_counter()
-        once()
-        elapsed = time.perf_counter() - started
-        samples.append(elapsed)
-        log.write(f"{label} sample={index} seconds={elapsed:.9f}\n")
+        order = rotate(arms, index)
+        log.write("order " + " ".join(arm["name"] for arm in order) + "\n")
         log.flush()
-    median, iqr = type7(samples)
-    return {"samples_s": samples, "median_s": median, "iqr_s": iqr}
+        for arm in order:
+            result = spawn_worker(script, arm["job"])
+            sample_index = len(store[arm["name"]])
+            store[arm["name"]].append(float(result["wall_s"]))
+            loads[arm["name"]].append(result.get("loadavg"))
+            log.write(
+                f"{arm['label']} sample={sample_index} "
+                f"seconds={result['wall_s']:.9f} load={result.get('loadavg')}\n"
+            )
+            log.flush()
+    out = {}
+    for name, samples in store.items():
+        median, iqr = type7(samples)
+        out[name] = {
+            "samples_s": samples,
+            "median_s": median,
+            "iqr_s": iqr,
+            "sample_loadavg": loads[name],
+        }
+    return out
 
 
 def ideal_efficiency(serial_s: float, parallel_s: float) -> float:
@@ -281,24 +343,8 @@ def check_sink(frame: bytes, workers: int, dest: Path) -> None:
         )
 
 
-def measure_sink(frame: bytes, directory: Path, workers: int, log) -> dict:
-    chunks, serial, total = sink_parts(frame, workers)
-    concurrent_path = directory / f"sink-n{workers}.bin"
-    serial_path = directory / f"sink-serial-n{workers}.bin"
-    directory.mkdir(parents=True, exist_ok=True)
-    label = f"sink {directory.name} workers={workers}"
-    concurrent = timed(
-        lambda: pwrite_chunks(concurrent_path, chunks, total),
-        log,
-        label + " concurrent",
-    )
-    single = timed(
-        lambda: pwrite_chunks(serial_path, [(serial, 0)], total),
-        log,
-        label + " serial",
-    )
-    concurrent_path.unlink(missing_ok=True)
-    serial_path.unlink(missing_ok=True)
+def _sink_result(frame: bytes, workers: int, concurrent: dict, single: dict) -> dict:
+    _chunks, _serial, total = sink_parts(frame, workers)
     return {
         "workers": workers,
         "bytes": total,
@@ -309,63 +355,140 @@ def measure_sink(frame: bytes, directory: Path, workers: int, log) -> dict:
 
 
 def measure_writes(frame: bytes, log) -> dict:
-    """Page-cache weak writes, tmpfs weak writes, and both sinks."""
+    """Page-cache and tmpfs sinks. Arms rotate; each sample is a new process."""
+    FRAME_PAYLOAD.write_bytes(frame)
+    arms = []
+    for workers in WIDTHS:
+        check_sink(frame, workers, PAGE / "sink-check.bin")
+        check_sink(frame, workers, TMPFS / "sink-check.bin")
+        for medium, directory in (("pagecache", PAGE), ("tmpfs", TMPFS)):
+            directory.mkdir(parents=True, exist_ok=True)
+            for mode, filename in (
+                ("concurrent", f"sink-n{workers}.bin"),
+                ("serial", f"sink-serial-n{workers}.bin"),
+            ):
+                name = f"{medium}-{workers}-{mode}"
+                arms.append(
+                    {
+                        "name": name,
+                        "label": f"sink {directory.name} workers={workers} {mode}",
+                        "medium": medium,
+                        "workers": workers,
+                        "mode": mode,
+                        "dest": directory / filename,
+                        "job": {
+                            "op": "sink",
+                            "frame": os.fspath(FRAME_PAYLOAD),
+                            "workers": workers,
+                            "mode": mode,
+                            "dest": os.fspath(directory / filename),
+                        },
+                    }
+                )
+    timed = interleaved_timed(arms, log)
     page_sink = {}
     tmpfs_sink = {}
     for workers in WIDTHS:
-        check_sink(frame, workers, PAGE / "sink-check.bin")
-        page_sink[str(workers)] = measure_sink(frame, PAGE, workers, log)
-        check_sink(frame, workers, TMPFS / "sink-check.bin")
-        tmpfs_sink[str(workers)] = measure_sink(frame, TMPFS, workers, log)
+        for medium, store in (("pagecache", page_sink), ("tmpfs", tmpfs_sink)):
+            concurrent = timed[f"{medium}-{workers}-concurrent"]
+            single = timed[f"{medium}-{workers}-serial"]
+            store[str(workers)] = _sink_result(frame, workers, concurrent, single)
+    for arm in arms:
+        arm["dest"].unlink(missing_ok=True)
     return {"pagecache": page_sink, "tmpfs": tmpfs_sink, "frame_bytes": len(frame)}
 
 
-def measure_one_width(frames, workers: int, log) -> dict:
-    """Weak write, then a one-thread pwrite of the bytes that write produced."""
-    out = {}
-    for medium, directory in (("pagecache", PAGE), ("tmpfs", TMPFS)):
-        dest = directory / f"weak-x{workers}.con"
-        produced = capture_write(frames, workers, dest)
-        weak = timed(
-            lambda dest=dest, frames=frames, workers=workers: weak_once(
-                frames, workers, dest
-            ),
-            log,
-            f"weak {medium} workers={workers}",
-        )
-        dest.unlink(missing_ok=True)
-        probe_path = directory / f"format-probe-x{workers}.bin"
-        probe = timed(
-            lambda path=probe_path, produced=produced: pwrite_chunks(
-                path, [(produced, 0)], len(produced)
-            ),
-            log,
-            f"format-probe {medium} workers={workers}",
-        )
-        probe_path.unlink(missing_ok=True)
-        out[medium] = {
-            "weak": weak,
-            "format_probe": probe,
-            "produced_bytes": len(produced),
-            "format_alone_s": weak["median_s"] - probe["median_s"],
-        }
-    return out
+def measure_widths(log) -> dict:
+    """Weak write and the one-thread pwrite of the bytes that write produced."""
+    produced_bytes: dict[tuple[str, int], int] = {}
+    arms = []
+    for workers in WIDTHS:
+        frames = load_frames(workers)
+        for medium, directory in (("pagecache", PAGE), ("tmpfs", TMPFS)):
+            directory.mkdir(parents=True, exist_ok=True)
+            dest = directory / f"weak-x{workers}.con"
+            produced = capture_write(frames, workers, dest)
+            blob = directory / f"produced-x{workers}.bin"
+            blob.write_bytes(produced)
+            produced_bytes[(medium, workers)] = len(produced)
+            arms.append(
+                {
+                    "name": f"weak-{medium}-{workers}",
+                    "label": f"weak {medium} workers={workers}",
+                    "job": {
+                        "op": "weak",
+                        "copies": workers,
+                        "workers": workers,
+                        "dest": os.fspath(dest),
+                    },
+                }
+            )
+            probe = directory / f"format-probe-x{workers}.bin"
+            arms.append(
+                {
+                    "name": f"probe-{medium}-{workers}",
+                    "label": f"format-probe {medium} workers={workers}",
+                    "job": {
+                        "op": "probe",
+                        "payload": os.fspath(blob),
+                        "dest": os.fspath(probe),
+                    },
+                }
+            )
+        del frames
+    timed = interleaved_timed(arms, log)
+    writes = {}
+    for workers in WIDTHS:
+        writes[str(workers)] = {}
+        for medium, directory in (("pagecache", PAGE), ("tmpfs", TMPFS)):
+            weak = timed[f"weak-{medium}-{workers}"]
+            probe = timed[f"probe-{medium}-{workers}"]
+            writes[str(workers)][medium] = {
+                "weak": weak,
+                "format_probe": probe,
+                "produced_bytes": produced_bytes[(medium, workers)],
+                "format_alone_s": weak["median_s"] - probe["median_s"],
+            }
+            (directory / f"weak-x{workers}.con").unlink(missing_ok=True)
+            (directory / f"format-probe-x{workers}.bin").unlink(missing_ok=True)
+            (directory / f"produced-x{workers}.bin").unlink(missing_ok=True)
+    return writes
 
 
-def measure_strong(frames, log) -> dict:
+def measure_strong(log) -> dict:
+    arms = []
+    for workers in WIDTHS:
+        dest = TMPFS / f"strong-n{workers}.con"
+        arms.append(
+            {
+                "name": str(workers),
+                "label": f"strong tmpfs workers={workers}",
+                "job": {
+                    "op": "strong",
+                    "copies": 1,
+                    "workers": workers,
+                    "dest": os.fspath(dest),
+                },
+            }
+        )
+    timed = interleaved_timed(arms, log)
     rows = {}
     for workers in WIDTHS:
-        dest = TMPFS / "strong-one.con"
-
-        def once(dest=dest, frames=frames, workers=workers):
-            weak_once(frames, workers, dest)
-
-        row = timed(once, log, f"strong tmpfs workers={workers}")
-        dest.unlink(missing_ok=True)
+        row = timed[str(workers)]
+        (TMPFS / f"strong-n{workers}.con").unlink(missing_ok=True)
         median, iqr = PERF14_STRONG[workers]
         limit = median + iqr
         if row["median_s"] > limit:
-            again = timed(once, log, f"strong tmpfs workers={workers} remeasure")
+            again = interleaved_timed(
+                [
+                    {
+                        "name": str(workers),
+                        "label": f"strong tmpfs workers={workers} remeasure",
+                        "job": arms[WIDTHS.index(workers)]["job"],
+                    }
+                ],
+                log,
+            )[str(workers)]
             again["remeasured"] = True
             again["first"] = row
             row = again
@@ -427,7 +550,9 @@ def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
 
     lines = [
         f"perf17 on {sha}. Same host as lscpu.txt. One warmup, six serial samples,",
-        "numpy linear (type-7) median and IQR. The writer is unchanged.",
+        "numpy linear (type-7) median and IQR. Each sample is a fresh process",
+        f"pinned with taskset -c {core_list()}, and sample order rotates.",
+        "The writer is unchanged.",
         "Page cache is ext4 (/tmp). The second ceiling is tmpfs (/dev/shm).",
         "Ideal efficiency is T(1)/T(N). The ceiling is max(format alone, sink(N)).",
         "ceiling_fraction is that ceiling divided by the weak-write median.",
@@ -476,19 +601,32 @@ def _log(out: Path):
     return (out / "samples.log").open("a", encoding="utf-8")
 
 
+def _protocol_fields(host: dict) -> dict:
+    return {
+        "process": "fresh subprocess per sample",
+        "interleave": "rotate-per-sample",
+        "affinity": f"taskset -c {core_list()}",
+        "host": host,
+    }
+
+
 def cmd_sink(out: Path) -> dict:
     if not CON.is_file():
         raise SystemExit(f"missing {CON}")
     ensure_module()
-    (out / "lscpu.txt").write_text(
-        subprocess.check_output(["lscpu"], text=True), encoding="utf-8"
-    )
+    pin_cores()
+    host = host_snapshot()
+    (out / "lscpu.txt").write_text(host["lscpu"], encoding="utf-8")
     (out / "samples.log").write_text("", encoding="utf-8")
     frames = load_frames(1)
     frame = capture_write(frames, 1, PAGE / "frame-payload.con")
     FRAME_PAYLOAD.write_bytes(frame)
     log = _log(out)
-    log.write(f"frame_bytes {len(frame)} commit {head_sha()}\n")
+    log.write(
+        f"frame_bytes {len(frame)} commit {head_sha()} "
+        f"taskset -c {core_list()} loadavg {host['loadavg']}\n"
+    )
+    log.write(f"governor {json.dumps(host['governor'], sort_keys=True)}\n")
     log.flush()
     try:
         sink = measure_writes(frame, log)
@@ -503,6 +641,7 @@ def cmd_sink(out: Path) -> dict:
         "pagecache": str(PAGE),
         "tmpfs": str(TMPFS),
         "sink": sink,
+        **_protocol_fields(host),
     }
     (out / "sink-ceiling.json").write_text(json.dumps(payload, indent=2) + "\n")
     return payload
@@ -514,14 +653,16 @@ def cmd_weak(out: Path) -> None:
         raise SystemExit("sink ceiling has not been measured")
     payload = json.loads(sink_path.read_text())
     ensure_module()
+    pin_cores()
+    host = host_snapshot()
     log = _log(out)
+    log.write(
+        f"weak commit {head_sha()} taskset -c {core_list()} loadavg {host['loadavg']}\n"
+    )
+    log.flush()
     try:
-        strong = measure_strong(load_frames(1), log)
-        writes = {}
-        for workers in WIDTHS:
-            frames = load_frames(workers)
-            writes[str(workers)] = measure_one_width(frames, workers, log)
-            del frames
+        strong = measure_strong(log)
+        writes = measure_widths(log)
     finally:
         log.close()
     table = assemble_table(writes, payload["sink"])
@@ -539,6 +680,7 @@ def cmd_weak(out: Path) -> None:
         "strong_tmpfs": strong,
         "sink": payload["sink"],
         "table": table,
+        **_protocol_fields(host),
     }
     (out / "rows.json").write_text(json.dumps(rows, indent=2) + "\n")
     (out / "weak-write.json").write_text(
@@ -617,6 +759,9 @@ def self_check() -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "worker":
+        worker_main()
+        return
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("campaign", "sink", "weak", "self-check"))
     parser.add_argument("--out", type=Path, default=BENCH / "scaling" / "perf17")
