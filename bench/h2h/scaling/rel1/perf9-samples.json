@@ -1,0 +1,119 @@
+{
+  "commit": "5ed50f19692b5b171d7ed8cdba25f329a20b45fd",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  },
+  "output_bytes": 23589082,
+  "sha256_prefix": "361546ecf130",
+  "why_not_a_counting_pass": "The coordinate length is the formatted length. Counting it runs the same float conversion and then throws the bytes away, so the writer formats once into a reused buffer and copies those bytes into the mapping.",
+  "one_worker": "One worker keeps the serial writer. A mapped write of the same frame at one rank was 0.063 s on tmpfs and 0.054 s on page cache, against a serial write near 0.044 s.",
+  "full_machine": "In-memory formatting at 8 threads is 0.0076-0.0080 s. A second copy thread on each of those cores slows the format, so a full machine pwrites the finished range. The shared-mapping memcpy ceiling at 8 threads is 0.0059 s on tmpfs and 0.0121 s on page cache.",
+  "mapping_memcpy_ceiling": {
+    "bytes": 23589082,
+    "tmpfs": {
+      "1": {
+        "median_s": 0.0130735,
+        "iqr_s": 0.00040075000000000006,
+        "samples_s": [
+          0.013837,
+          0.013049,
+          0.013567,
+          0.013098,
+          0.012645,
+          0.013049
+        ]
+      },
+      "2": {
+        "median_s": 0.008942499999999999,
+        "iqr_s": 0.00033050000000000093,
+        "samples_s": [
+          0.008898,
+          0.009034,
+          0.009222,
+          0.008987,
+          0.008623,
+          0.008582
+        ]
+      },
+      "4": {
+        "median_s": 0.0067139999999999995,
+        "iqr_s": 8.824999999999979e-05,
+        "samples_s": [
+          0.006795,
+          0.007519,
+          0.006692,
+          0.006516,
+          0.006692,
+          0.006736
+        ]
+      },
+      "8": {
+        "median_s": 0.005949,
+        "iqr_s": 0.0002310000000000003,
+        "samples_s": [
+          0.006272,
+          0.005994,
+          0.005743,
+          0.006021,
+          0.005526,
+          0.005904
+        ]
+      }
+    },
+    "page_cache": {
+      "1": {
+        "median_s": 0.015452500000000001,
+        "iqr_s": 0.00012974999999999966,
+        "samples_s": [
+          0.015557,
+          0.015409,
+          0.015924,
+          0.01549,
+          0.015209,
+          0.015415
+        ]
+      },
+      "2": {
+        "median_s": 0.013089,
+        "iqr_s": 0.00019524999999999924,
+        "samples_s": [
+          0.012753,
+          0.013278,
+          0.013106,
+          0.013264,
+          0.013072,
+          0.013015
+        ]
+      },
+      "4": {
+        "median_s": 0.011553,
+        "iqr_s": 0.00029799999999999965,
+        "samples_s": [
+          0.011808,
+          0.011597,
+          0.012178,
+          0.011233,
+          0.011509,
+          0.01144
+        ]
+      },
+      "8": {
+        "median_s": 0.012146500000000001,
+        "iqr_s": 0.0006154999999999997,
+        "samples_s": [
+          0.012538,
+          0.012284,
+          0.011726,
+          0.011809,
+          0.012606,
+          0.012009
+        ]
+      }
+    }
+  },
+  "pwrite_ceiling_reference": "bench/h2h/scaling/rel1/perf8-samples.json"
+}
