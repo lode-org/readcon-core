@@ -204,6 +204,9 @@ allow_exact = {
     # The one macro the paper reads. scripts/cargo_version_tex.py writes
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
+    # The fidelity campaign records the package it measured.
+    "bench/fidelity/results/fidelity.json",
+    "bench/fidelity/results/timing.json",
 }
 skip_dirs = {
     ".git",

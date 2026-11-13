@@ -1,6 +1,6 @@
 hardware Intel(R) Xeon(R) Processor x86_64 nproc 8 memory_kib 49342816
 serial, warmup 1, samples 6, percentile type 7
-eon_commit 
+eon_commit
 warmup tool=readcon op=read fixture=claisen.con warmup_s=1.093207000e-03
 sample tool=readcon op=read fixture=claisen.con sample_s=1.084131000e-03
 sample tool=readcon op=read fixture=claisen.con sample_s=1.049285998e-03

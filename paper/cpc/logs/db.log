@@ -13,8 +13,8 @@ repeat 0 kind readcon-db seconds None rss_bytes None rss_above_baseline None fra
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 0 kind ase.db seconds 0.0662161729997024 rss_bytes 91820032 rss_above_baseline 62550016 frames 40 error 
-repeat 1 kind ase.db seconds 0.08001528000022518 rss_bytes 91746304 rss_above_baseline 62476288 frames 40 error 
+repeat 0 kind ase.db seconds 0.0662161729997024 rss_bytes 91820032 rss_above_baseline 62550016 frames 40 error
+repeat 1 kind ase.db seconds 0.08001528000022518 rss_bytes 91746304 rss_above_baseline 62476288 frames 40 error
 repeat 1 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
@@ -23,8 +23,8 @@ repeat 2 kind readcon-db seconds None rss_bytes None rss_above_baseline None fra
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 2 kind ase.db seconds 0.062386165001953486 rss_bytes 91545600 rss_above_baseline 62275584 frames 40 error 
-repeat 3 kind ase.db seconds 0.05803996399845346 rss_bytes 91648000 rss_above_baseline 62377984 frames 40 error 
+repeat 2 kind ase.db seconds 0.062386165001953486 rss_bytes 91545600 rss_above_baseline 62275584 frames 40 error
+repeat 3 kind ase.db seconds 0.05803996399845346 rss_bytes 91648000 rss_above_baseline 62377984 frames 40 error
 repeat 3 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
@@ -33,8 +33,8 @@ repeat 4 kind readcon-db seconds None rss_bytes None rss_above_baseline None fra
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'
 
-repeat 4 kind ase.db seconds 0.10883305999959703 rss_bytes 89235456 rss_above_baseline 59965440 frames 40 error 
-repeat 5 kind ase.db seconds 0.06946091500140028 rss_bytes 91631616 rss_above_baseline 62361600 frames 40 error 
+repeat 4 kind ase.db seconds 0.10883305999959703 rss_bytes 89235456 rss_above_baseline 59965440 frames 40 error
+repeat 5 kind ase.db seconds 0.06946091500140028 rss_bytes 91631616 rss_above_baseline 62361600 frames 40 error
 repeat 5 kind readcon-db seconds None rss_bytes None rss_above_baseline None frames None error Traceback (most recent call last):
   File "<string>", line 8, in <module>
 ModuleNotFoundError: No module named 'readcon_db'

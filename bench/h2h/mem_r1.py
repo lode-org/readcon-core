@@ -43,7 +43,9 @@ def host_line() -> str:
             cpu = line.split(":", 1)[1].strip()
             break
     mem = next(
-        line for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines() if line.startswith("MemTotal")
+        line
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines()
+        if line.startswith("MemTotal")
     )
     return f"{platform.node()} {cpu} {mem} {platform.platform()}"
 
@@ -121,7 +123,9 @@ def build_python() -> None:
     if link.is_symlink() or link.exists():
         link.unlink()
     link.symlink_to(so.name)
-    os.environ["PYTHONPATH"] = str(folder) + os.pathsep + os.environ.get("PYTHONPATH", "")
+    os.environ["PYTHONPATH"] = (
+        str(folder) + os.pathsep + os.environ.get("PYTHONPATH", "")
+    )
 
 
 def rust_times(path: Path, mode: str, tag: str | None = None) -> dict:
@@ -153,11 +157,20 @@ def tool_times(binary: Path, op: str, path: Path, lang: str) -> dict:
         ["taskset", "-c", "0", str(binary), op, str(path), str(out), str(repeats)],
         f"{lang}.log",
     )
-    samples = [float(line.split()[1]) for line in text.splitlines() if line.startswith("read ")]
+    samples = [
+        float(line.split()[1]) for line in text.splitlines() if line.startswith("read ")
+    ]
     if lang == "fortran":
         samples = samples[WARMUP:]
     median, iqr = type7(samples)
-    return {"lang": lang, "mode": "path", "median_s": median, "iqr_s": iqr, "samples_s": samples, "raw": text}
+    return {
+        "lang": lang,
+        "mode": "path",
+        "median_s": median,
+        "iqr_s": iqr,
+        "samples_s": samples,
+        "raw": text,
+    }
 
 
 def python_times(path: Path) -> dict:
@@ -181,14 +194,29 @@ def python_times(path: Path) -> dict:
     median, iqr = type7(samples)
     raw = "\n".join(f"read {sample:.9f}" for sample in samples) + "\n"
     (LOG / "python.log").write_text(raw, encoding="utf-8")
-    return {"lang": "python", "mode": "path", "median_s": median, "iqr_s": iqr, "samples_s": samples, "raw": raw}
+    return {
+        "lang": "python",
+        "mode": "path",
+        "median_s": median,
+        "iqr_s": iqr,
+        "samples_s": samples,
+        "raw": raw,
+    }
 
 
 def ceilings() -> dict:
     stream_bin = ROOT / "target" / "release" / "examples" / "stream_triad"
     stream = run(["taskset", "-c", "0", str(stream_bin)], "stream.log")
     disk = OUT / "disk-ceiling.bin"
-    cmd = ["dd", "if=/dev/zero", f"of={disk}", "bs=1M", "count=256", "conv=fdatasync", "status=none"]
+    cmd = [
+        "dd",
+        "if=/dev/zero",
+        f"of={disk}",
+        "bs=1M",
+        "count=256",
+        "conv=fdatasync",
+        "status=none",
+    ]
     subprocess.run(cmd, cwd=ROOT, check=True)
     samples = []
     for _ in range(SAMPLES):
@@ -197,7 +225,9 @@ def ceilings() -> dict:
         samples.append(time.perf_counter() - started)
     median, iqr = type7(samples)
     nbytes = 256 * 1024 * 1024
-    (LOG / "fdatasync.log").write_text("".join(f"{sample:.9f}\n" for sample in samples), encoding="utf-8")
+    (LOG / "fdatasync.log").write_text(
+        "".join(f"{sample:.9f}\n" for sample in samples), encoding="utf-8"
+    )
     return {
         "host": host_line(),
         "stream": stream,
@@ -288,7 +318,9 @@ def reuse_artifacts() -> bool:
         BENCH / "work" / "time_cpp",
         BENCH / "work" / "time_f",
     ]
-    return os.environ.get("MEM_R1_REUSE") == "1" and all(path.is_file() for path in names)
+    return os.environ.get("MEM_R1_REUSE") == "1" and all(
+        path.is_file() for path in names
+    )
 
 
 def main() -> None:
@@ -299,7 +331,9 @@ def main() -> None:
     packed = gzip_path(plain)
     if reuse_artifacts():
         folder = ROOT / "target" / "release"
-        os.environ["PYTHONPATH"] = str(folder) + os.pathsep + os.environ.get("PYTHONPATH", "")
+        os.environ["PYTHONPATH"] = (
+            str(folder) + os.pathsep + os.environ.get("PYTHONPATH", "")
+        )
     else:
         build_rust()
         compile_bindings()
@@ -333,11 +367,19 @@ def main() -> None:
         "time-v.log",
     )
     (OUT / "rows.json").write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
-    (OUT / "hardware.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
+    (OUT / "hardware.json").write_text(
+        json.dumps(info, indent=2) + "\n", encoding="utf-8"
+    )
     for row in rows:
-        print(f"{row['lang']:8} {row['mode']:8} {row['median_s']:.4f} iqr {row['iqr_s']:.4f}", flush=True)
+        print(
+            f"{row['lang']:8} {row['mode']:8} {row['median_s']:.4f} iqr {row['iqr_s']:.4f}",
+            flush=True,
+        )
     print(info["host"], flush=True)
-    print(f"fdatasync {info['disk_median_s']:.4f}s {info['disk_Bps']/1e6:.0f} MB/s", flush=True)
+    print(
+        f"fdatasync {info['disk_median_s']:.4f}s {info['disk_Bps'] / 1e6:.0f} MB/s",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
