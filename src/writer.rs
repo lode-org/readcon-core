@@ -144,37 +144,117 @@ impl SpellCache {
     }
 
     fn push_column(&mut self, buf: &mut Vec<u8>, value: f64, column: Option<&mut FmtSlot>) {
-        let bits = value.to_bits();
-        // Low bits of nearby coordinates are not independent. Mix before
-        // taking the slot so a lattice of similar values does not collide.
-        let mut mixed = bits ^ (bits >> 30);
-        mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        mixed ^= mixed >> 27;
-        let idx = (mixed >> 55) as usize;
-        let (text, len) = {
-            let slot = &mut self.slots[idx];
-            if slot.state != 2 || slot.bits != bits {
-                let n = match write_short_decimal(&mut slot.text, value) {
-                    Some(n) => n,
-                    None => {
-                        let n = unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) };
-                        debug_assert!(n <= 24);
-                        n
-                    }
-                };
-                slot.bits = bits;
-                slot.len = n as u8;
-                slot.state = 2;
-            }
-            (slot.text, slot.len)
-        };
-        buf.extend_from_slice(&text[..len as usize]);
-        if let Some(column) = column {
-            column.text = text;
-            column.len = len;
-            column.bits = bits;
-            column.state = 2;
+        let start = buf.len();
+        if buf.capacity().saturating_sub(start) < 24 {
+            buf.reserve(24);
         }
+        // SAFETY: the spare capacity is at least 24. `write_finite` writes
+        // at most 24 bytes and returns a pointer inside that window.
+        unsafe {
+            let base = buf.as_mut_ptr();
+            let end = self.write_finite(base.add(start), value, column);
+            buf.set_len(end.offset_from(base) as usize);
+        }
+    }
+
+    /// Spell a finite value at `dst` and return the cursor after it.
+    ///
+    /// A column hit or a cache hit is a short copy. A miss formats once
+    /// into the slot, then that same spelling is what the line receives.
+    ///
+    /// # Safety
+    /// `dst` must be writable for 24 bytes. `value` must be finite.
+    /// Every spelling copied from a slot is at most 24 bytes, which is
+    /// the size of `FmtSlot::text`.
+    #[inline(always)]
+    unsafe fn write_finite(
+        &mut self,
+        dst: *mut u8,
+        value: f64,
+        column: Option<&mut FmtSlot>,
+    ) -> *mut u8 {
+        unsafe {
+            let bits = value.to_bits();
+            if let Some(col) = column.as_ref() {
+                if col.state == 2 && col.bits == bits {
+                    return copy_spelling(dst, col.text.as_ptr(), col.len as usize);
+                }
+            }
+            let idx = spell_index(bits);
+            let (text, len) = {
+                let slot = &mut self.slots[idx];
+                if slot.state != 2 || slot.bits != bits {
+                    fill_spell_slot(slot, value, bits);
+                }
+                (slot.text, slot.len)
+            };
+            let out = copy_spelling(dst, text.as_ptr(), len as usize);
+            if let Some(col) = column {
+                col.text = text;
+                col.len = len;
+                col.bits = bits;
+                col.state = 2;
+            }
+            out
+        }
+    }
+}
+
+/// Low bits of nearby coordinates are not independent. Mix before taking
+/// the slot so a lattice of similar values does not collide.
+#[inline(always)]
+fn spell_index(bits: u64) -> usize {
+    let mut mixed = bits ^ (bits >> 30);
+    mixed = mixed.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed ^= mixed >> 27;
+    (mixed >> 55) as usize
+}
+
+#[cold]
+#[inline(never)]
+fn fill_spell_slot(slot: &mut FmtSlot, value: f64, bits: u64) {
+    let n = match write_short_decimal(&mut slot.text, value) {
+        Some(n) => n,
+        // SAFETY: `slot.text` is 24 bytes. `ryu::raw::format64` writes at
+        // most 24 bytes for a finite f64, which is the only value that
+        // reaches this point.
+        None => unsafe { ryu::raw::format64(value, slot.text.as_mut_ptr()) },
+    };
+    debug_assert!(n <= 24);
+    slot.bits = bits;
+    slot.len = n as u8;
+    slot.state = 2;
+}
+
+/// Copy at most 24 spelling bytes. Wider stores stay in the writer; a
+/// memcpy of a coordinate was a call on every cache hit.
+///
+/// # Safety
+/// `src` is readable for `n` bytes and `dst` is writable for `n`.
+/// `n` is at most 24. The 8-byte stores run only when `n` covers them,
+/// so they stay inside that range.
+#[inline(always)]
+unsafe fn copy_spelling(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    debug_assert!(n <= 24);
+    unsafe {
+        let mut i = 0;
+        if n >= 8 {
+            (dst as *mut u64).write_unaligned((src as *const u64).read_unaligned());
+            i = 8;
+        }
+        if n >= 16 {
+            (dst.add(8) as *mut u64).write_unaligned((src.add(8) as *const u64).read_unaligned());
+            i = 16;
+        }
+        if n >= 24 {
+            (dst.add(16) as *mut u64).write_unaligned((src.add(16) as *const u64).read_unaligned());
+            i = 24;
+        }
+        while i < n {
+            *dst.add(i) = *src.add(i);
+            i += 1;
+        }
+        dst.add(n)
     }
 }
 
@@ -506,7 +586,16 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
-        ensure_unique_ids(&frame.atom_data)?;
+        // Column 5 is usually 0..n-1, which is already unique. The packed id
+        // column is one contiguous scan; the coordinate loop then checks
+        // that the ids actually written match that same range.
+        let sequential_ids = frame
+            .atom_ids
+            .as_slice()
+            .is_some_and(|ids| ids.len() == frame.atom_data.len() && u64s_are_index(ids));
+        if !sequential_ids {
+            ensure_unique_ids(&frame.atom_data)?;
+        }
         let prec = self.float_format;
         if frame.header.spec_version >= 2 {
             self.refresh_metadata_cache(frame)?;
@@ -606,13 +695,18 @@ impl<W: Write> ConFrameWriter<W> {
 
             // --- Write the Atom Data ---
             let mut atom_idx_offset = 0;
+            let mut ids_match = sequential_ids;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
                 push_str_line(buf, symbol);
                 push_component_line(buf, "Coordinates of Component", type_idx);
 
                 for i in 0..num_atoms_in_type {
-                    let atom = &frame.atom_data[atom_idx_offset + i];
+                    let index = atom_idx_offset + i;
+                    let atom = &frame.atom_data[index];
+                    if ids_match && atom.atom_id != index as u64 {
+                        ids_match = false;
+                    }
                     push_xyz_line(
                         buf,
                         ryu,
@@ -625,6 +719,9 @@ impl<W: Write> ConFrameWriter<W> {
                     );
                 }
                 atom_idx_offset += num_atoms_in_type;
+            }
+            if sequential_ids && (!ids_match || atom_idx_offset != frame.atom_data.len()) {
+                ensure_unique_ids(&frame.atom_data)?;
             }
 
             // --- Write optional velocity section ---
@@ -883,6 +980,28 @@ impl<W: Write> ConFrameWriter<W> {
     }
 }
 
+fn u64s_are_index(ids: &[u64]) -> bool {
+    let n = ids.len();
+    let mut i = 0;
+    while i + 4 <= n {
+        if ids[i] != i as u64
+            || ids[i + 1] != (i as u64) + 1
+            || ids[i + 2] != (i as u64) + 2
+            || ids[i + 3] != (i as u64) + 3
+        {
+            return false;
+        }
+        i += 4;
+    }
+    while i < n {
+        if ids[i] != i as u64 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
 fn ensure_unique_ids(atoms: &[crate::types::AtomDatum]) -> Result<(), WriteError> {
     let n = atoms.len();
     if n == 0 {
@@ -918,60 +1037,148 @@ fn written_fixed_flag(fixed: [bool; 3], spec_version: u32) -> u8 {
     }
 }
 
+const DIGIT_PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
 fn push_u64(buf: &mut Vec<u8>, n: u64) {
     // Two digits per division. u64 stays in a hardware remainder; the old
     // path widened every atom id to u128 and called the software divider.
-    // One to four digits are stored directly. A memcpy of that many bytes
-    // was most of the write profile.
-    const DIGITS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-    if n < 10 {
-        buf.push(b'0' + n as u8);
-        return;
+    let start = buf.len();
+    if buf.capacity().saturating_sub(start) < 20 {
+        buf.reserve(20);
     }
-    if n < 100 {
-        let r = n as usize;
-        buf.push(DIGITS[r * 2]);
-        buf.push(DIGITS[r * 2 + 1]);
-        return;
+    // SAFETY: the spare capacity is at least 20. `write_u64` writes at
+    // most 20 digits and returns a pointer inside that window.
+    unsafe {
+        let base = buf.as_mut_ptr();
+        let end = write_u64(base.add(start), n);
+        buf.set_len(end.offset_from(base) as usize);
     }
-    if n < 1000 {
-        let hi = (n / 100) as usize;
-        let r = (n % 100) as usize;
-        buf.push(b'0' + hi as u8);
-        buf.push(DIGITS[r * 2]);
-        buf.push(DIGITS[r * 2 + 1]);
-        return;
+}
+
+/// Decimal digits of `n` at `dst`. At most 20 bytes.
+///
+/// # Safety
+/// `dst` must be writable for 20 bytes. Each branch below writes at most
+/// that many: one byte, one pair, or a pair plus a shorter prefix. The
+/// tail call writes at most 20.
+#[inline(always)]
+unsafe fn write_u64(dst: *mut u8, n: u64) -> *mut u8 {
+    unsafe { write_u64_at(dst, n) }
+}
+
+/// # Safety
+/// `dst` must be writable for 20 bytes, the same bound as `write_u64`.
+#[inline(always)]
+unsafe fn write_u64_at(dst: *mut u8, n: u64) -> *mut u8 {
+    unsafe {
+        if n < 10 {
+            *dst = b'0' + n as u8;
+            return dst.add(1);
+        }
+        if n < 100 {
+            return write_pair(dst, n as usize);
+        }
+        if n < 1_000 {
+            let hi = (n / 100) as u8;
+            *dst = b'0' + hi;
+            return write_pair(dst.add(1), (n % 100) as usize);
+        }
+        if n < 10_000 {
+            let hi = (n / 100) as usize;
+            let lo = (n % 100) as usize;
+            let dst = write_pair(dst, hi);
+            return write_pair(dst, lo);
+        }
+        if n < 100_000 {
+            let n = n as u32;
+            let lo = (n % 100) as usize;
+            let n = n / 100;
+            let mid = (n % 100) as usize;
+            let hi = (n / 100) as u8;
+            *dst = b'0' + hi;
+            let dst = write_pair(dst.add(1), mid);
+            return write_pair(dst, lo);
+        }
+        if n < 1_000_000 {
+            let n = n as u32;
+            let lo = (n % 100) as usize;
+            let n = n / 100;
+            let mid = (n % 100) as usize;
+            let hi = (n / 100) as usize;
+            let dst = write_pair(dst, hi);
+            let dst = write_pair(dst, mid);
+            return write_pair(dst, lo);
+        }
+        if n < 10_000_000 {
+            let n = n as u32;
+            let lo = (n % 100) as usize;
+            let n = n / 100;
+            let mid = (n % 100) as usize;
+            let n = n / 100;
+            let hi = (n % 100) as usize;
+            let top = (n / 100) as u8;
+            *dst = b'0' + top;
+            let dst = write_pair(dst.add(1), hi);
+            let dst = write_pair(dst, mid);
+            return write_pair(dst, lo);
+        }
+        if n < 100_000_000 {
+            let n = n as u32;
+            let d0 = (n % 100) as usize;
+            let n = n / 100;
+            let d1 = (n % 100) as usize;
+            let n = n / 100;
+            let d2 = (n % 100) as usize;
+            let d3 = (n / 100) as usize;
+            let dst = write_pair(dst, d3);
+            let dst = write_pair(dst, d2);
+            let dst = write_pair(dst, d1);
+            return write_pair(dst, d0);
+        }
+        write_u64_rest(dst, n)
     }
-    if n < 10_000 {
-        let hi = (n / 100) as usize;
-        let r = (n % 100) as usize;
-        buf.push(DIGITS[hi * 2]);
-        buf.push(DIGITS[hi * 2 + 1]);
-        buf.push(DIGITS[r * 2]);
-        buf.push(DIGITS[r * 2 + 1]);
-        return;
+}
+
+/// # Safety
+/// `dst` must be writable for 2 bytes. `r` is at most 99, so both
+/// indexes fall inside `DIGIT_PAIRS`.
+#[inline(always)]
+unsafe fn write_pair(dst: *mut u8, r: usize) -> *mut u8 {
+    debug_assert!(r < 100);
+    unsafe {
+        *dst = DIGIT_PAIRS[r * 2];
+        *dst.add(1) = DIGIT_PAIRS[r * 2 + 1];
+        dst.add(2)
     }
-    let mut tmp = [0u8; 20];
-    let mut i = 20;
-    let mut n = n;
-    while n >= 100 {
-        let q = n / 100;
-        let r = (n % 100) as usize;
-        i -= 2;
-        tmp[i] = DIGITS[r * 2];
-        tmp[i + 1] = DIGITS[r * 2 + 1];
-        n = q;
+}
+
+/// # Safety
+/// `dst` must be writable for 20 bytes. The stack digits occupy
+/// `tmp[i..20]`, and `20 - i` is that length, at most 20.
+#[inline(never)]
+unsafe fn write_u64_rest(dst: *mut u8, mut n: u64) -> *mut u8 {
+    unsafe {
+        let mut tmp = [0u8; 20];
+        let mut i = 20;
+        while n >= 100 {
+            let q = n / 100;
+            let r = (n % 100) as usize;
+            i -= 2;
+            tmp[i] = DIGIT_PAIRS[r * 2];
+            tmp[i + 1] = DIGIT_PAIRS[r * 2 + 1];
+            n = q;
+        }
+        if n < 10 {
+            i -= 1;
+            tmp[i] = b'0' + n as u8;
+        } else {
+            let r = n as usize;
+            i -= 2;
+            tmp[i] = DIGIT_PAIRS[r * 2];
+            tmp[i + 1] = DIGIT_PAIRS[r * 2 + 1];
+        }
+        copy_spelling(dst, tmp.as_ptr().add(i), 20 - i)
     }
-    if n < 10 {
-        i -= 1;
-        tmp[i] = b'0' + n as u8;
-    } else {
-        let r = n as usize;
-        i -= 2;
-        tmp[i] = DIGITS[r * 2];
-        tmp[i + 1] = DIGITS[r * 2 + 1];
-    }
-    buf.extend_from_slice(&tmp[i..]);
 }
 
 fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
@@ -1091,24 +1298,39 @@ fn write_short_decimal(out: &mut [u8; 24], value: f64) -> Option<usize> {
     render_fixed(out, neg, n, k)
 }
 
+fn format_digits(n: u64, out: &mut [u8; 20]) -> usize {
+    if n == 0 {
+        out[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut i = 20usize;
+    let mut x = n;
+    while x >= 100 {
+        let q = x / 100;
+        let r = (x % 100) as usize;
+        i -= 2;
+        tmp[i] = DIGIT_PAIRS[r * 2];
+        tmp[i + 1] = DIGIT_PAIRS[r * 2 + 1];
+        x = q;
+    }
+    if x < 10 {
+        i -= 1;
+        tmp[i] = b'0' + x as u8;
+    } else {
+        let r = x as usize;
+        i -= 2;
+        tmp[i] = DIGIT_PAIRS[r * 2];
+        tmp[i + 1] = DIGIT_PAIRS[r * 2 + 1];
+    }
+    let len = 20 - i;
+    out[..len].copy_from_slice(&tmp[i..]);
+    len
+}
+
 fn render_fixed(out: &mut [u8; 24], neg: bool, n: u64, k: usize) -> Option<usize> {
     let mut digits = [0u8; 20];
-    let nd = if n == 0 {
-        digits[0] = b'0';
-        1
-    } else {
-        let mut tmp = [0u8; 20];
-        let mut i = 20usize;
-        let mut x = n;
-        while x > 0 {
-            i -= 1;
-            tmp[i] = b'0' + (x % 10) as u8;
-            x /= 10;
-        }
-        let len = 20 - i;
-        digits[..len].copy_from_slice(&tmp[i..]);
-        len
-    };
+    let nd = format_digits(n, &mut digits);
     let kk = nd as isize - k as isize;
     if kk > 16 || kk <= -5 {
         return None;
@@ -1201,6 +1423,46 @@ fn push_xyz_line(
 ) {
     let [x, y, z] = xyz;
     match prec {
+        FloatFormat::RoundTrip if x.is_finite() && y.is_finite() && z.is_finite() => {
+            // One cursor for the whole row: three spellings, the flag, and
+            // the id. Each spelling is at most 24 bytes and the id at most 20.
+            // 24+1+24+1+24+1+1+1+20+1. Three spellings, two spaces between
+            // them, a space, the flag, a space, at most 20 id digits, newline.
+            const MAX_LINE: usize = 24 * 3 + 2 + 1 + 1 + 1 + 20 + 1;
+            let start = buf.len();
+            if buf.capacity().saturating_sub(start) < MAX_LINE {
+                buf.reserve(MAX_LINE);
+            }
+            // SAFETY: the spare capacity is at least MAX_LINE (98).
+            // `write_finite` writes at most 24 per coordinate and
+            // `write_u64` writes at most 20. The five single-byte stores
+            // are the separators, the flag, and the newline. Their sum is
+            // MAX_LINE, so every store stays inside the reserved tail.
+            unsafe {
+                let base = buf.as_mut_ptr();
+                let mut p = base.add(start);
+                p = spell.write_finite(p, x, Some(&mut slots[0]));
+                *p = b' ';
+                p = p.add(1);
+                p = spell.write_finite(p, y, Some(&mut slots[1]));
+                *p = b' ';
+                p = p.add(1);
+                p = spell.write_finite(p, z, Some(&mut slots[2]));
+                *p = b' ';
+                p = p.add(1);
+                *p = b'0' + fixed;
+                p = p.add(1);
+                *p = b' ';
+                p = p.add(1);
+                p = write_u64(p, atom_id);
+                *p = b'\n';
+                p = p.add(1);
+                let end = p.offset_from(base) as usize;
+                debug_assert!(end - start <= MAX_LINE);
+                buf.set_len(end);
+            }
+            return;
+        }
         FloatFormat::RoundTrip => {
             push_round_trip(buf, ryu, Some(&mut slots[0]), spell, x);
             buf.push(b' ');
@@ -1492,6 +1754,38 @@ mod float_format_tests {
         let mut buf = Vec::new();
         push_f64_prec(&mut buf, v, prec);
         String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn push_u64_matches_decimal() {
+        let mut buf = Vec::new();
+        let mut check = |n: u64| {
+            buf.clear();
+            push_u64(&mut buf, n);
+            assert_eq!(buf, n.to_string().as_bytes(), "{n}");
+        };
+        for n in 0..20_000 {
+            check(n);
+        }
+        for base in [
+            10u64,
+            100,
+            1_000,
+            10_000,
+            100_000,
+            1_000_000,
+            10_000_000,
+            100_000_000,
+            1_000_000_000,
+            1 << 32,
+            1 << 53,
+        ] {
+            for n in base.saturating_sub(64)..base.saturating_add(64) {
+                check(n);
+            }
+        }
+        check(u64::MAX);
+        check((1 << 63) + 1);
     }
 
     #[test]
