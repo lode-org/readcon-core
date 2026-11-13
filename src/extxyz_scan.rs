@@ -202,12 +202,16 @@ fn next_field<'a>(line: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
 }
 
 fn intern_symbol(pool: &mut Vec<String>, token: &[u8]) -> u32 {
+    // Compare the spelling that will be stored. A raw invalid token never
+    // matches the U+FFFD string from the previous atom, so each repeat
+    // became a new id on the serial scan and one id after a threaded merge.
+    let decoded = String::from_utf8_lossy(token);
     for (index, known) in pool.iter().enumerate() {
-        if known.as_bytes() == token {
+        if known.as_str() == decoded.as_ref() {
             return index as u32;
         }
     }
-    pool.push(String::from_utf8_lossy(token).into_owned());
+    pool.push(decoded.into_owned());
     (pool.len() - 1) as u32
 }
 
@@ -1570,7 +1574,7 @@ fn stream_slots(
 #[cfg(feature = "parallel")]
 #[inline(always)]
 fn intern_packed(pool: &mut Vec<String>, keys: &mut Vec<u64>, token: &[u8]) -> u32 {
-    if token.len() > 8 {
+    if token.len() > 8 || std::str::from_utf8(token).is_err() {
         let before = pool.len();
         let id = intern_symbol(pool, token);
         if pool.len() != before {
@@ -3354,5 +3358,49 @@ Al 2 0 0 delta 0.125 0.25 0.5
         }
         let (memory, got) = write_both(&wide, 8);
         assert_eq!(got, memory);
+    }
+
+    fn species_ids(tables: &XyzTables) -> Vec<u32> {
+        let n = tables.n_frames.saturating_mul(tables.n_atoms);
+        if tables.uniform_species.is_some() || tables.species_ids.is_empty() {
+            return vec![0; n];
+        }
+        tables.species_ids.clone()
+    }
+
+    #[test]
+    fn repeated_non_utf8_symbols_share_one_id_on_every_scan() {
+        let n = 4096usize;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(format!("{n}\n").as_bytes());
+        bytes.extend_from_slice(
+            b"Lattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n",
+        );
+        let mut line = b"\xff 0.125 0.25 0.5".to_vec();
+        while line.len() < 260 {
+            line.push(b' ');
+        }
+        line.push(b'\n');
+        for _ in 0..n {
+            bytes.extend_from_slice(&line);
+        }
+        assert!(bytes.len() >= (1 << 20), "file is {} bytes", bytes.len());
+        let serial = tables_from_extxyz_bytes(&bytes).unwrap();
+        let parallel = tables_from_extxyz_bytes_with_threads(&bytes, 4).unwrap();
+        assert_eq!(expanded_species(&serial), expanded_species(&parallel));
+        let serial_ids = species_ids(&serial);
+        let parallel_ids = species_ids(&parallel);
+        assert_eq!(parallel_ids, serial_ids);
+        assert!(
+            serial_ids.iter().all(|id| *id == 0),
+            "serial ids {:?} pool {}",
+            &serial_ids[..8.min(serial_ids.len())],
+            serial.species_pool.len()
+        );
+        assert!(
+            serial.uniform_species.is_some() || serial.species_pool.len() == 1,
+            "pool {}",
+            serial.species_pool.len()
+        );
     }
 }

@@ -52,6 +52,24 @@ def test_wide_species_is_an_interned_sequence(tmp_path: Path):
     assert again["positions"][0, 2, 0] == pytest.approx(2.125)
 
 
+def test_repeated_non_utf8_symbol_is_one_string(tmp_path: Path):
+    n_atoms = 4096
+    line = b"\xff 0.125 0.25 0.5"
+    line = line + b" " * (260 - len(line)) + b"\n"
+    body = f"{n_atoms}\n".encode()
+    body += b'Lattice="4 0 0 0 5 0 0 0 6" Properties=species:S:1:pos:R:3 pbc="T T T"\n'
+    body += line * n_atoms
+    path = tmp_path / "invalid-utf8.extxyz"
+    path.write_bytes(body)
+    serial = readcon.read_extxyz(str(path), n_threads=1)
+    parallel = readcon.read_extxyz(str(path), n_threads=4)
+    assert serial["species"][0][0] == parallel["species"][0][0]
+    assert id(serial["species"][0][0]) == id(serial["species"][0][-1])
+    assert id(parallel["species"][0][0]) == id(parallel["species"][0][-1])
+    assert list(serial["species"].ids()[0, :4]) == [0, 0, 0, 0]
+    assert list(parallel["species"].ids()[0, :4]) == [0, 0, 0, 0]
+
+
 def test_wide_uniform_species_shares_one_string(tmp_path: Path):
     path = tmp_path / "copper.extxyz"
     _frame(path, 4096, mixed=False)
