@@ -214,6 +214,31 @@ def weak_table(store: Store, host: str) -> str:
     )
 
 
+def bench_versions(data: dict) -> str:
+    """Versions the head-to-head log recorded, in the caption."""
+    versions = data.get("versions") or {}
+    if not versions:
+        return ""
+    named = (
+        ("readcon", "readcon"),
+        ("ase", "ASE"),
+        ("chemfiles", "chemfiles"),
+        ("MDAnalysis", "MDAnalysis"),
+        ("ovito", "OVITO"),
+        ("extxyz", "extxyz"),
+        ("numpy", "NumPy"),
+    )
+    parts = [
+        f"{label} {esc(str(versions[key]))}"
+        for key, label in named
+        if versions.get(key)
+    ]
+    eon = versions.get("eon")
+    if eon:
+        parts.append(f"eOn {esc(str(eon))}")
+    return " Recorded versions: " + ", ".join(parts) + "."
+
+
 def h2h_extxyz(store: Store, host: str) -> str:
     data = store.json(f"{REL1}/h2h.json")
     chunks = []
@@ -236,7 +261,8 @@ def h2h_extxyz(store: Store, host: str) -> str:
             body.append(esc(name) + " & " + " & ".join(cells) + r" \\")
         header = "File & " + " & ".join(esc(reader) for reader in readers)
         chunks.append(table(
-            f"Extended XYZ head-to-head, {cache} cache, read. Median in seconds, interquartile range and $n$.",
+            f"Extended XYZ head-to-head, {cache} cache, read. Median in seconds, interquartile range and $n$."
+            + bench_versions(data),
             label,
             "@{}l" + "c" * len(readers) + "@{}",
             header,
@@ -255,7 +281,8 @@ def h2h_con(store: Store, host: str) -> str:
             f"& {cell(row['median_s'], row['iqr_s'], n_of(row))} \\\\"
         )
     return table(
-        "CON head-to-head. Median in seconds, interquartile range and $n$.",
+        "CON head-to-head. Median in seconds, interquartile range and $n$."
+        + bench_versions(data),
         "tab:conread",
         "@{}llllc@{}",
         r"File & Reader & Op & Cache & Median (IQR, $n$)",

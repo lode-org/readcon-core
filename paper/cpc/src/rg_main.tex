@@ -565,8 +565,9 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \subsection{Computational details}\label{sec:compute}
 We time every read on one core of an Intel Xeon of family 6, model 207 (Emerald Rapids), at 2.40~GHz, with eight cores, one thread per core, and 47~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
-The reads use readcon-core 0.22.0 and Python 3.12.3.
-The libraries beside those reads are NumPy 2.2.6, ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, MDAnalysis 2.11.0 and OVITO 3.17.2, each run with one thread where that library was timed.
+The reads use readcon-core 0.23.0 and Python 3.12.3.
+The libraries beside those reads are NumPy 2.5.4 \cite{harrisArrayProgrammingNumpy2020}, ASE 3.29.0 \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz 0.4.6 \cite{kermodeLibatomsExtxyzV0462026}, chemfiles 0.10.4 \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis 2.11.0 \cite{gowersMdanalysis21102026} and OVITO 3.17.2 \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, after the v3.6.0 release \cite{rohitgoswamiTheochemuieonV3602026}.
+Each was run with one thread where that library was timed.
 Each median is the type-7 median of six repeats after one warmup, on a warm page cache.
 The peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k}.
 
@@ -623,7 +624,13 @@ The plain extended XYZ write is 23.4 times the plain CON write on the million-at
 The gzipped extended XYZ write is 69.4 times the CON.zst write on the million-atom frame and 59.1 times on the trajectory.
 On the million-atom frame the NetCDF, DCD, XTC and OVITO XYZ read medians are lower than the plain CON read.
 On the trajectory the NetCDF, DCD and TRR read medians are lower, and the XTC read is not.
-NetCDF, DCD, XTC and TRR drop masses, velocities and constraints, and so do OVITO XYZ and the chemfiles XYZ rows.
+XTC stores coordinates only, and TRR stores coordinates, velocities and forces \cite{abrahamGromacsHighPerformance2015,krylovLibxtcEfficientLibrary2021,gromacsTrajectoryFormats2026}.
+DCD is the CHARMM coordinate trajectory \cite{brooksCharmmBiomolecular2009}.
+The AMBER NetCDF trajectory stores coordinates and the cell, not a mass or a constraint, and a velocity array is optional \cite{amberNetcdfConvention2026,caseAmberBiomolecularSimulation2005}.
+A PDB ATOM record stores coordinates, occupancy and the temperature factor, not a velocity or a per-component constraint \cite{wwpdbFormat33,bermanProteinDataBank2000}.
+Plain XYZ, as chemfiles and OVITO write it here, is the species and the coordinates \cite{frauxChemfileschemfilesVersion01042023,stukowskiVisualizationAnalysisAtomistic2010}.
+Extended XYZ can carry the extra columns, and the ASE row drops none \cite{kermodeLibatomsExtxyzV0462026,larsenAtomicSimulationEnvironmenta2017}.
+The TRR row's Drops entry lists velocities because the chemfiles reader returned none, although the writer had stored them and the format allows them.
 A file that drops those fields cannot stand in for a CON file.
 Extended XYZ drops none.
 \input{campaign/final/cross_format}
@@ -651,9 +658,9 @@ The next steps are a declared section for that optimiser state and a patch to AS
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
-readcon-core 0.22.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
-The Zenodo record for readcon-core 0.22.0 is \readconZenodoDOI.
-The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.22.0.
+readcon-core 0.23.0 is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
+The Zenodo record for readcon-core 0.23.0 is \readconZenodoDOI.
+The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core 0.23.0.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 Its inputs are \texttt{frames-32x100000.con}, \texttt{frames-32x100000.convel} and \texttt{copper-32x100000.extxyz} in \texttt{bench/h2h/work/parallel-frames}, \texttt{con-1000000x1.con} in \texttt{bench/h2h/work/inputs}, and \texttt{alloy-1e6.extxyz} and \texttt{md-10k.extxyz} in \texttt{bench/h2h/work/thread-reads}.
@@ -663,7 +670,7 @@ The hop files of Section~\ref{sec:claisen} are \texttt{reactant.con} and \texttt
 % UNSOURCED: needs the fidelity fixture name and the loadcons median on that file. The campaign timing file has no hop.con row.
 \texttt{hop.con} in \texttt{tests/data/hop} is the fidelity file of Table~\ref{tab:fidelity-time}.
 The command is \texttt{python paper/cpc/scripts/hop\_emt.py}.
-The comparison in Section~\ref{sec:fidelity} uses readcon 0.22.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.2.6 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of that Xeon.
+The comparison in Section~\ref{sec:fidelity} uses readcon 0.23.0, ASE 3.29.0, chemfiles 0.10.4, NumPy 2.5.4 and eOn's Python loader at commit \texttt{579738a9387e8d0ea55496f45dd057812cfab892}, on one core of that Xeon.
 It is the Snakemake target \texttt{fidelity} in \texttt{benchmarks/workflow/Snakefile}, and \texttt{asv.fidelity.conf.json} times one call of the same reads.
 Section~\ref{sec:supp-repro} and Listing~\ref{lst:repro} rebuild both documents, and the supplementary material states the grammar, the corpora and the commands behind the tables.
 The CON reader shipped with eOn is under the BSD 3-clause licence of the eOn Development Team.
