@@ -145,3 +145,10 @@ path = "fuzz_targets/write_zst.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "traj-seek"
+path = "fuzz_targets/traj_seek.rs"
+test = false
+doc = false
+bench = false
