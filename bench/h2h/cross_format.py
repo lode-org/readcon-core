@@ -1167,7 +1167,11 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     notes: list[str] = []
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     lines = [
+        f"commit {sha}",
         f"warmup 1 samples {repeats} percentile type7 serial 1",
         f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
         f"loadavg {host['loadavg']}",
@@ -1373,6 +1377,7 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 lines.append(f"sample {sample:.9f}")
             print(f"  write {arm['id']} {median:.4f}", flush=True)
     payload = {
+        "commit": sha,
         "host": host,
         "warmup": 1,
         "repeats": repeats,
@@ -1441,7 +1446,9 @@ def run(out: Path, repeats: int = 6, structures=STRUCTURES) -> None:
                 ]
             )
         )
-    (out / "cross-format.tsv").write_text("\n".join(table) + "\n")
+    (out / "cross-format.tsv").write_text(
+        f"commit {sha}\n" + "\n".join(table) + "\n"
+    )
     print("wrote", out / "cross-format.tsv", flush=True)
 
 

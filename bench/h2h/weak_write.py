@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -58,7 +57,6 @@ REPEATS = 6
 CON = BENCH / "work" / "inputs" / "con-1000000x1.con"
 PAGE = Path("/tmp/perf17-page")
 TMPFS = Path("/dev/shm/perf17")
-MODULE = Path("/tmp/readcon-py")
 FRAME_PAYLOAD = Path("/tmp/perf17-frame.bin")
 
 # perf14 weak writes on tmpfs, from bench/h2h/scaling/perf14/rows.json.
@@ -84,29 +82,26 @@ def head_sha() -> str:
 
 
 def ensure_module() -> None:
-    """Build the Python extension from this checkout and put it on the path."""
-    so = ROOT / "target" / "release" / "libreadcon_core.so"
+    """Use the installed wheel. Cargo's cdylib does not export ``PyInit_readcon``."""
+    wheel_dir = ROOT / "target" / "wheels"
+    wheels = list(wheel_dir.glob("readcon-*.whl")) if wheel_dir.is_dir() else []
+    newest = max(wheels, key=lambda path: path.stat().st_mtime) if wheels else None
     sources = [
         ROOT / "src" / "writer.rs",
         ROOT / "src" / "python.rs",
         ROOT / "src" / "compression.rs",
-        ROOT / "Cargo.toml",
+        ROOT / "pyproject.toml",
     ]
-    stale = not so.is_file() or any(
-        so.stat().st_mtime < path.stat().st_mtime for path in sources if path.is_file()
+    stale = newest is None or any(
+        newest.stat().st_mtime < path.stat().st_mtime
+        for path in sources
+        if path.is_file()
     )
     if stale:
-        subprocess.run(
-            ["cargo", "build", "--release", "--features", "python", "--lib"],
-            cwd=ROOT,
-            check=True,
-        )
-    if not so.is_file():
-        raise SystemExit(f"missing {so}")
-    MODULE.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(so, MODULE / "readcon.so")
-    if str(MODULE) not in sys.path:
-        sys.path.insert(0, str(MODULE))
+        from release_campaign import ensure_python_extension
+
+        ensure_python_extension()
+    import readcon  # noqa: F401
 
 
 def pwrite_full(fd: int, buf: bytes, offset: int) -> None:
@@ -396,7 +391,7 @@ def measure_writes(frame: bytes, log) -> dict:
                         },
                     }
                 )
-    timed = interleaved_timed(arms, log)
+    timed = interleaved_timed(arms, log, REPEATS)
     page_sink = {}
     tmpfs_sink = {}
     for workers in WIDTHS:
@@ -447,7 +442,7 @@ def measure_widths(log) -> dict:
                 }
             )
         del frames
-    timed = interleaved_timed(arms, log)
+    timed = interleaved_timed(arms, log, REPEATS)
     writes = {}
     for workers in WIDTHS:
         writes[str(workers)] = {}
@@ -482,7 +477,7 @@ def measure_strong(log) -> dict:
                 },
             }
         )
-    timed = interleaved_timed(arms, log)
+    timed = interleaved_timed(arms, log, REPEATS)
     rows = {}
     for workers in WIDTHS:
         row = timed[str(workers)]
@@ -607,6 +602,16 @@ def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _stamp_texts(out: Path) -> None:
+    from campaign_protocol import head_sha, stamp_file
+
+    sha = head_sha()
+    for name in ("NOTES.txt", "weak-write-table.tsv", "samples.log", "lscpu.txt"):
+        path = out / name
+        if path.is_file():
+            stamp_file(path, sha, REPEATS, None)
+
+
 def _log(out: Path):
     out.mkdir(parents=True, exist_ok=True)
     return (out / "samples.log").open("a", encoding="utf-8")
@@ -655,6 +660,7 @@ def cmd_sink(out: Path) -> dict:
         **_protocol_fields(host),
     }
     (out / "sink-ceiling.json").write_text(json.dumps(payload, indent=2) + "\n")
+    _stamp_texts(out)
     return payload
 
 
@@ -693,13 +699,14 @@ def cmd_weak(out: Path) -> None:
         "table": table,
         **_protocol_fields(host),
     }
-    (out / "rows.json").write_text(json.dumps(rows, indent=2) + "\n")
+    (out / "weak-rows.json").write_text(json.dumps(rows, indent=2) + "\n")
     (out / "weak-write.json").write_text(
         json.dumps({"commit": sha, "weak": writes, "strong_tmpfs": strong}, indent=2)
         + "\n"
     )
     write_table(out / "weak-write-table.tsv", table)
     write_notes(out / "NOTES.txt", table, strong, sha)
+    _stamp_texts(out)
     FRAME_PAYLOAD.unlink(missing_ok=True)
     for row in table:
         print(
@@ -776,7 +783,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("campaign", "sink", "weak", "self-check"))
     parser.add_argument("--out", type=Path, default=BENCH / "scaling" / "perf17")
+    parser.add_argument("--repeats", type=int, default=6)
     args = parser.parse_args()
+    global REPEATS
+    if args.repeats < 1:
+        raise SystemExit("repeats must be positive")
+    REPEATS = args.repeats
     if args.command == "self-check":
         self_check()
         return

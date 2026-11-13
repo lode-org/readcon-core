@@ -22,6 +22,7 @@ import gzip
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -434,10 +435,10 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     host = host_snapshot()
     lscpu = host["lscpu"]
-    (out / "compressed-h2h-lscpu.txt").write_text(lscpu)
     sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
+    (out / "compressed-h2h-lscpu.txt").write_text(f"commit {sha}\n{lscpu}")
     cases = prepare_inputs()
     rows: list[dict] = []
     lines = [
@@ -622,6 +623,7 @@ def main() -> None:
     }
     (out / "compressed-h2h.json").write_text(json.dumps(payload, indent=2) + "\n")
     (out / "compressed-h2h.log").write_text("\n".join(lines) + "\n")
+    shutil.rmtree(out / "compressed-h2h-tmp", ignore_errors=True)
     print("wrote", out / "compressed-h2h.json", flush=True)
 
 

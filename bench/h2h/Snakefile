@@ -85,6 +85,9 @@ rule campaign:
 FINAL_OUT = config.get("out", "bench/h2h/scaling/rel1")
 FINAL_REPEATS = int(config.get("repeats", 6))
 
+# A stale PYTHONPATH must not shadow the wheel this campaign installs.
+shell.prefix("unset PYTHONPATH; ")
+
 
 rule final_bindings:
     output:
@@ -101,6 +104,7 @@ rule final_ceilings:
         f"{FINAL_OUT}/bindings.json",
     output:
         f"{FINAL_OUT}/hardware.json",
+        f"{FINAL_OUT}/lscpu.txt",
     params:
         out=FINAL_OUT,
         repeats=FINAL_REPEATS,
@@ -155,33 +159,34 @@ rule final_weak:
 # one thread pwriting those same bytes. Samples stay inside one process.
 # The asv class WeakWrite times one call of the same helpers.
 rule sink_ceiling:
+    input:
+        f"{FINAL_OUT}/bindings.json",
     output:
-        "bench/h2h/scaling/perf17/sink-ceiling.json",
-        "bench/h2h/scaling/perf17/lscpu.txt",
+        f"{FINAL_OUT}/sink-ceiling.json",
+        f"{FINAL_OUT}/samples.log",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
     shell:
-        """
-        set -euo pipefail
-        mkdir -p bench/h2h/scaling/perf17
-        python3 bench/h2h/weak_write.py sink --out bench/h2h/scaling/perf17
-        """
+        "python3 bench/h2h/weak_write.py sink --out {params.out} --repeats {params.repeats}"
 
 
 # Weak writes beside that ceiling. The table has two efficiency columns:
 # ideal T(1)/T(N), and max(format alone, sink(N)) / T(N).
 rule weak_write:
     input:
-        "bench/h2h/scaling/perf17/sink-ceiling.json",
+        f"{FINAL_OUT}/sink-ceiling.json",
+        f"{FINAL_OUT}/hardware.json",
     output:
-        "bench/h2h/scaling/perf17/rows.json",
-        "bench/h2h/scaling/perf17/weak-write.json",
-        "bench/h2h/scaling/perf17/weak-write-table.tsv",
-        "bench/h2h/scaling/perf17/samples.log",
-        "bench/h2h/scaling/perf17/NOTES.txt",
+        f"{FINAL_OUT}/weak-rows.json",
+        f"{FINAL_OUT}/weak-write.json",
+        f"{FINAL_OUT}/weak-write-table.tsv",
+        f"{FINAL_OUT}/NOTES.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
     shell:
-        """
-        set -euo pipefail
-        python3 bench/h2h/weak_write.py weak --out bench/h2h/scaling/perf17
-        """
+        "python3 bench/h2h/weak_write.py weak --out {params.out} --repeats {params.repeats}"
 
 
 rule final_langs:
@@ -218,6 +223,7 @@ rule final_table2:
     output:
         f"{FINAL_OUT}/h2h.json",
         f"{FINAL_OUT}/h2h.log",
+        f"{FINAL_OUT}/table2-h2h.tsv",
     params:
         out=FINAL_OUT,
         repeats=FINAL_REPEATS,
@@ -230,21 +236,33 @@ rule final_table2:
 # (plain, gz, zst). Chemfiles has no CON reader; the other arms are
 # extxyz, XYZ, PDB, DCD, XTC, and NetCDF where that library imports.
 rule cross_format:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
     output:
-        "bench/h2h/scaling/rel1/cross-format.json",
-        "bench/h2h/scaling/rel1/cross-format.log",
-        "bench/h2h/scaling/rel1/cross-format.tsv",
+        f"{FINAL_OUT}/cross-format.json",
+        f"{FINAL_OUT}/cross-format.log",
+        f"{FINAL_OUT}/cross-format.tsv",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
     shell:
-        "python3 bench/h2h/cross_format.py --out bench/h2h/scaling/rel1 --repeats 6"
+        "python3 bench/h2h/cross_format.py --out {params.out} --repeats {params.repeats}"
 
 
 rule compressed_h2h:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+        f"{FINAL_OUT}/hardware.json",
     output:
-        "bench/h2h/scaling/rel1/compressed-h2h.json",
-        "bench/h2h/scaling/rel1/compressed-h2h.log",
-        "bench/h2h/scaling/rel1/compressed-h2h-lscpu.txt",
+        f"{FINAL_OUT}/compressed-h2h.json",
+        f"{FINAL_OUT}/compressed-h2h.log",
+        f"{FINAL_OUT}/compressed-h2h-lscpu.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
     shell:
-        "python3 bench/h2h/compressed_h2h.py --out bench/h2h/scaling/rel1 --repeats 6"
+        "python3 bench/h2h/compressed_h2h.py --out {params.out} --repeats {params.repeats}"
 
 
 rule final_con_h2h:
@@ -254,6 +272,7 @@ rule final_con_h2h:
     output:
         f"{FINAL_OUT}/con-h2h.json",
         f"{FINAL_OUT}/con-h2h.log",
+        f"{FINAL_OUT}/con-h2h.tsv",
     params:
         out=FINAL_OUT,
         repeats=FINAL_REPEATS,
@@ -288,10 +307,76 @@ rule final_fidelity:
         "python3 bench/h2h/final_campaign.py fidelity --out {params.out} --repeats {params.repeats}"
 
 
+rule compressed_write_memory:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/compressed-write-memory.json",
+        f"{FINAL_OUT}/compressed-write-memory.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/paper_rows.py compressed-memory --out {params.out} --repeats {params.repeats}"
+
+
+rule plugin_rss:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/plugin-rss.json",
+        f"{FINAL_OUT}/plugin-rss.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/paper_rows.py plugin-rss --out {params.out} --repeats {params.repeats}"
+
+
+rule mw_persistence:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/mw-persistence.json",
+        f"{FINAL_OUT}/mw-persistence.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/paper_rows.py mw-persistence --out {params.out} --repeats {params.repeats}"
+
+
+rule hop_barrier:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/hop-barrier.json",
+        f"{FINAL_OUT}/hop-barrier.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/paper_rows.py hop-barrier --out {params.out} --repeats {params.repeats}"
+
+
+rule eon_loadcons:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{FINAL_OUT}/eon-loadcons.json",
+        f"{FINAL_OUT}/eon-loadcons.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    shell:
+        "python3 bench/h2h/paper_rows.py eon-loadcons --out {params.out} --repeats {params.repeats}"
+
+
 rule final_check:
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
+        f"{FINAL_OUT}/lscpu.txt",
         f"{FINAL_OUT}/strong-threads.json",
         f"{FINAL_OUT}/strong-mpi.json",
         f"{FINAL_OUT}/weak-threads.json",
@@ -302,7 +387,26 @@ rule final_check:
         f"{FINAL_OUT}/langs.json",
         f"{FINAL_OUT}/compressed.json",
         f"{FINAL_OUT}/h2h.json",
+        f"{FINAL_OUT}/table2-h2h.tsv",
         f"{FINAL_OUT}/con-h2h.json",
+        f"{FINAL_OUT}/con-h2h.tsv",
+        f"{FINAL_OUT}/cross-format.json",
+        f"{FINAL_OUT}/cross-format.log",
+        f"{FINAL_OUT}/cross-format.tsv",
+        f"{FINAL_OUT}/compressed-h2h.json",
+        f"{FINAL_OUT}/compressed-h2h.log",
+        f"{FINAL_OUT}/compressed-h2h-lscpu.txt",
+        f"{FINAL_OUT}/sink-ceiling.json",
+        f"{FINAL_OUT}/weak-rows.json",
+        f"{FINAL_OUT}/weak-write.json",
+        f"{FINAL_OUT}/weak-write-table.tsv",
+        f"{FINAL_OUT}/samples.log",
+        f"{FINAL_OUT}/NOTES.txt",
+        f"{FINAL_OUT}/compressed-write-memory.json",
+        f"{FINAL_OUT}/plugin-rss.json",
+        f"{FINAL_OUT}/mw-persistence.json",
+        f"{FINAL_OUT}/hop-barrier.json",
+        f"{FINAL_OUT}/eon-loadcons.json",
         f"{FINAL_OUT}/db.log",
         f"{FINAL_OUT}/fidelity.json",
         f"{FINAL_OUT}/fidelity-timing.json",

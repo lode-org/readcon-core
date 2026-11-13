@@ -139,6 +139,7 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
             check=True,
         )
     stream = subprocess.check_output([str(stream_bin)], text=True, cwd=ROOT)
+    lscpu = subprocess.check_output(["lscpu"], text=True)
     nbytes = 256 * 1024 * 1024
     disk = BENCH / "work" / "r6" / "disk-ceiling.bin"
     disk.parent.mkdir(parents=True, exist_ok=True)
@@ -180,6 +181,7 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
         json.dumps(
             {
                 "stream": stream,
+                "lscpu": lscpu,
                 "bytes": nbytes,
                 "disk_sync": "fdatasync",
                 "pwrite": "raw",
@@ -194,6 +196,9 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
         + "\n"
     )
     finish(path, out, repeats, sha, ceilings=False)
+    lscpu_path = out / "lscpu.txt"
+    lscpu_path.write_text(lscpu)
+    stamp_file(lscpu_path, sha, repeats, None)
     print(
         f"ceilings fdatasync {sync_median:.4f}s pwrite {pwrite_median:.4f}s",
         flush=True,
@@ -286,6 +291,9 @@ def cmd_table2(out: Path, repeats: int) -> None:
     log = out / "h2h.log"
     if log.is_file():
         finish(log, out, repeats, sha, ceilings=False)
+    tsv = out / "table2-h2h.tsv"
+    if tsv.is_file():
+        finish(tsv, out, repeats, sha, ceilings=False)
 
 
 def cmd_con_h2h(out: Path, repeats: int) -> None:
@@ -295,8 +303,10 @@ def cmd_con_h2h(out: Path, repeats: int) -> None:
     from fair_h2h import run_con_h2h
 
     run_con_h2h(paths, out, repeats)
-    for name in ("con-h2h.json", "con-h2h.log"):
-        finish(out / name, out, repeats, sha, ceilings=name.endswith(".json"))
+    for name in ("con-h2h.json", "con-h2h.log", "con-h2h.tsv"):
+        path = out / name
+        if path.is_file():
+            finish(path, out, repeats, sha, ceilings=name.endswith(".json"))
 
 
 def cmd_db(out: Path, repeats: int) -> None:
@@ -313,6 +323,9 @@ def cmd_db(out: Path, repeats: int) -> None:
     summary = out / "db-results" / "db.json"
     if summary.is_file():
         finish(summary, out, repeats, sha, ceilings=True)
+    side_log = out / "db-results" / "db.log"
+    if side_log.is_file():
+        finish(side_log, out, repeats, sha, ceilings=False)
 
 
 def cmd_fidelity(out: Path, repeats: int) -> None:
