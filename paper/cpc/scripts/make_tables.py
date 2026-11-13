@@ -494,18 +494,22 @@ def cross_format(store: Store, host: str) -> str:
         ("1M", r"One frame of \(10^{6}\) atoms.", "tab:cross-1m"),
         ("traj", "The trajectory.", "tab:cross-traj"),
     )
-    held = {("chemfiles", "con"), ("readcon-chemfiles", "con-via-xyz")}
+    # h2h6 renamed the bridge rows. The recorded times stay on the old
+    # rows until the full rerun. chemfiles 0.10.4 reads TRR velocities;
+    # the bench copied none, so the old Drops cell listed them.
+    renamed = {
+        ("chemfiles", "con"): ("readcon", "chemfiles.Frame"),
+        ("readcon-chemfiles", "con-via-xyz"): ("readcon", "xyz"),
+    }
     for structure, title, label in specs:
         body = []
-        marked = set()
         for row in rows:
             if row["structure"] != structure:
                 continue
-            key = (row["tool"], row["format"])
-            if key in held and key not in marked:
-                body.append("% PENDING h2h6")
-                marked.add(key)
+            tool, fmt = renamed.get((row["tool"], row["format"]), (row["tool"], row["format"]))
             loses = row["loses"]
+            if row["tool"] == "chemfiles" and row["format"] == "trr":
+                loses = loses.replace("velocities,", "").replace(",velocities", "")
             if loses.startswith("unsupported") or not str(row["median_s"]).strip():
                 warm = "unsupported"
                 cold = ""
@@ -513,7 +517,7 @@ def cross_format(store: Store, host: str) -> str:
                 warm = timed(row, "")
                 cold = timed(row, "cold_")
             body.append(
-                f"{esc(row['tool'])} & {esc(row['format'])} & {esc(row['op'])} "
+                f"{esc(tool)} & {esc(fmt)} & {esc(row['op'])} "
                 f"& {warm} & {cold} "
                 f"& {mib(row['rss_bytes']) if str(row['rss_bytes']).strip() else ''} "
                 f"& {mib(row['file_bytes']) if str(row['file_bytes']).strip() else ''} "

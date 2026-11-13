@@ -605,7 +605,9 @@ Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are one frame of \(10^{6}\) a
 Each tool reads and writes the format named in its row.
 Warm is the timed run and Cold is the cold-cache read.
 The Drops column is what that format does not keep.
-The chemfiles CON and readcon-chemfiles rows are in the tables and are not used in the comparisons below.
+The readcon xyz row imports extended XYZ with \texttt{read\_chemfiles} and writes it with \texttt{write\_con}.
+The readcon \texttt{chemfiles.Frame} row parses CON and copies the positions and the cell into a \texttt{chemfiles.Frame}.
+Those two rows keep the times from before that rename, so the comparisons below leave them out.
 On the million-atom frame, CON.zst is the smallest file that drops nothing: \zstMib~MiB, which is \zstMb~MB.
 ASE extxyz.gz is \extxyzGzMib~MiB (\extxyzGzMb~MB), \extxyzGzOverZst\ times that file.
 DCD and NetCDF are \dcdMib~MiB (\dcdMb~MB), \dcdOverZst\ times CON.zst.
@@ -630,7 +632,9 @@ The AMBER NetCDF trajectory stores coordinates and the cell, not a mass or a con
 A PDB ATOM record stores coordinates, occupancy and the temperature factor, not a velocity or a per-component constraint \cite{wwpdbFormat33,bermanProteinDataBank2000}.
 Plain XYZ, as chemfiles and OVITO write it here, is the species and the coordinates \cite{frauxChemfileschemfilesVersion01042023,stukowskiVisualizationAnalysisAtomistic2010}.
 Extended XYZ can carry the extra columns, and the ASE row drops none \cite{kermodeLibatomsExtxyzV0462026,larsenAtomicSimulationEnvironmenta2017}.
-The TRR row's Drops entry lists velocities because the chemfiles reader returned none, although the writer had stored them and the format allows them.
+chemfiles 0.10.4 reads the velocities in a TRR file.
+The earlier Drops cell listed them because the bench did not copy that array.
+The cell now lists masses and constraints.
 A file that drops those fields cannot stand in for a CON file.
 Extended XYZ drops none.
 \input{campaign/final/cross_format}

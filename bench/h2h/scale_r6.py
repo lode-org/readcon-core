@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import subprocess
 import sys
 import time
@@ -390,6 +391,23 @@ def h2h(paths: dict[str, Path]) -> None:
     run_table2(paths, OUT, REPEATS)
 
 
+def toolchain_versions() -> dict[str, str]:
+    """Kernel and compiler lines for a hardware.json written by this run."""
+
+    def first_line(argv: list[str]) -> str:
+        text = subprocess.check_output(argv, text=True, stderr=subprocess.STDOUT)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return lines[0] if lines else ""
+
+    return {
+        "kernel": platform.release(),
+        "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+        "gxx": first_line(["g++", "--version"]),
+        "gfortran": first_line(["gfortran", "--version"]),
+        "python": platform.python_version(),
+    }
+
+
 def hardware(rows: list[dict]) -> None:
     lscpu = subprocess.check_output(["lscpu"], text=True)
     meminfo = Path("/proc/meminfo").read_text().splitlines()
@@ -440,6 +458,7 @@ def hardware(rows: list[dict]) -> None:
         "disk_samples_s": samples,
         "disk_Bps": nbytes / median,
     }
+    info.update(toolchain_versions())
     (OUT / "hardware.json").write_text(json.dumps(info, indent=2) + "\n")
     print(f"disk {median:.4f}s {info['disk_Bps'] / 1e6:.0f} MB/s", flush=True)
 
