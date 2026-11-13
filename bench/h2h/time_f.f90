@@ -31,6 +31,7 @@ program time_f
     frames = read_all_frames(trim(path), 1)
     do i = 1, repeats
       call wall(t0)
+      call execute_command_line("rm -f " // trim(out), wait=.true.)
       writer = open_writer(trim(out))
       stat = writer%extend_one(frames(1))
       call writer%free()

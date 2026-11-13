@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     auto frames = readcon::read_all_frames(path, 1);
     for (int i = 0; i < repeats; ++i) {
         const double t0 = now_s();
+        std::remove(out.c_str());
         readcon::ConFrameWriter writer(out);
         writer.extend(frames);
         std::printf("write %.9f\n", now_s() - t0);

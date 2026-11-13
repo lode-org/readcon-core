@@ -2,8 +2,19 @@
 // Transparent compression support
 //=============================================================================
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::Path;
+
+/// zlib/gzip level used for CON payloads.
+///
+/// This is [`flate2::Compression::default`] (level 6). The historical
+/// campaign median of 0.120 s was this level applied to a frame whose
+/// coordinates had already been cleared; the first sample of that run,
+/// still holding the lattice, was 0.371 s.
+pub const GZIP_LEVEL: u32 = 6;
+
+/// zstd level used for CON payloads. Level 3 is the zstd CLI default.
+pub const ZSTD_LEVEL: i32 = 3;
 
 /// Detected compression format based on magic bytes.
 ///
@@ -442,8 +453,88 @@ pub fn gzip_writer(path: &Path) -> io::Result<flate2::write::GzEncoder<std::fs::
     let file = std::fs::File::create(path)?;
     Ok(flate2::write::GzEncoder::new(
         file,
-        flate2::Compression::default(),
+        flate2::Compression::new(GZIP_LEVEL),
     ))
+}
+
+/// How many independent compression members a payload of `nbytes` uses.
+///
+/// Below 1 MiB the file stays one member, so small fixtures keep a single
+/// gzip stream. Larger payloads use one member per core, capped at 8.
+pub fn compression_workers(nbytes: usize) -> usize {
+    const MIN_CHUNKED: usize = 1 << 20;
+    if nbytes < MIN_CHUNKED {
+        return 1;
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .clamp(1, 8)
+}
+
+fn split_chunks(data: &[u8], workers: usize) -> Vec<&[u8]> {
+    if data.is_empty() || workers <= 1 {
+        return vec![data];
+    }
+    let chunk = data.len().div_ceil(workers);
+    let mut parts = Vec::new();
+    let mut start = 0;
+    while start < data.len() {
+        let end = (start + chunk).min(data.len());
+        parts.push(&data[start..end]);
+        start = end;
+    }
+    parts
+}
+
+fn gzip_member(data: &[u8]) -> io::Result<Vec<u8>> {
+    let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(GZIP_LEVEL));
+    enc.write_all(data)?;
+    enc.finish()
+}
+
+/// Writes `data` as gzip members at [`GZIP_LEVEL`].
+///
+/// One member when the payload is small. Otherwise each core compresses a
+/// slice and the members are concatenated. [`read_file_contents`] reads
+/// every member, and the level matches a single-stream gzip of the same
+/// bytes.
+pub fn write_gzip_members(path: &Path, data: &[u8]) -> io::Result<usize> {
+    let parts = split_chunks(data, compression_workers(data.len()));
+    let encoded = encode_parts(&parts, gzip_member)?;
+    write_members(path, &encoded)?;
+    Ok(encoded.len())
+}
+
+fn encode_parts<F>(parts: &[&[u8]], encode: F) -> io::Result<Vec<Vec<u8>>>
+where
+    F: Fn(&[u8]) -> io::Result<Vec<u8>> + Sync,
+{
+    if parts.len() < 2 {
+        return Ok(vec![encode(parts.first().copied().unwrap_or(b""))?]);
+    }
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(parts.len());
+        for part in parts {
+            handles.push(scope.spawn(|| encode(part)));
+        }
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err(io::Error::other("compress")))
+            })
+            .collect()
+    })
+}
+
+fn write_members(path: &Path, members: &[Vec<u8>]) -> io::Result<()> {
+    let mut file = std::fs::File::create(path)?;
+    for member in members {
+        file.write_all(member)?;
+    }
+    file.flush()
 }
 
 /// Creates a zstd-compressed writer wrapping a file at the given path.
@@ -457,8 +548,22 @@ pub fn zstd_writer(
 ) -> io::Result<zstd::stream::write::AutoFinishEncoder<'static, std::fs::File>> {
     let file = std::fs::File::create(path)?;
     // Level 3 is the zstd CLI default; balances ratio against speed.
-    let encoder = zstd::stream::write::Encoder::new(file, 3)?;
+    let encoder = zstd::stream::write::Encoder::new(file, ZSTD_LEVEL)?;
     Ok(encoder.auto_finish())
+}
+
+/// Writes `data` as concatenated zstd frames at [`ZSTD_LEVEL`].
+///
+/// The same chunking as [`write_gzip_members`]. The reader already accepts
+/// concatenated frames.
+#[cfg(feature = "zstd")]
+pub fn write_zstd_members(path: &Path, data: &[u8]) -> io::Result<usize> {
+    let parts = split_chunks(data, compression_workers(data.len()));
+    let encoded = encode_parts(&parts, |part| {
+        zstd::bulk::compress(part, ZSTD_LEVEL).map_err(|err| io::Error::other(err.to_string()))
+    })?;
+    write_members(path, &encoded)?;
+    Ok(encoded.len())
 }
 
 #[cfg(test)]
@@ -700,5 +805,57 @@ mod tests {
         let mid = dir.path().join("skip-between.con.zst");
         std::fs::write(&mid, &between).unwrap();
         assert_eq!(read_file_text(&mid).unwrap(), format!("{text}{text}"));
+    }
+
+    fn gzip_member_count(bytes: &[u8]) -> usize {
+        let mut rest = bytes;
+        let mut count = 0;
+        while !rest.is_empty() {
+            let mut decoder = flate2::bufread::GzDecoder::new(rest);
+            let mut out = Vec::new();
+            std::io::Read::read_to_end(&mut decoder, &mut out).unwrap();
+            let next = decoder.into_inner();
+            assert!(
+                next.len() < rest.len() || out.is_empty(),
+                "gzip member did not consume input"
+            );
+            if next.len() == rest.len() {
+                break;
+            }
+            rest = next;
+            count += 1;
+        }
+        count
+    }
+
+    #[test]
+    fn chunked_gzip_roundtrips_at_level_6_with_one_member_per_slice() {
+        // A single gzip member of this payload is the old streaming writer.
+        // Four members is the chunked level-6 writer.
+        let unit = b"Cu 1.0 2.0 3.0 0 1\n";
+        let data = unit.repeat(80_000);
+        assert!(data.len() > (1 << 20));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con.gz");
+        let members = write_gzip_members(&path, &data).unwrap();
+        assert!(
+            members > 1,
+            "a wide payload must be more than one gzip member"
+        );
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(gzip_member_count(&bytes), members);
+        assert_eq!(bytes[8], 0, "XFL 0 is gzip level 6, not the fast level");
+        assert_eq!(read_file_bytes(&path).unwrap(), data);
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn chunked_zstd_roundtrips_at_level_3() {
+        let data = b"0.0 1.0 2.0 0 0\n".repeat(80_000);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.con.zst");
+        let members = write_zstd_members(&path, &data).unwrap();
+        assert!(members > 1);
+        assert_eq!(read_file_bytes(&path).unwrap(), data);
     }
 }

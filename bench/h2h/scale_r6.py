@@ -85,6 +85,121 @@ def run(cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> str
     return completed.stdout
 
 
+def _fmt_micro(value: int, places: int) -> str:
+    sign = "-" if value < 0 else ""
+    value = abs(value)
+    scale = 10**places
+    return f"{sign}{value // scale}.{value % scale:0{places}d}"
+
+
+def write_alloy_extxyz(path: Path) -> None:
+    """One million-atom Cu/Ni/Al/H frame.
+
+    The coordinates are the file used for the Table 2 alloy row:
+    ``x = (i % 100) * 0.462 + (i % 7) * 0.00125``,
+    ``y = ((i // 100) % 100) * 0.462 + (i % 5) * 0.0003``,
+    ``z = (i // 10000) * 0.462 + (i % 11) * 0.00017``,
+    eight decimal places.
+    """
+    species = (
+        ("Cu", "63.546"),
+        ("Ni", "58.6934"),
+        ("Al", "26.9815385"),
+        ("H", "1.00784"),
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("1000000\n")
+        handle.write(
+            'Lattice="46.2 0.0 0.0 0.0 46.2 0.0 0.0 0.0 46.2" '
+            "Properties=species:S:1:pos:R:3:masses:R:1 "
+            'energy=-1.234567 step=0 pbc="T T T"\n'
+        )
+        chunk: list[str] = []
+        for index in range(1_000_000):
+            symbol, mass = species[index % 4]
+            x = (index % 100) * 46_200_000 + (index % 7) * 125_000
+            y = ((index // 100) % 100) * 46_200_000 + (index % 5) * 30_000
+            z = (index // 10_000) * 46_200_000 + (index % 11) * 17_000
+            chunk.append(
+                f"{symbol} {_fmt_micro(x, 8)} {_fmt_micro(y, 8)} {_fmt_micro(z, 8)} {mass}\n"
+            )
+            if len(chunk) == 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
+def write_md_extxyz(path: Path) -> None:
+    """Ten thousand frames of 96 water atoms.
+
+    Each axis has a per-atom residue that the frame advances: x by 0.01 in
+    a 0.13 cell, y by 0.024 in a 0.088 cell, z by 0.006 in a 0.054 cell.
+    The comment energy is ``-300 - f * 0.00137``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    base = []
+    for index in range(96):
+        x = (index * 1_510_000) % 12_000_000 - 130_000 * (index // 13)
+        y = (
+            index * 8_000 + 1_600_000 * (index // 8) - 88_000 * (index // 11)
+        ) % 6_400_000
+        z = 1_700_000 * (index // 32) + (index * 12_000) % 54_000
+        symbol, mass = ("O", "15.999") if index % 3 == 0 else ("H", "1.00784")
+        # The frame drift lives in one residue of each axis. x steps by
+        # 0.01 inside a 0.13 cell indexed by i % 13, y by 0.024 inside a
+        # 0.088 cell indexed by i % 11, z by 0.006 inside the 0.054 cell
+        # (i * 0.012) mod 0.054.
+        base.append(
+            (
+                symbol,
+                mass,
+                x - (index % 13) * 10_000,
+                y - (index % 11) * 8_000,
+                z - (index * 12_000) % 54_000,
+                (index % 13) * 10_000,
+                (index % 11) * 8_000,
+                (index * 12_000) % 54_000,
+            )
+        )
+    with path.open("w", encoding="utf-8") as handle:
+        chunk: list[str] = []
+        for frame in range(10_000):
+            energy = 300_000_000 + frame * 1_370
+            chunk.append("96\n")
+            chunk.append(
+                'Lattice="12.8 0.0 0.0 0.0 12.8 0.0 0.0 0.0 12.8" '
+                "Properties=species:S:1:pos:R:3:masses:R:1 "
+                f"energy=-{_fmt_micro(energy, 6)} step={frame} "
+                'pbc="T T T"\n'
+            )
+            for symbol, mass, x_site, y_site, z_site, x_local, y_local, z_local in base:
+                x_out = x_site + (x_local + frame * 10_000) % 130_000
+                y_out = y_site + (y_local + frame * 24_000) % 88_000
+                z_out = z_site + (z_local + frame * 6_000) % 54_000
+                chunk.append(
+                    f"{symbol} {_fmt_micro(x_out, 6)} {_fmt_micro(y_out, 6)} "
+                    f"{_fmt_micro(z_out, 6)} {mass}\n"
+                )
+            if len(chunk) >= 100_000:
+                handle.write("".join(chunk))
+                chunk.clear()
+        if chunk:
+            handle.write("".join(chunk))
+
+
+def drop_file(path: Path) -> None:
+    """Remove `path` before a timed write.
+
+    ``File::create`` truncates. On this ext4 disk that waits for writeback
+    of the previous sample, so a page-cache write lands on the fdatasync
+    ceiling. Unlink starts a new inode. The fdatasync ceiling is the
+    separate ``dd conv=fdatasync`` row in ``hardware.json``.
+    """
+    path.unlink(missing_ok=True)
+
+
 def ensure_inputs() -> dict[str, Path]:
     folder = WORK / "r6"
     folder.mkdir(parents=True, exist_ok=True)
@@ -110,10 +225,10 @@ def ensure_inputs() -> dict[str, Path]:
     same = folder / "atoms-1000000x1.extxyz"
     if not same.is_file() or same.stat().st_size == 0:
         write_samefmt_extxyz(same)
-    if not alloy.exists() and Path("/tmp/h2h-general/alloy-1e6.extxyz").exists():
-        alloy.write_bytes(Path("/tmp/h2h-general/alloy-1e6.extxyz").read_bytes())
-    if not md.exists() and Path("/tmp/h2h-general/md-10k.extxyz").exists():
-        md.write_bytes(Path("/tmp/h2h-general/md-10k.extxyz").read_bytes())
+    if not alloy.is_file() or alloy.stat().st_size == 0:
+        write_alloy_extxyz(alloy)
+    if not md.is_file() or md.stat().st_size == 0:
+        write_md_extxyz(md)
     paths["extxyz-alloy"] = alloy
     paths["extxyz-md"] = md
     paths["extxyz-same"] = same
@@ -207,12 +322,14 @@ def python_threads(paths: dict[str, Path], rows: list[dict]) -> None:
                     dest = dest_root / f"{name}.extxyz"
 
                     def go(data=data, dest=dest, workers=workers):
+                        drop_file(dest)
                         readcon.write_extxyz(os.fspath(dest), data, n_threads=workers)
                 else:
                     frames = readcon.read_con(os.fspath(path), n_threads=1)
                     dest = dest_root / f"{name}.con"
 
                     def go(frames=frames, dest=dest, workers=workers):
+                        drop_file(dest)
                         readcon.write_con(os.fspath(dest), frames, n_threads=workers)
 
                 go()
@@ -409,6 +526,7 @@ def langs(paths: dict[str, Path]) -> None:
             frames = readcon.read_con(os.fspath(con), n_threads=1)
 
             def once(frames=frames):
+                drop_file(out)
                 readcon.write_con(os.fspath(out), frames, n_threads=1)
 
         once()
@@ -590,10 +708,13 @@ def compressed(paths: dict[str, Path]) -> None:
         return
     frames = readcon.read_con(os.fspath(paths["con-1e6"]), n_threads=1)
     rows = []
+    plain_bytes = 0
+    members = min(os.cpu_count() or 1, 8)
     for codec, suffix in (("gzip", ".con.gz"), ("zstd", ".con.zst")):
         dest = dest_dir / f"con-1e6{suffix}"
 
         def write(dest=dest, codec=codec):
+            drop_file(dest)
             readcon.write_con(os.fspath(dest), frames, compression=codec, n_threads=1)
 
         def read(dest=dest):
@@ -607,17 +728,29 @@ def compressed(paths: dict[str, Path]) -> None:
                 go()
                 samples.append(time.perf_counter() - started)
             median, iqr = type7(samples)
-            rows.append(
-                {
-                    "op": op,
-                    "codec": codec,
-                    "file": "con-1e6",
-                    "median_s": median,
-                    "iqr_s": iqr,
-                    "samples_s": samples,
-                    "bytes": dest.stat().st_size,
-                }
-            )
+            record_row = {
+                "op": op,
+                "codec": codec,
+                "file": "con-1e6",
+                "median_s": median,
+                "iqr_s": iqr,
+                "samples_s": samples,
+                "bytes": dest.stat().st_size,
+                # gzip level 6 is flate2's default. zstd level 3 is the CLI
+                # default. Wide files are one member per core, capped at 8.
+                "level": 6 if codec == "gzip" else 3,
+                "members": members,
+            }
+            if op == "write" and dest.stat().st_size:
+                if codec == "gzip":
+                    import gzip
+
+                    with gzip.GzipFile(filename=str(dest)) as handle:
+                        plain_bytes = len(handle.read())
+                if plain_bytes:
+                    record_row["plain_bytes"] = plain_bytes
+                    record_row["ratio"] = plain_bytes / dest.stat().st_size
+            rows.append(record_row)
             print(f"compressed {codec} {op} {median:.4f}", flush=True)
     log.write_text(json.dumps(rows, indent=2) + "\n")
 

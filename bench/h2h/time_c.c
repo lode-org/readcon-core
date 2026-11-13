@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static double now_s(void) {
     struct timespec ts;
@@ -88,6 +89,7 @@ int main(int argc, char **argv) {
         for (i = 0; i < repeats; i++) {
             struct RKRConFrameWriter *writer;
             double t0 = now_s();
+            unlink(out);
             writer = create_writer_from_path_c(out);
             if (rkr_writer_extend(writer, (const struct RKRConFrame *const *)frames, nframes) !=
                 RKR_STATUS_SUCCESS) {

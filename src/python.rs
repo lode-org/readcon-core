@@ -3040,6 +3040,71 @@ fn con_frame_list_stored(
 /// The caller keeps the input frames. The writer buffer is flushed before
 /// this function returns.
 ///
+/// CON text for a compressed write.
+///
+/// The bytes match a binding rewrite. Compression then splits a large
+/// payload into independent members; formatting itself still follows
+/// `n_threads`.
+fn plain_binding_bytes(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    precision: Option<usize>,
+    canonical: bool,
+    n_threads: Option<usize>,
+) -> PyResult<Vec<u8>> {
+    let workers = n_threads.filter(|count| *count >= 2).unwrap_or(1);
+    let mut buffer = Vec::new();
+    if let Ok(list) = frames.cast::<ConFrameList>() {
+        let all_stored = {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            slots.iter().all(|slot| slot.is_some())
+        };
+        if all_stored {
+            let borrowed = list.borrow();
+            let slots = borrowed.frames.lock().expect("frames");
+            let refs: Vec<&ConFrame> = slots
+                .iter()
+                .map(|slot| slot.as_ref().expect("stored frame"))
+                .collect();
+            {
+                let mut writer = match precision {
+                    Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+                    None => ConFrameWriter::new(&mut buffer),
+                }
+                .canonical(canonical);
+                if workers >= 2 {
+                    writer = writer.parallel_atoms(workers);
+                }
+                for frame in refs {
+                    writer
+                        .write_frame_bound(frame)
+                        .map_err(|err| write_err_to_py(py, err))?;
+                }
+                flush_writer(&mut writer)?;
+            }
+            return Ok(buffer);
+        }
+    }
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+            None => ConFrameWriter::new(&mut buffer),
+        }
+        .canonical(canonical);
+        if workers >= 2 {
+            writer = writer.parallel_atoms(workers);
+        }
+        stream_frames(py, frames, |frame| {
+            writer
+                .write_frame_bound(frame)
+                .map_err(|err| write_err_to_py(py, err))
+        })?;
+        flush_writer(&mut writer)?;
+    }
+    Ok(buffer)
+}
+
 /// The `compression` argument controls output compression:
 /// - `None` (default): codec from the path extension (`.gz` gzip, `.zst` zstd)
 /// - `"gzip"`, `"zstd"`, or `"none"`
@@ -3094,43 +3159,24 @@ fn write_con(
 
     match codec {
         OutputCodec::Gzip => {
-            let mut writer = match precision {
-                Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
-                    .map_err(|e| {
-                    PyIOError::new_err(format!("failed to create gzip writer: {e}"))
-                })?,
-                None => ConFrameWriter::from_path_gzip(path).map_err(|e| {
-                    PyIOError::new_err(format!("failed to create gzip writer: {e}"))
-                })?,
-            }
-            .canonical(canonical);
-            stream_frames(py, frames, |frame| {
-                write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
+            let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+            crate::compression::write_gzip_members(Path::new(path), &plain).map_err(|err| {
+                PyIOError::new_err(format!("failed to create gzip writer: {err}"))
             })?;
-            flush_writer(&mut writer)
+            Ok(())
         }
         OutputCodec::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                let mut writer = match precision {
-                    Some(precision) => {
-                        ConFrameWriter::from_path_zstd_with_precision(path, precision).map_err(
-                            |e| PyIOError::new_err(format!("failed to create zstd writer: {e}")),
-                        )?
-                    }
-                    None => ConFrameWriter::from_path_zstd(path).map_err(|e| {
-                        PyIOError::new_err(format!("failed to create zstd writer: {e}"))
-                    })?,
-                }
-                .canonical(canonical);
-                stream_frames(py, frames, |frame| {
-                    write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
+                let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
+                crate::compression::write_zstd_members(Path::new(path), &plain).map_err(|err| {
+                    PyIOError::new_err(format!("failed to create zstd writer: {err}"))
                 })?;
-                flush_writer(&mut writer)
+                Ok(())
             }
             #[cfg(not(feature = "zstd"))]
             {
-                let _ = (precision, canonical, frames, py);
+                let _ = (precision, canonical, frames, py, n_threads);
                 Err(PyIOError::new_err(
                     "zstd compression requires readcon built with the zstd feature",
                 ))
