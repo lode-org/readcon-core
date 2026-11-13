@@ -121,7 +121,7 @@ def cmd_bindings(out: Path, repeats: int) -> None:
 
 def cmd_ceilings(out: Path, repeats: int) -> None:
     sha = head_sha()
-    prepare(out, repeats)
+    scale = prepare(out, repeats)
     stream_bin = Path("/tmp/readcon-stream")
     if not stream_bin.exists():
         subprocess.run(
@@ -191,6 +191,7 @@ def cmd_ceilings(out: Path, repeats: int) -> None:
                 "pwrite_median_s": pwrite_median,
                 "pwrite_iqr_s": pwrite_iqr,
                 "pwrite_samples_s": pwrite_samples,
+                **scale.toolchain_versions(),
             }
         )
         + "\n"
