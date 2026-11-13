@@ -658,14 +658,10 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
         import readcon
 
         if readcon.has_chemfiles_support():
-            arms.append(
-                {
-                    "id": "chemfiles-con",
-                    "tool": "chemfiles",
-                    "format": "con",
-                    "precision": PRECISION["con"],
-                }
-            )
+            # readcon-chemfiles reads XYZ through the linked library.
+            # chemfiles-con copies that CON parse into a chemfiles.Frame,
+            # which needs the chemfiles Python package. The wheel job links
+            # the library and does not install that package.
             arms.append(
                 {
                     "id": "readcon-chemfiles",
@@ -674,6 +670,22 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                     "precision": PRECISION["xyz"],
                 }
             )
+            try:
+                import chemfiles  # noqa: F401
+            except ImportError:
+                notes.append(
+                    "chemfiles-con omitted; the chemfiles Python package "
+                    "is not installed."
+                )
+            else:
+                arms.append(
+                    {
+                        "id": "chemfiles-con",
+                        "tool": "chemfiles",
+                        "format": "con",
+                        "precision": PRECISION["con"],
+                    }
+                )
         else:
             notes.append(
                 "chemfiles-con and readcon-chemfiles omitted; "
