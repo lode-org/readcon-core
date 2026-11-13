@@ -5,10 +5,14 @@
 //! process, after `mpirun` has started.
 //!
 //! A single wide frame is formatted per rank and written with one
-//! `pwrite` at the exclusive-scan offset. A shared mapping of that slice
-//! was slower on the page cache: the faulting copy sat on the same core
-//! as the format. `READCON_MPI_SYNC` fdatasyncs on rank 0 before the
-//! sample ends.
+//! `pwrite` at the exclusive-scan offset. On tmpfs a shared mapping of
+//! that slice is faster. Each rank is one core, so the format and the
+//! sink add. At 8 ranks on tmpfs that split is about 0.0044 s of format,
+//! 0.0014 s for rank 0's truncate, and 0.0040 s of faulting copy.
+//! Prefaulting the slice on a second thread, splicing, and formatting
+//! straight into the mapping were all slower: the extra pass or the
+//! second thread stole the only core. `READCON_MPI_SYNC` fdatasyncs on
+//! rank 0 before the sample ends.
 
 use mpi::traits::*;
 use readcon_core::distrib::Comm;

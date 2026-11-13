@@ -1,0 +1,42 @@
+{
+  "base": "ce84696cc936096b032a38eb4a1fcf164929bdf3",
+  "per_rank_tmpfs_8": {
+    "format_s": 0.0044,
+    "exclusive_scan_s": 0.0001,
+    "rank0_truncate_s": 0.0014,
+    "barrier_s": 0.000005,
+    "faulting_copy_s": 0.0040,
+    "note": "One core per rank, bound with --bind-to core. Format and the sink add. The barrier itself is a few microseconds."
+  },
+  "ceilings_same_bytes": {
+    "bytes_python_rewrite": 23589082,
+    "sha256_prefix_python_rewrite": "361546ecf130",
+    "mpi_file_bytes": 23589039,
+    "mpi_file_sha256_prefix": "7f7c1a0e85fc",
+    "note": "The MPI writer keeps the source header. The coordinate body matches the serial format. The python rewrite is the 23589082-byte file.",
+    "tmpfs_one_pwrite_s": 0.0056,
+    "tmpfs_one_pwrite_including_unlink_s": 0.0072,
+    "ext4_one_pwrite_including_unlink_s": 0.0071,
+    "tmpfs_mmap_copy_s": 0.0101,
+    "ext4_mmap_copy_s": 0.0136,
+    "tmpfs_8_pwrite_s": 0.0099,
+    "ext4_8_pwrite_s": 0.0115,
+    "mpi_barrier_8_s": 0.000005,
+    "mpi_barrier_4_s": 0.000002
+  },
+  "attempts_8_ranks_tmpfs_median_s": {
+    "map_after_format": 0.0107,
+    "create_overlapped_with_format": 0.0109,
+    "map_populate_before_copy": 0.0112,
+    "prefault_on_a_second_thread": 0.0314,
+    "vmsplice_to_file": 0.013,
+    "format_into_scratch_then_slide": 0.0136
+  },
+  "why_memory_8_stays_under_0_8": "Efficiency 0.8 at 8 ranks needs about 0.0085 s (T1 0.0546 s). The serial chunk format is 0.0044 s and the faulting copy of that rank's bytes is 0.0040 s. They run on the same core, so the floor is their sum, about 0.0084 s, before the truncate and the open. Measured wall is 0.0107 s. A second thread on that core made the prefault slower. Writing the lines straight into the mapping still had to slide each rank onto the packed offset, and that second store brought the median to 0.0136 s.",
+  "page_cache": {
+    "campaign_4_s": 0.022362,
+    "campaign_8_s": 0.017728,
+    "overlap_create_8_s": 0.0193,
+    "note": "Eight ranks already use one pwrite each. Contended pwrites of one inode were slower than the tmpfs mapping. One pwrite of the whole 23.6 MB is 0.0071 s including unlink, but that requires the bytes on one rank. Gathering them adds another pass on top of the 0.0044 s format, so 8-rank page cache stays above the 0.0096 s a 0.8 efficiency would need."
+  }
+}
