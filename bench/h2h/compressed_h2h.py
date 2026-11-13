@@ -71,7 +71,7 @@ def ensure_eon() -> None:
         EON_SRC / "eon" / "structure.py",
         EON_SRC / "eon" / "geometry" / "cell.py",
     ]
-    base = "https://raw.githubusercontent.com/TheochemUI/eOn/" f"{EON_PIN}/"
+    base = f"https://raw.githubusercontent.com/TheochemUI/eOn/{EON_PIN}/"
     for rel in (
         "eon/__init__.py",
         "eon/fileio.py",
@@ -214,7 +214,9 @@ def same(left: dict, right: dict, label: str) -> None:
             raise SystemExit(f"{label} {key} delta {delta}")
 
 
-def write_readcon(path: Path, kind: str, payload, threads: int | None, codec: str) -> None:
+def write_readcon(
+    path: Path, kind: str, payload, threads: int | None, codec: str
+) -> None:
     import readcon
 
     path.unlink(missing_ok=True)
@@ -267,9 +269,7 @@ def prepare_inputs() -> dict[str, dict]:
                 path = folder / f"{label}{suffix}{extra}"
                 if not path.is_file() or path.stat().st_size == 0:
                     if kind == "con":
-                        readcon.write_con(
-                            os.fspath(path), frames, compression=codec
-                        )
+                        readcon.write_con(os.fspath(path), frames, compression=codec)
                     else:
                         readcon.write_extxyz(os.fspath(path), ext)
                 shared[f"{kind}-{codec}"] = path
@@ -319,7 +319,9 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     lscpu = subprocess.check_output(["lscpu"], text=True)
     (out / "compressed-h2h-lscpu.txt").write_text(lscpu)
-    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     cases = prepare_inputs()
     rows: list[dict] = []
     lines = [
@@ -354,11 +356,16 @@ def main() -> None:
                 views = {}
                 for name, fn in readers.items():
                     views[name] = fn(os.fspath(path))
-                    same(reference if kind == "con" else views["readcon"], views[name], f"check {file_id} {name}")
+                    same(
+                        reference if kind == "con" else views["readcon"],
+                        views[name],
+                        f"check {file_id} {name}",
+                    )
                 ext_ref = views["readcon"] if kind == "extxyz" else reference
                 if kind == "extxyz":
                     same(ext_ref, views["ase"], f"check {file_id} ase")
                 for name, fn in readers.items():
+
                     def once(fn=fn, path=path):
                         fn(os.fspath(path))
 
@@ -392,7 +399,11 @@ def main() -> None:
                     dest.parent.mkdir(parents=True, exist_ok=True)
 
                     def once_write(
-                        dest=dest, threads=threads, kind=kind, payload=payload, codec=codec
+                        dest=dest,
+                        threads=threads,
+                        kind=kind,
+                        payload=payload,
+                        codec=codec,
                     ):
                         write_readcon(dest, kind, payload, threads, codec)
 

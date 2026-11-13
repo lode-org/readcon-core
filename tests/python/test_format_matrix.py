@@ -30,7 +30,9 @@ def _atoms(layout: str) -> list[tuple[str, float]]:
     return atoms
 
 
-def _frame(layout: str, shift: float, velocities: bool, id_base: int) -> readcon.ConFrame:
+def _frame(
+    layout: str, shift: float, velocities: bool, id_base: int
+) -> readcon.ConFrame:
     atoms = []
     for index, (symbol, mass) in enumerate(_atoms(layout)):
         fixed = (True, False, True) if index == 0 else (False, False, False)
@@ -43,9 +45,7 @@ def _frame(layout: str, shift: float, velocities: bool, id_base: int) -> readcon
             kwargs["vx"] = 0.5
             kwargs["vy"] = shift
             kwargs["vz"] = index * 0.25
-        atoms.append(
-            readcon.Atom(symbol, index + shift, 0.25, 0.125, **kwargs)
-        )
+        atoms.append(readcon.Atom(symbol, index + shift, 0.25, 0.125, **kwargs))
     return readcon.ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), atoms)
 
 
@@ -104,9 +104,13 @@ def test_con_and_convel_round_trip(tmp_path: Path) -> None:
             for codec in CODECS:
                 if codec == "zstd" and not zstd:
                     continue
-                suffix = {"none": kind, "gzip": f"{kind}.gz", "zstd": f"{kind}.zst"}[codec]
+                suffix = {"none": kind, "gzip": f"{kind}.gz", "zstd": f"{kind}.zst"}[
+                    codec
+                ]
                 for write_threads in THREADS:
-                    path = tmp_path / f"{layout}-{kind}-{codec}-w{write_threads}.{suffix}"
+                    path = (
+                        tmp_path / f"{layout}-{kind}-{codec}-w{write_threads}.{suffix}"
+                    )
                     members = write_threads if codec != "none" else None
                     readcon.write_con(
                         str(path),
@@ -116,7 +120,9 @@ def test_con_and_convel_round_trip(tmp_path: Path) -> None:
                         compression_members=members,
                     )
                     for read_threads in THREADS:
-                        label = f"{layout} {kind} {codec} w{write_threads} r{read_threads}"
+                        label = (
+                            f"{layout} {kind} {codec} w{write_threads} r{read_threads}"
+                        )
                         back = readcon.read_con(
                             str(path),
                             n_threads=read_threads,
@@ -185,9 +191,9 @@ def test_extxyz_round_trip(tmp_path: Path) -> None:
                 assert np.array_equal(back["cell"], original["cell"]), label
                 if layout == "wide":
                     assert np.array_equal(
-                        np.asarray(back["arrays"]["forces"]), original["arrays"]["forces"]
+                        np.asarray(back["arrays"]["forces"]),
+                        original["arrays"]["forces"],
                     ), label
                     assert np.array_equal(
                         np.asarray(back["arrays"]["mom"]), original["arrays"]["mom"]
                     ), label
-

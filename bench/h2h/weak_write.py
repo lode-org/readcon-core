@@ -259,7 +259,9 @@ def weak_once(frames, workers: int, dest: Path) -> None:
     _readcon().write_con(os.fspath(dest), frames, n_threads=workers)
 
 
-def sink_parts(frame: bytes, workers: int) -> tuple[list[tuple[bytes, int]], bytes, int]:
+def sink_parts(
+    frame: bytes, workers: int
+) -> tuple[list[tuple[bytes, int]], bytes, int]:
     total = len(frame) * workers
     chunks = [(frame, index * len(frame)) for index in range(workers)]
     serial = frame * workers
@@ -399,7 +401,9 @@ def assemble_table(writes: dict, sink: dict) -> list[dict]:
                     "median_s": wall,
                     "iqr_s": point["weak"]["iqr_s"],
                     "ideal": ideal_efficiency(base, wall),
-                    "ceiling_fraction": ceiling_fraction(wall, format_alone, concurrent),
+                    "ceiling_fraction": ceiling_fraction(
+                        wall, format_alone, concurrent
+                    ),
                     "format_alone_s": format_alone,
                     "sink_concurrent_s": concurrent,
                     "sink_serial_s": serial,
@@ -416,7 +420,9 @@ def assemble_table(writes: dict, sink: dict) -> list[dict]:
 def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
     def cell(medium: str, workers: int) -> dict:
         return next(
-            row for row in table if row["medium"] == medium and row["workers"] == workers
+            row
+            for row in table
+            if row["medium"] == medium and row["workers"] == workers
         )
 
     lines = [
@@ -439,7 +445,9 @@ def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
             f"{row['format_alone_s']:.6f} {row['sink_concurrent_s']:.6f}"
         )
     lines.append("")
-    lines.append("tmpfs weak median / iqr / ideal / ceiling_fraction / format / sink / perf14")
+    lines.append(
+        "tmpfs weak median / iqr / ideal / ceiling_fraction / format / sink / perf14"
+    )
     for workers in WIDTHS:
         row = cell("tmpfs", workers)
         lines.append(
@@ -449,7 +457,9 @@ def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
             f"{row['perf14_tmpfs_median_s']:.6f}"
         )
     lines.append("")
-    lines.append("strong tmpfs one-frame median / iqr / strong_efficiency / perf14 / within_iqr")
+    lines.append(
+        "strong tmpfs one-frame median / iqr / strong_efficiency / perf14 / within_iqr"
+    )
     for workers in WIDTHS:
         row = strong[str(workers)]
         lines.append(
@@ -532,7 +542,8 @@ def cmd_weak(out: Path) -> None:
     }
     (out / "rows.json").write_text(json.dumps(rows, indent=2) + "\n")
     (out / "weak-write.json").write_text(
-        json.dumps({"commit": sha, "weak": writes, "strong_tmpfs": strong}, indent=2) + "\n"
+        json.dumps({"commit": sha, "weak": writes, "strong_tmpfs": strong}, indent=2)
+        + "\n"
     )
     write_table(out / "weak-write-table.tsv", table)
     write_notes(out / "NOTES.txt", table, strong, sha)
@@ -586,7 +597,9 @@ def self_check() -> None:
         write_table(path, rows)
         text = path.read_text(encoding="utf-8")
         header = next(line for line in text.splitlines() if line.startswith("medium"))
-        if "ideal" not in header.split("\t") or "ceiling_fraction" not in header.split("\t"):
+        if "ideal" not in header.split("\t") or "ceiling_fraction" not in header.split(
+            "\t"
+        ):
             raise SystemExit(header)
         try:
             write_table(path, [])
