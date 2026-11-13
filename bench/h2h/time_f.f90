@@ -20,24 +20,27 @@ program time_f
   read(count, *) repeats
 
   if (trim(op) == "read") then
-    do i = 1, repeats
+    ! One untimed pass, then `repeats` samples. Free the previous frames
+    ! before the clock so a dropped million-atom frame is not in the sample.
+    do i = 0, repeats
+      if (allocated(frames)) call release_frames(frames)
       call wall(t0)
       frames = read_all_frames(trim(path), 1)
       call wall(t1)
-      write(*, "(A,1X,F16.9)") "read", t1 - t0
+      if (i > 0) write(*, "(A,1X,F16.9)") "read", t1 - t0
     end do
     call report(frames, trim(path))
   else
     frames = read_all_frames(trim(path), 1)
-    do i = 1, repeats
+    do i = 0, repeats
       call wall(t0)
-      call execute_command_line("rm -f " // trim(out), wait=.true.)
+      call unlink_path(trim(out))
       writer = open_writer(trim(out))
       stat = writer%extend_one(frames(1))
       call writer%free()
       call wall(t1)
       if (stat /= 0) stop 1
-      write(*, "(A,1X,F16.9)") "write", t1 - t0
+      if (i > 0) write(*, "(A,1X,F16.9)") "write", t1 - t0
     end do
     block
       type(frame_t), allocatable :: written(:)
@@ -48,6 +51,39 @@ program time_f
   hwm = vm_hwm()
   write(*, "(A,1X,I0)") "hwm_kib", hwm
 contains
+  subroutine release_frames(frames)
+    type(frame_t), allocatable, intent(inout) :: frames(:)
+    integer :: j
+    if (.not. allocated(frames)) return
+    do j = 1, size(frames)
+      call frames(j)%free()
+    end do
+    deallocate(frames)
+  end subroutine
+
+  subroutine unlink_path(path)
+    character(len=*), intent(in) :: path
+    interface
+      function c_unlink(name) bind(C, name="unlink")
+        import :: c_char, c_int
+        character(kind=c_char), intent(in) :: name(*)
+        integer(c_int) :: c_unlink
+      end function
+    end interface
+    character(kind=c_char), allocatable :: name(:)
+    integer :: n, j
+    n = len_trim(path)
+    allocate(name(n + 1))
+    do j = 1, n
+      name(j) = path(j:j)
+    end do
+    name(n + 1) = c_null_char
+    ! A missing destination is the usual case. The status is not an error.
+    if (c_unlink(name) /= 0) then
+      return
+    end if
+  end subroutine
+
   subroutine wall(t)
     real(c_double), intent(out) :: t
     integer(c_int64_t) :: ticks, rate

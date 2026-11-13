@@ -1,0 +1,29 @@
+protocol warmup=1 samples=6 percentile=type7 serial=1 core=0 unlink_create=1
+input bench/h2h/work/inputs/con-1000000x1.con
+writes /dev/shm/bind-out.con
+rust read is scale_probe pos (column walk)
+rust write is scale_probe write
+c read is rkr_read_positions
+c++ and fortran reads are read_all_frames
+bindings rebuilt from this checkout
+
+after, type-7 median and iqr, seconds
+rust read 0.038898 0.003055
+c read 0.037626 0.000147
+c++ read 0.043074 0.002821
+fortran read 0.045378 0.004833
+rust write 0.046475 0.002451
+c write 0.048189 0.000920
+c++ write 0.045169 0.000284
+fortran write 0.043950 0.000207
+
+full-frame reads stay above the coordinate walk. On a warm buffer the
+column walk was 0.037 s, species shells alone 0.006 s, and building the
+shells inside that walk 0.044 s. The line parser, which builds the shells
+while it parses, was 0.042 s on the same buffer. A second shell pass was
+slower, so read_all_frames keeps the line parser. Mapping the plain file
+removed the extra copy into a heap buffer. The shells are the part that
+does not fit in 5 percent of the coordinate read: a million AtomDatum
+values, one shared symbol, and the fixed mask and id.
+writes are the formatter. Fortran no longer shells out to rm, and the
+write loops drop one warmup sample the way the read loops already did.

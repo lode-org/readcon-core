@@ -1,0 +1,2 @@
+=== rust-write ===
+kind=write workers=1 median=0.046474 samples=0.050445,0.048514,0.045747,0.045731,0.047202,0.045702

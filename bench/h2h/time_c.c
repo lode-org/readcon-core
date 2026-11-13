@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "read failed\n");
             return 1;
         }
-        for (i = 0; i < repeats; i++) {
+        for (i = 0; i < repeats + 1; i++) {
             struct RKRConFrameWriter *writer;
             double t0 = now_s();
             unlink(out);
@@ -97,7 +97,9 @@ int main(int argc, char **argv) {
                 return 1;
             }
             free_rkr_writer(writer);
-            printf("write %.9f\n", now_s() - t0);
+            if (i > 0) {
+                printf("write %.9f\n", now_s() - t0);
+            }
         }
         free_rkr_frame_array(frames, nframes);
     }
