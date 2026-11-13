@@ -71,11 +71,36 @@ def readers(path: str) -> dict:
     def extxyz_py():
         extxyz.read_dicts(path, use_cextxyz=False)
 
+    def chemfiles_read():
+        import chemfiles
+
+        traj = chemfiles.Trajectory(path)
+        traj.read()
+
+    def ovito_read():
+        from ovito.io import import_file
+
+        import_file(path, sort_particles=False)
+
+    def mdanalysis_read():
+        import MDAnalysis as mda
+
+        mda.Universe(path, format="XYZ")
+
+    def pymatgen_read():
+        from pymatgen.core import Molecule
+
+        Molecule.from_file(path)
+
     return {
         "readcon": readcon_read,
         "ase_extxyz": ase_extxyz,
         "ase_cextxyz": ase_cextxyz,
         "extxyz_0_4_6": extxyz_py,
+        "chemfiles": chemfiles_read,
+        "ovito": ovito_read,
+        "mdanalysis": mdanalysis_read,
+        "pymatgen": pymatgen_read,
     }
 
 
@@ -105,11 +130,27 @@ def campaign() -> None:
         "percentile numpy method=linear type=7",
         f"file {path}",
     ]
+    import ase
+    import chemfiles
     import extxyz
     import readcon
 
     log.append(f"readcon {getattr(readcon, '__version__', '?')}")
+    log.append(f"ase {ase.__version__}")
     log.append(f"extxyz {getattr(extxyz, '__version__', '?')}")
+    log.append(f"chemfiles {getattr(chemfiles, '__version__', '?')}")
+    try:
+        import MDAnalysis as mda
+
+        log.append(f"mdanalysis {mda.__version__}")
+    except Exception as exc:
+        log.append(f"mdanalysis missing {exc}")
+    try:
+        import ovito
+
+        log.append(f"ovito {getattr(ovito, 'version', '?')}")
+    except Exception as exc:
+        log.append(f"ovito missing {exc}")
     calls = readers(os.fspath(path))
     for name, fn in calls.items():
         try:
