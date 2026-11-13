@@ -133,7 +133,7 @@ rule regen_figures_log:
 
 # Refresh every results table from bench/h2h/scaling on the release tip.
 FINAL_COMMIT = "ee7662a955e173ea7faffcae614b4d0a78dd7682"
-CROSS_COMMIT = "0b42d8e40f9b4ed97358157eaf39f8062d3a4e43"
+CROSS_COMMIT = "beb158ad7cb9d9e8fbc38c860c85b0b5f343a196"
 
 rule final_campaign:
     output:

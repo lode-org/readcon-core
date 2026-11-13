@@ -436,8 +436,23 @@ def drops(text: str) -> str:
     return esc(text.replace(",", ", "))
 
 
+def timed(row: dict, prefix: str) -> str:
+    """Warm or cold median. Writes have no cold sample."""
+    median = str(row.get(f"{prefix}median_s", "")).strip()
+    if not median:
+        return ""
+    iqr = row.get(f"{prefix}iqr_s", "")
+    count = str(row.get(f"{prefix}n", "")).strip()
+    if not count:
+        raise SystemExit(
+            "cross-format.tsv has no n for "
+            f"{row['structure']} {row['tool']} {row['format']} {row['op']} {prefix or 'warm'}"
+        )
+    return f"{sig(median)} ({sig(iqr)}, $n{{=}}{count}$)"
+
+
 def cross_format(store: Store, host: str) -> str:
-    """1M-atom frame and trajectory from cross-format.tsv. Every row must carry n."""
+    """1M-atom frame and trajectory from cross-format.tsv. The n column is required."""
     raw = store.text(f"{REL1}/cross-format.tsv")
     rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
     if not rows or "n" not in rows[0]:
@@ -447,49 +462,40 @@ def cross_format(store: Store, host: str) -> str:
         ("1M", r"One frame of \(10^{6}\) atoms.", "tab:cross-1m"),
         ("traj", "The trajectory.", "tab:cross-traj"),
     )
+    held = {("chemfiles", "con"), ("readcon-chemfiles", "con-via-xyz")}
     for structure, title, label in specs:
         body = []
-        seen_readcon = False
-        marked_readcon = False
-        seen_chem = False
-        marked_chem = False
+        marked = set()
         for row in rows:
             if row["structure"] != structure:
                 continue
-            if row["tool"] == "readcon":
-                seen_readcon = True
-            elif seen_readcon and not marked_readcon:
-                body.append("% PENDING h2h5 readcon-chemfiles")
-                marked_readcon = True
-            if row["tool"] == "chemfiles":
-                seen_chem = True
-            elif seen_chem and not marked_chem:
-                body.append("% PENDING h2h5 compressed chemfiles")
-                marked_chem = True
-            count = str(row.get("n", "")).strip()
-            if not count:
-                raise SystemExit(
-                    "cross-format.tsv has no n for "
-                    f"{row['structure']} {row['tool']} {row['format']} {row['op']}"
-                )
+            key = (row["tool"], row["format"])
+            if key in held and key not in marked:
+                body.append("% PENDING h2h6")
+                marked.add(key)
+            loses = row["loses"]
+            if loses.startswith("unsupported") or not str(row["median_s"]).strip():
+                warm = "unsupported"
+                cold = ""
+            else:
+                warm = timed(row, "")
+                cold = timed(row, "cold_")
             body.append(
                 f"{esc(row['tool'])} & {esc(row['format'])} & {esc(row['op'])} "
-                f"& {sig(row['median_s'])} ({sig(row['iqr_s'])}, $n{{=}}{count}$) "
-                f"& {mib(row['rss_bytes'])} & {mib(row['file_bytes'])} "
-                f"& {drops(row['loses'])} \\\\"
+                f"& {warm} & {cold} "
+                f"& {mib(row['rss_bytes']) if str(row['rss_bytes']).strip() else ''} "
+                f"& {mib(row['file_bytes']) if str(row['file_bytes']).strip() else ''} "
+                f"& {drops(loses)} \\\\"
             )
-        if not marked_readcon:
-            body.append("% PENDING h2h5 readcon-chemfiles")
-        if not marked_chem:
-            body.append("% PENDING h2h5 compressed chemfiles")
         chunks.append(table(
             title + " Each tool uses the format in its row. "
-            "Time is the median in seconds, the interquartile range, and $n$. "
+            "Warm is the main read or write: the median in seconds, the interquartile range, and $n$. "
+            "Cold is the cold-cache read, with its own median, interquartile range, and $n$. "
             "RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. "
             "Drops names the fields that format does not keep.",
             label,
-            "@{}lllrrrl@{}",
-            r"Tool & Format & Op & Time (IQR, $n$) & RSS & File & Drops",
+            "@{}lllccrrl@{}",
+            r"Tool & Format & Op & Warm (IQR, $n$) & Cold (IQR, $n$) & RSS & File & Drops",
             body,
             host,
         ))
