@@ -1289,24 +1289,29 @@ mod tests {
             first_bit_mismatch(&parallel.positions[..n * 3], &serial.positions),
             None
         );
-        let time = |bytes: &[u8], workers: usize| {
-            let _ = positions_parallel(bytes, workers, false).unwrap();
-            let mut samples = Vec::with_capacity(5);
-            for _ in 0..5 {
-                let started = std::time::Instant::now();
-                let got = positions_parallel(bytes, workers, false).unwrap();
-                std::hint::black_box(got.positions.len());
-                samples.push(started.elapsed().as_secs_f64());
-            }
-            samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
-            samples[samples.len() / 2]
-        };
-        let one_s = time(one.as_bytes(), 1);
-        let two_s = time(two.as_bytes(), 2);
-        assert!(
-            two_s < one_s * 1.7,
-            "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
-        );
+        // llvm-cov instrumentation stretches the parallel walk past this
+        // ratio on a shared runner. The equality checks above still run.
+        #[cfg(not(coverage))]
+        {
+            let time = |bytes: &[u8], workers: usize| {
+                let _ = positions_parallel(bytes, workers, false).unwrap();
+                let mut samples = Vec::with_capacity(5);
+                for _ in 0..5 {
+                    let started = std::time::Instant::now();
+                    let got = positions_parallel(bytes, workers, false).unwrap();
+                    std::hint::black_box(got.positions.len());
+                    samples.push(started.elapsed().as_secs_f64());
+                }
+                samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
+                samples[samples.len() / 2]
+            };
+            let one_s = time(one.as_bytes(), 1);
+            let two_s = time(two.as_bytes(), 2);
+            assert!(
+                two_s < one_s * 1.7,
+                "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
+            );
+        }
     }
 
     #[cfg(feature = "parallel")]
