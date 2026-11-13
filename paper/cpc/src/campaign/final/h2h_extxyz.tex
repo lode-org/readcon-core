@@ -15,3 +15,21 @@ extxyz-same & 0.1103 (0.01115, $n{=}6$) & 0.2439 (0.01104, $n{=}6$) & 2.011 (0.1
 \end{tabular}
 }
 \end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Extended XYZ head-to-head, cold cache, read. Median in seconds, interquartile range and $n$. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\label{tab:h2h-cold}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+File & readcon & ovito & ase-extxyz & cextxyz & extxyz & chemfiles & mdanalysis \\
+\midrule
+extxyz-alloy & 0.07976 (0.01403, $n{=}6$) & 0.1593 (0.001551, $n{=}6$) & 1.453 (0.01613, $n{=}6$) & 0.1247 (0.002765, $n{=}6$) & 1.56 (0.02105, $n{=}6$) & 0.3696 (0.006479, $n{=}6$) & 9.246 (0.1864, $n{=}6$) \\
+extxyz-md & 0.0772 (0.01151, $n{=}6$) & 1.432 (0.04744, $n{=}6$) & 2.623 (0.03311, $n{=}6$) & 0.6459 (0.03673, $n{=}6$) & 4.728 (0.0658, $n{=}6$) & 0.7292 (0.007303, $n{=}6$) & 0.5535 (0.00579, $n{=}6$) \\
+extxyz-same & 0.1304 (0.008346, $n{=}6$) & 0.2606 (0.004242, $n{=}6$) & 1.95 (0.01052, $n{=}6$) & 0.1818 (0.001031, $n{=}6$) & 2.72 (0.02754, $n{=}6$) & 0.6919 (0.01323, $n{=}6$) & 6.799 (0.1204, $n{=}6$) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

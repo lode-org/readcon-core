@@ -212,37 +212,36 @@ def weak_table(store: Store, host: str) -> str:
     )
 
 
-def sig(value: float) -> str:
-    return f"{float(value):.4g}"
-
-
 def h2h_extxyz(store: Store, host: str) -> str:
     data = store.json(f"{REL1}/h2h.json")
-    rows = [row for row in data["rows"] if row["op"] == "read" and row["cache"] == "warm"]
-    files, readers = [], []
-    by = {}
-    for row in rows:
-        by.setdefault(row["file"], {})[row["reader"]] = row
-        if row["file"] not in files:
-            files.append(row["file"])
-        if row["reader"] not in readers:
-            readers.append(row["reader"])
-    body = []
-    for name in files:
-        cells = []
-        for reader in readers:
-            row = by[name].get(reader)
-            cells.append(cell(row["median_s"], row["iqr_s"], n_of(row)) if row else "")
-        body.append(esc(name) + " & " + " & ".join(cells) + r" \\")
-    header = "File & " + " & ".join(esc(reader) for reader in readers)
-    return table(
-        "Extended XYZ head-to-head, warm cache, read. Median in seconds, interquartile range and $n$.",
-        "tab:h2h-main",
-        "@{}l" + "c" * len(readers) + "@{}",
-        header,
-        body,
-        host,
-    )
+    chunks = []
+    for cache, label in (("warm", "tab:h2h-main"), ("cold", "tab:h2h-cold")):
+        rows = [row for row in data["rows"] if row["op"] == "read" and row["cache"] == cache]
+        files, readers = [], []
+        by = {}
+        for row in rows:
+            by.setdefault(row["file"], {})[row["reader"]] = row
+            if row["file"] not in files:
+                files.append(row["file"])
+            if row["reader"] not in readers:
+                readers.append(row["reader"])
+        body = []
+        for name in files:
+            cells = []
+            for reader in readers:
+                row = by[name].get(reader)
+                cells.append(cell(row["median_s"], row["iqr_s"], n_of(row)) if row else "")
+            body.append(esc(name) + " & " + " & ".join(cells) + r" \\")
+        header = "File & " + " & ".join(esc(reader) for reader in readers)
+        chunks.append(table(
+            f"Extended XYZ head-to-head, {cache} cache, read. Median in seconds, interquartile range and $n$.",
+            label,
+            "@{}l" + "c" * len(readers) + "@{}",
+            header,
+            body,
+            host,
+        ))
+    return "\n".join(chunks)
 
 
 def h2h_con(store: Store, host: str) -> str:

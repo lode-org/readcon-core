@@ -1506,7 +1506,7 @@ readcon-core 0.22.0 reads the same two files as gzip and as zstd, from Rust, C, 
 One warmup is discarded and the median is type 7 over six samples, on one core of the Xeon in Section~\ref{sec:compute}.
 The \num{100000}-frame file is 32 atoms per frame.
 The other file is one frame of $10^{6}$ copper atoms.
-The compressed CON and extended XYZ medians against readcon, ASE and eOn are Tables~\ref{tab:gzip} and~\ref{tab:zstd}.
+The compressed CON and extended XYZ medians against readcon, ASE and eOn follow.
 
 \input{campaign/final/compressed}
 
@@ -1515,7 +1515,7 @@ Each row is a type-7 median of six repeats after one warmup, on one core.
 The resident set and the massif heap are the increase above the loaded input.
 The trajectory gzip write takes \SI{0.560}{\second}, with a resident set of \SI{0.73}{\mebi\byte} and a heap of \SI{0.36}{\mebi\byte}.
 The trajectory zstd write takes \SI{0.467}{\second}, \SI{3.47}{\mebi\byte} and \SI{3.55}{\mebi\byte}.
-The readcon gzip write of the million-atom CON frame takes 0.09085~s, and ASE takes 2.861~s (Table~\ref{tab:gzip}).
+The readcon gzip write of the million-atom CON frame takes 0.09085~s, and ASE takes 2.861~s (Table~\ref{tab:cmp8}).
 The zstd write of that frame takes \SI{0.198}{\second}, \SI{39.0}{\mebi\byte} and \SI{35.5}{\mebi\byte}.
 The heap of that zstd write matches the Rust writer.
 
