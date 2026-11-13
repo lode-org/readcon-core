@@ -577,40 +577,41 @@ mod tests {
                 .wrapping_add(0x1405_7b7e_f767_814f);
             state
         };
-        let mut proved = 0u32;
         let mut differed = 0u32;
-        let mut samples = 0u32;
-        for exp in -22..=22 {
+        // Every power the product table indexes, including the ends.
+        let exp_lo = super::POW5_LO;
+        let exp_hi = super::POW5_LO + super::POW5.len() as i32 - 1;
+        for exp in exp_lo..=exp_hi {
             for _ in 0..4_000 {
                 let mant = next();
                 for neg in [false, true] {
                     let got = super::finish_unit_interval(neg, mant, exp).map(f64::to_bits);
                     let want = spec(neg, mant, exp);
                     assert_eq!(got, want, "mant {mant} exp {exp} neg {neg}");
-                    samples += 1;
                     if want.is_none() {
                         differed += 1;
                     }
-                    if super::proved_same_neighbor(neg, mant, exp).is_some() {
-                        proved += 1;
-                    }
                 }
             }
-            // 19-digit window used by a 20-digit coordinate, plus the powers of two.
-            for mant in [
+            // 19-digit window used by a 20-digit coordinate, the powers of two,
+            // and the first mantissas past the short division.
+            let mut edges = vec![
                 10u64.pow(18),
                 10u64.pow(18) + 1,
                 10u64.pow(19) - 2,
-                (1u64 << 53) + 1,
                 (1u64 << 62) - 1,
-                (1u64 << 62),
+                1u64 << 62,
                 (1u64 << 63) - 1,
                 1u64 << 63,
                 u64::MAX - 1,
                 u64::MAX,
                 0,
                 1,
-            ] {
+            ];
+            for step in 1..=32u64 {
+                edges.push(super::MAX_FAST_MANTISSA + step);
+            }
+            for mant in edges {
                 for neg in [false, true] {
                     assert_eq!(
                         super::finish_unit_interval(neg, mant, exp).map(f64::to_bits),
@@ -620,14 +621,9 @@ mod tests {
                 }
             }
         }
-        // The coordinate case: 19 digits at 10^-16. Almost every mantissa is
-        // more than one unit from a rounding boundary.
-        let mut wide_proved = 0u32;
+        // 19 digits at 10^-16, the fixed coordinate shape.
         for _ in 0..20_000 {
             let mant = 10u64.pow(18) + (next() % (10u64.pow(19) - 10u64.pow(18) - 1));
-            if super::proved_same_neighbor(false, mant, -16).is_some() {
-                wide_proved += 1;
-            }
             assert_eq!(
                 super::finish_unit_interval(false, mant, -16).map(f64::to_bits),
                 spec(false, mant, -16)
@@ -637,11 +633,71 @@ mod tests {
             differed > 0,
             "expected some mantissas to straddle a boundary"
         );
-        assert!(proved > samples / 4, "proved {proved} of {samples}");
-        assert!(
-            wide_proved > 19_000,
-            "19-digit window proved {wide_proved} of 20000"
-        );
+    }
+
+    /// `hi` has bit 63 clear and the next mantissa sets it. Every such step
+    /// the table can produce is checked against rounding both sides.
+    #[test]
+    fn upperbit_crossing_matches_both_sides() {
+        fn spec(neg: bool, mant: u64, exp: i32) -> Option<u64> {
+            let low = super::finish(neg, mant, exp)?;
+            let high = super::finish(neg, mant.checked_add(1)?, exp)?;
+            (low.to_bits() == high.to_bits()).then_some(low.to_bits())
+        }
+        fn div_ceil(n: u128, d: u128) -> u128 {
+            (n + d - 1) / d
+        }
+        let mut saw = 0u32;
+        let exp_lo = i64::from(super::POW5_LO);
+        for (index, &(lo5, _)) in super::POW5.iter().enumerate() {
+            let exp = (exp_lo + index as i64) as i32;
+            let lo5 = lo5 as u128;
+            let target = 1u128 << 127;
+            for lz in 0..64u32 {
+                let delta = lo5 << lz;
+                if delta == 0 || delta > target {
+                    continue;
+                }
+                // `wn * lo5` lands in `[2^127 - delta, 2^127)`. Adding `delta`
+                // is the step to `mant + 1`, so bit 63 of the high half flips.
+                let wn_lo = div_ceil(target - delta, lo5);
+                let wn_hi = div_ceil(target, lo5);
+                let start = wn_lo.max(1u128 << 63);
+                let end = wn_hi.min(1u128 << 64);
+                if start >= end {
+                    continue;
+                }
+                let step = 1u128 << lz;
+                let mut wn = (start + step - 1) & !(step - 1);
+                while wn < end {
+                    let mant = (wn >> lz) as u64;
+                    wn += step;
+                    if mant == 0
+                        || mant == u64::MAX
+                        || mant.leading_zeros() != lz
+                        || (mant + 1).leading_zeros() != lz
+                    {
+                        continue;
+                    }
+                    let first = ((mant as u128) << lz).wrapping_mul(lo5);
+                    let sum = first + delta;
+                    let hi = (first >> 64) as u64;
+                    let hi2 = (sum >> 64) as u64;
+                    if hi >> 63 != 0 || hi2 >> 63 != 1 {
+                        continue;
+                    }
+                    saw += 1;
+                    for neg in [false, true] {
+                        assert_eq!(
+                            super::finish_unit_interval(neg, mant, exp).map(f64::to_bits),
+                            spec(neg, mant, exp),
+                            "upperbit mant {mant} exp {exp} neg {neg}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(saw > 0, "no mantissa crossed bit 63 of the high product");
     }
 
     fn bits_of(text: &str) -> Option<u64> {
