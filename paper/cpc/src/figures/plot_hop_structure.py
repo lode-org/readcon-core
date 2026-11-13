@@ -245,11 +245,12 @@ def main() -> None:
 
 
 def landscape(out: Path) -> None:
-    """Fig 3. The values are the published EMT profiles. Fonts are 8 pt or larger."""
-    matched = [0.0, 0.014588961261054134, 0.03335417913934968, 0.039894281917480345,
-               0.03335792588108655, 0.014596112332057487, 0.0]
-    by_row = [0.0, 1.0550736587440164, 5.758180765486507, 15.555979952129109,
-              10.812257269042275, 1.3769164484163814, 0.0]
+    """Fig 3. The profiles are the hop-emt log. Fonts are 8 pt or larger."""
+    import json
+    log = Path(__file__).resolve().parents[2] / "logs" / "hop-emt.json"
+    record = json.loads(log.read_text())
+    matched = record["profile_eV"]
+    by_row = record["swapped_profile_eV"]
     plt.rcParams.update({
         "font.size": 11,
         "axes.labelsize": 11,

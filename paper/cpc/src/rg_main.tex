@@ -72,6 +72,7 @@ Elsevier%
 \input{figures/generated/spec_macros}
 \input{figures/generated/e5_macros}
 \input{figures/generated/velocity_case}
+\input{figures/generated/hop_macros}
 \input{figures/generated/worked_macros}
 \input{figures/generated/test_run_macros}
 \input{figures/generated/si_macros}
@@ -435,7 +436,7 @@ The saddle carries a displacements section with the same fixed-flag column and t
 readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
 readcon-ops takes a \texttt{ConFrame}: \texttt{identical} matches atoms of one element under the minimum image, \texttt{internal\_motion} removes a rigid motion, \texttt{rotational\_match} aligns by iterative rotations and assignments, and \texttt{wulff\_vertices} returns a Wulff construction.
 The three programs split the work as parse, store and compare (Table~\ref{tab:commands}, Section~\ref{sec:supp-commands}).
-Rust installs with \texttt{cargo add readcon-core@0.22.0}, Python with \texttt{pip install readcon==0.22.0}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==0.22.0}.
+Rust installs with \texttt{cargo add readcon-core@\benchReadcon}, Python with \texttt{pip install readcon==\benchReadcon}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==\benchReadcon}.
 Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}, and C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
 readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}, and readcon-ops installs with \texttt{pip install .} from a checkout of \url{https://github.com/lode-org/readcon-ops}.
 
@@ -472,24 +473,22 @@ A permutation of one image makes those differences connect different atoms, so t
 That pairing is the chemical map.
 EMT is a cheap model surface for that pairing, not a copper barrier.
 
-ASE \benchAse\ builds the band with its nudged elastic band, spring constant \SI{0.8}{\electronvolt\per\angstrom\squared}, the improved tangent and the FIRE optimiser.
+ASE \benchAse\ builds the band with its nudged elastic band, spring constant \(\hopSpring\,\mathrm{eV}/\text{\AA}^{2}\), the improved tangent and the FIRE optimiser.
 The seven images are the CON file named in the data availability statement, read through readcon.
 The slab is three layers of a \(2\times 2\) cell with the bottom layer held.
-In each hollow the hydrogen is 1.399~\text{\AA} above the top layer and the four Cu--H contacts are 2.318~\text{\AA}.
+In each hollow the hydrogen is \hopHollowHeight~\text{\AA} above the top layer and the four Cu--H contacts are \hopHollowContact~\text{\AA}.
 
-% UNSOURCED: needs the id-matched EMT NEB barrier (highest image above the hollow, in eV) and the peak after the copper rows are exchanged, recorded in the campaign JSON.
 Paired by atom id, the highest image is the bridge.
-It lies 0.0399~eV above the hollow, the force is \(0.048\,\mathrm{eV}/\text{\AA}\), and the hydrogen is 1.608~\text{\AA} above the top layer with two Cu--H contacts of 2.113~\text{\AA} (Figure~\ref{fig:claisen-land}).
-The mode is \(147\mathrm{i}\,\mathrm{cm}^{-1}\), along the hop.
-Exchanging the CON rows of two copper atoms and pairing by file row moves the highest image to 15.6~eV (Figures~\ref{fig:claisen-land} and~\ref{fig:claisen-struct-ids}).
+It lies \hopBarrier~eV above the hollow, the force is \(\hopForce\,\mathrm{eV}/\text{\AA}\), and the hydrogen is \hopHeight~\text{\AA} above the top layer with two Cu--H contacts of \hopContact~\text{\AA} (Figure~\ref{fig:claisen-land}).
+The mode is \(\hopMode\mathrm{i}\,\mathrm{cm}^{-1}\), along the hop.
+Exchanging the CON rows of two copper atoms and pairing by file row moves the highest image to \hopSwapped~eV (Figures~\ref{fig:claisen-land} and~\ref{fig:claisen-struct-ids}).
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{figures/generated/claisen_landscape.pdf}
-% UNSOURCED: needs the same two EMT barriers, id-matched and row-exchanged, recorded in the campaign JSON.
 \caption{Losing the identifier on the EMT model.
-Left, paired by atom id, 0.0399~eV at the bridge.
-Right, the CON rows of two copper atoms exchanged and paired by file row, 15.6~eV.}
+Left, paired by atom id, \hopBarrier~eV at the bridge.
+Right, the CON rows of two copper atoms exchanged and paired by file row, \hopSwapped~eV.}
 \label{fig:claisen-land}
 \end{figure}
 
@@ -547,7 +546,7 @@ The failures that change the physics are the lost \(z\) hold and a misread veloc
 Dropping the hold moves the barrier from \eFiveBarrierHeld~eV to \eFiveBarrierFree~eV, \eFiveBarrierDeltaMeV~meV, and multiplies the prefactor by \eFivePrefactorRatioFree.
 Reading the natural unit as \(\text{\AA}/\mathrm{fs}\) multiplies the kinetic energy by \velFactorSq.
 Six decimals, extended XYZ and POSCAR shift the barrier by \(\num{\rfDeSixNum}\), \(\num{\rfDeXyzNum}\) and at most \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\), and Table~\ref{tab:restartfmt} gives the coordinate shift beside each of those barriers.
-The Morse barrier stays \eOneBarrierLbfgs~eV on the round trip, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
+The Morse barrier stays \eOneBarrierLbfgs~eV on the round trip, and six decimals shift it by \(\eOneSixConDelta\)~eV (Figure~\ref{fig:restart}, Section~\ref{sec:supp-morse}).
 
 \begin{figure}[tbp] \centering
 \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf}
@@ -564,6 +563,7 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 
 \subsection{Computational details}\label{sec:compute}
 We time every read on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
+% PENDING final campaign
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
 The reads use readcon-core \benchReadcon\ and Python 3.12.3.
 The libraries beside those reads are NumPy \benchNumpy\ \cite{harrisArrayProgrammingNumpy2020}, ASE \benchAse\ \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz \benchExtxyz\ \cite{kermodeLibatomsExtxyzV0462026}, chemfiles \benchChemfiles\ \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \benchMda\ \cite{gowersMdanalysis21102026} and OVITO \benchOvito\ \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{\benchEon}, after the \eOneEonTag\ release \cite{rohitgoswamiTheochemuieonV3602026}.
@@ -650,7 +650,7 @@ A search that keeps a Hessian or the steps of L-BFGS or FIRE takes a different p
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 % UNSOURCED: needs the id-matched EMT barrier and the scrambled-band peak, in eV, recorded in the campaign JSON.
-Losing the identifier changes the result from 0.04~eV to 15.6~eV on an EMT model.
+Losing the identifier changes the result from \hopBarrier~eV to \hopSwapped~eV on an EMT model.
 readcon takes \conReadconMedian~s on the million-atom CON frame, against \conAseMedian~s for ASE.
 % UNSOURCED: needs the neighbour-pair persistence on 4096 molecules of mW water, identifier kept against file order, recorded in the campaign JSON.
 On 4096 molecules of mW water the neighbour pairs persist at 0.955 when the stored identifier is kept and at 0.001 when the file order replaces it.

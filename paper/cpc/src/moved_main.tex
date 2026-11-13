@@ -630,7 +630,7 @@ On the id-ordered product the hydrogen moves 2.553~\text{\AA} from one hollow to
 \texttt{product\_swapped.con} exchanges the rows of copper ids 8 and 11, and the identifiers travel with those rows.
 Pairing the rows by slot then moves one copper by 3.610~\text{\AA}.
 Pairing them by identifier leaves that copper in place and keeps the hydrogen step at 2.553~\text{\AA}.
-The images of Eq.~\eqref{eq:lerp} on the slot pairing drag those two copper atoms across the cell, which is the 15.6~eV image of Figure~\ref{fig:claisen-land}.
+The images of Eq.~\eqref{eq:lerp} on the slot pairing drag those two copper atoms across the cell, which is the \hopSwapped~eV image of Figure~\ref{fig:claisen-land}.
 \texttt{reorder\_like} puts the swapped file back into the identifier order of the reactant.
 
 \section{Water quench}\label{sec:supp-water-protocol}
@@ -717,7 +717,7 @@ and its memory vectors are stored in no geometry file.
 A restart therefore cannot repeat an L-BFGS path from the geometry alone.
 The uninterrupted Morse band, on eOn's Morse potential, takes 946 optimiser steps and 4737 force calls, and the barrier is 1.37~eV (Figure~\ref{fig:restart}).
 The round trip reaches the same barrier, with a shift of 0, in 922 optimiser steps and 4617 force calls on the resumed leg.
-Six decimals shift the barrier by \(1.00\times 10^{-6}\)~eV and take the same resumed leg.
+Six decimals shift the barrier by \(\eOneSixConDelta\)~eV and take the same resumed leg.
 
 \section{The three applications in full}\label{sec:supp-applications}
 The hop of Section~\ref{sec:validation} is Figure~\ref{fig:claisen-land}, and the restart drift is Figure~\ref{fig:restartfmt}.
@@ -741,7 +741,7 @@ The NEB tangent and the spring, Eqs.~\eqref{eq:tangent} and~\eqref{eq:spring}, t
 The chemical correspondence is the identity permutation carried by the atom ids of the two frames.
 Figure~\ref{fig:claisen-land} is the band paired by atom id beside the band paired by file row, after the CON rows of two copper atoms are exchanged.
 Figure~\ref{fig:claisen-struct-ids} draws both from above.
-Losing the identifier is the difference between 0.04~eV and 15.6~eV on this model.
+Losing the identifier is the difference between \hopBarrier~eV and \hopSwapped~eV on this model.
 
 
 
@@ -880,7 +880,7 @@ The route-by-route prefactors are Table~\ref{tab:prefactor-routes} (Section~\ref
 
 \subsubsection{eOn resuming a Morse band}\label{sec:morse-resume}
 eOn's L-BFGS memory is stored in no geometry file, so a restart cannot repeat that path from the geometry alone (Section~\ref{sec:supp-morse}).
-The uninterrupted Morse barrier is 1.37~eV, the round trip shifts it by 0, and six decimals shift it by \(1.00\times 10^{-6}\)~eV (Figure~\ref{fig:restart}).
+The uninterrupted Morse barrier is \eOneBarrierLbfgs~eV, the round trip shifts it by 0, and six decimals shift it by \(\eOneSixConDelta\)~eV (Figure~\ref{fig:restart}).
 
 
 \section{Atom correspondence}\label{sec:identity}
