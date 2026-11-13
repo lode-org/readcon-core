@@ -4590,6 +4590,9 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(has_parallel_support, m)?)?;
     m.add_function(wrap_pyfunction!(has_mpi_support, m)?)?;
     m.add_function(wrap_pyfunction!(read_pdb, m)?)?;
+    m.add_class::<SpeciesFrames>()?;
+    m.add_class::<SpeciesRow>()?;
+    m.add_class::<SpeciesIter>()?;
     m.add_function(wrap_pyfunction!(read_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(write_extxyz, m)?)?;
     m.add_function(wrap_pyfunction!(read_chemfiles, m)?)?;
@@ -4899,17 +4902,187 @@ fn uniform_symbol_frames<'py>(
     pyo3::types::PyList::new(py, (0..n_frames).map(|_| row.clone_ref(py)))
 }
 
+fn species_index(index: isize, len: usize) -> PyResult<usize> {
+    let resolved = if index < 0 {
+        index + len as isize
+    } else {
+        index
+    };
+    if resolved < 0 || resolved as usize >= len {
+        return Err(pyo3::exceptions::PyIndexError::new_err("species index"));
+    }
+    Ok(resolved as usize)
+}
+
+/// Wide-frame species: one interned string per distinct symbol, and the
+/// per-atom ids. A frame below 4096 atoms is still a tuple. A wide frame
+/// is this view, so the read does not build a million-item tuple.
+#[pyclass(name = "SpeciesFrames")]
+struct SpeciesFrames {
+    n_frames: usize,
+    n_atoms: usize,
+    pool: Vec<Py<pyo3::types::PyString>>,
+    /// Empty when every atom uses `pool[0]`.
+    ids: Vec<u32>,
+}
+
+#[pyclass(name = "SpeciesRow")]
+struct SpeciesRow {
+    parent: Py<SpeciesFrames>,
+    frame: usize,
+}
+
+#[pyclass]
+struct SpeciesIter {
+    parent: Py<SpeciesFrames>,
+    frame: usize,
+    index: usize,
+}
+
+#[pymethods]
+impl SpeciesFrames {
+    fn __len__(&self) -> usize {
+        self.n_frames
+    }
+
+    fn __getitem__(slf: &Bound<'_, Self>, index: isize) -> PyResult<Py<SpeciesRow>> {
+        let py = slf.py();
+        let frame = species_index(index, slf.borrow().n_frames)?;
+        Py::new(
+            py,
+            SpeciesRow {
+                parent: slf.clone().unbind(),
+                frame,
+            },
+        )
+    }
+
+    /// Per-atom species ids, shape `(frames, atoms)`. Empty when the file
+    /// is one symbol.
+    fn ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<u32>>> {
+        if self.ids.is_empty() {
+            let flat = vec![0u32; self.n_frames.saturating_mul(self.n_atoms)];
+            let array = Array2::from_shape_vec((self.n_frames, self.n_atoms), flat)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            return Ok(array.into_pyarray(py));
+        }
+        let array = Array2::from_shape_vec((self.n_frames, self.n_atoms), self.ids.clone())
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        Ok(array.into_pyarray(py))
+    }
+}
+
+impl SpeciesFrames {
+    fn owned_text(&self, py: Python<'_>) -> PyResult<OwnedText> {
+        let mut symbols = Vec::with_capacity(self.pool.len());
+        for symbol in &self.pool {
+            symbols.push(symbol.bind(py).to_str()?.to_string());
+        }
+        let total = self.n_frames.saturating_mul(self.n_atoms);
+        let ids = if self.ids.is_empty() {
+            vec![0u32; total]
+        } else {
+            self.ids.clone()
+        };
+        Ok(OwnedText { symbols, ids })
+    }
+}
+
+#[pymethods]
+impl SpeciesRow {
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        Ok(self.parent.bind(py).borrow().n_atoms)
+    }
+
+    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<pyo3::types::PyString>> {
+        let frames = self.parent.bind(py).borrow();
+        let atom = species_index(index, frames.n_atoms)?;
+        let id = if frames.ids.is_empty() {
+            0
+        } else {
+            frames.ids[self.frame * frames.n_atoms + atom]
+        };
+        frames
+            .pool
+            .get(id as usize)
+            .map(|symbol| symbol.clone_ref(py))
+            .ok_or_else(|| PyValueError::new_err("species id"))
+    }
+
+    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<SpeciesIter>> {
+        Py::new(
+            py,
+            SpeciesIter {
+                parent: self.parent.clone_ref(py),
+                frame: self.frame,
+                index: 0,
+            },
+        )
+    }
+}
+
+#[pymethods]
+impl SpeciesIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> Option<Py<pyo3::types::PyString>> {
+        let frames = self.parent.bind(py).borrow();
+        if self.index >= frames.n_atoms {
+            return None;
+        }
+        let id = if frames.ids.is_empty() {
+            0
+        } else {
+            frames.ids[self.frame * frames.n_atoms + self.index]
+        };
+        let symbol = frames.pool.get(id as usize)?.clone_ref(py);
+        drop(frames);
+        self.index += 1;
+        Some(symbol)
+    }
+}
+
+fn species_view<'py>(
+    py: Python<'py>,
+    pool: &[String],
+    ids: Vec<u32>,
+    n_frames: usize,
+    n_atoms: usize,
+) -> PyResult<Py<SpeciesFrames>> {
+    let mut py_pool = Vec::with_capacity(pool.len().max(1));
+    for symbol in pool {
+        py_pool.push(pyo3::types::PyString::new(py, symbol).unbind());
+    }
+    if py_pool.is_empty() {
+        py_pool.push(pyo3::types::PyString::new(py, "").unbind());
+    }
+    let ids = if py_pool.len() == 1 { Vec::new() } else { ids };
+    Py::new(
+        py,
+        SpeciesFrames {
+            n_frames,
+            n_atoms,
+            pool: py_pool,
+            ids,
+        },
+    )
+}
+
 /// Read an extended XYZ file.
 ///
 /// The comment line gives the lattice and the column order. The returned
 /// dict holds ``positions`` with shape `(frames, atoms, 3)`, ``masses``
 /// with shape `(frames, atoms)`, ``cell`` with shape `(frames, 6)`,
-/// ``species`` as one symbol tuple per frame, and ``arrays``, a dict of
+/// ``species`` as one symbol sequence per frame, and ``arrays``, a dict of
 /// every per-atom `Properties` column. A real column is one float array.
 /// A text column is a list of tuples. A repeated symbol is one string
 /// object, and a frame whose symbols match the previous frame is that
-/// same tuple. ``arrays['species']`` is ``species``. ``arrays['pos']``
-/// and ``arrays['masses']`` are the top-level slabs.
+/// same tuple when the frame has fewer than 4096 atoms. A wider frame is
+/// an immutable sequence over interned symbols and their ids, not one
+/// Python tuple per atom. ``arrays['species']`` is ``species``.
+/// ``arrays['pos']`` and ``arrays['masses']`` are the top-level slabs.
 /// `n_threads` of `None` or `1` is the serial scan. `n >= 2` splits frames.
 #[pyfunction]
 #[pyo3(signature = (path, n_threads=None))]
@@ -4920,25 +5093,14 @@ fn read_extxyz<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let path_owned = path.to_string();
     let workers = n_threads.unwrap_or(1);
-    let (mut tables, prebuilt_species) = py
-        .detach(move || {
+    let mut tables = py
+        .detach(move || -> Result<_, String> {
             let file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
             // The map is the parse input. A second copy of the file was a
             // serial pass in front of every threaded read.
             // SAFETY: the file is not truncated while this map is alive.
             let bytes = unsafe { memmap2::Mmap::map(&file) }.map_err(|_| "read".to_string())?;
-            if workers < 2 {
-                let tables =
-                    crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)?;
-                return Ok((tables, None));
-            }
-            let (tx, rx) = std::sync::mpsc::sync_channel(workers.max(1));
-            let builder = std::thread::spawn(move || species_list_from_batches(rx));
-            let tables =
-                crate::extxyz_scan::tables_from_extxyz_bytes_reporting(&bytes, workers, Some(&tx));
-            drop(tx);
-            let species = builder.join().unwrap_or(None);
-            tables.map(|tables| (tables, species))
+            crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
         })
         .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let n_frames = tables.n_frames;
@@ -4983,12 +5145,21 @@ fn read_extxyz<'py>(
             arrays.set_item(column.name, values.into_pyarray(py))?;
         }
     }
-    let species = match shared_species {
-        Some(found) => found,
-        None if prebuilt_species.is_some() => {
-            let built = prebuilt_species.unwrap().bind(py).clone();
-            arrays.set_item("species", &built)?;
-            built
+    let species: Bound<'_, PyAny> = match shared_species {
+        Some(found) => found.into_any(),
+        None if n_atoms >= 4096
+            && (tables.uniform_species.is_some() || !tables.species_ids.is_empty()) =>
+        {
+            let pool = if let Some(symbol) = tables.uniform_species.take() {
+                vec![symbol]
+            } else {
+                std::mem::take(&mut tables.species_pool)
+            };
+            let ids = std::mem::take(&mut tables.species_ids);
+            let built = species_view(py, &pool, ids, n_frames, n_atoms)?;
+            let bound = built.bind(py).clone();
+            arrays.set_item("species", &bound)?;
+            bound.into_any()
         }
         None => {
             let built = if let Some(symbol) = tables.uniform_species.as_deref() {
@@ -5005,7 +5176,7 @@ fn read_extxyz<'py>(
                 py_text_frames(py, &tables.species, n_atoms, 1)?
             };
             arrays.set_item("species", &built)?;
-            built
+            built.into_any()
         }
     };
     let dict = PyDict::new(py);
@@ -5023,6 +5194,9 @@ struct OwnedText {
 }
 
 fn intern_text_column(value: &Bound<'_, PyAny>) -> PyResult<OwnedText> {
+    if let Ok(table) = value.cast::<SpeciesFrames>() {
+        return table.borrow().owned_text(value.py());
+    }
     let frames = match frame_tuples(value) {
         Some(frames) => frames,
         None => return intern_text_iter(value),

@@ -1044,31 +1044,310 @@ fn tables_stream_parallel(
         return None;
     }
     let n_atoms = parse_f64(count_line).ok()? as usize;
-    if n_atoms < 4096 {
-        return None;
-    }
-    // A multi-frame file is larger than one fat frame of ordinary lines.
-    // Counting it here would throw the work away and run the frame walker.
-    if bytes.len() > n_atoms.saturating_mul(512) {
+    if n_atoms == 0 {
         return None;
     }
     let (body, comment) = line_span(bytes, count_end)?;
     let properties = quoted_after(comment, b"Properties=")?;
-    let lattice = quoted_after(comment, b"Lattice=")?;
-    let frame_cell = lattice_cell(lattice).ok()?;
     let specs = property_columns(properties).ok()?;
     if !stream_layout(&specs) {
         return None;
     }
-    let (chunks, end) = crate::parser::plan_coord_chunks(bytes, body, n_atoms, workers).ok()?;
-    let mut cursor = end;
-    while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
-        cursor += 1;
+    // One fat frame is split by atoms. A long series of small frames is
+    // split by frame, still on this scanner, so the line-pointer vector
+    // is not built.
+    if n_atoms >= 4096 && bytes.len() <= n_atoms.saturating_mul(512) {
+        let lattice = quoted_after(comment, b"Lattice=")?;
+        let frame_cell = lattice_cell(lattice).ok()?;
+        if let Ok((chunks, end)) = crate::parser::plan_coord_chunks(bytes, body, n_atoms, workers) {
+            let mut cursor = end;
+            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+                cursor += 1;
+            }
+            if cursor == bytes.len() {
+                return fill_stream_chunks(bytes, n_atoms, &specs, frame_cell, &chunks, batches)
+                    .map(Ok);
+            }
+        }
     }
-    if cursor != bytes.len() {
+    fill_stream_frames(bytes, n_atoms, properties, &specs, workers, batches).map(Ok)
+}
+
+#[cfg(feature = "parallel")]
+fn indexed_line<'a>(bytes: &'a [u8], newlines: &[usize], index: usize) -> &'a [u8] {
+    let start = if index == 0 {
+        0
+    } else {
+        newlines[index - 1] + 1
+    };
+    let mut end = if index < newlines.len() {
+        newlines[index]
+    } else {
+        bytes.len()
+    };
+    if end > start && bytes[end - 1] == b'\r' {
+        end -= 1;
+    }
+    if start >= bytes.len() || start > end {
+        return &[];
+    }
+    &bytes[start..end.min(bytes.len())]
+}
+
+/// Many frames of one streaming layout. Frame starts are arithmetic in
+/// the newline index, and each worker parses a run of frames.
+#[cfg(feature = "parallel")]
+fn fill_stream_frames(
+    bytes: &[u8],
+    n_atoms: usize,
+    properties: &[u8],
+    specs: &[ColumnSpec],
+    workers: usize,
+    batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
+) -> Option<XyzTables> {
+    let newlines = crate::parser::newline_index(bytes, workers);
+    let n_lines = if bytes.last() == Some(&b'\n') {
+        newlines.len()
+    } else if bytes.is_empty() {
+        0
+    } else {
+        newlines.len() + 1
+    };
+    let stride = n_atoms.saturating_add(2);
+    if stride < 2 || n_lines < stride || !n_lines.is_multiple_of(stride) {
         return None;
     }
-    fill_stream_chunks(bytes, n_atoms, &specs, frame_cell, &chunks, batches).map(Ok)
+    let n_frames = n_lines / stride;
+    if n_frames < 2 {
+        return None;
+    }
+    let total = n_frames.saturating_mul(n_atoms);
+    let mut positions = Vec::<f64>::with_capacity(total.saturating_mul(3));
+    let mut mass_slot = None;
+    let mut extra_at = vec![None; specs.len()];
+    let mut extras: Vec<Vec<f64>> = Vec::new();
+    for (index, spec) in specs.iter().enumerate() {
+        if spec.name == "masses" || spec.name == "mass" {
+            mass_slot = Some(index);
+        } else if index > 0 && spec.name != "pos" && spec.kind != b'S' {
+            extra_at[index] = Some(extras.len());
+            extras.push(Vec::with_capacity(total.saturating_mul(spec.width)));
+        }
+    }
+    let mut masses = if mass_slot.is_some() {
+        Vec::with_capacity(total)
+    } else {
+        Vec::new()
+    };
+    let mut cell = Vec::<f64>::with_capacity(n_frames.saturating_mul(6));
+    let pos_ptr = positions.as_mut_ptr() as usize;
+    let mass_ptr = masses.as_mut_ptr() as usize;
+    let cell_ptr = cell.as_mut_ptr() as usize;
+    let extra_ptrs: Vec<usize> = (0..specs.len())
+        .map(|index| {
+            extra_at[index]
+                .map(|extra| extras[extra].as_mut_ptr() as usize)
+                .unwrap_or(0)
+        })
+        .collect();
+    let frame_chunk = n_frames.div_ceil(workers.max(1)).max(1);
+    let mut slots: Vec<Option<(Vec<String>, Vec<u32>)>> = Vec::new();
+    let worker_count = n_frames.div_ceil(frame_chunk).min(workers.max(1));
+    slots.resize_with(worker_count, || None);
+    let slots_ptr = slots.as_mut_ptr() as usize;
+    let extra_ptrs = extra_ptrs.as_slice();
+    crate::parser::on_pool(worker_count.max(1), || {
+        use rayon::prelude::*;
+        (0..worker_count).into_par_iter().for_each(|worker| {
+            let frame_from = worker * frame_chunk;
+            let frame_to = (frame_from + frame_chunk).min(n_frames);
+            let mut pool = Vec::new();
+            let mut keys = Vec::new();
+            let slots = stream_slots(specs, pos_ptr, mass_ptr, extra_ptrs);
+            let mut ids = Vec::with_capacity((frame_to - frame_from).saturating_mul(n_atoms));
+            for frame in frame_from..frame_to {
+                let count_line = indexed_line(bytes, &newlines, frame * stride);
+                let Ok(parsed) = parse_f64(trim(count_line)) else {
+                    return;
+                };
+                if parsed as usize != n_atoms {
+                    return;
+                }
+                let comment = indexed_line(bytes, &newlines, frame * stride + 1);
+                let Some(props) = quoted_after(comment, b"Properties=") else {
+                    return;
+                };
+                if props != properties {
+                    return;
+                }
+                let Some(lattice) = quoted_after(comment, b"Lattice=") else {
+                    return;
+                };
+                let Ok(frame_cell) = lattice_cell(lattice) else {
+                    return;
+                };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        frame_cell.as_ptr(),
+                        (cell_ptr as *mut f64).add(frame * 6),
+                        6,
+                    );
+                }
+                let mut pos = if frame * stride + 2 == 0 {
+                    0
+                } else {
+                    newlines[frame * stride + 1] + 1
+                };
+                for atom in 0..n_atoms {
+                    let (next, line) = match line_span(bytes, pos) {
+                        Some(pair) => pair,
+                        None => return,
+                    };
+                    pos = next;
+                    if !write_stream_line(
+                        line,
+                        &slots,
+                        &mut pool,
+                        &mut keys,
+                        &mut ids,
+                        frame * n_atoms + atom,
+                    ) {
+                        return;
+                    }
+                }
+            }
+            unsafe {
+                *(slots_ptr as *mut Option<(Vec<String>, Vec<u32>)>).add(worker) =
+                    Some((pool, ids));
+            }
+        });
+    });
+    let mut worker_species = Vec::with_capacity(slots.len());
+    for slot in slots {
+        worker_species.push(slot?);
+    }
+    if batches.is_some() {
+        for (worker, (local_pool, local_ids)) in worker_species.iter().enumerate() {
+            let chunk = if local_pool.len() == 1 {
+                SpeciesChunk::Uniform {
+                    symbol: local_pool[0].clone(),
+                    atoms: local_ids.len(),
+                }
+            } else {
+                SpeciesChunk::Mixed {
+                    pool: local_pool.clone(),
+                    ids: local_ids.clone(),
+                }
+            };
+            let frames = if n_atoms == 0 {
+                0
+            } else {
+                local_ids.len() / n_atoms
+            };
+            emit_species(batches, worker as u16, frames, &chunk);
+        }
+    }
+    unsafe {
+        positions.set_len(total * 3);
+        if mass_slot.is_some() {
+            masses.set_len(total);
+        }
+        cell.set_len(n_frames * 6);
+        for (index, spec) in specs.iter().enumerate() {
+            if let Some(extra) = extra_at[index] {
+                extras[extra].set_len(total * spec.width);
+            }
+        }
+    }
+    let (pool, ids) = combine_species(worker_species, total);
+    if pool.is_empty() {
+        return None;
+    }
+    if mass_slot.is_none() {
+        masses = vec![f64::NAN; total];
+    }
+    let mut columns = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate() {
+        let real = if spec.kind == b'S' || spec.name == "pos" || Some(index) == mass_slot {
+            Vec::new()
+        } else if let Some(extra) = extra_at[index] {
+            std::mem::take(&mut extras[extra])
+        } else {
+            Vec::new()
+        };
+        columns.push(XyzColumn {
+            name: spec.name.clone(),
+            kind: spec.kind,
+            width: spec.width,
+            text: Vec::new(),
+            real,
+        });
+    }
+    Some(XyzTables {
+        n_frames,
+        n_atoms,
+        positions,
+        masses,
+        cell,
+        species: Vec::new(),
+        uniform_species: None,
+        species_pool: pool,
+        species_ids: ids,
+        columns,
+    })
+}
+
+#[cfg(feature = "parallel")]
+fn combine_species(
+    worker_species: Vec<(Vec<String>, Vec<u32>)>,
+    n_atoms: usize,
+) -> (Vec<String>, Vec<u32>) {
+    let mut pool = Vec::new();
+    let mut maps = Vec::with_capacity(worker_species.len());
+    let mut locals = Vec::with_capacity(worker_species.len());
+    for (local_pool, local_ids) in worker_species {
+        let mut map = Vec::with_capacity(local_pool.len());
+        for symbol in &local_pool {
+            map.push(intern_symbol(&mut pool, symbol.as_bytes()));
+        }
+        maps.push(map);
+        locals.push(local_ids);
+    }
+    let mut base = 0usize;
+    for local in &locals {
+        base += local.len();
+    }
+    if base != n_atoms {
+        return (Vec::new(), Vec::new());
+    }
+    let ids = if pool.len() <= 1 {
+        vec![0u32; n_atoms]
+    } else {
+        let mut ids = Vec::<u32>::with_capacity(n_atoms);
+        let ptr = ids.as_mut_ptr() as usize;
+        let mut spans = Vec::with_capacity(locals.len());
+        let mut at = 0usize;
+        for local in &locals {
+            spans.push(at);
+            at += local.len();
+        }
+        crate::parser::on_pool(locals.len().max(1), || {
+            use rayon::prelude::*;
+            (0..locals.len()).into_par_iter().for_each(|worker| {
+                let map = &maps[worker];
+                let local = &locals[worker];
+                let start = spans[worker];
+                for (offset, id) in local.iter().enumerate() {
+                    unsafe {
+                        *((ptr as *mut u32).add(start + offset)) = map[*id as usize];
+                    }
+                }
+            });
+        });
+        unsafe { ids.set_len(n_atoms) };
+        ids
+    };
+    (pool, ids)
 }
 
 #[cfg(feature = "parallel")]
@@ -1115,30 +1394,18 @@ fn fill_stream_chunks(
             let (start, nrows) = chunks[worker];
             let atom0 = start_atom(chunks, worker);
             let mut pool = Vec::new();
+            let mut keys = Vec::new();
+            let slots = stream_slots(specs, pos_ptr, mass_ptr, extra_ptrs);
             let mut ids = Vec::with_capacity(nrows);
             let mut pos = start;
             for offset in 0..nrows {
-                // A short line: memchr's setup costs more than the scan.
-                let mut end = pos;
-                while end < bytes.len() && bytes[end] != b'\n' {
-                    end += 1;
-                }
-                let mut line_end = end;
-                if line_end > pos && bytes[line_end - 1] == b'\r' {
-                    line_end -= 1;
-                }
-                let line = &bytes[pos..line_end];
-                pos = if end < bytes.len() { end + 1 } else { end };
-                if !write_stream_line(
-                    line,
-                    specs,
-                    &mut pool,
-                    &mut ids,
-                    pos_ptr as *mut f64,
-                    mass_ptr as *mut f64,
-                    extra_ptrs,
-                    atom0 + offset,
-                ) {
+                let (next, line) = match line_span(bytes, pos) {
+                    Some(pair) => pair,
+                    None => return,
+                };
+                pos = next;
+                if !write_stream_line(line, &slots, &mut pool, &mut keys, &mut ids, atom0 + offset)
+                {
                     return;
                 }
             }
@@ -1152,19 +1419,21 @@ fn fill_stream_chunks(
     for slot in slots {
         worker_species.push(slot?);
     }
-    for (worker, (local_pool, local_ids)) in worker_species.iter().enumerate() {
-        let chunk = if local_pool.len() == 1 {
-            SpeciesChunk::Uniform {
-                symbol: local_pool[0].clone(),
-                atoms: local_ids.len(),
-            }
-        } else {
-            SpeciesChunk::Mixed {
-                pool: local_pool.clone(),
-                ids: local_ids.clone(),
-            }
-        };
-        emit_species(batches, worker as u16, 0, &chunk);
+    if batches.is_some() {
+        for (worker, (local_pool, local_ids)) in worker_species.iter().enumerate() {
+            let chunk = if local_pool.len() == 1 {
+                SpeciesChunk::Uniform {
+                    symbol: local_pool[0].clone(),
+                    atoms: local_ids.len(),
+                }
+            } else {
+                SpeciesChunk::Mixed {
+                    pool: local_pool.clone(),
+                    ids: local_ids.clone(),
+                }
+            };
+            emit_species(batches, worker as u16, 0, &chunk);
+        }
     }
     unsafe {
         positions.set_len(n_atoms * 3);
@@ -1178,14 +1447,45 @@ fn fill_stream_chunks(
         }
     }
     let mut pool = Vec::new();
-    let mut ids = Vec::with_capacity(n_atoms);
+    let mut maps = Vec::with_capacity(worker_species.len());
+    let mut locals = Vec::with_capacity(worker_species.len());
     for (local_pool, local_ids) in worker_species {
         let mut map = Vec::with_capacity(local_pool.len());
         for symbol in &local_pool {
             map.push(intern_symbol(&mut pool, symbol.as_bytes()));
         }
-        ids.extend(local_ids.into_iter().map(|id| map[id as usize]));
+        maps.push(map);
+        locals.push(local_ids);
     }
+    // One symbol in the whole frame: every local id is that symbol.
+    // Remapping a million ids on this thread was the alloy tail.
+    let ids = if pool.len() <= 1 {
+        vec![0u32; n_atoms]
+    } else {
+        let mut ids = Vec::<u32>::with_capacity(n_atoms);
+        let ptr = ids.as_mut_ptr() as usize;
+        let mut spans = Vec::with_capacity(locals.len());
+        let mut base = 0usize;
+        for local in &locals {
+            spans.push(base);
+            base += local.len();
+        }
+        crate::parser::on_pool(locals.len().max(1), || {
+            use rayon::prelude::*;
+            (0..locals.len()).into_par_iter().for_each(|worker| {
+                let map = &maps[worker];
+                let local = &locals[worker];
+                let start = spans[worker];
+                for (offset, id) in local.iter().enumerate() {
+                    unsafe {
+                        *((ptr as *mut u32).add(start + offset)) = map[*id as usize];
+                    }
+                }
+            });
+        });
+        unsafe { ids.set_len(n_atoms) };
+        ids
+    };
     if mass_slot.is_none() {
         masses = vec![f64::NAN; n_atoms];
     }
@@ -1226,14 +1526,80 @@ fn start_atom(chunks: &[(usize, usize)], worker: usize) -> usize {
 }
 
 #[cfg(feature = "parallel")]
+struct StreamSlot {
+    width: usize,
+    base: usize,
+    /// 0 position, 1 mass, 2 other real column.
+    mode: u8,
+}
+
+#[cfg(feature = "parallel")]
+fn stream_slots(
+    specs: &[ColumnSpec],
+    pos_ptr: usize,
+    mass_ptr: usize,
+    extra_ptrs: &[usize],
+) -> Vec<StreamSlot> {
+    let mut slots = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate().skip(1) {
+        if spec.name == "pos" {
+            slots.push(StreamSlot {
+                width: spec.width,
+                base: pos_ptr,
+                mode: 0,
+            });
+        } else if spec.name == "masses" || spec.name == "mass" {
+            slots.push(StreamSlot {
+                width: spec.width,
+                base: mass_ptr,
+                mode: 1,
+            });
+        } else {
+            slots.push(StreamSlot {
+                width: spec.width,
+                base: extra_ptrs.get(index).copied().unwrap_or(0),
+                mode: 2,
+            });
+        }
+    }
+    slots
+}
+
+/// First eight bytes plus the length. Chemical symbols fit, so the key
+/// compare does not look at the stored string.
+#[cfg(feature = "parallel")]
+#[inline(always)]
+fn intern_packed(pool: &mut Vec<String>, keys: &mut Vec<u64>, token: &[u8]) -> u32 {
+    if token.len() > 8 {
+        let before = pool.len();
+        let id = intern_symbol(pool, token);
+        if pool.len() != before {
+            keys.push(!0);
+        }
+        return id;
+    }
+    let mut packed = (token.len() as u64) << 56;
+    for (index, byte) in token.iter().enumerate() {
+        packed |= (*byte as u64) << (8 * index);
+    }
+    for (index, key) in keys.iter().enumerate() {
+        if *key == packed {
+            return index as u32;
+        }
+    }
+    keys.push(packed);
+    pool.push(String::from_utf8_lossy(token).into_owned());
+    (pool.len() - 1) as u32
+}
+
+#[cfg(feature = "parallel")]
+#[inline(always)]
 fn write_stream_line(
     line: &[u8],
-    specs: &[ColumnSpec],
+    slots: &[StreamSlot],
     pool: &mut Vec<String>,
+    keys: &mut Vec<u64>,
     ids: &mut Vec<u32>,
-    pos_ptr: *mut f64,
-    mass_ptr: *mut f64,
-    extra_ptrs: &[usize],
     atom: usize,
 ) -> bool {
     let mut index = 0usize;
@@ -1247,21 +1613,22 @@ fn write_stream_line(
     if start == index {
         return false;
     }
-    ids.push(intern_symbol(pool, &line[start..index]));
-    for (slot, spec) in specs.iter().enumerate().skip(1) {
-        for k in 0..spec.width {
+    ids.push(intern_packed(pool, keys, &line[start..index]));
+    for slot in slots {
+        for k in 0..slot.width {
             let Some(value) = next_number(line, &mut index) else {
                 return false;
             };
+            if slot.base == 0 {
+                continue;
+            }
+            let at = match slot.mode {
+                0 => atom * 3 + k,
+                1 => atom,
+                _ => atom * slot.width + k,
+            };
             unsafe {
-                if spec.name == "pos" {
-                    *pos_ptr.add(atom * 3 + k) = value;
-                } else if spec.name == "masses" || spec.name == "mass" {
-                    *mass_ptr.add(atom) = value;
-                } else if extra_ptrs.get(slot).copied().unwrap_or(0) != 0 {
-                    let dest = extra_ptrs[slot] as *mut f64;
-                    *dest.add(atom * spec.width + k) = value;
-                }
+                *((slot.base as *mut f64).add(at)) = value;
             }
         }
     }

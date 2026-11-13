@@ -294,7 +294,7 @@ struct ChunkTally {
 }
 
 #[cfg(feature = "parallel")]
-fn newline_cuts(bytes: &[u8], workers: usize) -> Vec<usize> {
+pub(crate) fn newline_cuts(bytes: &[u8], workers: usize) -> Vec<usize> {
     let workers = workers.min(bytes.len()).max(1);
     let mut cuts = Vec::with_capacity(workers + 1);
     cuts.push(0usize);
