@@ -1637,6 +1637,21 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 
 
 
+\section{Round-6 scaling}\label{sec:r6}
+The medians are the type-7 median of six samples after one warmup, from commit \texttt{50bcbb74}, on the Xeon of Section~\ref{sec:compute}.
+Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
+\input{figures/generated/r6_read_table}
+
+\begin{figure}[tbp]
+\centering
+\includegraphics[width=\textwidth]{figures/generated/scaling-r6-full.pdf}
+\caption{Round-6 speedup and efficiency.
+The upper two rows are threads.
+The lower two rows are MPI ranks.
+Commit \texttt{50bcbb74}.}
+\label{fig:scaling-r6-full}
+\end{figure}
+
 \input{moved_main}
 \input{si_from_main}
 
