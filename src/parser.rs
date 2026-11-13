@@ -1531,44 +1531,53 @@ where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
     let header = parse_frame_header(lines)?;
+    // A count the unread input can hold takes the same parse as before this
+    // bound existed. Anything larger must not reserve or bump an `Arc` by
+    // the declared total.
+    if frame_count_fits(&header.natms_per_type, max_rows) {
+        return parse_fitting_frame(lines, header);
+    }
+    parse_oversized_frame(lines, header, max_rows)
+}
+
+/// `true` when the per-type counts sum without wrapping and that sum is no
+/// larger than the atom lines the caller can account for.
+fn frame_count_fits(counts: &[usize], max_rows: Option<usize>) -> bool {
+    let mut total = 0usize;
+    for &count in counts {
+        let Some(sum) = total.checked_add(count) else {
+            return false;
+        };
+        total = sum;
+    }
+    // `with_capacity` panics above `isize::MAX`. A `u32::MAX` count is tens
+    // of GiB even when the iterator cannot say how many lines remain.
+    if total > (isize::MAX as usize) / 4 {
+        return false;
+    }
+    match max_rows {
+        Some(rows) => total <= rows,
+        None => total <= (1 << 20),
+    }
+}
+
+fn parse_fitting_frame<'a, L>(lines: &mut L, header: FrameHeader) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
     let validate = header.strict_validation;
-    // More than `usize::MAX` atoms never fit the input, so a saturated total
-    // ends in `IncompleteFrame` as the exact one would.
-    let total_atoms = header
-        .natms_per_type
-        .iter()
-        .fold(0usize, |sum, &n| sum.saturating_add(n));
-    let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
-    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    let total_atoms: usize = header.natms_per_type.iter().sum();
+    use crate::storage_dtype::{ElementKind, FloatArray2, StorageDtypes};
     let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
-    // A declared count the input can hold uses the same `with_capacity` as a
-    // normal frame. A larger count only reserves what the unread bytes can
-    // hold, and a failed reservation means the vectors grow as rows arrive.
-    let (mut pos_flat, mut ids, mut atom_data) = if reserve_atoms == total_atoms
-        && total_atoms <= (isize::MAX as usize) / 4
-    {
-        (
-            Vec::with_capacity(total_atoms.saturating_mul(3)),
-            Vec::with_capacity(total_atoms),
-            Vec::with_capacity(total_atoms),
-        )
+    let f64_positions = dt.positions == ElementKind::Float64;
+    let mut pos_flat = Vec::with_capacity(total_atoms.saturating_mul(3));
+    let mut positions_other = if f64_positions {
+        None
     } else {
-        let mut pos_flat = Vec::new();
-        let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
-        let mut ids = Vec::new();
-        let _ = ids.try_reserve_exact(reserve_atoms);
-        let mut atom_data = Vec::new();
-        let _ = atom_data.try_reserve_exact(reserve_atoms);
-        (pos_flat, ids, atom_data)
+        Some(FloatArray2::zeros(dt.positions, total_atoms, 3))
     };
-    // Non-f64 storage is built after the rows exist. Allocating it from the
-    // declared count panicked when that count was larger than the input.
-    let mut positions_other = None;
-    // `symbol_shares` adds `n` to an `Arc` strong count. Cap that bump by
-    // the rows the unread input can hold so a huge declared count cannot
-    // wrap the count or spend the drop path on references that were never
-    // going to be read.
-    let share_limit = max_rows.unwrap_or(1 << 20);
+    let mut ids = Vec::with_capacity(total_atoms);
+    let mut atom_data: Vec<AtomDatum> = Vec::with_capacity(total_atoms);
 
     let mut global_atom_idx: u64 = 0;
     for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
@@ -1584,7 +1593,6 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
-            share_limit,
             CoordSink {
                 pos_flat: &mut pos_flat,
                 ids: &mut ids,
@@ -1593,8 +1601,62 @@ where
             },
         )?;
     }
-    // Another storage dtype is allocated only here, once every declared row
-    // has been read.
+    let positions = if f64_positions {
+        FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat)
+    } else {
+        positions_other.expect("non-f64 positions allocated")
+    };
+    Ok(crate::types::con_frame_coords_only_with_ids(
+        header, atom_data, positions, ids,
+    ))
+}
+
+/// A header declared more atoms than the rest of the input can hold.
+///
+/// Reservations stay within `max_rows`. Rows are still read up to the
+/// declared count, so a short file is `IncompleteFrame`.
+fn parse_oversized_frame<'a, L>(
+    lines: &mut L,
+    header: FrameHeader,
+    max_rows: Option<usize>,
+) -> Result<ConFrame, ParseError>
+where
+    L: LineStream<'a> + Iterator<Item = &'a str>,
+{
+    let validate = header.strict_validation;
+    let total_atoms = header
+        .natms_per_type
+        .iter()
+        .fold(0usize, |sum, &n| sum.saturating_add(n));
+    let reserve_atoms = max_rows.map_or(0, |rows| total_atoms.min(rows));
+    use crate::storage_dtype::{FloatArray2, StorageDtypes};
+    let dt = StorageDtypes::from_metadata(&header.metadata).unwrap_or_default();
+    let mut pos_flat = Vec::new();
+    let _ = pos_flat.try_reserve_exact(reserve_atoms.saturating_mul(3));
+    let mut ids = Vec::new();
+    let _ = ids.try_reserve_exact(reserve_atoms);
+    let mut atom_data: Vec<AtomDatum> = Vec::new();
+    let _ = atom_data.try_reserve_exact(reserve_atoms);
+
+    let mut global_atom_idx: u64 = 0;
+    for (type_idx, num_atoms) in header.natms_per_type.iter().enumerate() {
+        let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let symbol: Arc<str> = Arc::from(symbol_line.trim());
+        let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        if validate {
+            validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
+        }
+        global_atom_idx = ingest_coord_rows_cloned(
+            lines,
+            *num_atoms,
+            header.spec_version,
+            global_atom_idx,
+            &symbol,
+            &mut pos_flat,
+            &mut ids,
+            &mut atom_data,
+        )?;
+    }
     let mut positions = FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat);
     positions.project_to(dt.positions);
     Ok(crate::types::con_frame_coords_only_with_ids(
@@ -1616,7 +1678,6 @@ fn ingest_coord_rows<'a, L>(
     spec_version: u32,
     global_atom_idx: u64,
     symbol: &Arc<str>,
-    share_limit: usize,
     sink: CoordSink<'_>,
 ) -> Result<u64, ParseError>
 where
@@ -1635,7 +1696,6 @@ where
             spec_version,
             global_atom_idx,
             symbol,
-            share_limit,
             pos_flat,
             ids,
             atom_data,
@@ -1674,7 +1734,6 @@ fn ingest_coord_rows_f64<'a, L>(
     spec_version: u32,
     mut global_atom_idx: u64,
     symbol: &Arc<str>,
-    share_limit: usize,
     pos_flat: &mut Vec<f64>,
     ids: &mut Vec<u64>,
     atom_data: &mut Vec<AtomDatum>,
@@ -1682,36 +1741,47 @@ fn ingest_coord_rows_f64<'a, L>(
 where
     L: LineStream<'a>,
 {
-    // The common path is one `Arc` bump and a branch-free take per row.
-    // A declared count the unread input cannot hold clones instead, so the
-    // strong count is not wrapped by a number of rows that will not be read.
-    if n <= share_limit {
-        let mut shares = symbol_shares(symbol, n);
-        for _ in 0..n {
-            let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-            let sym = shares.take();
-            pos_flat.extend_from_slice(&xyz);
-            ids.push(atom_id);
-            atom_data.push(AtomDatum::coords(
-                sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
-            ));
-            global_atom_idx += 1;
-        }
-    } else {
-        for _ in 0..n {
-            let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-            pos_flat.extend_from_slice(&xyz);
-            ids.push(atom_id);
-            atom_data.push(AtomDatum::coords(
-                Arc::clone(symbol),
-                xyz[0],
-                xyz[1],
-                xyz[2],
-                fixed,
-                atom_id,
-            ));
-            global_atom_idx += 1;
-        }
+    let mut shares = symbol_shares(symbol, n);
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        let sym = shares.take();
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
+        global_atom_idx += 1;
+    }
+    Ok(global_atom_idx)
+}
+
+/// Coordinate rows when the declared count must not bump an `Arc` by `n`.
+fn ingest_coord_rows_cloned<'a, L>(
+    lines: &mut L,
+    n: usize,
+    spec_version: u32,
+    mut global_atom_idx: u64,
+    symbol: &Arc<str>,
+    pos_flat: &mut Vec<f64>,
+    ids: &mut Vec<u64>,
+    atom_data: &mut Vec<AtomDatum>,
+) -> Result<u64, ParseError>
+where
+    L: LineStream<'a>,
+{
+    for _ in 0..n {
+        let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        pos_flat.extend_from_slice(&xyz);
+        ids.push(atom_id);
+        atom_data.push(AtomDatum::coords(
+            Arc::clone(symbol),
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            fixed,
+            atom_id,
+        ));
+        global_atom_idx += 1;
     }
     Ok(global_atom_idx)
 }
