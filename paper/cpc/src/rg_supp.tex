@@ -1577,8 +1577,9 @@ On the 160-frame file the short-decimal build takes 2.84~ms, the Eisel--Lemire b
 \section{In-memory scaling}\label{sec:r6}
 The medians are the type-7 median of six samples after one warmup, on the Xeon of Section~\ref{sec:compute}.
 Figure~\ref{fig:scaling-r6-full} is the thread and rank campaign.
+{\renewcommand{\label}[1]{}%
 \input{campaign/final/strong}
-\input{campaign/final/weak}
+\input{campaign/final/weak}}
 
 A gzip or zstd member index is rejected when its plain length overflows the member sum, when a row span skips an atom, or when the plain length is shorter than the inflated member.
 Lengths that do not fit the file fall back to the full parser or return an error.
