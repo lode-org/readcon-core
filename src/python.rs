@@ -3330,24 +3330,23 @@ fn read_con_columnar(
     if threads >= 2 {
         let prepared = py.detach(|| -> Option<_> {
             let n_bytes = std::fs::metadata(&path_owned).ok()?.len();
-            let mut src = crate::compression::open_decoded(Path::new(&path_owned)).ok()?;
-            let mut bytes = Vec::new();
-            std::io::Read::read_to_end(&mut src, &mut bytes).ok()?;
-            let mut layout = crate::column_read::layout_indexed(&bytes, threads).ok()?;
+            let contents = crate::compression::read_file_contents(Path::new(&path_owned)).ok()?;
+            let mut layout =
+                crate::column_read::layout_indexed(contents.as_bytes(), threads).ok()?;
             if layout.n_frames < 2 || layout.n_atoms == 0 {
                 return None;
             }
             layout.n_bytes = n_bytes;
-            Some((bytes, layout))
+            Some((contents, layout))
         });
-        let Some((bytes, layout)) = prepared else {
+        let Some((contents, layout)) = prepared else {
             return Ok(None);
         };
         let offsets = layout.frame_offsets.clone();
         let frames_end = layout.frames_end;
         return materialize_columns(py, layout, threads, move |layout, slabs| {
             crate::column_read::fill_bytes_threaded(
-                &bytes,
+                contents.as_bytes(),
                 layout.n_frames,
                 layout.n_atoms,
                 layout.sections,

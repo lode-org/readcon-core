@@ -634,7 +634,7 @@ struct Piece {
 }
 
 /// Byte length of the first frame when `bytes` is that frame repeated.
-fn repeated_span(bytes: &[u8]) -> Option<usize> {
+fn repeated_span(bytes: &[u8], threads: usize) -> Option<usize> {
     if bytes.is_empty() {
         return None;
     }
@@ -651,13 +651,26 @@ fn repeated_span(bytes: &[u8]) -> Option<usize> {
         return None;
     }
     let first = &bytes[..span];
-    for copy in 1..copies {
+    let same = |copy: usize| {
         let start = copy * span;
-        if &bytes[start..start + span] != first {
-            return None;
+        &bytes[start..start + span] == first
+    };
+    #[cfg(feature = "parallel")]
+    {
+        if threads >= 2 && copies >= 4 {
+            let workers = threads.min(copies - 1).max(2);
+            let ok = crate::parser::on_pool(workers, || {
+                use rayon::prelude::*;
+                (1..copies).into_par_iter().all(same)
+            });
+            return ok.then_some(span);
         }
     }
-    Some(span)
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = threads;
+    }
+    (1..copies).all(same).then_some(span)
 }
 
 fn piece_symbols_match(left: &Piece, right: &Piece) -> bool {
@@ -938,7 +951,7 @@ fn tile_repeated(
     slabs: &mut Slabs<'_>,
     note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
 ) -> Result<Option<Columns>, ()> {
-    let Some(span) = repeated_span(bytes) else {
+    let Some(span) = repeated_span(bytes, threads) else {
         return Ok(None);
     };
     if n_frames < 2 || bytes.len() / span != n_frames || frames_end < span.saturating_mul(n_frames)
