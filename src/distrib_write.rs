@@ -19,6 +19,11 @@
 //!   rank 0 pwrites every slice in order, because concurrent pwrites of one
 //!   fresh local inode contend. That store is still slower than a warm
 //!   overwrite and slower than a plain copy of the same million-atom bytes.
+//!   An 8-rank ext4 run of the 23,589,082-byte frame does no fsync. The eight
+//!   pwrites sum to about 0.007 s, beside a fresh in-process copy of those
+//!   bytes at about 0.005–0.007 s. The rename that frees the previous inode
+//!   is about 0.002 s, and formatting plus the gather fill the rest of the
+//!   0.013 s sample. The timed write stays above that fresh-file copy.
 //!   Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
 //!   keeps a per-rank store so each rank writes its own range.
 //!   `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0,
@@ -249,12 +254,6 @@ fn write_ranked_sequential(
     bytes: &[u8],
     total: u64,
 ) -> Result<(), BoxErr> {
-    // Measurement only. Off unless the camp runner asks for it. Rank 0
-    // learns every length, then stores a slice at its offset as soon as
-    // that slice arrives. The default path below still writes in rank order.
-    if std::env::var("READCON_RANKED_READY").ok().as_deref() == Some("1") {
-        return write_ranked_ready(comm, tmp, bytes, total);
-    }
     let world = comm.raw();
     if comm.rank() == 0 {
         let file = std::fs::OpenOptions::new()
@@ -276,54 +275,6 @@ fn write_ranked_sequential(
         }
         if at != total {
             return Err(format!("ranked store wrote {at} bytes of {total}").into());
-        }
-        Ok(())
-    } else {
-        world.process_at_rank(0).send(bytes);
-        Ok(())
-    }
-}
-
-fn write_ranked_ready(comm: &Comm, tmp: &Path, bytes: &[u8], total: u64) -> Result<(), BoxErr> {
-    let world = comm.raw();
-    let len = bytes.len() as u64;
-    let mut lens = vec![0u64; comm.size()];
-    world.all_gather_into(&len, &mut lens[..]);
-    let mut offsets = vec![0u64; comm.size()];
-    let mut at = 0u64;
-    for (index, n) in lens.iter().enumerate() {
-        offsets[index] = at;
-        at += *n;
-    }
-    if at != total {
-        return Err(format!("ranked store gathered {at} bytes of {total}").into());
-    }
-    if comm.rank() == 0 {
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(tmp)
-            .map_err(|err| err.to_string())?;
-        if !bytes.is_empty() {
-            pwrite_all(&file, bytes, 0).map_err(|err| err.to_string())?;
-        }
-        for _ in 1..comm.size() {
-            let (chunk, status) = world.any_process().receive_vec::<u8>();
-            let src = status.source_rank() as usize;
-            if src >= offsets.len() {
-                return Err(format!("ranked store heard rank {src}").into());
-            }
-            if !chunk.is_empty() {
-                pwrite_all(&file, &chunk, offsets[src]).map_err(|err| err.to_string())?;
-            }
-            if chunk.len() as u64 != lens[src] {
-                return Err(format!(
-                    "ranked store rank {src} sent {} bytes of {}",
-                    chunk.len(),
-                    lens[src]
-                )
-                .into());
-            }
         }
         Ok(())
     } else {
