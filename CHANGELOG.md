@@ -44,6 +44,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- The metatensor build no longer deadlocks on the cargo target-directory
+  lock. The fix is a `[patch.crates-io]` of `metatensor-sys` in this
+  repository. `cargo package` drops `[patch]`, so a crates.io install of
+  this version still builds the published `metatensor-sys` and can
+  deadlock the same way.
 - The published library does not embed the build machine's path. Test
   scratch uses the tempfile crate. A conbin readahead test that needs a
   real disk uses a test-only directory under `target/` or `build/`, and
