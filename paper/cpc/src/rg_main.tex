@@ -224,7 +224,7 @@ frames into that file.
 \textit{Additional comments including restrictions and unusual features:}
 The library is readcon-core 0.23.2.
 readcon-core 0.23.2 is published on crates.io.
-readcon 0.23.1 and readcon-chemfiles 0.23.1 are published on PyPI.
+readcon 0.23.2 and readcon-chemfiles 0.23.2 are published on PyPI.
 Both require Python 3.10 or later, and the wheels cover CPython 3.10 through 3.15.
 Version 0.23.1 rejects a CON-bin column the file cannot hold.
 The companion programs are readcon-db \benchReadconDb, under the MIT licence, at
@@ -448,7 +448,7 @@ The saddle carries a displacements section with the same fixed-flag column and t
 readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
 readcon-ops takes a \texttt{ConFrame}: \texttt{identical} matches atoms of one element under the minimum image, \texttt{internal\_motion} removes a rigid motion, \texttt{rotational\_match} aligns by iterative rotations and assignments, and \texttt{wulff\_vertices} returns a Wulff construction.
 The three programs split the work as parse, store and compare (Table~\ref{tab:commands}, Section~\ref{sec:supp-commands}).
-Rust installs with \texttt{cargo add readcon-core@0.23.2}, Python with \texttt{pip install readcon==0.23.1}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==0.23.1}.
+Rust installs with \texttt{cargo add readcon-core@0.23.2}, Python with \texttt{pip install readcon==0.23.2}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==0.23.2}.
 The ASE plugin installs from the repository directory and registers the \texttt{ase.ioformats} entries \texttt{readcon-con} and \texttt{readcon-convel}.
 Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}, and C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
 readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}, and readcon-ops installs with \texttt{pip install .} from a checkout of \url{https://github.com/lode-org/readcon-ops}.
@@ -696,7 +696,7 @@ The published crate is readcon-core 0.23.2, under the MIT licence, from \url{htt
 The git tag \texttt{v0.23.2} is \texttt{8c2d9984}.
 The Zenodo record is \readconZenodoDOI.
 readcon-core 0.23.2 is on crates.io.
-readcon 0.23.1 and readcon-chemfiles 0.23.1 are on PyPI.
+readcon 0.23.2 and readcon-chemfiles 0.23.2 are on PyPI.
 Both require Python 3.10 or later, and the wheels cover CPython 3.10 through 3.15.
 The ASE plugin installs from the repository directory and registers \texttt{readcon-con} and \texttt{readcon-convel}.
 The DOI above is a placeholder.
