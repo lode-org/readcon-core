@@ -1,0 +1,20 @@
+{
+  "built": [
+    "target/release/examples/scale_probe",
+    "target/release/examples/serial_probe",
+    "target/release/examples/weak_scale_threads",
+    "target/release/examples/strong_scale_mpi",
+    "target/release/examples/weak_scale_mpi",
+    "bench/h2h/work/time_c",
+    "bench/h2h/work/time_cpp",
+    "bench/h2h/work/time_f"
+  ],
+  "commit": "5182f58489536512641d74bcd4387b1c201362ac",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "stream": "n 167772160\nrepeats 8\nparallel_threads 8\nparallel_triad_gbs 114.774451\nparallel_triad_iqr 1.772495\narray_kib 1310720\ncopy_gbs 17.306229\ncopy_iqr 0.032866\nscale_gbs 17.514891\nscale_iqr 0.037788\nadd_gbs 17.909890\nadd_iqr 0.021231\ntriad_gbs 17.859449\ntriad_iqr 0.025254\n",
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           52 bits physical, 57 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  8\nOn-line CPU(s) list:                     0-7\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Xeon(R) Processor\nCPU family:                              6\nModel:                                   173\nThread(s) per core:                      1\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                5400.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc pebs bts rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq dtes64 vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd arat vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid bus_lock_detect cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 flush_l1d arch_capabilities\nVirtualization:                          VT-x\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               384 KiB (8 instances)\nL1i cache:                               512 KiB (8 instances)\nL2 cache:                                16 MiB (8 instances)\nL3 cache:                                480 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-7\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Mitigation; TSX disabled\nVulnerability Vmscape:                   Not affected\n",
+  "bytes": 268435456,
+  "disk_sync": "fdatasync",
+  "pwrite": "raw",
+  "fdatasync_median_s": 0.30956962349955575,
+  "fdatasync_iqr_s": 0.001244103254066431,
+  "fdatasync_samples_s": [
+    0.31022614800167503,
+    0.3096679040027084,
+    0.30807069900038186,
+    0.3094713429964031,
+    0.31089615199744003,
+    0.3086328639983549
+  ],
+  "pwrite_median_s": 0.1120349474986142,
+  "pwrite_iqr_s": 0.0014534682541125221,
+  "pwrite_samples_s": [
+    0.1166293990027043,
+    0.11318820800079266,
+    0.1124755089986138,
+    0.11154395799530903,
+    0.1115943859986146,
+    0.11000826900271932
+  ],
+  "kernel": "6.12.113+",
+  "rustc": "rustc 1.88.0 (6b00bc388 2025-06-23)",
+  "gxx": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "gfortran": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "python": "3.12.3",
+  "commit": "5182f58489536512641d74bcd4387b1c201362ac",
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  }
+}
