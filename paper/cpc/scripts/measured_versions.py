@@ -53,16 +53,9 @@ def release_version() -> str:
     return tag_version(commit) or "unknown"
 
 
-def drift_record() -> dict | None:
-    disk = REPO / DRIFT
-    if disk.is_file():
-        return json.loads(disk.read_text(encoding="utf-8"))
-    listed = git("log", "--pretty=%H", "--", DRIFT)
-    for commit in listed.stdout.split():
-        shown = git("show", f"{commit}:{DRIFT}")
-        if shown.returncode == 0 and shown.stdout.strip():
-            return json.loads(shown.stdout)
-    return None
+def drift_record() -> dict:
+    """The committed ``version_drift.json``. The file is the measurement."""
+    return json.loads((REPO / DRIFT).read_text(encoding="utf-8"))
 
 
 def drift_fourth() -> str:
