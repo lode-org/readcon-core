@@ -85,7 +85,7 @@ def write_context(results: Path, command: str, method: str) -> Path:
     fieldnames = [column for _key, column in _LSCPU_FIELDS]
     fieldnames.extend(("asv_command", "memory_tracking_method", "n_threads"))
     with out.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerow(row)
     return out
@@ -260,7 +260,7 @@ def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = 
         "same_con",
     ]
     with dest.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
