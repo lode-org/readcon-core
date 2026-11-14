@@ -4707,9 +4707,12 @@ fn try_write_coord_frame<W: std::io::Write>(
     let mut groups: Vec<crate::writer::CoordGroup> = Vec::new();
     let mut index_of: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for item in atoms.iter() {
-        let atom = item.extract::<PyAtomDatum>().map_err(|_| {
+        // Borrow the atom. Extracting it cloned the symbol string for every
+        // row, and a 218-atom frame did that once per frame.
+        let atom_obj = item.cast::<PyAtomDatum>().map_err(|_| {
             PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
         })?;
+        let atom = atom_obj.borrow();
         if atom.has_velocity()
             || atom.has_forces()
             || atom.energy.is_some()
@@ -4724,7 +4727,7 @@ fn try_write_coord_frame<W: std::io::Write>(
             return Ok(false);
         }
         let mass = atom.mass.unwrap_or(0.0);
-        if let Some(&index) = index_of.get(&atom.symbol) {
+        if let Some(&index) = index_of.get(atom.symbol.as_str()) {
             let group = &groups[index];
             if (group.mass - mass).abs() > crate::types::ConFrameBuilder::TYPE_MASS_ABS_TOL {
                 return Err(PyValueError::new_err(format!(
@@ -4737,9 +4740,10 @@ fn try_write_coord_frame<W: std::io::Write>(
             group.fixed.push(atom.fixed);
             group.ids.push(atom.atom_id);
         } else {
-            index_of.insert(atom.symbol.clone(), groups.len());
+            let symbol = atom.symbol.clone();
+            index_of.insert(symbol.clone(), groups.len());
             groups.push(crate::writer::CoordGroup {
-                symbol: atom.symbol,
+                symbol,
                 mass,
                 xyz: vec![atom.x, atom.y, atom.z],
                 fixed: vec![atom.fixed],

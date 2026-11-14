@@ -577,7 +577,23 @@ impl<W: Write> ConFrameWriter<W> {
             )));
         }
         let n: usize = groups.iter().map(|group| group.ids.len()).sum();
-        {
+        // Strictly increasing ids are unique. The set is only for a frame
+        // whose ids are not already in order.
+        let mut increasing = true;
+        let mut previous: Option<u64> = None;
+        for group in groups {
+            for &id in &group.ids {
+                if previous.is_some_and(|prev| id <= prev) {
+                    increasing = false;
+                    break;
+                }
+                previous = Some(id);
+            }
+            if !increasing {
+                break;
+            }
+        }
+        if !increasing {
             let mut seen = std::collections::HashSet::with_capacity(n);
             for group in groups {
                 for &id in &group.ids {
