@@ -94,3 +94,9 @@ def test_distinct_frames_keep_atoms_and_species() -> None:
     assert frames[0].count("Coordinates of Component") == one.count(
         "Coordinates of Component"
     )
+
+
+def test_con_frames_without_coordinate_rows_are_refused() -> None:
+    guard = _guard()
+    with pytest.raises(SystemExit, match="no coordinate rows"):
+        guard.require_distinct_frames(["header one\n", "header two\n"])

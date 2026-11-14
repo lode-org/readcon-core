@@ -202,7 +202,8 @@ def _require_text_frames(frames: list[str]) -> list[str]:
     species = {tuple(_species_lines(frame)) for frame in frames}
     if len(counts) != 1 or len(species) != 1:
         raise SystemExit("frames do not share an atom count and species")
-    # extxyz text has no CON coordinate rows. Identical copies are still refused.
+    if counts == {0}:
+        raise SystemExit("frames have no coordinate rows")
     hashes = [hashlib.sha256(frame.encode("utf-8")).hexdigest() for frame in frames]
     return _refuse_copies(hashes)
 
