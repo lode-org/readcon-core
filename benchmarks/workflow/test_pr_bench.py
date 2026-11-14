@@ -54,13 +54,11 @@ class SplitAndLayout(unittest.TestCase):
         self.assertEqual(pr_bench.MEM_AA_ROUNDS, 12)
 
     def test_number_one_only_on_ray_classes(self) -> None:
-        timing = (
-            bench.TimeChemfilesXyz,
-            bench.TimeSelectAtoms,
-        )
+        timing = (bench.TimeSelectAtoms,)
         cleaned = (
             bench.TimeReadConTiny,
             bench.TimeReadConCuh2,
+            bench.TimeChemfilesXyz,
         )
         memory = (
             bench.RayReadConTiny,

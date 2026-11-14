@@ -34,6 +34,24 @@ def test_readcon_timing_teardown_deletes_the_file() -> None:
         assert not path.exists()
 
 
+def test_chemfiles_teardown_deletes_the_file() -> None:
+    bench = _load("bench_readcon", ROOT / "benchmarks" / "bench_readcon.py")
+    assert not hasattr(bench.TimeChemfilesXyz, "teardown_cache")
+    case = bench.TimeChemfilesXyz()
+    try:
+        case.setup(50)
+    except Exception as exc:
+        if isinstance(exc, (NotImplementedError, ImportError)):
+            return
+        if type(exc).__name__ == "SkipNotImplemented":
+            return
+        raise
+    path = Path(case._path)
+    assert path.is_file()
+    case.teardown(50)
+    assert not path.exists()
+
+
 def test_weak_thread_teardown_deletes_the_file(monkeypatch) -> None:
     module = _load("bench_threads", ROOT / "benches" / "weak_asv" / "bench_threads.py")
     monkeypatch.setattr(module, "serial_match", lambda *_args, **_kwargs: None)
