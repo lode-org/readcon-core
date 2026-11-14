@@ -85,6 +85,31 @@ def test_named_commits_and_tags_exist() -> None:
     assert not missing, missing
 
 
+def test_shipped_spec_blob_is_this_tree() -> None:
+    macros = _macros()
+    blob = _git("hash-object", "docs/orgmode/spec.org")
+    assert blob.returncode == 0
+    assert blob.stdout.strip().startswith(macros["rcReleaseSpecBlob"])
+    supp = (CPC / "rg_supp.tex").read_text(encoding="utf-8")
+    assert r"\rcReleaseSpecBlob" in supp
+    assert r"\rcMeasuredSpecBlob" in supp
+
+
+def test_measured_commit_matches_its_cargo_and_spec() -> None:
+    macros = _macros()
+    commit = macros["readconcommit"]
+    if _git("cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
+        pytest.skip("the named commit is not in this clone")
+    show = _git("show", f"{commit}:Cargo.toml")
+    found = re.search(r'^version = "([^"]+)"', show.stdout, re.M)
+    assert found is not None
+    assert found.group(1) == macros["rcMeasuredVersion"]
+    spec = _git("rev-parse", f"{commit}:docs/orgmode/spec.org")
+    assert spec.returncode == 0
+    assert spec.stdout.strip().startswith(macros["rcMeasuredSpecBlob"])
+    assert macros["rcMeasuredSpecBlob"] != macros["rcReleaseSpecBlob"]
+
+
 def test_recorded_tags_match_git() -> None:
     if not _tags():
         pytest.skip("this clone has no release tags")

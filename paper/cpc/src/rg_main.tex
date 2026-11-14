@@ -501,7 +501,7 @@ The parallel path walks the frame boundaries in one thread, because the start of
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step.
 
 % snapper:off.
-\begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a path, as readcon-core~\readconversion{} does.}
+\begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a path, as this release, readcon-core~\readconversion{}, does.}
 \label{alg:parser} \begin{algorithmic}[1] \Require path; thread count \(P\), where absent or 0 selects the default \Ensure frames in file order, or an error that names its line \State Read the first four bytes; on gzip magic, decompress every member into memory \State On zstd magic, decompress when built with zstd, else \textbf{error}: unsupported zstd input \State Otherwise read a file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \If{\(P=1\), or no parallel feature, or \(P\) is the default and the text is shorter than \(B_{\mathrm{par}}\)} \State Parse frame after frame with \Call{ParseFrame}{} \Else \State Walk the frame boundaries in one thread, skipping each frame by its counts \State Parse the frames with \Call{ParseFrame}{} in a pool of \(P\) threads, or the global pool \EndIf \Function{ParseFrame}{} \State \textbf{error} on a byte-order mark at the start of the file; line 2 is JSON when it starts with \texttt{\{}, else version 1 \State Check the header against Eq.~\eqref{eq:version}; keep unknown keys \State Read the cell; \textbf{error} when \(\hat\rho\le-\num{\wkWindow}\) in Eq.~\eqref{eq:cell} \State Read the type counts, the masses and the coordinate rows \State Round each decimal to the nearest binary64 value; \textbf{error} on a value that is not finite; check each mask against Eq.~\eqref{eq:mask} \If{line 2 has no \texttt{sections} key} \State Read a legacy velocity block when a blank line and a complete block follow \Else \For{each name in \texttt{sections}, in order} \State Read a reserved section, or count the rows of a later minor's section of declared width, else \textbf{error} \EndFor \EndIf \State \textbf{error} on a velocity section without \texttt{units.time} when \(M=3\) and \(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm} % snapper:on.
 
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
@@ -541,7 +541,7 @@ The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
 \section{Conformance}\label{sec:conformance} A specification settles a dispute between readers only when each reader can be tested against it.
-The conformance corpus of readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus}), and its manifest names the error class of each illegal file.
+The conformance corpus shipped with readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus}), and its manifest names the error class of each illegal file.
 Read through the Python module of the release, all \(\corpusConfAgree\) files return the verdict and error class of their manifest entries, and the release checks the same files from Rust, Python, C, Fortran and Julia.
 
 Table~\ref{tab:corpus} is in the supplement.
@@ -827,7 +827,7 @@ Unlike a format whose meaning lives in the code of one reader, CON 3.1 lets any 
 \FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
 The public commit on the main branch is \begin{center} \texttt{ac4f437989dea5aad9f75ff045af09ccf7127eba} \end{center} and the latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
 The deposited timing records name the candidate commit \texttt{\readconcommit}.
-That candidate is not a public tag.
+That candidate is readcon-core~\rcMeasuredVersion{} and is not a public tag.
 Rebuild the library from the public commit with \texttt{cargo build -{}-release}.
 The concept record of readcon-core \cite{goswamiReadconcoreConConvel2026} is \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 
