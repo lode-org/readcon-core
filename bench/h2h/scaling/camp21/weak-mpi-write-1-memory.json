@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 1,
+  "frames_per_worker": 8000,
+  "repeats": 12,
+  "samples_s": [0.168747599, 0.164270981, 0.176294012, 0.163170212, 0.165133069, 0.162551648, 0.159627450, 0.155920972, 0.157658879, 0.150365167, 0.155289351, 0.155872469],
+  "warmup_s": 0.303501547,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp21-weak/weak-out-1.con",
+  "host": "Intel Xeon Processor"
+}

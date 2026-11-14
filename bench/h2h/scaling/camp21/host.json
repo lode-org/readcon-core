@@ -1,0 +1,10 @@
+{
+  "commit": "a3689b221fa067fb3d93ec390b4bdc5d912ae586",
+  "base": "680e143639d67e304b56e0722bd79cd0271b988a",
+  "nproc": 8,
+  "repeats": 12,
+  "warmup": 1,
+  "pinned": "taskset -c 0-7",
+  "mpi": "mpirun --bind-to core",
+  "note": "/tmp is ext4. /dev/shm is tmpfs. Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n)."
+}
