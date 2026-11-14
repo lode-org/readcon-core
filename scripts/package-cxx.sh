@@ -195,8 +195,8 @@ EOF
 fi
 
 # Drop crate-only trees. Keep CMake/Meson consume tests.
-rm -rf "$DEST/tests" "$DEST/bench" "$DEST/benches" "$DEST/benchmarks" "$DEST/julia" \
-    "$DEST/fortran" "$DEST/docs" "$DEST/addl" || true
+rm -rf "$DEST/tests" "$DEST/bench" "$DEST/benches" "$DEST/benchmarks" "$DEST/fuzz" \
+    "$DEST/julia" "$DEST/fortran" "$DEST/docs" "$DEST/addl" || true
 # The wrap digest names this archive. Leaving that file inside the archive
 # makes the digest change every time the file is updated.
 rm -rf "$DEST/packaging/wrapdb" || true

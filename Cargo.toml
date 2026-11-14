@@ -16,6 +16,8 @@ exclude = [
   # Campaign harness, fixtures, and recorded rows. The library build does
   # not read this tree. Tests that open a fixture use the git checkout.
   "bench/**",
+  # cargo-fuzz crate. It is not part of the published library or the cxx wrap.
+  "fuzz/**",
 ]
 
 [lib]

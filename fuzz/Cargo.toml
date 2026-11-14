@@ -157,3 +157,10 @@ path = "fuzz_targets/traj_seek.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "conbin-reader"
+path = "fuzz_targets/conbin_reader.rs"
+test = false
+doc = false
+bench = false
