@@ -1,0 +1,51 @@
+name: Paper
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+    paths:
+      - "paper/cpc/**"
+      - ".github/workflows/ci_paper.yml"
+  pull_request:
+    paths:
+      - "paper/cpc/**"
+      - ".github/workflows/ci_paper.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          manifest-path: paper/cpc/pixi.toml
+          cache: true
+
+      - name: Install Tectonic 0.17.0
+        run: |
+          curl -fsSL -o /tmp/tectonic.tar.gz \
+            https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf /tmp/tectonic.tar.gz -C /usr/local/bin tectonic
+          tectonic --version
+
+      - name: Regenerate the paper from the committed records
+        run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-regen
+
+      - name: Typeset with Tectonic
+        run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-tex-tectonic
+
+      - name: Every included figure exists
+        run: python3 paper/cpc/scripts/check_figures.py

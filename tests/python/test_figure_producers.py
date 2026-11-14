@@ -1,57 +1,88 @@
-"""Every included figure is written by a step regen_paper.py runs."""
+"""Run the plotters. A ``pass`` in place of a figure function leaves no PDF."""
 
 from __future__ import annotations
 
-import ast
 import re
+import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CPC = ROOT / "paper" / "cpc"
+SCRIPTS = CPC / "scripts"
 TEXTS = (CPC / "src" / "rg_main.tex", CPC / "src" / "rg_supp.tex")
 GRAPHIC = re.compile(
     r"\\includegraphics(?:\[[^\]]*\])?\{figures/generated/([^}]+)\.pdf\}"
 )
-# A quoted figure stem passed to a saver, or a generated pdf path.
-PRODUCED = re.compile(
-    r"""(?:_save|bars|save)\(\s*(?:fig,\s*)?["']([A-Za-z][A-Za-z0-9_]*)["']"""
-    r"""|["']([A-Za-z][A-Za-z0-9_]*)\.pdf["']"""
-)
+# The eOn band is not in git. plot_figures keeps the committed restart.pdf.
+KEPT = {"restart"}
 
 
-def _format_scripts() -> list[str]:
-    tree = ast.parse((CPC / "scripts" / "regen_paper.py").read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            getattr(target, "id", None) == "FORMAT" for target in node.targets
-        ):
-            steps = ast.literal_eval(node.value)
-            return [step[0] for step in steps]
-    raise AssertionError("regen_paper.py has no FORMAT list")
-
-
-def _producers() -> set[str]:
-    found: set[str] = set()
-    for script in _format_scripts():
-        lines = []
-        for line in (CPC / script).read_text(encoding="utf-8").splitlines():
-            if line.lstrip().startswith("#"):
-                continue
-            lines.append(line)
-        for stem, path in PRODUCED.findall("\n".join(lines)):
-            found.add(stem or path)
-    return found
-
-
-def test_included_figures_have_a_regen_producer() -> None:
-    produced = _producers()
-    missing = []
+def _stems() -> list[str]:
+    found: list[str] = []
     for path in TEXTS:
         text = "\n".join(
             re.sub(r"(?<!\\)%.*", "", line)
             for line in path.read_text(encoding="utf-8").splitlines()
         )
-        for stem in GRAPHIC.findall(text):
-            if stem not in produced:
-                missing.append(f"{path.name}: {stem}.pdf")
-    assert not missing, "included figure with no regen producer:\n" + "\n".join(missing)
+        found.extend(GRAPHIC.findall(text))
+    return found
+
+
+def _load(name: str):
+    sys.path.insert(0, str(SCRIPTS))
+    return __import__(name)
+
+
+def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
+    try:
+        import chemparseplot  # noqa: F401
+    except ImportError:
+        import pytest
+
+        pytest.importorskip("chemparseplot")
+    if tmp_path is None:
+        tmp_path = Path(tempfile.mkdtemp())
+    restored = _load("plot_restored")
+    extra = _load("plot_union_extra")
+    figures = _load("plot_figures")
+    perf = _load("plot_perf")
+    structures = _load("plot_structures")
+    restart = _load("plot_restart_formats")
+    supp = _load("plot_supp")
+    generated = _load("gen_figures")
+    mpi = _load("mpi_from_log")
+    for module, attr in (
+        (restored, "OUT"),
+        (extra, "OUT"),
+        (figures, "OUT"),
+        (perf, "OUT"),
+        (structures, "OUT"),
+        (generated, "OUT"),
+        (mpi, "GEN"),
+    ):
+        setattr(module, attr, tmp_path)
+    restored.main()
+    extra.main()
+    perf.main()
+    structures.main()
+    restart.main()
+    supp.main()
+    generated.main()
+    mpi.main()
+    figures.main()
+    missing = []
+    for stem in _stems():
+        pdf = tmp_path / f"{stem}.pdf"
+        if stem in KEPT and not pdf.is_file():
+            committed = CPC / "src" / "figures" / "generated" / f"{stem}.pdf"
+            if committed.is_file() and committed.read_bytes().startswith(b"%PDF"):
+                continue
+        if not pdf.is_file() or not pdf.read_bytes().startswith(b"%PDF"):
+            missing.append(stem + ".pdf")
+    assert not missing, "plotter did not write:\n" + "\n".join(missing)
+
+
+if __name__ == "__main__":
+    test_plotters_write_included_figures()
+    print("figures ok")
