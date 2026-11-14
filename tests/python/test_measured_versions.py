@@ -6,6 +6,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 CPC = ROOT / "paper" / "cpc"
 SCRIPT = CPC / "scripts" / "measured_versions.py"
@@ -41,6 +43,18 @@ def test_generated_macros_match_the_records() -> None:
     )
     assert cargo != _macro("rcReleaseVersion", text)
     assert cargo != tag
+
+
+def test_render_refuses_a_record_with_no_version(tmp_path, monkeypatch) -> None:
+    module = _module()
+    bad = tmp_path / "latest_release.json"
+    bad.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "LATEST", bad)
+    with pytest.raises(SystemExit):
+        module.render()
+    assert "unknown" not in (CPC / "src" / "measured_versions.tex").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_measured_sentences_quote_the_record() -> None:
