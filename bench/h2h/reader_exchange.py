@@ -427,6 +427,9 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "gc collect, malloc_trim, then gc.disable before READY, every arm",
         "readcon_first stays on the warm gate: its warm median was 0.040 s and its cold median 0.111 s",
         "an arm whose warm IQR/median exceeds 0.10 is rerun at n=12",
+        "conbin seconds are one read_conbin; a warm sample loops and is divided by that count",
+        "perf21 conbin 0.0066 s was one warm read_conbin: mmap plus MADV_POPULATE_READ on a hot page cache",
+        "MAP_POPULATE is not used; cold runs the same populate once and does not skip it",
         "MALLOC_MMAP_THRESHOLD_=65536 for every arm",
         "memory VmHWM_after_read_minus_VmHWM_after_import_MiB",
         "numpy_percentile method=linear type=7",
@@ -481,13 +484,33 @@ def run(out: Path, frames: int, repeats: int) -> None:
             }
         return sample_arm(name, paths[name], cache, core)
 
+    def _one_read(doc: dict, reps: int) -> dict:
+        """Report one ``read_conbin``. The warm clock loops so a short map is stable.
+
+        perf21's 6.6 ms was one call on a hot page cache. perf22 stored the
+        loop sum, so 33 of those calls were published as 152 ms and looked
+        slower than the single cold fault. ``malloc_trim`` returns heap
+        pages, not the file cache. Each call maps the file again and asks
+        ``MADV_POPULATE_READ``; ``MAP_POPULATE`` is not used, and the cold
+        call does not skip that advice.
+        """
+        seconds = doc.get("seconds")
+        if reps > 1 and isinstance(seconds, (int, float)):
+            doc["loop_s"] = float(seconds)
+            doc["seconds"] = float(seconds) / reps
+            doc["inner"] = reps
+        return doc
+
     def record(name: str, cache: str, rep: int | None, doc: dict) -> None:
         label = "warmup" if rep is None else f"sample rep={rep}"
+        loop = ""
+        if doc.get("loop_s") is not None:
+            loop = f" loop_s={doc['loop_s']} inner={doc['inner']}"
         lines.append(
             f"{label} arm={name} cache={cache} seconds={doc.get('seconds')} "
             f"mib={doc.get('mib')} matched={doc.get('matched')} got={doc.get('got')} "
             f"requested={doc.get('requested')} exit={doc.get('exit')} "
-            f"error={doc.get('error', '')}"
+            f"error={doc.get('error', '')}{loop}"
         )
 
     # Each arm's repeats run back-to-back after its own warmup, so a
@@ -522,11 +545,12 @@ def run(out: Path, frames: int, repeats: int) -> None:
             else:
                 os.environ["READER_EXCHANGE_INNER"] = "1"
             lines.append(f"arm {name} cache={cache}")
-            record(name, cache, None, take(name, cache))
+            reps = conbin_inner if name == "conbin" and cache == "warm" else 1
+            record(name, cache, None, _one_read(take(name, cache), reps))
             _release_heap()
             last = 0.0
             for rep in range(repeats):
-                doc = take(name, cache)
+                doc = _one_read(take(name, cache), reps)
                 taken[name][cache].append(doc)
                 record(name, cache, rep, doc)
                 if doc.get("seconds"):
@@ -544,11 +568,12 @@ def run(out: Path, frames: int, repeats: int) -> None:
                 os.environ["READER_EXCHANGE_INNER"] = "1"
             taken[name][cache] = []
             lines.append(f"arm {name} cache={cache} repeats={n_rep}")
-            record(name, cache, None, take(name, cache))
+            reps = conbin_inner if name == "conbin" and cache == "warm" else 1
+            record(name, cache, None, _one_read(take(name, cache), reps))
             _release_heap()
             last = 0.0
             for rep in range(n_rep):
-                doc = take(name, cache)
+                doc = _one_read(take(name, cache), reps)
                 taken[name][cache].append(doc)
                 record(name, cache, rep, doc)
                 if doc.get("seconds"):
@@ -636,6 +661,8 @@ def run(out: Path, frames: int, repeats: int) -> None:
             "requested": requested,
             "matched": matched,
         }
+        if name == "conbin":
+            payload_arms[name]["inner"] = conbin_inner
     tip = payload_arms.get("readcon_tip", {})
     if tip.get("error") or len(tip.get("seconds") or []) < repeats:
         raise SystemExit(
