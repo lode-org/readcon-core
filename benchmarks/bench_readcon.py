@@ -1,12 +1,15 @@
 """ASV benchmarks for the shipped ``readcon`` Python API (not a reimplementation).
 
 Timing methods (``time_*``) and memory methods (``ray_*``) live on separate
-classes. asv-runner 0.3.2 forces ``number = 1`` when a timing class defines
-``setup`` (``asv_runner/benchmarks/time.py``), so the timing classes have no
-``setup`` and no ``number``. asv calibrates ``number`` until each sample takes
-about ``sample_time`` seconds. That target is asv_runner's default of
-0.01 s. Memory classes set ``number = 1`` so
-memray records one call. The workflow passes ``repeat`` and ``rounds``.
+classes. asv-runner 0.3.2 calls a method named ``teardown`` and never calls
+``teardown_cache``. ``TimeReadConTiny`` and ``TimeReadConCuh2`` therefore
+create their file in ``setup`` and delete it in ``teardown``. Defining
+``setup`` makes asv record ``number = 1`` (``asv_runner/benchmarks/time.py``).
+``TimeChemfilesXyz`` and ``TimeSelectAtoms`` still have no ``setup``, so asv
+calibrates ``number`` until each sample takes about ``sample_time`` seconds.
+That target is asv_runner's default of 0.01 s. Memory classes set
+``number = 1`` so memray records one call. The workflow passes ``repeat``
+and ``rounds``.
 """
 
 from __future__ import annotations
@@ -117,18 +120,6 @@ def _skip_if_needed(cache) -> None:
         raise SkipNotImplemented("chemfiles not linked")
 
 
-def _tiny_files() -> dict[int, tuple[str, str]]:
-    out: dict[int, tuple[str, str]] = {}
-    for n in TINY_FRAMES:
-        text = _ladder_con(FIXTURE_TINY, n)
-        out[n] = (text, _write_temp(text))
-    return out
-
-
-def _cuh2_files() -> dict[int, str]:
-    return {n: _write_temp(_ladder_con(FIXTURE_CUH2, n)) for n in CUH2_FRAMES}
-
-
 def _xyz_files() -> dict:
     import readcon
 
@@ -157,24 +148,22 @@ class TimeReadConTiny:
     params = list(TINY_FRAMES)
     param_names = ["n_frames"]
 
-    def setup_cache(self) -> dict[int, tuple[str, str]]:
-        return _tiny_files()
+    def setup(self, n_frames: int) -> None:
+        text = _ladder_con(FIXTURE_TINY, int(n_frames))
+        self._text = text
+        self._path = _write_temp(text)
 
-    def teardown_cache(self, cache: dict[int, tuple[str, str]]) -> None:
-        for _text, path in cache.values():
-            Path(path).unlink(missing_ok=True)
+    def teardown(self, n_frames: int) -> None:
+        Path(self._path).unlink(missing_ok=True)
 
-    def time_read_con_string(self, cache: dict, n_frames: int) -> None:
-        text, _path = cache[int(n_frames)]
-        _read_con_string(text, int(n_frames))
+    def time_read_con_string(self, n_frames: int) -> None:
+        _read_con_string(self._text, int(n_frames))
 
-    def time_read_con_path(self, cache: dict, n_frames: int) -> None:
-        _text, path = cache[int(n_frames)]
-        _read_con_path(path, int(n_frames))
+    def time_read_con_path(self, n_frames: int) -> None:
+        _read_con_path(self._path, int(n_frames))
 
-    def time_iter_con_materialize(self, cache: dict, n_frames: int) -> None:
-        _text, path = cache[int(n_frames)]
-        _iter_con_path(path, int(n_frames))
+    def time_iter_con_materialize(self, n_frames: int) -> None:
+        _iter_con_path(self._path, int(n_frames))
 
 
 class RayReadConTiny:
@@ -220,15 +209,14 @@ class TimeReadConCuh2:
     params = list(CUH2_FRAMES)
     param_names = ["n_frames"]
 
-    def setup_cache(self) -> dict[int, str]:
-        return _cuh2_files()
+    def setup(self, n_frames: int) -> None:
+        self._path = _write_temp(_ladder_con(FIXTURE_CUH2, int(n_frames)))
 
-    def teardown_cache(self, cache: dict[int, str]) -> None:
-        for path in cache.values():
-            Path(path).unlink(missing_ok=True)
+    def teardown(self, n_frames: int) -> None:
+        Path(self._path).unlink(missing_ok=True)
 
-    def time_read_con_path(self, cache: dict, n_frames: int) -> None:
-        _read_con_path(cache[int(n_frames)], int(n_frames), n_atoms=218)
+    def time_read_con_path(self, n_frames: int) -> None:
+        _read_con_path(self._path, int(n_frames), n_atoms=218)
 
 
 class RayReadConCuh2:
