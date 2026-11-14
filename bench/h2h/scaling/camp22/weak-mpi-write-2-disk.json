@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 2,
+  "frames_per_worker": 8000,
+  "repeats": 12,
+  "samples_s": [0.309712116, 0.289337835, 0.233606586, 0.203077879, 0.205438203, 0.210185868, 0.205806448, 0.210208947, 0.222331787, 0.202907301, 0.203222797, 0.196989865],
+  "warmup_s": 0.546172328,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/agent/repos/readcon-core/build/bench/weak/weak-out-2.con",
+  "host": "Intel Xeon Processor"
+}
