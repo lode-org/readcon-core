@@ -126,8 +126,12 @@ pub(crate) fn positions_parallel(
     }
     // N copies of one wide frame. Planning the first copy on every core
     // and then parsing it again made N threads slower than one thread.
-    if let Some(repeated) = parse_repeated_copies(bytes, workers, rich)? {
-        return Ok(repeated);
+    match parse_repeated_copies(bytes, workers, rich) {
+        Ok(Some(repeated)) => return Ok(repeated),
+        Ok(None) => {}
+        // The copy plan matched the byte length and then found a row it
+        // could not finish. The serial walk is the result callers compare.
+        Err(_) => return parse_con(bytes, rich, false, true, 1, None),
     }
     // Equal frames of one component are filled below, straight into the
     // slab. Re-parsing each frame into its own vector and then copying
@@ -188,7 +192,7 @@ pub(crate) fn positions_parallel(
     if let Some((span, head0, spec, block_lines)) = direct {
         let count0 = out.counts[0];
         let nframes = out.n_frames;
-        let (certified, saw) = fill_tiled_frames(
+        let (certified, saw) = match fill_tiled_frames(
             bytes,
             nframes,
             workers,
@@ -203,7 +207,12 @@ pub(crate) fn positions_parallel(
                 ids: ids_ptr,
                 flags: flags_ptr,
             },
-        )?;
+        ) {
+            Ok(pair) => pair,
+            // Equal byte lengths hid a short row. Reparse on one thread so
+            // the error is the one the serial walker returns.
+            Err(_) => return parse_con(bytes, rich, false, true, 1, None),
+        };
         if !certified {
             out.stock = false;
         }
@@ -769,7 +778,13 @@ fn fill_copied_frame(
         ));
     }
     let mut rel = pos - frame_start;
-    let (certified, saw) = skip_sections(&bytes[frame_start..frame_end], &mut rel, count + 2)?;
+    let frame = &bytes[frame_start..frame_end];
+    let (certified, saw) = skip_sections(frame, &mut rel, count + 2)?;
+    if !tail_is_whitespace(frame, rel) {
+        return Err(ParseError::InvalidNumberFormat(
+            "coordinate row left non-numeric bytes in the frame".into(),
+        ));
+    }
     Ok((certified, saw))
 }
 
@@ -865,8 +880,6 @@ fn find_line_at(bytes: &[u8], line: &[u8], from: usize) -> Option<usize> {
     None
 }
 
-/// `bytes` is `n` copies of a frame of `span` bytes, each starting with
-/// the same header. Later frames can then be planned on their own core.
 /// Lines in one coordinate block: the atom rows plus a symbol line and a
 /// label line per component. One component is `count + 2`.
 #[cfg(feature = "parallel")]
@@ -989,9 +1002,25 @@ fn fill_one_tiled_frame(
         ));
     }
     let mut rel = pos - frame_start;
-    skip_sections(&bytes[frame_start..frame_end], &mut rel, plan.block_lines)
+    let frame = &bytes[frame_start..frame_end];
+    let skipped = skip_sections(frame, &mut rel, plan.block_lines)?;
+    if !tail_is_whitespace(frame, rel) {
+        return Err(ParseError::InvalidNumberFormat(
+            "coordinate row left non-numeric bytes in the frame".into(),
+        ));
+    }
+    Ok(skipped)
 }
 
+fn tail_is_whitespace(frame: &[u8], rel: usize) -> bool {
+    match frame.get(rel..) {
+        Some(tail) => tail.iter().all(u8::is_ascii_whitespace),
+        None => false,
+    }
+}
+
+/// `bytes` is `n` copies of a frame of `span` bytes, each starting with
+/// the same header. Later frames can then be planned on their own core.
 fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
     if span < 16 || head_end == 0 || head_end > span {
         return None;
@@ -1509,6 +1538,104 @@ mod tests {
         assert_eq!(parallel.ids, serial.ids);
         assert_eq!(parallel.flags, serial.flags);
         assert_eq!(parallel.masses, serial.masses);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn equal_tiled_frames(n: usize) -> String {
+        let one = "\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n20.0 20.0 20.0\n90.0 90.0 90.0\n\n\n1\n4\n63.546\nCu\nCoordinates of Component 1\n00.0 0.25 0.5 0 0\n01.0 1.25 1.5 0 1\n02.0 2.25 2.5 0 2\n03.0 3.25 3.5 7 3\n";
+        let mut text = String::new();
+        for frame in 0..n {
+            text.push_str(&one.replace("00.0 0.25 0.5", &format!("{frame:02}.0 0.25 0.5")));
+        }
+        text
+    }
+
+    #[cfg(feature = "parallel")]
+    fn cut_last_row(frame: &str) -> String {
+        let mut out = frame.to_string();
+        let end = out.len();
+        // The last three bytes are the id and the newline (` 3\n`). `XX\n`
+        // keeps the frame the same length and leaves a non-numeric tail.
+        out.replace_range(end - 3..end, "XX\n");
+        out
+    }
+
+    #[cfg(feature = "parallel")]
+    fn same_parse_class(
+        label: &str,
+        serial: Result<ConPositions, ParseError>,
+        parallel: Result<ConPositions, ParseError>,
+    ) {
+        match (serial, parallel) {
+            (Ok(serial), Ok(parallel)) => {
+                assert_eq!(parallel.n_frames, serial.n_frames, "{label}");
+                assert_eq!(parallel.counts, serial.counts, "{label}");
+                assert_eq!(
+                    first_bit_mismatch(&parallel.positions, &serial.positions),
+                    None,
+                    "{label}"
+                );
+            }
+            (Err(serial), Err(parallel)) => {
+                assert_eq!(
+                    std::mem::discriminant(&serial),
+                    std::mem::discriminant(&parallel),
+                    "{label}: serial {serial:?} parallel {parallel:?}"
+                );
+            }
+            (serial, parallel) => panic!("{label}: serial {serial:?} parallel {parallel:?}"),
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn a_short_row_inside_an_equal_span_matches_the_serial_error() {
+        let whole = equal_tiled_frames(64);
+        let span = whole.len() / 64;
+        assert_eq!(whole.len(), span * 64);
+        let mut text = String::new();
+        for frame in 0..64 {
+            let slice = &whole[frame * span..(frame + 1) * span];
+            if frame == 10 {
+                text.push_str(&cut_last_row(slice));
+            } else {
+                text.push_str(slice);
+            }
+        }
+        assert_eq!(text.len(), whole.len());
+        let bytes = text.as_bytes();
+        let serial = positions_from_con_bytes(bytes);
+        assert!(
+            matches!(serial, Err(ParseError::InvalidFixedFlag(_))),
+            "{serial:?}"
+        );
+        same_parse_class("cut id", serial, positions_parallel(bytes, 8, false));
+        let mut number = text.clone();
+        let row = number[10 * span..11 * span].rfind("3.25").unwrap() + 10 * span;
+        number.replace_range(row..row + 4, "3.XX");
+        let serial = positions_from_con_bytes(number.as_bytes());
+        assert!(
+            matches!(serial, Err(ParseError::InvalidNumberFormat(_))),
+            "{serial:?}"
+        );
+        same_parse_class(
+            "bad float",
+            serial,
+            positions_parallel(number.as_bytes(), 8, false),
+        );
+        same_parse_class(
+            "rich",
+            positions_with_identity(bytes),
+            positions_parallel(bytes, 8, true),
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short-row.con");
+        std::fs::write(&path, bytes).unwrap();
+        let serial = crate::iterators::read_positions_with_threads(&path, Some(1));
+        let parallel = crate::iterators::read_positions_with_threads(&path, Some(8));
+        assert!(serial.is_err(), "{serial:?}");
+        assert!(parallel.is_err(), "{parallel:?}");
     }
 
     #[cfg(feature = "parallel")]
