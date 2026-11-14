@@ -49,6 +49,7 @@ def builds() -> list[tuple[str, str]]:
         ("v0.23.0", _release_python("v0.23.0", "READCON_PYTHON_0230")),
     ]
 
+
 WORKER = r"""
 import json, sys, time
 import numpy as np
