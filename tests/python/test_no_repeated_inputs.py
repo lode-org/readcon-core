@@ -7,10 +7,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ROOTS = ("bench", "benches", "benchmarks", "examples", "paper")
+_COPIED = r"(?:text|one|blob|fixture|FRAME)"
+_LISTED = r"(?:text|one|blob|fixture|FRAME|raw|arr|frame)"
 PATTERNS = (
     re.compile(r"\.read_bytes\(\)\s*\*"),
     re.compile(r"\.read_text\(\)\s*\*"),
-    re.compile(r"\b(?:text|one|blob|fixture|FRAME)\s*\*\s*\w+"),
+    re.compile(r"\bread_text\s*\([^)]*\)\s*\*\s*\w+"),
+    re.compile(rf"\b{_COPIED}\s*\*\s*\w+"),
+    re.compile(rf"\[{_LISTED}\]\s*\*\s*\w+"),
+    re.compile(r"\bnp\.tile\s*\("),
+    re.compile(rf"""\.join\(\s*\[{_LISTED}\]\s*\*\s*\w+"""),
     re.compile(r"\brepeat_text\b"),
     re.compile(r"(?<!p)\.repeat\("),
 )
@@ -23,9 +29,36 @@ ALLOW = {
     ("paper/cpc/scripts/referee_probes.py", 3002),
     ("paper/cpc/scripts/referee_probes.py", 3005),
     ("paper/cpc/scripts/referee_probes.py", 3037),
+    ("paper/cpc/scripts/referee_probes.py", 1254),
+    ("paper/cpc/scripts/referee_probes.py", 1341),
+    ("paper/cpc/scripts/referee_probes.py", 2775),
     ("paper/cpc/scripts/referee_probes.py", 3229),
     ("benches/iterator_bench.rs", 214),
 }
+
+
+def repeated_hits(text: str) -> list[str]:
+    found = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if any(pattern.search(line) for pattern in PATTERNS):
+            found.append(f"{number}: {line.strip()}")
+    return found
+
+
+def test_np_tile_is_a_repeated_input() -> None:
+    assert repeated_hits("positions = np.tile(arr, (8, 1))")
+
+
+def test_a_list_repeat_is_a_repeated_input() -> None:
+    assert repeated_hits("frames = [one]*8")
+
+
+def test_read_text_times_n_is_a_repeated_input() -> None:
+    assert repeated_hits("body = read_text(path)*8")
+
+
+def test_bytes_join_of_copies_is_a_repeated_input() -> None:
+    assert repeated_hits('blob = b"".join([raw]*8)')
 
 
 def test_drivers_do_not_tile_one_frame() -> None:
@@ -41,6 +74,6 @@ def test_drivers_do_not_tile_one_frame() -> None:
             ):
                 if (rel, number) in ALLOW:
                     continue
-                if any(pattern.search(line) for pattern in PATTERNS):
+                if repeated_hits(line):
                     found.append(f"{rel}:{number}: {line.strip()}")
     assert not found, "repeated timing input:\n" + "\n".join(found)
