@@ -173,10 +173,17 @@ class ReleaseArtifactGuard(unittest.TestCase):
         self.assertNotIn("twine", yml)
         self.assertNotIn("git tag", yml)
         self.assertNotIn("softprops/action-gh-release", yml)
-        self.assertIn("msvc-crt-static = false", yml)
-        self.assertEqual(yml.count("msvc-crt-static = false"), 3)
-        workspace = (ROOT / "dist-workspace.toml").read_text(encoding="utf-8")
-        self.assertIn("msvc-crt-static = false", workspace)
+        self.assertIn("fill-empty-release-notes.sh", yml)
+        cargo = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+        self.assertIn("cfg(all(not(miri), not(windows)))", cargo)
+        self.assertIn("cfg(any(miri, windows))", cargo)
+        self.assertIn("rust_backend", cargo)
+        self.assertIn(
+            'gh release edit "$tag" --repo "$repo" --notes-file "$notes"',
+            (ROOT / "scripts" / "fill-empty-release-notes.sh").read_text(
+                encoding="utf-8"
+            ),
+        )
 
     def test_dist_binary_passes_when_manifest_version_matches(self) -> None:
         name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"

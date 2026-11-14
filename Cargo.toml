@@ -128,12 +128,15 @@ cudarc = { version = "0.13", optional = true, default-features = false, features
 pest = { version = "2.8", optional = true }
 pest_derive = { version = "2.8", optional = true }
 
-# Ordinary builds use zlib-ng. `cargo miri` sets `cfg(miri)` and links the
-# pure-Rust flate2 backend so the gzip readers can run under Miri.
-[target.'cfg(not(miri))'.dependencies]
+# Ordinary builds use zlib-ng. Windows uses the pure-Rust backend instead.
+# cargo-dist 0.28 always passes +crt-static for MSVC (it drops
+# msvc-crt-static when applying the workspace layer). libz-ng-sys builds
+# zlib-ng with cmake and the DLL CRT, so the static link fails on
+# __imp__wassert. `cargo miri` uses the same pure-Rust backend.
+[target.'cfg(all(not(miri), not(windows)))'.dependencies]
 flate2 = { version = "1", default-features = false, features = ["zlib-ng"] }
 
-[target.'cfg(miri)'.dependencies]
+[target.'cfg(any(miri, windows))'.dependencies]
 flate2 = { version = "1", default-features = false, features = [
   "rust_backend",
 ] }
