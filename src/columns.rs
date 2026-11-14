@@ -66,6 +66,26 @@ impl ConPositions {
 }
 
 /// Positions from a CON or convel buffer, in file order.
+/// Three stores into a buffer that already has room. `extend_from_slice`
+/// of a 3-float row did not inline into the column walk, so a million-atom
+/// frame paid a `memcpy` per atom.
+#[inline(always)]
+fn push_xyz(dst: &mut Vec<f64>, row: [f64; 3]) {
+    let len = dst.len();
+    // The caller reserved the frame. A short reserve still grows once.
+    if dst.capacity().saturating_sub(len) < 3 {
+        dst.reserve(3);
+    }
+    // SAFETY: `reserve` left three free slots, and `len` is the initialized prefix.
+    unsafe {
+        let ptr = dst.as_mut_ptr().add(len);
+        ptr.write(row[0]);
+        ptr.add(1).write(row[1]);
+        ptr.add(2).write(row[2]);
+        dst.set_len(len + 3);
+    }
+}
+
 pub fn positions_from_con_bytes(bytes: &[u8]) -> Result<ConPositions, ParseError> {
     parse_con(bytes, false, false, true, 1, None)
 }
@@ -386,7 +406,7 @@ fn serial_coord_rows(
     let mut default_id = 0u64;
     for _ in 0..n {
         let ((row, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, default_id)?;
-        xyz.extend_from_slice(&row);
+        push_xyz(&mut xyz, row);
         ids.push(atom_id);
         flags.push(fixed);
         pos = next;
@@ -880,7 +900,7 @@ fn parse_one_frame(
         if store_rows {
             for atom in 0..*count {
                 let (row, next) = parse_coord_row_at(bytes, *pos, spec, atom as u64)?;
-                out.positions.extend_from_slice(&row.0);
+                push_xyz(&mut out.positions, row.0);
                 if rich {
                     out.ids.push(row.2);
                     out.flags.push(flag_bits(row.1));
