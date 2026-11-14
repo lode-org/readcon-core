@@ -98,21 +98,19 @@ def test_notes_name_the_fields_con_keeps(tmp_path: Path):
             _row("ase-extxyz", "ase", "write", 8.0),
         ],
     }
-    baseline = {
-        "rows": [
-            _row("readcon-con", "readcon", "read", 0.10),
-            _row("ase-extxyz", "ase", "read", 2.0),
-            _row("readcon-con", "readcon", "write", 0.15),
-            _row("ase-extxyz", "ase", "write", 4.0),
-        ]
-    }
     (tmp_path / "cross-format.json").write_text(json.dumps(doc))
-    notes, flags = report.build_notes(doc, baseline)
+    notes, flags = report.build_notes(doc)
     assert flags == []
+    assert "measured readcon 0.23.2" in notes
     assert "masses, velocities, constraints" in notes
-    assert "Peer reads" in notes and "Peer writes" in notes
+    assert "adjusted" not in notes
+    assert "Peer reads" not in notes and "Peer writes" not in notes
+    assert "one file" in notes
     report.write_record(tmp_path, doc, notes)
-    assert (tmp_path / "host.json").is_file()
+    saved = json.loads((tmp_path / "host.json").read_text())
+    assert len(saved["tree"]) == 40
+    assert saved["host"]["cpu_model"] == "test"
+    assert saved["host"]["disk_filesystem"]
     assert (tmp_path / "lscpu.txt").read_text().startswith("Model name")
 
 
@@ -128,6 +126,54 @@ def test_library_commit_matches_the_sources_at_head():
     )
     assert head_src == lib_src
     assert len(found) == 40
+
+
+def test_a_string_median_is_not_a_timed_row():
+    doc = {"rows": [_row("chemfiles-con", "readcon", "write", "no writer")]}
+    assert report.index_rows(doc) == {}
+
+
+def test_same_host_gap_wider_than_the_iqr_is_a_regression():
+    ab = {
+        "rows": [
+            {
+                "build": "head",
+                "format": "con.gz",
+                "op": "read",
+                "median_s": 0.120,
+                "iqr_s": 0.005,
+            },
+            {
+                "build": "v0.23.0",
+                "format": "con.gz",
+                "op": "read",
+                "median_s": 0.096,
+                "iqr_s": 0.004,
+            },
+        ]
+    }
+    flags = report.release_flags(ab)
+    assert len(flags) == 1
+    assert "con.gz read" in flags[0]
+    close = {
+        "rows": [
+            {
+                "build": "head",
+                "format": "con",
+                "op": "read",
+                "median_s": 0.086,
+                "iqr_s": 0.003,
+            },
+            {
+                "build": "v0.23.0",
+                "format": "con",
+                "op": "read",
+                "median_s": 0.085,
+                "iqr_s": 0.002,
+            },
+        ]
+    }
+    assert report.release_flags(close) == []
 
 
 def test_write_only_campaign_does_not_demand_read_rows():
@@ -146,16 +192,8 @@ def test_write_only_campaign_does_not_demand_read_rows():
             _row("ase-extxyz", "ase", "write", 8.0),
         ],
     }
-    baseline = {
-        "rows": [
-            _row("readcon-con", "readcon", "read", 0.10),
-            _row("ase-extxyz", "ase", "read", 2.0),
-            _row("readcon-con", "readcon", "write", 0.15),
-            _row("ase-extxyz", "ase", "write", 4.0),
-        ]
-    }
-    notes, flags = report.build_notes(doc, baseline)
+    notes, flags = report.build_notes(doc)
     assert flags == []
-    assert "Peer writes" in notes
-    assert "Peer reads" not in notes
+    assert "readcon-con write" in notes
     assert "readcon-con read" not in notes
+    assert "adjusted" not in notes

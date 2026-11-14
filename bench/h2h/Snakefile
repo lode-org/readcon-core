@@ -470,7 +470,7 @@ rule camp16b:
 # Fresh process per sample, pinned to the starting CPU set, one warmup,
 # n=12, type-7 median and IQR. The asv class times the same readcon calls.
 # ``--config ops=write`` times writes. The default times reads and writes.
-MILLION = "bench/h2h/million/v0232"
+MILLION = "bench/h2h/million/v0232b"
 MILLION_OPS = config.get("ops", "read,write")
 MILLION_MEASURE = [
     f"{MILLION}/cross-format.json",

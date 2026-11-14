@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Interleaved readcon A/B on this host.
 
-v0.23.0, v0.23.2 (8c2d9984), and the current tree read and write the same
-million-atom CON. Sample ``i`` rotates which build goes first. Each sample
+v0.23.0, v0.23.2 (8c2d9984), and this tree read and write the same
+million-atom CON. The head row records ``readcon.__version__`` of this
+tree. Sample ``i`` rotates which build goes first. Each sample
 is a new process with one warmup outside the clock. The timed read is the
 cross-format read: ``read_con``, then the positions, cell, and masses copied
 into NumPy. That is not camp18's ``read_positions`` of the column slab.
@@ -17,19 +18,33 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import readcon
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
+from bench_disk import bench_disk  # noqa: E402
 from sample_protocol import core_list, host_snapshot, pin_cores  # noqa: E402
 
 REPEATS = 12
+
+
+def _release_python(label: str, env_name: str) -> str:
+    found = os.environ.get(env_name, "")
+    if found:
+        return found
+    candidate = bench_disk() / "venvs" / label / "bin" / "python"
+    if candidate.is_file():
+        return os.fspath(candidate)
+    raise SystemExit(f"set {env_name} to the {label} interpreter")
+
+
 BUILDS = (
-    ("a2fbfce3", sys.executable),
-    ("v0.23.2", "/tmp/venv-0232/bin/python"),
-    ("v0.23.0", "/tmp/venv-0230/bin/python"),
+    ("head", sys.executable),
+    ("v0.23.2", _release_python("v0.23.2", "READCON_PYTHON_0232")),
+    ("v0.23.0", _release_python("v0.23.0", "READCON_PYTHON_0230")),
 )
 
 WORKER = r"""
@@ -181,18 +196,27 @@ def main() -> None:
         lines.append(
             f"{key[0]} {key[1]} {key[2]} {median:.6f} {iqr:.6f} n={len(values)}"
         )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     current = {
-        (row["format"], row["op"]): row for row in rows if row["build"] == "a2fbfce3"
+        (row["format"], row["op"]): row for row in rows if row["build"] == "head"
     }
     for row in rows:
         base = current.get((row["format"], row["op"]))
-        if base and row["build"] != "a2fbfce3" and row["median_s"]:
-            row["current_over_this"] = base["median_s"] / row["median_s"]
+        if base and row["build"] != "head" and row["median_s"]:
+            row["head_over_this"] = base["median_s"] / row["median_s"]
             lines.append(
-                f"ratio a2fbfce3/{row['build']} {row['format']} {row['op']} "
-                f"{row['current_over_this']:.3f}"
+                f"ratio head/{row['build']} {row['format']} {row['op']} "
+                f"{row['head_over_this']:.3f}"
             )
-    payload = {"host": host, "rows": rows, "lines": lines}
+    payload = {
+        "head": head,
+        "readcon_version": readcon.__version__,
+        "host": host,
+        "rows": rows,
+        "lines": lines,
+    }
     (out / "ab.json").write_text(json.dumps(payload, indent=2) + "\n")
     (out / "ab.log").write_text("\n".join(lines) + "\n")
     print("wrote", out / "ab.json", flush=True)
