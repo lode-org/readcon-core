@@ -37,7 +37,8 @@ enum store {
     STORE_PWRITE,
     STORE_POPULATE,
     STORE_HUGE,
-    STORE_POPULATE_WRITE
+    STORE_POPULATE_WRITE,
+    STORE_HUGEPAGE
 };
 
 struct job {
@@ -95,10 +96,9 @@ static void store_range(const struct job *job) {
     if (map == MAP_FAILED) {
         die("mmap");
     }
-    if (job->store == STORE_HUGE) {
-        if (madvise(map, job->bytes, MADV_HUGEPAGE) != 0) {
-            die("MADV_HUGEPAGE");
-        }
+    if (job->store == STORE_HUGE || job->store == STORE_HUGEPAGE) {
+        /* Ignore refusal: a mount that forbids huge pages still copies. */
+        (void)madvise(map, job->bytes, MADV_HUGEPAGE);
     }
     if (job->store == STORE_POPULATE_WRITE || job->store == STORE_HUGE) {
         if (madvise(map, job->bytes, MADV_POPULATE_WRITE) != 0) {
@@ -198,6 +198,9 @@ static int parse_store(const char *text) {
     }
     if (strcmp(text, "populate_write") == 0) {
         return STORE_POPULATE_WRITE;
+    }
+    if (strcmp(text, "hugepage") == 0) {
+        return STORE_HUGEPAGE;
     }
     fprintf(stderr, "unknown store %s\n", text);
     exit(2);
