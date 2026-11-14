@@ -701,6 +701,10 @@ The ASE extended XYZ row drops none.
 
 Tables~\ref{tab:camp16b-threads-read-memory} and~\ref{tab:camp16b-mpi-write-memory} are camp16b, one session on the model 173 host.
 The record is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
+camp18 replaces the con-100k and con-1e6 reads in Table~\ref{tab:camp16b-threads-read-memory}.
+The record is \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
+The one-thread read of the million-atom frame is 0.03634~s.
+Coordinate rows are stored directly, instead of a per-atom copy.
 Each median is twelve samples.
 A write in these tables unlinks the destination before the clock.
 camp17 replaces the thread-write cells named in the write-table captions.
@@ -760,6 +764,7 @@ The one-core timings of Section~\ref{sec:performance} and the fidelity compariso
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
 Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
+The con-100k and con-1e6 reads are \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.

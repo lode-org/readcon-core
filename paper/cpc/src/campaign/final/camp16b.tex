@@ -1,16 +1,16 @@
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across cores, read into memory. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Strong scaling across cores, read of the ext4 file into memory. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. camp18 replaces con-100k and con-1e6. Those cells are \texttt{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1fe72ca085a2540cd87d99c4d1f066afeb}. convel is camp16b. Host from lscpu for camp16b: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
 \label{tab:camp16b-threads-read-memory}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 File & 1 & 2 & 4 & 8 & 8-way \\
 \midrule
-con-100k & 0.3465 (0.015, $n{=}12$) & 0.1742 (0.004053, $n{=}12$) & 0.1024 (0.003183, $n{=}12$) & 0.05968 (0.002076, $n{=}12$) & 0.7258 \\
+con-100k & 0.3411 (0.01484, $n{=}12$) & 0.1748 (0.01011, $n{=}12$) & 0.1019 (0.004492, $n{=}12$) & 0.06574 (0.02439, $n{=}12$) & 0.6486 \\
 convel & 0.513 (0.02916, $n{=}12$) & 0.2476 (0.01451, $n{=}12$) & 0.143 (0.005668, $n{=}12$) & 0.08383 (0.004838, $n{=}12$) & 0.7649 \\
-con-1e6 & 0.04396 (0.0001899, $n{=}12$) & 0.02198 (0.0004064, $n{=}12$) & 0.01178 (0.0001956, $n{=}12$) & 0.007797 (0.0001607, $n{=}12$) & 0.7049 \\
+con-1e6 & 0.03634 (0.0002411, $n{=}12$) & 0.01977 (0.0004426, $n{=}12$) & 0.01083 (0.0002751, $n{=}12$) & 0.006028 (0.0002209, $n{=}12$) & 0.7536 \\
 \bottomrule
 \end{tabular}
 }
