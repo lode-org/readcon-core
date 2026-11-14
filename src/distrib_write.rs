@@ -11,10 +11,14 @@
 //!
 //! Modes:
 //!
-//! - [`WriteMode::MpiIo`]: rank 0 allocates a fresh file with
-//!   [`crate::writer::begin_shared_store`] and every rank writes its slice.
-//!   [`crate::writer::commit_shared_store`] publishes it. No spare is left
-//!   behind. `rewrite` instead fills `path` + `.rewrite`.
+//! - [`WriteMode::MpiIo`]: the same publish as
+//!   [`crate::writer::publish_ranked_slices`]. Rank 0 allocates a fresh
+//!   file with [`crate::writer::begin_shared_store`]. A multi-frame group
+//!   is spelled into that mapping, which removes the second copy. One wide
+//!   frame is formatted and then stored with `pwrite`: spelling it into
+//!   the mapping, and overlapping two halves, were both slower.
+//!   [`crate::writer::commit_shared_store`] publishes the file. No spare is
+//!   left behind. `rewrite` instead fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
 //!   collects every block (`MPI_Gatherv` up to 2 GiB in total,
 //!   point-to-point chunks above that) and writes the file itself.
@@ -230,6 +234,124 @@ fn write_pwrite(
     Ok(())
 }
 
+fn write_spelled(
+    comm: &Comm,
+    path: &Path,
+    frames: &[&ConFrame],
+    frame_lens: &[usize],
+) -> Result<u64, BoxErr> {
+    let local: usize = frame_lens.iter().sum();
+    let share = [local as u64, frames.len() as u64];
+    let mut gathered = vec![0u64; comm.size() * 2];
+    comm.raw().all_gather_into(&share[..], &mut gathered[..]);
+    let mut offset = 0u64;
+    for rank in 0..comm.rank() {
+        offset += gathered[rank * 2];
+    }
+    let total: u64 = gathered.iter().step_by(2).copied().sum();
+    let lengths: Vec<u64> = gathered.iter().step_by(2).copied().collect();
+    let frame_counts: Vec<u64> = gathered.iter().skip(1).step_by(2).copied().collect();
+    let mut starts = Vec::with_capacity(frame_lens.len());
+    let mut at = 0u64;
+    for len in frame_lens {
+        starts.push(at);
+        at += *len as u64;
+    }
+    let (mut held, tmp) = stage_store(comm, path, total)?;
+    let page = 4096u64;
+    let aligned = offset & !(page - 1);
+    let delta = (offset - aligned) as usize;
+    let mapped = (|| -> Result<Option<memmap2::MmapMut>, BoxErr> {
+        if local == 0 {
+            return Ok(None);
+        }
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&tmp)
+            .map_err(|err| err.to_string())?;
+        // SAFETY: `aligned` is a multiple of the page, and the span stays
+        // inside the file rank 0 allocated.
+        let mut map = unsafe {
+            memmap2::MmapOptions::new()
+                .offset(aligned)
+                .len(delta + local)
+                .map_mut(&file)
+                .map_err(|err| err.to_string())?
+        };
+        crate::writer::advise_shared_store(&file, map.as_mut_ptr(), map.len());
+        crate::writer::format_group_into(frames, &mut map[delta..delta + local], None, false, true)
+            .map_err(|err| err.to_string())?;
+        Ok(Some(map))
+    })();
+    let map = match collective(comm, mapped, "spell") {
+        Ok(map) => map,
+        Err(err) => {
+            drop(held);
+            return Err(err);
+        }
+    };
+    let bytes: &[u8] = map
+        .as_ref()
+        .map(|mapped| &mapped[delta..delta + local])
+        .unwrap_or(&[]);
+    let ready = local_ready(offset, bytes, total);
+    let published = if let Some(store) = held.take() {
+        crate::writer::commit_shared_store(store, path).map_err(BoxErr::from)
+    } else {
+        Ok(())
+    };
+    collective(comm, published, "publish")?;
+    publish_index(
+        comm,
+        path,
+        &lengths,
+        &frame_counts,
+        offset,
+        &starts,
+        bytes,
+        total,
+        ready,
+    )?;
+    Ok(total)
+}
+
+/// Rank 0 fallocates one fresh file of `total` bytes and every rank
+/// receives the path of that inode.
+fn stage_store(
+    comm: &Comm,
+    path: &Path,
+    total: u64,
+) -> Result<(Option<crate::writer::SharedStore>, std::path::PathBuf), BoxErr> {
+    let mut held = None;
+    let mut create_err = None;
+    let encoded = if comm.rank() == 0 {
+        match crate::writer::begin_shared_store(path, total) {
+            Ok(store) => {
+                let encoded = store.path().as_os_str().as_encoded_bytes().to_vec();
+                held = Some(store);
+                encoded
+            }
+            Err(err) => {
+                create_err = Some(err.to_string());
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    let raw = bcast_short(comm, &encoded);
+    if raw.is_empty() {
+        return Err(create_err
+            .unwrap_or_else(|| "create failed on rank 0".to_string())
+            .into());
+    }
+    // SAFETY: `raw` is the path rank 0 just exposed for this inode.
+    let tmp =
+        std::path::PathBuf::from(unsafe { std::ffi::OsString::from_encoded_bytes_unchecked(raw) });
+    Ok((held, tmp))
+}
+
 fn write_pwrite_spare(
     comm: &Comm,
     path: &Path,
@@ -395,6 +517,19 @@ pub fn write_block_refs(
     rewrite: bool,
     keep_spare: bool,
 ) -> Result<u64, BoxErr> {
+    // Every rank takes the same branch. An empty rank can join a priced
+    // group; a rank whose frames do not price falls the whole group back
+    // to format-then-store.
+    let can_spell =
+        !rewrite && precision.is_none() && matches!(mode, WriteMode::Auto | WriteMode::MpiIo);
+    let priced = if can_spell && frames.len() >= 2 {
+        crate::writer::cached_packed_lengths(frames, 1, None, false, true)
+    } else {
+        None
+    };
+    if can_spell && agree(comm, priced.is_some() || frames.is_empty()) {
+        return write_spelled(comm, path, frames, &priced.unwrap_or_default());
+    }
     // One allgather replaces the exclusive scan, the length reduction,
     // and the format agree. `u64::MAX` is a format error; a real block
     // cannot be that long.

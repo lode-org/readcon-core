@@ -4574,7 +4574,7 @@ fn packed_frame_lengths(
 
 /// Format `group` into `dest`. `dest` is the exact concatenation, so the
 /// bytes are not copied into a second buffer afterwards.
-fn format_group_into(
+pub(crate) fn format_group_into(
     group: &[&ConFrame],
     dest: &mut [u8],
     precision: Option<usize>,
@@ -4870,7 +4870,7 @@ pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
     }
 }
 
-fn cached_packed_lengths(
+pub(crate) fn cached_packed_lengths(
     frames: &[&ConFrame],
     workers: usize,
     precision: Option<usize>,
