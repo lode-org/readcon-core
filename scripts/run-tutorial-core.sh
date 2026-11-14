@@ -4,7 +4,7 @@
 # Authoritative path (no soft-fail theater):
 #   1) org-babel-tangle → docs/notebooks/tutorial_core.py
 #   2) fail if committed tangle differs from re-tangle (unless READCON_TANGLE_UPDATE=1)
-#   3) python3 the tangled file (asserts + summary.json)
+#   3) run the tangled file with the venv interpreter (asserts + summary.json)
 #
 # Local interactive C-c C-c in Emacs is fine for humans; CI does not use
 # session execute as a second success path (session vs tangle can disagree).
@@ -46,15 +46,47 @@ mkdir -p "$OUT_DIR" "$(dirname "$TANGLE_PY")"
 export READCON_TUT_ROOT="$ROOT"
 export READCON_TUT_WORK="$OUT_DIR"
 
-if ! python3 -c "import readcon" 2>/dev/null; then
-  echo "Building lean Python extension (maturin develop --features python)..." >&2
+# Maturin installs into the active virtualenv. $PYTHON wins when it is set.
+# The system python3 is not that interpreter.
+resolve_python() {
+  if [[ -n "${PYTHON:-}" ]]; then
+    if [[ ! -x "$PYTHON" ]]; then
+      echo "PYTHON=$PYTHON is not executable" >&2
+      return 1
+    fi
+    echo "$PYTHON"
+    return
+  fi
+  if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
+    echo "${VIRTUAL_ENV}/bin/python"
+    return
+  fi
   if command -v maturin >/dev/null 2>&1; then
-    maturin develop --features python
+    local beside
+    beside="$(dirname "$(command -v maturin)")/python"
+    if [[ -x "$beside" ]]; then
+      echo "$beside"
+      return
+    fi
+  fi
+  echo "set PYTHON to the venv interpreter maturin installs into" >&2
+  return 1
+}
+
+PYTHON_BIN="$(resolve_python)"
+
+if ! "$PYTHON_BIN" -c "import readcon" 2>/dev/null; then
+  echo "Building lean Python extension into $PYTHON_BIN (maturin develop --features python)..." >&2
+  venv="$(cd "$(dirname "$PYTHON_BIN")/.." && pwd)"
+  if "$PYTHON_BIN" -m maturin --version >/dev/null 2>&1; then
+    VIRTUAL_ENV="$venv" "$PYTHON_BIN" -m maturin develop --features python
+  elif command -v maturin >/dev/null 2>&1; then
+    VIRTUAL_ENV="$venv" maturin develop --features python
   else
     echo "maturin not on PATH; install maturin or: pixi run -e python python-build" >&2
     exit 1
   fi
-  python3 -c "import readcon"
+  "$PYTHON_BIN" -c "import readcon"
 fi
 
 # Snapshot committed (or pre-tangle) bytes for drift check.
@@ -93,13 +125,13 @@ if ! cmp -s "$BEFORE" "$TANGLE_PY"; then
 fi
 rm -f "$BEFORE"
 
-echo "run: python3 $TANGLE_PY"
-READCON_TUT_ROOT="$ROOT" READCON_TUT_WORK="$OUT_DIR" python3 "$TANGLE_PY"
+echo "run: $PYTHON_BIN $TANGLE_PY"
+READCON_TUT_ROOT="$ROOT" READCON_TUT_WORK="$OUT_DIR" "$PYTHON_BIN" "$TANGLE_PY"
 
 if [[ ! -f "$OUT_DIR/summary.json" ]]; then
   echo "FAIL: $OUT_DIR/summary.json missing after tutorial run" >&2
   exit 1
 fi
 
-python3 -c "from pathlib import Path; p=Path(r'''$OUT_DIR/summary.json'''); t=p.read_text(); assert 'built_energy' in t and 'multi_frames' in t, t; print(t)"
+"$PYTHON_BIN" -c "from pathlib import Path; p=Path(r'''$OUT_DIR/summary.json'''); t=p.read_text(); assert 'built_energy' in t and 'multi_frames' in t, t; print(t)"
 echo "OK — tangled, drift-checked, and ran: $ORG"

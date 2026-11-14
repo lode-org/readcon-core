@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -47,7 +48,18 @@ def test_org_source_declares_tangle_and_ci_script():
     script = SCRIPT.read_text(encoding="utf-8")
     assert "tangle drift" in script
     assert "falling back" not in script
-    assert 'python3 "$TANGLE_PY"' in script or 'python3 "$TANGLE_PY"' in script
+    assert '"$PYTHON_BIN" "$TANGLE_PY"' in script
+
+
+def test_tutorial_script_does_not_call_system_python3():
+    """A bare python3 is the system interpreter, not the venv maturin used."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    hits = []
+    for number, line in enumerate(script.splitlines(), 1):
+        code = line.split("#", 1)[0]
+        if re.search(r"(^|[^$A-Za-z0-9_])python3\b", code):
+            hits.append(f"{number}: {line.strip()}")
+    assert not hits, "script hard-codes system python3:\n" + "\n".join(hits)
 
 
 def test_org_babel_tutorial_core_script():
