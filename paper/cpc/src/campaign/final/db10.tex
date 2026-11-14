@@ -1,0 +1,24 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{db10 frames-100 cold reads.
+A cold read drops the page cache outside the clock and times the query.
+A cold-open read times the open and the query together.
+The summary is the type-7 median and the interquartile range.
+Peak RSS is \texttt{VmHWM} divided by $10^{6}$.
+Record \texttt{bench/db10} at \texttt{719a21f13871ba0840fb8010a64e7d9cc9da2f11}.
+Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}
+\label{tab:db10}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrllr@{}}
+\toprule
+Op & Tool & Median (s) & IQR (s) & $n$ & RSS (MB) \\
+\midrule
+cold full read & readcon-db & 0.0002543 & 0.0001113 & 12 & 95.32 \\
+cold full read & ASE database & 0.008983 & 0.0001123 & 12 & 94.29 \\
+cold-open full read & readcon-db & 0.0008994 & 0.0001091 & 12 & 95.28 \\
+cold-open full read & ASE database & 0.009127 & 0.0001718 & 12 & 94.29 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
