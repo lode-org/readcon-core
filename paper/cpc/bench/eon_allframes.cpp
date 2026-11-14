@@ -1,6 +1,7 @@
-// Read every frame of a CON file through eOn's ConFileIO.
-// Matter::con2matter(ConFrame) is the per-frame path. The file read is
-// readcon::read_all_frames, the same call ConFileIO uses.
+// Read a CON file through eOn's ConFileIO and con2matter.
+// `all` (the default) reads every frame with readcon::read_all_frames and
+// converts each one. `first` reads one frame with read_first_frame.
+// The coordinate check is the second loop and is outside the clock.
 
 #include "eon/ConFileIO.h"
 #include "eon/Matter.h"
@@ -14,6 +15,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -40,8 +42,13 @@ double expected(std::size_t frame, std::size_t atom, int axis) {
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    std::cerr << "usage: eon_allframes FILE\n";
+  if (argc != 2 && argc != 3) {
+    std::cerr << "usage: eon_allframes FILE [all|first]\n";
+    return 2;
+  }
+  const bool first_only = argc == 3 && std::string(argv[2]) == "first";
+  if (argc == 3 && std::string(argv[2]) != "first" && std::string(argv[2]) != "all") {
+    std::cerr << "usage: eon_allframes FILE [all|first]\n";
     return 2;
   }
   eonc::Parameters parameters;
@@ -50,8 +57,14 @@ int main(int argc, char **argv) {
   eonc::Matter matter(potential, parameters);
   const int before = hwm_kib();
   const auto t0 = std::chrono::steady_clock::now();
-  const auto frames = readcon::read_all_frames(argv[1]);
+  std::vector<readcon::ConFrame> frames;
+  if (first_only) {
+    frames.push_back(readcon::read_first_frame(argv[1]));
+  } else {
+    frames = readcon::read_all_frames(argv[1]);
+  }
   double checksum = 0.0;
+  int natoms = 0;
   for (const auto &frame : frames) {
     const auto status = eonc::io::con2matter(matter, frame, nullptr);
     if (!eonc::io::io_ok(status)) {
@@ -59,6 +72,7 @@ int main(int argc, char **argv) {
       return 1;
     }
     const auto &positions = matter.getPositions();
+    natoms = static_cast<int>(positions.rows());
     checksum += positions.sum();
   }
   const auto t1 = std::chrono::steady_clock::now();
@@ -88,6 +102,6 @@ int main(int argc, char **argv) {
     ++index;
   }
   std::cout << seconds << " " << before << " " << after << " " << matched << " " << frames.size()
-            << " " << checksum << "\n";
+            << " " << checksum << " " << natoms << "\n";
   return 0;
 }

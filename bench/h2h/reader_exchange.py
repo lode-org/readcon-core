@@ -266,6 +266,23 @@ def _clock_note(core: int) -> str:
     )
 
 
+def _scope(name: str) -> str:
+    """What the arm returns, so a one-frame arm is not compared with all frames."""
+    return {
+        "readcon_first": "first_frame_positions",
+        "eon_first": "first_frame_con2matter",
+        "readcon_eon_api_first": "first_frame_con2matter",
+        "eon_all": "all_frames_con2matter",
+        "readcon_eon_api": "all_frames_con2matter",
+        "readcon_tip": "all_frames_positions",
+        "readcon_db": "all_frames_positions",
+        "conbin": "all_frames_positions",
+        "readcon_base": "all_frames_xyz",
+        "readcon_v0173": "all_frames_xyz",
+        "eon_py": "all_frames_positions",
+    }.get(name, "all_frames_positions")
+
+
 def _release_heap() -> None:
     """Return the parent's free arenas between samples.
 
@@ -299,9 +316,12 @@ def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
     # default glibc arena policy moves that sample by a few tenths of a
     # second. One mmap threshold for every arm keeps the treatment the same.
     env["MALLOC_MMAP_THRESHOLD_"] = "65536"
-    if arm == "eon":
-        # pyeonclient is installed next to the built libeonclib. The paper
-        # tree's peer checkout is used when it is actually present.
+    if arm == "eon_py":
+        pkg = br.EON_PKG if (br.EON_PKG / "eon").is_dir() else Path("/tmp/eOn")
+        env["EON_PKG"] = str(pkg)
+        env["PYTHONPATH"] = str(pkg)
+    if arm in {"eon_first", "eon_all", "readcon_eon_api", "readcon_eon_api_first"}:
+        env["EON_ALLFRAMES"] = str(br.EON_BIN)
         lib_dirs = [
             "/tmp/eon-build/client",
             "/tmp/eon-build/client/potentials/SocketNWChem",
@@ -317,14 +337,6 @@ def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
             [d for d in lib_dirs if Path(d).is_dir()]
             + ([env["LD_LIBRARY_PATH"]] if env.get("LD_LIBRARY_PATH") else [])
         )
-        if (Path(br.EON_PY) / "pyeonclient").is_dir():
-            env["PYTHONPATH"] = str(br.EON_PY)
-    if arm == "eon_py":
-        pkg = br.EON_PKG if (br.EON_PKG / "eon").is_dir() else Path("/tmp/eOn")
-        env["EON_PKG"] = str(pkg)
-        env["PYTHONPATH"] = str(pkg)
-    if arm == "readcon_eon_api":
-        env["EON_ALLFRAMES"] = str(br.EON_BIN)
     proc = subprocess.Popen(
         [
             "taskset",
@@ -361,8 +373,22 @@ def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
         }
     if cache == "warm":
         _prime(path)
+        if arm == "readcon_db":
+            for child in sorted(path.with_suffix(".corpus").glob("*")):
+                if child.is_file():
+                    _prime(child)
     else:
         _drop_until_cold(path)
+        if arm == "readcon_db":
+            # The corpus is created before READY. Drop its pages too.
+            # An open LMDB map can keep them resident; that is recorded
+            # by the cold time, and it does not fail the con-file drop.
+            for child in sorted(path.with_suffix(".corpus").glob("*")):
+                if child.is_file() and child.name != "lock.mdb":
+                    try:
+                        _drop_until_cold(child)
+                    except SystemExit:
+                        pass
     proc.stdin.write("\n")
     proc.stdin.flush()
     out, err = proc.communicate()
@@ -423,7 +449,9 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "malloc_trim and gc.collect between samples, and in the child before READY",
         "page_cache primed after READY, before the warm clock",
         "cold drops the page cache after READY, before the cold clock",
-        "clock parse only; the coordinate check is outside the clock",
+        "clock parse only; the coordinate check and the frame and atom count check are outside the clock",
+        "eon_first and readcon_eon_api_first each convert one frame; eon_all and readcon_eon_api each convert every frame",
+        "readcon_db clock is ConCorpus.get_positions_all; append_trajectory_str is before READY",
         "gc collect, malloc_trim, then gc.disable before READY, every arm",
         "readcon_first stays on the warm gate: its warm median was 0.040 s and its cold median 0.111 s",
         "an arm whose warm IQR/median exceeds 0.10 is rerun at n=12",
@@ -456,7 +484,9 @@ def run(out: Path, frames: int, repeats: int) -> None:
         ("readcon_first", con),
         ("readcon_db", con),
         ("ase_eon", con),
-        ("eon", con),
+        ("eon_first", con),
+        ("readcon_eon_api_first", con),
+        ("eon_all", con),
         ("eon_py", con),
         ("readcon_eon_api", con),
         ("conbin", WORK / "frames.conbin"),
@@ -631,9 +661,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
         mib, mib_iqr, mib_q1, mib_q3 = _type7([row["mib"] for row in got])
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
-        scope = "first_frame" if name in {"eon", "readcon_first"} else "all_frames"
-        if name == "readcon_eon_api":
-            scope = "readcon_through_eon"
+        scope = _scope(name)
         lines.append(
             f"summary arm={name} scope={scope} n_rep={len(got)} "
             f"median_s={med:.9e} iqr_s={iqr:.9e} "
@@ -669,7 +697,8 @@ def run(out: Path, frames: int, repeats: int) -> None:
             "readcon_tip did not complete: "
             + str(tip.get("error") or "too few samples")
         )
-    lines.append("exit_code 0")
+    bad = [name for name, doc in payload_arms.items() if doc.get("error")]
+    lines.append("exit_code 0" if not bad else "exit_code 1")
     out.mkdir(parents=True, exist_ok=True)
     log = out / "reader-exchange.log"
     log.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -689,6 +718,8 @@ def run(out: Path, frames: int, repeats: int) -> None:
     stamp_file(path, sha, repeats, None)
     stamp_file(log, sha, repeats, None)
     print(f"readcon_tip {tip['median_s']:.6f}s rss {tip['mib_median']:.3f} MiB")
+    if bad:
+        raise SystemExit("frame or atom check failed: " + " ".join(bad))
 
 
 def main() -> None:

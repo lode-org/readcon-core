@@ -156,15 +156,18 @@ if arm in {"readcon_tip", "readcon_base", "readcon_v0173", "readcon_first"}:
             return readcon.read_positions(path)
         return [np.array(frame.xyz, dtype=float) for frame in readcon.read_con(path)]
 elif arm == "readcon_db":
+    # db5 (564ea6e5) cooks an RCSO blob in append_trajectory_str.
+    # get_positions_all copies that blob into one (frames, atoms, 3) array.
+    # Ingest is setup, outside the clock. The clock is the stream.
     from readcon_db import ConCorpus
+    import shutil
+    dest = Path(path).with_suffix(".corpus")
+    if dest.exists():
+        shutil.rmtree(dest)
+    db = ConCorpus(str(dest))
+    db.append_trajectory_str(1, Path(path).read_text(), source="frames.con")
     def parse():
-        dest = Path(path).with_suffix(".corpus")
-        if dest.exists():
-            import shutil
-            shutil.rmtree(dest)
-        db = ConCorpus(str(dest))
-        db.append_trajectory_str(1, Path(path).read_text(), source="frames.con")
-        return [np.array(db.get_positions(1, i), dtype=float) for i in range(n_frames)]
+        return db.get_positions_all(1)
 elif arm == "ase_eon":
     from ase.io import read
     def parse():
@@ -211,24 +214,14 @@ elif arm == "mdanalysis":
     def parse():
         universe = mda.Universe(path)
         return [universe.atoms.positions.copy() for _ in universe.trajectory]
-elif arm == "eon":
-    import pyeonclient as pyec
-    def parse():
-        params = pyec.Parameters()
-        pot = pyec.make_potential("LJ", params)
-        matter = pyec.Matter(pot, params)
-        status = matter.con2matter(path)
-        if not pyec.io_ok(status):
-            raise RuntimeError(str(status))
-        return [np.array(matter.positions)]
 elif arm == "eon_py":
     sys.path.insert(0, os.environ["EON_PKG"])
     from eon.fileio import loadcons
     def parse():
         return [np.array(frame.r, dtype=float) for frame in loadcons(path)]
-elif arm == "readcon_eon_api":
+elif arm in {"eon_first", "eon_all", "readcon_eon_api", "readcon_eon_api_first"}:
     def parse():
-        raise RuntimeError("readcon_eon_api is timed in its own process")
+        raise RuntimeError(arm + " is timed in its own process")
 elif arm == "conbin":
     import readcon
     def parse():
@@ -240,22 +233,30 @@ else:
 before = hwm_kib()
 print(f"READY {before}", flush=True)
 sys.stdin.readline()
-if arm == "readcon_eon_api":
+if arm in {"eon_first", "eon_all", "readcon_eon_api", "readcon_eon_api_first"}:
     import subprocess
-    proc = subprocess.run([os.environ["EON_ALLFRAMES"], path], capture_output=True, text=True)
+    mode = "first" if arm in {"eon_first", "readcon_eon_api_first"} else "all"
+    proc = subprocess.run([os.environ["EON_ALLFRAMES"], path, mode], capture_output=True, text=True)
     parts = proc.stdout.split()
     if proc.returncode != 0 or len(parts) < 5:
         err = (proc.stderr or proc.stdout)[-240:].replace("\n", " ")
         print(json.dumps({"seconds": None, "hwm_before": before, "hwm_after": before, "matched": 0, "got": 0, "requested": n_frames, "error": err}))
         raise SystemExit(0)
+    got_n = int(parts[4])
+    atoms_got = int(parts[6]) if len(parts) > 6 else 0
+    requested = 1 if arm in {"eon_first", "readcon_eon_api_first"} else n_frames
+    err = ""
+    if got_n != requested or atoms_got != n_atoms or int(parts[3]) != got_n:
+        err = f"frames {got_n} atoms {atoms_got} matched {parts[3]} wanted {requested}x{n_atoms}"
     print(json.dumps({
         "seconds": float(parts[0]),
         "hwm_before": int(parts[1]),
         "hwm_after": int(parts[2]),
         "matched": int(parts[3]),
-        "got": int(parts[4]),
-        "requested": n_frames,
-        "error": "",
+        "got": got_n,
+        "atoms": atoms_got,
+        "requested": requested,
+        "error": err,
     }))
     raise SystemExit(0)
 import time
@@ -273,7 +274,7 @@ dt = time.perf_counter() - t0
 after = hwm_kib()
 matched = 0
 got_n = 0
-requested = 1 if arm in {"eon", "readcon_first"} else n_frames
+requested = 1 if arm in {"eon_first", "readcon_first", "readcon_eon_api_first"} else n_frames
 if arr is not None and arr.ndim == 3:
     got_n = int(arr.shape[0])
     frames = np.arange(got_n, dtype=np.float64)[:, None, None]
@@ -283,7 +284,10 @@ if arr is not None and arr.ndim == 3:
     if arr.shape[1:] == (n_atoms, 3) and ref.shape[0] >= 1:
         take = min(got_n, requested, ref.shape[0])
         matched = int(np.sum(np.max(np.abs(arr[:take] - ref[:take]), axis=(1, 2)) <= 1e-5))
-print(json.dumps({"seconds": dt, "hwm_before": before, "hwm_after": after, "matched": matched, "got": got_n, "requested": requested, "error": error}))
+atoms_got = int(arr.shape[1]) if arr is not None and arr.ndim == 3 else 0
+if error == "" and (got_n != requested or atoms_got != n_atoms or matched != requested):
+    error = f"frames {got_n} atoms {atoms_got} matched {matched} wanted {requested}x{n_atoms}"
+print(json.dumps({"seconds": dt, "hwm_before": before, "hwm_after": after, "matched": matched, "got": got_n, "atoms": atoms_got, "requested": requested, "error": error}))
 """
 
 
@@ -292,16 +296,11 @@ def one(arm: str, path: Path) -> dict:
     env["READCON_BASE"] = str(BASE_DIR)
     env["READCON_V0173"] = str(RELEASE_DIR)
     env.pop("TMPDIR", None)
-    if arm == "eon":
-        env["PYTHONPATH"] = str(EON_PY) + os.pathsep + env.get("PYTHONPATH", "")
-        env["LD_LIBRARY_PATH"] = (
-            str(EON_LIB) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
-        )
+    if arm in {"eon_first", "eon_all", "readcon_eon_api", "readcon_eon_api_first"}:
+        env["EON_ALLFRAMES"] = str(EON_BIN)
     if arm == "eon_py":
         env["EON_PKG"] = str(EON_PKG)
         env["PYTHONPATH"] = str(EON_PKG) + os.pathsep + env.get("PYTHONPATH", "")
-    if arm == "readcon_eon_api":
-        env["EON_ALLFRAMES"] = str(EON_BIN)
     proc = subprocess.run(
         [sys.executable, "-c", WORKER, arm, str(path), str(N_FRAMES), str(N_ATOMS)],
         input="\n",
@@ -373,9 +372,11 @@ def main() -> int:
         "numpy_percentile method=linear type=7",
         "readcon_xyz no",
         "readcon_hdf5 no",
-        "eon_first Matter.con2matter first frame",
+        "eon_first read_first_frame plus one con2matter",
+        "eon_all read_all_frames plus con2matter on every frame",
+        "readcon_eon_api_first the same one-frame call as eon_first",
+        "readcon_eon_api the same all-frame call as eon_all",
         "eon_py eon.fileio.loadcons all frames",
-        "readcon_eon_api readcon through the eOn C++ API, all frames",
         "conbin mmap zero-copy positions",
         "eon_reader eon.fileio.loadcons",
         "readcon_first read_first_frame first frame",
@@ -392,7 +393,9 @@ def main() -> int:
         ("readcon_first", con),
         ("readcon_db", con),
         ("ase_eon", con),
-        ("eon", con),
+        ("eon_first", con),
+        ("readcon_eon_api_first", con),
+        ("eon_all", con),
         ("eon_py", con),
         ("readcon_eon_api", con),
         ("conbin", WORK / "frames.conbin"),
@@ -433,9 +436,13 @@ def main() -> int:
         mib, mib_iqr = type7([row["mib"] for row in got])
         matched = min(row["matched"] for row in got)
         requested = got[0]["requested"]
-        scope = "first_frame" if name in {"eon", "readcon_first"} else "all_frames"
-        if name == "readcon_eon_api":
-            scope = "readcon_through_eon"
+        scope = {
+            "readcon_first": "first_frame_positions",
+            "eon_first": "first_frame_con2matter",
+            "readcon_eon_api_first": "first_frame_con2matter",
+            "eon_all": "all_frames_con2matter",
+            "readcon_eon_api": "all_frames_con2matter",
+        }.get(name, "all_frames")
         lines.append(
             f"summary arm={name} scope={scope} n_rep={len(got)} median_s={med:.9e} iqr_s={iqr:.9e} "
             f"mib_median={mib:.6f} mib_iqr={mib_iqr:.6f} "
