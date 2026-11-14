@@ -164,3 +164,31 @@ path = "fuzz_targets/conbin_reader.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "writer-plain"
+path = "fuzz_targets/writer_plain.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-gzip"
+path = "fuzz_targets/writer_gzip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-zstd"
+path = "fuzz_targets/writer_zstd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-conbin"
+path = "fuzz_targets/writer_conbin.rs"
+test = false
+doc = false
+bench = false
