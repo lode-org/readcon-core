@@ -13,8 +13,6 @@ import hashlib
 import re
 from pathlib import Path
 
-import numpy as np
-
 _MASK64 = (1 << 64) - 1
 _FLOAT = re.compile(r"[-+]?\d+\.\d+")
 
@@ -98,8 +96,10 @@ def _shift_hundredths(token: str, draw: int) -> str:
     return token
 
 
-def thermal_shift(n_atoms: int, frame: int, seed: int = 1) -> np.ndarray:
+def thermal_shift(n_atoms: int, frame: int, seed: int = 1):
     """Per-atom displacement of ±0.01–0.05 Å. One PCG32 stream per frame."""
+    import numpy as np
+
     state = _frame_state(frame, seed)
     out = np.empty((n_atoms, 3), dtype=np.float64)
     for atom in range(n_atoms):
@@ -146,7 +146,10 @@ def distinct_frame_list(text: str, n: int, seed: int = 1) -> list[str]:
     if n < 1:
         raise ValueError("n")
     one = text if text.endswith("\n") else text + "\n"
-    return [perturb_frame(one, frame, seed) for frame in range(n)]
+    frames = [perturb_frame(one, frame, seed) for frame in range(n)]
+    if n > 1:
+        require_distinct_frames(frames)
+    return frames
 
 
 def distinct_frames(text: str, n: int, seed: int = 1) -> str:
@@ -174,12 +177,14 @@ def _refuse_copies(hashes: list[str]) -> list[str]:
     return hashes
 
 
-def _require_coord_frames(positions: np.ndarray) -> list[str]:
+def _require_coord_frames(positions) -> list[str]:
     """SHA-256 of each frame's coordinates.
 
     Two frames with the same hash are the same bytes. The repeated-frame
     reader would time a copy of the first.
     """
+    import numpy as np
+
     coords = np.ascontiguousarray(positions, dtype="<f8")
     if coords.ndim != 3 or coords.shape[2] != 3:
         raise SystemExit("positions are not frames x atoms x 3")
@@ -203,7 +208,19 @@ def _require_text_frames(frames: list[str]) -> list[str]:
     return _refuse_copies(hashes)
 
 
-def require_distinct_frames(frames: np.ndarray | list[str]) -> list[str]:
+def require_distinct_texts(frames: list[str]) -> list[str]:
+    """SHA-256 of each frame's text. Identical frames are refused.
+
+    Non-CON writers, such as an extxyz trajectory, have no CON coordinate
+    rows. The refusal is the same one ``require_distinct_frames`` uses.
+    """
+    if len(frames) < 1:
+        raise SystemExit("positions are not frames x atoms x 3")
+    hashes = [hashlib.sha256(frame.encode("utf-8")).hexdigest() for frame in frames]
+    return _refuse_copies(hashes)
+
+
+def require_distinct_frames(frames) -> list[str]:
     """SHA-256 of each frame. Identical frames are refused.
 
     ``frames`` is a coordinate array of shape ``(n_frames, n_atoms, 3)`` or a

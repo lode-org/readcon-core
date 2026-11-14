@@ -34,3 +34,15 @@ sys.stdout.write(distinct_frames(text, 3))
     assert_eq!(rust.len(), python.len());
     assert_eq!(rust, python);
 }
+
+#[test]
+fn repeated_frames_are_refused() {
+    let caught = std::panic::catch_unwind(|| frames_guard::distinct_frames("header\n", 2));
+    let message = caught.expect_err("identical frames must panic");
+    let text = message
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| message.downcast_ref::<&str>().copied())
+        .unwrap_or("");
+    assert!(text.contains("byte-identical"), "panic text was {text:?}");
+}
