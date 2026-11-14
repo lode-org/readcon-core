@@ -76,3 +76,17 @@ def test_each_writer_refuses_repeated_frames(tmp_path: Path, monkeypatch) -> Non
 def test_payload_series_refuses_repeated_positions() -> None:
     with pytest.raises(SystemExit, match="repeat the positions"):
         make_payloads.distinct({"positions": np.zeros((2, 1, 3))}, "trajectory")
+
+
+def test_a_cached_input_does_not_skip_the_guard(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(bench_parallel_frames, "WORK", tmp_path)
+    for path in bench_parallel_frames.input_paths().values():
+        path.write_text("cached\n", encoding="utf-8")
+    (tmp_path / "stamp.json").write_text(
+        '{"frames": %d, "atoms": %d}'
+        % (bench_parallel_frames.N_FRAMES, bench_parallel_frames.N_ATOMS),
+        encoding="utf-8",
+    )
+    with pytest.raises(SystemExit, match="byte-identical"):
+        bench_parallel_frames.write_inputs(np.zeros((2, 1, 3)))
+    assert (tmp_path / "stamp.json").exists()
