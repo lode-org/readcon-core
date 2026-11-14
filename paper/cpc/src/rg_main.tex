@@ -643,12 +643,14 @@ The convel read at one thread has median \convelOne~s and interquartile range \c
 On 10000 frames of 8 atoms, readcon-db inserts in 0.2826~s and the ASE database in 2.524~s (Table~\ref{tab:db9}).
 Peak RSS is 189~MB and 194.4~MB.
 On one million atoms the insert is 0.1893~s and 0.2283~s, and peak RSS is 601.7~MB and 1102~MB.
-The frames-100 cold reads that include the open are the db13 record \path{bench/db13} at \texttt{b6680e00} (Table~\ref{tab:db13}).
-The selected cold-open read has median 0.000866~s for readcon-db and 0.001152~s for the ASE database.
-The full-read cold-open has median 0.0005948~s for readcon-db and 0.008862~s for the ASE database.
-The full-read IQR/median is 0.3218 for readcon-db.
-A cold open of a map under 1~MiB reads the file with one pread before it returns.
-The selected-cold query is the query after that prefetching open.
+The frames-100 cold and cold-open reads are the db14 record \path{bench/db14} at \texttt{c64e9ce6} (Table~\ref{tab:db14}).
+Automatic collection is off for every read row, for both tools, and it is restored when the row returns.
+A readcon-db open of a map under 1~MiB is one pread before the environment map.
+Selected cold is the query after that prefetching open.
+cold-open times the open and the query.
+Every cold sample has mincore resident fraction 0, and $n{=}12$.
+The full-read cold-open median is 0.0003673~s for readcon-db and 0.009745~s for the ASE database.
+The full-read cold-open IQR/median is 0.06149 for readcon-db.
 A streamed insert of 10000 frames yields one frame at a time, puts groups of 64 into one LMDB transaction, and drops each group's text after the put (Table~\ref{tab:db11-memory}).
 The ASE atom list stays allocated for the whole trajectory.
 Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
@@ -656,7 +658,7 @@ The record is \path{bench/db11} at \texttt{4dbb746e}.
 The fidelity check on these rows is exact.
 The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 \input{campaign/final/db9}
-\input{campaign/final/db13}
+\input{campaign/final/db14}
 \input{campaign/final/db11_memory}
 
 \input{campaign/final/strong}
@@ -759,7 +761,7 @@ The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
 Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
-The frames-100 cold-open reads are \path{bench/db13} at \texttt{b6680e00}.
+The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
 The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 The weak reads and the write split are \path{bench/h2h/scaling/camp9} at \texttt{20a7ff13}.

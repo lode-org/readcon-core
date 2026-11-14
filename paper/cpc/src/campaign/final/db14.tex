@@ -1,0 +1,29 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{db14 frames-100 cold and cold-open reads.
+Automatic collection is off for every read row, for both tools.
+A readcon-db open of a map under 1~MiB is one pread before the environment map.
+Selected cold is the query after that prefetching open.
+cold-open times the open and the query.
+Every cold sample has mincore resident fraction 0.
+The summary is the type-7 median, the interquartile range, $n$, and the ratio of the interquartile range to the median.
+Record \texttt{bench/db14} at \texttt{c64e9ce6e6cdcad41b8bf25ad2cf81da8bb814c5}.
+The log's rev-parse is \texttt{4bb67729c54eb55d30a00923890dd60d0e514ef4}.
+Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}
+\label{tab:db14}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Op & Tool & Median (s) & IQR (s) & $n$ & IQR/median \\
+\midrule
+selected cold & readcon-db & 2.641e-05 & 4.063e-07 & 12 & 0.01539 \\
+selected cold & ASE database & 0.0005278 & 2.685e-05 & 12 & 0.05088 \\
+full-read cold & readcon-db & 8.249e-05 & 1.878e-06 & 12 & 0.02277 \\
+full-read cold & ASE database & 0.009252 & 0.0001584 & 12 & 0.01712 \\
+selected cold-open & readcon-db & 0.0002666 & 1.723e-05 & 12 & 0.06464 \\
+selected cold-open & ASE database & 0.001115 & 7.333e-05 & 12 & 0.06577 \\
+full-read cold-open & readcon-db & 0.0003673 & 2.259e-05 & 12 & 0.06149 \\
+full-read cold-open & ASE database & 0.009745 & 0.0001431 & 12 & 0.01468 \\
+\bottomrule
+\end{tabular}
+\end{table}
