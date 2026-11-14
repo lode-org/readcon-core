@@ -134,7 +134,29 @@ def write_alloy_extxyz(path: Path) -> None:
             handle.write("".join(chunk))
 
 
-def write_md_extxyz(path: Path) -> None:
+def _md_frame_text(frame: int, base) -> str:
+    energy = 300_000_000 + frame * 1_370
+    frame_lines = [
+        "96\n",
+        (
+            'Lattice="12.8 0.0 0.0 0.0 12.8 0.0 0.0 0.0 12.8" '
+            "Properties=species:S:1:pos:R:3:masses:R:1 "
+            f"energy=-{_fmt_micro(energy, 6)} step={frame} "
+            'pbc="T T T"\n'
+        ),
+    ]
+    for symbol, mass, x_site, y_site, z_site, x_local, y_local, z_local in base:
+        x_out = x_site + (x_local + frame * 10_000) % 130_000
+        y_out = y_site + (y_local + frame * 24_000) % 88_000
+        z_out = z_site + (z_local + frame * 6_000) % 54_000
+        frame_lines.append(
+            f"{symbol} {_fmt_micro(x_out, 6)} {_fmt_micro(y_out, 6)} "
+            f"{_fmt_micro(z_out, 6)} {mass}\n"
+        )
+    return "".join(frame_lines)
+
+
+def write_md_extxyz(path: Path, n_frames: int = 10_000) -> None:
     """Ten thousand frames of 96 water atoms.
 
     Each axis has a per-atom residue that the frame advances: x by 0.01 in
@@ -166,30 +188,10 @@ def write_md_extxyz(path: Path) -> None:
                 (index * 12_000) % 54_000,
             )
         )
-    from frames_guard import require_distinct_texts
+    from frames_guard import require_distinct_frames
 
-    frames: list[str] = []
-    for frame in range(10_000):
-        energy = 300_000_000 + frame * 1_370
-        frame_lines = [
-            "96\n",
-            (
-                'Lattice="12.8 0.0 0.0 0.0 12.8 0.0 0.0 0.0 12.8" '
-                "Properties=species:S:1:pos:R:3:masses:R:1 "
-                f"energy=-{_fmt_micro(energy, 6)} step={frame} "
-                'pbc="T T T"\n'
-            ),
-        ]
-        for symbol, mass, x_site, y_site, z_site, x_local, y_local, z_local in base:
-            x_out = x_site + (x_local + frame * 10_000) % 130_000
-            y_out = y_site + (y_local + frame * 24_000) % 88_000
-            z_out = z_site + (z_local + frame * 6_000) % 54_000
-            frame_lines.append(
-                f"{symbol} {_fmt_micro(x_out, 6)} {_fmt_micro(y_out, 6)} "
-                f"{_fmt_micro(z_out, 6)} {mass}\n"
-            )
-        frames.append("".join(frame_lines))
-    require_distinct_texts(frames)
+    frames = [_md_frame_text(frame, base) for frame in range(n_frames)]
+    require_distinct_frames(frames)
     path.write_text("".join(frames), encoding="utf-8")
 
 
