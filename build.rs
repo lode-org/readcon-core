@@ -174,7 +174,7 @@ fn chemfiles_generated_include() -> PathBuf {
     panic!("chemfiles-sys did not generate include/chemfiles/exports.h");
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "chemfiles"))]
 mod chemfiles_include_tests {
     use super::{chemfiles_build_dirs, chemfiles_exports_include};
     use std::fs;

@@ -726,6 +726,12 @@ fn merge_species_chunks(chunks: Vec<SpeciesParts>) -> SpeciesParts {
     (pool, ids)
 }
 
+struct XyzShape {
+    frames: usize,
+    atoms: usize,
+    nfloat: usize,
+}
+
 /// Species and positions (and an optional mass) with no per-atom string
 /// until a frame actually mixes symbols.
 struct SpeciesPosInput<'a> {
@@ -736,9 +742,7 @@ struct SpeciesPosInput<'a> {
 }
 
 fn fill_species_pos_parallel(
-    n_frames: usize,
-    n_atoms: usize,
-    nfloat: usize,
+    shape: XyzShape,
     workers: usize,
     input: SpeciesPosInput<'_>,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,

@@ -2123,6 +2123,11 @@ fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
     })
 }
 
+/// Spec line limited to `con_spec_version`, optional `con_spec_minor`, and `units`.
+///
+/// Returns the major version when the object is exactly that shape and, for
+/// version 3 or newer, `length` and `energy` are valid units. Anything else
+/// is `None` so the general JSON parser can accept or reject it.
 fn simple_metadata_version(line: &str) -> Option<u32> {
     let bytes = line.as_bytes();
     let mut i = 0usize;
@@ -2688,6 +2693,12 @@ where
     Ok(global_atom_idx)
 }
 
+struct ClonedRows<'a> {
+    pos: &'a mut Vec<f64>,
+    ids: &'a mut Vec<u64>,
+    atoms: &'a mut Vec<AtomDatum>,
+}
+
 /// Coordinate rows when the declared count must not bump an `Arc` by `n`.
 struct IngestRows<'a> {
     pos_flat: &'a mut Vec<f64>,
@@ -2706,6 +2717,11 @@ fn ingest_coord_rows_cloned<'a, L>(
 where
     L: LineStream<'a>,
 {
+    let ClonedRows {
+        pos: pos_flat,
+        ids,
+        atoms: atom_data,
+    } = rows;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         rows.pos_flat.extend_from_slice(&xyz);

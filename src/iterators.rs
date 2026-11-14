@@ -3699,6 +3699,8 @@ pub struct PhasedFrames {
 /// that many workers. Every other count parses on the calling thread.
 /// The frame list matches [`frames_from_bytes`].
 ///
+type PipedFrames = (Vec<types::ConFrame>, f64, f64);
+
 /// A parse failure is the [`error::LocatedParseError`] from the parse
 /// that failed. The path is not opened again.
 /// Inflate each indexed member and parse its coordinate rows on that same
@@ -3950,6 +3952,8 @@ mod spare_capacity {
         assert_eq!(atoms.capacity(), cap);
     }
 }
+
+type StockHead = (types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize);
 
 #[cfg(feature = "parallel")]
 type StockHeader = (types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize);

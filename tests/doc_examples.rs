@@ -172,7 +172,7 @@ fn howto_rust_spec_query_reads_a_frame() {
     let result = std::panic::catch_unwind(|| {
         use readcon_core::{CON_SPEC_VERSION, VERSION};
         assert_eq!(CON_SPEC_VERSION, 3);
-        println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
+        println!("readcon-core {VERSION} (spec v{CON_SPEC_VERSION})");
         use readcon_core::iterators::read_first_frame;
         let frame = read_first_frame(std::path::Path::new("input.con")).unwrap();
         println!("File spec version: {}", frame.header.spec_version);

@@ -639,6 +639,19 @@ struct PeekedHeader {
     symbol: Arc<str>,
 }
 
+struct CopiedSpan {
+    start: usize,
+    end: usize,
+    head: usize,
+}
+
+struct CopiedCols {
+    positions: usize,
+    masses: usize,
+    ids: usize,
+    flags: usize,
+}
+
 /// Parse one copied frame straight into the shared column buffers.
 ///
 /// A temporary `Vec` per copy allocated, copied, and freed on the same

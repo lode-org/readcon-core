@@ -874,6 +874,8 @@ struct MemberPlan {
     rows: Option<Vec<(u32, u32)>>,
 }
 
+type GzipMemberSlot = std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>;
+
 fn gzip_member_starts(bytes: &[u8]) -> Option<MemberPlan> {
     if bytes.len() < 16 || bytes[0] != 0x1f || bytes[1] != 0x8b || bytes[3] & 0x04 == 0 {
         return None;
@@ -1554,7 +1556,7 @@ pub fn codec_deflate(
         for part in encoded {
             out.extend(part);
         }
-        return Ok(out);
+        Ok(out)
     }
     #[cfg(not(feature = "zstd"))]
     {

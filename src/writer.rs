@@ -830,8 +830,7 @@ impl<W: Write> ConFrameWriter<W> {
                     || (self.atom_workers >= 2 && num_atoms_in_type >= WIDE_ATOM_GRAIN);
                 append_coord_rows(
                     buf,
-                    ryu,
-                    slots,
+                    LineFmt { ryu, slots },
                     &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
                     CoordJob {
                         prec,
@@ -1725,8 +1724,10 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
     let mut slots = [FmtSlot::new(); 3];
     append_coord_rows(
         &mut buf,
-        &mut ryu,
-        &mut slots,
+        LineFmt {
+            ryu: &mut ryu,
+            slots: &mut slots,
+        },
         atoms,
         CoordJob {
             prec: FloatFormat::RoundTrip,
@@ -1973,7 +1974,7 @@ fn append_coord_rows(
                 },
             );
         }
-        return Ok(());
+        Ok(())
     }
 }
 
