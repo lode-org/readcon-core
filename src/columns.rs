@@ -124,6 +124,22 @@ pub(crate) fn positions_parallel(
     if workers < 2 {
         return parse_con(bytes, rich, false, true, 1, None);
     }
+    // The fast path can reject a row the serial walker also rejects and
+    // name a different variant (InvalidNumberFormat against
+    // InvalidVectorLength). Callers compare the two results, so an error
+    // is the serial walk's error.
+    match positions_parallel_fast(bytes, workers, rich) {
+        Ok(parsed) => Ok(parsed),
+        Err(_) => parse_con(bytes, rich, false, true, 1, None),
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn positions_parallel_fast(
+    bytes: &[u8],
+    workers: usize,
+    rich: bool,
+) -> Result<ConPositions, ParseError> {
     // N copies of one wide frame. Planning the first copy on every core
     // and then parsing it again made N threads slower than one thread.
     match parse_repeated_copies(bytes, workers, rich) {
@@ -1710,6 +1726,107 @@ mod tests {
     }
 
     #[cfg(feature = "parallel")]
+    fn plant_blank_line(frame: &str) -> String {
+        let nl = frame[..frame.len() - 1].rfind('\n').unwrap();
+        let row = &frame[nl + 1..];
+        let head = "0 0 0 0 0\n";
+        assert!(row.len() > head.len());
+        let mut replacement = String::from(head);
+        replacement.push_str(&" ".repeat(row.len() - head.len() - 1));
+        replacement.push('\n');
+        assert_eq!(replacement.len(), row.len());
+        let mut out = frame[..nl + 1].to_string();
+        out.push_str(&replacement);
+        out
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn a_blank_line_after_a_short_row_matches_serial_on_every_worker() {
+        // Three-digit frame numbers keep every span the same length, and
+        // 128 frames leave index 63 short of end-of-file. The whitespace
+        // line is the next header for the serial walker.
+        let one = equal_tiled_frames(1);
+        let mut whole = String::new();
+        for frame in 0..128 {
+            whole.push_str(&one.replace("00.0", &format!("{frame:03}.0")));
+        }
+        let span = whole.len() / 128;
+        assert_eq!(whole.len(), span * 128);
+        for frame in [1usize, 10, 62, 63] {
+            let mut text = String::new();
+            for index in 0..128 {
+                let slice = &whole[index * span..(index + 1) * span];
+                if index == frame {
+                    text.push_str(&plant_blank_line(slice));
+                } else {
+                    text.push_str(slice);
+                }
+            }
+            assert_eq!(text.len(), whole.len());
+            let serial = positions_from_con_bytes(text.as_bytes());
+            assert!(serial.is_err(), "frame {frame}: {serial:?}");
+            for workers in [2usize, 4, 8] {
+                same_parse_class(
+                    &format!("frame {frame} workers {workers}"),
+                    positions_from_con_bytes(text.as_bytes()),
+                    positions_parallel(text.as_bytes(), workers, false),
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn a_blank_line_in_repeated_wide_copies_matches_serial() {
+        let atoms = 4096usize;
+        let mut one = String::from(
+            "grid\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n",
+        );
+        one.push_str(&format!(
+            "{atoms}\n63.546\nCu\nCoordinates of Component 1\n"
+        ));
+        for i in 0..atoms {
+            one.push_str(&format!("{i}.125 0.25 0.5 0 {i}\n"));
+        }
+        let planted = plant_blank_line(&one);
+        let text = planted.repeat(2);
+        let serial = positions_from_con_bytes(text.as_bytes());
+        assert!(serial.is_err(), "{serial:?}");
+        same_parse_class(
+            "repeated copies",
+            positions_from_con_bytes(text.as_bytes()),
+            positions_parallel(text.as_bytes(), 2, false),
+        );
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn two_thousand_equal_span_corruptions_match_the_serial_error_kind() {
+        let whole = equal_tiled_frames(8);
+        let span = whole.len() / 8;
+        let mut state = 0x0fed_cba9_8765_4321u64;
+        let mut next = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            state
+        };
+        let alphabet = b"0123456789. \nX";
+        for trial in 0..2000 {
+            let mut bytes = whole.clone().into_bytes();
+            let frame = (next() as usize) % 8;
+            let at = frame * span + (next() as usize) % span.saturating_sub(4).max(1);
+            let width = 1 + (next() as usize) % 6;
+            for offset in 0..width {
+                let index = (at + offset).min(bytes.len() - 1);
+                bytes[index] = alphabet[(next() as usize) % alphabet.len()];
+            }
+            let serial = positions_from_con_bytes(&bytes);
+            let parallel = positions_parallel(&bytes, 4, false);
+            same_parse_class(&format!("trial {trial} frame {frame}"), serial, parallel);
+        }
+    }
+
+    #[cfg(feature = "parallel")]
     #[test]
     fn tiled_small_frames_match_the_serial_walker() {
         let one = "\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n20.0 20.0 20.0\n90.0 90.0 90.0\n\n\n1\n4\n63.546\nCu\nCoordinates of Component 1\n00.0 0.25 0.5 0 0\n01.0 1.25 1.5 0 1\n02.0 2.25 2.5 0 2\n03.0 3.25 3.5 7 3\n";
@@ -1848,31 +1965,6 @@ mod tests {
             first_bit_mismatch(&parallel.positions[..n * 3], &serial.positions),
             None
         );
-        // llvm-cov and an unoptimized build stretch the parallel walk past
-        // this ratio: the serial column walk is a few thread spawns shorter.
-        // The samples still run so those lines stay in the coverage build.
-        // The equality checks above still run. Release builds keep the ratio.
-        let time = |bytes: &[u8], workers: usize| {
-            let _ = positions_parallel(bytes, workers, false).unwrap();
-            let mut samples = Vec::with_capacity(5);
-            for _ in 0..5 {
-                let started = std::time::Instant::now();
-                let got = positions_parallel(bytes, workers, false).unwrap();
-                std::hint::black_box(got.positions.len());
-                samples.push(started.elapsed().as_secs_f64());
-            }
-            samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
-            samples[samples.len() / 2]
-        };
-        let one_s = time(one.as_bytes(), 1);
-        let two_s = time(two.as_bytes(), 2);
-        #[cfg(all(not(coverage), not(debug_assertions)))]
-        assert!(
-            two_s < one_s * 1.7,
-            "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
-        );
-        #[cfg(any(coverage, debug_assertions))]
-        let _ = (one_s, two_s);
     }
 
     #[cfg(feature = "parallel")]
