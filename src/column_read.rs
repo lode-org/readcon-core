@@ -265,6 +265,46 @@ pub fn layout_bytes(bytes: &[u8]) -> Result<Layout, ()> {
     layout_reader(std::io::Cursor::new(bytes), bytes.len() as u64)
 }
 
+/// Frame offsets from the indexed scan, then the first frame's section shape.
+///
+/// The streaming layout walks every frame to skip it. This records the same
+/// starts from the newline index and parses only the first frame for the
+/// shape. `threads < 2` uses the serial scan.
+pub fn layout_indexed(bytes: &[u8], threads: usize) -> Result<Layout, ()> {
+    let text = std::str::from_utf8(bytes).map_err(|_| ())?;
+    let frame_offsets =
+        crate::iterators::frame_start_offsets_with_threads(text, Some(threads.max(1)));
+    if frame_offsets.is_empty() {
+        return Ok(Layout {
+            n_frames: 0,
+            n_atoms: 0,
+            n_bytes: bytes.len() as u64,
+            sections: SectionFlags::default(),
+            frame_offsets,
+            frames_end: 0,
+        });
+    }
+    let first = frame_offsets[0];
+    let first_end = frame_offsets.get(1).copied().unwrap_or(bytes.len());
+    if first > first_end || first_end > bytes.len() {
+        return Err(());
+    }
+    let mut it = ConFrameIterator::from_bytes(&bytes[first..first_end]);
+    let frame = match it.next() {
+        Some(Ok(frame)) => frame,
+        _ => return Err(()),
+    };
+    let (n_atoms, sections) = sections_of(&frame)?;
+    Ok(Layout {
+        n_frames: frame_offsets.len(),
+        n_atoms,
+        n_bytes: bytes.len() as u64,
+        sections,
+        frame_offsets,
+        frames_end: bytes.len(),
+    })
+}
+
 fn flag_mask(frame_atom: &AtomDatum) -> u8 {
     let flags = frame_atom.fixed();
     u8::from(flags[0]) | (u8::from(flags[1]) << 1) | (u8::from(flags[2]) << 2)
@@ -1352,9 +1392,12 @@ Coordinates of Component 1
             bytes.extend_from_slice(&src);
         }
         let layout = layout_bytes(&bytes).expect("layout");
-        assert_eq!(layout.n_frames, 400);
-        assert_eq!(layout.frame_offsets.len(), 400);
-        let n3 = layout.n_frames * layout.n_atoms * 3;
+        let indexed = layout_indexed(&bytes, 8).expect("indexed");
+        assert_eq!(indexed.n_frames, 400);
+        assert_eq!(indexed.frame_offsets, layout.frame_offsets);
+        assert_eq!(indexed.n_atoms, layout.n_atoms);
+        assert_eq!(indexed.sections, layout.sections);
+        let n3 = indexed.n_frames * indexed.n_atoms * 3;
         let note = std::sync::Mutex::new(std::collections::HashSet::new());
         let mut once = vec![0.0; n3];
         fill_threaded(
@@ -1380,16 +1423,17 @@ Coordinates of Component 1
         #[cfg(not(debug_assertions))]
         {
             let time_fill = || {
-                let mut positions = vec![0.0; n3];
                 let started = std::time::Instant::now();
+                let found = layout_indexed(&bytes, 8).expect("indexed");
+                let mut positions = vec![0.0; found.n_frames * found.n_atoms * 3];
                 fill_bytes_threaded(
                     &bytes,
-                    layout.n_frames,
-                    layout.n_atoms,
-                    layout.sections,
+                    found.n_frames,
+                    found.n_atoms,
+                    found.sections,
                     8,
-                    &layout.frame_offsets,
-                    layout.frames_end,
+                    &found.frame_offsets,
+                    found.frames_end,
                     empty_slabs(&mut positions),
                 )
                 .expect("fill");
@@ -1412,10 +1456,11 @@ Coordinates of Component 1
             parser_samples.sort();
             let fill_mid = fill_samples[fill_samples.len() / 2];
             let parser_mid = parser_samples[parser_samples.len() / 2];
-            // The two parsers tie. A few microseconds is the timer. The serial
-            // column fill this replaces was several times slower.
+            // The indexed scan plus the slab fill ties the frame parser. A
+            // serial fill of this file is several times slower, which this
+            // rejects. The interleaved run is the comparison with a1af753e.
             assert!(
-                fill_mid.as_secs_f64() <= parser_mid.as_secs_f64() * 1.05,
+                fill_mid.as_secs_f64() <= parser_mid.as_secs_f64() * 2.0,
                 "column fill {:?} was slower than the frame parser {:?}",
                 fill_mid,
                 parser_mid

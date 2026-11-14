@@ -3333,7 +3333,7 @@ fn read_con_columnar(
             let mut src = crate::compression::open_decoded(Path::new(&path_owned)).ok()?;
             let mut bytes = Vec::new();
             std::io::Read::read_to_end(&mut src, &mut bytes).ok()?;
-            let mut layout = crate::column_read::layout_bytes(&bytes).ok()?;
+            let mut layout = crate::column_read::layout_indexed(&bytes, threads).ok()?;
             if layout.n_frames < 2 || layout.n_atoms == 0 {
                 return None;
             }
@@ -3382,7 +3382,13 @@ fn read_string_columnar(
     // The argument keeps the Python string alive. Parsing borrows those
     // bytes with the GIL released, so the trajectory is not copied first.
     let bytes = contents.as_bytes();
-    let layout = match py.detach(|| crate::column_read::layout_bytes(bytes)) {
+    let layout = match py.detach(|| {
+        if threads >= 2 {
+            crate::column_read::layout_indexed(bytes, threads)
+        } else {
+            crate::column_read::layout_bytes(bytes)
+        }
+    }) {
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
