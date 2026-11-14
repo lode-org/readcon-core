@@ -87,10 +87,16 @@ def test_write_rereads_with_ase_and_extxyz(tmp_path):
     import extxyz
     from ase.io import read as ase_read
 
+    from ase.io.formats import ioformats
+
     original = readcon.read_extxyz(str(FIXTURES / "small-1.extxyz"))
     out = tmp_path / "small-1.extxyz"
     readcon.write_extxyz(str(out), original)
-    for fmt in ("extxyz", "cextxyz"):
+    # ASE 3.29 registers its own reader as extxyz. Older builds register
+    # the libAtoms reader as cextxyz. Use whichever names this ASE has.
+    registered = [name for name in ("extxyz", "cextxyz") if name in ioformats]
+    assert registered, "ASE did not register an extended XYZ reader"
+    for fmt in registered:
         image = ase_read(str(out), index=0, format=fmt)
         assert image.get_chemical_symbols() == list(original["species"][0])
         _same(image.positions, original["positions"][0])
