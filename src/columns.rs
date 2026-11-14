@@ -779,8 +779,9 @@ fn fill_copied_frame(
     }
     let mut rel = pos - frame_start;
     let frame = &bytes[frame_start..frame_end];
-    let (certified, saw) = skip_sections(frame, &mut rel, count + 2)?;
-    if !tail_is_whitespace(frame, rel) {
+    let at_eof = remainder_is_whitespace(bytes, frame_end);
+    let (certified, saw) = skip_sections(frame, &mut rel, count + 2, at_eof)?;
+    if !span_matches_serial_frame(bytes, frame_start, frame_end, rel) {
         return Err(ParseError::InvalidNumberFormat(
             "coordinate row left non-numeric bytes in the frame".into(),
         ));
@@ -1003,8 +1004,9 @@ fn fill_one_tiled_frame(
     }
     let mut rel = pos - frame_start;
     let frame = &bytes[frame_start..frame_end];
-    let skipped = skip_sections(frame, &mut rel, plan.block_lines)?;
-    if !tail_is_whitespace(frame, rel) {
+    let at_eof = remainder_is_whitespace(bytes, frame_end);
+    let skipped = skip_sections(frame, &mut rel, plan.block_lines, at_eof)?;
+    if !span_matches_serial_frame(bytes, frame_start, frame_end, rel) {
         return Err(ParseError::InvalidNumberFormat(
             "coordinate row left non-numeric bytes in the frame".into(),
         ));
@@ -1012,11 +1014,26 @@ fn fill_one_tiled_frame(
     Ok(skipped)
 }
 
-fn tail_is_whitespace(frame: &[u8], rel: usize) -> bool {
-    match frame.get(rel..) {
-        Some(tail) => tail.iter().all(u8::is_ascii_whitespace),
-        None => false,
+/// The serial walker treats a blank line after the coordinates as line 1 of
+/// the next frame. Whitespace is not part of this span unless it runs through
+/// the end of the file, which is where that walker stops.
+fn remainder_is_whitespace(file: &[u8], at: usize) -> bool {
+    at <= file.len() && file[at..].iter().all(u8::is_ascii_whitespace)
+}
+
+fn span_matches_serial_frame(
+    file: &[u8],
+    frame_start: usize,
+    frame_end: usize,
+    rel: usize,
+) -> bool {
+    let Some(abs) = frame_start.checked_add(rel) else {
+        return false;
+    };
+    if abs == frame_end {
+        return true;
     }
+    abs < frame_end && remainder_is_whitespace(file, abs)
 }
 
 /// `bytes` is `n` copies of a frame of `span` bytes, each starting with
@@ -1188,7 +1205,7 @@ fn parse_one_frame(
         }
     }
     let block_lines = n + natm_types * 2;
-    let (certified, saw_section) = skip_sections(bytes, pos, block_lines)?;
+    let (certified, saw_section) = skip_sections(bytes, pos, block_lines, true)?;
     if !certified {
         stock = false;
     }
@@ -1233,6 +1250,7 @@ fn skip_sections(
     bytes: &[u8],
     pos: &mut usize,
     block_lines: usize,
+    at_eof: bool,
 ) -> Result<(bool, bool), ParseError> {
     let mut saw = false;
     loop {
@@ -1249,7 +1267,7 @@ fn skip_sections(
             return Ok((true, saw));
         }
         let after = eol.map(|i| *pos + i + 1).unwrap_or(bytes.len());
-        if bytes[after..].iter().all(u8::is_ascii_whitespace) {
+        if at_eof && bytes[after..].iter().all(u8::is_ascii_whitespace) {
             *pos = bytes.len();
             return Ok((true, saw));
         }
@@ -1629,6 +1647,32 @@ mod tests {
             positions_parallel(bytes, 8, true),
         );
 
+        let mut blank = String::new();
+        for frame in 0..64 {
+            let slice = &whole[frame * span..(frame + 1) * span];
+            if frame == 10 {
+                let nl = slice[..slice.len() - 1].rfind('\n').unwrap();
+                let row = &slice[nl + 1..];
+                let replacement = "3. 3.2 3.5 7 3\n  \n";
+                assert_eq!(replacement.len(), row.len());
+                blank.push_str(&slice[..nl + 1]);
+                blank.push_str(replacement);
+            } else {
+                blank.push_str(slice);
+            }
+        }
+        assert_eq!(blank.len(), whole.len());
+        let serial = positions_from_con_bytes(blank.as_bytes());
+        assert!(
+            matches!(serial, Err(ParseError::InvalidNumberFormat(_))),
+            "{serial:?}"
+        );
+        same_parse_class(
+            "blank line after a short row",
+            serial,
+            positions_parallel(blank.as_bytes(), 8, false),
+        );
+
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("short-row.con");
         std::fs::write(&path, bytes).unwrap();
@@ -1636,6 +1680,33 @@ mod tests {
         let parallel = crate::iterators::read_positions_with_threads(&path, Some(8));
         assert!(serial.is_err(), "{serial:?}");
         assert!(parallel.is_err(), "{parallel:?}");
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn random_equal_span_corruptions_match_the_serial_walker() {
+        let whole = equal_tiled_frames(8);
+        let span = whole.len() / 8;
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            state
+        };
+        let alphabet = b"0123456789. \nX";
+        for trial in 0..24 {
+            let mut bytes = whole.clone().into_bytes();
+            let frame = (next() as usize) % 8;
+            let at = frame * span + (next() as usize) % span.saturating_sub(4).max(1);
+            let width = 1 + (next() as usize) % 6;
+            for offset in 0..width {
+                let index = (at + offset).min(bytes.len() - 1);
+                let pick = alphabet[(next() as usize) % alphabet.len()];
+                bytes[index] = pick;
+            }
+            let serial = positions_from_con_bytes(&bytes);
+            let parallel = positions_parallel(&bytes, 4, false);
+            same_parse_class(&format!("trial {trial}"), serial, parallel);
+        }
     }
 
     #[cfg(feature = "parallel")]
