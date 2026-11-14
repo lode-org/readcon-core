@@ -77,7 +77,7 @@ All notable changes to this project will be documented in this file. See [conven
   memory in static TLS block" once the process surplus was spent. Static
   Rust binaries leave the feature off and keep initial-exec.
 - A coordinate line spells an exact `N.0` in `0` ..= `9999` from the integer
-  table. Writing an unmodified frame borrows the stored atoms instead of
+  table. Signed zero stays `-0.0`, the spelling ryu uses. Writing an unmodified frame borrows the stored atoms instead of
   rebuilding them through `add_atom`, which boxed a coordinate triple per
   atom. A million-atom chemfiles lattice was several times slower than the
   column writer of the same numbers.
