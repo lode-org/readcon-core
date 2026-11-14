@@ -3046,6 +3046,31 @@ impl Unpublished {
 
     fn commit(mut self, dest: &Path) -> io::Result<()> {
         if let Some(scratch) = self.scratch.take() {
+            // Measurement only. The default publish is the single rename
+            // below. Two renames leave a window where `dest` has no name;
+            // the previous file is the aside name until the new file is in
+            // place. The unlink of that aside name runs after the publish
+            // returns, so a crash before it leaves the previous file there.
+            if std::env::var_os("READCON_DEFER_UNLINK").is_some() {
+                let aside = dest.with_extension("aside");
+                if dest.exists() {
+                    std::fs::rename(dest, &aside)?;
+                }
+                return match std::fs::rename(&scratch, dest) {
+                    Ok(()) => {
+                        self.committed = true;
+                        std::thread::spawn(move || {
+                            let _ = std::fs::remove_file(aside);
+                        });
+                        Ok(())
+                    }
+                    Err(err) => {
+                        let _ = std::fs::rename(&aside, dest);
+                        let _ = std::fs::remove_file(&scratch);
+                        Err(err)
+                    }
+                };
+            }
             match std::fs::rename(&scratch, dest) {
                 Ok(()) => {
                     self.committed = true;

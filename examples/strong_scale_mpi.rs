@@ -12,7 +12,8 @@
 use mpi::traits::*;
 use readcon_core::distrib::Comm;
 use readcon_core::distrib_read::{
-    ReadMode, frame_coord_span, parse_coord_lines, rank_line_range, read_block,
+    ReadMode, frame_coord_span, parse_coord_lines, rank_line_range, rank_line_range_share,
+    read_block,
 };
 use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
@@ -67,6 +68,20 @@ fn write_rank(comm: &Comm, out: &std::path::Path, body: &[u8]) {
     maybe_sync(comm, out);
 }
 
+fn line_range(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+    rank: usize,
+    size: usize,
+) -> std::ops::Range<usize> {
+    match std::env::var("READCON_RANK0_SHARE").ok().as_deref() {
+        Some("0") => rank_line_range_share(bytes, start, end, rank, size, 0, 4),
+        Some("0.25") => rank_line_range_share(bytes, start, end, rank, size, 1, 4),
+        _ => rank_line_range(bytes, start, end, rank, size),
+    }
+}
+
 fn maybe_sync(comm: &Comm, out: &std::path::Path) {
     if std::env::var_os("READCON_MPI_SYNC").is_some() && comm.rank() == 0 {
         if let Ok(file) = std::fs::File::open(out) {
@@ -106,7 +121,7 @@ fn main() {
     let split = held.n_total == 1 && comm.size() > 1;
     let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
-        let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
+        let range = line_range(&file_bytes, start, end, comm.rank(), comm.size());
         let symbol = component_symbol(&file_bytes);
         let rows = atoms_from_lines(&file_bytes[range], &symbol);
         // The one-rank path writes this frame with `write_frame_bound`,
@@ -122,8 +137,9 @@ fn main() {
     } else {
         None
     };
+    let floor = op == "floor-fresh" || op == "floor-replace";
     world.barrier();
-    if op == "write" {
+    if op == "write" || floor {
         if let Some((header, rows, _, _)) = &prepared {
             let mut body = header.clone();
             body.extend(
@@ -150,11 +166,42 @@ fn main() {
         let _ = read_block(&comm, path, mode, Some(1)).expect("warmup read");
     }
     world.barrier();
+    // The floor copies the file the warmup write just published. The read
+    // of that file is outside the clock, the same way atom preparation is
+    // outside the write clock. Fresh unlinks the destination before the
+    // clock. Replace starts with a same-sized file already at the name.
+    let payload = if floor && comm.rank() == 0 {
+        std::fs::read(out).expect("floor bytes")
+    } else {
+        Vec::new()
+    };
+    let fresh_path = out.with_extension("fresh");
+    let replace_path = out.with_extension("replace");
+    if op == "floor-replace" && comm.rank() == 0 {
+        std::fs::write(&replace_path, &payload).expect("seed replace");
+    }
     let mut samples = Vec::with_capacity(repeats);
     for _ in 0..repeats {
+        if op == "floor-fresh" && comm.rank() == 0 {
+            let _ = std::fs::remove_file(&fresh_path);
+        }
         world.barrier();
         let started = Instant::now();
-        if op == "write" {
+        if op == "floor-fresh" || op == "floor-replace" {
+            if comm.rank() == 0 {
+                if op == "floor-fresh" {
+                    let mut file = std::fs::File::create(&fresh_path).expect("fresh");
+                    std::io::Write::write_all(&mut file, &payload).expect("fresh bytes");
+                } else {
+                    let tmp = replace_path.with_extension("tmp");
+                    {
+                        let mut file = std::fs::File::create(&tmp).expect("replace tmp");
+                        std::io::Write::write_all(&mut file, &payload).expect("replace bytes");
+                    }
+                    std::fs::rename(&tmp, &replace_path).expect("replace");
+                }
+            }
+        } else if op == "write" {
             if let Some((header, rows, _, _)) = &prepared {
                 let mut body = header.clone();
                 body.extend(
@@ -176,7 +223,7 @@ fn main() {
                 maybe_sync(&comm, out);
             }
         } else if let Some((_, _, start, end)) = &prepared {
-            let range = rank_line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
+            let range = line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
             let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
             std::hint::black_box(coords.len());
         } else {

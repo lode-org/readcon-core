@@ -998,6 +998,40 @@ pub fn rank_line_range(
     cuts[rank]..cuts[rank + 1]
 }
 
+/// [`rank_line_range`] with rank 0 taking `rank0_numer/rank0_denom` of the span.
+///
+/// The cut snaps to a newline. The other ranks split what remains, in order,
+/// so concatenating the slices is still `[start, end)`. `numer >= denom` is
+/// the equal split. `numer == 0` gives rank 0 no lines. Used by the ranked
+/// write harness; the default call is [`rank_line_range`].
+pub fn rank_line_range_share(
+    bytes: &[u8],
+    start: usize,
+    end: usize,
+    rank: usize,
+    size: usize,
+    rank0_numer: usize,
+    rank0_denom: usize,
+) -> std::ops::Range<usize> {
+    if size <= 1 || rank0_denom == 0 || rank0_numer >= rank0_denom {
+        return rank_line_range(bytes, start, end, rank, size);
+    }
+    let mut cut = start + (end - start) * rank0_numer / rank0_denom;
+    if cut > start && cut < end && bytes[cut - 1] != b'\n' {
+        while cut < end && bytes[cut] != b'\n' {
+            cut += 1;
+        }
+        if cut < end {
+            cut += 1;
+        }
+    }
+    let cut = cut.min(end);
+    if rank == 0 {
+        return start..cut;
+    }
+    rank_line_range(bytes, cut, end, rank - 1, size - 1)
+}
+
 /// Parse `x y z` from each non-empty line. The returned buffer is three
 /// floats per line, in file order.
 /// Atoms whose coordinates alias `coords`.
@@ -1136,6 +1170,27 @@ mod atom_range_tests {
         assert_eq!(coords.len(), 15);
         assert_eq!(coords[0], 0.5);
         assert_eq!(coords[12], 4.5);
+    }
+
+    #[test]
+    fn a_smaller_rank0_share_still_covers_every_line() {
+        let mut text = String::from(
+            "grid\n{\"con_spec_version\":2}\n1 1 1\n90 90 90\n0 0\n0 0\n1\n8\n1.0\nH\nCoordinates of Component 1\n",
+        );
+        for index in 0..8 {
+            text.push_str(&format!("{index}.5 0 1 0 {index}\n"));
+        }
+        let bytes = text.as_bytes();
+        let (start, end) = frame_coord_span(bytes).unwrap();
+        for (numer, denom) in [(0, 4), (1, 4), (1, 1)] {
+            let mut cursor = start;
+            for rank in 0..4 {
+                let range = super::rank_line_range_share(bytes, start, end, rank, 4, numer, denom);
+                assert_eq!(range.start, cursor, "share {numer}/{denom} rank {rank}");
+                cursor = range.end;
+            }
+            assert_eq!(cursor, end, "share {numer}/{denom}");
+        }
     }
 
     #[test]
