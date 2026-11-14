@@ -3873,11 +3873,12 @@ fn write_con(
                 }
                 let members = compression_members
                     .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                // An explicit count is the worker count. The default keeps
-                // the wide member split and caps deflate at one thread per
-                // logical CPU.
+                // `n_threads` formats the text. One deflate thread on every
+                // member of a 45 MB frame is the slow gzip path (about 0.37 s
+                // of encode). Members stay independent, so deflate uses one
+                // worker per core unless the caller asked for two or more.
                 let threads = n_threads
-                    .filter(|count| *count >= 1)
+                    .filter(|count| *count >= 2)
                     .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
                 crate::compression::write_gzip_members_limited(
                     Path::new(path),
@@ -3922,7 +3923,7 @@ fn write_con(
                     let members = compression_members
                         .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
                     let threads = n_threads
-                        .filter(|count| *count >= 1)
+                        .filter(|count| *count >= 2)
                         .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
                     crate::compression::write_zstd_members_limited(
                         Path::new(path),
