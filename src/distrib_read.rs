@@ -998,11 +998,11 @@ pub fn rank_line_range(
     cuts[rank]..cuts[rank + 1]
 }
 
-/// [`rank_line_range`] with rank 0 taking `rank0_numer/rank0_denom` of the span.
+/// [`rank_line_range`] with rank 0 taking `rank0_num/rank0_den` of the span.
 ///
 /// The cut snaps to a newline. The other ranks split what remains, in order,
-/// so concatenating the slices is still `[start, end)`. `numer >= denom` is
-/// the equal split. `numer == 0` gives rank 0 no lines. Used by the ranked
+/// so concatenating the slices is still `[start, end)`. `num >= den` is
+/// the equal split. `num == 0` gives rank 0 no lines. Used by the ranked
 /// write harness; the default call is [`rank_line_range`].
 pub fn rank_line_range_share(
     bytes: &[u8],
@@ -1010,13 +1010,13 @@ pub fn rank_line_range_share(
     end: usize,
     rank: usize,
     size: usize,
-    rank0_numer: usize,
-    rank0_denom: usize,
+    rank0_num: usize,
+    rank0_den: usize,
 ) -> std::ops::Range<usize> {
-    if size <= 1 || rank0_denom == 0 || rank0_numer >= rank0_denom {
+    if size <= 1 || rank0_den == 0 || rank0_num >= rank0_den {
         return rank_line_range(bytes, start, end, rank, size);
     }
-    let mut cut = start + (end - start) * rank0_numer / rank0_denom;
+    let mut cut = start + (end - start) * rank0_num / rank0_den;
     if cut > start && cut < end && bytes[cut - 1] != b'\n' {
         while cut < end && bytes[cut] != b'\n' {
             cut += 1;
@@ -1182,14 +1182,14 @@ mod atom_range_tests {
         }
         let bytes = text.as_bytes();
         let (start, end) = frame_coord_span(bytes).unwrap();
-        for (numer, denom) in [(0, 4), (1, 4), (1, 1)] {
+        for (num, den) in [(0, 4), (1, 4), (1, 1)] {
             let mut cursor = start;
             for rank in 0..4 {
-                let range = super::rank_line_range_share(bytes, start, end, rank, 4, numer, denom);
-                assert_eq!(range.start, cursor, "share {numer}/{denom} rank {rank}");
+                let range = super::rank_line_range_share(bytes, start, end, rank, 4, num, den);
+                assert_eq!(range.start, cursor, "share {num}/{den} rank {rank}");
                 cursor = range.end;
             }
-            assert_eq!(cursor, end, "share {numer}/{denom}");
+            assert_eq!(cursor, end, "share {num}/{den}");
         }
     }
 
