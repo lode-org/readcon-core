@@ -85,6 +85,66 @@ def test_named_commits_and_tags_exist() -> None:
     assert not missing, missing
 
 
+def _external_pin(lines: list[str], digest: str) -> bool:
+    """A 40-digit pin of another project, not a commit of this repository."""
+    markers = (
+        "gitlab.com",
+        "github.com",
+        "githubusercontent.com",
+        "lode-org/readcon-db",
+        "EON_COMMIT",
+        "READCON_DB_REV",
+    )
+    for index, line in enumerate(lines):
+        if digest not in line:
+            continue
+        window = "\n".join(lines[max(0, index - 2) : index + 3])
+        if any(marker in window for marker in markers):
+            return True
+    return False
+
+
+def _paper_sources() -> list[tuple[Path, str]]:
+    root = ROOT / "paper" / "cpc"
+    listings = root / "evidence" / "listings"
+    found: list[tuple[Path, str]] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        if path.suffix in {".md", ".py", ".tex"} or listings in path.parents:
+            found.append((path, path.read_text(encoding="utf-8")))
+    return found
+
+
+def test_unpublished_identity_is_absent() -> None:
+    for path, text in _paper_sources():
+        assert "0.17.4" not in text, path
+        assert "b65aa63d" not in text, path
+
+
+def test_paper_sources_name_real_tags_and_commits() -> None:
+    if not _tags():
+        pytest.skip("this clone has no release tags")
+    missing: list[str] = []
+    full = re.compile(r"(?<![0-9A-Za-z])[0-9a-f]{40}(?![0-9A-Za-z])")
+    for path, text in _paper_sources():
+        rel = path.relative_to(ROOT)
+        for version in TAG.findall(text):
+            if (
+                _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode
+                != 0
+            ):
+                missing.append(f"{rel}: v{version}")
+        lines = text.splitlines()
+        for value in full.findall(text):
+            if _git("cat-file", "-e", f"{value}^{{commit}}").returncode == 0:
+                continue
+            if _external_pin(lines, value):
+                continue
+            missing.append(f"{rel}: {value}")
+    assert not missing, missing
+
+
 def test_shipped_spec_blob_is_this_tree() -> None:
     macros = _macros()
     blob = _git("hash-object", "docs/orgmode/spec.org")

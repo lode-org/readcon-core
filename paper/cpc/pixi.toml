@@ -73,7 +73,7 @@ cpc-eon = { cmd = "python evidence/e1_restart.py", description = "Rerun the eOn 
 cpc-restart-walls = { cmd = "python scripts/run_restart_walls.py", description = "Wall times and force-call counts of the resumed legs" }
 cpc-sizes = { cmd = "python scripts/file_sizes.py", description = "Rewrite the format-size files and the size table" }
 cpc-bench-payloads = { cmd = "python bench/make_payloads.py", description = "Write the timed files of the performance records" }
-cpc-bench-reads = { cmd = "python bench/reads.py", description = "Time every Python and C++ read of the 0.17.4 tables in interleaved rounds of fresh processes, into bench/results/r0174/reads.json" }
+cpc-bench-reads = { cmd = "python bench/reads.py", description = "Time every Python and C++ read of the 0.17.3 tables in interleaved rounds of fresh processes, into bench/results/r0174/reads.json" }
 cpc-bench-memray = { cmd = "python bench/memray_peaks.py", description = "Peak heap of each timed cell, in interleaved rounds of fresh processes" }
 cpc-bench-cpp = { cmd = "python bench/cpp_reads.py", description = "Build the C++ readers of the timed cells and check one run of each against payloads.json" }
 cpc-bench-cachegrind = { cmd = "python bench/cachegrind.py", description = "Instruction counts of the readcon-core harness and of chemfiles C++, into bench/results/r0174/cachegrind" }

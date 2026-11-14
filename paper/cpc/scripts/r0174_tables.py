@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the readcon-core 0.17.4 performance tables and macros from the timing, memray and Cachegrind records.
+"""Write the readcon-core 0.17.3 performance tables and macros from the timing, memray and Cachegrind records.
 
 Inputs (``R0174``, default ``bench/results/r0174``):
 

@@ -27,7 +27,7 @@ masses, version, minor, declared and applied time unit and periodicity by
 equality.
 
 readcon runs in a child process per call, so a call that aborts the process is
-a crash on that file and the run goes on. readcon-core 0.17.4 puts no line
+a crash on that file and the run goes on. readcon-core 0.17.3 puts no line
 number in its Python exceptions, so its lines are not compared, and it warns
 of a units.time that it does not apply only when it converts the frame to
 ASE (ConFrame.to_ase()), so the child converts every frame that has velocities.

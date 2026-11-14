@@ -1,7 +1,7 @@
-"""The Python cells of the 0.17.4 performance records: one reader on one payload at one thread count.
+"""The Python cells of the 0.17.3 performance records: one reader on one payload at one thread count.
 
 ``RC_PAYLOADS`` is the directory ``make_payloads.py`` wrote.  The peers are the
-readers of ``bench_child.py``; the readcon readers below use the 0.17.4 frame
+readers of ``bench_child.py``; the readcon readers below use the 0.17.3 frame
 API, which returns masks and symbols through ``ConFrame.atoms``.  A one-thread
 cell runs on core 0 and an eight-thread cell on every core.
 """

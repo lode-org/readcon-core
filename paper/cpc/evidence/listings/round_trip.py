@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write one CON frame with the Python API of readcon 0.17.4.
+"""Read and write one CON frame with the Python API of readcon 0.23.3.
 
 The default writer is the round-trip printer. precision=6 is the
 fixed-decimal writer.

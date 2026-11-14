@@ -1,10 +1,8 @@
-"""Provenance of the readcon-core 0.17.4 measurements: commit, library digest, module, host, tools.
+"""Provenance of the readcon-core 0.17.3 measurements: commit, library digest, module, host, tools.
 
-The measured library is the tree of the commit that ``provenance.source_identity``
-finds: tag v0.17.4 once it holds these library files, and until then the
-release candidate at HEAD, which descends from commit ``BASE``, the head of
-pull request 80 to the main branch after the published release named in Cargo.toml, and
-adds the version bump and the changes that CHANGELOG.md lists under 0.17.4.
+The measured library is the tree of commit ``5e1430ddf6da5d2b0d4652f47dce889e7895598f``
+(readcon-core 0.17.3, not a release tag). It descends from commit ``BASE``, the head of
+pull request 80 to the main branch after the published release 0.17.3 (tag v0.17.3).
 ``build()`` records that commit, the number of commits after ``BASE``, the
 library digest of the working tree and of the commit's git objects, which must
 agree, and the imported module, which must be newer than every library file.

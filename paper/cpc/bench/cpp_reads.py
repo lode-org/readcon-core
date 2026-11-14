@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build and check the C++ readers of readcon-core 0.17.4 and chemfiles for the timing campaign.
+"""Build and check the C++ readers of readcon-core 0.17.3 and chemfiles for the timing campaign.
 
-``bench/reads.py`` times the C++ cells of the 0.17.4 tables in the same
+``bench/reads.py`` times the C++ cells of the 0.17.3 tables in the same
 schedule as the Python cells; this script builds their two programs with the
 C++ compiler of the Python environment that runs it (``sys.prefix``, the
 ``default`` environment of pixi.toml):
