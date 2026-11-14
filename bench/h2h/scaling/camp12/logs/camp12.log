@@ -1,0 +1,551 @@
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe mkvel /agent/repos/readcon-core/resources/test/cuh2.con /dev/shm/camp12-one.convel
+mkvel bytes=13365
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-1.con 1
+warmup 0.110355104
+write 0.108401606
+kind=write workers=1 median=0.108402 samples=0.108402
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-1.con 1
+warmup 0.186486775
+write 0.181412114
+kind=write workers=1 median=0.181412 samples=0.181412
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-p-1.con 1
+warmup 0.026623082
+write 0.026383858
+kind=write workers=1 median=0.026384 samples=0.026384
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-p-1.con 1
+warmup 0.044201782
+write 0.044704505
+kind=write workers=1 median=0.044705 samples=0.044705
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-1.con 1
+warmup 0.105424236
+write 0.107299654
+write 0.103563438
+write 0.100518193
+write 0.100162958
+write 0.099435086
+write 0.099168475
+write 0.099553712
+write 0.099402888
+write 0.100490909
+write 0.101225417
+write 0.102607893
+write 0.101434367
+kind=write workers=1 median=0.100505 samples=0.107300,0.103563,0.100518,0.100163,0.099435,0.099168,0.099554,0.099403,0.100491,0.101225,0.102608,0.101434
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-2.con 2
+warmup 0.114241145
+write 0.104038053
+write 0.102156542
+write 0.102564930
+write 0.102903484
+write 0.102176844
+write 0.103533216
+write 0.101796096
+write 0.102084273
+write 0.102880651
+write 0.102072754
+write 0.103203920
+write 0.101668607
+kind=write workers=2 median=0.102371 samples=0.104038,0.102157,0.102565,0.102903,0.102177,0.103533,0.101796,0.102084,0.102881,0.102073,0.103204,0.101669
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-4.con 4
+warmup 0.120859028
+write 0.118895010
+write 0.117821136
+write 0.117376743
+write 0.116873696
+write 0.117178604
+write 0.117471185
+write 0.117567573
+write 0.117196719
+write 0.117468357
+write 0.118504772
+write 0.116926736
+write 0.116879357
+kind=write workers=4 median=0.117423 samples=0.118895,0.117821,0.117377,0.116874,0.117179,0.117471,0.117568,0.117197,0.117468,0.118505,0.116927,0.116879
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-8.con 8
+warmup 0.209696076
+write 0.145929733
+write 0.145234397
+write 0.143659324
+write 0.143874096
+write 0.142086462
+write 0.143910807
+write 0.142544584
+write 0.142524721
+write 0.144445648
+write 0.143739560
+write 0.145367428
+write 0.143833089
+kind=write workers=8 median=0.143854 samples=0.145930,0.145234,0.143659,0.143874,0.142086,0.143911,0.142545,0.142525,0.144446,0.143740,0.145367,0.143833
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 1 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-1.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-con-write-1.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 1,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.036780124, 0.034250051, 0.034258036, 0.034046978, 0.034041526, 0.033982345, 0.033965806, 0.034158403, 0.034280481, 0.033962666, 0.034040762, 0.034056373],
+  "warmup_s": 0.038655151,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-con-1.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 2 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-2.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-con-write-2.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 2,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.038614714, 0.037306995, 0.036854744, 0.036906867, 0.036671714, 0.037106537, 0.036504566, 0.036648570, 0.036764741, 0.036690794, 0.036788487, 0.036603579],
+  "warmup_s": 0.040276885,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-con-2.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 4 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-4.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-con-write-4.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 4,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.040724841, 0.038592827, 0.038615649, 0.038219371, 0.038360945, 0.038607764, 0.039985485, 0.038469102, 0.037872024, 0.038420250, 0.038068438, 0.038056222],
+  "warmup_s": 0.041446476,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-con-4.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 8 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-8.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-con-write-8.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.050946222, 0.051141451, 0.049539035, 0.049261116, 0.049923473, 0.049369280, 0.049313253, 0.049593034, 0.049378445, 0.049461272, 0.048453423, 0.048432807],
+  "warmup_s": 0.053816173,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-con-8.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-1.con 1
+warmup 0.176882845
+write 0.180033223
+write 0.180668384
+write 0.176596353
+write 0.176237313
+write 0.175107928
+write 0.174598719
+write 0.174879544
+write 0.174683052
+write 0.175464067
+write 0.175643297
+write 0.175449289
+write 0.175161954
+kind=write workers=1 median=0.175457 samples=0.180033,0.180668,0.176596,0.176237,0.175108,0.174599,0.174880,0.174683,0.175464,0.175643,0.175449,0.175162
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-2.con 2
+warmup 0.182076034
+write 0.176645793
+write 0.176237935
+write 0.182659226
+write 0.176941955
+write 0.177568547
+write 0.181724278
+write 0.182371055
+write 0.176197973
+write 0.175615181
+write 0.175063973
+write 0.175079274
+write 0.175974932
+kind=write workers=2 median=0.176442 samples=0.176646,0.176238,0.182659,0.176942,0.177569,0.181724,0.182371,0.176198,0.175615,0.175064,0.175079,0.175975
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-4.con 4
+warmup 0.192287100
+write 0.205766772
+write 0.201713366
+write 0.200836176
+write 0.204428442
+write 0.200212779
+write 0.200083248
+write 0.202912150
+write 0.201169887
+write 0.200617811
+write 0.199476034
+write 0.199500028
+write 0.204104925
+kind=write workers=4 median=0.201003 samples=0.205767,0.201713,0.200836,0.204428,0.200213,0.200083,0.202912,0.201170,0.200618,0.199476,0.199500,0.204105
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-8.con 8
+warmup 0.332764761
+write 0.254033275
+write 0.250181619
+write 0.248213372
+write 0.248206360
+write 0.249313321
+write 0.248773916
+write 0.251402077
+write 0.251906980
+write 0.250008293
+write 0.244069707
+write 0.251817625
+write 0.250685612
+kind=write workers=8 median=0.250095 samples=0.254033,0.250182,0.248213,0.248206,0.249313,0.248774,0.251402,0.251907,0.250008,0.244070,0.251818,0.250686
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 1 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-1.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-convel-write-1.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 1,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.061999838, 0.058944235, 0.058501785, 0.058701527, 0.058214435, 0.058309458, 0.058614745, 0.058639408, 0.058571716, 0.058602515, 0.058404663, 0.058024776],
+  "warmup_s": 0.069250401,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-convel-1.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 2 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-2.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-convel-write-2.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 2,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.066171484, 0.067838443, 0.064223416, 0.063379489, 0.062450485, 0.062129100, 0.062659806, 0.062453580, 0.063274450, 0.062739121, 0.062970658, 0.062025813],
+  "warmup_s": 0.071709529,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-convel-2.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 4 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-4.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-convel-write-4.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 4,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.069084897, 0.068407904, 0.068422707, 0.066916676, 0.066287800, 0.066706439, 0.066836998, 0.066893840, 0.066963503, 0.068196836, 0.066590188, 0.067221870],
+  "warmup_s": 0.074916433,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-convel-4.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 8 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-8.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-tmpfs-ranks-convel-write-8.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.085874137, 0.086018625, 0.085179360, 0.084822610, 0.084208219, 0.084523717, 0.084981236, 0.086632188, 0.086678478, 0.088924181, 0.088341472, 0.086338463],
+  "warmup_s": 0.090709022,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-convel-8.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-1.con 1
+warmup 0.110734386
+write 0.115044240
+write 0.113985329
+write 0.108504694
+write 0.106793272
+write 0.106830788
+write 0.105769864
+write 0.106338694
+write 0.107020930
+write 0.109355743
+write 0.106251051
+write 0.106295136
+write 0.106356506
+kind=write workers=1 median=0.106812 samples=0.115044,0.113985,0.108505,0.106793,0.106831,0.105770,0.106339,0.107021,0.109356,0.106251,0.106295,0.106357
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-2.con 2
+warmup 0.103762659
+write 0.108715902
+write 0.108107079
+write 0.107466908
+write 0.106991540
+write 0.106618887
+write 0.106391385
+write 0.106615677
+write 0.106226438
+write 0.106204116
+write 0.106069017
+write 0.105960454
+write 0.106345863
+kind=write workers=2 median=0.106504 samples=0.108716,0.108107,0.107467,0.106992,0.106619,0.106391,0.106616,0.106226,0.106204,0.106069,0.105960,0.106346
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-4.con 4
+warmup 0.113982962
+write 0.129936231
+write 0.128141149
+write 0.127292757
+write 0.126725112
+write 0.127062590
+write 0.130103278
+write 0.126286680
+write 0.127080906
+write 0.127598557
+write 0.127027060
+write 0.125666543
+write 0.125959142
+kind=write workers=4 median=0.127072 samples=0.129936,0.128141,0.127293,0.126725,0.127063,0.130103,0.126287,0.127081,0.127599,0.127027,0.125667,0.125959
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-con-t-8.con 8
+warmup 0.251818499
+write 0.206569051
+write 0.209576674
+write 0.207073036
+write 0.208399429
+write 0.204135258
+write 0.207459025
+write 0.203242941
+write 0.210995158
+write 0.202540809
+write 0.209432244
+write 0.201857194
+write 0.208489474
+kind=write workers=8 median=0.207266 samples=0.206569,0.209577,0.207073,0.208399,0.204135,0.207459,0.203243,0.210995,0.202541,0.209432,0.201857,0.208489
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 1 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-1.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-1.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 1,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.035931913, 0.033156852, 0.033028993, 0.032639727, 0.032922675, 0.032945062, 0.033008172, 0.032704648, 0.033077232, 0.032610772, 0.032769458, 0.032599742],
+  "warmup_s": 0.037819881,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-con-1.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 2 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-2.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-2.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 2,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.039867462, 0.039124180, 0.052088295, 0.052096670, 0.039423092, 0.038551414, 0.038578388, 0.038447734, 0.039071825, 0.038857363, 0.038997101, 0.038578345],
+  "warmup_s": 0.041675511,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-con-2.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 4 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-4.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-4.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 4,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.052205927, 0.052147467, 0.049263644, 0.049111493, 0.049542351, 0.048815027, 0.050430213, 0.049068829, 0.049442096, 0.049151168, 0.050322951, 0.048238082],
+  "warmup_s": 0.052128358,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-con-4.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 8 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-con-p-8.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-8.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.072949602, 0.070428515, 0.070904577, 0.071514885, 0.073877176, 0.070708991, 0.071928681, 0.071671819, 0.069317394, 0.069031067, 0.069110572, 0.069166829],
+  "warmup_s": 0.078639349,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-con-8.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-1.con 1
+warmup 0.185597422
+write 0.192008664
+write 0.190613098
+write 0.189821980
+write 0.188205684
+write 0.187454825
+write 0.187053146
+write 0.186395171
+write 0.185799365
+write 0.186742788
+write 0.184713581
+write 0.185108709
+write 0.185722301
+kind=write workers=1 median=0.186898 samples=0.192009,0.190613,0.189822,0.188206,0.187455,0.187053,0.186395,0.185799,0.186743,0.184714,0.185109,0.185722
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-2.con 2
+warmup 0.186744279
+write 0.193009938
+write 0.186150802
+write 0.188245141
+write 0.185098799
+write 0.183413609
+write 0.187855378
+write 0.186526525
+write 0.184722016
+write 0.187436461
+write 0.183992159
+write 0.183489161
+write 0.185977633
+kind=write workers=2 median=0.186064 samples=0.193010,0.186151,0.188245,0.185099,0.183414,0.187855,0.186527,0.184722,0.187436,0.183992,0.183489,0.185978
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-4.con 4
+warmup 0.199562656
+write 0.222413382
+write 0.220840039
+write 0.218839306
+write 0.217429739
+write 0.217220345
+write 0.217447800
+write 0.218433981
+write 0.218471818
+write 0.218261103
+write 0.217437192
+write 0.218992695
+write 0.218159666
+kind=write workers=4 median=0.218348 samples=0.222413,0.220840,0.218839,0.217430,0.217220,0.217448,0.218434,0.218472,0.218261,0.217437,0.218993,0.218160
+exit 0
+$ taskset -c 0-7 /agent/repos/readcon-core/target/release/examples/scale_probe write /dev/shm/camp12-convel-t-8.con 8
+warmup 0.416060729
+write 0.352519789
+write 0.366447066
+write 0.347113056
+write 0.363869394
+write 0.346015812
+write 0.358509187
+write 0.344287646
+write 0.363118351
+write 0.344186565
+write 0.368062857
+write 0.343777374
+write 0.349391424
+kind=write workers=8 median=0.350956 samples=0.352520,0.366447,0.347113,0.363869,0.346016,0.358509,0.344288,0.363118,0.344187,0.368063,0.343777,0.349391
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 1 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-1.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-1.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 1,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.060043804, 0.055573078, 0.055697145, 0.055919344, 0.055289890, 0.055339964, 0.055339935, 0.055070175, 0.054906333, 0.055733027, 0.055245553, 0.054869713],
+  "warmup_s": 0.065568079,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-convel-1.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 2 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-2.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-2.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 2,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.067691472, 0.066162936, 0.065571963, 0.066824737, 0.066374991, 0.066442246, 0.075938747, 0.067083194, 0.066089731, 0.066123582, 0.066050057, 0.065907247],
+  "warmup_s": 0.073159164,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-convel-2.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 4 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-4.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-4.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 4,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.088110079, 0.084072931, 0.084742008, 0.083943546, 0.085344132, 0.083674325, 0.084622989, 0.083704297, 0.085291970, 0.083863810, 0.090541644, 0.084337003],
+  "warmup_s": 0.092168203,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-convel-4.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0
+$ taskset -c 0-7 mpirun --bind-to core -n 8 /agent/repos/readcon-core/target/release/examples/weak_scale_mpi /dev/shm/camp12-convel-p-8.con /agent/repos/readcon-core/bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-8.json 12
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.121998680, 0.121304187, 0.119413393, 0.118629603, 0.118960961, 0.120007651, 0.126066206, 0.120877060, 0.121469899, 0.121746382, 0.120275763, 0.121445590],
+  "warmup_s": 0.127922345,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-convel-8.con",
+  "host": "Intel Xeon Processor"
+}
+exit 0

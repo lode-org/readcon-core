@@ -1,0 +1,60 @@
+{
+  "before": [
+    {
+      "kind": "con",
+      "frames": 100000,
+      "bytes": 792600000,
+      "seconds": 1.619585,
+      "GBps": 0.48938462630859136,
+      "line": "kind=con frames=100000 bytes=792600000 seconds=1.619585 GBps=0.489",
+      "when": "before"
+    },
+    {
+      "kind": "con",
+      "frames": 1000000,
+      "bytes": 7926000000,
+      "seconds": 15.854795,
+      "GBps": 0.49991185631854596,
+      "line": "kind=con frames=1000000 bytes=7926000000 seconds=15.854795 GBps=0.500",
+      "when": "before"
+    }
+  ],
+  "after": [
+    {
+      "kind": "con",
+      "frames": 100000,
+      "bytes": 792600000,
+      "seconds": 1.04452,
+      "GBps": 0.758817447248497,
+      "line": "kind=con frames=100000 bytes=792600000 seconds=1.044520 GBps=0.759",
+      "when": "after"
+    },
+    {
+      "kind": "con",
+      "frames": 1000000,
+      "bytes": 7926000000,
+      "seconds": 10.46753,
+      "GBps": 0.7571986896622221,
+      "line": "kind=con frames=1000000 bytes=7926000000 seconds=10.467530 GBps=0.757",
+      "when": "after"
+    },
+    {
+      "kind": "convel",
+      "frames": 100000,
+      "bytes": 1336500000,
+      "seconds": 1.838185,
+      "GBps": 0.7270758927964269,
+      "line": "kind=convel frames=100000 bytes=1336500000 seconds=1.838185 GBps=0.727",
+      "when": "after"
+    },
+    {
+      "kind": "convel",
+      "frames": 1000000,
+      "bytes": 13365000000,
+      "seconds": 18.457193,
+      "GBps": 0.7241079399234759,
+      "line": "kind=convel frames=1000000 bytes=13365000000 seconds=18.457193 GBps=0.724",
+      "when": "after"
+    }
+  ]
+}
