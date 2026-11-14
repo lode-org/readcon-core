@@ -6,17 +6,42 @@ NetCDFTrajectory are included. H5MD is attempted if ASE can write it.
 
 Requires: readcon (chemfiles for XYZ ingress), ase; netCDF4 for netcdftrajectory.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import subprocess
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from cpu_model import cpu_model, platform_label
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+release = _BENCH.release
+
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -70,74 +95,82 @@ def main() -> None:
     fr0 = list(readcon.iter_con(str(args.fixture)))[0]
     atoms0 = fr0.to_ase()
     atoms_list = [atoms0.copy() for _ in range(args.frames)]
-    work = Path(tempfile.mkdtemp(prefix="traj_vs_con_"))
-    xyz = work / "traj.xyz"
-    traj = work / "traj.traj"
-    netcdf = work / "traj.nc"
-    con = work / "traj.con"
-    ase_write(str(xyz), atoms_list, format="xyz")
-    with Trajectory(str(traj), "w") as t:
-        for a in atoms_list:
-            t.write(a)
-    ase_write(str(netcdf), atoms_list, format="netcdftrajectory")
-    con.write_text(args.fixture.read_text() * args.frames)
+    work = bench_dir("traj-vs-con")
+    try:
+        xyz = work / "traj.xyz"
+        traj = work / "traj.traj"
+        netcdf = work / "traj.nc"
+        con = work / "traj.con"
+        ase_write(str(xyz), atoms_list, format="xyz")
+        with Trajectory(str(traj), "w") as t:
+            for a in atoms_list:
+                t.write(a)
+        ase_write(str(netcdf), atoms_list, format="netcdftrajectory")
+        con.write_text(args.fixture.read_text() * args.frames)
 
-    sizes = {p.name: p.stat().st_size for p in work.iterdir() if p.is_file()}
+        sizes = {p.name: p.stat().st_size for p in work.iterdir() if p.is_file()}
 
-    def ase_xyz() -> int:
-        return len(ase_read(str(xyz), index=":", format="xyz"))
+        def ase_xyz() -> int:
+            return len(ase_read(str(xyz), index=":", format="xyz"))
 
-    def ase_traj() -> int:
-        return len(ase_read(str(traj), index=":"))
+        def ase_traj() -> int:
+            return len(ase_read(str(traj), index=":"))
 
-    def ase_netcdf() -> int:
-        return len(ase_read(str(netcdf), index=":", format="netcdftrajectory"))
+        def ase_netcdf() -> int:
+            return len(ase_read(str(netcdf), index=":", format="netcdftrajectory"))
 
-    def cf_xyz() -> int:
-        return len(readcon.read_chemfiles(str(xyz)))
+        def cf_xyz() -> int:
+            return len(readcon.read_chemfiles(str(xyz)))
 
-    def native_con() -> int:
-        return len(readcon.read_con(str(con)))
+        def native_con() -> int:
+            return len(readcon.read_con(str(con)))
 
-    for fn in (ase_xyz, ase_traj, ase_netcdf, cf_xyz, native_con):
-        fn()
+        for fn in (ase_xyz, ase_traj, ase_netcdf, cf_xyz, native_con):
+            fn()
 
-    res = {
-        "protocol": (
-            "equal geometry multi-frame full load; ASE Trajectory (.traj), "
-            "NetCDFTrajectory, multi-frame XYZ vs readcon.read_chemfiles and readcon.read_con"
-        ),
-        "n_frames": args.frames,
-        "n_atoms": len(fr0),
-        "repeats": args.repeats,
-        "fixture": str(Path(args.fixture).resolve().relative_to(REPO) if Path(args.fixture).resolve().is_relative_to(REPO) else args.fixture),
-        "file_sizes_bytes": sizes,
-        "ase_xyz_median_ms": median_ms(ase_xyz, args.repeats),
-        "ase_traj_median_ms": median_ms(ase_traj, args.repeats),
-        "ase_netcdf_median_ms": median_ms(ase_netcdf, args.repeats),
-        "readcon_chemfiles_xyz_to_con_median_ms": median_ms(cf_xyz, args.repeats),
-        "readcon_con_median_ms": median_ms(native_con, args.repeats),
-        "note_h5md": "ASE format h5md not registered in this ASE build (UnknownFileTypeError)",
-    }
-    base = res["readcon_con_median_ms"]
-    for key in (
-        "ase_xyz_median_ms",
-        "ase_traj_median_ms",
-        "ase_netcdf_median_ms",
-        "readcon_chemfiles_xyz_to_con_median_ms",
-    ):
-        res[f"ratio_{key}_over_con"] = res[key] / base
-    res["ratio_ase_traj_over_chemfiles_to_con"] = (
-        res["ase_traj_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
-    )
-    res["ratio_ase_netcdf_over_chemfiles_to_con"] = (
-        res["ase_netcdf_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
-    )
-    _stamp(res)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(res, indent=2) + "\n")
-    print(json.dumps(res, indent=2))
-    print("wrote", args.out)
+        res = {
+            "protocol": (
+                "equal geometry multi-frame full load; ASE Trajectory (.traj), "
+                "NetCDFTrajectory, multi-frame XYZ vs readcon.read_chemfiles and readcon.read_con"
+            ),
+            "n_frames": args.frames,
+            "n_atoms": len(fr0),
+            "repeats": args.repeats,
+            "fixture": str(
+                Path(args.fixture).resolve().relative_to(REPO)
+                if Path(args.fixture).resolve().is_relative_to(REPO)
+                else args.fixture
+            ),
+            "file_sizes_bytes": sizes,
+            "ase_xyz_median_ms": median_ms(ase_xyz, args.repeats),
+            "ase_traj_median_ms": median_ms(ase_traj, args.repeats),
+            "ase_netcdf_median_ms": median_ms(ase_netcdf, args.repeats),
+            "readcon_chemfiles_xyz_to_con_median_ms": median_ms(cf_xyz, args.repeats),
+            "readcon_con_median_ms": median_ms(native_con, args.repeats),
+            "note_h5md": "ASE format h5md not registered in this ASE build (UnknownFileTypeError)",
+        }
+        base = res["readcon_con_median_ms"]
+        for key in (
+            "ase_xyz_median_ms",
+            "ase_traj_median_ms",
+            "ase_netcdf_median_ms",
+            "readcon_chemfiles_xyz_to_con_median_ms",
+        ):
+            res[f"ratio_{key}_over_con"] = res[key] / base
+        res["ratio_ase_traj_over_chemfiles_to_con"] = (
+            res["ase_traj_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
+        )
+        res["ratio_ase_netcdf_over_chemfiles_to_con"] = (
+            res["ase_netcdf_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
+        )
+        _stamp(res)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(res, indent=2) + "\n")
+        print(json.dumps(res, indent=2))
+        print("wrote", args.out)
+
+    finally:
+        release(work)
 
 
 if __name__ == "__main__":

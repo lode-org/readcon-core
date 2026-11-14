@@ -25,13 +25,36 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import make_arxiv as arxiv  # noqa: E402
 import make_em_flat as em  # noqa: E402
 import regen_paper  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 NAME = "main"
 TARBALL = "readcon-arxiv-v2.tar.gz"
@@ -268,7 +291,8 @@ def write_bbl(stage: Path, work: Path, texbin: Path, env: dict, report: dict) ->
 
 def check(tarball: Path, texbin: Path, work: Path, env: dict) -> tuple[dict, Path]:
     """Unpack into an empty directory, run pdflatex three times, and read the log."""
-    test = Path(tempfile.mkdtemp(prefix="arxiv-v2-test-", dir=work))
+    test = work / "pdflatex-test"
+    test.mkdir(parents=True, exist_ok=True)
     with tarfile.open(tarball) as tar:
         tar.extractall(test, filter="data")
     ver = subprocess.run(
@@ -330,7 +354,7 @@ def main() -> int:
     args = ap.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="cpc-arxiv-v2-"))
+    work = bench_dir("cpc-arxiv-v2")
     report: dict = {"rewrites": [], "unicode": []}
     # \today in the preprint footer is the SOURCE_DATE_EPOCH of regen_paper.py, the date of both PDFs.
     epoch = int(regen_paper.SOURCE_DATE_EPOCH)

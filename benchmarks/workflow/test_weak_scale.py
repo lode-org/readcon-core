@@ -4,9 +4,32 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import tempfile
 import unittest
 from pathlib import Path
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -134,7 +157,7 @@ class Report(unittest.TestCase):
             weak.table_filename("threads", summary["host"]),
             "weak_threads_Intel_Xeon_Processor.tex",
         )
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             path = Path(tmp) / weak.table_filename("threads", summary["host"])
             weak.write_table(path, summary)
             text = path.read_text(encoding="utf-8")
@@ -145,7 +168,7 @@ class Report(unittest.TestCase):
 
     def test_curve_lists_every_coordinate_and_the_ideal(self) -> None:
         summary = weak.summarise(_flat_curve())
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             path = Path(tmp) / "curve.tex"
             weak.write_curve(path, summary)
             text = path.read_text(encoding="utf-8")
@@ -154,7 +177,7 @@ class Report(unittest.TestCase):
             self.assertIn("dashed ideal", text)
 
     def test_stubs_have_no_times(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             directory = Path(tmp)
             weak.write_stubs(directory)
             for name in (
@@ -185,7 +208,7 @@ class Report(unittest.TestCase):
         except ImportError:
             self.skipTest("matplotlib is not installed")
         summary = weak.summarise(_flat_curve())
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             path = Path(tmp) / "curve.pdf"
             weak.write_plot(path, summary)
             self.assertGreater(path.stat().st_size, 1000)
@@ -294,7 +317,7 @@ class HostAndLaunch(unittest.TestCase):
         pr = json.loads((ROOT / "asv.conf.json").read_text(encoding="utf-8"))
         self.assertEqual(pr["benchmark_dir"], "benchmarks")
         self.assertFalse(list((ROOT / "benchmarks").glob("**/bench_threads.py")))
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             dest = Path(tmp) / "asv.weak.conf.json"
             weak.derive_asv_conf(ROOT / "asv.conf.json", dest)
             derived = json.loads(dest.read_text(encoding="utf-8"))
@@ -313,7 +336,7 @@ class HostAndLaunch(unittest.TestCase):
         over.append(host["physical_cores"] * 2)
         plan = weak.make_plan(host, over)
         self.assertFalse(plan["ladder_fits"])
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             directory = Path(tmp)
             host_path = directory / "host.json"
             plan_path = directory / "plan.json"

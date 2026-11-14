@@ -35,9 +35,32 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -68,7 +91,7 @@ def child(route: str) -> None:
     start = 0
     if fn is not None:
         start = rf.run(imgs, stop=rf.K)["step"]
-        with tempfile.TemporaryDirectory() as td:
+        with bench_scratch("scratch") as td:
             imgs = fn(rf.with_ids(imgs), Path(td))
     t0 = time.perf_counter()
     res = rf.run(imgs, start=start)

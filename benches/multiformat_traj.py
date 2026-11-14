@@ -12,18 +12,42 @@ Usage:
   python benches/multiformat_traj.py \\
     --fixtures tiny,cuh2 --ladder 50,100,200 --repeats 7 --out results.json
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import statistics
 import subprocess
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from cpu_model import cpu_model, platform_label
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -140,7 +164,9 @@ def run_one(
         write_xyz(con_path, plainxyz_path, n, "xyz")
 
         readers = {
-            "readcon_con": lambda p=con_path: len(list(readcon.read_all_frames(str(p)))),
+            "readcon_con": lambda p=con_path: len(
+                list(readcon.read_all_frames(str(p)))
+            ),
             "ase_extxyz": lambda p=extxyz_path: (
                 lambda o: len(o) if isinstance(o, list) else 1
             )(ase_read(str(p), index=":")),
@@ -167,6 +193,7 @@ def run_one(
 
             readers["chemfiles_xyz"] = _cf2
         if have_mda:
+
             def _mda(p=plainxyz_path):
                 import MDAnalysis as mda
 
@@ -217,9 +244,7 @@ def run_one(
         ]
         for peer in peer_keys:
             if peer in fps:
-                parts.append(
-                    f"{peer}={fps[peer]:.1f} fps ({ratios.get(peer, 0):.2f}x)"
-                )
+                parts.append(f"{peer}={fps[peer]:.1f} fps ({ratios.get(peer, 0):.2f}x)")
             elif f"{peer}_error" in row:
                 parts.append(f"{peer}=ERR")
         print("  ".join(parts), flush=True)
@@ -288,13 +313,15 @@ def main():
         raise SystemExit(f"need readcon+ase; have={have}")
 
     suite_rows = []
-    with tempfile.TemporaryDirectory() as td:
+    with bench_scratch("scratch") as td:
         work = Path(td)
         for key, path in fixtures:
             if not path.is_file():
                 raise SystemExit(f"missing fixture {path}")
             natoms = count_atoms_con(path)
-            ladder = ladder_large if natoms >= args.large_atom_threshold else ladder_small
+            ladder = (
+                ladder_large if natoms >= args.large_atom_threshold else ladder_small
+            )
             print(f"=== {key} natoms={natoms} ladder={ladder} ===", flush=True)
             block = run_one(path, key, ladder, args.repeats, work)
             suite_rows.append(block)
@@ -311,7 +338,9 @@ def main():
             ratios = r.get("ratios") or {}
             if not ratios:
                 ok = False
-                failures.append(f"{r.get('fixture')} N={r.get('n_frames')}: no peer ratios")
+                failures.append(
+                    f"{r.get('fixture')} N={r.get('n_frames')}: no peer ratios"
+                )
                 continue
             for peer, ratio in ratios.items():
                 need = (

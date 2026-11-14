@@ -37,7 +37,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -46,6 +45,30 @@ sys.path.insert(0, str(HERE))
 import interleave  # noqa: E402
 import portable  # noqa: E402
 import provenance  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 FRAMES = 10000
 STEPS = ("payloads", "python", "cpp")
@@ -149,7 +172,7 @@ def payloads() -> None:
     headtohead.ensure_peers(con, paths["coords"]["peers"], FRAMES)
 
     first = velocity_campaign(WORK)
-    with tempfile.TemporaryDirectory(prefix="h2h-rerun-", dir=WORK) as tmp:
+    with bench_scratch("scratch") as tmp:
         second = velocity_campaign(Path(tmp))
         rerun = {
             kind: filecmp.cmp(first[kind], second[kind], shallow=False)
@@ -320,7 +343,7 @@ def python() -> None:
                 for name in calls
             }
         )
-        with tempfile.TemporaryDirectory(prefix="h2h-memray-") as tmp:
+        with bench_scratch("scratch") as tmp:
             scripts = {}
             for name, body in memray_scripts(con, rc, peers, FRAMES, shape).items():
                 scripts[name] = Path(tmp) / f"{name}.py"
@@ -432,7 +455,7 @@ def cpp() -> None:
         .strip()
     )
     for campaign in CAMPAIGNS:
-        with tempfile.TemporaryDirectory(prefix="h2h-cpp-") as tmp:
+        with bench_scratch("scratch") as tmp:
             built, runs = {}, {}
             for name, opt, build_name in matrix.CELLS:
                 chem_build = CHEMFILES / build_name

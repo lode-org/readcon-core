@@ -21,8 +21,31 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -57,7 +80,7 @@ def child(reader: str, threads: int, out: str) -> None:
 
 def capture(reader: str, threads: int):
     def run() -> dict:
-        with tempfile.TemporaryDirectory() as tmp:
+        with bench_scratch("scratch") as tmp:
             proc = subprocess.run(
                 [
                     sys.executable,

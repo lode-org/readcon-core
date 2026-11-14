@@ -23,7 +23,6 @@ import json
 import os
 import platform
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -44,6 +43,30 @@ sys.path.insert(0, str(ROOT.parent / "scripts"))
 import provenance  # noqa: E402
 import restart_formats as rf  # noqa: E402
 from sinum import num  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 RESULTS = ROOT / "results"
 GENERATED = ROOT.parent / "src" / "figures" / "generated"
@@ -400,7 +423,7 @@ def prepare_pair(kind: str, reference, product_positions, bottom, adatom, masks)
     routes = dict(rf.ROUTES)
     reactant.set_constraint(correct_constraints(bottom, adatom))
     product.set_constraint(correct_constraints(bottom, adatom))
-    with tempfile.TemporaryDirectory() as td:
+    with bench_scratch("scratch") as td:
         loaded_r, loaded_p = routes[kind]([reactant, product], Path(td))
     return (
         loaded_r,

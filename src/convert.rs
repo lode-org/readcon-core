@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn convert_native_con_roundtrip() {
-        let dir = tempfile_dir();
+        let dir = scratch_dir();
         let out = dir.path().join("out.con");
         let report = convert_path_to_con(&fixture("tiny_multi_cuh2.con"), &out).unwrap();
         assert!(report.native_con);
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     #[cfg(feature = "chemfiles")]
     fn convert_xyz_via_chemfiles() {
-        let dir = tempfile_dir();
+        let dir = scratch_dir();
         let xyz = dir.path().join("water.xyz");
         fs::write(
             &xyz,
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     #[cfg(not(feature = "chemfiles"))]
     fn convert_xyz_fails_without_chemfiles() {
-        let dir = tempfile_dir();
+        let dir = scratch_dir();
         let xyz = dir.path().join("water.xyz");
         fs::write(&xyz, "3\nx\nO 0 0 0\nH 1 0 0\nH 0 1 0\n").unwrap();
         let out = dir.path().join("water.con");
@@ -237,7 +237,7 @@ mod tests {
         ));
     }
 
-    fn tempfile_dir() -> tempfile::TempDir {
+    fn scratch_dir() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
     }
 }

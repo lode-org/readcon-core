@@ -28,7 +28,7 @@ import threading
 import time
 from pathlib import Path
 
-from bench_disk import bench_disk
+from bench_disk import bench_disk, bench_scratch
 
 for _var in (
     "OMP_NUM_THREADS",
@@ -752,9 +752,8 @@ def self_check() -> None:
             "perf14_ideal": 1.0,
         }
     ]
-    import tempfile
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with bench_scratch("scratch") as tmp:
         path = Path(tmp) / "weak-write-table.tsv"
         write_table(path, rows)
         text = path.read_text(encoding="utf-8")
