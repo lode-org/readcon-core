@@ -123,3 +123,12 @@ def test_a_cached_input_does_not_skip_the_guard(tmp_path: Path, monkeypatch) -> 
     with pytest.raises(SystemExit, match="byte-identical"):
         bench_parallel_frames.write_inputs(np.zeros((2, 1, 3)))
     assert (tmp_path / "stamp.json").exists()
+
+
+def test_a_cache_of_other_coordinates_is_rewritten(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(bench_parallel_frames, "WORK", tmp_path)
+    first = np.arange(6, dtype=np.float64).reshape(2, 1, 3)
+    paths = bench_parallel_frames.write_inputs(first)
+    before = paths["con"].read_bytes()
+    bench_parallel_frames.write_inputs(first + 0.5)
+    assert paths["con"].read_bytes() != before
