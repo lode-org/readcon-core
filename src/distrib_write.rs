@@ -15,9 +15,14 @@
 //!   [`crate::writer::publish_ranked_slices`]. Rank 0 allocates a fresh
 //!   file with [`crate::writer::begin_shared_store`]. A multi-frame group
 //!   is spelled into that mapping, which removes the second copy. A wide
-//!   frame is formatted, then stored as one sequential ext4 pwrite: eight
-//!   concurrent pwrites of a fresh inode contend and finish slower. tmpfs
-//!   keeps a shared mapping per rank.
+//!   frame is formatted, then stored. On ext2, ext3, ext4, XFS, and btrfs,
+//!   rank 0 pwrites every slice in order, because concurrent pwrites of one
+//!   fresh local inode contend. That store is still slower than a warm
+//!   overwrite and slower than a plain copy of the same million-atom bytes.
+//!   Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
+//!   keeps a per-rank store so each rank writes its own range.
+//!   `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0,
+//!   overrides the choice.
 //!   [`crate::writer::commit_shared_store`] publishes the file. No spare is
 //!   left behind. `rewrite` instead fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
@@ -188,20 +193,29 @@ fn write_pwrite(
     // renames onto `path`. fallocate of the whole length happens once,
     // inside `begin_shared_store`, before any rank writes.
     let (held, tmp) = stage_store(comm, path, total)?;
-    // Eight concurrent pwrites of a fresh ext4 inode contend on the page
-    // cache and finish slower than one sequential pass. tmpfs does not,
-    // and keeps a shared mapping per rank.
+    // 0 = each rank writes its slice, 1 = rank 0 writes them in order,
+    // 2 = rank 0 rejected READCON_RANKED_WRITE.
     let mut kind = [0u8];
+    let mut choice_err = None;
     if comm.rank() == 0 {
-        kind[0] = match std::fs::File::open(&tmp) {
-            Ok(file) if crate::writer::file_is_tmpfs(&file) => 1,
-            Ok(_) => 0,
-            Err(_) => 2,
-        };
+        match std::fs::File::open(&tmp) {
+            Ok(file) => match choose_ranked_store(&file) {
+                Ok(RankedStore::Parallel) => kind[0] = 0,
+                Ok(RankedStore::Sequential) => kind[0] = 1,
+                Err(err) => {
+                    kind[0] = 2;
+                    choice_err = Some(err);
+                }
+            },
+            Err(err) => {
+                kind[0] = 2;
+                choice_err = Some(err.to_string());
+            }
+        }
     }
     comm.raw().process_at_rank(0).broadcast_into(&mut kind);
     let wrote = match kind[0] {
-        1 => (|| -> std::io::Result<()> {
+        0 => (|| -> std::io::Result<()> {
             let file = std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -209,8 +223,10 @@ fn write_pwrite(
             store_ranked_slice(&file, bytes, offset)
         })()
         .map_err(BoxErr::from),
-        0 => write_ext4_sequential(comm, &tmp, bytes, total),
-        _ => Err("create failed on rank 0".into()),
+        1 => write_ranked_sequential(comm, &tmp, bytes, total),
+        _ => Err(choice_err
+            .unwrap_or_else(|| "ranked store failed on rank 0".to_string())
+            .into()),
     };
     if let Err(err) = collective(comm, wrote, "pwrite") {
         drop(held);
@@ -225,10 +241,75 @@ fn write_pwrite(
     Ok(())
 }
 
-/// One sequential pwrite of the whole file. Concurrent pwrites of a fresh
-/// ext4 inode contend in the page cache and finish slower than this pass.
-/// Slices arrive in rank order, so the write starts at offset 0.
-fn write_ext4_sequential(comm: &Comm, tmp: &Path, bytes: &[u8], total: u64) -> Result<(), BoxErr> {
+/// How a fresh ranked file is filled after rank 0 has allocated it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RankedStore {
+    /// Each rank writes its own slice. This is the path on tmpfs and on
+    /// parallel network filesystems.
+    Parallel,
+    /// Rank 0 pwrites every slice in order. Local block filesystems contend
+    /// when every rank faults the same fresh inode.
+    Sequential,
+}
+
+/// `statfs.f_type` values. ext2, ext3, and ext4 share one magic.
+const EXT_SUPER_MAGIC: u32 = 0xEF53;
+const XFS_SUPER_MAGIC: u32 = 0x5846_5342;
+const BTRFS_SUPER_MAGIC: u32 = 0x9123_683E;
+
+/// Sequential gather only for a local block filesystem. Every other magic,
+/// including tmpfs and unknown types, stays on the per-rank store.
+fn ranked_store_for_magic(magic: i64) -> RankedStore {
+    match magic as u32 {
+        EXT_SUPER_MAGIC | XFS_SUPER_MAGIC | BTRFS_SUPER_MAGIC => RankedStore::Sequential,
+        _ => RankedStore::Parallel,
+    }
+}
+
+/// `READCON_RANKED_WRITE=parallel` or `sequential`. Anything else is an error.
+fn ranked_store_override(value: &str) -> Result<RankedStore, String> {
+    match value {
+        "parallel" => Ok(RankedStore::Parallel),
+        "sequential" => Ok(RankedStore::Sequential),
+        _ => Err(format!(
+            "READCON_RANKED_WRITE={value} is not parallel or sequential"
+        )),
+    }
+}
+
+fn choose_ranked_store(file: &std::fs::File) -> Result<RankedStore, String> {
+    if let Ok(value) = std::env::var("READCON_RANKED_WRITE") {
+        return ranked_store_override(&value);
+    }
+    Ok(ranked_store_for_magic(filesystem_magic(file).unwrap_or(0)))
+}
+
+fn filesystem_magic(file: &std::fs::File) -> Option<i64> {
+    #[cfg(all(target_os = "linux", not(miri)))]
+    {
+        use std::os::fd::AsRawFd;
+        let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
+        let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
+        if rc == 0 {
+            return Some(stat.f_type as i64);
+        }
+        None
+    }
+    #[cfg(any(not(target_os = "linux"), miri))]
+    {
+        let _ = file;
+        None
+    }
+}
+
+/// One sequential pwrite of the whole file. Slices arrive in rank order,
+/// so the write starts at offset 0. Used on ext2, ext3, ext4, XFS, and btrfs.
+fn write_ranked_sequential(
+    comm: &Comm,
+    tmp: &Path,
+    bytes: &[u8],
+    total: u64,
+) -> Result<(), BoxErr> {
     let world = comm.raw();
     if comm.rank() == 0 {
         let file = std::fs::OpenOptions::new()
@@ -1276,6 +1357,49 @@ unsafe fn mpi_write_block(
             0
         }
         Err(_) => -1,
+    }
+}
+
+#[cfg(test)]
+mod ranked_store_tests {
+    use super::{RankedStore, ranked_store_for_magic, ranked_store_override};
+
+    #[test]
+    fn local_block_magics_use_one_sequential_writer() {
+        for magic in [0xEF53_i64, 0x5846_5342, 0x9123_683E] {
+            assert_eq!(ranked_store_for_magic(magic), RankedStore::Sequential);
+        }
+        // A 32-bit statfs word sign-extends btrfs. The low 32 bits still match.
+        let sign_extended = 0x9123_683E_u32 as i32 as i64;
+        assert_eq!(
+            ranked_store_for_magic(sign_extended),
+            RankedStore::Sequential
+        );
+    }
+
+    #[test]
+    fn other_magics_keep_a_write_per_rank() {
+        for magic in [0_i64, -1, 0x0102_1994, 0x6969, 0x0BD0_0BD0, 0xFF53_4642] {
+            assert_eq!(
+                ranked_store_for_magic(magic),
+                RankedStore::Parallel,
+                "magic {magic:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_env_override_names_the_two_paths() {
+        assert_eq!(
+            ranked_store_override("parallel").unwrap(),
+            RankedStore::Parallel
+        );
+        assert_eq!(
+            ranked_store_override("sequential").unwrap(),
+            RankedStore::Sequential
+        );
+        assert!(ranked_store_override("ext4").is_err());
+        assert!(ranked_store_override("").is_err());
     }
 }
 
