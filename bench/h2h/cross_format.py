@@ -503,11 +503,16 @@ def _ase_images(spec: dict):
     return images
 
 
-def write_ase(path: Path, spec: dict) -> None:
+def write_built_ase(path: Path, images: list) -> None:
+    """Write Atoms images that were built before the clock started."""
     from ase.io import write as ase_write
 
     path.unlink(missing_ok=True)
-    ase_write(os.fspath(path), _ase_images(spec), format="extxyz")
+    ase_write(os.fspath(path), images, format="extxyz")
+
+
+def write_ase(path: Path, spec: dict) -> None:
+    write_built_ase(path, _ase_images(spec))
 
 
 def read_ase(path: str) -> dict:
@@ -554,10 +559,15 @@ def _mda_universe(spec: dict):
     return universe
 
 
-def _mda_write(path: Path, spec: dict, velocities: bool = False) -> None:
+def write_built_mda(path: Path, spec: dict, universe, velocities: bool = False) -> None:
+    """Write a Universe whose topology already exists.
+
+    MDAnalysis keeps one timestep. Copying that frame's coordinates onto
+    it is the serialise, and it stays inside the clock. Building the
+    topology is not.
+    """
     import MDAnalysis as mda
 
-    universe = _mda_universe(spec)
     path.unlink(missing_ok=True)
     # Amber NetCDF only creates the velocity variable when the writer is
     # opened with velocities=True. Setting the timestep flag later is not enough.
@@ -577,6 +587,10 @@ def _mda_write(path: Path, spec: dict, velocities: bool = False) -> None:
                 )
                 step.has_velocities = True
             writer.write(universe.atoms)
+
+
+def _mda_write(path: Path, spec: dict, velocities: bool = False) -> None:
+    write_built_mda(path, spec, _mda_universe(spec), velocities)
 
 
 def _mda_read_reader(path: str, reader_cls, velocities: bool = False) -> dict:
@@ -651,15 +665,12 @@ def read_mda_pdb(path: str) -> dict:
     }
 
 
-def write_ovito(path: Path, spec: dict) -> None:
+def ovito_sources(spec: dict) -> list:
+    """Build one Pipeline per frame. The particle fill is not the file writer."""
     from ovito.data import DataCollection, ParticleType
-    from ovito.io import export_file
     from ovito.pipeline import Pipeline, StaticSource
 
-    # OVITO's static source is one frame. A trajectory is appended by
-    # exporting each frame into the same XYZ the reader accepts.
-    path.unlink(missing_ok=True)
-    chunks = []
+    sources = []
     for frame_index in range(spec["n_frames"]):
         data = DataCollection()
         lengths = spec["cell"][frame_index, :3]
@@ -672,23 +683,40 @@ def write_ovito(path: Path, spec: dict) -> None:
         types = particles.create_property("Particle Type")
         types.types.append(ParticleType(id=1, name="Cu"))
         types[...] = 1
-        pipeline = Pipeline(source=StaticSource(data=data))
+        sources.append(Pipeline(source=StaticSource(data=data)))
+    return sources
+
+
+def write_built_ovito(path: Path, sources: list) -> None:
+    """Export pipelines that were built before the clock started.
+
+    A static source is one frame. A trajectory is those exports joined
+    into the XYZ the reader accepts. The gzip arm compresses that text.
+    """
+    from ovito.io import export_file
+
+    path.unlink(missing_ok=True)
+    columns = ["Particle Type", "Position", "Velocity", "Mass"]
+    if len(sources) == 1 and not path.name.endswith(".gz"):
+        export_file(sources[0], os.fspath(path), "xyz", columns=columns)
+        return
+    chunks = []
+    for frame_index, pipeline in enumerate(sources):
         piece = path.with_name(path.name + f".part{frame_index}")
-        export_file(
-            pipeline,
-            os.fspath(piece),
-            "xyz",
-            columns=["Particle Type", "Position", "Velocity", "Mass"],
-        )
-        chunks.append(piece.read_text(encoding="utf-8"))
+        export_file(pipeline, os.fspath(piece), "xyz", columns=columns)
+        chunks.append(piece.read_bytes())
         piece.unlink()
-    text = "".join(chunks)
+    payload = b"".join(chunks)
     if path.name.endswith(".gz"):
         import gzip
 
-        path.write_bytes(gzip.compress(text.encode("utf-8")))
+        path.write_bytes(gzip.compress(payload))
     else:
-        path.write_text(text, encoding="utf-8")
+        path.write_bytes(payload)
+
+
+def write_ovito(path: Path, spec: dict) -> None:
+    write_built_ovito(path, ovito_sources(spec))
 
 
 def read_ovito(path: str) -> dict:
@@ -1050,6 +1078,36 @@ def expect_written_roundtrip(
     expect_full_read(got, n_atoms, n_frames, arm_id)
 
 
+def write_clock(arm_id: str) -> str:
+    """What the write sample times, after the in-memory structure exists."""
+    if arm_id == "chemfiles-con":
+        return "no writer"
+    if arm_id == "readcon-con":
+        return "write_columns of the numpy columns already in the spec, one thread"
+    if arm_id in ("readcon-con-gz", "readcon-con-zst"):
+        return (
+            "write_con of frames loaded before the clock, one thread, "
+            "including compression"
+        )
+    if arm_id == "readcon-chemfiles":
+        return "write_con of chemfiles frames loaded before the clock, one thread"
+    if arm_id == "readcon-conbin":
+        return "write_conbin_columns of the numpy columns already in the spec"
+    if arm_id.startswith("chemfiles-"):
+        return "Trajectory.write of Frames built before the clock"
+    if arm_id.startswith("ase-"):
+        return "ase.io.write of Atoms images built before the clock"
+    if arm_id.startswith("mda-"):
+        return "Writer.write of a Universe whose topology was built before the clock"
+    if arm_id.startswith("mdtraj-"):
+        return "trajectory.save of a Trajectory built before the clock"
+    if arm_id.startswith("ovito-"):
+        return "export_file of Pipelines built before the clock, then the store"
+    if arm_id == "mdcompress-mdc":
+        return "mdcompress compress of a DCD and description already on disk"
+    raise KeyError(arm_id)
+
+
 def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
     """Arms this interpreter can actually run. Nothing is invented."""
     arms = [
@@ -1384,6 +1442,10 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             "those rows are unsupported. The binding views the float64 "
             "box as float32; the cell is read from those bytes as float64."
         )
+    for arm in arms:
+        clock = write_clock(arm["id"])
+        prior = arm.get("notes", "")
+        arm["notes"] = f"{prior} Clock: {clock}.".strip()
     return arms, notes
 
 
@@ -2006,6 +2068,18 @@ def worker_main() -> None:
             chem_frames = build_chemfiles_frames(spec, chem_fmt, dest)
         child_rss = [0]
         md_trajectory = mdtraj_trajectory(spec) if arm.startswith("mdtraj-") else None
+        # Topology, Atoms, and particle properties are the in-memory
+        # structure. The clock below only serialises and stores them.
+        ase_images = (
+            _ase_images(spec) if arm in ("ase-extxyz", "ase-extxyz-gz") else None
+        )
+        mda_universe = None
+        mda_velocities = arm in ("mda-ncdf", "mda-trr")
+        if arm in ("mda-pdb", "mda-dcd", "mda-xtc", "mda-xyz", "mda-ncdf", "mda-trr"):
+            mda_universe = _mda_universe(spec)
+        ovito_pipes = (
+            ovito_sources(spec) if arm in ("ovito-xyz", "ovito-xyz-gz") else None
+        )
 
         def once(
             spec=spec,
@@ -2016,12 +2090,22 @@ def worker_main() -> None:
             chem_frames=chem_frames,
             chem_fmt=chem_fmt,
             md_trajectory=md_trajectory,
+            ase_images=ase_images,
+            mda_universe=mda_universe,
+            mda_velocities=mda_velocities,
+            ovito_pipes=ovito_pipes,
         ):
             if chem_frames is not None:
                 write_built_chemfiles(dest, chem_fmt, chem_frames)
             elif md_trajectory is not None:
                 dest.unlink(missing_ok=True)
                 md_trajectory.save(os.fspath(dest))
+            elif ase_images is not None:
+                write_built_ase(dest, ase_images)
+            elif mda_universe is not None:
+                write_built_mda(dest, spec, mda_universe, mda_velocities)
+            elif ovito_pipes is not None:
+                write_built_ovito(dest, ovito_pipes)
             elif arm == "mdcompress-mdc":
                 child_rss[0] = write_mdcompress(
                     dest, Path(job["mdc_src"]), Path(job["mdc_desc"])
@@ -2135,8 +2219,8 @@ def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
     return median
 
 
-def con_writer_samples(repeats: int) -> tuple[list[float], list[float]]:
-    """Back-to-back 1M CON writes: one warmup, then ``repeats`` samples.
+def con_writer_samples() -> tuple[list[float], list[float]]:
+    """Back-to-back 1M CON writes: one warmup, then twelve samples.
 
     The interleaved campaign write follows other formats, so its median
     is not this measurement. The published readcon-con write row uses
@@ -2206,20 +2290,17 @@ def run(
         "that format's size range, and reads back at the full atom count. "
         "That check runs after the clock stops."
     )
-    serial_con, default_con = con_writer_samples(repeats)
+    serial_con, default_con = con_writer_samples()
     serial_med, _serial_iqr = type7(serial_con)
     default_med, _default_iqr = type7(default_con)
     notes.append(
-        "h2h10 printed readcon-con and chemfiles-con writes as 0.0794 s. "
-        "The raw samples differ (readcon 0.079409, chemfiles 0.079377); "
-        "four decimal places hid that. Chemfiles has no CON writer. "
-        "Its write copies coordinates into a Frame. Both rows stored the "
-        "readcon CON size, 45378064, which is not chemfiles' output. "
-        "The interleaved fresh-process write was slower than a back-to-back "
-        f"write_columns loop. This table's 1M readcon-con write is that "
-        f"back-to-back serial measurement, {serial_med:.4f} s. "
-        f"Default threads are {default_med:.4f} s. "
-        "chemfiles-con has no writer, so its write cell is 'no writer'."
+        "Every write sample except the 1M readcon-con row is the interleaved "
+        "fresh-process measurement from this session. The clock is serialise "
+        "and store of a structure that already exists: see each row's Clock "
+        "note. The 1M readcon-con write is the back-to-back serial "
+        f"measurement, {serial_med:.4f} s. Default threads are "
+        f"{default_med:.4f} s. Chemfiles has no CON writer, so its write "
+        "cell is 'no writer'."
     )
     lines = []
     for note in notes:
