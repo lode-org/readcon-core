@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 4,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.050319474, 0.048574162, 0.048045019, 0.047819606, 0.048107668, 0.047679891, 0.047495967, 0.047497172, 0.047494592, 0.048832771, 0.047972597, 0.047868336],
+  "warmup_s": 0.052715619,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp11-mw-con-4.con",
+  "host": "Intel Xeon Processor"
+}

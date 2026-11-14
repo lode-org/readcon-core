@@ -1,0 +1,120 @@
+{
+  "saturation": [
+    {
+      "mode": "threads",
+      "workers": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "aggregate_Bps": [
+        13187934240.989454,
+        26179247202.243084,
+        48772638239.40223,
+        79965877788.1214
+      ],
+      "plateau_workers": null,
+      "still_rising_at": 8
+    },
+    {
+      "mode": "procs",
+      "workers": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "aggregate_Bps": [
+        13181862895.30544,
+        26117638485.347862,
+        47901489429.80621,
+        80122512750.67624
+      ],
+      "plateau_workers": null,
+      "still_rising_at": 8
+    }
+  ],
+  "time_ratio": [
+    {
+      "kind": "threads",
+      "format": "con",
+      "workers": 1,
+      "readcon_s": 0.14261000000000001,
+      "copy_s": 0.0296815,
+      "readcon_over_copy": 4.8046763135286294,
+      "readcon_Bps": 444625201.5987658,
+      "copy_Bps": 2136353486.1782591
+    },
+    {
+      "kind": "threads",
+      "format": "con",
+      "workers": 8,
+      "readcon_s": 0.1918155,
+      "copy_s": 0.0866325,
+      "readcon_over_copy": 2.214128646870401,
+      "readcon_Bps": 2644541238.8467045,
+      "copy_Bps": 5855555455.516117
+    },
+    {
+      "kind": "threads",
+      "format": "convel",
+      "workers": 1,
+      "readcon_s": 0.2495775,
+      "copy_s": 0.049436,
+      "readcon_over_copy": 5.0484970466866255,
+      "readcon_Bps": 428404002.7646723,
+      "copy_Bps": 2162836475.442997
+    },
+    {
+      "kind": "threads",
+      "format": "convel",
+      "workers": 8,
+      "readcon_s": 0.32847899999999997,
+      "copy_s": 0.1282505,
+      "readcon_over_copy": 2.5612297807805815,
+      "readcon_Bps": 2604002082.324898,
+      "copy_Bps": 6669571440.26729
+    },
+    {
+      "kind": "ranks",
+      "format": "con",
+      "workers": 1,
+      "readcon_s": 0.043283606,
+      "copy_s": 0.0100605,
+      "readcon_over_copy": 4.302331494458526,
+      "readcon_Bps": 366235659.7553355,
+      "copy_Bps": 1576026638.835048
+    },
+    {
+      "kind": "ranks",
+      "format": "con",
+      "workers": 8,
+      "readcon_s": 0.0585325785,
+      "copy_s": 0.018418999999999998,
+      "readcon_over_copy": 3.1778369346870083,
+      "readcon_Bps": 2166588304.323549,
+      "copy_Bps": 6886634887.887508
+    },
+    {
+      "kind": "ranks",
+      "format": "convel",
+      "workers": 1,
+      "readcon_s": 0.0736712575,
+      "copy_s": 0.015428500000000001,
+      "readcon_over_copy": 4.77501101856953,
+      "readcon_Bps": 362828067.64904207,
+      "copy_Bps": 1732540169.1674497
+    },
+    {
+      "kind": "ranks",
+      "format": "convel",
+      "workers": 8,
+      "readcon_s": 0.1031175925,
+      "copy_s": 0.031206499999999998,
+      "readcon_over_copy": 3.3043626327848363,
+      "readcon_Bps": 2073748958.0160632,
+      "copy_Bps": 6852545719.641742
+    }
+  ]
+}
