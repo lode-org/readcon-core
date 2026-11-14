@@ -40,6 +40,14 @@ def _library_versions() -> tuple[str, str]:
     return mda.group(1), ovito.group(1)
 
 
+def _ci_python() -> str:
+    """CI installs MDAnalysis for the arm tests. It does not install OVITO."""
+    text = (ROOT / ".github/workflows/ci_python.yml").read_text(encoding="utf-8")
+    mda = re.search(r"'MDAnalysis==([^']+)'", text)
+    assert mda, "ci_python.yml installs no pinned MDAnalysis"
+    return mda.group(1)
+
+
 def test_competitor_versions_are_one_set() -> None:
     found = {
         "paper/cpc/pixi.toml": _pixi(),
@@ -53,3 +61,4 @@ def test_competitor_versions_are_one_set() -> None:
     }
     for name, pair in found.items():
         assert pair == (MDA, OVITO), (name, pair)
+    assert _ci_python() == MDA

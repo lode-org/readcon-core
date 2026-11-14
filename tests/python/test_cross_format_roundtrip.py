@@ -165,3 +165,14 @@ def test_pdb_above_serial_is_reported() -> None:
         return
     assert pdb[0]["unsupported"] is True
     assert "five digits" in pdb[0]["drops"]
+
+
+def test_required_arms_are_offered() -> None:
+    required = [
+        name for name in os.environ.get("READCON_REQUIRE_ARMS", "").split(",") if name
+    ]
+    if not required:
+        pytest.skip("READCON_REQUIRE_ARMS is not set")
+    arms, notes = cross_format.arm_table(4)
+    missing = sorted(set(required) - {arm["id"] for arm in arms})
+    assert not missing, (missing, notes)
