@@ -44,3 +44,4 @@ data/**
 !data/**/
 !data/cloud-runs-2/SUMMARY.md
 !data/db/RESULTS.md
+!data/spec/version_drift.json
