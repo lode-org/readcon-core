@@ -151,25 +151,6 @@ proptest! {
 }
 
 #[cfg(feature = "mpi")]
-fn mpi_launcher() -> Vec<String> {
-    // More ranks than cores needs oversubscribe. Open MPI accepts it;
-    // MPICH ignores the flag it does not know only when we omit it.
-    let mut argv = vec!["mpirun".to_string()];
-    if std::process::Command::new("mpirun")
-        .arg("--help")
-        .output()
-        .ok()
-        .is_some_and(|out| {
-            let text = String::from_utf8_lossy(&out.stdout);
-            text.contains("oversubscribe")
-        })
-    {
-        argv.push("--oversubscribe".to_string());
-    }
-    argv
-}
-
-#[cfg(feature = "mpi")]
 fn run_ranks(
     ranks: usize,
     input: &std::path::Path,
@@ -177,11 +158,7 @@ fn run_ranks(
     second: Option<&std::path::Path>,
 ) {
     let exe = std::env::current_exe().expect("test binary");
-    let mut cmd = std::process::Command::new("mpirun");
-    let launcher = mpi_launcher();
-    if launcher.len() > 1 {
-        cmd.arg("--oversubscribe");
-    }
+    let mut cmd = readcon_core::mpi_launch::mpi_command();
     cmd.args(["-n", &ranks.to_string()])
         .arg(&exe)
         .arg("mpi_ranks_match_the_serial_writer")
@@ -194,10 +171,10 @@ fn run_ranks(
     } else {
         cmd.env_remove("READCON_RANK_SECOND");
     }
-    let status = cmd
-        .status()
+    let output = cmd
+        .output()
         .unwrap_or_else(|err| panic!("mpirun -n {ranks}: {err}"));
-    assert!(status.success(), "mpirun -n {ranks} failed");
+    readcon_core::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks}"));
 }
 
 #[cfg(feature = "mpi")]
