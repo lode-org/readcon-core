@@ -801,12 +801,12 @@ impl<W: Write> ConFrameWriter<W> {
                     VEL_ROWS.with(|cell| *cell.borrow_mut() = rows);
                 }
             }
-            let mut velocity_rows = RestoreRows(if direct_velocity {
-                Vec::new()
+            let mut velocity_rows = if direct_velocity {
+                None
             } else {
-                VEL_ROWS.with(|cell| cell.take())
-            });
-            if !direct_velocity {
+                Some(RestoreRows(VEL_ROWS.with(|cell| cell.take())))
+            };
+            if let Some(velocity_rows) = velocity_rows.as_mut() {
                 let ntypes = frame.header.natms_per_type.len();
                 if velocity_rows.0.len() < ntypes {
                     velocity_rows.0.resize_with(ntypes, Vec::new);
@@ -835,7 +835,7 @@ impl<W: Write> ConFrameWriter<W> {
                     self.force_map,
                     stream_out.as_mut().map(|out| &mut out.file),
                     if save_velocity && !direct_velocity {
-                        Some(&mut velocity_rows.0[type_idx])
+                        Some(&mut velocity_rows.as_mut().unwrap().0[type_idx])
                     } else {
                         None
                     },
@@ -858,7 +858,7 @@ impl<W: Write> ConFrameWriter<W> {
                     if direct_velocity {
                         append_velocity_lines(buf, ryu, atoms, prec, spec_version);
                     } else {
-                        buf.extend_from_slice(&velocity_rows.0[type_idx]);
+                        buf.extend_from_slice(&velocity_rows.as_ref().unwrap().0[type_idx]);
                     }
                     vel_idx_offset += num_atoms_in_type;
                 }
@@ -3291,28 +3291,36 @@ fn place_packed(
         }
         return store_disjoint_parts(file, &parts).map_err(WriteError::Io);
     }
-    let mut map = unsafe {
-        memmap2::MmapOptions::new()
-            .len(total as usize)
-            .map_mut(file)
-            .map_err(WriteError::Io)?
-    };
-    let base = map.as_mut_ptr() as usize;
+    // One mapping per worker, dropped on that worker. Tearing down a single
+    // 184 MB map was a serial tail after the formatters had finished.
     let result = std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
         for (thread, &(start, end)) in ranges.iter().enumerate() {
             let offset = prefix[start];
             let span = prefix[end] - prefix[start];
             let piece = &frames[start..end];
-            guards.push(scope.spawn(move || {
+            let cloned = file.try_clone().map_err(WriteError::Io)?;
+            guards.push(scope.spawn(move || -> Result<(), WriteError> {
                 #[cfg(feature = "parallel")]
                 crate::parser::pin_worker(thread);
                 if span == 0 {
                     return Ok(());
                 }
-                let dest =
-                    unsafe { std::slice::from_raw_parts_mut((base + offset) as *mut u8, span) };
-                format_group_into(piece, dest, precision, canonical, bind)
+                let page = 4096usize;
+                let map_off = offset & !(page - 1);
+                let delta = offset - map_off;
+                let map_len = delta + span;
+                let mut map = unsafe {
+                    memmap2::MmapOptions::new()
+                        .offset(map_off as u64)
+                        .len(map_len)
+                        .map_mut(&cloned)
+                        .map_err(WriteError::Io)?
+                };
+                let dest = &mut map[delta..delta + span];
+                format_group_into(piece, dest, precision, canonical, bind)?;
+                drop(map);
+                Ok(())
             }));
         }
         for guard in guards {
@@ -3325,8 +3333,6 @@ fn place_packed(
         }
         Ok(())
     });
-    // The mapping stays alive until every worker has finished writing.
-    drop(map);
     result
 }
 
