@@ -101,6 +101,8 @@ def _read_con_threads(path: str, n_frames: int, n_atoms: int, n_threads: int) ->
 
 
 THREAD_COUNTS = (2, 4, 8)
+# ASE's eOn reader rejects a velocity or force section, so those files are
+# compared with the previous readcon build only. Plain cuh2 is the ASE peer.
 
 
 def _iter_con_path(path: str, n_frames: int) -> None:
@@ -786,96 +788,6 @@ class RayReadForcesThreads:
 
     def ray_read_con_threads(self, n_frames: int, n_threads: int) -> None:
         _read_con_threads(self._path, self._n, 4, self._threads)
-
-
-class TimeAseConvel:
-    """ASE eOn on the same velocity files as the threaded readcon rows."""
-
-    timeout = 300
-    repeat = REPEAT
-    sample_time = SAMPLE_TIME
-    min_run_count = 2
-    warmup_time = 0.1
-    params = (100, 200)
-    param_names = ["n_frames"]
-
-    def setup_cache(self) -> dict[int, str]:
-        return {n: _write_temp(_ladder_con(FIXTURE_CONVEL, n), suffix=".convel") for n in (100, 200)}
-
-    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
-        _ase_eon(cache[int(n_frames)], int(n_frames), 4)
-
-
-class RayAseConvel:
-    """Memray peak for ASE eOn on the velocity files."""
-
-    timeout = 180
-    number = 1
-    repeat = REPEAT
-    rounds = 1
-    unit = "bytes"
-    params = (100, 200)
-    param_names = ["n_frames"]
-
-    def setup(self, n_frames: int) -> None:
-        text = _ladder_con(FIXTURE_CONVEL, n_frames)
-        self._path = _write_temp(text, suffix=".convel")
-        self._n = n_frames
-        _ase_eon(self._path, self._n, 4)
-
-    def teardown(self, n_frames: int) -> None:
-        try:
-            os.unlink(self._path)
-        except OSError:
-            pass
-
-    def ray_read_ase_eon(self, n_frames: int) -> None:
-        _ase_eon(self._path, self._n, 4)
-
-
-class TimeAseForces:
-    """ASE eOn on the same force files as the threaded readcon rows."""
-
-    timeout = 300
-    repeat = REPEAT
-    sample_time = SAMPLE_TIME
-    min_run_count = 2
-    warmup_time = 0.1
-    params = (100, 200)
-    param_names = ["n_frames"]
-
-    def setup_cache(self) -> dict[int, str]:
-        return {n: _write_temp(_ladder_con(FIXTURE_FORCES, n)) for n in (100, 200)}
-
-    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
-        _ase_eon(cache[int(n_frames)], int(n_frames), 4)
-
-
-class RayAseForces:
-    """Memray peak for ASE eOn on the force files."""
-
-    timeout = 180
-    number = 1
-    repeat = REPEAT
-    rounds = 1
-    unit = "bytes"
-    params = (100, 200)
-    param_names = ["n_frames"]
-
-    def setup(self, n_frames: int) -> None:
-        text = _ladder_con(FIXTURE_FORCES, n_frames)
-        self._path = _write_temp(text)
-        self._n = n_frames
-        _ase_eon(self._path, self._n, 4)
-
-    def teardown(self, n_frames: int) -> None:
-        try:
-            os.unlink(self._path)
-        except OSError:
-            pass
-
-    def ray_read_ase_eon(self, n_frames: int) -> None:
-        _ase_eon(self._path, self._n, 4)
 
 
 def _ray_repeats(bench) -> int:
