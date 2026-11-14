@@ -43,6 +43,12 @@ _CONST = re.compile(
 )
 _CALL = re.compile(r"(?:std::)?env::var(?:_os)?\s*\(")
 _CONCAT = re.compile(r"concat!\s*\(")
+_JOIN_LIST = re.compile(
+    r"""\[((?:\s*"(?:\\.|[^"\\])*"\s*,?)+)\]\s*\.join\(\s*"((?:\\.|[^"\\])*)"\s*\)"""
+)
+_JOIN_SEP = re.compile(
+    r""""((?:\\.|[^"\\])*)"\s*\.join\(\s*\[((?:\s*"(?:\\.|[^"\\])*"\s*,?)+)\]"""
+)
 
 
 def _mask_comments(text: str) -> str:
@@ -159,8 +165,9 @@ def readcon_reads(text: str) -> list[tuple[int, str]]:
     """Every ``READCON_*`` string in production code, and the dynamic forms.
 
     A name may be a string literal, a ``let`` / ``const`` / ``static`` binding,
-    a ``concat!``, or a renamed ``env::var``. ``format!("READCON_{{}")`` and
-    ``env::vars`` filtering are reported too.
+    a ``concat!``, a renamed ``env::var``, or a join of string pieces
+    (``["READCON", "G"].join("_")`` and ``"_".join(["READCON", "G"])``).
+    ``format!("READCON_{{}")`` and ``env::vars`` filtering are reported too.
     """
     masked = _mask_comments(text)
     bindings = _bindings(masked)
@@ -183,6 +190,16 @@ def readcon_reads(text: str) -> list[tuple[int, str]]:
         window = masked[match.start() : match.start() + 400]
         if "READCON_" in window:
             found.append((_line_of(masked, match.start()), "READCON_"))
+    for match in _JOIN_LIST.finditer(masked):
+        parts = re.findall(r'"((?:\\.|[^"\\])*)"', match.group(1))
+        name = match.group(2).join(parts)
+        if name.startswith("READCON"):
+            found.append((_line_of(masked, match.start()), name))
+    for match in _JOIN_SEP.finditer(masked):
+        parts = re.findall(r'"((?:\\.|[^"\\])*)"', match.group(2))
+        name = match.group(1).join(parts)
+        if name.startswith("READCON"):
+            found.append((_line_of(masked, match.start()), name))
     return found
 
 
@@ -257,6 +274,17 @@ def test_let_vars_format_and_renamed_imports_are_seen() -> None:
     assert "READCON_BOUND" in names
     assert "READCON_" in names
     assert "READCON_{}" in names
+
+
+def test_a_joined_name_is_seen() -> None:
+    planted = """
+    fn look() {
+        let _ = std::env::var(["READCON","G"].join("_"));
+        let _ = std::env::var("_".join(["READCON","GIT"]));
+    }
+    """
+    names = {name for _line, name in readcon_reads(planted)}
+    assert names == {"READCON_G", "READCON_GIT"}
 
 
 def test_split_const_and_concat_reads_are_seen() -> None:
