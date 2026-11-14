@@ -278,3 +278,17 @@ path = "fuzz_targets/reader_diff.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "push-xyz-rows"
+path = "fuzz_targets/push_xyz_rows.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ranked-slices"
+path = "fuzz_targets/ranked_slices.rs"
+test = false
+doc = false
+bench = false
