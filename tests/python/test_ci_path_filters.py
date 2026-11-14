@@ -102,6 +102,13 @@ def test_wheel_pull_requests_rebuild_when_the_build_script_changes():
     _require(lists, WHEEL_INPUTS, "python_wheels.yml")
 
 
+def test_cxx_wrap_pin_does_not_run_for_bench_only_changes():
+    text = (ROOT / ".github/workflows/ci_cxx_wrap_pin.yml").read_text(encoding="utf-8")
+    assert text.count("paths-ignore:") == 2
+    assert text.count("- 'bench/**'") == 2
+    assert "bash scripts/check_cxx_wrap_pin.sh" in text
+
+
 def test_release_branch_pushes_build_wheels_before_the_tag():
     text = (ROOT / ".github/workflows/python_wheels.yml").read_text(encoding="utf-8")
     push, _, rest = text.partition("\n  pull_request:")
