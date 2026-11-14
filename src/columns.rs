@@ -190,17 +190,19 @@ pub(crate) fn positions_parallel(
         let nframes = out.n_frames;
         let (certified, saw) = fill_tiled_frames(
             bytes,
-            span,
-            head0,
-            count0,
             nframes,
             workers,
-            rich,
-            spec,
-            block_lines,
-            positions_ptr,
-            ids_ptr,
-            flags_ptr,
+            TiledPlan {
+                span,
+                head: head0,
+                count: count0,
+                spec,
+                block_lines,
+                rich,
+                positions: positions_ptr,
+                ids: ids_ptr,
+                flags: flags_ptr,
+            },
         )?;
         if !certified {
             out.stock = false;
@@ -887,23 +889,30 @@ fn header_block_lines(bytes: &[u8], frame_start: usize) -> Result<usize, ParseEr
     Ok(n + natm_types.saturating_mul(2))
 }
 
+/// Shared plan for one tiled trajectory. Copied into each worker.
+#[cfg(feature = "parallel")]
+#[derive(Clone, Copy)]
+struct TiledPlan {
+    span: usize,
+    head: usize,
+    count: usize,
+    spec: u32,
+    block_lines: usize,
+    rich: bool,
+    positions: usize,
+    ids: usize,
+    flags: usize,
+}
+
 /// One worker owns a contiguous run of equal frames and writes each row
 /// into the shared slab. A rayon job per frame allocated a fresh vector
 /// for 32 atoms, and that allocation was the whole 8-thread plateau.
 #[cfg(feature = "parallel")]
 fn fill_tiled_frames(
     bytes: &[u8],
-    span: usize,
-    head: usize,
-    count: usize,
     nframes: usize,
     workers: usize,
-    rich: bool,
-    spec: u32,
-    block_lines: usize,
-    positions: usize,
-    ids: usize,
-    flags: usize,
+    plan: TiledPlan,
 ) -> Result<(bool, bool), ParseError> {
     let saw_section = std::sync::atomic::AtomicBool::new(false);
     let lost_stock = std::sync::atomic::AtomicBool::new(false);
@@ -920,21 +929,7 @@ fn fill_tiled_frames(
             guards.push(scope.spawn(move || -> Result<(), ParseError> {
                 crate::parser::pin_worker(worker);
                 for frame in start_frame..end_frame {
-                    let start = frame * span;
-                    let (certified, saw) = fill_one_tiled_frame(
-                        bytes,
-                        start,
-                        start + span,
-                        head + start,
-                        count,
-                        frame * count,
-                        spec,
-                        block_lines,
-                        rich,
-                        positions,
-                        ids,
-                        flags,
-                    )?;
+                    let (certified, saw) = fill_one_tiled_frame(bytes, frame, plan)?;
                     if saw {
                         saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -965,30 +960,25 @@ fn fill_tiled_frames(
 #[cfg(feature = "parallel")]
 fn fill_one_tiled_frame(
     bytes: &[u8],
-    frame_start: usize,
-    frame_end: usize,
-    head: usize,
-    count: usize,
-    dest: usize,
-    spec: u32,
-    block_lines: usize,
-    rich: bool,
-    positions: usize,
-    ids: usize,
-    flags: usize,
+    frame: usize,
+    plan: TiledPlan,
 ) -> Result<(bool, bool), ParseError> {
-    let mut pos = head;
-    for row in 0..count {
-        let ((row_xyz, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, row as u64)?;
+    let frame_start = frame * plan.span;
+    let frame_end = frame_start + plan.span;
+    let dest = frame * plan.count;
+    let mut pos = plan.head + frame_start;
+    for row in 0..plan.count {
+        let ((row_xyz, fixed, atom_id), next) =
+            parse_coord_row_at(bytes, pos, plan.spec, row as u64)?;
         unsafe {
             std::ptr::copy_nonoverlapping(
                 row_xyz.as_ptr(),
-                (positions as *mut f64).add((dest + row) * 3),
+                (plan.positions as *mut f64).add((dest + row) * 3),
                 3,
             );
-            if rich {
-                *((ids as *mut u64).add(dest + row)) = atom_id;
-                *((flags as *mut u8).add(dest + row)) = flag_bits(fixed);
+            if plan.rich {
+                *((plan.ids as *mut u64).add(dest + row)) = atom_id;
+                *((plan.flags as *mut u8).add(dest + row)) = flag_bits(fixed);
             }
         }
         pos = next;
@@ -999,7 +989,7 @@ fn fill_one_tiled_frame(
         ));
     }
     let mut rel = pos - frame_start;
-    skip_sections(&bytes[frame_start..frame_end], &mut rel, block_lines)
+    skip_sections(&bytes[frame_start..frame_end], &mut rel, plan.block_lines)
 }
 
 fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
@@ -1547,7 +1537,10 @@ mod tests {
         let rich = positions_parallel(bytes, 4, true).unwrap();
         assert_eq!(rich.ids, rich_serial.ids);
         assert_eq!(rich.flags, rich_serial.flags);
-        assert_eq!(first_bit_mismatch(&rich.positions, &rich_serial.positions), None);
+        assert_eq!(
+            first_bit_mismatch(&rich.positions, &rich_serial.positions),
+            None
+        );
 
         let mut typed = String::new();
         let two = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n2\n2 1\n63.546 1.0\nCu\nCoordinates of Component 1\n0.1 0.2 0.3 0 0\n0.4 0.5 0.6 0 1\nH\nCoordinates of Component 2\n0.7 0.8 0.9 7 2\n";
