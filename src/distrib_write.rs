@@ -12,27 +12,18 @@
 //! Modes:
 //!
 //! - [`WriteMode::MpiIo`]: the same publish as
-//!   [`crate::writer::publish_ranked_slices`]. Rank 0 allocates a fresh
-//!   file with [`crate::writer::begin_shared_store`]. A multi-frame group
-//!   is spelled into that mapping, which removes the second copy. A wide
-//!   frame is formatted, then stored. On ext2, ext3, ext4, XFS, and btrfs,
-//!   rank 0 pwrites every slice in order, because concurrent pwrites of one
-//!   fresh local inode contend. That store is still slower than a warm
-//!   overwrite and slower than a plain copy of the same million-atom bytes.
-//!   An 8-rank ext4 run of the 23,589,082-byte frame does no fsync. After the
-//!   warmup settles, the ordered gather is about 0.0112 s. Letting every rank
-//!   pwrite its own slice into the same temp file is about 0.0126 s, and a
-//!   fresh in-process copy of those bytes is about 0.0051 s. The per-rank
-//!   store matches the gather byte for byte (sha256
-//!   `361546ecf1305d2c0174ba13777081b034ac72a56ec711e90779bc00604b4ad7` at 1,
-//!   2, 4 and 8 ranks) and is slower here, so ext4 keeps the gather. The
-//!   fresh copy does not format, gather, or free the previous inode.
-//!   Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
-//!   keeps a per-rank store so each rank writes its own range.
-//!   `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0,
-//!   overrides the choice.
-//!   [`crate::writer::commit_shared_store`] publishes the file. No spare is
-//!   left behind. `rewrite` instead fills `path` + `.rewrite`.
+//!   [`crate::writer::publish_ranked_slices`]. The layout pass is the
+//!   exclusive scan of each rank's formatted length, plus that rank's
+//!   frame starts. Rank 0 allocates a fresh file with
+//!   [`crate::writer::begin_shared_store`]. Each rank then pwrites its
+//!   own frames into that scratch at those offsets. A multi-frame group
+//!   that can be priced is spelled into the same mapping instead, which
+//!   removes the second copy. [`crate::writer::commit_shared_store`]
+//!   publishes the file with one rename. No spare is left behind.
+//!   Lustre, GPFS, BeeGFS, and PanFS use `MPI_File_write_at_all` into
+//!   that scratch, where collective MPI-IO is the per-rank store.
+//!   `READCON_RANKED_WRITE=sequential`, read on rank 0, is the ordered
+//!   gather. `parallel` forces the pwrite. `rewrite` fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
 //!   collects every block (`MPI_Gatherv` up to 2 GiB in total,
 //!   point-to-point chunks above that) and writes the file itself.
@@ -180,7 +171,7 @@ pub fn write_ranked_bytes(
     }
     let mut total = 0u64;
     world.all_reduce_into(&len, &mut total, ::mpi::collective::SystemOperation::sum());
-    write_pwrite(comm, path, bytes, offset, total, rewrite, keep_spare)?;
+    write_pwrite(comm, path, bytes, offset, total, &[], rewrite, keep_spare)?;
     world.barrier();
     Ok(total)
 }
@@ -191,18 +182,19 @@ fn write_pwrite(
     bytes: &[u8],
     offset: u64,
     total: u64,
+    frame_starts: &[u64],
     rewrite: bool,
     keep_spare: bool,
 ) -> Result<(), BoxErr> {
     if rewrite {
-        return write_pwrite_spare(comm, path, bytes, offset, total, keep_spare);
+        return write_pwrite_spare(comm, path, bytes, offset, total, frame_starts, keep_spare);
     }
     // Rank 0's file is the same unpublished inode `commit_shared_store`
     // renames onto `path`. fallocate of the whole length happens once,
     // inside `begin_shared_store`, before any rank writes.
     let (held, tmp) = stage_store(comm, path, total)?;
-    // 0 = each rank writes its slice, 1 = rank 0 writes them in order,
-    // 2 = rank 0 rejected READCON_RANKED_WRITE.
+    // 0 = each rank pwrites its frames, 1 = rank 0 writes them in order,
+    // 2 = rank 0 rejected READCON_RANKED_WRITE, 3 = collective MPI-IO.
     let mut kind = [0u8];
     let mut choice_err = None;
     if comm.rank() == 0 {
@@ -210,6 +202,7 @@ fn write_pwrite(
             Ok(file) => match crate::writer::choose_ranked_store(&file) {
                 Ok(crate::writer::RankedStore::Parallel) => kind[0] = 0,
                 Ok(crate::writer::RankedStore::Sequential) => kind[0] = 1,
+                Ok(crate::writer::RankedStore::MpiIo) => kind[0] = 3,
                 Err(err) => {
                     kind[0] = 2;
                     choice_err = Some(err);
@@ -228,10 +221,11 @@ fn write_pwrite(
                 .read(true)
                 .write(true)
                 .open(&tmp)?;
-            store_ranked_slice(&file, bytes, offset)
+            pwrite_frames(&file, bytes, offset, frame_starts)
         })()
         .map_err(BoxErr::from),
         1 => write_ranked_sequential(comm, &tmp, bytes, total),
+        3 => write_mpiio(comm, &tmp, bytes, offset, total),
         _ => Err(choice_err
             .unwrap_or_else(|| "ranked store failed on rank 0".to_string())
             .into()),
@@ -404,12 +398,45 @@ fn stage_store(
     Ok((held, tmp))
 }
 
+fn pwrite_frames(
+    file: &std::fs::File,
+    bytes: &[u8],
+    offset: u64,
+    frame_starts: &[u64],
+) -> std::io::Result<()> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    if frame_starts.is_empty() {
+        return store_ranked_slice(file, bytes, offset);
+    }
+    for (index, &start) in frame_starts.iter().enumerate() {
+        let end = frame_starts
+            .get(index + 1)
+            .copied()
+            .unwrap_or(bytes.len() as u64);
+        let lo = usize::try_from(start).unwrap_or(usize::MAX);
+        let hi = usize::try_from(end).unwrap_or(usize::MAX);
+        if lo > bytes.len() || hi > bytes.len() || hi < lo {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "frame offset is outside the rank buffer",
+            ));
+        }
+        if hi > lo {
+            pwrite_all(file, &bytes[lo..hi], offset + start)?;
+        }
+    }
+    Ok(())
+}
+
 fn write_pwrite_spare(
     comm: &Comm,
     path: &Path,
     bytes: &[u8],
     offset: u64,
     total: u64,
+    frame_starts: &[u64],
     keep_spare: bool,
 ) -> Result<(), BoxErr> {
     let spare = crate::writer::rewrite_names(path)
@@ -432,7 +459,7 @@ fn write_pwrite_spare(
             .read(true)
             .write(true)
             .open(&spare)?;
-        store_ranked_slice(&file, bytes, offset)
+        pwrite_frames(&file, bytes, offset, frame_starts)
     })();
     if let Err(err) = collective(comm, wrote.map_err(BoxErr::from), "pwrite") {
         return Err(err);
@@ -640,7 +667,16 @@ pub fn write_block_refs(
             // pass after the file is published.
             let ready = std::thread::scope(|scope| {
                 let job = scope.spawn(|| local_ready(offset, &bytes, total));
-                let stored = write_pwrite(comm, path, &bytes, offset, total, rewrite, keep_spare);
+                let stored = write_pwrite(
+                    comm,
+                    path,
+                    &bytes,
+                    offset,
+                    total,
+                    &starts,
+                    rewrite,
+                    keep_spare,
+                );
                 let ready = job.join().unwrap_or_else(|_| LocalReady {
                     hashes: Vec::new(),
                     tail: None,
@@ -1059,7 +1095,6 @@ fn publish_index(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn write_mpiio(
     comm: &Comm,
     path: &Path,
@@ -1337,21 +1372,33 @@ mod ranked_store_tests {
     use crate::writer::{RankedStore, ranked_store_for_magic, ranked_store_override};
 
     #[test]
-    fn local_block_magics_use_one_sequential_writer() {
-        for magic in [0xEF53_i64, 0x5846_5342, 0x9123_683E] {
-            assert_eq!(ranked_store_for_magic(magic), RankedStore::Sequential);
+    fn local_block_magics_pwrite_each_rank() {
+        for magic in [0xEF53_i64, 0x5846_5342, 0x9123_683E, 0x0102_1994, 0x6969] {
+            assert_eq!(
+                ranked_store_for_magic(magic),
+                RankedStore::Parallel,
+                "magic {magic:#x}"
+            );
         }
         // A 32-bit statfs word sign-extends btrfs. The low 32 bits still match.
         let sign_extended = 0x9123_683E_u32 as i32 as i64;
-        assert_eq!(
-            ranked_store_for_magic(sign_extended),
-            RankedStore::Sequential
-        );
+        assert_eq!(ranked_store_for_magic(sign_extended), RankedStore::Parallel);
+    }
+
+    #[test]
+    fn parallel_filesystems_use_mpi_io() {
+        for magic in [0x0BD0_0BD0_i64, 0x4750_4653, 0x1983_0326, 0xAAD7_AAEA] {
+            assert_eq!(
+                ranked_store_for_magic(magic),
+                RankedStore::MpiIo,
+                "magic {magic:#x}"
+            );
+        }
     }
 
     #[test]
     fn other_magics_keep_a_write_per_rank() {
-        for magic in [0_i64, -1, 0x0102_1994, 0x6969, 0x0BD0_0BD0, 0xFF53_4642] {
+        for magic in [0_i64, -1, 0xFF53_4642] {
             assert_eq!(
                 ranked_store_for_magic(magic),
                 RankedStore::Parallel,
@@ -1686,34 +1733,42 @@ mod split_hash {
 
 #[cfg(all(test, feature = "mpi"))]
 mod wide_rank_sha {
-    use super::write_ranked_bytes;
-    use crate::distrib::Comm;
+    use super::write_block;
+    use crate::distrib::{Comm, block_range};
+    use crate::distrib_write::WriteMode;
     use crate::types::ConFrameBuilder;
-    use crate::writer::{ConFrameWriter, format_coordinate_lines, wide_frame_header};
+    use crate::writer::ConFrameWriter;
     use mpi::collective::CommunicatorCollectives;
     use std::path::PathBuf;
 
-    fn frame() -> crate::types::ConFrame {
-        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
-        for index in 0..8 {
-            builder.add_atom(
-                "Cu",
-                index as f64 * 0.125,
-                0.25,
-                0.5,
-                [false, false, false],
-                index,
-                63.546,
-            );
-        }
-        builder.build().expect("frame")
+    /// Eight frames. Frame `n` is not a copy of frame 0: its coordinates move.
+    fn frames() -> Vec<crate::types::ConFrame> {
+        (0..8)
+            .map(|frame| {
+                let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+                for atom in 0..4 {
+                    builder.add_atom(
+                        "Cu",
+                        frame as f64 + atom as f64 * 0.25,
+                        0.5,
+                        1.5,
+                        [false, false, false],
+                        atom,
+                        63.546,
+                    );
+                }
+                builder.build().expect("frame")
+            })
+            .collect()
     }
 
-    fn bound_bytes(frame: &crate::types::ConFrame) -> Vec<u8> {
+    fn bound_bytes(frames: &[crate::types::ConFrame]) -> Vec<u8> {
         let mut buf = Vec::new();
         {
             let mut writer = ConFrameWriter::new(&mut buf);
-            writer.write_frame_bound(frame).expect("bound");
+            for frame in frames {
+                writer.write_frame_bound(frame).expect("bound");
+            }
             writer.flush().expect("flush");
         }
         buf
@@ -1723,22 +1778,14 @@ mod wide_rank_sha {
         let universe = mpi::initialize().expect("mpi");
         let world = universe.world();
         let comm = Comm::dup_of(&world);
-        let frame = frame();
-        let expect = bound_bytes(&frame);
-        let share = frame.atom_data.len() / comm.size();
-        let rank = comm.rank();
-        let slice = format_coordinate_lines(&frame.atom_data[rank * share..(rank + 1) * share])
-            .expect("slice");
-        let mut body = if rank == 0 {
-            wide_frame_header(&frame).expect("header")
-        } else {
-            Vec::new()
-        };
-        body.extend(slice);
+        let frames = frames();
+        let expect = bound_bytes(&frames);
+        let range = block_range(frames.len(), comm.size(), comm.rank());
+        let mine = &frames[range];
         let out = PathBuf::from(std::env::var("READCON_RANK_OUT").expect("out"));
-        write_ranked_bytes(&comm, &out, &body, false, false).expect("write");
+        write_block(&comm, &out, mine, WriteMode::MpiIo, None, false, false).expect("write");
         comm.raw().barrier();
-        if rank == 0 {
+        if comm.rank() == 0 {
             let got = std::fs::read(&out).expect("read");
             assert_eq!(got, expect, "ranks {}", comm.size());
         }
@@ -1762,19 +1809,20 @@ mod wide_rank_sha {
                         std::process::id()
                     ));
                 let _ = std::fs::create_dir_all(out.parent().expect("parent"));
-                let status = std::process::Command::new("mpirun")
-                    .args([
-                        "-n",
-                        &ranks.to_string(),
-                        exe.to_str().expect("utf8"),
-                        "one_two_four_and_eight_ranks_share_one_file",
-                    ])
-                    .env("READCON_WIDE_CHILD", "1")
-                    .env("READCON_RANKED_WRITE", mode)
-                    .env("READCON_RANK_OUT", &out)
-                    .status()
+                let mut cmd = crate::mpi_launch::mpi_command();
+                cmd.args([
+                    "-n",
+                    &ranks.to_string(),
+                    exe.to_str().expect("utf8"),
+                    "one_two_four_and_eight_ranks_share_one_file",
+                ])
+                .env("READCON_WIDE_CHILD", "1")
+                .env("READCON_RANKED_WRITE", mode)
+                .env("READCON_RANK_OUT", &out);
+                let output = cmd
+                    .output()
                     .unwrap_or_else(|err| panic!("mpirun -n {ranks} {mode}: {err}"));
-                assert!(status.success(), "mpirun -n {ranks} {mode} failed");
+                crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} {mode}"));
                 let bytes = std::fs::read(&out).expect("written");
                 let got = sha256_hex(&bytes);
                 match &digest {
