@@ -1,7 +1,7 @@
 """Emit the later pinned tables from git show of the record commits.
 
 camp16b, camp17, camp18, camp19 and camp20 live in readcon-core.
-db15, db16 and db17 live in readcon-db. A row's 1/2/4/8 ladder and its
+db16, db17 and db18 live in readcon-db. A row's 1/2/4/8 ladder and its
 efficiency come from one record. A later record that measured only some
 worker counts fills those cells and leaves the efficiency blank.
 """
@@ -33,8 +33,8 @@ CAMP17 = "a350668818694095c7f9a10250a32aa1911e7001"
 CAMP18 = "63f1db1fe72ca085a2540cd87d99c4d1f066afeb"
 CAMP19 = "87beea40ae3c6f21bb7d24cbc7f879b9ed9312ff"
 CAMP20 = "ef4d6946e8e148428c964be7f48975ebfde06fa1"
-DB15 = "9e568240a2d734085da2c411be0977e604e12ed6"
 DB16 = "fe3e0d54db993e0e6750cd48939823f32d663f23"
+DB18 = "06ffcbddc44039b4bf3f3c38793a0927a5709d8a"
 
 FILES = ("con-100k", "convel", "con-1e6")
 WORKERS = (1, 2, 4, 8)
@@ -558,11 +558,11 @@ def camp20_tex() -> str:
 
 
 def db15_tex() -> str:
-    times = load(readcon_db(), DB15, "bench/db15/campaign.json")["fair"]
-    sizes = load(readcon_db(), DB16, "bench/db16/campaign.json")["fair"]
+    rows = load(readcon_db(), DB18, "bench/db18/campaign.json")["fair"]
+    index = {(row["workload"], row["op"], row["cache"], row["tool"]): row for row in rows}
     disk = {
         (row["workload"], row["tool"]): int(row["disk_bytes"])
-        for row in sizes
+        for row in rows
         if row["op"] == "insert"
     }
     order_w = ("frames-1000", "frames-10000", "traj-100k")
@@ -578,24 +578,33 @@ def db15_tex() -> str:
         ("metadata", "warm", "metadata"),
     )
     tools = (("readcon-db", "readcon-db"), ("ase.db", "ASE database"))
-    index = {(row["workload"], row["op"], row["cache"], row["tool"]): row for row in times}
+    samples = {int(row["n"]) for row in rows}
+    if len(samples) != 1:
+        raise SystemExit(f"bench/db18 fair rows do not share one sample count: {sorted(samples)}")
     body = []
+    missing = []
     for workload in order_w:
         for op, cache, label in order_op:
             for tool, shown in tools:
-                row = index[(workload, op, cache, tool)]
+                key = (workload, op, cache, tool)
+                row = index.get(key)
+                if row is None or (workload, tool) not in disk:
+                    missing.append(key)
+                    continue
                 rate = sig(row["frames_per_s"]) if row.get("frames_per_s") else ""
                 mb = sig(row["megabytes_per_s"]) if row.get("megabytes_per_s") else ""
                 body.append(
                     f"{workload} & {shown} & {label} & {cache} & "
                     f"{sig(row['median_s'])} & {rate} & {mb} & {disk[(workload, tool)]} \\\\"
                 )
+    if missing:
+        listed = ", ".join(f"{w} {op} {cache} {tool}" for w, op, cache, tool in missing)
+        raise SystemExit(f"bench/db18 has no row for: {listed}")
     caption = (
         "Scale comparison of readcon-db and the ASE database. "
-        "Time is the type-7 median in seconds, and $n{=}12$. "
+        f"Time is the type-7 median in seconds, and $n{{=}}{samples.pop()}$. "
         "frames/s and MB/s are the ingest of the CON text. "
-        "Disk is the database file in bytes after the later ingest. "
-        "The times, frames/s and MB/s are the earlier measurement. "
+        "Disk is the database file in bytes after that ingest. "
         "A cold read drops the page cache until the mincore resident fraction is 0, opens outside the clock, and times the query. "
         "A warm read times the query after one warmup read. "
         "A range read returns an inclusive frame-index span. "
@@ -619,7 +628,7 @@ def db15_tex() -> str:
 
 
 def pinned_macros() -> str:
-    sizes = load(readcon_db(), DB16, "bench/db16/campaign.json")["fair"]
+    sizes = load(readcon_db(), DB18, "bench/db18/campaign.json")["fair"]
     disk = {
         (row["workload"], row["tool"]): int(row["disk_bytes"])
         for row in sizes

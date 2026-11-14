@@ -1,6 +1,6 @@
 {\scriptsize\setlength{\tabcolsep}{3pt}
 \begin{longtable}{@{}llllrrrr@{}}
-\caption{Scale comparison of readcon-db and the ASE database. Time is the type-7 median in seconds, and $n{=}12$. frames/s and MB/s are the ingest of the CON text. Disk is the database file in bytes after the later ingest. The times, frames/s and MB/s are the earlier measurement. A cold read drops the page cache until the mincore resident fraction is 0, opens outside the clock, and times the query. A warm read times the query after one warmup read. A range read returns an inclusive frame-index span. A metadata read returns the frame indexes whose energy is in the last tenth. Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}\label{tab:db15}\\
+\caption{Scale comparison of readcon-db and the ASE database. Time is the type-7 median in seconds, and $n{=}12$. frames/s and MB/s are the ingest of the CON text. Disk is the database file in bytes after that ingest. A cold read drops the page cache until the mincore resident fraction is 0, opens outside the clock, and times the query. A warm read times the query after one warmup read. A range read returns an inclusive frame-index span. A metadata read returns the frame indexes whose energy is in the last tenth. Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}\label{tab:db15}\\
 \toprule
 Workload & Tool & Op & Cache & Time (s) & frames/s & MB/s & Disk (B) \\
 \midrule
@@ -10,60 +10,60 @@ Workload & Tool & Op & Cache & Time (s) & frames/s & MB/s & Disk (B) \\
 Workload & Tool & Op & Cache & Time (s) & frames/s & MB/s & Disk (B) \\
 \midrule
 \endhead
-frames-1000 & readcon-db & ingest & cold-file & 0.03353 & 2.983e+04 & 22.42 & 700416 \\
-frames-1000 & ASE database & ingest & cold-file & 0.2675 & 3738 & 2.809 & 1138688 \\
-frames-1000 & readcon-db & full & cold & 0.001709 &  &  & 700416 \\
-frames-1000 & ASE database & full & cold & 0.0853 &  &  & 1138688 \\
-frames-1000 & readcon-db & selected & cold & 0.0002839 &  &  & 700416 \\
-frames-1000 & ASE database & selected & cold & 0.001132 &  &  & 1138688 \\
-frames-1000 & readcon-db & range & cold & 0.001324 &  &  & 700416 \\
-frames-1000 & ASE database & range & cold & 0.0264 &  &  & 1138688 \\
-frames-1000 & readcon-db & metadata & cold & 0.0008047 &  &  & 700416 \\
-frames-1000 & ASE database & metadata & cold & 0.004526 &  &  & 1138688 \\
-frames-1000 & readcon-db & full & warm & 0.0006719 &  &  & 700416 \\
-frames-1000 & ASE database & full & warm & 0.08005 &  &  & 1138688 \\
-frames-1000 & readcon-db & selected & warm & 1.174e-05 &  &  & 700416 \\
-frames-1000 & ASE database & selected & warm & 0.0002189 &  &  & 1138688 \\
-frames-1000 & readcon-db & range & warm & 0.0001326 &  &  & 700416 \\
-frames-1000 & ASE database & range & warm & 0.02035 &  &  & 1138688 \\
-frames-1000 & readcon-db & metadata & warm & 2.582e-05 &  &  & 700416 \\
-frames-1000 & ASE database & metadata & warm & 0.002537 &  &  & 1138688 \\
-frames-10000 & readcon-db & ingest & cold-file & 0.3214 & 3.111e+04 & 23.88 & 6266880 \\
-frames-10000 & ASE database & ingest & cold-file & 2.818 & 3549 & 2.724 & 10792960 \\
-frames-10000 & readcon-db & full & cold & 0.02196 &  &  & 6266880 \\
-frames-10000 & ASE database & full & cold & 0.9821 &  &  & 10792960 \\
-frames-10000 & readcon-db & selected & cold & 0.0003109 &  &  & 6266880 \\
-frames-10000 & ASE database & selected & cold & 0.00379 &  &  & 10792960 \\
-frames-10000 & readcon-db & range & cold & 0.01357 &  &  & 6266880 \\
-frames-10000 & ASE database & range & cold & 0.2231 &  &  & 10792960 \\
-frames-10000 & readcon-db & metadata & cold & 0.006186 &  &  & 6266880 \\
-frames-10000 & ASE database & metadata & cold & 0.04347 &  &  & 10792960 \\
-frames-10000 & readcon-db & full & warm & 0.007626 &  &  & 6266880 \\
-frames-10000 & ASE database & full & warm & 0.9425 &  &  & 10792960 \\
-frames-10000 & readcon-db & selected & warm & 1.64e-05 &  &  & 6266880 \\
-frames-10000 & ASE database & selected & warm & 0.0007309 &  &  & 10792960 \\
-frames-10000 & readcon-db & range & warm & 0.001946 &  &  & 6266880 \\
-frames-10000 & ASE database & range & warm & 0.2209 &  &  & 10792960 \\
-frames-10000 & readcon-db & metadata & warm & 0.000249 &  &  & 6266880 \\
-frames-10000 & ASE database & metadata & warm & 0.02721 &  &  & 10792960 \\
-traj-100k & readcon-db & ingest & cold-file & 1.332 & 48.06 & 248.3 & 342003712 \\
-traj-100k & ASE database & ingest & cold-file & 1.494 & 42.82 & 221.2 & 384503808 \\
-traj-100k & readcon-db & full & cold & 0.6514 &  &  & 342003712 \\
-traj-100k & ASE database & full & cold & 2.539 &  &  & 384503808 \\
-traj-100k & readcon-db & selected & cold & 0.007261 &  &  & 342003712 \\
-traj-100k & ASE database & selected & cold & 0.0377 &  &  & 384503808 \\
-traj-100k & readcon-db & range & cold & 0.1702 &  &  & 342003712 \\
-traj-100k & ASE database & range & cold & 0.6023 &  &  & 384503808 \\
-traj-100k & readcon-db & metadata & cold & 0.0002614 &  &  & 342003712 \\
-traj-100k & ASE database & metadata & cold & 0.2595 &  &  & 384503808 \\
-traj-100k & readcon-db & full & warm & 0.4048 &  &  & 342003712 \\
-traj-100k & ASE database & full & warm & 1.983 &  &  & 384503808 \\
-traj-100k & readcon-db & selected & warm & 0.002768 &  &  & 342003712 \\
-traj-100k & ASE database & selected & warm & 0.03158 &  &  & 384503808 \\
-traj-100k & readcon-db & range & warm & 0.1006 &  &  & 342003712 \\
-traj-100k & ASE database & range & warm & 0.5182 &  &  & 384503808 \\
-traj-100k & readcon-db & metadata & warm & 3.326e-06 &  &  & 342003712 \\
-traj-100k & ASE database & metadata & warm & 0.08254 &  &  & 384503808 \\
+frames-1000 & readcon-db & ingest & cold-file & 0.02998 & 3.335e+04 & 25.06 & 356352 \\
+frames-1000 & ASE database & ingest & cold-file & 0.2737 & 3654 & 2.746 & 1146880 \\
+frames-1000 & readcon-db & full & cold & 0.0004132 &  &  & 356352 \\
+frames-1000 & ASE database & full & cold & 0.08424 &  &  & 1146880 \\
+frames-1000 & readcon-db & selected & cold & 4.183e-05 &  &  & 356352 \\
+frames-1000 & ASE database & selected & cold & 0.001435 &  &  & 1146880 \\
+frames-1000 & readcon-db & range & cold & 0.0001603 &  &  & 356352 \\
+frames-1000 & ASE database & range & cold & 0.02479 &  &  & 1146880 \\
+frames-1000 & readcon-db & metadata & cold & 3.598e-05 &  &  & 356352 \\
+frames-1000 & ASE database & metadata & cold & 0.004563 &  &  & 1146880 \\
+frames-1000 & readcon-db & full & warm & 0.0003494 &  &  & 356352 \\
+frames-1000 & ASE database & full & warm & 0.07959 &  &  & 1146880 \\
+frames-1000 & readcon-db & selected & warm & 1.053e-05 &  &  & 356352 \\
+frames-1000 & ASE database & selected & warm & 0.0002253 &  &  & 1146880 \\
+frames-1000 & readcon-db & range & warm & 9.612e-05 &  &  & 356352 \\
+frames-1000 & ASE database & range & warm & 0.02049 &  &  & 1146880 \\
+frames-1000 & readcon-db & metadata & warm & 1.269e-05 &  &  & 356352 \\
+frames-1000 & ASE database & metadata & warm & 0.002513 &  &  & 1146880 \\
+frames-10000 & readcon-db & ingest & cold-file & 0.2663 & 3.755e+04 & 28.82 & 3362816 \\
+frames-10000 & ASE database & ingest & cold-file & 2.632 & 3799 & 2.915 & 10817536 \\
+frames-10000 & readcon-db & full & cold & 0.005316 &  &  & 3362816 \\
+frames-10000 & ASE database & full & cold & 0.9272 &  &  & 10817536 \\
+frames-10000 & readcon-db & selected & cold & 5.059e-05 &  &  & 3362816 \\
+frames-10000 & ASE database & selected & cold & 0.003488 &  &  & 10817536 \\
+frames-10000 & readcon-db & range & cold & 0.001648 &  &  & 3362816 \\
+frames-10000 & ASE database & range & cold & 0.2277 &  &  & 10817536 \\
+frames-10000 & readcon-db & metadata & cold & 0.000151 &  &  & 3362816 \\
+frames-10000 & ASE database & metadata & cold & 0.03722 &  &  & 10817536 \\
+frames-10000 & readcon-db & full & warm & 0.005263 &  &  & 3362816 \\
+frames-10000 & ASE database & full & warm & 0.9158 &  &  & 10817536 \\
+frames-10000 & readcon-db & selected & warm & 1.051e-05 &  &  & 3362816 \\
+frames-10000 & ASE database & selected & warm & 0.0007302 &  &  & 10817536 \\
+frames-10000 & readcon-db & range & warm & 0.001084 &  &  & 3362816 \\
+frames-10000 & ASE database & range & warm & 0.2152 &  &  & 10817536 \\
+frames-10000 & readcon-db & metadata & warm & 0.0001002 &  &  & 3362816 \\
+frames-10000 & ASE database & metadata & warm & 0.02571 &  &  & 10817536 \\
+traj-100k & readcon-db & ingest & cold-file & 1.229 & 52.07 & 269 & 341966848 \\
+traj-100k & ASE database & ingest & cold-file & 1.394 & 45.9 & 237.1 & 384503808 \\
+traj-100k & readcon-db & full & cold & 0.6378 &  &  & 341966848 \\
+traj-100k & ASE database & full & cold & 2.414 &  &  & 384503808 \\
+traj-100k & readcon-db & selected & cold & 0.006779 &  &  & 341966848 \\
+traj-100k & ASE database & selected & cold & 0.03627 &  &  & 384503808 \\
+traj-100k & readcon-db & range & cold & 0.1747 &  &  & 341966848 \\
+traj-100k & ASE database & range & cold & 0.6025 &  &  & 384503808 \\
+traj-100k & readcon-db & metadata & cold & 1.506e-05 &  &  & 341966848 \\
+traj-100k & ASE database & metadata & cold & 0.2855 &  &  & 384503808 \\
+traj-100k & readcon-db & full & warm & 0.3614 &  &  & 341966848 \\
+traj-100k & ASE database & full & warm & 1.928 &  &  & 384503808 \\
+traj-100k & readcon-db & selected & warm & 0.002727 &  &  & 341966848 \\
+traj-100k & ASE database & selected & warm & 0.03013 &  &  & 384503808 \\
+traj-100k & readcon-db & range & warm & 0.09313 &  &  & 341966848 \\
+traj-100k & ASE database & range & warm & 0.493 &  &  & 384503808 \\
+traj-100k & readcon-db & metadata & warm & 2.433e-06 &  &  & 341966848 \\
+traj-100k & ASE database & metadata & warm & 0.0859 &  &  & 384503808 \\
 \bottomrule
 \end{longtable}
 }
