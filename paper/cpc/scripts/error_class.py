@@ -1,6 +1,6 @@
 """The ParseError class of a failed readcon read.
 
-readcon-core 0.17.4 raises OSError with the Display text of the Rust
+readcon-core 0.17.3 raises OSError with the Display text of the Rust
 ParseError (``src/error.rs``), and ``classify`` maps that text to the name of
 the variant.
 """

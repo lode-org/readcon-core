@@ -1,4 +1,4 @@
-/* Read one CON file with the C API of readcon-core 0.17.4.
+/* Read one CON file with the C API of readcon-core 0.23.3.
  *
  * rkr_read_all_frames returns NULL on failure and does not write an
  * error string. readcon-core issue 51 is the open change that would

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Time every Python and C++ read of the 0.17.4 tables in one interleaved campaign.
+"""Time every Python and C++ read of the 0.17.3 tables in one interleaved campaign.
 
 A cell is one reader on one payload at one thread count: the Python cells of
 ``readers.py``, each run a fresh ``bench_child.py``, and the C++ cells of

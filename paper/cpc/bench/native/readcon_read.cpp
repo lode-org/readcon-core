@@ -1,8 +1,8 @@
-// readcon-core 0.17.4 through its C++ header: read_all_frames(path, n_threads),
+// readcon-core 0.17.3 through its C++ header: read_all_frames(path, n_threads),
 // then one record per frame of the output contract. Positions, velocities and
 // ids stay in the frame's binary64 and u64 columns, and ConFrame::pbc() gives
 // the periodic flags, periodic in all three directions when pbc is absent
-// (CON-cell.3). The 0.17.4 header has no column accessor for the atomic
+// (CON-cell.3). The 0.17.3 header has no column accessor for the atomic
 // numbers or the fixed flags, so both come from ConFrame::atoms(), the
 // per-atom list, and none for the cell matrix, so the frame's JSON metadata is
 // scanned for lattice_vectors, which wins over lines 3-4 (CON-cell.1).
