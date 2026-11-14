@@ -45,21 +45,22 @@ fn library_dirs() -> Vec<PathBuf> {
             break;
         }
     }
-    let build = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
-    if let Ok(entries) = fs::read_dir(&build) {
-        for entry in entries.flatten() {
-            let out = entry.path().join("out");
-            if plain_library(&out) {
-                dirs.push(out);
+    // A non-Python build can leave the plain cdylib in the build-script
+    // out directory. A Python build must not pick up an older plain library
+    // from that tree.
+    if !cfg!(feature = "python") {
+        let build =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
+        if let Ok(entries) = fs::read_dir(&build) {
+            for entry in entries.flatten() {
+                let out = entry.path().join("out");
+                if plain_library(&out) {
+                    dirs.push(out);
+                }
             }
         }
     }
-    assert!(!dirs.is_empty(), "libreadcon_core was not built");
     dirs
-}
-
-fn link_flags() -> Vec<String> {
-    link_flags_for(&library_dirs())
 }
 
 fn frame(id: u64, x: f64) -> ConFrame {
@@ -239,6 +240,14 @@ fn c_append_flush_and_string_match_the_file() {
 
 #[test]
 fn cpp_append_flush_and_string_match_the_file() {
+    let dirs = library_dirs();
+    if cfg!(feature = "python") && dirs.is_empty() {
+        return;
+    }
+    assert!(
+        !dirs.is_empty(),
+        "a non-Python libreadcon_core was not next to the test binary"
+    );
     let dir = tempfile::tempdir().unwrap();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/c/test_writer_append.cpp");
     let binary = dir.path().join("test_writer_append");
@@ -246,7 +255,7 @@ fn cpp_append_flush_and_string_match_the_file() {
     command
         .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", "include"])
         .arg(&source);
-    for flag in link_flags() {
+    for flag in link_flags_for(&dirs) {
         command.arg(flag);
     }
     let status = command.arg("-o").arg(&binary).status().expect("g++");
@@ -256,7 +265,7 @@ fn cpp_append_flush_and_string_match_the_file() {
     );
     let run = Command::new(&binary)
         .arg(dir.path())
-        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
+        .env("LD_LIBRARY_PATH", runtime_library_path(&dirs))
         .status()
         .expect("run cpp writer test");
     assert!(run.success(), "C++ append, flush, or string check failed");
