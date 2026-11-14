@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+from bench_disk import bench_disk
+
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = Path(__file__).resolve().parent
 OUT = BENCH / "results"
@@ -88,7 +90,13 @@ def time_callable(fn, repeats: int = 6) -> tuple[float, list[float]]:
 
 def run_probe(path: Path) -> tuple[list[float], int]:
     proc = subprocess.run(
-        [str(PROBE), str(path), "/tmp/serial-probe.json", "6", "positions"],
+        [
+            str(PROBE),
+            str(path),
+            str(bench_disk() / "serial-probe.json"),
+            "6",
+            "positions",
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -96,13 +104,13 @@ def run_probe(path: Path) -> tuple[list[float], int]:
     # The probe writes samples and does not print them. Read the json.
     # Warmup is inside the probe and is not a sample.
     _ = proc
-    doc = json.loads(Path("/tmp/serial-probe.json").read_text())
+    doc = json.loads((bench_disk() / "serial-probe.json").read_text())
     return [float(v) for v in doc["samples_s"]], int(doc["frames"])
 
 
 def run_c(path: Path) -> list[float]:
     proc = subprocess.run(
-        [str(TIME_C), "read", str(path), "/tmp/unused-write.con", "6"],
+        [str(TIME_C), "read", str(path), str(bench_disk() / "unused-write.con"), "6"],
         check=True,
         capture_output=True,
         text=True,
@@ -132,7 +140,7 @@ def fresh_rss(cmd: list[str]) -> int:
 def main() -> None:
     pin()
     readcon_only = "--readcon-only" in sys.argv
-    eon_root = os.environ.get("EON_ROOT", "/tmp/eOn")
+    eon_root = os.environ.get("EON_ROOT", str(bench_disk() / "eOn"))
     if (Path(eon_root) / "eon" / "fileio.py").is_file():
         sys.path.insert(0, eon_root)
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -438,7 +446,13 @@ def measure_rss() -> list[str]:
     for file_id, path in ("con-100k", CON), ("convel", CONVEL), ("con-1e6", MILLION):
         lines.append(
             rss_command(
-                [str(PROBE), str(path), "/tmp/serial-probe-rss.json", "1", "positions"],
+                [
+                    str(PROBE),
+                    str(path),
+                    str(bench_disk() / "serial-probe-rss.json"),
+                    "1",
+                    "positions",
+                ],
                 file_id,
                 "readcon-rust",
                 path,
@@ -446,14 +460,20 @@ def measure_rss() -> list[str]:
         )
         lines.append(
             rss_command(
-                [str(TIME_C), "read", str(path), "/tmp/unused-write.con", "1"],
+                [
+                    str(TIME_C),
+                    "read",
+                    str(path),
+                    str(bench_disk() / "unused-write.con"),
+                    "1",
+                ],
                 file_id,
                 "readcon-c",
                 path,
             )
         )
     print("\n".join(lines), flush=True)
-    eon_root = os.environ.get("EON_ROOT", "/tmp/eOn")
+    eon_root = os.environ.get("EON_ROOT", str(bench_disk() / "eOn"))
     jobs = [
         (
             "con-100k",

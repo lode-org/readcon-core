@@ -20,6 +20,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -261,7 +263,7 @@ def main() -> None:
     env["READCON_SCALE_LOG"] = str(LOG)
     env.pop("RAYON_NUM_THREADS", None)
     env.pop("CARGO_TARGET_DIR", None)
-    eon = env.get("EON_ROOT", "/tmp/eOn")
+    eon = env.get("EON_ROOT", str(bench_disk() / "eOn"))
     if (Path(eon) / "eon" / "fileio.py").is_file():
         env["EON_ROOT"] = eon
     subprocess.run(

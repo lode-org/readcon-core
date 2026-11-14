@@ -18,6 +18,8 @@ import time
 import tracemalloc
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 BENCH = Path(__file__).resolve().parent
@@ -65,7 +67,8 @@ def child_compressed(src: str, codec: str) -> None:
     before = hwm_kib()
     tracemalloc.start()
     tracemalloc.clear_traces()
-    dest = Path(f"/tmp/perf19-cw-{os.getpid()}.{'gz' if codec == 'gzip' else 'zst'}")
+    suffix = "gz" if codec == "gzip" else "zst"
+    dest = bench_disk() / f"perf19-cw-{os.getpid()}.{suffix}"
     dest.unlink(missing_ok=True)
     started = time.perf_counter()
     readcon.write_con(os.fspath(dest), frames, compression=codec)

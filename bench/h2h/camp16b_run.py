@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 BENCH = Path(__file__).resolve().parent
@@ -50,10 +52,10 @@ def host_record() -> dict:
         "lscpu": capture(["lscpu"]),
         "tmpfs": capture(["findmnt", "-no", "TARGET,FSTYPE,OPTIONS", "/dev/shm"]),
         "root": capture(["findmnt", "-no", "TARGET,FSTYPE,SOURCE,OPTIONS", "/"]),
-        "tmp_is_ext4": Path("/tmp").is_dir(),
+        "disk": str(bench_disk()),
         "note": (
-            "/tmp is the root ext4 filesystem. /dev/shm is tmpfs. "
-            "A write whose destination is /tmp is not a tmpfs row."
+            "Disk rows use READCON_BENCH_DISK or <repo>/build/bench. "
+            "/dev/shm is tmpfs. A write on the disk root is not a tmpfs row."
         ),
     }
 
@@ -71,7 +73,7 @@ def reconcile(probe: Path) -> None:
     rows = []
     for label, dest in (
         ("tmpfs", Path("/dev/shm/camp16b-reconcile.con")),
-        ("ext4", Path("/tmp/camp16b-reconcile.con")),
+        ("ext4", bench_disk() / "camp16b-reconcile.con"),
     ):
         env = os.environ.copy()
         env["READCON_PROBE_OUT"] = str(dest)
@@ -116,8 +118,8 @@ def reconcile(probe: Path) -> None:
                 "camp14_tmpfs_threads_t8_s": 0.1515,
                 "camp15_reported_t8_s": 0.213,
                 "explanation": (
-                    "camp15 timed READCON_PROBE_OUT under /tmp, which is the "
-                    "root ext4 disk. camp14's 0.1515 s row wrote to /dev/shm. "
+                    "camp15 timed READCON_PROBE_OUT on the root ext4 disk. "
+                    "camp14's 0.1515 s row wrote to /dev/shm. "
                     "Same 64000-frame cuh2 file, same 8-thread scale_probe."
                 ),
                 "rows": rows,

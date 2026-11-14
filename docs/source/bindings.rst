@@ -539,9 +539,7 @@ Include ``readcon-core.h`` and link against ``libreadcon_core``.
 A ranked write (``rkr_mpi_write_block``) stores a fresh file. On ext2, ext3,
 ext4, XFS, and btrfs, rank 0 writes every slice in order. Every other
 filesystem keeps one write per rank. ``READCON_RANKED_WRITE=parallel`` or
-``sequential``, read on rank 0, overrides that choice. Leave it unset. A
-million-atom single frame on ext4 is still slower than a warm overwrite
-and slower than a plain copy of those bytes.
+``sequential``, read on rank 0, overrides that choice. Leave it unset.
 
 .. code:: c
 

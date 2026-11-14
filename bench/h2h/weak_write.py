@@ -12,9 +12,9 @@ One warmup, then six serial samples. The median and the interquartile
 range use the type-7 percentile (NumPy ``linear``). Each sample unlinks
 the destination before creating it, and each sample is a fresh process
 pinned to the same CPU set. Sample order rotates across the arms in a
-group so no arm's repeats form a block. Page cache is the ext4
-filesystem that holds ``/tmp``. The second ceiling is the same 8-thread
-sink on tmpfs (``/dev/shm``).
+group so no arm's repeats form a block. Page cache is the filesystem
+that holds the bench disk (``READCON_BENCH_DISK`` or ``<repo>/build/bench``).
+The second ceiling is the same 8-thread sink on tmpfs (``/dev/shm``).
 """
 
 from __future__ import annotations
@@ -27,6 +27,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+from bench_disk import bench_disk
 
 for _var in (
     "OMP_NUM_THREADS",
@@ -55,9 +57,9 @@ WIDTHS = (1, 2, 4, 8)
 WARMUP = 1
 REPEATS = 6
 CON = BENCH / "work" / "inputs" / "con-1000000x1.con"
-PAGE = Path("/tmp/perf17-page")
+PAGE = bench_disk() / "perf17-page"
 TMPFS = Path("/dev/shm/perf17")
-FRAME_PAYLOAD = Path("/tmp/perf17-frame.bin")
+FRAME_PAYLOAD = bench_disk() / "perf17-frame.bin"
 
 # perf14 weak writes on tmpfs, from bench/h2h/scaling/perf14/rows.json.
 PERF14_WEAK = {
@@ -559,7 +561,7 @@ def write_notes(path: Path, table: list[dict], strong: dict, sha: str) -> None:
         "numpy linear (type-7) median and IQR. Each sample is a fresh process",
         f"pinned with taskset -c {core_list()}, and sample order rotates.",
         "The writer is unchanged.",
-        "Page cache is ext4 (/tmp). The second ceiling is tmpfs (/dev/shm).",
+        "Page cache is the bench disk. The second ceiling is tmpfs (/dev/shm).",
         "Ideal efficiency is T(1)/T(N). The ceiling is max(format alone, sink(N)).",
         "ceiling_fraction is that ceiling divided by the weak-write median.",
         "Format alone is the weak write minus one pwrite of the bytes that write produced.",

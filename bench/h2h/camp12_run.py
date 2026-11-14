@@ -13,6 +13,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +22,7 @@ OUT = ROOT / "bench" / "h2h" / "scaling" / "camp12"
 PROBE = ROOT / "target/release/examples/scale_probe"
 MPI = ROOT / "target/release/examples/weak_scale_mpi"
 FORMAT = ROOT / "target/release/examples/format_profile"
-BEFORE = Path("/tmp/format_profile_before")
+BEFORE = bench_disk() / "format_profile_before"
 WIDTHS = (1, 2, 4, 8)
 REPEATS = 12
 CON = ROOT / "resources/test/cuh2.con"

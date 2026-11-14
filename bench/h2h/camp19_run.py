@@ -13,6 +13,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 BENCH = Path(__file__).resolve().parent
@@ -124,7 +126,7 @@ def main() -> None:
     produced: dict[tuple[str, str], Path] = {}
     for name, ranks in CELLS:
         for sink, root in (
-            ("disk", Path("/tmp")),
+            ("disk", bench_disk()),
             ("memory", Path("/dev/shm")),
         ):
             dest = root / f"camp19-{name}-{ranks}.con"

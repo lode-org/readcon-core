@@ -330,9 +330,7 @@ The default store is a fresh file, not a spare reused in place. Rank 0
 renames that file onto the path only after every byte is stored. On ext2,
 ext3, ext4, XFS, and btrfs, rank 0 writes the slices in order. Other
 filesystems keep one write per rank. ``READCON_RANKED_WRITE=parallel`` or
-``sequential``, read on rank 0, overrides that. A million-atom single frame
-on ext4 is still slower than a warm overwrite and slower than a plain copy
-of those bytes. One gather of the frame offsets and block hashes then writes the ``.rcidx``
+``sequential``, read on rank 0, overrides that. One gather of the frame offsets and block hashes then writes the ``.rcidx``
 sidecar. Until the rename the new bytes are a second copy, and the
 published path is still the previous complete file. After the rename it
 is the finished new one.

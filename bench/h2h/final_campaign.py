@@ -17,6 +17,8 @@ import sys
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 sys.path.insert(0, str(BENCH))
@@ -122,7 +124,7 @@ def cmd_bindings(out: Path, repeats: int) -> None:
 def cmd_ceilings(out: Path, repeats: int) -> None:
     sha = head_sha()
     scale = prepare(out, repeats)
-    stream_bin = Path("/tmp/readcon-stream")
+    stream_bin = bench_disk() / "readcon-stream"
     if not stream_bin.exists():
         subprocess.run(
             [

@@ -2592,43 +2592,29 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     fn streaming_dir() -> Option<std::path::PathBuf> {
-        let mut candidates = vec![std::env::temp_dir()];
-        if let Ok(cwd) = std::env::current_dir() {
-            candidates.push(cwd);
+        let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("build")
+            .join("test");
+        if std::fs::create_dir_all(&base).is_err() || dir_is_tmpfs(&base) {
+            return None;
         }
-        candidates.push(std::path::PathBuf::from("/var/tmp"));
-        for base in candidates {
-            if base.is_dir() && !dir_is_tmpfs(&base) {
-                let dir = base.join(format!("conbin-stream-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&dir);
-                if std::fs::create_dir_all(&dir).is_ok() {
-                    return Some(dir);
-                }
-            }
-        }
-        None
+        // Each caller gets its own directory. Two tests in one process must
+        // not delete each other's file.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = base.join(format!(
+            "conbin-stream-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).ok()?;
+        Some(dir)
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn a_cold_multi_megabyte_file_uses_the_readahead_stream() {
-        let mut dir = None;
-        let mut candidates = vec![std::env::temp_dir()];
-        if let Ok(cwd) = std::env::current_dir() {
-            candidates.push(cwd);
-        }
-        candidates.push(std::path::PathBuf::from("/var/tmp"));
-        for base in candidates {
-            if base.is_dir() && !dir_is_tmpfs(&base) {
-                let path = base.join(format!("conbin-cold-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&path);
-                if std::fs::create_dir_all(&path).is_ok() {
-                    dir = Some(path);
-                    break;
-                }
-            }
-        }
-        let Some(dir) = dir else {
+        let Some(dir) = streaming_dir() else {
             panic!("no non-tmpfs directory for the readahead stream");
         };
         let path = dir.join("cold.conbin");

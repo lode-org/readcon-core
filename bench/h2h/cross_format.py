@@ -36,6 +36,8 @@ import sys
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 from sample_protocol import (
     core_list,
@@ -1384,7 +1386,7 @@ def _mdcompress_tools() -> tuple[Path, Path, str] | None:
     which = shutil.which("mdcompress")
     if which:
         candidates.append(Path(which))
-    candidates.append(Path("/tmp/mdcompress/bin/mdcompress"))
+    candidates.append(bench_disk() / "mdcompress" / "bin" / "mdcompress")
     for path in candidates:
         if path.is_file() and os.access(path, os.X_OK):
             binary = path
@@ -1392,7 +1394,7 @@ def _mdcompress_tools() -> tuple[Path, Path, str] | None:
     module = None
     module_env = os.environ.get("MDCOMPRESS_PYTHON", "")
     module_candidates = [Path(module_env)] if module_env else []
-    module_candidates.append(Path("/tmp/mdcompress/python/build"))
+    module_candidates.append(bench_disk() / "mdcompress" / "python" / "build")
     for path in module_candidates:
         if path.is_dir() and any(path.glob("mdc*.so")):
             module = path
