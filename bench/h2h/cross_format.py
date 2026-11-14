@@ -18,14 +18,19 @@ in Drops.
 
 Each arm is converted once, outside the clock. Samples are fresh processes
 pinned to the same CPU set, one warmup, six serial samples, rotated order.
-The log keeps every sample, the type-7 median and IQR, peak RSS, file
-size, and the fields the format did not round-trip.
+A row whose IQR/median exceeds 5% takes six more samples. The log keeps
+every sample, the type-7 median and IQR, peak RSS, file size, and the
+fields the format did not round-trip. A timed write is kept only when the
+file is non-empty, inside that format's size range, and reads back at the
+full atom count.
 """
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -35,6 +40,7 @@ import numpy as np
 from sample_protocol import (
     core_list,
     host_snapshot,
+    peak_rss_bytes,
     pin_cores,
     result_line,
     rotate,
@@ -988,6 +994,10 @@ def expect_file_bytes(arm_id: str, n_atoms: int, n_frames: int, size: int) -> No
         low = max(64, n)
     elif any(token in arm_id for token in ("dcd", "ncdf", "trr", "conbin")):
         low = n * 8
+    elif "mdc" in arm_id:
+        # Archive MDC is a few bytes per atom. Half a byte is still far
+        # above a stub and under the files this compressor writes.
+        low = max(64, n // 2)
     else:
         low = n * 4
     high = n * 400
@@ -1005,6 +1015,25 @@ def expect_full_read(got: dict, n_atoms: int, n_frames: int, arm_id: str) -> Non
         raise SystemExit(
             f"{arm_id} read shape {tuple(positions.shape)}, expected {expected}"
         )
+
+
+def expect_written_roundtrip(
+    arm_id: str, path: Path, n_atoms: int, n_frames: int
+) -> None:
+    """The file a timed write left behind is that format, at this atom count.
+
+    Called after the clock stops. A 0-byte or 10-byte stand-in fails, and so
+    does a file that does not read back as ``(n_frames, n_atoms, 3)``.
+    """
+    written = Path(path)
+    size = written.stat().st_size
+    if size <= 0:
+        raise SystemExit(f"{arm_id} wrote {size} bytes")
+    expect_file_bytes(arm_id, n_atoms, n_frames, size)
+    # readcon-chemfiles writes CON from frames it read as XYZ.
+    reader = "readcon-con" if arm_id == "readcon-chemfiles" else arm_id
+    got = read_arm(reader, os.fspath(written))
+    expect_full_read(got, n_atoms, n_frames, arm_id)
 
 
 def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
@@ -1310,7 +1339,188 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
         )
     except ImportError:
         notes.append("OVITO is not installed.")
+    found = _mdcompress_tools()
+    if found is None:
+        notes.append(
+            "mdcompress 1.0.0 is not on PyPI. The refresh-bio binary and "
+            "its in-memory reader were not both available, so the row is omitted."
+        )
+    else:
+        _binary, _pypath, version = found
+        arms.append(
+            {
+                "id": "mdcompress-mdc",
+                "tool": "mdcompress",
+                "format": "mdc",
+                "precision": PRECISION["xtc"],
+                "notes": (
+                    f"MDCompress {version}, archive preset, one thread. "
+                    "1.0.0 is not this binary. The timed write compresses a "
+                    "DCD already on disk. The timed read is the in-memory "
+                    "reader. Default resolution is 0.01 angstrom"
+                ),
+            }
+        )
+        notes.append(
+            f"mdcompress {version} (refresh-bio). 1.0.0 is not on PyPI and "
+            "this row is not relabeled as 1.0.0. Archive preset, one thread. "
+            "The clock compresses a DCD that is already on disk, and the "
+            "read queries one frame at a time. The binding views the float64 "
+            "box as float32; the cell is read from those bytes as float64."
+        )
     return arms, notes
+
+
+def _mdcompress_tools() -> tuple[Path, Path, str] | None:
+    """Binary, reader module directory, and the version the binary prints."""
+    cached = getattr(_mdcompress_tools, "found", None)
+    if cached is not None:
+        return cached or None
+    binary = None
+    env = os.environ.get("MDCOMPRESS", "")
+    candidates = [Path(env)] if env else []
+    which = shutil.which("mdcompress")
+    if which:
+        candidates.append(Path(which))
+    candidates.append(Path("/tmp/mdcompress/bin/mdcompress"))
+    for path in candidates:
+        if path.is_file() and os.access(path, os.X_OK):
+            binary = path
+            break
+    module = None
+    module_env = os.environ.get("MDCOMPRESS_PYTHON", "")
+    module_candidates = [Path(module_env)] if module_env else []
+    module_candidates.append(Path("/tmp/mdcompress/python/build"))
+    for path in module_candidates:
+        if path.is_dir() and any(path.glob("mdc*.so")):
+            module = path
+            break
+    if binary is None or module is None:
+        _mdcompress_tools.found = False
+        return None
+    if str(module) not in sys.path:
+        sys.path.insert(0, str(module))
+    try:
+        import mdc  # noqa: F401
+    except ImportError:
+        _mdcompress_tools.found = False
+        return None
+    proc = subprocess.run(
+        [os.fspath(binary)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    version = "unknown"
+    for line in (proc.stdout + proc.stderr).splitlines():
+        if "version:" in line.lower():
+            version = line.split(":", 1)[1].strip()
+            break
+    found = (binary, module, version)
+    _mdcompress_tools.found = found
+    return found
+
+
+def _mdc_box_to_cell(frame) -> np.ndarray:
+    """Lengths and angles from a frame whose binding types the box as float32.
+
+    ``frame.box`` is ``double[3][3]`` viewed as float32. The pointer is the
+    float64 matrix.
+    """
+    view = frame.box
+    raw = (ctypes.c_double * 9).from_address(view.ctypes.data)
+    box = np.ctypeslib.as_array(raw).copy().reshape(3, 3)
+    lengths = np.linalg.norm(box, axis=1)
+    cell = np.zeros(6, dtype=np.float64)
+    cell[:3] = lengths
+
+    def angle(i: int, j: int) -> float:
+        cosine = float(np.dot(box[i], box[j]) / (lengths[i] * lengths[j]))
+        return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+    # alpha is between b and c, beta between a and c, gamma between a and b.
+    cell[3] = angle(1, 2)
+    cell[4] = angle(0, 2)
+    cell[5] = angle(0, 1)
+    return cell
+
+
+def read_mdcompress(path: str) -> dict:
+    import mdc
+
+    reader = mdc.Reader(path)
+    if reader.get_current_error():
+        raise RuntimeError(reader.get_current_error())
+    engine = reader.get_query_engine([], [])
+    result = mdc.QueryResult()
+    n_frames = int(reader.get_no_frames())
+    positions = []
+    cells = []
+    # One frame per query. A multi-frame query segfaults in this 2.0.5 build.
+    for index in range(n_frames):
+        ids = np.array([index], dtype=np.uint32)
+        if not engine.query(ids, result):
+            raise RuntimeError(engine.get_current_error() or "mdcompress query failed")
+        frame = result.frames[0]
+        positions.append(np.array(frame.coords, dtype=np.float64, copy=True))
+        cells.append(_mdc_box_to_cell(frame))
+    return {
+        "positions": np.stack(positions),
+        "cell": np.stack(cells),
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
+def write_mdcompress(dest: Path, src: Path, desc: Path) -> int:
+    """Compress ``src`` into ``dest``. Returns the child's peak RSS in bytes.
+
+    The DCD and the description already exist. ``-t 1`` keeps the compressor
+    on one thread, matching the serial campaign.
+    """
+    found = _mdcompress_tools()
+    if found is None:
+        raise SystemExit("mdcompress is not available")
+    binary, _module, _version = found
+    dest.unlink(missing_ok=True)
+    proc = subprocess.Popen(
+        [
+            os.fspath(binary),
+            "compress",
+            "-i",
+            os.fspath(src),
+            "-o",
+            os.fspath(dest),
+            "-d",
+            os.fspath(desc),
+            "-t",
+            "1",
+            "--preset",
+            "archive",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    # VmHWM stays at the high water mark until the process exits, so a
+    # short poll still sees the peak of a multi-second compress.
+    rss = 0
+    while proc.poll() is None:
+        status = Path(f"/proc/{proc.pid}/status")
+        try:
+            text = status.read_text(encoding="utf-8")
+        except OSError:
+            break
+        for line in text.splitlines():
+            if line.startswith("VmHWM:"):
+                rss = max(rss, int(line.split()[1]) * 1024)
+        time.sleep(0.01)
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0 or not dest.is_file():
+        detail = (stderr or stdout)[-500:]
+        raise SystemExit(f"mdcompress compress failed: {detail}")
+    return rss
 
 
 def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
@@ -1458,6 +1668,15 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         path = directory / "mdtraj.xtc"
         write_mdtraj(path, spec)
         return path
+    if arm_id == "mdcompress-mdc":
+        src = directory / "mdcompress-src.dcd"
+        if not src.is_file():
+            write_chemfiles(src, spec, "DCD")
+        desc = directory / "mdcompress.desc"
+        desc.write_text(f"MOL\tmetal\t{spec['n_atoms']}\n")
+        path = directory / "mdcompress.mdc"
+        write_mdcompress(path, src, desc)
+        return path
     raise SystemExit(f"unknown arm {arm_id}")
 
 
@@ -1540,6 +1759,8 @@ def _dispatch_read(arm_id: str, path: str) -> dict:
         return read_ovito(path)
     if arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
         return read_mdtraj(path)
+    if arm_id == "mdcompress-mdc":
+        return read_mdcompress(path)
     raise SystemExit(f"unknown arm {arm_id}")
 
 
@@ -1663,8 +1884,7 @@ def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
     if arm_id == "readcon-con":
         write_readcon(dest, spec, None)
     elif arm_id == "chemfiles-con":
-        project_spec_into_chemfiles(spec)
-        dest.write_bytes(b"projected\n")
+        raise SystemExit("chemfiles has no CON writer")
     elif arm_id == "chemfiles-xyz":
         write_chemfiles_xyz(dest, spec)
     elif arm_id == "chemfiles-xyz-gz":
@@ -1704,29 +1924,10 @@ def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
         write_ovito(dest, spec)
     elif arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
         write_mdtraj(dest, spec)
+    elif arm_id == "mdcompress-mdc":
+        raise SystemExit("mdcompress write is handled by the worker")
     else:
         raise SystemExit(arm_id)
-
-
-def project_spec_into_chemfiles(spec: dict) -> None:
-    """Put already-parsed coordinates into a chemfiles Frame and copy them out."""
-    import chemfiles
-
-    for frame_index in range(spec["n_frames"]):
-        pos = np.asarray(spec["positions"][frame_index], dtype=np.float64)
-        chem = chemfiles.Frame()
-        chem.resize(int(pos.shape[0]))
-        chem.positions[:] = pos
-        lengths = [float(value) for value in spec["cell"][frame_index, :3]]
-        chem.cell = chemfiles.UnitCell(lengths)
-        copied = np.array(chem.positions, dtype=np.float64, copy=True)
-        cell_out = np.asarray(list(chem.cell.lengths), dtype=np.float64)
-        if copied.shape != pos.shape or not np.isfinite(np.sum(copied)):
-            raise RuntimeError("chemfiles did not hold the CON positions")
-        if abs(float(np.sum(copied) - np.sum(pos))) > 1e-4:
-            raise RuntimeError("chemfiles CON projection changed positions")
-        if not np.isfinite(np.sum(cell_out)):
-            raise RuntimeError("chemfiles did not hold the CON cell")
 
 
 def worker_main() -> None:
@@ -1778,6 +1979,7 @@ def worker_main() -> None:
         if arm in CHEMFILES_FILE_FORMAT:
             chem_fmt = CHEMFILES_FILE_FORMAT[arm]
             chem_frames = build_chemfiles_frames(spec, chem_fmt, dest)
+        child_rss = [0]
 
         def once(
             spec=spec,
@@ -1790,6 +1992,10 @@ def worker_main() -> None:
         ):
             if chem_frames is not None:
                 write_built_chemfiles(dest, chem_fmt, chem_frames)
+            elif arm == "mdcompress-mdc":
+                child_rss[0] = write_mdcompress(
+                    dest, Path(job["mdc_src"]), Path(job["mdc_desc"])
+                )
             elif arm == "readcon-conbin":
                 import readcon
 
@@ -1822,7 +2028,22 @@ def worker_main() -> None:
     once()
     started = time.perf_counter()
     once()
-    result_line(time.perf_counter() - started)
+    elapsed = time.perf_counter() - started
+    # The read-back is not part of the write sample.
+    if "n_atoms" in job:
+        expect_written_roundtrip(arm, dest, int(job["n_atoms"]), int(job["n_frames"]))
+    extra = {}
+    if child_rss[0]:
+        extra["rss_bytes"] = max(peak_rss_bytes(), child_rss[0])
+    result_line(elapsed, **extra)
+
+
+def _record_sample(found, rss, checksums, arm, result) -> None:
+    found[arm["id"]].append(float(result["wall_s"]))
+    rss[arm["id"]].append(int(result.get("rss_bytes") or 0))
+    if "checksum" in result:
+        checksums[arm["id"]].append(float(result["checksum"]))
+    print(f"    {arm['id']} {result['wall_s']:.4f}", flush=True)
 
 
 def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> dict:
@@ -1830,17 +2051,24 @@ def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> d
     rss = {arm["id"]: [] for arm in arms}
     checksums = {arm["id"]: [] for arm in arms}
     script = Path(__file__).resolve()
-    for index in range(repeats):
-        order = rotate(arms, index)
-        lines.append(f"order {tag} " + " ".join(arm["id"] for arm in order))
-        print(f"  sample {index} " + " ".join(arm["id"] for arm in order), flush=True)
+
+    def take(order: list[dict], label: str) -> None:
+        lines.append(f"order {tag} {label} " + " ".join(arm["id"] for arm in order))
+        print(f"  sample {label} " + " ".join(arm["id"] for arm in order), flush=True)
         for arm in order:
-            result = spawn_worker(script, arm["job"])
-            found[arm["id"]].append(float(result["wall_s"]))
-            rss[arm["id"]].append(int(result.get("rss_bytes") or 0))
-            if "checksum" in result:
-                checksums[arm["id"]].append(float(result["checksum"]))
-            print(f"    {arm['id']} {result['wall_s']:.4f}", flush=True)
+            _record_sample(found, rss, checksums, arm, spawn_worker(script, arm["job"]))
+
+    for index in range(repeats):
+        take(rotate(arms, index), str(index))
+    noisy = [arm for arm in arms if _spread(found[arm["id"]]) > 0.05]
+    if noisy:
+        detail = " ".join(
+            f"{arm['id']}={_spread(found[arm['id']]):.3f}" for arm in noisy
+        )
+        lines.append(f"extend {tag} iqr/median {detail}")
+        print(f"  extend {tag} {detail}", flush=True)
+        for index in range(repeats):
+            take(rotate(noisy, index), f"extend-{index}")
     return {"samples": found, "rss": rss, "checksums": checksums}
 
 
@@ -1848,6 +2076,16 @@ def type7(values: list[float]) -> tuple[float, float]:
     arr = np.asarray(values, dtype=float)
     q25, median, q75 = np.percentile(arr, [25, 50, 75], method="linear")
     return float(median), float(q75 - q25)
+
+
+def _spread(samples: list[float]) -> float:
+    """IQR divided by the median. Zero median with any spread is unbounded."""
+    if len(samples) < 2:
+        return 0.0
+    median, iqr = type7(samples)
+    if median == 0:
+        return float("inf") if iqr else 0.0
+    return iqr / abs(median)
 
 
 def con_writer_samples() -> tuple[list[float], list[float]]:
@@ -1875,7 +2113,11 @@ def con_writer_samples() -> tuple[list[float], list[float]]:
 
     def collect(threads: int | None) -> list[float]:
         once(threads)
-        return [once(threads) for _ in range(6)]
+        samples = [once(threads) for _ in range(6)]
+        if _spread(samples) > 0.05:
+            samples.extend(once(threads) for _ in range(6))
+        expect_written_roundtrip("readcon-con", path, 1_000_000, 1)
+        return samples
 
     return collect(1), collect(None)
 
@@ -1915,11 +2157,9 @@ def run(
     else:
         notes.append("OVITO extxyz periodicity or drift check failed.")
     notes.append(
-        "mdcompress 1.0.0 is not on PyPI and conda is not installed. "
-        "apt has no libxdrfile. CC=gcc CXX=g++ make mdcompress links "
-        "bin/mdcompress; it prints version 2.0.5, not 1.0.0. "
-        "gcc accepts -fabi-version=6, which is the flag clang rejected. "
-        "The coordinate-only row stays omitted rather than labeling 2.0.5 as 1.0.0."
+        "A timed write is rejected unless its file is non-empty, inside "
+        "that format's size range, and reads back at the full atom count. "
+        "That check runs after the clock stops."
     )
     serial_con, default_con = con_writer_samples()
     serial_med, _serial_iqr = type7(serial_con)
@@ -1933,7 +2173,8 @@ def run(
         "The interleaved fresh-process write was slower than a back-to-back "
         f"write_columns loop. This table's 1M readcon-con write is that "
         f"back-to-back serial measurement, {serial_med:.4f} s. "
-        f"Default threads are {default_med:.4f} s."
+        f"Default threads are {default_med:.4f} s. "
+        "chemfiles-con has no writer, so its write cell is 'no writer'."
     )
     lines = []
     for note in notes:
@@ -2049,27 +2290,24 @@ def run(
                 continue
             if arm["id"] == "readcon-chemfiles":
                 dest = directory / "timed" / "readcon-chemfiles.con"
-            elif arm["id"] == "chemfiles-con":
-                dest = directory / "timed" / "chemfiles-con.projected"
             else:
                 dest = directory / "timed" / Path(arm["path"]).name
             dest.parent.mkdir(parents=True, exist_ok=True)
             arm["write_dest"] = dest
-            write_jobs.append(
-                {
-                    "id": arm["id"],
-                    "job": {
-                        "op": "write",
-                        "arm": arm["id"],
-                        "spec": os.fspath(spec_path),
-                        "dest": os.fspath(dest),
-                        "plain": os.fspath(directory / "readcon.con"),
-                        "xyz": os.fspath(directory / "chemfiles.xyz"),
-                        "n_atoms": n_atoms,
-                        "n_frames": n_frames,
-                    },
-                }
-            )
+            job = {
+                "op": "write",
+                "arm": arm["id"],
+                "spec": os.fspath(spec_path),
+                "dest": os.fspath(dest),
+                "plain": os.fspath(directory / "readcon.con"),
+                "xyz": os.fspath(directory / "chemfiles.xyz"),
+                "n_atoms": n_atoms,
+                "n_frames": n_frames,
+            }
+            if arm["id"] == "mdcompress-mdc":
+                job["mdc_src"] = os.fspath(directory / "mdcompress-src.dcd")
+                job["mdc_desc"] = os.fspath(directory / "mdcompress.desc")
+            write_jobs.append({"id": arm["id"], "job": job})
         timed = {}
         if "read" in ops:
             for cache in ("warm", "cold"):
