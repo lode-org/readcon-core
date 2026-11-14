@@ -152,7 +152,9 @@ def _one_grid(n_atoms: int) -> str:
             for x in range(side):
                 if written >= n_atoms:
                     break
-                lines.append(f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}")
+                lines.append(
+                    f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}"
+                )
                 written += 1
             else:
                 continue
