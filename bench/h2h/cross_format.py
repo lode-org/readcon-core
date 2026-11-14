@@ -2128,9 +2128,7 @@ def con_writer_samples() -> tuple[list[float], list[float]]:
 
     def collect(threads: int | None) -> list[float]:
         once(threads)
-        samples = [once(threads) for _ in range(6)]
-        if _spread(samples) > 0.05:
-            samples.extend(once(threads) for _ in range(6))
+        samples = [once(threads) for _ in range(12)]
         expect_written_roundtrip("readcon-con", path, 1_000_000, 1)
         return samples
 
