@@ -40,6 +40,26 @@ release = _BENCH.release
 REPO = Path(__file__).resolve().parent.parent
 
 
+def thermal_positions(pos0, n_frames: int):
+    """One thermal step per frame. Identical frames are refused."""
+    import numpy as np
+
+    __import__("sys").path.insert(
+        0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h")
+    )
+    from frames_guard import require_distinct_frames, thermal_shift
+
+    n_atoms = len(pos0)
+    positions = np.empty((n_frames, n_atoms, 3), dtype=np.float64)
+    for index in range(n_frames):
+        positions[index] = np.asarray(pos0, dtype=np.float64) + thermal_shift(
+            n_atoms, index
+        )
+    if n_frames > 1:
+        require_distinct_frames(positions)
+    return positions
+
+
 def _stamp(res: dict) -> dict:
     res["host"] = cpu_model()
     res["platform"] = platform_label()
@@ -97,11 +117,9 @@ def main() -> None:
     __import__("sys").path.insert(
         0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h")
     )
-    from frames_guard import distinct_frames, thermal_shift
+    from frames_guard import distinct_frames
 
-    positions = np.empty((args.frames, n_atoms, 3), dtype=np.float64)
-    for i in range(args.frames):
-        positions[i] = pos0 + thermal_shift(n_atoms, i)
+    positions = thermal_positions(pos0, args.frames)
 
     work = bench_dir("h5md-vs-con")
     try:
@@ -145,7 +163,7 @@ def main() -> None:
         xyz = work / "traj.xyz"
         atoms_list = [atoms0.copy() for _ in range(args.frames)]
         for i, a in enumerate(atoms_list):
-            a.set_positions(pos0 + thermal_shift(n_atoms, i))
+            a.set_positions(positions[i])
         ase_write(str(xyz), atoms_list, format="xyz")
 
         def mda_h5md() -> int:

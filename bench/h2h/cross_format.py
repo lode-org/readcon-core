@@ -39,6 +39,15 @@ from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
 from frames_guard import require_distinct_frames
+
+
+def _guard_spec(spec: dict) -> None:
+    """A writer of more than one frame refuses byte-identical copies."""
+    positions = spec.get("positions")
+    if positions is not None and len(positions) > 1:
+        require_distinct_frames(positions)
+
+
 from measured_commit import measurement, record_path, refuse_stale_build
 
 import numpy as np
@@ -272,6 +281,7 @@ def _columns(spec: dict) -> dict:
 
 
 def write_readcon(path: Path, spec: dict, compression: str | None) -> None:
+    _guard_spec(spec)
     import readcon
 
     path.unlink(missing_ok=True)
@@ -349,6 +359,7 @@ def write_xyz_for_readcon(path: Path, spec: dict) -> None:
     ``Lattice`` (column-major, zeros off the diagonal). ``read_chemfiles``
     turns that back into box lengths and 90 degree angles.
     """
+    _guard_spec(spec)
     lines: list[str] = []
     for frame_index in range(spec["n_frames"]):
         lengths = spec["cell"][frame_index, :3]
@@ -406,6 +417,7 @@ def write_built_chemfiles(path: Path, fmt: str, frames: list) -> None:
 
 
 def write_chemfiles(path: Path, spec: dict, fmt: str) -> None:
+    _guard_spec(spec)
     write_built_chemfiles(path, fmt, build_chemfiles_frames(spec, fmt, path))
 
 
@@ -574,6 +586,7 @@ def write_built_ase(path: Path, images: list) -> None:
 
 
 def write_ase(path: Path, spec: dict) -> None:
+    _guard_spec(spec)
     write_built_ase(path, _ase_images(spec))
 
 
@@ -628,6 +641,7 @@ def write_built_mda(path: Path, spec: dict, universe, velocities: bool = False) 
     it is the serialise, and it stays inside the clock. Building the
     topology is not.
     """
+    _guard_spec(spec)
     import MDAnalysis as mda
 
     path.unlink(missing_ok=True)
@@ -778,6 +792,7 @@ def write_built_ovito(path: Path, sources: list) -> None:
 
 
 def write_ovito(path: Path, spec: dict) -> None:
+    _guard_spec(spec)
     write_built_ovito(path, ovito_sources(spec))
 
 
@@ -909,6 +924,7 @@ def mdtraj_trajectory(spec: dict):
 
 def write_mdtraj(path: Path, spec: dict) -> None:
     """MDTraj's trajectory object is in nanometres. The file units differ by format."""
+    _guard_spec(spec)
     path.unlink(missing_ok=True)
     mdtraj_trajectory(spec).save(os.fspath(path))
 

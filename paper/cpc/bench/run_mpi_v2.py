@@ -23,29 +23,33 @@ def write_con(path: Path) -> None:
     import sys
 
     sys.path.insert(0, str(ROOT / "bench" / "h2h"))
-    from frames_guard import thermal_shift
+    from frames_guard import require_distinct_frames, thermal_shift
 
     lines = [""]
+    frames: list[str] = []
     for frame in range(N_FRAMES):
         delta = thermal_shift(N_ATOMS, frame)
-        lines.append(
-            '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}'
-        )
-        lines.append("10.0 10.0 10.0")
-        lines.append("90.0 90.0 90.0")
-        lines.append("")
-        lines.append("")
-        lines.append("1")
-        lines.append(str(N_ATOMS))
-        lines.append("63.546")
-        lines.append("Cu")
-        lines.append("Coordinates of Component 1")
+        frame_lines = [
+            '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}',
+            "10.0 10.0 10.0",
+            "90.0 90.0 90.0",
+            "",
+            "",
+            "1",
+            str(N_ATOMS),
+            "63.546",
+            "Cu",
+            "Coordinates of Component 1",
+        ]
         for atom in range(N_ATOMS):
             x = (atom % 8) * 1.1 + float(delta[atom, 0])
             y = (atom // 8) * 1.1 + float(delta[atom, 1])
             z = 0.5 + float(delta[atom, 2])
-            lines.append(f"{x:.6f} {y:.6f} {z:.6f} 0 {atom}")
-        lines.append("")
+            frame_lines.append(f"{x:.6f} {y:.6f} {z:.6f} 0 {atom}")
+        frame_lines.append("")
+        frames.append("\n".join(frame_lines))
+        lines.extend(frame_lines)
+    require_distinct_frames(frames)
     path.write_text("\n".join(lines))
 
 

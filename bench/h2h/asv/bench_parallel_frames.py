@@ -69,6 +69,10 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
             return paths
     for path in paths.values():
         path.unlink(missing_ok=True)
+    from frames_guard import require_distinct_frames
+
+    if len(coords) > 1:
+        require_distinct_frames(coords)
     header = _header()
     con_parts: list[str] = ["\n"]
     vel_parts: list[str] = []
