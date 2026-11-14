@@ -1798,10 +1798,12 @@ mod wide_rank_sha {
     use std::process::{Command, Output};
     use std::time::{Duration, Instant};
 
-    /// The `.con` and the `.rcidx` beside it. Drop removes both, including
-    /// when the test panics.
+    /// The `.con`, the `.rcidx` beside it, and a killed writer's
+    /// `.readcon-write-<pid>-0.tmp`. Drop removes them, including when the
+    /// test panics or the child is killed at the timeout.
     struct RankedOut {
         path: PathBuf,
+        pids: Vec<u32>,
     }
 
     impl RankedOut {
@@ -1809,11 +1811,22 @@ mod wide_rank_sha {
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
-            Self { path }
+            Self {
+                path,
+                pids: Vec::new(),
+            }
         }
 
         fn path(&self) -> &Path {
             &self.path
+        }
+
+        fn note_pids(&mut self, pids: &[u32]) {
+            for pid in pids {
+                if *pid != 0 && !self.pids.contains(pid) {
+                    self.pids.push(*pid);
+                }
+            }
         }
     }
 
@@ -1823,20 +1836,74 @@ mod wide_rank_sha {
             let mut side = self.path.as_os_str().to_os_string();
             side.push(".rcidx");
             let _ = std::fs::remove_file(side);
+            let Some(dir) = self.path.parent() else {
+                return;
+            };
+            for pid in self.pids.clone() {
+                let prefix = format!(".readcon-write-{pid}-");
+                let _ = std::fs::remove_file(dir.join(format!(".readcon-write-{pid}-0.tmp")));
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name();
+                        let text = name.to_string_lossy();
+                        if text.starts_with(&prefix) && text.ends_with(".tmp") {
+                            let _ = std::fs::remove_file(entry.path());
+                        }
+                    }
+                }
+            }
         }
     }
 
-    fn finish_within(cmd: &mut Command, limit: Duration, label: &str) -> Output {
+    fn descendant_pids(root: u32) -> Vec<u32> {
+        let mut pids = vec![root];
+        let mut index = 0;
+        while index < pids.len() {
+            let pid = pids[index];
+            index += 1;
+            let path = format!("/proc/{pid}/task/{pid}/children");
+            let Ok(text) = std::fs::read_to_string(path) else {
+                continue;
+            };
+            for part in text.split_whitespace() {
+                if let Ok(child) = part.parse() {
+                    if !pids.contains(&child) {
+                        pids.push(child);
+                    }
+                }
+            }
+        }
+        pids
+    }
+
+    fn finish_within(
+        cmd: &mut Command,
+        limit: Duration,
+        label: &str,
+        out: &mut RankedOut,
+    ) -> Output {
         let mut child = cmd
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
             .unwrap_or_else(|err| panic!("{label}: {err}"));
+        let root = child.id();
+        out.note_pids(&[root]);
         let started = Instant::now();
         loop {
             match child.try_wait() {
-                Ok(Some(_)) => return child.wait_with_output().expect("output"),
+                Ok(Some(_)) => {
+                    out.note_pids(&descendant_pids(root));
+                    return child.wait_with_output().expect("output");
+                }
                 Ok(None) if started.elapsed() > limit => {
+                    let pids = descendant_pids(root);
+                    out.note_pids(&pids);
+                    for pid in pids.iter().rev() {
+                        let _ = Command::new("kill")
+                            .args(["-KILL", &pid.to_string()])
+                            .status();
+                    }
                     let _ = child.kill();
                     let _ = child.wait();
                     panic!("{label} exceeded {limit:?}");
@@ -1914,7 +1981,7 @@ mod wide_rank_sha {
         let mut digest = None;
         for ranks in [1u32, 2, 4, 8] {
             for mode in ["sequential", "parallel", "mpiio"] {
-                let out = RankedOut::new(
+                let mut out = RankedOut::new(
                     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("build")
                         .join("test")
@@ -1937,6 +2004,7 @@ mod wide_rank_sha {
                     &mut cmd,
                     Duration::from_secs(60),
                     &format!("mpirun -n {ranks} {mode}"),
+                    &mut out,
                 );
                 crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} {mode}"));
                 let bytes = std::fs::read(out.path()).expect("written");
@@ -1960,7 +2028,7 @@ mod wide_rank_sha {
         // One rank keeps the variable because it is rank 0. Two ranks drop
         // it after `MPI_Init` on every rank but 0.
         for (ranks, rank0_only) in [(1u32, false), (2, true)] {
-            let out = RankedOut::new(
+            let mut out = RankedOut::new(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("build")
                     .join("test")
@@ -1983,6 +2051,7 @@ mod wide_rank_sha {
                 &mut cmd,
                 Duration::from_secs(30),
                 &format!("mpirun -n {ranks} rank0-only"),
+                &mut out,
             );
             crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} rank0-only"));
             let got = sha256_hex(&std::fs::read(out.path()).expect("written"));
@@ -1991,6 +2060,29 @@ mod wide_rank_sha {
                 Some(expected) => assert_eq!(&got, expected, "ranks {ranks}"),
             }
         }
+    }
+
+    #[test]
+    fn a_timeout_removes_the_killed_scratch() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("build")
+            .join("test");
+        let pid = std::process::id();
+        let scratch = dir.join(format!(".readcon-write-{pid}-0.tmp"));
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut out = RankedOut::new(dir.join(format!("readcon-timeout-scratch-{pid}.con")));
+            std::fs::write(&scratch, b"partial").expect("scratch");
+            out.note_pids(&[pid]);
+            let mut cmd = Command::new("sleep");
+            cmd.arg("30");
+            finish_within(&mut cmd, Duration::from_millis(200), "sleep", &mut out);
+        }));
+        assert!(caught.is_err());
+        assert!(
+            !scratch.exists(),
+            "killed writer left {}",
+            scratch.display()
+        );
     }
 
     fn sha256_hex(bytes: &[u8]) -> String {
