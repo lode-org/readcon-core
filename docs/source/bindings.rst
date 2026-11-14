@@ -195,7 +195,7 @@ sidecars ``chemfiles_atom_names`` / ``chemfiles_atom_types`` let ``name H1`` and
 
 **Format limits.** No residues, pair ``bonds`` only, thin property sidecars—so
 ``resname``, impropers, and most external property maps are not selectable.
-:doc:`chemfiles-explain`.
+`What selection cannot see on CON <chemfiles-explain.rst>`_.
 
 Python (PyO3)
 -------------
@@ -268,6 +268,10 @@ Usage
     # Write frames (with optional precision)
     readcon.write_con("output.con", frames)
     readcon.write_con("precise.con", frames, precision=17)
+    # rewrite=True writes path.rewrite, then renames it over path. The spare
+    # doubles disk until keep_spare=False. The published path is the previous
+    # complete file or the finished new one.
+    readcon.write_con("output.con", frames, rewrite=True, keep_spare=False)
     output_str = readcon.write_con_string(frames)
 
     # ASE conversion (v0.4.0+, requires ase)
@@ -382,6 +386,7 @@ CUDA). Legacy
 .. code:: python
 
     import numpy as np
+    import torch
     import readcon
 
     frame = readcon.read_first_frame("trajectory.con")
@@ -392,22 +397,13 @@ CUDA). Legacy
     energies = frame.energies_array()     # Optional shape (N,)
     atom_ids = frame.atom_ids_array()     # typically uint64
 
+    # Zero-copy hand-off into torch via DLPack (dtype follows the tensor).
+    coords_torch = torch.from_dlpack(coords)
+    assert coords_torch.shape == (len(frame), 3)
+
     # atom_id reverse index for O(1) lookup by file column-5 id.
     idx = frame.build_atom_id_index()      # dict[int, int]
     position = idx.get(42)                 # Optional[int]
-
-Torch is optional. When it is installed, the same array is a zero-copy DLPack
-tensor:
-
-.. code:: python
-
-    import torch
-    import readcon
-
-    frame = readcon.read_first_frame("trajectory.con")
-    coords = frame.coords_array()
-    coords_torch = torch.from_dlpack(coords)
-    assert coords_torch.shape == (len(frame), 3)
 
 - ASE conversion preserves ``atom_id`` through an ``atom_id`` array,
   velocities through ASE velocities, forces through a
@@ -638,7 +634,7 @@ handle and that buffer. NULL is a no-op, and the values pointer is invalid
 afterwards. ``rkr_read_positions_n_threads`` is the same call with a worker
 count. A count below 2 stays on the calling thread. A file whose frames do
 not share one atom count returns NULL, and ``rkr_last_error_message`` has the
-text. C++ ``readcon::read_positions`` and Fortran ``read_positions`` return
+text. C++ \`readcon\:\:read\_positions\` and Fortran \`read\_positions\` return
 the same block. The values pointer is not copied.
 
 .. code:: c
@@ -980,6 +976,7 @@ by another tool.
 The path readers decompress the whole file into memory before they parse it.
 ``compression::open_decoded(path)`` returns the decoded bytes as a stream instead, and ``stream::ConFrameReader`` parses frames from any ``std::io::Read`` with about one frame buffered.
 Python reaches the same reader through ``iter_con(path, stream=True)``.
+
 
 Fortran (fpm ReadCon, ISO\_C\_BINDING)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

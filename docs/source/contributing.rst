@@ -136,6 +136,11 @@ Branching and workflow
 - Keep commits logical and atomic. Soft-reset and rebase as needed.
   Contributors MUST NOT soft-reset or rebase ``main``.
 
+- ``scripts/check_cxx_wrap_pin.sh`` rebuilds the slim cxx archive with the
+  saved source-date-epoch and fails when that digest is not the wrap pin.
+  A push that changes only ``bench/**`` does not run the job. Catch the stale
+  pin here, before the tag upload.
+
 - The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
   Python (``ci_python.yml``: ``maturin develop`` + ``pytest tests/python/`` for lean
   and chemfiles features), and benchmark regression (one-runner ASV via
@@ -204,33 +209,33 @@ Workflows
 
 .. table::
 
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Workflow                  | File                       | Trigger                                    | Purpose                                                    |
-    +===========================+============================+============================================+============================================================+
-    | Prek                      | ``ci_prek.yml``            | push, PR                                   | ``prek run -a`` (whitespace, ruff, taplo, codespell)       |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Documentation             | ``ci_docs.yml``            | push, PR                                   | ``pixi r -e docs docbld`` then lychee on HTML              |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | C/C++ dist                | ``ci_cxx.yml``             | push, PR                                   | CMake/Meson/pkg-config without cbindgen                    |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR                             | Build wheels for 5 platforms, publish to PyPI              |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main                                 | ASV base vs head on one runner (Snakemake)                 |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete                         | Post ASV table as PR comment                               |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Coverage                  | ``coverage.yml``           | push, PR                                   | Code coverage via tarpaulin                                |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Lint                      | ``lint.yml``               | PR                                         | Conventional commit check + large file audit               |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | Release                   | ``release.yml``            | PR plan, ``v*`` tag                        | cargo-dist plan on PRs; GitHub Release on tag              |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | crates.io                 | ``crates_publish.yml``     | ``v*`` tag                                 | ``cargo publish --locked``                                 |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | cxx tarball               | ``cxx_tarball.yml``        | ``v*`` tag + ``workflow_dispatch``         | Attach slim + vendor C/C++ source tarballs                 |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
-    | clib tarball              | ``c_lib_tarball.yml``      | ``v*`` tag + ``workflow_dispatch``         | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
-    +---------------------------+----------------------------+--------------------------------------------+------------------------------------------------------------+
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Workflow                  | File                       | Trigger                               | Purpose                                                    |
+    +===========================+============================+=======================================+============================================================+
+    | Prek                      | ``ci_prek.yml``            | push, PR                              | ``prek run -a`` (whitespace, ruff, taplo, codespell)       |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Documentation             | ``ci_docs.yml``            | push, PR                              | ``pixi r -e docs docbld`` then lychee on HTML              |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | C/C++ dist                | ``ci_cxx.yml``             | push, PR                              | CMake/Meson/pkg-config without cbindgen                    |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Python wheels             | ``python_wheels.yml``      | ``v*`` tag, PR                        | Build wheels for 5 platforms, publish to PyPI              |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Benchmark PR              | ``ci_benchmark.yml``       | PR to main                            | ASV base vs head on one runner (Snakemake)                 |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Comment benchmark results | ``ci_bench_commenter.yml`` | benchmark complete                    | Post ASV table as PR comment                               |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Coverage                  | ``coverage.yml``           | push, PR                              | Code coverage via tarpaulin                                |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Lint                      | ``lint.yml``               | PR                                    | Conventional commit check + large file audit               |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | Release                   | ``release.yml``            | PR plan, ``v*`` tag                   | cargo-dist plan on PRs; GitHub Release on tag              |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | crates.io                 | ``crates_publish.yml``     | ``v*`` tag                            | ``cargo publish --locked``                                 |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | cxx tarball               | ``cxx_tarball.yml``        | ``v*`` tag, ``workflow_dispatch`` tag | Attach slim + vendor C/C++ source tarballs                 |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
+    | clib tarball              | ``c_lib_tarball.yml``      | ``v*`` tag, ``workflow_dispatch`` tag | Attach prebuilt C ABI (``readcon-core-clib-$VER-$target``) |
+    +---------------------------+----------------------------+---------------------------------------+------------------------------------------------------------+
 
 Benchmark regression detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -272,7 +277,7 @@ Two-workflow pattern for safe PR comments:
 
 The ``workflow_run`` split is required for fork PRs to have write access for
 posting comments (GitHub security model). Suite and local reproduce:
-:doc:`benchmarks` (``benchmarks/``, ``asv.conf.json``,
+`benchmarks.org <benchmarks.rst>`_ (``benchmarks/``, ``asv.conf.json``,
 ``benchmarks/workflow/Snakefile``).
 
 Executable chemfiles pages

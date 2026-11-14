@@ -230,7 +230,8 @@ frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0))
 readcon.write_con("output.con", frames)
 readcon.write_con("precise.con", frames, precision=17)
 # rewrite=True writes path.rewrite, then renames it over path. The spare
-# doubles disk until keep_spare=False. A crash leaves path complete.
+# doubles disk until keep_spare=False. The published path is the previous
+# complete file or the finished new one.
 readcon.write_con("output.con", frames, rewrite=True, keep_spare=False)
 output_str = readcon.write_con_string(frames)
 

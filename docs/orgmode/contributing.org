@@ -99,6 +99,10 @@ tst: add roundtrip test for convel writer
 - Bugfix branches: =fix/<description>=
 - Keep commits logical and atomic. Soft-reset and rebase as needed.
   Contributors MUST NOT soft-reset or rebase =main=.
+- =scripts/check_cxx_wrap_pin.sh= rebuilds the slim cxx archive with the
+  saved source-date-epoch and fails when that digest is not the wrap pin.
+  A push that changes only =bench/**= does not run the job. Catch the stale
+  pin here, before the tag upload.
 - The CI runs on every PR: Rust tests, lint, coverage, Fortran fpm tests,
   Python (=ci_python.yml=: =maturin develop= + =pytest tests/python/= for lean
   and chemfiles features), and benchmark regression (one-runner ASV via

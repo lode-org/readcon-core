@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Features
+
+- A ranked write gathers each rank's byte length and frame count in one
+  `MPI_Allgather`. Each rank stores into a fresh file. Rank 0 renames that
+  file onto the path only after every byte is stored, then one gather of the
+  frame offsets and block hashes writes the `.rcidx` sidecar. Spare reuse is
+  not the default.
+- `rewrite_frame_refs_to_path`, `write_con(..., rewrite=True)`, and
+  `rkr_rewrite_path` replace a same-length trajectory from a spare named
+  `path.rewrite`. `keep_spare=True` parks the previous inode there, which
+  doubles the disk the trajectory occupies. `keep_spare=False` deletes the
+  spare after the rename.
+- Round-trip coordinates that are an exact decimal of at most six places are
+  spelled directly. A tie takes the even last digit, the same side ryu prints,
+  and a shorter place is kept when it still round-trips. Other values use ryu.
+- The serial CON writer formats from the column arrays. The bytes match a
+  binding rewrite, without a heap tail per atom.
+- Gzip members are deflated in parallel. Formatting stays on the caller's
+  thread count. Deflate uses one worker per core when the caller did not ask
+  for two or more threads. The members stay independent, so a reader can
+  still open them together.
+
+### Bugfixes
+
+- A path write publishes only after every byte is stored. On Linux the store
+  is an unnamed file, and `linkat` plus `rename` run in a helper that outlives
+  the writer. The published path is either the previous complete file or the
+  finished new one. CON-bin uses the same publish.
+- A text round trip keeps the cell, symbols, coordinates, masses, atom ids,
+  fixed flags, and velocities when they were present. NaN and infinity are
+  spelled and rejected on read. CON-bin version 2 stores positions, velocities
+  (a missing section as zeros), forces when any frame has them, masses, the
+  cell, atom ids, and the per-axis fixed flags. It does not store symbols.
+  Version 1 files still open and hold positions and velocities only. binary32
+  does not keep binary64 bits. CON-bin is published with the same unnamed-file
+  rule as a path write.
+
+### Misc
+
+- CI rebuilds the slim cxx archive and fails when the wrap pin does not match
+  that tree. A change that touches only `bench/**` does not run the job.
+
+
 ## v0.23.2 - 2026-11-14
 
 ### Bugfixes
