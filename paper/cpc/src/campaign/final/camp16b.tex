@@ -19,16 +19,16 @@ con-1e6 & 0.04396 (0.0001899, $n{=}12$) & 0.02198 (0.0004064, $n{=}12$) & 0.0117
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across cores, write onto disk. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Each write unlinks the destination before the clock, so the row is a fresh file. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Camp16b strong scaling across cores, write onto disk. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. Each write unlinks the destination before the clock, so the row is a fresh file. camp17 replaces con-100k at 1 thread, convel at 8 threads, and con-1e6 at 1, 2, 4 and 8 threads. Those cells are \texttt{bench/h2h/scaling/camp17/threads.json} at \texttt{a3506688}. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-threads-write-disk}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 File & 1 & 2 & 4 & 8 & 8-way \\
 \midrule
-con-100k & 0.5314 (0.004228, $n{=}12$) & 0.2678 (0.003443, $n{=}12$) & 0.1492 (0.01436, $n{=}12$) & 0.08126 (0.007154, $n{=}12$) & 0.8174 \\
-convel & 0.7419 (0.0039, $n{=}12$) & 0.3682 (0.002357, $n{=}12$) & 0.2092 (0.003698, $n{=}12$) & 0.1348 (0.001561, $n{=}12$) & 0.6878 \\
-con-1e6 & 0.04605 (0.0003338, $n{=}12$) & 0.02533 (0.001773, $n{=}12$) & 0.01801 (0.0005493, $n{=}12$) & 0.01515 (0.0006704, $n{=}12$) & 0.3799 \\
+con-100k & 0.4678 (0.002004, $n{=}12$) & 0.2678 (0.003443, $n{=}12$) & 0.1492 (0.01436, $n{=}12$) & 0.08126 (0.007154, $n{=}12$) & 0.7197 \\
+convel & 0.7419 (0.0039, $n{=}12$) & 0.3682 (0.002357, $n{=}12$) & 0.2092 (0.003698, $n{=}12$) & 0.1219 (0.001242, $n{=}12$) & 0.7609 \\
+con-1e6 & 0.03544 (0.0002339, $n{=}12$) & 0.02093 (0.0005689, $n{=}12$) & 0.01425 (0.0002172, $n{=}12$) & 0.01132 (0.0009326, $n{=}12$) & 0.3912 \\
 \bottomrule
 \end{tabular}
 }
@@ -37,16 +37,16 @@ con-1e6 & 0.04605 (0.0003338, $n{=}12$) & 0.02533 (0.001773, $n{=}12$) & 0.01801
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across cores, write into memory. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Each write unlinks the destination before the clock, so the row is a fresh file. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Camp16b strong scaling across cores, write into memory. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. Each write unlinks the destination before the clock, so the row is a fresh file. camp17 replaces con-100k at 1 thread and con-1e6 at 2 and 4 threads. Those cells are \texttt{bench/h2h/scaling/camp17/threads.json} at \texttt{a3506688}. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-threads-write-memory}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 File & 1 & 2 & 4 & 8 & 8-way \\
 \midrule
-con-100k & 0.5219 (0.001341, $n{=}12$) & 0.2652 (0.003829, $n{=}12$) & 0.1429 (0.004516, $n{=}12$) & 0.07345 (0.000773, $n{=}12$) & 0.8883 \\
+con-100k & 0.4523 (0.001831, $n{=}12$) & 0.2652 (0.003829, $n{=}12$) & 0.1429 (0.004516, $n{=}12$) & 0.07345 (0.000773, $n{=}12$) & 0.7697 \\
 convel & 0.7282 (0.003469, $n{=}12$) & 0.3635 (0.001245, $n{=}12$) & 0.2031 (0.007029, $n{=}12$) & 0.116 (0.001124, $n{=}12$) & 0.7845 \\
-con-1e6 & 0.03746 (0.0008002, $n{=}12$) & 0.02251 (0.000235, $n{=}12$) & 0.01529 (0.0007225, $n{=}12$) & 0.01158 (0.000518, $n{=}12$) & 0.4044 \\
+con-1e6 & 0.03746 (0.0008002, $n{=}12$) & 0.02 (0.0001944, $n{=}12$) & 0.01211 (0.0001473, $n{=}12$) & 0.01158 (0.000518, $n{=}12$) & 0.4044 \\
 \bottomrule
 \end{tabular}
 }
@@ -55,16 +55,16 @@ con-1e6 & 0.03746 (0.0008002, $n{=}12$) & 0.02251 (0.000235, $n{=}12$) & 0.01529
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across cores, write onto disk, then fdatasync. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Each write unlinks the destination before the clock, so the row is a fresh file. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Camp16b strong scaling across cores, write onto disk, then fdatasync. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. Each write unlinks the destination before the clock, so the row is a fresh file. camp17 replaces con-100k at 1 thread and con-1e6 at 1, 2, 4 and 8 threads. Those cells are \texttt{bench/h2h/scaling/camp17/threads.json} at \texttt{a3506688}. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-threads-write-disksync}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 File & 1 & 2 & 4 & 8 & 8-way \\
 \midrule
-con-100k & 0.591 (0.004611, $n{=}12$) & 0.3305 (0.01796, $n{=}12$) & 0.2053 (0.003493, $n{=}12$) & 0.1383 (0.0043, $n{=}12$) & 0.534 \\
+con-100k & 0.522 (0.01057, $n{=}12$) & 0.3305 (0.01796, $n{=}12$) & 0.2053 (0.003493, $n{=}12$) & 0.1383 (0.0043, $n{=}12$) & 0.4716 \\
 convel & 0.8457 (0.009499, $n{=}12$) & 0.4853 (0.008415, $n{=}12$) & 0.3224 (0.005212, $n{=}12$) & 0.2577 (0.01299, $n{=}12$) & 0.4103 \\
-con-1e6 & 0.07015 (0.006229, $n{=}12$) & 0.04752 (0.003292, $n{=}12$) & 0.03595 (0.003698, $n{=}12$) & 0.03896 (0.002758, $n{=}12$) & 0.2251 \\
+con-1e6 & 0.04979 (0.004641, $n{=}12$) & 0.03751 (0.002239, $n{=}12$) & 0.0283 (0.0029, $n{=}12$) & 0.02435 (0.002925, $n{=}12$) & 0.2556 \\
 \bottomrule
 \end{tabular}
 }
@@ -91,16 +91,16 @@ con-1e6 & 0.06178 (0.0003908, $n{=}12$) & 0.02031 (0.0004595, $n{=}12$) & 0.0104
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across ranks, write onto disk. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Each write unlinks the destination before the clock, so the row is a fresh file. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Camp16b strong scaling across ranks, write onto disk. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. Each write unlinks the destination before the clock, so the row is a fresh file. camp17 replaces con-100k at 8 ranks, convel at 8 ranks, and con-1e6 at 4 and 8 ranks. Those cells are \texttt{bench/h2h/scaling/camp17/ranked.json} at \texttt{a3506688}, a fresh file on each sample. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-mpi-write-disk}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 File & 1 & 2 & 4 & 8 & 8-way \\
 \midrule
-con-100k & 0.7151 (0.01058, $n{=}12$) & 0.3828 (0.004275, $n{=}12$) & 0.2092 (0.002924, $n{=}12$) & 0.1297 (0.004953, $n{=}12$) & 0.6894 \\
-convel & 1.18 (0.01319, $n{=}12$) & 0.6237 (0.008657, $n{=}12$) & 0.3529 (0.002861, $n{=}12$) & 0.2199 (0.00439, $n{=}12$) & 0.671 \\
-con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01648 (0.0009012, $n{=}12$) & 0.01333 (0.001266, $n{=}12$) & 0.3642 \\
+con-100k & 0.7151 (0.01058, $n{=}12$) & 0.3828 (0.004275, $n{=}12$) & 0.2092 (0.002924, $n{=}12$) & 0.1276 (0.006448, $n{=}12$) & 0.7007 \\
+convel & 1.18 (0.01319, $n{=}12$) & 0.6237 (0.008657, $n{=}12$) & 0.3529 (0.002861, $n{=}12$) & 0.225 (0.006982, $n{=}12$) & 0.6557 \\
+con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01668 (0.0009477, $n{=}12$) & 0.01328 (0.001501, $n{=}12$) & 0.3656 \\
 \bottomrule
 \end{tabular}
 }

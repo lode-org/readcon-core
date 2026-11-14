@@ -661,7 +661,7 @@ The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
-Write scaling in this paper is camp16b.
+Write scaling in this paper is camp16b, and camp17 replaces the thread writes it remeasured.
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
 Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are h2h12: one frame of \(10^{6}\) atoms and one trajectory, on the model 173 host.
@@ -701,8 +701,19 @@ Tables~\ref{tab:camp16b-threads-read-memory} and~\ref{tab:camp16b-mpi-write-memo
 The record is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
 Each median is twelve samples.
 A write in these tables unlinks the destination before the clock.
-On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.8883 for threaded con-100k, 0.7845 for threaded convel, 0.8874 for MPI con-100k and 0.8717 for MPI convel.
-The fresh-file write of the million-atom frame to disk takes 0.04605~s at one thread and 0.01515~s at eight threads.
+camp17 replaces the thread-write cells named in the write-table captions.
+The record is \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
+The host record's commit is \texttt{9b43ec68}, with 8 CPUs.
+The thread writes in these tables are the fresh-file path with no spare.
+The one-thread disk write is 0.4678~s for con-100k and 0.03544~s for the million-atom frame.
+The eight-thread disk write of that frame is 0.01132~s.
+Those three times sit under the rel1 medians, 0.4688~s, 0.04132~s and 0.01203~s.
+The serial path fallocates the fresh file and spells into a shared mapping once the frame lengths are priced.
+Ranked ext4 writes publish a fresh file on each sample, so they are slower than camp5c, which rewrote a warm inode.
+The million-atom frame at 8 ranks takes 0.01328~s.
+camp5c recorded 0.007466~s for that cell.
+An opt-in rewrite path writes over a spare.
+On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.7845 for threaded convel, 0.8874 for MPI con-100k and 0.8717 for MPI convel.
 The weak parses are Table~\ref{tab:camp16b-weak}.
 Eight threads keep the time at 0.1225~s, and \(T(1)/T(8)\) is 0.884.
 Eight ranks keep the time at 0.02963~s, and \(T(1)/T(8)\) is 0.9858.
@@ -746,7 +757,7 @@ The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
-Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
+Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold-open reads are \path{bench/db13} at \texttt{b6680e00}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
