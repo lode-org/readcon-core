@@ -128,6 +128,21 @@ if ! grep -q '^\[workspace\]' "$DEST/Cargo.toml"; then
     printf '\n[workspace]\n' >> "$DEST/Cargo.toml"
 fi
 
+# cargo package drops [patch]. The lockfile records metatensor-sys as the
+# path crate under third_party/, and the CMake build passes --locked.
+# Put the patch back or that build cannot resolve the package.
+if ! grep -q '^\[patch\.crates-io\]' "$DEST/Cargo.toml"; then
+    cat >> "$DEST/Cargo.toml" <<'EOF'
+
+[patch.crates-io]
+metatensor-sys = { path = "third_party/metatensor-sys" }
+EOF
+fi
+if [[ ! -d "$DEST/third_party/metatensor-sys" ]]; then
+    mkdir -p "$DEST/third_party"
+    cp -a "$ROOT_DIR/third_party/metatensor-sys" "$DEST/third_party/"
+fi
+
 if [[ ! -f "$DEST/Cargo.lock" ]]; then
     cargo generate-lockfile --manifest-path "$DEST/Cargo.toml"
 fi
