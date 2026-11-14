@@ -42,15 +42,6 @@ from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
 from frames_guard import require_distinct_frames
-
-
-def _guard_spec(spec: dict) -> None:
-    """A writer of more than one frame refuses byte-identical copies."""
-    positions = spec.get("positions")
-    if positions is not None and len(positions) > 1:
-        require_distinct_frames(positions)
-
-
 from measured_commit import measurement, record_path, refuse_stale_build
 
 import numpy as np
@@ -63,6 +54,14 @@ from sample_protocol import (
     rotate,
     spawn_worker,
 )
+
+
+def _guard_spec(spec: dict) -> None:
+    """A writer of more than one frame refuses byte-identical copies."""
+    positions = spec.get("positions")
+    if positions is not None and len(positions) > 1:
+        require_distinct_frames(positions)
+
 
 BENCH = Path(__file__).resolve().parent
 # tests/python/test_distinct_frames.py compares this binding with measured_commit.measurement.
