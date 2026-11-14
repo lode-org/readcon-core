@@ -1,0 +1,119 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across cores, into disk. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-threads.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-threads-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.497 (0.02045, $n{=}6$) & 0.2324 (0.003665, $n{=}6$) & 0.1242 (0.008809, $n{=}6$) & 0.07639 (0.002785, $n{=}6$) & 0.813 \\
+convel & 0.7249 (0.04138, $n{=}6$) & 0.3457 (0.007363, $n{=}6$) & 0.1987 (0.006071, $n{=}6$) & 0.1245 (0.01135, $n{=}6$) & 0.728 \\
+con-1e6 & 0.04531 (0.0009033, $n{=}6$) & 0.02386 (0.0003785, $n{=}6$) & 0.01456 (0.0004643, $n{=}6$) & 0.009758 (0.0003755, $n{=}6$) & 0.580 \\
+extxyz-cu & 0.4356 (0.005539, $n{=}6$) & 0.4149 (0.0122, $n{=}6$) & 0.1722 (0.002325, $n{=}6$) & 0.09115 (0.0009929, $n{=}6$) & 0.597 \\
+extxyz-alloy & 0.1693 (0.002231, $n{=}6$) & 0.157 (0.001381, $n{=}6$) & 0.06133 (0.001639, $n{=}6$) & 0.0283 (0.0006187, $n{=}6$) & 0.748 \\
+extxyz-md & 0.1842 (0.002564, $n{=}6$) & 0.1751 (0.0008042, $n{=}6$) & 0.07289 (0.007599, $n{=}6$) & 0.03588 (0.002459, $n{=}6$) & 0.642 \\
+extxyz-same & 0.4399 (0.03966, $n{=}6$) & 0.4105 (0.005683, $n{=}6$) & 0.1574 (0.001624, $n{=}6$) & 0.07031 (0.001127, $n{=}6$) & 0.782 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across cores, into memory. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-threads.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-threads-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.4777 (0.01252, $n{=}6$) & 0.2282 (0.00956, $n{=}6$) & 0.119 (0.001784, $n{=}6$) & 0.07128 (0.002732, $n{=}6$) & 0.838 \\
+convel & 0.7237 (0.03068, $n{=}6$) & 0.3337 (0.003577, $n{=}6$) & 0.1819 (0.00599, $n{=}6$) & 0.1187 (0.005675, $n{=}6$) & 0.762 \\
+con-1e6 & 0.0443 (0.002301, $n{=}6$) & 0.02226 (0.0002516, $n{=}6$) & 0.01244 (0.0005981, $n{=}6$) & 0.006722 (0.0004994, $n{=}6$) & 0.824 \\
+extxyz-cu & 0.4322 (0.009285, $n{=}6$) & 0.4079 (0.006068, $n{=}6$) & 0.1683 (0.001609, $n{=}6$) & 0.08806 (0.0003128, $n{=}6$) & 0.614 \\
+extxyz-alloy & 0.1711 (0.002891, $n{=}6$) & 0.1552 (0.003465, $n{=}6$) & 0.05996 (0.0008515, $n{=}6$) & 0.02686 (0.0002456, $n{=}6$) & 0.796 \\
+extxyz-md & 0.1839 (0.001297, $n{=}6$) & 0.1797 (0.01058, $n{=}6$) & 0.06931 (0.002116, $n{=}6$) & 0.03504 (0.0002733, $n{=}6$) & 0.656 \\
+extxyz-same & 0.4271 (0.01191, $n{=}6$) & 0.4181 (0.01335, $n{=}6$) & 0.1533 (0.001057, $n{=}6$) & 0.06776 (0.002009, $n{=}6$) & 0.788 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across cores, into disk\_sync. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-threads.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-threads-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.5517 (0.01323, $n{=}6$) & 0.2928 (0.0167, $n{=}6$) & 0.1824 (0.004034, $n{=}6$) & 0.1395 (0.009623, $n{=}6$) & 0.495 \\
+convel & 0.8577 (0.1088, $n{=}6$) & 0.4683 (0.006811, $n{=}6$) & 0.3047 (0.01823, $n{=}6$) & 0.2523 (0.008966, $n{=}6$) & 0.425 \\
+con-1e6 & 0.06231 (0.01524, $n{=}6$) & 0.04445 (0.001622, $n{=}6$) & 0.03563 (0.002405, $n{=}6$) & 0.03182 (0.004462, $n{=}6$) & 0.245 \\
+extxyz-cu & 0.4851 (0.01582, $n{=}6$) & 0.4538 (0.002719, $n{=}6$) & 0.2226 (0.004048, $n{=}6$) & 0.1415 (0.004498, $n{=}6$) & 0.429 \\
+extxyz-alloy & 0.1911 (0.005004, $n{=}6$) & 0.1798 (0.005011, $n{=}6$) & 0.08357 (0.002448, $n{=}6$) & 0.04793 (0.0007098, $n{=}6$) & 0.498 \\
+extxyz-md & 0.2019 (0.002961, $n{=}6$) & 0.1918 (0.002579, $n{=}6$) & 0.08646 (0.002459, $n{=}6$) & 0.05255 (0.004383, $n{=}6$) & 0.480 \\
+extxyz-same & 0.4689 (0.009006, $n{=}6$) & 0.4438 (0.008713, $n{=}6$) & 0.1971 (0.007879, $n{=}6$) & 0.1173 (0.003189, $n{=}6$) & 0.500 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across MPI ranks, into disk. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-mpi.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-mpi-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.6517 (0.004532, $n{=}6$) & 0.3427 (0.004775, $n{=}6$) & 0.1813 (0.001081, $n{=}6$) & 0.1086 (0.00421, $n{=}6$) & 0.750 \\
+convel & 1.088 (0.005007, $n{=}6$) & 0.5693 (0.007394, $n{=}6$) & 0.3108 (0.006183, $n{=}6$) & 0.1892 (0.01446, $n{=}6$) & 0.719 \\
+con-1e6 & 0.0458 (0.0004795, $n{=}6$) & 0.0213 (0.001184, $n{=}6$) & 0.01245 (0.002361, $n{=}6$) & 0.007502 (0.001583, $n{=}6$) & 0.763 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across MPI ranks, into memory. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-mpi.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-mpi-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.6611 (0.01031, $n{=}6$) & 0.3307 (0.001693, $n{=}6$) & 0.1645 (0.004866, $n{=}6$) & 0.08654 (0.002557, $n{=}6$) & 0.955 \\
+convel & 1.113 (0.004878, $n{=}6$) & 0.557 (0.0133, $n{=}6$) & 0.2784 (0.001609, $n{=}6$) & 0.1496 (0.008887, $n{=}6$) & 0.930 \\
+con-1e6 & 0.04814 (0.0003325, $n{=}6$) & 0.02553 (0.0004215, $n{=}6$) & 0.01391 (0.0004385, $n{=}6$) & 0.009052 (0.0002245, $n{=}6$) & 0.665 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp4 strong write scaling across MPI ranks, into disk\_sync. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$. Record \texttt{bench/h2h/scaling/camp4/strong-mpi.json} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit field is \texttt{f3ee0f471234e112209e6ad7623b2b6e5ce8a673}. This record supersedes camp3. It is not the model 207 campaign. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp4-mpi-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.7012 (0.00852, $n{=}6$) & 0.3951 (0.004512, $n{=}6$) & 0.2411 (0.006963, $n{=}6$) & 0.1581 (0.005752, $n{=}6$) & 0.555 \\
+convel & 1.273 (0.01195, $n{=}6$) & 0.6848 (0.01429, $n{=}6$) & 0.427 (0.01229, $n{=}6$) & 0.3092 (0.01196, $n{=}6$) & 0.515 \\
+con-1e6 & 0.06135 (0.0013, $n{=}6$) & 0.04038 (0.00165, $n{=}6$) & 0.03106 (0.003832, $n{=}6$) & 0.02482 (0.003058, $n{=}6$) & 0.309 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

@@ -645,6 +645,17 @@ A file that drops those fields cannot stand in for a CON file.
 Extended XYZ drops none.
 \input{campaign/final/cross_format}
 
+The model 207 rows above stay as recorded.
+Table~\ref{tab:h2h9-1m} is a separate session, one frame of \(10^{6}\) atoms, from \texttt{bench/h2h/scaling/h2h9} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
+The host is a Xeon, family 6, model 173.
+Time, size and drops are the columns of that record.
+The eight-thread rows are pending camp5, and the CON-bin rows are pending h2h10.
+Tables~\ref{tab:camp4-threads-write-memory} and~\ref{tab:camp4-mpi-write-memory} are the camp4 write-scaling record at that same tip, which supersedes camp3.
+On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.838 for threaded con-100k, 0.762 for threaded convel, 0.955 for MPI con-100k and 0.930 for MPI convel.
+The disk and disk-sync tables from the same record are model 173 as well, not the model 207 strong-scaling tables.
+\input{campaign/final/h2h9_1m}
+\input{campaign/final/camp4_writes}
+
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
 H5MD stores an identifier and a velocity unit and defines no per-component constraint.

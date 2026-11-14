@@ -1,0 +1,82 @@
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}lllrr p{0.30\textwidth}@{}}
+\caption{One frame of \(10^{6}\) atoms from h2h9. Time is the type-7 median in seconds of six samples. Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Threaded rows are pending camp5. CON-bin rows are pending h2h10. Record \texttt{bench/h2h/scaling/h2h9/cross-format.tsv} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit line is \texttt{83a34ca49de4a1e4f1d19b89aa3f222d0d290df6}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}\label{tab:h2h9-1m}\\
+\toprule
+Tool & Format & Op & Time (s) & Size & Drops \\
+\midrule
+\endfirsthead
+\caption[]{One frame of \(10^{6}\) atoms from h2h9, continued.}\\
+\toprule
+Tool & Format & Op & Time (s) & Size & Drops \\
+\midrule
+\endhead
+mdanalysis & pdb & read & unsupported &  & unsupported: PDB atom serial is five digits (max 99999 atoms) \\
+readcon & con & read & 0.1015 & 43.28 & none \\
+readcon & con & write & 0.1817 & 43.28 & none \\
+readcon & con.gz & read & 0.1364 & 5.169 & none \\
+readcon & con.gz & write & 0.46 & 5.169 & none \\
+readcon & con.zst & read & 0.104 & 1.349 & none \\
+readcon & con.zst & write & 0.1439 & 1.349 & none \\
+readcon & xyz & read & 0.2184 & 11.16 & velocities, constraints \\
+readcon & xyz & write & 0.5833 & 11.16 & velocities, constraints \\
+readcon & chemfiles.Frame & read & 0.1706 & 43.28 & masses, velocities, constraints \\
+readcon & chemfiles.Frame & write & 0.08745 & 43.28 & masses, velocities, constraints \\
+chemfiles & xyz & read & 0.1967 & 11.16 & masses, velocities, constraints \\
+chemfiles & xyz & write & 0.2836 & 11.16 & masses, velocities, constraints \\
+chemfiles & xyz.gz & read & 0.2178 & 1.598 & masses, velocities, constraints \\
+chemfiles & xyz.gz & write & 0.6803 & 1.598 & masses, velocities, constraints \\
+chemfiles & xyz.xz & read & 0.265 & 0.09991 & masses, velocities, constraints \\
+chemfiles & xyz.xz & write & 4.863 & 0.09991 & masses, velocities, constraints \\
+chemfiles & xyz.bz2 & read & 0.4386 & 0.8531 & masses, velocities, constraints \\
+chemfiles & xyz.bz2 & write & 0.7386 & 0.8531 & masses, velocities, constraints \\
+chemfiles & trr & read & 0.1454 & 22.89 & masses, constraints, precision \\
+chemfiles & trr & write & 0.09032 & 22.89 & masses, constraints, precision \\
+chemfiles & ncdf & read & 0.1296 & 22.89 & masses, constraints \\
+chemfiles & ncdf & write & 0.07559 & 22.89 & masses, constraints \\
+chemfiles & dcd & read & 0.1151 & 11.44 & masses, velocities, constraints \\
+chemfiles & dcd & write & 0.03646 & 11.44 & masses, velocities, constraints \\
+chemfiles & xtc & read & 0.1294 & 3.548 & masses, velocities, constraints, precision \\
+chemfiles & xtc & write & 0.04375 & 3.548 & masses, velocities, constraints, precision \\
+chemfiles & pdb & read & 1.862 & 75.34 & masses, velocities, constraints \\
+chemfiles & pdb & write & 0.8594 & 75.34 & masses, velocities, constraints \\
+chemfiles & gro & read & 0.4606 & 65.8 & masses, constraints \\
+chemfiles & gro & write & 0.5017 & 65.8 & masses, constraints \\
+chemfiles & pdb.gz & read & 1.935 & 6.979 & masses, velocities, constraints \\
+chemfiles & pdb.gz & write & 1.83 & 6.979 & masses, velocities, constraints \\
+chemfiles & gro.gz & read & 0.5001 & 2.547 & masses, constraints \\
+chemfiles & gro.gz & write & 0.8693 & 2.547 & masses, constraints \\
+chemfiles & pdb.xz & read & 2.175 & 1.384 & masses, velocities, constraints \\
+chemfiles & pdb.xz & write & 32.94 & 1.384 & masses, velocities, constraints \\
+chemfiles & gro.xz & read & 0.632 & 0.3306 & masses, constraints \\
+chemfiles & gro.xz & write & 16.79 & 0.3306 & masses, constraints \\
+ase & extxyz & read & 2.083 & 119.2 & none \\
+ase & extxyz & write & 4.38 & 119.2 & none \\
+ase & extxyz.gz & read & 2.369 & 2.647 & none \\
+ase & extxyz.gz & write & 9.112 & 2.647 & none \\
+mdanalysis & xyz & read & 6.617 & 41.01 & masses, velocities, constraints, cell \\
+mdanalysis & xyz & write & 2.373 & 41.01 & masses, velocities, constraints, cell \\
+mdanalysis & dcd & read & 0.04383 & 11.44 & masses, velocities, constraints \\
+mdanalysis & dcd & write & 0.231 & 11.44 & masses, velocities, constraints \\
+mdanalysis & xtc & read & 0.08877 & 3.548 & masses, velocities, constraints, precision \\
+mdanalysis & xtc & write & 0.2451 & 3.548 & masses, velocities, constraints, precision \\
+mdanalysis & ncdf & read & 0.04042 & 22.89 & masses, constraints \\
+mdanalysis & ncdf & write & 0.2883 & 22.89 & masses, constraints \\
+mdanalysis & trr & read & 0.2505 & 22.89 & masses, constraints, precision \\
+mdanalysis & trr & write & 0.3209 & 22.89 & masses, constraints, precision \\
+mdtraj & ncdf & read & 0.01896 & 11.44 & masses, velocities, constraints \\
+mdtraj & ncdf & write & 1.134 & 11.44 & masses, velocities, constraints \\
+mdtraj & dcd & read & 0.01884 & 11.44 & masses, velocities, constraints \\
+mdtraj & dcd & write & 1.105 & 11.44 & masses, velocities, constraints \\
+mdtraj & xtc & read & 0.04056 & 3.548 & masses, velocities, constraints, precision \\
+mdtraj & xtc & write & 1.076 & 3.548 & masses, velocities, constraints, precision \\
+ovito & xyz & read & 0.1911 & 35.86 & constraints \\
+ovito & xyz & write & 0.5906 & 35.86 & constraints \\
+ovito & xyz.gz & read & 0.2118 & 2.291 & constraints \\
+ovito & xyz.gz & write & 6.089 & 2.291 & constraints \\
+readcon & con & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\
+readcon & convel & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\
+readcon & conbin & read & \multicolumn{3}{l}{pending h2h10} \\
+readcon & conbin & write & \multicolumn{3}{l}{pending h2h10} \\
+\bottomrule
+\end{longtable}
+}

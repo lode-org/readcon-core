@@ -1,0 +1,3080 @@
+note OVITO 3.17.2 reads extended XYZ periodicity and an out-of-cell second frame without wrapping or repeating frame 0.
+note mdcompress 1.0.0 is not on PyPI and conda is not installed. apt has no libxdrfile. The refresh-bio clone reports version 2.0.5, not 1.0.0. `make` stops on the example binaries with cc: error: unknown argument: '-fabi-version=6'. That is the 1.0.0 install failure, so the coordinate-only row is omitted.
+note Reads and writes that do not call the readcon writer were timed on 6e0ffcd8ee291bdc6e58427d765b78efba4b5159. readcon CON, CON.gz, CON.zst, chemfiles and CON-bin writes were timed on f3ee0f471234e112209e6ad7623b2b6e5ce8a673. 83a34ca4 adds writer tests and a wrap pin and does not change that writer or the reader. The readcon write sample blocks are that later five-arm rotation; the order write lines are the original full rotation.
+commit 83a34ca49de4a1e4f1d19b89aa3f222d0d290df6
+versions {"MDAnalysis": "2.11.0", "ase": "3.29.0", "chemfiles": "0.10.4", "mdtraj": "1.11.2", "numpy": "2.5.4", "ovito": "3.17.2", "readcon": "0.23.0"}
+ovito-extxyz {"drift_max_abs": 0.0, "file_frame1": [1.2, 6.4, -0.3], "file_pbc": [true, true, false], "frames": 2, "ovito": "3.17.2", "pbc_matches": true, "read_frame1": [1.2, 6.4, -0.3], "read_pbc": [[true, true, false], [true, true, false]], "stuck_on_frame0": false, "wrapped_into_cell": false}
+warmup 1 samples 6 percentile type7 serial 1
+fresh process per sample, taskset -c 0,1,2,3,4,5,6,7, rotate order each sample
+loadavg 0.26 0.26 0.51 8/312 126134
+governor {"0": "absent", "1": "absent", "2": "absent", "3": "absent", "4": "absent", "5": "absent", "6": "absent", "7": "absent"}
+cpu_mhz 2700.0
+warm reads the file once before the clock; cold drops the page cache after warmup
+every timed read copies positions and the cell into numpy and checks the sum
+note chemfiles has no native CON format; the chemfiles-con row copies positions and the cell out of a chemfiles Frame filled from readcon.
+note chemfiles compression library /tmp/chemfiles-install/lib/libchemfiles.so opens {"bz2": true, "gz": true, "trr": true, "xz": true}
+note MDAnalysis 2.11.0 on DCD, XTC, NetCDF, TRR, XYZ and PDB. Cells are orthogonal, so the 2.11 triclinic wrap does not apply.
+order read-warm 1k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-warm 1k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-warm 1k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-warm 1k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-warm 1k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-warm 1k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order read-cold 1k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-cold 1k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-cold 1k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-cold 1k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-cold 1k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-cold 1k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order write 1k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order write 1k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order write 1k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order write 1k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order write 1k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order write 1k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+checksum warm 1k readcon-con expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k readcon-con 0.000135 0.000009 rss 43454464 bytes 36958 loses none
+sample 0.000269793
+sample 0.000136424
+sample 0.000129078
+sample 0.000133055
+sample 0.000139861
+sample 0.000129200
+checksum cold 1k readcon-con expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k readcon-con 0.001866 0.000998 rss 43511808 bytes 36958 loses none
+sample 0.001922395
+sample 0.000577751
+sample 0.001864039
+sample 0.000593377
+sample 0.001867710
+sample 0.001963946
+write 1k readcon-con 0.000244 0.000091 rss 46188544 bytes 36958 loses none
+sample 0.000323386
+sample 0.000337685
+sample 0.000194198
+sample 0.000262436
+sample 0.000225728
+sample 0.000213927
+checksum warm 1k readcon-con-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k readcon-con-gz 0.000175 0.000015 rss 43636736 bytes 5677 loses none
+sample 0.000183077
+sample 0.000165913
+sample 0.000170183
+sample 0.000162666
+sample 0.000274733
+sample 0.000180630
+checksum cold 1k readcon-con-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k readcon-con-gz 0.000900 0.000709 rss 43724800 bytes 5677 loses none
+sample 0.000759991
+sample 0.001802011
+sample 0.001040209
+sample 0.000593196
+sample 0.001471047
+sample 0.000618972
+write 1k readcon-con-gz 0.000681 0.000098 rss 46903296 bytes 5677 loses none
+sample 0.000693889
+sample 0.000937050
+sample 0.000668213
+sample 0.000778362
+sample 0.000654040
+sample 0.000656088
+checksum warm 1k readcon-con-zst expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k readcon-con-zst 0.000205 0.000005 rss 48068608 bytes 2876 loses none
+sample 0.000202336
+sample 0.000207631
+sample 0.000202442
+sample 0.000213325
+sample 0.000200806
+sample 0.000206857
+checksum cold 1k readcon-con-zst expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k readcon-con-zst 0.000780 0.000653 rss 48177152 bytes 2876 loses none
+sample 0.002290668
+sample 0.000955434
+sample 0.000581722
+sample 0.000604004
+sample 0.001334867
+sample 0.000554919
+write 1k readcon-con-zst 0.000583 0.000164 rss 45858816 bytes 2876 loses none
+sample 0.000526264
+sample 0.000870967
+sample 0.000510662
+sample 0.000639032
+sample 0.000483211
+sample 0.000691195
+checksum warm 1k readcon-chemfiles expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k readcon-chemfiles 0.000214 0.000006 rss 43905024 bytes 9069 loses velocities,constraints
+sample 0.000204673
+sample 0.000334740
+sample 0.000214129
+sample 0.000214532
+sample 0.000214079
+sample 0.000206874
+checksum cold 1k readcon-chemfiles expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k readcon-chemfiles 0.000912 0.000268 rss 43974656 bytes 9069 loses velocities,constraints
+sample 0.000959196
+sample 0.000657105
+sample 0.001985065
+sample 0.000623356
+sample 0.000864364
+sample 0.000982834
+write 1k readcon-chemfiles 0.002793 0.003505 rss 56195072 bytes 9069 loses velocities,constraints
+sample 0.006319087
+sample 0.004490670
+sample 0.001096310
+sample 0.001057971
+sample 0.001095773
+sample 0.004637433
+checksum warm 1k chemfiles-con expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-con 0.000245 0.000012 rss 45717504 bytes 36958 loses masses,velocities,constraints
+sample 0.000249381
+sample 0.000237299
+sample 0.000240786
+sample 0.000238382
+sample 0.000262703
+sample 0.000251497
+checksum cold 1k chemfiles-con expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-con 0.002291 0.000644 rss 45811712 bytes 36958 loses masses,velocities,constraints
+sample 0.002407105
+sample 0.002175323
+sample 0.004055052
+sample 0.000789749
+sample 0.001795955
+sample 0.002577169
+write 1k chemfiles-con 0.000658 0.000125 rss 36184064 bytes 36958 loses masses,velocities,constraints
+sample 0.000598036
+sample 0.000599485
+sample 0.000279506
+sample 0.000715979
+sample 0.000725657
+sample 0.000783892
+checksum warm 1k chemfiles-xyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-xyz 0.000199 0.000022 rss 35801088 bytes 9069 loses masses,velocities,constraints
+sample 0.000219319
+sample 0.000216926
+sample 0.000203523
+sample 0.000188074
+sample 0.000191371
+sample 0.000193596
+checksum cold 1k chemfiles-xyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-xyz 0.000943 0.000476 rss 35821568 bytes 9069 loses masses,velocities,constraints
+sample 0.000910045
+sample 0.001883699
+sample 0.000687657
+sample 0.000975334
+sample 0.000589001
+sample 0.001300858
+write 1k chemfiles-xyz 0.000292 0.000015 rss 36820992 bytes 9069 loses masses,velocities,constraints
+sample 0.000304273
+sample 0.000287487
+sample 0.000284990
+sample 0.000287940
+sample 0.000304559
+sample 0.000296382
+checksum warm 1k chemfiles-xyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-xyz-gz 0.000216 0.000002 rss 35966976 bytes 1897 loses masses,velocities,constraints
+sample 0.000216543
+sample 0.000215535
+sample 0.000220266
+sample 0.000212628
+sample 0.000216032
+sample 0.000213986
+checksum cold 1k chemfiles-xyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-xyz-gz 0.001366 0.000263 rss 36040704 bytes 1897 loses masses,velocities,constraints
+sample 0.001192029
+sample 0.001407161
+sample 0.001515243
+sample 0.001595198
+sample 0.001324634
+sample 0.001169926
+write 1k chemfiles-xyz-gz 0.000934 0.000011 rss 37185536 bytes 1897 loses masses,velocities,constraints
+sample 0.000930599
+sample 0.000919648
+sample 0.000937888
+sample 0.000946882
+sample 0.000927731
+sample 0.000939448
+checksum warm 1k chemfiles-xyz-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-xyz-xz 0.000274 0.000016 rss 35987456 bytes 500 loses masses,velocities,constraints
+sample 0.000269089
+sample 0.000344846
+sample 0.000289542
+sample 0.000272830
+sample 0.000267261
+sample 0.000275480
+checksum cold 1k chemfiles-xyz-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-xyz-xz 0.001107 0.000647 rss 36057088 bytes 500 loses masses,velocities,constraints
+sample 0.000923601
+sample 0.001724681
+sample 0.001200021
+sample 0.001013929
+sample 0.000918752
+sample 0.001867747
+write 1k chemfiles-xyz-xz 0.002391 0.000054 rss 38225920 bytes 500 loses masses,velocities,constraints
+sample 0.002412227
+sample 0.002337429
+sample 0.002433462
+sample 0.002420735
+sample 0.002363524
+sample 0.002369101
+checksum warm 1k chemfiles-xyz-bz2 expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-xyz-bz2 0.000340 0.000022 rss 36048896 bytes 754 loses masses,velocities,constraints
+sample 0.000354257
+sample 0.000344173
+sample 0.000334942
+sample 0.000372059
+sample 0.000328494
+sample 0.000327894
+checksum cold 1k chemfiles-xyz-bz2 expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-xyz-bz2 0.001341 0.000748 rss 36093952 bytes 754 loses masses,velocities,constraints
+sample 0.000812681
+sample 0.000782579
+sample 0.001184347
+sample 0.001959160
+sample 0.001496702
+sample 0.001706208
+write 1k chemfiles-xyz-bz2 0.000880 0.000039 rss 37056512 bytes 754 loses masses,velocities,constraints
+sample 0.000865501
+sample 0.000867270
+sample 0.000918698
+sample 0.000881594
+sample 0.000879348
+sample 0.001118789
+checksum warm 1k chemfiles-trr expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-trr 0.000154 0.000015 rss 36438016 bytes 24120 loses masses,constraints,precision
+sample 0.000150147
+sample 0.000168273
+sample 0.000151139
+sample 0.000170143
+sample 0.000156741
+sample 0.000150147
+checksum cold 1k chemfiles-trr expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-trr 0.000952 0.000718 rss 36515840 bytes 24120 loses masses,constraints,precision
+sample 0.000602539
+sample 0.000658012
+sample 0.000596296
+sample 0.001380895
+sample 0.001363804
+sample 0.001245985
+write 1k chemfiles-trr 0.001167 0.000658 rss 36763648 bytes 24120 loses masses,constraints,precision
+sample 0.001649740
+sample 0.001617536
+sample 0.000642166
+sample 0.000909952
+sample 0.000913442
+sample 0.001420987
+checksum warm 1k chemfiles-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-ncdf 0.000145 0.000014 rss 35901440 bytes 24800 loses masses,constraints
+sample 0.000142215
+sample 0.000147109
+sample 0.000158097
+sample 0.000178173
+sample 0.000140310
+sample 0.000141109
+checksum cold 1k chemfiles-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-ncdf 0.001295 0.000516 rss 35973120 bytes 24800 loses masses,constraints
+sample 0.001122936
+sample 0.001735489
+sample 0.000642922
+sample 0.001408087
+sample 0.001182907
+sample 0.001736234
+write 1k chemfiles-ncdf 0.001645 0.001014 rss 36714496 bytes 24800 loses masses,constraints
+sample 0.002281071
+sample 0.001941612
+sample 0.001347702
+sample 0.000412162
+sample 0.002102910
+sample 0.000948247
+checksum warm 1k chemfiles-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-dcd 0.000122 0.000009 rss 35751936 bytes 12196 loses masses,velocities,constraints
+sample 0.000116683
+sample 0.000119691
+sample 0.000111272
+sample 0.000126494
+sample 0.000124369
+sample 0.000128986
+checksum cold 1k chemfiles-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-dcd 0.001061 0.000522 rss 35801088 bytes 12196 loses masses,velocities,constraints
+sample 0.001053688
+sample 0.001632395
+sample 0.000613820
+sample 0.000939904
+sample 0.001631306
+sample 0.001067478
+write 1k chemfiles-dcd 0.001571 0.000440 rss 36700160 bytes 12196 loses masses,velocities,constraints
+sample 0.001922206
+sample 0.001655778
+sample 0.000800854
+sample 0.001486769
+sample 0.002428841
+sample 0.001391465
+checksum warm 1k chemfiles-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-xtc 0.000163 0.000016 rss 36376576 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.000157116
+sample 0.000152983
+sample 0.000168262
+sample 0.000221036
+sample 0.000171201
+sample 0.000154236
+checksum cold 1k chemfiles-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-xtc 0.001243 0.001182 rss 36415488 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.002234694
+sample 0.002243308
+sample 0.000704196
+sample 0.000631355
+sample 0.001175425
+sample 0.001310254
+write 1k chemfiles-xtc 0.001316 0.000744 rss 36702208 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.002110932
+sample 0.000533140
+sample 0.001796434
+sample 0.001097656
+sample 0.001534386
+sample 0.000949785
+checksum warm 1k chemfiles-pdb expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-pdb 0.001012 0.000043 rss 36782080 bytes 79093 loses masses,velocities,constraints
+sample 0.001003184
+sample 0.001057046
+sample 0.001000026
+sample 0.001670885
+sample 0.001006270
+sample 0.001018233
+checksum cold 1k chemfiles-pdb expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-pdb 0.002394 0.000935 rss 36855808 bytes 79093 loses masses,velocities,constraints
+sample 0.001770118
+sample 0.003011611
+sample 0.002203012
+sample 0.002889195
+sample 0.001634521
+sample 0.002584027
+write 1k chemfiles-pdb 0.000761 0.000040 rss 36827136 bytes 79093 loses masses,velocities,constraints
+sample 0.000763496
+sample 0.000736589
+sample 0.000787946
+sample 0.000815299
+sample 0.000734695
+sample 0.000759138
+checksum warm 1k chemfiles-gro expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-gro 0.000535 0.000022 rss 36155392 bytes 69067 loses masses,constraints
+sample 0.000520840
+sample 0.000533262
+sample 0.000551253
+sample 0.000551718
+sample 0.000523477
+sample 0.000537021
+checksum cold 1k chemfiles-gro expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-gro 0.001947 0.000255 rss 36245504 bytes 69067 loses masses,constraints
+sample 0.002616269
+sample 0.001948736
+sample 0.001946213
+sample 0.001753810
+sample 0.002276383
+sample 0.001936864
+write 1k chemfiles-gro 0.000541 0.000034 rss 36814848 bytes 69067 loses masses,constraints
+sample 0.000525063
+sample 0.000524534
+sample 0.000559578
+sample 0.000568874
+sample 0.000520843
+sample 0.000555971
+checksum warm 1k chemfiles-pdb-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-pdb-gz 0.001133 0.000036 rss 37058560 bytes 5657 loses masses,velocities,constraints
+sample 0.001117069
+sample 0.001108797
+sample 0.001132921
+sample 0.001611130
+sample 0.001164602
+sample 0.001133451
+checksum cold 1k chemfiles-pdb-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-pdb-gz 0.002347 0.000708 rss 37154816 bytes 5657 loses masses,velocities,constraints
+sample 0.003123047
+sample 0.002343985
+sample 0.002064074
+sample 0.003006010
+sample 0.002350020
+sample 0.001693720
+write 1k chemfiles-pdb-gz 0.001575 0.000041 rss 37107712 bytes 5657 loses masses,velocities,constraints
+sample 0.001560280
+sample 0.001589063
+sample 0.001660680
+sample 0.001557147
+sample 0.001556566
+sample 0.001602764
+checksum warm 1k chemfiles-gro-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-gro-gz 0.000638 0.000012 rss 36442112 bytes 5757 loses masses,constraints
+sample 0.000617655
+sample 0.000633208
+sample 0.000645999
+sample 0.000651086
+sample 0.000641587
+sample 0.000633420
+checksum cold 1k chemfiles-gro-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-gro-gz 0.001983 0.000663 rss 36495360 bytes 5757 loses masses,constraints
+sample 0.002825957
+sample 0.002122333
+sample 0.001131531
+sample 0.001844587
+sample 0.002349713
+sample 0.001558900
+write 1k chemfiles-gro-gz 0.001452 0.000011 rss 37238784 bytes 5757 loses masses,constraints
+sample 0.001492928
+sample 0.001444296
+sample 0.001459076
+sample 0.001452099
+sample 0.001440110
+sample 0.001452182
+checksum warm 1k chemfiles-pdb-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-pdb-xz 0.001394 0.000101 rss 37195776 bytes 1804 loses masses,velocities,constraints
+sample 0.001340790
+sample 0.001516197
+sample 0.001423440
+sample 0.001478087
+sample 0.001364143
+sample 0.001362899
+checksum cold 1k chemfiles-pdb-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-pdb-xz 0.002240 0.000384 rss 37251072 bytes 1804 loses masses,velocities,constraints
+sample 0.002033417
+sample 0.002867121
+sample 0.002340760
+sample 0.001953664
+sample 0.002478001
+sample 0.002139817
+write 1k chemfiles-pdb-xz 0.019755 0.000248 rss 38879232 bytes 1804 loses masses,velocities,constraints
+sample 0.019780397
+sample 0.019658964
+sample 0.019972356
+sample 0.020296614
+sample 0.019421141
+sample 0.019729983
+checksum warm 1k chemfiles-gro-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k chemfiles-gro-xz 0.000891 0.000011 rss 36562944 bytes 1952 loses masses,constraints
+sample 0.001137310
+sample 0.000885194
+sample 0.000897158
+sample 0.000885498
+sample 0.000895623
+sample 0.000886552
+checksum cold 1k chemfiles-gro-xz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k chemfiles-gro-xz 0.002633 0.000363 rss 36597760 bytes 1952 loses masses,constraints
+sample 0.002859198
+sample 0.001493097
+sample 0.002654070
+sample 0.002634892
+sample 0.002170638
+sample 0.002632003
+write 1k chemfiles-gro-xz 0.017219 0.000645 rss 39036928 bytes 1952 loses masses,constraints
+sample 0.017204644
+sample 0.017914089
+sample 0.017063184
+sample 0.017232720
+sample 0.016894419
+sample 0.023690708
+checksum warm 1k ase-extxyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k ase-extxyz 0.002227 0.000097 rss 84246528 bytes 125134 loses none
+sample 0.002207912
+sample 0.002275789
+sample 0.002314966
+sample 0.002246265
+sample 0.002128863
+sample 0.002159662
+checksum cold 1k ase-extxyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k ase-extxyz 0.003299 0.000776 rss 84287488 bytes 125134 loses none
+sample 0.003568679
+sample 0.002731443
+sample 0.003028730
+sample 0.004816775
+sample 0.002856173
+sample 0.003711272
+write 1k ase-extxyz 0.004638 0.000900 rss 83771392 bytes 125134 loses none
+sample 0.006456470
+sample 0.004545666
+sample 0.004541950
+sample 0.004730061
+sample 0.005680901
+sample 0.004499945
+checksum warm 1k ase-extxyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k ase-extxyz-gz 0.002525 0.000025 rss 84289536 bytes 3024 loses none
+sample 0.002539291
+sample 0.002523604
+sample 0.002527318
+sample 0.002474125
+sample 0.003478729
+sample 0.002507701
+checksum cold 1k ase-extxyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k ase-extxyz-gz 0.004038 0.000191 rss 84371456 bytes 3024 loses none
+sample 0.004037777
+sample 0.003602766
+sample 0.004238693
+sample 0.004309517
+sample 0.004037905
+sample 0.003983591
+write 1k ase-extxyz-gz 0.009460 0.000260 rss 84090880 bytes 3024 loses none
+sample 0.009265412
+sample 0.009361047
+sample 0.009459398
+sample 0.009707251
+sample 0.009460387
+sample 0.009937567
+checksum warm 1k mda-pdb expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mda-pdb 0.007130 0.000243 rss 97910784 bytes 81162 loses velocities,constraints
+sample 0.007153722
+sample 0.007335234
+sample 0.006910052
+sample 0.007217875
+sample 0.007106494
+sample 0.006904141
+checksum cold 1k mda-pdb expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mda-pdb 0.008023 0.000463 rss 97802240 bytes 81162 loses velocities,constraints
+sample 0.007811732
+sample 0.007846460
+sample 0.007835018
+sample 0.008585772
+sample 0.008200180
+sample 0.008333983
+write 1k mda-pdb 0.007611 0.000313 rss 97085440 bytes 81162 loses velocities,constraints
+sample 0.007930973
+sample 0.007529062
+sample 0.007588130
+sample 0.008860309
+sample 0.007509679
+sample 0.007634452
+checksum warm 1k mda-xyz expected 13500 got 13500 13500 13500 13500 13500 13500 ok True
+read warm 1k mda-xyz 0.005152 0.000189 rss 97140736 bytes 43065 loses masses,velocities,constraints,cell
+sample 0.005277952
+sample 0.005302835
+sample 0.005145329
+sample 0.005159638
+sample 0.005030159
+sample 0.004965716
+checksum cold 1k mda-xyz expected 13500 got 13500 13500 13500 13500 13500 13500 ok True
+read cold 1k mda-xyz 0.005772 0.000154 rss 97138688 bytes 43065 loses masses,velocities,constraints,cell
+sample 0.005735480
+sample 0.005641815
+sample 0.006157448
+sample 0.005822626
+sample 0.005562639
+sample 0.005808179
+write 1k mda-xyz 0.002930 0.000078 rss 96593920 bytes 43065 loses masses,velocities,constraints,cell
+sample 0.002990618
+sample 0.002888154
+sample 0.002931191
+sample 0.003034188
+sample 0.002928450
+sample 0.002845105
+checksum warm 1k readcon-conbin expected 13500 got 13500 13500 13500 13500 13500 13500 ok True
+read warm 1k readcon-conbin 0.000040 0.000001 rss 40048640 bytes 52096 loses masses,constraints,cell
+sample 0.000041436
+sample 0.000039951
+sample 0.000040812
+sample 0.000038866
+sample 0.000041019
+sample 0.000039620
+checksum cold 1k readcon-conbin expected 13500 got 13500 13500 13500 13500 13500 13500 ok True
+read cold 1k readcon-conbin 0.000386 0.000598 rss 40120320 bytes 52096 loses masses,constraints,cell
+sample 0.000377482
+sample 0.000377431
+sample 0.001425511
+sample 0.000334138
+sample 0.001169739
+sample 0.000394190
+write 1k readcon-conbin 0.000223 0.000055 rss 44111872 bytes 52096 loses masses,constraints,cell
+sample 0.000219195
+sample 0.000268124
+sample 0.000167695
+sample 0.000227113
+sample 0.000295053
+sample 0.000197173
+checksum warm 1k mda-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mda-dcd 0.000242 0.000023 rss 96675840 bytes 12436 loses masses,velocities,constraints
+sample 0.000248916
+sample 0.000256255
+sample 0.000234875
+sample 0.000229834
+sample 0.000230397
+sample 0.000361161
+checksum cold 1k mda-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mda-dcd 0.001677 0.000468 rss 96677888 bytes 12436 loses masses,velocities,constraints
+sample 0.001510249
+sample 0.002056736
+sample 0.002146276
+sample 0.001562087
+sample 0.001792802
+sample 0.000760089
+write 1k mda-dcd 0.000830 0.000057 rss 96749568 bytes 12436 loses masses,velocities,constraints
+sample 0.000809494
+sample 0.000871520
+sample 0.000850669
+sample 0.000934910
+sample 0.000809863
+sample 0.000795866
+checksum warm 1k mda-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mda-xtc 0.000979 0.000040 rss 96745472 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.001170714
+sample 0.000973475
+sample 0.000955648
+sample 0.000985097
+sample 0.000924284
+sample 0.001004819
+checksum cold 1k mda-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mda-xtc 0.002787 0.000146 rss 96780288 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.003188172
+sample 0.002922643
+sample 0.002818540
+sample 0.002756293
+sample 0.002748512
+sample 0.002343065
+write 1k mda-xtc 0.000871 0.000064 rss 96841728 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.000831157
+sample 0.000973138
+sample 0.000859784
+sample 0.000882262
+sample 0.000836656
+sample 0.000914933
+checksum warm 1k mda-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mda-ncdf 0.000395 0.000010 rss 96401408 bytes 24964 loses masses,constraints
+sample 0.000454001
+sample 0.000388779
+sample 0.000381844
+sample 0.000401692
+sample 0.000394848
+sample 0.000395556
+checksum cold 1k mda-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mda-ncdf 0.001828 0.000771 rss 96446464 bytes 24964 loses masses,constraints
+sample 0.002670459
+sample 0.001115231
+sample 0.001788924
+sample 0.001016956
+sample 0.002116789
+sample 0.001867976
+write 1k mda-ncdf 0.001864 0.000077 rss 98179072 bytes 24964 loses masses,constraints
+sample 0.001769853
+sample 0.001785203
+sample 0.001965983
+sample 0.001875242
+sample 0.001852519
+sample 0.001879862
+checksum warm 1k mda-trr expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mda-trr 0.001115 0.000038 rss 96843776 bytes 24120 loses masses,constraints,precision
+sample 0.001088998
+sample 0.001192160
+sample 0.001094912
+sample 0.001118813
+sample 0.001111665
+sample 0.001143635
+checksum cold 1k mda-trr expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mda-trr 0.003090 0.001033 rss 96800768 bytes 24120 loses masses,constraints,precision
+sample 0.002380484
+sample 0.003325180
+sample 0.003914454
+sample 0.002463853
+sample 0.002855560
+sample 0.003685262
+write 1k mda-trr 0.000941 0.000056 rss 96854016 bytes 24120 loses masses,constraints,precision
+sample 0.000914293
+sample 0.000977016
+sample 0.000959416
+sample 0.000892568
+sample 0.000921652
+sample 0.000997799
+checksum warm 1k mdtraj-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mdtraj-ncdf 0.000857 0.000061 rss 67076096 bytes 12900 loses masses,velocities,constraints
+sample 0.000870384
+sample 0.000842296
+sample 0.000843115
+sample 0.000914779
+sample 0.000944594
+sample 0.000827409
+checksum cold 1k mdtraj-ncdf expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mdtraj-ncdf 0.001995 0.000479 rss 67065856 bytes 12900 loses masses,velocities,constraints
+sample 0.002369073
+sample 0.001352055
+sample 0.002179839
+sample 0.001785992
+sample 0.002301673
+sample 0.001809831
+write 1k mdtraj-ncdf 0.001948 0.000071 rss 67590144 bytes 12900 loses masses,velocities,constraints
+sample 0.001915773
+sample 0.003034743
+sample 0.002005753
+sample 0.001954670
+sample 0.001910612
+sample 0.001940693
+checksum warm 1k mdtraj-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mdtraj-dcd 0.000056 0.000004 rss 51279872 bytes 12356 loses masses,velocities,constraints
+sample 0.000055784
+sample 0.000055341
+sample 0.000060069
+sample 0.000056995
+sample 0.000055535
+sample 0.000080234
+checksum cold 1k mdtraj-dcd expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mdtraj-dcd 0.000913 0.000370 rss 51265536 bytes 12356 loses masses,velocities,constraints
+sample 0.000611552
+sample 0.000865638
+sample 0.001638423
+sample 0.000446634
+sample 0.001073291
+sample 0.000961139
+write 1k mdtraj-dcd 0.000606 0.000023 rss 52158464 bytes 12356 loses masses,velocities,constraints
+sample 0.000610018
+sample 0.000590023
+sample 0.000595393
+sample 0.000623851
+sample 0.000695386
+sample 0.000602820
+checksum warm 1k mdtraj-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k mdtraj-xtc 0.000126 0.000003 rss 51464192 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.000127482
+sample 0.000124964
+sample 0.000121603
+sample 0.000128107
+sample 0.000128231
+sample 0.000124461
+checksum cold 1k mdtraj-xtc expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k mdtraj-xtc 0.001058 0.000555 rss 51349504 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.001332550
+sample 0.000626742
+sample 0.000792603
+sample 0.001322974
+sample 0.001405952
+sample 0.000769772
+write 1k mdtraj-xtc 0.000773 0.000020 rss 52455424 bytes 3696 loses masses,velocities,constraints,precision
+sample 0.000802474
+sample 0.000784214
+sample 0.000744435
+sample 0.000773042
+sample 0.000773078
+sample 0.000757274
+checksum warm 1k ovito-xyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k ovito-xyz 0.000879 0.000084 rss 94365696 bytes 35015 loses constraints
+sample 0.000447101
+sample 0.000889479
+sample 0.000849892
+sample 0.001008687
+sample 0.000867738
+sample 0.000954648
+checksum cold 1k ovito-xyz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k ovito-xyz 0.001785 0.000482 rss 94425088 bytes 35015 loses constraints
+sample 0.001786898
+sample 0.002399586
+sample 0.001199712
+sample 0.001758084
+sample 0.001782503
+sample 0.002891213
+write 1k ovito-xyz 0.000998 0.000037 rss 88285184 bytes 35015 loses constraints
+sample 0.000961432
+sample 0.000981119
+sample 0.000980913
+sample 0.001014834
+sample 0.001617448
+sample 0.001018680
+checksum warm 1k ovito-xyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read warm 1k ovito-xyz-gz 0.001067 0.000047 rss 94834688 bytes 2455 loses constraints
+sample 0.001037519
+sample 0.001046583
+sample 0.000773858
+sample 0.001087004
+sample 0.001086903
+sample 0.001234306
+checksum cold 1k ovito-xyz-gz expected 13801.5 got 13801.5 13801.5 13801.5 13801.5 13801.5 13801.5 ok True
+read cold 1k ovito-xyz-gz 0.001644 0.000169 rss 94885888 bytes 2455 loses constraints
+sample 0.001812549
+sample 0.001646193
+sample 0.001523877
+sample 0.002071898
+sample 0.001588328
+sample 0.001641193
+write 1k ovito-xyz-gz 0.008087 0.000121 rss 88629248 bytes 2455 loses constraints
+sample 0.008153235
+sample 0.008077157
+sample 0.007898524
+sample 0.008979239
+sample 0.007998253
+sample 0.008097719
+unsupported 100k mda-pdb unsupported: PDB atom serial is five digits (max 99999 atoms)
+order read-warm 100k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-warm 100k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-warm 100k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-warm 100k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-warm 100k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-warm 100k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order read-cold 100k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-cold 100k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-cold 100k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-cold 100k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-cold 100k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-cold 100k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order write 100k readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order write 100k readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order write 100k readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order write 100k readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order write 100k chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order write 100k chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+checksum warm 100k readcon-con expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k readcon-con 0.009177 0.002410 rss 68892672 bytes 4303070 loses none
+sample 0.009130603
+sample 0.008936599
+sample 0.012119676
+sample 0.008729822
+sample 0.012806838
+sample 0.009222533
+checksum cold 100k readcon-con expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k readcon-con 0.012546 0.001628 rss 66551808 bytes 4303070 loses none
+sample 0.012510012
+sample 0.011677308
+sample 0.014653778
+sample 0.012582224
+sample 0.011555694
+sample 0.013824370
+write 100k readcon-con 0.018268 0.003675 rss 114522112 bytes 4303070 loses none
+sample 0.034034394
+sample 0.017881041
+sample 0.017862227
+sample 0.018534700
+sample 0.018001509
+sample 0.022602971
+checksum warm 100k readcon-con-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k readcon-con-gz 0.022334 0.006134 rss 111816704 bytes 647854 loses none
+sample 0.023712235
+sample 0.015832261
+sample 0.012886375
+sample 0.021885048
+sample 0.027965845
+sample 0.022782881
+checksum cold 100k readcon-con-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k readcon-con-gz 0.022503 0.008059 rss 108793856 bytes 647854 loses none
+sample 0.013466386
+sample 0.014179556
+sample 0.024714170
+sample 0.024953093
+sample 0.022186754
+sample 0.022819593
+write 100k readcon-con-gz 0.049560 0.006794 rss 107038720 bytes 647854 loses none
+sample 0.052870136
+sample 0.052453254
+sample 0.046667299
+sample 0.044450777
+sample 0.045740598
+sample 0.063703903
+checksum warm 100k readcon-con-zst expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k readcon-con-zst 0.012082 0.003189 rss 79437824 bytes 436801 loses none
+sample 0.015981577
+sample 0.010865696
+sample 0.013269363
+sample 0.010894851
+sample 0.014326152
+sample 0.010182243
+checksum cold 100k readcon-con-zst expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k readcon-con-zst 0.012460 0.000607 rss 79597568 bytes 436801 loses none
+sample 0.011808765
+sample 0.011411597
+sample 0.012498164
+sample 0.012421285
+sample 0.012592610
+sample 0.012859706
+write 100k readcon-con-zst 0.022197 0.009365 rss 109926400 bytes 436801 loses none
+sample 0.030537043
+sample 0.028217073
+sample 0.022870019
+sample 0.016179023
+sample 0.021523583
+sample 0.015831274
+checksum warm 100k readcon-chemfiles expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k readcon-chemfiles 0.018229 0.000332 rss 71913472 bytes 1135081 loses velocities,constraints
+sample 0.018537595
+sample 0.018166174
+sample 0.018101613
+sample 0.019768713
+sample 0.018136431
+sample 0.018291192
+checksum cold 100k readcon-chemfiles expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k readcon-chemfiles 0.022901 0.006184 rss 71999488 bytes 1135081 loses velocities,constraints
+sample 0.020758542
+sample 0.023582921
+sample 0.022218115
+sample 0.028548768
+sample 0.030351899
+sample 0.020586508
+write 100k readcon-chemfiles 0.062119 0.006311 rss 228638720 bytes 1135081 loses velocities,constraints
+sample 0.064847768
+sample 0.065662736
+sample 0.056430975
+sample 0.077046651
+sample 0.059066939
+sample 0.059391229
+checksum warm 100k chemfiles-con expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-con 0.015458 0.000984 rss 78104576 bytes 4303070 loses masses,velocities,constraints
+sample 0.015201049
+sample 0.015567409
+sample 0.015349407
+sample 0.015189821
+sample 0.016440086
+sample 0.021057155
+checksum cold 100k chemfiles-con expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-con 0.020989 0.000979 rss 78184448 bytes 4303070 loses masses,velocities,constraints
+sample 0.021511285
+sample 0.020419964
+sample 0.022879602
+sample 0.020668447
+sample 0.020170831
+sample 0.021309880
+write 100k chemfiles-con 0.007883 0.000118 rss 67084288 bytes 4303070 loses masses,velocities,constraints
+sample 0.007833677
+sample 0.007988898
+sample 0.007850232
+sample 0.008247203
+sample 0.007853995
+sample 0.007911884
+checksum warm 100k chemfiles-xyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-xyz 0.018125 0.004111 rss 55564288 bytes 1135081 loses masses,velocities,constraints
+sample 0.018587026
+sample 0.023501660
+sample 0.017348912
+sample 0.017662881
+sample 0.017415005
+sample 0.022588249
+checksum cold 100k chemfiles-xyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-xyz 0.023011 0.001329 rss 55642112 bytes 1135081 loses masses,velocities,constraints
+sample 0.028714119
+sample 0.021806735
+sample 0.023451078
+sample 0.020220882
+sample 0.022819102
+sample 0.023202578
+write 100k chemfiles-xyz 0.029126 0.001262 rss 65476608 bytes 1135081 loses masses,velocities,constraints
+sample 0.029813375
+sample 0.029310173
+sample 0.027897245
+sample 0.028060444
+sample 0.029620023
+sample 0.028942030
+checksum warm 100k chemfiles-xyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-xyz-gz 0.020299 0.000679 rss 55826432 bytes 214040 loses masses,velocities,constraints
+sample 0.020931649
+sample 0.020663770
+sample 0.019867760
+sample 0.020133950
+sample 0.019591112
+sample 0.020463242
+checksum cold 100k chemfiles-xyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-xyz-gz 0.023871 0.001003 rss 55908352 bytes 214040 loses masses,velocities,constraints
+sample 0.024421000
+sample 0.023310942
+sample 0.023531143
+sample 0.022989336
+sample 0.024211213
+sample 0.024579605
+write 100k chemfiles-xyz-gz 0.091852 0.000808 rss 65869824 bytes 214040 loses masses,velocities,constraints
+sample 0.090905291
+sample 0.091350705
+sample 0.094040557
+sample 0.092215119
+sample 0.092172653
+sample 0.091532243
+checksum warm 100k chemfiles-xyz-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-xyz-xz 0.023906 0.001437 rss 58161152 bytes 16128 loses masses,velocities,constraints
+sample 0.025728739
+sample 0.025318066
+sample 0.023547284
+sample 0.024124178
+sample 0.023538597
+sample 0.023688021
+checksum cold 100k chemfiles-xyz-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-xyz-xz 0.025593 0.001264 rss 58261504 bytes 16128 loses masses,velocities,constraints
+sample 0.026865009
+sample 0.025370775
+sample 0.030682964
+sample 0.025328450
+sample 0.025044415
+sample 0.025815544
+write 100k chemfiles-xyz-xz 0.384031 0.007557 rss 78086144 bytes 16128 loses masses,velocities,constraints
+sample 0.376762789
+sample 0.384855223
+sample 0.374131794
+sample 0.399033699
+sample 0.386289661
+sample 0.383206368
+checksum warm 100k chemfiles-xyz-bz2 expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-xyz-bz2 0.042094 0.000541 rss 55810048 bytes 116985 loses masses,velocities,constraints
+sample 0.042163594
+sample 0.049370225
+sample 0.042024976
+sample 0.042290369
+sample 0.041614590
+sample 0.041471003
+checksum cold 100k chemfiles-xyz-bz2 expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-xyz-bz2 0.043900 0.001526 rss 55887872 bytes 116985 loses masses,velocities,constraints
+sample 0.054717564
+sample 0.043531452
+sample 0.043033607
+sample 0.044822004
+sample 0.042741964
+sample 0.044268978
+write 100k chemfiles-xyz-bz2 0.077898 0.001291 rss 69957632 bytes 116985 loses masses,velocities,constraints
+sample 0.077535029
+sample 0.077363129
+sample 0.078260187
+sample 0.075845408
+sample 0.079887860
+sample 0.078842762
+checksum warm 100k chemfiles-trr expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-trr 0.011012 0.001381 rss 64413696 bytes 2400120 loses masses,constraints,precision
+sample 0.011233245
+sample 0.012067191
+sample 0.012801701
+sample 0.010000340
+sample 0.010373089
+sample 0.010789930
+checksum cold 100k chemfiles-trr expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-trr 0.019605 0.003783 rss 64530432 bytes 2400120 loses masses,constraints,precision
+sample 0.025223547
+sample 0.017380835
+sample 0.020780707
+sample 0.022370794
+sample 0.018428496
+sample 0.018111274
+write 100k chemfiles-trr 0.008494 0.001534 rss 75868160 bytes 2400120 loses masses,constraints,precision
+sample 0.008611935
+sample 0.021690839
+sample 0.009979951
+sample 0.008375902
+sample 0.007574497
+sample 0.008013455
+checksum warm 100k chemfiles-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-ncdf 0.009086 0.000789 rss 64049152 bytes 2400800 loses masses,constraints
+sample 0.009792776
+sample 0.008805732
+sample 0.008987619
+sample 0.010834650
+sample 0.008654815
+sample 0.009184418
+checksum cold 100k chemfiles-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-ncdf 0.021918 0.001673 rss 64018432 bytes 2400800 loses masses,constraints
+sample 0.021912695
+sample 0.022835848
+sample 0.021923396
+sample 0.020511227
+sample 0.022737865
+sample 0.020505101
+write 100k chemfiles-ncdf 0.008073 0.001685 rss 72415232 bytes 2400800 loses masses,constraints
+sample 0.007976689
+sample 0.011230462
+sample 0.007095767
+sample 0.008169486
+sample 0.006150100
+sample 0.009278073
+checksum warm 100k chemfiles-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-dcd 0.008979 0.000567 rss 55965696 bytes 1200196 loses masses,velocities,constraints
+sample 0.009240602
+sample 0.009507084
+sample 0.008461382
+sample 0.008629852
+sample 0.008761411
+sample 0.009197454
+checksum cold 100k chemfiles-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-dcd 0.013624 0.001303 rss 56025088 bytes 1200196 loses masses,velocities,constraints
+sample 0.014905748
+sample 0.012284744
+sample 0.013794365
+sample 0.013988506
+sample 0.012364502
+sample 0.013453548
+write 100k chemfiles-dcd 0.005395 0.001510 rss 67065856 bytes 1200196 loses masses,velocities,constraints
+sample 0.003037815
+sample 0.005514688
+sample 0.006948182
+sample 0.007299960
+sample 0.005014448
+sample 0.005276209
+checksum warm 100k chemfiles-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-xtc 0.010373 0.002235 rss 56791040 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.013014454
+sample 0.010477471
+sample 0.010088092
+sample 0.013207255
+sample 0.010268640
+sample 0.010103929
+checksum cold 100k chemfiles-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-xtc 0.014236 0.001983 rss 56817664 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.014660554
+sample 0.014866143
+sample 0.013810610
+sample 0.015190545
+sample 0.012188345
+sample 0.012506026
+write 100k chemfiles-xtc 0.006109 0.000726 rss 69070848 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.006658381
+sample 0.006134749
+sample 0.006271897
+sample 0.005320763
+sample 0.006083493
+sample 0.005153502
+checksum warm 100k chemfiles-pdb expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-pdb 0.175928 0.008163 rss 168036352 bytes 7900093 loses masses,velocities,constraints
+sample 0.178075786
+sample 0.179789342
+sample 0.173781127
+sample 0.168614477
+sample 0.170336880
+sample 0.183972867
+checksum cold 100k chemfiles-pdb expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-pdb 0.176509 0.005519 rss 168101888 bytes 7900093 loses masses,velocities,constraints
+sample 0.181523130
+sample 0.177890385
+sample 0.175127808
+sample 0.183005803
+sample 0.175084946
+sample 0.171678818
+write 100k chemfiles-pdb 0.078281 0.003010 rss 67829760 bytes 7900093 loses masses,velocities,constraints
+sample 0.081236382
+sample 0.077464043
+sample 0.080670922
+sample 0.077202835
+sample 0.076727549
+sample 0.079098235
+checksum warm 100k chemfiles-gro expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-gro 0.084348 0.002336 rss 101627904 bytes 6900068 loses masses,constraints
+sample 0.085159528
+sample 0.082363581
+sample 0.084826006
+sample 0.080345599
+sample 0.083869140
+sample 0.087055687
+checksum cold 100k chemfiles-gro expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-gro 0.086023 0.002039 rss 101728256 bytes 6900068 loses masses,constraints
+sample 0.087104982
+sample 0.084397040
+sample 0.086038256
+sample 0.086007597
+sample 0.090906815
+sample 0.082044719
+write 100k chemfiles-gro 0.051619 0.001107 rss 67993600 bytes 6900068 loses masses,constraints
+sample 0.050711109
+sample 0.052205557
+sample 0.054073671
+sample 0.051247017
+sample 0.050976762
+sample 0.051990552
+checksum warm 100k chemfiles-pdb-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-pdb-gz 0.182383 0.006509 rss 168275968 bytes 712687 loses masses,velocities,constraints
+sample 0.184937272
+sample 0.176674919
+sample 0.179285858
+sample 0.187776395
+sample 0.179829136
+sample 0.186262002
+checksum cold 100k chemfiles-pdb-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-pdb-gz 0.179490 0.004432 rss 168372224 bytes 712687 loses masses,velocities,constraints
+sample 0.197243319
+sample 0.184629645
+sample 0.178760261
+sample 0.179430622
+sample 0.171453022
+sample 0.179549861
+write 100k chemfiles-pdb-gz 0.181702 0.003755 rss 68311040 bytes 712687 loses masses,velocities,constraints
+sample 0.187097618
+sample 0.179866937
+sample 0.181556694
+sample 0.184777407
+sample 0.181846776
+sample 0.178850318
+checksum warm 100k chemfiles-gro-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-gro-gz 0.091194 0.002541 rss 101906432 bytes 669040 loses masses,constraints
+sample 0.089847511
+sample 0.089180461
+sample 0.091253761
+sample 0.093196085
+sample 0.097505005
+sample 0.091134889
+checksum cold 100k chemfiles-gro-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-gro-gz 0.091539 0.001387 rss 101984256 bytes 669040 loses masses,constraints
+sample 0.092244417
+sample 0.093630507
+sample 0.090499813
+sample 0.091695971
+sample 0.091381780
+sample 0.089748361
+write 100k chemfiles-gro-gz 0.159069 0.002651 rss 68390912 bytes 669040 loses masses,constraints
+sample 0.160200444
+sample 0.157880419
+sample 0.157936768
+sample 0.157026643
+sample 0.167524442
+sample 0.160659875
+checksum warm 100k chemfiles-pdb-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-pdb-xz 0.204091 0.006286 rss 176226304 bytes 172236 loses masses,velocities,constraints
+sample 0.209371554
+sample 0.201730434
+sample 0.196468642
+sample 0.206451967
+sample 0.208417206
+sample 0.201609630
+checksum cold 100k chemfiles-pdb-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-pdb-xz 0.216458 0.019121 rss 176259072 bytes 172236 loses masses,velocities,constraints
+sample 0.228381603
+sample 0.225136443
+sample 0.209114422
+sample 0.204537672
+sample 0.196444234
+sample 0.223800753
+write 100k chemfiles-pdb-xz 2.644528 0.025536 rss 146083840 bytes 172236 loses masses,velocities,constraints
+sample 2.648147403
+sample 2.640907985
+sample 2.627394781
+sample 2.659029947
+sample 2.668593083
+sample 2.620070100
+checksum warm 100k chemfiles-gro-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k chemfiles-gro-xz 0.109340 0.003885 rss 108832768 bytes 152324 loses masses,constraints
+sample 0.109979034
+sample 0.107877728
+sample 0.108700844
+sample 0.108192193
+sample 0.112945706
+sample 0.113770912
+checksum cold 100k chemfiles-gro-xz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k chemfiles-gro-xz 0.112817 0.002943 rss 108900352 bytes 152324 loses masses,constraints
+sample 0.110809735
+sample 0.115070364
+sample 0.109787287
+sample 0.114428373
+sample 0.113275723
+sample 0.112358773
+write 100k chemfiles-gro-xz 2.498155 0.041513 rss 133451776 bytes 152324 loses masses,constraints
+sample 2.479244637
+sample 2.630859402
+sample 2.453265537
+sample 2.507973409
+sample 2.528049497
+sample 2.488336231
+checksum warm 100k ase-extxyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k ase-extxyz 0.202594 0.002995 rss 147148800 bytes 12500136 loses none
+sample 0.204304498
+sample 0.200861300
+sample 0.201769134
+sample 0.196620533
+sample 0.203419275
+sample 0.204449054
+checksum cold 100k ase-extxyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k ase-extxyz 0.219633 0.005383 rss 142497792 bytes 12500136 loses none
+sample 0.220234696
+sample 0.231596176
+sample 0.224410272
+sample 0.217634621
+sample 0.219031404
+sample 0.216777675
+write 100k ase-extxyz 0.429386 0.014094 rss 118591488 bytes 12500136 loses none
+sample 0.426640604
+sample 0.432131316
+sample 0.425090639
+sample 0.482946949
+sample 0.423519502
+sample 0.442052479
+checksum warm 100k ase-extxyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k ase-extxyz-gz 0.232381 0.003721 rss 142684160 bytes 249713 loses none
+sample 0.232335220
+sample 0.232110668
+sample 0.232427299
+sample 0.240936151
+sample 0.237041536
+sample 0.231505843
+checksum cold 100k ase-extxyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k ase-extxyz-gz 0.239749 0.004629 rss 142788608 bytes 249713 loses none
+sample 0.240469823
+sample 0.243876459
+sample 0.234582439
+sample 0.265806647
+sample 0.238185164
+sample 0.239028353
+write 100k ase-extxyz-gz 0.787551 0.008334 rss 119025664 bytes 249713 loses none
+sample 0.785954398
+sample 0.797569295
+sample 0.787398418
+sample 0.796964116
+sample 0.782281188
+sample 0.787703966
+checksum warm 100k mda-xyz expected 6.80323e+06 got 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 ok True
+read warm 100k mda-xyz 0.490486 0.021632 rss 151240704 bytes 4300067 loses masses,velocities,constraints,cell
+sample 0.511628804
+sample 0.483061195
+sample 0.484638928
+sample 0.493265382
+sample 0.535672193
+sample 0.487706340
+checksum cold 100k mda-xyz expected 6.80323e+06 got 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 ok True
+read cold 100k mda-xyz 0.504767 0.019584 rss 148404224 bytes 4300067 loses masses,velocities,constraints,cell
+sample 0.518433002
+sample 0.494539341
+sample 0.494118633
+sample 0.501438432
+sample 0.548952763
+sample 0.508094756
+write 100k mda-xyz 0.236429 0.006651 rss 117198848 bytes 4300067 loses masses,velocities,constraints,cell
+sample 0.238152692
+sample 0.232805960
+sample 0.240525111
+sample 0.234704561
+sample 0.232032459
+sample 0.244082190
+checksum warm 100k readcon-conbin expected 6.80323e+06 got 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 ok True
+read warm 100k readcon-conbin 0.001179 0.000161 rss 51914752 bytes 4804096 loses masses,constraints,cell
+sample 0.001275407
+sample 0.001038720
+sample 0.001247400
+sample 0.001233261
+sample 0.001068933
+sample 0.001124673
+checksum cold 100k readcon-conbin expected 6.80323e+06 got 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 6.80323e+06 ok True
+read cold 100k readcon-conbin 0.008844 0.000790 rss 49436672 bytes 4804096 loses masses,constraints,cell
+sample 0.009136778
+sample 0.008723771
+sample 0.011226100
+sample 0.008963373
+sample 0.008163828
+sample 0.007543194
+write 100k readcon-conbin 0.012753 0.000416 rss 91424768 bytes 4804096 loses masses,constraints,cell
+sample 0.016905785
+sample 0.012359666
+sample 0.012776549
+sample 0.013126755
+sample 0.012587077
+sample 0.012729630
+checksum warm 100k mda-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mda-dcd 0.004355 0.000152 rss 105914368 bytes 1200436 loses masses,velocities,constraints
+sample 0.004319190
+sample 0.004884657
+sample 0.004269768
+sample 0.004390645
+sample 0.004448294
+sample 0.004228869
+checksum cold 100k mda-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mda-dcd 0.007443 0.000575 rss 105900032 bytes 1200436 loses masses,velocities,constraints
+sample 0.006781549
+sample 0.007546590
+sample 0.007110667
+sample 0.007945769
+sample 0.007808534
+sample 0.007338563
+write 100k mda-dcd 0.021621 0.000184 rss 120963072 bytes 1200436 loses masses,velocities,constraints
+sample 0.021636755
+sample 0.021605211
+sample 0.021653066
+sample 0.021418441
+sample 0.021001439
+sample 0.022128410
+checksum warm 100k mda-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mda-xtc 0.010561 0.000311 rss 102989824 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.010394066
+sample 0.010664504
+sample 0.010456634
+sample 0.010356645
+sample 0.010739666
+sample 0.010866839
+checksum cold 100k mda-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mda-xtc 0.013469 0.000361 rss 102977536 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.012134498
+sample 0.013624323
+sample 0.013215612
+sample 0.018263921
+sample 0.013359093
+sample 0.013578605
+write 100k mda-xtc 0.023500 0.000785 rss 121307136 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.024210021
+sample 0.023093041
+sample 0.023630634
+sample 0.023250718
+sample 0.023370272
+sample 0.024401122
+checksum warm 100k mda-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mda-ncdf 0.005740 0.000109 rss 108173312 bytes 2400964 loses masses,constraints
+sample 0.005689026
+sample 0.005711320
+sample 0.005769611
+sample 0.005648479
+sample 0.005893995
+sample 0.005814528
+checksum cold 100k mda-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mda-ncdf 0.009619 0.002162 rss 108048384 bytes 2400964 loses masses,constraints
+sample 0.008169158
+sample 0.009299523
+sample 0.009937682
+sample 0.010839681
+sample 0.011145688
+sample 0.007731398
+write 100k mda-ncdf 0.027936 0.000899 rss 130742272 bytes 2400964 loses masses,constraints
+sample 0.027394162
+sample 0.027259453
+sample 0.028269485
+sample 0.031121275
+sample 0.027603072
+sample 0.028370922
+checksum warm 100k mda-trr expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mda-trr 0.026690 0.000979 rss 109840384 bytes 2400120 loses masses,constraints,precision
+sample 0.026642625
+sample 0.026329873
+sample 0.026736650
+sample 0.025726709
+sample 0.027604502
+sample 0.028078495
+checksum cold 100k mda-trr expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mda-trr 0.029250 0.001265 rss 110778368 bytes 2400120 loses masses,constraints,precision
+sample 0.029000826
+sample 0.031942805
+sample 0.028437881
+sample 0.029958659
+sample 0.027711853
+sample 0.029500101
+write 100k mda-trr 0.030318 0.000838 rss 124188672 bytes 2400120 loses masses,constraints,precision
+sample 0.030499093
+sample 0.029667769
+sample 0.030136195
+sample 0.030663987
+sample 0.029115303
+sample 0.031371558
+checksum warm 100k mdtraj-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mdtraj-ncdf 0.001984 0.000096 rss 73666560 bytes 1200900 loses masses,velocities,constraints
+sample 0.002082574
+sample 0.001969579
+sample 0.002089648
+sample 0.001941688
+sample 0.001963917
+sample 0.001998628
+checksum cold 100k mdtraj-ncdf expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mdtraj-ncdf 0.006964 0.002929 rss 73609216 bytes 1200900 loses masses,velocities,constraints
+sample 0.006795488
+sample 0.003801436
+sample 0.003588647
+sample 0.007594448
+sample 0.007131899
+sample 0.008175951
+write 100k mdtraj-ncdf 0.067240 0.001756 rss 103299072 bytes 1200900 loses masses,velocities,constraints
+sample 0.067585983
+sample 0.066893446
+sample 0.068220930
+sample 0.068864767
+sample 0.065137014
+sample 0.066110203
+checksum warm 100k mdtraj-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mdtraj-dcd 0.002126 0.000106 rss 55986176 bytes 1200356 loses masses,velocities,constraints
+sample 0.002525557
+sample 0.001988500
+sample 0.002117419
+sample 0.002166395
+sample 0.002134022
+sample 0.002030695
+checksum cold 100k mdtraj-dcd expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mdtraj-dcd 0.004194 0.000806 rss 55820288 bytes 1200356 loses masses,velocities,constraints
+sample 0.004335321
+sample 0.004483819
+sample 0.003402511
+sample 0.003504015
+sample 0.004051807
+sample 0.005655678
+write 100k mdtraj-dcd 0.064430 0.001909 rss 89919488 bytes 1200356 loses masses,velocities,constraints
+sample 0.062548210
+sample 0.064312252
+sample 0.068605387
+sample 0.064547008
+sample 0.063140199
+sample 0.065606674
+checksum warm 100k mdtraj-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k mdtraj-xtc 0.004418 0.000081 rss 56674304 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.004353069
+sample 0.004375942
+sample 0.004391121
+sample 0.004647697
+sample 0.004466371
+sample 0.004445754
+checksum cold 100k mdtraj-xtc expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k mdtraj-xtc 0.007574 0.000640 rss 56823808 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.007079889
+sample 0.008679245
+sample 0.007621533
+sample 0.006019108
+sample 0.007525594
+sample 0.007901171
+write 100k mdtraj-xtc 0.064911 0.001867 rss 87861248 bytes 369516 loses masses,velocities,constraints,precision
+sample 0.063287525
+sample 0.065924503
+sample 0.065036171
+sample 0.065693867
+sample 0.062727187
+sample 0.064785396
+checksum warm 100k ovito-xyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k ovito-xyz 0.019330 0.000412 rss 112736256 bytes 3725127 loses constraints
+sample 0.019782869
+sample 0.019363381
+sample 0.019217216
+sample 0.019297284
+sample 0.020565203
+sample 0.019256192
+checksum cold 100k ovito-xyz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k ovito-xyz 0.023686 0.000501 rss 112742400 bytes 3725127 loses constraints
+sample 0.023995109
+sample 0.023865741
+sample 0.023446695
+sample 0.023505870
+sample 0.023373005
+sample 0.032510972
+write 100k ovito-xyz 0.057798 0.001066 rss 114919424 bytes 3725127 loses constraints
+sample 0.056771977
+sample 0.058204965
+sample 0.057860748
+sample 0.057736223
+sample 0.058842358
+sample 0.056825498
+checksum warm 100k ovito-xyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read warm 100k ovito-xyz-gz 0.023303 0.000425 rss 113094656 bytes 252277 loses constraints
+sample 0.022319232
+sample 0.023322152
+sample 0.022917874
+sample 0.023471857
+sample 0.023283137
+sample 0.032897968
+checksum cold 100k ovito-xyz-gz expected 6.80364e+06 got 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 6.80364e+06 ok True
+read cold 100k ovito-xyz-gz 0.023860 0.000382 rss 113172480 bytes 252277 loses constraints
+sample 0.023641340
+sample 0.034586397
+sample 0.023726897
+sample 0.023876282
+sample 0.024224997
+sample 0.023844375
+write 100k ovito-xyz-gz 0.375832 0.007272 rss 115632128 bytes 252277 loses constraints
+sample 0.376866010
+sample 0.370049401
+sample 0.398955035
+sample 0.371309629
+sample 0.380316871
+sample 0.374798547
+unsupported 1M mda-pdb unsupported: PDB atom serial is five digits (max 99999 atoms)
+order read-warm 1M readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-warm 1M readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-warm 1M readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-warm 1M readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-warm 1M chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-warm 1M chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order read-cold 1M readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-cold 1M readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-cold 1M readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-cold 1M readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-cold 1M chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-cold 1M chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order write 1M readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order write 1M readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order write 1M readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order write 1M readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order write 1M chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order write 1M chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+checksum warm 1M readcon-con expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M readcon-con 0.101533 0.003666 rss 287954944 bytes 45378064 loses none
+sample 0.098097497
+sample 0.098220307
+sample 0.101357891
+sample 0.102992216
+sample 0.101707584
+sample 0.103515955
+checksum cold 1M readcon-con expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M readcon-con 0.122582 0.068099 rss 288049152 bytes 45378064 loses none
+sample 0.239177692
+sample 0.117715232
+sample 0.118929255
+sample 0.119530523
+sample 0.207692794
+sample 0.125634077
+write 1M readcon-con 0.181655 0.031525 rss 536958976 bytes 45378064 loses none
+sample 0.214325769
+sample 0.175096086
+sample 0.177449028
+sample 0.185861615
+sample 0.218699000
+sample 0.172978629
+checksum warm 1M readcon-con-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M readcon-con-gz 0.136373 0.033546 rss 397713408 bytes 5419616 loses none
+sample 0.148726249
+sample 0.158071925
+sample 0.106833878
+sample 0.124020189
+sample 0.121578668
+sample 0.166042900
+checksum cold 1M readcon-con-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M readcon-con-gz 0.142604 0.037503 rss 397803520 bytes 5419616 loses none
+sample 0.163799351
+sample 0.157875852
+sample 0.110698424
+sample 0.112964980
+sample 0.134965115
+sample 0.150243590
+write 1M readcon-con-gz 0.460034 0.018719 rss 447653888 bytes 5419616 loses none
+sample 0.461896505
+sample 0.458170708
+sample 0.451863085
+sample 0.488798885
+sample 0.478079118
+sample 0.454362195
+checksum warm 1M readcon-con-zst expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M readcon-con-zst 0.104001 0.005837 rss 321290240 bytes 1414782 loses none
+sample 0.112306779
+sample 0.100105154
+sample 0.097949881
+sample 0.102215836
+sample 0.105785558
+sample 0.106698359
+checksum cold 1M readcon-con-zst expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M readcon-con-zst 0.106299 0.007966 rss 321370112 bytes 1414782 loses none
+sample 0.104912427
+sample 0.104181919
+sample 0.121474858
+sample 0.107685437
+sample 0.101421140
+sample 0.113878562
+write 1M readcon-con-zst 0.143921 0.012381 rss 446529536 bytes 1414782 loses none
+sample 0.151794788
+sample 0.188129133
+sample 0.141986341
+sample 0.145856596
+sample 0.136576360
+sample 0.132717955
+checksum warm 1M readcon-chemfiles expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M readcon-chemfiles 0.218381 0.036915 rss 319692800 bytes 11700075 loses velocities,constraints
+sample 0.208394189
+sample 0.218661914
+sample 0.212047645
+sample 0.261079933
+sample 0.300944849
+sample 0.218100579
+checksum cold 1M readcon-chemfiles expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M readcon-chemfiles 0.234397 0.016455 rss 319864832 bytes 11700075 loses velocities,constraints
+sample 0.243977225
+sample 0.230210231
+sample 0.268452186
+sample 0.224828412
+sample 0.223858119
+sample 0.238584191
+write 1M readcon-chemfiles 0.583302 0.089572 rss 1461190656 bytes 11700075 loses velocities,constraints
+sample 0.630646860
+sample 0.603128829
+sample 0.563474331
+sample 0.640533983
+sample 0.466770243
+sample 0.524435997
+checksum warm 1M chemfiles-con expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-con 0.170600 0.009368 rss 386027520 bytes 45378064 loses masses,velocities,constraints
+sample 0.159532743
+sample 0.177805407
+sample 0.184428197
+sample 0.168350485
+sample 0.172850131
+sample 0.166815235
+checksum cold 1M chemfiles-con expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-con 0.216583 0.051682 rss 386004992 bytes 45378064 loses masses,velocities,constraints
+sample 0.258873280
+sample 0.209158404
+sample 0.275475863
+sample 0.194913541
+sample 0.191540643
+sample 0.224008124
+write 1M chemfiles-con 0.087454 0.003325 rss 348000256 bytes 45378064 loses masses,velocities,constraints
+sample 0.088890742
+sample 0.090075385
+sample 0.084498867
+sample 0.085879249
+sample 0.089354885
+sample 0.086017309
+checksum warm 1M chemfiles-xyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-xyz 0.196676 0.021592 rss 235421696 bytes 11700075 loses masses,velocities,constraints
+sample 0.229698926
+sample 0.185356950
+sample 0.188124942
+sample 0.216548351
+sample 0.196127620
+sample 0.197223909
+checksum cold 1M chemfiles-xyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-xyz 0.205284 0.018041 rss 235507712 bytes 11700075 loses masses,velocities,constraints
+sample 0.207008538
+sample 0.198433583
+sample 0.261372745
+sample 0.192083027
+sample 0.221338761
+sample 0.203558903
+write 1M chemfiles-xyz 0.283596 0.005804 rss 324849664 bytes 11700075 loses masses,velocities,constraints
+sample 0.282375785
+sample 0.293547359
+sample 0.286707462
+sample 0.284815767
+sample 0.279782668
+sample 0.278564166
+checksum warm 1M chemfiles-xyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-xyz-gz 0.217760 0.005852 rss 235667456 bytes 1675339 loses masses,velocities,constraints
+sample 0.238742902
+sample 0.211877067
+sample 0.208045938
+sample 0.217629191
+sample 0.219592255
+sample 0.217890885
+checksum cold 1M chemfiles-xyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-xyz-gz 0.226381 0.005157 rss 235720704 bytes 1675339 loses masses,velocities,constraints
+sample 0.231713311
+sample 0.230486965
+sample 0.226222114
+sample 0.226540108
+sample 0.223717192
+sample 0.220017917
+write 1M chemfiles-xyz-gz 0.680298 0.011152 rss 325232640 bytes 1675339 loses masses,velocities,constraints
+sample 0.675612551
+sample 0.687822414
+sample 0.684287185
+sample 0.696441558
+sample 0.676307867
+sample 0.671917391
+checksum warm 1M chemfiles-xyz-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-xyz-xz 0.264981 0.006573 rss 244033536 bytes 104764 loses masses,velocities,constraints
+sample 0.264738820
+sample 0.257281898
+sample 0.255079654
+sample 0.273281211
+sample 0.265884271
+sample 0.265223219
+checksum cold 1M chemfiles-xyz-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-xyz-xz 0.260756 0.010332 rss 244224000 bytes 104764 loses masses,velocities,constraints
+sample 0.273213812
+sample 0.272546464
+sample 0.261315108
+sample 0.260197657
+sample 0.259143276
+sample 0.257632196
+write 1M chemfiles-xyz-xz 4.862585 0.306870 rss 406525952 bytes 104764 loses masses,velocities,constraints
+sample 5.046450350
+sample 5.116830430
+sample 4.656486894
+sample 4.891378668
+sample 4.833790461
+sample 4.644159510
+checksum warm 1M chemfiles-xyz-bz2 expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-xyz-bz2 0.438647 0.015215 rss 238075904 bytes 894507 loses masses,velocities,constraints
+sample 0.433459413
+sample 0.452993709
+sample 0.436921230
+sample 0.440373062
+sample 0.453233316
+sample 0.433858267
+checksum cold 1M chemfiles-xyz-bz2 expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-xyz-bz2 0.449403 0.010147 rss 238155776 bytes 894507 loses masses,velocities,constraints
+sample 0.464065310
+sample 0.444468403
+sample 0.457423018
+sample 0.435617825
+sample 0.450264822
+sample 0.448541016
+write 1M chemfiles-xyz-bz2 0.738595 0.008690 rss 329416704 bytes 894507 loses masses,velocities,constraints
+sample 0.761076842
+sample 0.733596853
+sample 0.744842113
+sample 0.737430640
+sample 0.739759160
+sample 0.734031755
+checksum warm 1M chemfiles-trr expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-trr 0.145410 0.014120 rss 320067584 bytes 24000120 loses masses,constraints,precision
+sample 0.129501675
+sample 0.140009726
+sample 0.136261268
+sample 0.150810461
+sample 0.151487896
+sample 0.158515345
+checksum cold 1M chemfiles-trr expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-trr 0.174177 0.032239 rss 320112640 bytes 24000120 loses masses,constraints,precision
+sample 0.209135710
+sample 0.174928008
+sample 0.212994570
+sample 0.173426005
+sample 0.158295136
+sample 0.166650969
+write 1M chemfiles-trr 0.090323 0.002961 rss 432500736 bytes 24000120 loses masses,constraints,precision
+sample 0.094497184
+sample 0.093823814
+sample 0.090408009
+sample 0.089931954
+sample 0.089482604
+sample 0.090238551
+checksum warm 1M chemfiles-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-ncdf 0.129567 0.009603 rss 319533056 bytes 24000800 loses masses,constraints
+sample 0.123879048
+sample 0.117677576
+sample 0.128240690
+sample 0.130893645
+sample 0.138416799
+sample 0.135798675
+checksum cold 1M chemfiles-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-ncdf 0.171739 0.010453 rss 319612928 bytes 24000800 loses masses,constraints
+sample 0.171536906
+sample 0.171941996
+sample 0.182476324
+sample 0.164900016
+sample 0.178702757
+sample 0.164108391
+write 1M chemfiles-ncdf 0.075590 0.021540 rss 396548096 bytes 24000800 loses masses,constraints
+sample 0.079795405
+sample 0.071384357
+sample 0.123525545
+sample 0.058756650
+sample 0.089070404
+sample 0.063154367
+checksum warm 1M chemfiles-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-dcd 0.115106 0.011843 rss 239476736 bytes 12000196 loses masses,velocities,constraints
+sample 0.101487011
+sample 0.125834302
+sample 0.103354615
+sample 0.117027787
+sample 0.117864439
+sample 0.113183751
+checksum cold 1M chemfiles-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-dcd 0.125096 0.006122 rss 239491072 bytes 12000196 loses masses,velocities,constraints
+sample 0.127071549
+sample 0.124983531
+sample 0.172192801
+sample 0.118983475
+sample 0.125209218
+sample 0.117500091
+write 1M chemfiles-dcd 0.036459 0.008138 rss 344393728 bytes 12000196 loses masses,velocities,constraints
+sample 0.031431372
+sample 0.031516097
+sample 0.037637472
+sample 0.035280787
+sample 0.047160186
+sample 0.041581778
+checksum warm 1M chemfiles-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-xtc 0.129425 0.017197 rss 243382272 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.119298579
+sample 0.120368052
+sample 0.122136696
+sample 0.136714239
+sample 0.138437632
+sample 0.149194075
+checksum cold 1M chemfiles-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-xtc 0.141276 0.007853 rss 243521536 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.150352648
+sample 0.141935825
+sample 0.237308005
+sample 0.134908916
+sample 0.140321974
+sample 0.140615761
+write 1M chemfiles-xtc 0.043755 0.003019 rss 364199936 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.044904806
+sample 0.048078100
+sample 0.045592490
+sample 0.042604413
+sample 0.042334585
+sample 0.039491458
+checksum warm 1M chemfiles-pdb expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-pdb 1.861899 0.053601 rss 1318324224 bytes 79000093 loses masses,velocities,constraints
+sample 1.770314769
+sample 1.816904080
+sample 1.850021061
+sample 1.873777307
+sample 1.880453507
+sample 1.909509034
+checksum cold 1M chemfiles-pdb expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-pdb 1.917150 0.044171 rss 1318408192 bytes 79000093 loses masses,velocities,constraints
+sample 2.020393931
+sample 1.913982011
+sample 1.920317064
+sample 1.876771629
+sample 1.933555245
+sample 1.865798436
+write 1M chemfiles-pdb 0.859351 0.056978 rss 349722624 bytes 79000093 loses masses,velocities,constraints
+sample 0.905432525
+sample 0.840833256
+sample 0.902163749
+sample 0.838538044
+sample 0.832266490
+sample 0.877868832
+checksum warm 1M chemfiles-gro expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-gro 0.460604 0.019928 rss 410658816 bytes 69000069 loses masses,constraints
+sample 0.440882882
+sample 0.478553699
+sample 0.435975571
+sample 0.459972189
+sample 0.467032222
+sample 0.461234925
+checksum cold 1M chemfiles-gro expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-gro 0.485021 0.004823 rss 410808320 bytes 69000069 loses masses,constraints
+sample 0.505304137
+sample 0.485563509
+sample 0.486784254
+sample 0.480714892
+sample 0.484479040
+sample 0.477500149
+write 1M chemfiles-gro 0.501735 0.009783 rss 348919808 bytes 69000069 loses masses,constraints
+sample 0.513100676
+sample 0.509035833
+sample 0.492848089
+sample 0.504616335
+sample 0.497912171
+sample 0.498853585
+checksum warm 1M chemfiles-pdb-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-pdb-gz 1.934717 0.061174 rss 1318471680 bytes 7318170 loses masses,velocities,constraints
+sample 1.858737704
+sample 1.957379422
+sample 1.885175041
+sample 1.920676739
+sample 2.056008024
+sample 1.948758104
+checksum cold 1M chemfiles-pdb-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-pdb-gz 2.036524 0.052403 rss 1318682624 bytes 7318170 loses masses,velocities,constraints
+sample 2.021914822
+sample 1.999288248
+sample 2.051132295
+sample 1.969808993
+sample 2.079366728
+sample 2.059419223
+write 1M chemfiles-pdb-gz 1.829816 0.027549 rss 350253056 bytes 7318170 loses masses,velocities,constraints
+sample 2.163810741
+sample 1.832793834
+sample 1.826838005
+sample 1.851603658
+sample 1.809369700
+sample 1.816857323
+checksum warm 1M chemfiles-gro-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-gro-gz 0.500086 0.015508 rss 410982400 bytes 2670576 loses masses,constraints
+sample 0.488276607
+sample 0.490316788
+sample 0.494601811
+sample 0.546544742
+sample 0.507337340
+sample 0.505570454
+checksum cold 1M chemfiles-gro-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-gro-gz 0.504939 0.005360 rss 411013120 bytes 2670576 loses masses,constraints
+sample 0.522445978
+sample 0.504173543
+sample 0.507780852
+sample 0.501144769
+sample 0.505704949
+sample 0.499994792
+write 1M chemfiles-gro-gz 0.869330 0.015487 rss 349413376 bytes 2670576 loses masses,constraints
+sample 0.903541700
+sample 0.860761671
+sample 0.862155654
+sample 0.875105352
+sample 0.863553817
+sample 0.878954392
+checksum warm 1M chemfiles-pdb-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-pdb-xz 2.174735 0.057273 rss 1327017984 bytes 1451472 loses masses,velocities,constraints
+sample 2.114919581
+sample 2.169859740
+sample 2.133726762
+sample 2.206840520
+sample 2.232116355
+sample 2.179609668
+checksum cold 1M chemfiles-pdb-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-pdb-xz 2.278587 0.089131 rss 1327022080 bytes 1451472 loses masses,velocities,constraints
+sample 2.326294176
+sample 2.275902099
+sample 2.209242845
+sample 2.193162017
+sample 2.353720461
+sample 2.281272305
+write 1M chemfiles-pdb-xz 32.935428 0.800000 rss 446238720 bytes 1451472 loses masses,velocities,constraints
+sample 40.726219387
+sample 32.865742835
+sample 33.005112688
+sample 32.490906854
+sample 31.902508625
+sample 33.511116594
+checksum warm 1M chemfiles-gro-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M chemfiles-gro-xz 0.632047 0.004826 rss 420460544 bytes 346668 loses masses,constraints
+sample 0.634448753
+sample 0.618670928
+sample 0.630292008
+sample 0.650611766
+sample 0.633802551
+sample 0.629184116
+checksum cold 1M chemfiles-gro-xz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M chemfiles-gro-xz 0.638295 0.034701 rss 420610048 bytes 346668 loses masses,constraints
+sample 0.642012869
+sample 0.634578020
+sample 0.665929819
+sample 0.617282852
+sample 0.622139753
+sample 0.666999637
+write 1M chemfiles-gro-xz 16.791753 0.174765 rss 432707584 bytes 346668 loses masses,constraints
+sample 18.186321270
+sample 16.709427987
+sample 16.804555834
+sample 16.778950184
+sample 16.933913424
+sample 16.582155021
+checksum warm 1M ase-extxyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M ase-extxyz 2.082923 0.095981 rss 670779392 bytes 125000140 loses none
+sample 1.995158853
+sample 2.054217948
+sample 2.012887621
+sample 2.111627058
+sample 2.121726336
+sample 2.206919280
+checksum cold 1M ase-extxyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M ase-extxyz 2.209127 0.146885 rss 670717952 bytes 125000140 loses none
+sample 2.258757403
+sample 2.311011869
+sample 2.311080987
+sample 2.148251812
+sample 2.159496826
+sample 2.133263637
+write 1M ase-extxyz 4.379988 0.140949 rss 432824320 bytes 125000140 loses none
+sample 4.596444286
+sample 4.320701946
+sample 4.502980166
+sample 4.388467388
+sample 4.253319780
+sample 4.371507978
+checksum warm 1M ase-extxyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M ase-extxyz-gz 2.368642 0.146617 rss 671203328 bytes 2775716 loses none
+sample 2.383935054
+sample 2.329599801
+sample 2.353349530
+sample 2.549793326
+sample 2.535554379
+sample 2.350259708
+checksum cold 1M ase-extxyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M ase-extxyz-gz 2.360465 0.100941 rss 671238144 bytes 2775716 loses none
+sample 2.519157308
+sample 2.436701904
+sample 2.320550654
+sample 2.388120412
+sample 2.332809693
+sample 2.305946203
+write 1M ase-extxyz-gz 9.111654 0.092126 rss 438702080 bytes 2775716 loses none
+sample 9.541350902
+sample 9.089718582
+sample 9.133589402
+sample 9.178795789
+sample 8.956038960
+sample 9.070584354
+checksum warm 1M mda-xyz expected 1.485e+08 got 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 ok True
+read warm 1M mda-xyz 6.616575 0.357945 rss 617234432 bytes 43000068 loses masses,velocities,constraints,cell
+sample 6.192086643
+sample 6.033702671
+sample 6.619855981
+sample 6.613293039
+sample 6.667158767
+sample 6.802902196
+checksum cold 1M mda-xyz expected 1.485e+08 got 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 ok True
+read cold 1M mda-xyz 6.420220 0.473746 rss 617263104 bytes 43000068 loses masses,velocities,constraints,cell
+sample 6.584076999
+sample 6.699515269
+sample 6.177092199
+sample 6.256363732
+sample 6.119960636
+sample 7.008701159
+write 1M mda-xyz 2.372693 0.021235 rss 304510976 bytes 43000068 loses masses,velocities,constraints,cell
+sample 2.421920445
+sample 2.361408572
+sample 2.378149203
+sample 2.367237253
+sample 2.363592359
+sample 2.388268393
+checksum warm 1M readcon-conbin expected 1.485e+08 got 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 ok True
+read warm 1M readcon-conbin 0.025415 0.002492 rss 135782400 bytes 48004096 loses masses,constraints,cell
+sample 0.026851023
+sample 0.024010251
+sample 0.026883264
+sample 0.026219925
+sample 0.024065207
+sample 0.024611012
+checksum cold 1M readcon-conbin expected 1.485e+08 got 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 1.485e+08 ok True
+read cold 1M readcon-conbin 0.072382 0.013147 rss 135809024 bytes 48004096 loses masses,constraints,cell
+sample 0.064725764
+sample 0.081295664
+sample 0.052165091
+sample 0.070942411
+sample 0.115700298
+sample 0.073820939
+write 1M readcon-conbin 0.148253 0.010609 rss 486592512 bytes 48004096 loses masses,constraints,cell
+sample 0.198971546
+sample 0.148851176
+sample 0.142447299
+sample 0.156194130
+sample 0.147654748
+sample 0.131395341
+checksum warm 1M mda-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mda-dcd 0.043831 0.008245 rss 192247808 bytes 12000436 loses masses,velocities,constraints
+sample 0.038813649
+sample 0.036750226
+sample 0.049035882
+sample 0.042674356
+sample 0.054781326
+sample 0.044987773
+checksum cold 1M mda-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mda-dcd 0.054493 0.010084 rss 192350208 bytes 12000436 loses masses,velocities,constraints
+sample 0.061891827
+sample 0.086377568
+sample 0.051919292
+sample 0.050004964
+sample 0.050161813
+sample 0.057066834
+write 1M mda-dcd 0.230959 0.007230 rss 340633600 bytes 12000436 loses masses,velocities,constraints
+sample 0.244315037
+sample 0.228079765
+sample 0.231489858
+sample 0.230427477
+sample 0.227945721
+sample 0.237365459
+checksum warm 1M mda-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mda-xtc 0.088768 0.004856 rss 160360448 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.084940561
+sample 0.087521803
+sample 0.093466754
+sample 0.089561428
+sample 0.087973607
+sample 0.096492999
+checksum cold 1M mda-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mda-xtc 0.094414 0.005184 rss 160296960 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.096477975
+sample 0.095961625
+sample 0.094594642
+sample 0.089169868
+sample 0.087821690
+sample 0.094233474
+write 1M mda-xtc 0.245065 0.004941 rss 344440832 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.294554250
+sample 0.249868654
+sample 0.244387478
+sample 0.245743359
+sample 0.241539244
+sample 0.243732699
+checksum warm 1M mda-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mda-ncdf 0.040420 0.002014 rss 216229888 bytes 24000964 loses masses,constraints
+sample 0.039598356
+sample 0.035446875
+sample 0.042827428
+sample 0.039198458
+sample 0.041336678
+sample 0.041241120
+checksum cold 1M mda-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mda-ncdf 0.067865 0.007203 rss 216158208 bytes 24000964 loses masses,constraints
+sample 0.072510149
+sample 0.069344568
+sample 0.066385496
+sample 0.054589086
+sample 0.063892397
+sample 0.082288389
+write 1M mda-ncdf 0.288322 0.014626 rss 426108928 bytes 24000964 loses masses,constraints
+sample 0.334166997
+sample 0.285201350
+sample 0.301243590
+sample 0.270429052
+sample 0.283823085
+sample 0.291442935
+checksum warm 1M mda-trr expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mda-trr 0.250548 0.007347 rss 228638720 bytes 24000120 loses masses,constraints,precision
+sample 0.243894243
+sample 0.243648495
+sample 0.252169894
+sample 0.248925435
+sample 0.252608897
+sample 0.256652128
+checksum cold 1M mda-trr expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mda-trr 0.258089 0.013534 rss 240338944 bytes 24000120 loses masses,constraints,precision
+sample 0.270326112
+sample 0.290157346
+sample 0.253229011
+sample 0.246503127
+sample 0.256666709
+sample 0.259512026
+write 1M mda-trr 0.320935 0.004282 rss 372740096 bytes 24000120 loses masses,constraints,precision
+sample 0.368415896
+sample 0.321060736
+sample 0.323412594
+sample 0.317787411
+sample 0.317582130
+sample 0.320810199
+checksum warm 1M mdtraj-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mdtraj-ncdf 0.018956 0.003078 rss 134602752 bytes 12000900 loses masses,velocities,constraints
+sample 0.016119024
+sample 0.015280253
+sample 0.020144022
+sample 0.021728921
+sample 0.019074468
+sample 0.018838023
+checksum cold 1M mdtraj-ncdf expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mdtraj-ncdf 0.034305 0.007969 rss 117456896 bytes 12000900 loses masses,velocities,constraints
+sample 0.033980603
+sample 0.043419038
+sample 0.034628870
+sample 0.029566400
+sample 0.030168342
+sample 0.040577626
+write 1M mdtraj-ncdf 1.133531 0.121488 rss 410695680 bytes 12000900 loses masses,velocities,constraints
+sample 1.160626605
+sample 1.002509892
+sample 1.139332390
+sample 1.167659157
+sample 0.988638756
+sample 1.127730606
+checksum warm 1M mdtraj-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mdtraj-dcd 0.018839 0.002473 rss 99115008 bytes 12000356 loses masses,velocities,constraints
+sample 0.017589614
+sample 0.016708519
+sample 0.022320231
+sample 0.018542680
+sample 0.019134609
+sample 0.020689800
+checksum cold 1M mdtraj-dcd expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mdtraj-dcd 0.026259 0.003733 rss 99057664 bytes 12000356 loses masses,velocities,constraints
+sample 0.025746546
+sample 0.030504129
+sample 0.022537595
+sample 0.025929699
+sample 0.026588524
+sample 0.031496460
+write 1M mdtraj-dcd 1.104541 0.077001 rss 404783104 bytes 12000356 loses masses,velocities,constraints
+sample 1.123400498
+sample 1.030787885
+sample 1.119624757
+sample 1.089456959
+sample 0.959201868
+sample 1.142878431
+checksum warm 1M mdtraj-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M mdtraj-xtc 0.040557 0.004024 rss 99637248 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.037375579
+sample 0.037462854
+sample 0.042889532
+sample 0.039474065
+sample 0.042107018
+sample 0.041639397
+checksum cold 1M mdtraj-xtc expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M mdtraj-xtc 0.047844 0.004994 rss 99641344 bytes 3720100 loses masses,velocities,constraints,precision
+sample 0.045970234
+sample 0.051962849
+sample 0.057415183
+sample 0.043728882
+sample 0.048843523
+sample 0.046845455
+write 1M mdtraj-xtc 1.075550 0.080891 rss 412684288 bytes 3720100 loses masses,velocities,constraints,precision
+sample 1.111907155
+sample 1.027295601
+sample 1.205622217
+sample 1.040684940
+sample 0.935910388
+sample 1.110415724
+checksum warm 1M ovito-xyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M ovito-xyz 0.191094 0.016059 rss 278026240 bytes 37600121 loses constraints
+sample 0.183328128
+sample 0.186588221
+sample 0.194039055
+sample 0.188149280
+sample 0.213516142
+sample 0.206036820
+checksum cold 1M ovito-xyz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M ovito-xyz 0.215229 0.020164 rss 277970944 bytes 37600121 loses constraints
+sample 0.210686797
+sample 0.232717622
+sample 0.196619798
+sample 0.200828057
+sample 0.219771721
+sample 0.224684684
+write 1M ovito-xyz 0.590648 0.014597 rss 359215104 bytes 37600121 loses constraints
+sample 0.758504405
+sample 0.592909032
+sample 0.600976223
+sample 0.583021570
+sample 0.575448222
+sample 0.588386756
+checksum warm 1M ovito-xyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read warm 1M ovito-xyz-gz 0.211788 0.004924 rss 279144448 bytes 2402559 loses constraints
+sample 0.203669501
+sample 0.215161374
+sample 0.234407821
+sample 0.209199201
+sample 0.210882413
+sample 0.212693651
+checksum cold 1M ovito-xyz-gz expected 1.48501e+08 got 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 1.48501e+08 ok True
+read cold 1M ovito-xyz-gz 0.233416 0.007455 rss 279150592 bytes 2402559 loses constraints
+sample 0.234603110
+sample 0.236924915
+sample 0.227776214
+sample 0.232228071
+sample 0.206153953
+sample 0.285970285
+write 1M ovito-xyz-gz 6.088758 0.045038 rss 366491648 bytes 2402559 loses constraints
+sample 6.104904874
+sample 6.090389923
+sample 6.038722063
+sample 6.087125766
+sample 6.024584458
+sample 6.097684958
+order read-warm traj readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-warm traj readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-warm traj readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-warm traj readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-warm traj chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-warm traj chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order read-cold traj readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order read-cold traj readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order read-cold traj readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order read-cold traj readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order read-cold traj chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order read-cold traj chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+order write traj readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+order write traj readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+order write traj readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+order write traj readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+order write traj chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+order write traj chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+checksum warm traj readcon-con expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj readcon-con 0.000830 0.000021 rss 45864960 bytes 302664 loses none
+sample 0.000785027
+sample 0.000815106
+sample 0.000835050
+sample 0.000839199
+sample 0.000824151
+sample 0.001260775
+checksum cold traj readcon-con expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj readcon-con 0.002229 0.000671 rss 45977600 bytes 302664 loses none
+sample 0.002869110
+sample 0.001443763
+sample 0.002853611
+sample 0.002113898
+sample 0.002343160
+sample 0.002035991
+write traj readcon-con 0.001393 0.000095 rss 53055488 bytes 302664 loses none
+sample 0.001303447
+sample 0.001411245
+sample 0.001272473
+sample 0.001374591
+sample 0.001460018
+sample 0.001418087
+checksum warm traj readcon-con-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj readcon-con-gz 0.001058 0.000037 rss 50087936 bytes 44174 loses none
+sample 0.001007566
+sample 0.001074991
+sample 0.001060967
+sample 0.001098226
+sample 0.001055207
+sample 0.001026916
+checksum cold traj readcon-con-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj readcon-con-gz 0.002832 0.000307 rss 50173952 bytes 44174 loses none
+sample 0.003622807
+sample 0.002898032
+sample 0.002765188
+sample 0.001545929
+sample 0.002908601
+sample 0.002543119
+write traj readcon-con-gz 0.005756 0.000296 rss 51656704 bytes 44174 loses none
+sample 0.005659049
+sample 0.005744886
+sample 0.005718631
+sample 0.005767588
+sample 0.006105893
+sample 0.006437208
+checksum warm traj readcon-con-zst expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj readcon-con-zst 0.001068 0.000032 rss 52684800 bytes 9766 loses none
+sample 0.001096998
+sample 0.001062709
+sample 0.001073644
+sample 0.001050205
+sample 0.001057714
+sample 0.001515860
+checksum cold traj readcon-con-zst expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj readcon-con-zst 0.001850 0.000165 rss 52774912 bytes 9766 loses none
+sample 0.001787612
+sample 0.001912766
+sample 0.001954047
+sample 0.001541716
+sample 0.001775503
+sample 0.003033043
+write traj readcon-con-zst 0.001397 0.000027 rss 50970624 bytes 9766 loses none
+sample 0.001399620
+sample 0.001360876
+sample 0.001395323
+sample 0.001425102
+sample 0.002246360
+sample 0.001390274
+checksum warm traj readcon-chemfiles expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj readcon-chemfiles 0.001482 0.000078 rss 44134400 bytes 93552 loses velocities,constraints
+sample 0.001410597
+sample 0.001519171
+sample 0.001434920
+sample 0.001510967
+sample 0.001533986
+sample 0.001452612
+checksum cold traj readcon-chemfiles expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj readcon-chemfiles 0.002496 0.000486 rss 44247040 bytes 93552 loses velocities,constraints
+sample 0.002489934
+sample 0.003078204
+sample 0.002502688
+sample 0.004049505
+sample 0.002435096
+sample 0.002100953
+write traj readcon-chemfiles 0.003489 0.000109 rss 63782912 bytes 93552 loses velocities,constraints
+sample 0.003393120
+sample 0.003465481
+sample 0.003408904
+sample 0.003538999
+sample 0.004339294
+sample 0.003511840
+checksum warm traj chemfiles-con expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-con 0.001242 0.000059 rss 46286848 bytes 302664 loses masses,velocities,constraints
+sample 0.001250581
+sample 0.001224928
+sample 0.001191916
+sample 0.001383104
+sample 0.001298221
+sample 0.001233261
+checksum cold traj chemfiles-con expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-con 0.003257 0.000844 rss 46135296 bytes 302664 loses masses,velocities,constraints
+sample 0.003433803
+sample 0.002199870
+sample 0.003668930
+sample 0.003526897
+sample 0.002520127
+sample 0.003079243
+write traj chemfiles-con 0.000536 0.000277 rss 36784128 bytes 302664 loses masses,velocities,constraints
+sample 0.000753057
+sample 0.000462876
+sample 0.000421146
+sample 0.000608693
+sample 0.000896477
+sample 0.000432909
+checksum warm traj chemfiles-xyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-xyz 0.001216 0.000068 rss 36075520 bytes 93552 loses masses,velocities,constraints
+sample 0.001186114
+sample 0.001258198
+sample 0.001422480
+sample 0.001172896
+sample 0.001188641
+sample 0.001243473
+checksum cold traj chemfiles-xyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-xyz 0.002946 0.000391 rss 36259840 bytes 93552 loses masses,velocities,constraints
+sample 0.002083513
+sample 0.003325345
+sample 0.004044533
+sample 0.002915497
+sample 0.002977151
+sample 0.002824769
+write traj chemfiles-xyz 0.002231 0.000055 rss 38477824 bytes 93552 loses masses,velocities,constraints
+sample 0.002263579
+sample 0.002209164
+sample 0.002258305
+sample 0.002199635
+sample 0.002142422
+sample 0.002253199
+checksum warm traj chemfiles-xyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-xyz-gz 0.001459 0.000055 rss 36388864 bytes 13670 loses masses,velocities,constraints
+sample 0.001453051
+sample 0.001464208
+sample 0.001397967
+sample 0.001475931
+sample 0.001512363
+sample 0.001406507
+checksum cold traj chemfiles-xyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-xyz-gz 0.002817 0.000555 rss 36331520 bytes 13670 loses masses,velocities,constraints
+sample 0.002064829
+sample 0.002842330
+sample 0.002142045
+sample 0.002865554
+sample 0.002791580
+sample 0.003298535
+write traj chemfiles-xyz-gz 0.005847 0.000078 rss 38920192 bytes 13670 loses masses,velocities,constraints
+sample 0.005921707
+sample 0.005798973
+sample 0.005850651
+sample 0.005957021
+sample 0.005820027
+sample 0.005842955
+checksum warm traj chemfiles-xyz-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-xyz-xz 0.001723 0.000055 rss 36640768 bytes 1332 loses masses,velocities,constraints
+sample 0.001787063
+sample 0.001730033
+sample 0.001716436
+sample 0.001780052
+sample 0.001688871
+sample 0.001711833
+checksum cold traj chemfiles-xyz-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-xyz-xz 0.003142 0.000458 rss 36726784 bytes 1332 loses masses,velocities,constraints
+sample 0.002825838
+sample 0.003429480
+sample 0.003303958
+sample 0.002927150
+sample 0.002979877
+sample 0.004048211
+write traj chemfiles-xyz-xz 0.021777 0.002839 rss 40867840 bytes 1332 loses masses,velocities,constraints
+sample 0.025017633
+sample 0.021218811
+sample 0.021680351
+sample 0.021873991
+sample 0.032829079
+sample 0.021297426
+checksum warm traj chemfiles-xyz-bz2 expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-xyz-bz2 0.002491 0.000071 rss 36677632 bytes 6801 loses masses,velocities,constraints
+sample 0.002564621
+sample 0.002542255
+sample 0.002424237
+sample 0.002509100
+sample 0.002473016
+sample 0.002460030
+checksum cold traj chemfiles-xyz-bz2 expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-xyz-bz2 0.004059 0.000478 rss 36755456 bytes 6801 loses masses,velocities,constraints
+sample 0.003665807
+sample 0.004066578
+sample 0.004051323
+sample 0.004297521
+sample 0.003224877
+sample 0.004383151
+write traj chemfiles-xyz-bz2 0.006060 0.000065 rss 39485440 bytes 6801 loses masses,velocities,constraints
+sample 0.006091592
+sample 0.005957948
+sample 0.006067402
+sample 0.006070985
+sample 0.006052663
+sample 0.005988869
+checksum warm traj chemfiles-trr expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-trr 0.000815 0.000041 rss 37201920 bytes 192960 loses masses,constraints,precision
+sample 0.000859361
+sample 0.000851412
+sample 0.000820187
+sample 0.000809114
+sample 0.000800441
+sample 0.000775548
+checksum cold traj chemfiles-trr expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-trr 0.002707 0.000489 rss 37261312 bytes 192960 loses masses,constraints,precision
+sample 0.003268890
+sample 0.002631337
+sample 0.002588692
+sample 0.002729263
+sample 0.002685489
+sample 0.003599037
+write traj chemfiles-trr 0.001844 0.000852 rss 38623232 bytes 192960 loses masses,constraints,precision
+sample 0.001577104
+sample 0.003106236
+sample 0.002596898
+sample 0.002018639
+sample 0.001669222
+sample 0.001382198
+checksum warm traj chemfiles-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-ncdf 0.000790 0.000029 rss 36622336 bytes 192968 loses masses,constraints,precision
+sample 0.001213214
+sample 0.000761364
+sample 0.000793986
+sample 0.000810680
+sample 0.000775036
+sample 0.000786678
+checksum cold traj chemfiles-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-ncdf 0.002729 0.000845 rss 36739072 bytes 192968 loses masses,constraints,precision
+sample 0.002629134
+sample 0.002828008
+sample 0.001963927
+sample 0.003675560
+sample 0.003024754
+sample 0.001892257
+write traj chemfiles-ncdf 0.002860 0.000970 rss 38604800 bytes 192968 loses masses,constraints,precision
+sample 0.000978341
+sample 0.001938924
+sample 0.002874914
+sample 0.002845298
+sample 0.003449488
+sample 0.003222897
+checksum warm traj chemfiles-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-dcd 0.000475 0.000012 rss 36220928 bytes 96756 loses masses,velocities,constraints,precision
+sample 0.000481220
+sample 0.000561035
+sample 0.000471376
+sample 0.000479086
+sample 0.000447414
+sample 0.000468435
+checksum cold traj chemfiles-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-dcd 0.001967 0.000784 rss 36245504 bytes 96756 loses masses,velocities,constraints,precision
+sample 0.001317251
+sample 0.002372148
+sample 0.002071331
+sample 0.001239421
+sample 0.001862344
+sample 0.002292855
+write traj chemfiles-dcd 0.002257 0.000733 rss 38346752 bytes 96756 loses masses,velocities,constraints,precision
+sample 0.002823706
+sample 0.001610511
+sample 0.002564222
+sample 0.002222112
+sample 0.002292868
+sample 0.001439053
+checksum warm traj chemfiles-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-xtc 0.000632 0.000029 rss 36667392 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.000628173
+sample 0.000652952
+sample 0.000647936
+sample 0.000609662
+sample 0.000635773
+sample 0.000612411
+checksum cold traj chemfiles-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-xtc 0.002079 0.000392 rss 36806656 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.001999870
+sample 0.002516217
+sample 0.002069840
+sample 0.001416817
+sample 0.002087594
+sample 0.002532880
+write traj chemfiles-xtc 0.001803 0.000863 rss 38348800 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.001958091
+sample 0.000903574
+sample 0.001467400
+sample 0.002662647
+sample 0.002515001
+sample 0.001647691
+checksum warm traj chemfiles-pdb expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-pdb 0.007553 0.000133 rss 37646336 bytes 632716 loses masses,velocities,constraints
+sample 0.007535685
+sample 0.007429934
+sample 0.007571043
+sample 0.007415304
+sample 0.007830190
+sample 0.007596111
+checksum cold traj chemfiles-pdb expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-pdb 0.009985 0.001670 rss 37681152 bytes 632716 loses masses,velocities,constraints
+sample 0.009086848
+sample 0.009649527
+sample 0.011089654
+sample 0.010320934
+sample 0.011241177
+sample 0.008895245
+write traj chemfiles-pdb 0.005872 0.000206 rss 38426624 bytes 632716 loses masses,velocities,constraints
+sample 0.005939528
+sample 0.005803667
+sample 0.005775660
+sample 0.006051568
+sample 0.005748556
+sample 0.006005665
+checksum warm traj chemfiles-gro expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-gro 0.003961 0.001077 rss 37345280 bytes 552536 loses masses,constraints
+sample 0.003835282
+sample 0.004086906
+sample 0.003773437
+sample 0.005785257
+sample 0.005125351
+sample 0.003761886
+checksum cold traj chemfiles-gro expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-gro 0.005506 0.001163 rss 37074944 bytes 552536 loses masses,constraints
+sample 0.004956980
+sample 0.005330575
+sample 0.008291865
+sample 0.006390220
+sample 0.004832783
+sample 0.005682108
+write traj chemfiles-gro 0.004102 0.000387 rss 38600704 bytes 552536 loses masses,constraints
+sample 0.004067573
+sample 0.003994970
+sample 0.004136029
+sample 0.004047780
+sample 0.005079409
+sample 0.004540987
+checksum warm traj chemfiles-pdb-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-pdb-gz 0.008321 0.000271 rss 37804032 bytes 44768 loses masses,velocities,constraints
+sample 0.008245427
+sample 0.008586548
+sample 0.008354929
+sample 0.012951557
+sample 0.008248096
+sample 0.008286494
+checksum cold traj chemfiles-pdb-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-pdb-gz 0.010573 0.000674 rss 37890048 bytes 44768 loses masses,velocities,constraints
+sample 0.010241245
+sample 0.010817637
+sample 0.009441800
+sample 0.010328849
+sample 0.010977164
+sample 0.013855430
+write traj chemfiles-pdb-gz 0.012505 0.000187 rss 38887424 bytes 44768 loses masses,velocities,constraints
+sample 0.012453976
+sample 0.012518708
+sample 0.012490739
+sample 0.012850233
+sample 0.012430227
+sample 0.012694268
+checksum warm traj chemfiles-gro-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-gro-gz 0.004645 0.000079 rss 37394432 bytes 45570 loses masses,constraints
+sample 0.004672508
+sample 0.004690767
+sample 0.004717895
+sample 0.004603438
+sample 0.004594666
+sample 0.004617700
+checksum cold traj chemfiles-gro-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-gro-gz 0.005964 0.001414 rss 37527552 bytes 45570 loses masses,constraints
+sample 0.005286492
+sample 0.006908539
+sample 0.007115600
+sample 0.005340255
+sample 0.005488380
+sample 0.006440361
+write traj chemfiles-gro-gz 0.011485 0.000165 rss 39053312 bytes 45570 loses masses,constraints
+sample 0.011538060
+sample 0.011426627
+sample 0.011427666
+sample 0.011432295
+sample 0.011612417
+sample 0.011614706
+checksum warm traj chemfiles-pdb-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-pdb-xz 0.009762 0.000248 rss 38594560 bytes 9932 loses masses,velocities,constraints
+sample 0.009881172
+sample 0.010108057
+sample 0.009548281
+sample 0.009633331
+sample 0.009642777
+sample 0.009884682
+checksum cold traj chemfiles-pdb-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-pdb-xz 0.011260 0.000658 rss 38639616 bytes 9932 loses masses,velocities,constraints
+sample 0.011369322
+sample 0.011150629
+sample 0.011488074
+sample 0.010600609
+sample 0.011633896
+sample 0.010684302
+write traj chemfiles-pdb-xz 0.200212 0.003851 rss 45795328 bytes 9932 loses masses,velocities,constraints
+sample 0.209946961
+sample 0.198245293
+sample 0.199410433
+sample 0.201013259
+sample 0.196813968
+sample 0.202845499
+checksum warm traj chemfiles-gro-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj chemfiles-gro-xz 0.005697 0.000157 rss 37812224 bytes 5548 loses masses,constraints
+sample 0.005613303
+sample 0.005702783
+sample 0.005866268
+sample 0.005661357
+sample 0.005898416
+sample 0.005690864
+checksum cold traj chemfiles-gro-xz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj chemfiles-gro-xz 0.007207 0.000629 rss 37888000 bytes 5548 loses masses,constraints
+sample 0.007318937
+sample 0.007366663
+sample 0.007747015
+sample 0.006407445
+sample 0.007095106
+sample 0.006602963
+write traj chemfiles-gro-xz 0.133062 0.000970 rss 45031424 bytes 5548 loses masses,constraints
+sample 0.132240021
+sample 0.133181830
+sample 0.136370756
+sample 0.132941741
+sample 0.131437742
+sample 0.133453507
+checksum warm traj ase-extxyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj ase-extxyz 0.015274 0.000069 rss 85952512 bytes 1001072 loses none
+sample 0.015774372
+sample 0.015262654
+sample 0.015286214
+sample 0.015100618
+sample 0.015335001
+sample 0.015250618
+checksum cold traj ase-extxyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj ase-extxyz 0.019829 0.000961 rss 85698560 bytes 1001072 loses none
+sample 0.019741855
+sample 0.020310367
+sample 0.019087482
+sample 0.023596096
+sample 0.019915399
+sample 0.017827500
+write traj ase-extxyz 0.034581 0.000584 rss 84992000 bytes 1001072 loses none
+sample 0.034645200
+sample 0.034205019
+sample 0.035236832
+sample 0.035371976
+sample 0.034517627
+sample 0.034500766
+checksum warm traj ase-extxyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj ase-extxyz-gz 0.021678 0.000860 rss 85825536 bytes 23257 loses none
+sample 0.021216269
+sample 0.021298766
+sample 0.022273284
+sample 0.023363895
+sample 0.021421048
+sample 0.021935757
+checksum cold traj ase-extxyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj ase-extxyz-gz 0.023408 0.002065 rss 85846016 bytes 23257 loses none
+sample 0.025861967
+sample 0.023388811
+sample 0.025918862
+sample 0.023428133
+sample 0.023122010
+sample 0.022870745
+write traj ase-extxyz-gz 0.079469 0.000432 rss 85381120 bytes 23257 loses none
+sample 0.080565869
+sample 0.079468555
+sample 0.079469548
+sample 0.079078646
+sample 0.079976864
+sample 0.079400912
+checksum warm traj mda-pdb expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mda-pdb 0.016113 0.000504 rss 99397632 bytes 648316 loses velocities,constraints,precision
+sample 0.016074224
+sample 0.016619756
+sample 0.015973751
+sample 0.015718260
+sample 0.016152190
+sample 0.016664591
+checksum cold traj mda-pdb expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mda-pdb 0.019216 0.002679 rss 99391488 bytes 648316 loses velocities,constraints,precision
+sample 0.022280443
+sample 0.019631042
+sample 0.021124765
+sample 0.017764563
+sample 0.017828984
+sample 0.018801643
+write traj mda-pdb 0.054137 0.000538 rss 97658880 bytes 648316 loses velocities,constraints,precision
+sample 0.054191122
+sample 0.054082761
+sample 0.053999357
+sample 0.053317437
+sample 0.054680739
+sample 0.055873168
+checksum warm traj mda-xyz expected 108280 got 108280 108280 108280 108280 108280 108280 ok True
+read warm traj mda-xyz 0.008683 0.000124 rss 97587200 bytes 344513 loses masses,velocities,constraints,cell,precision
+sample 0.008664582
+sample 0.008641767
+sample 0.008813929
+sample 0.010274993
+sample 0.008700674
+sample 0.008661169
+checksum cold traj mda-xyz expected 108280 got 108280 108280 108280 108280 108280 108280 ok True
+read cold traj mda-xyz 0.010248 0.001192 rss 97617920 bytes 344513 loses masses,velocities,constraints,cell,precision
+sample 0.010882409
+sample 0.010737306
+sample 0.013958109
+sample 0.009618766
+sample 0.009459908
+sample 0.009758490
+write traj mda-xyz 0.018019 0.000118 rss 97085440 bytes 344513 loses masses,velocities,constraints,cell,precision
+sample 0.017981153
+sample 0.017749382
+sample 0.018253287
+sample 0.018033795
+sample 0.018129008
+sample 0.018004802
+checksum warm traj readcon-conbin expected 108280 got 108280 108280 108280 108280 108280 108280 ok True
+read warm traj readcon-conbin 0.000091 0.000006 rss 40851456 bytes 388096 loses masses,constraints,cell
+sample 0.000112560
+sample 0.000086427
+sample 0.000097220
+sample 0.000090821
+sample 0.000090040
+sample 0.000090217
+checksum cold traj readcon-conbin expected 108280 got 108280 108280 108280 108280 108280 108280 ok True
+read cold traj readcon-conbin 0.001502 0.000602 rss 40742912 bytes 388096 loses masses,constraints,cell
+sample 0.001876616
+sample 0.001353889
+sample 0.001172163
+sample 0.001649291
+sample 0.001061352
+sample 0.002242431
+write traj readcon-conbin 0.000965 0.000118 rss 50939904 bytes 388096 loses masses,constraints,cell
+sample 0.001053340
+sample 0.000962640
+sample 0.000887752
+sample 0.001081654
+sample 0.000897196
+sample 0.000967356
+checksum warm traj mda-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mda-dcd 0.000531 0.000024 rss 96983040 bytes 96996 loses masses,velocities,constraints,precision
+sample 0.000533910
+sample 0.000518437
+sample 0.000642142
+sample 0.000528362
+sample 0.000547946
+sample 0.000506009
+checksum cold traj mda-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mda-dcd 0.002222 0.000888 rss 96937984 bytes 96996 loses masses,velocities,constraints,precision
+sample 0.002407848
+sample 0.001488614
+sample 0.002036360
+sample 0.002615458
+sample 0.001474816
+sample 0.002549087
+write traj mda-dcd 0.001285 0.000029 rss 97378304 bytes 96996 loses masses,velocities,constraints,precision
+sample 0.001279092
+sample 0.001252250
+sample 0.001290238
+sample 0.001326776
+sample 0.001267381
+sample 0.001302610
+checksum warm traj mda-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mda-xtc 0.001435 0.000054 rss 97144832 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.001485727
+sample 0.001413406
+sample 0.001473187
+sample 0.001417588
+sample 0.001392685
+sample 0.001453350
+checksum cold traj mda-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mda-xtc 0.003393 0.000381 rss 97124352 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.003632432
+sample 0.003082275
+sample 0.003544634
+sample 0.002924232
+sample 0.003324440
+sample 0.003462376
+write traj mda-xtc 0.001408 0.000048 rss 97460224 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.001445801
+sample 0.001422295
+sample 0.001376261
+sample 0.001443734
+sample 0.001390108
+sample 0.001393004
+checksum warm traj mda-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mda-ncdf 0.000833 0.000086 rss 96956416 bytes 193328 loses masses,constraints,precision
+sample 0.000845750
+sample 0.000802812
+sample 0.000908973
+sample 0.000797416
+sample 0.000821067
+sample 0.000916077
+checksum cold traj mda-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mda-ncdf 0.002973 0.000658 rss 96886784 bytes 193328 loses masses,constraints,precision
+sample 0.002749301
+sample 0.003510014
+sample 0.002617100
+sample 0.003148727
+sample 0.002797051
+sample 0.003688599
+write traj mda-ncdf 0.004074 0.000074 rss 98844672 bytes 193328 loses masses,constraints,precision
+sample 0.004094014
+sample 0.004031789
+sample 0.003968498
+sample 0.004204098
+sample 0.004053325
+sample 0.004117498
+checksum warm traj mda-trr expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mda-trr 0.002289 0.000053 rss 97472512 bytes 192960 loses masses,constraints,precision
+sample 0.002532800
+sample 0.002310495
+sample 0.002268087
+sample 0.002321275
+sample 0.002264442
+sample 0.002215979
+checksum cold traj mda-trr expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mda-trr 0.005098 0.000710 rss 97406976 bytes 192960 loses masses,constraints,precision
+sample 0.005435837
+sample 0.005706396
+sample 0.005064948
+sample 0.004332713
+sample 0.005130782
+sample 0.004511780
+write traj mda-trr 0.001936 0.000035 rss 97353728 bytes 192960 loses masses,constraints,precision
+sample 0.001950862
+sample 0.001957400
+sample 0.001975467
+sample 0.001921092
+sample 0.001894481
+sample 0.001920431
+checksum warm traj mdtraj-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mdtraj-ncdf 0.000948 0.000150 rss 67272704 bytes 97264 loses masses,velocities,constraints,precision
+sample 0.000994828
+sample 0.001059392
+sample 0.000890891
+sample 0.000888823
+sample 0.000900673
+sample 0.001315761
+checksum cold traj mdtraj-ncdf expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mdtraj-ncdf 0.003285 0.000353 rss 67272704 bytes 97264 loses masses,velocities,constraints,precision
+sample 0.003415665
+sample 0.002776619
+sample 0.003182277
+sample 0.003013426
+sample 0.003672503
+sample 0.003386883
+write traj mdtraj-ncdf 0.002302 0.000139 rss 68347904 bytes 97264 loses masses,velocities,constraints,precision
+sample 0.002330019
+sample 0.002159943
+sample 0.002780290
+sample 0.002358868
+sample 0.002274328
+sample 0.002191713
+checksum warm traj mdtraj-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mdtraj-dcd 0.000210 0.000019 rss 51558400 bytes 96916 loses masses,velocities,constraints,precision
+sample 0.000237062
+sample 0.000192314
+sample 0.000228732
+sample 0.000204780
+sample 0.000208316
+sample 0.000210991
+checksum cold traj mdtraj-dcd expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mdtraj-dcd 0.001706 0.000743 rss 51544064 bytes 96916 loses masses,velocities,constraints,precision
+sample 0.002133113
+sample 0.002034982
+sample 0.001012192
+sample 0.001362566
+sample 0.002178513
+sample 0.001376621
+write traj mdtraj-dcd 0.000745 0.000040 rss 52951040 bytes 96916 loses masses,velocities,constraints,precision
+sample 0.000707692
+sample 0.000796558
+sample 0.000720058
+sample 0.000747996
+sample 0.000742699
+sample 0.000771918
+checksum warm traj mdtraj-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj mdtraj-xtc 0.000343 0.000017 rss 51861504 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.000333963
+sample 0.000329575
+sample 0.000338607
+sample 0.000363370
+sample 0.000346995
+sample 0.000354262
+checksum cold traj mdtraj-xtc expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj mdtraj-xtc 0.001858 0.000777 rss 51916800 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.000969523
+sample 0.002199319
+sample 0.001922789
+sample 0.001205806
+sample 0.001794210
+sample 0.002300518
+write traj mdtraj-xtc 0.001050 0.000033 rss 53174272 bytes 29568 loses masses,velocities,constraints,precision
+sample 0.001629698
+sample 0.001047906
+sample 0.001042993
+sample 0.001086365
+sample 0.001044113
+sample 0.001053044
+checksum warm traj ovito-xyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj ovito-xyz 0.002854 0.000870 rss 95760384 bytes 287120 loses constraints
+sample 0.002789659
+sample 0.002918550
+sample 0.002423767
+sample 0.002725114
+sample 0.003841574
+sample 0.004145639
+checksum cold traj ovito-xyz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj ovito-xyz 0.007007 0.001207 rss 95825920 bytes 287120 loses constraints
+sample 0.006178507
+sample 0.008291049
+sample 0.007548886
+sample 0.006648799
+sample 0.007365961
+sample 0.005190778
+write traj ovito-xyz 0.008798 0.000592 rss 89516032 bytes 287120 loses constraints
+sample 0.008211239
+sample 0.008656329
+sample 0.008940068
+sample 0.010178677
+sample 0.008285166
+sample 0.008979780
+checksum warm traj ovito-xyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read warm traj ovito-xyz-gz 0.003858 0.001509 rss 95805440 bytes 20660 loses constraints
+sample 0.003502927
+sample 0.002986523
+sample 0.005590972
+sample 0.003640235
+sample 0.004075183
+sample 0.005369535
+checksum cold traj ovito-xyz-gz expected 110692 got 110692 110692 110692 110692 110692 110692 ok True
+read cold traj ovito-xyz-gz 0.007521 0.001552 rss 95782912 bytes 20660 loses constraints
+sample 0.008946458
+sample 0.008743710
+sample 0.007539261
+sample 0.006686290
+sample 0.006602686
+sample 0.007503626
+write traj ovito-xyz-gz 0.055333 0.000657 rss 90044416 bytes 20660 loses constraints
+sample 0.055480552
+sample 0.055807692
+sample 0.055565302
+sample 0.054788337
+sample 0.054581928
+sample 0.055185345
