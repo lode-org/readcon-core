@@ -3085,7 +3085,6 @@ impl SharedStore {
     }
 }
 
-#[cfg(feature = "mpi")]
 fn allocate_len(file: &File, total: u64) -> io::Result<()> {
     use std::os::unix::io::AsRawFd;
     if total == 0 {
@@ -4565,7 +4564,7 @@ fn place_packed(
     bind: bool,
 ) -> Result<(), WriteError> {
     let total: u64 = lengths.iter().map(|len| *len as u64).sum();
-    file.set_len(total).map_err(WriteError::Io)?;
+    allocate_len(file, total).map_err(WriteError::Io)?;
     if total == 0 {
         return Ok(());
     }
@@ -4646,6 +4645,16 @@ fn write_serial_frames(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    // A priced trajectory is spelled straight into the fresh file. The
+    // copy onto a second buffer was the gap against a writer that filled
+    // the inode itself. One frame has no group price; it streams.
+    if frames.len() >= 2
+        && let Some(lengths) = cached_packed_lengths(frames, 1, precision, canonical, bind)
+    {
+        let (staged, file) = begin_unpublished(path)?;
+        let result = place_packed(&file, frames, &lengths, 1, precision, canonical, bind);
+        return finish_unpublished(staged, path, result);
+    }
     let (staged, file) = begin_unpublished(path)?;
     let mut writer = match precision {
         Some(precision) => ConFrameWriter::with_precision(file, precision),
@@ -4847,7 +4856,7 @@ fn store_disjoint_parts(file: &File, parts: &[Vec<u8>]) -> io::Result<()> {
         offsets.push(total);
         total += part.len() as u64;
     }
-    file.set_len(total)?;
+    allocate_len(file, total)?;
     if total == 0 {
         return Ok(());
     }
