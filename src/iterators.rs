@@ -3884,11 +3884,11 @@ fn piped_stock_frames(
     });
     let scope_s = t_scope.elapsed().as_secs_f64();
     if let Some(err) = error.into_inner().unwrap_or(None) {
-        std::mem::forget(atoms);
+        release_uninit_atoms(atoms);
         return Err(err.into());
     }
     let Some(header) = header.into_inner().unwrap_or(None) else {
-        std::mem::forget(atoms);
+        release_uninit_atoms(atoms);
         return Ok(None);
     };
     // Every coordinate, id, and flag was written. The length stayed 0
@@ -3912,6 +3912,14 @@ fn piped_stock_frames(
     }
     let frame = crate::types::con_frame_coords_only_with_ids(header, atoms, positions, ids);
     Ok(Some((vec![frame], alloc_s, scope_s)))
+}
+
+/// The spare was `set_len`'d before the workers filled it. Dropping it
+/// would run `AtomDatum`'s destructor on uninitialised slots. Setting the
+/// length back to zero frees the allocation and drops nothing.
+#[cfg(feature = "parallel")]
+fn release_uninit_atoms(mut raw: Vec<std::mem::MaybeUninit<types::AtomDatum>>) {
+    unsafe { raw.set_len(0) };
 }
 
 /// `raw` is `n` initialized atoms in a buffer that may be larger than `n`.

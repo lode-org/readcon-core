@@ -1688,9 +1688,10 @@ std::thread_local! {
     static PLAIN_BUF: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Inflate `file` into a reused buffer and hand that slice to `body`.
+/// Inflate `file` into a buffer and hand that slice to `body`.
 ///
-/// The buffer stays on this thread. The next call keeps its capacity.
+/// The plain text is dropped before this returns. A read that then copies
+/// coordinates must not keep the inflated file beside those copies.
 pub(crate) fn with_inflated_plain<T>(
     file: &[u8],
     body: impl FnOnce(&[u8]) -> Result<T, Box<dyn std::error::Error>>,
@@ -1715,7 +1716,7 @@ pub(crate) fn with_inflated_plain<T>(
             buf.extend_from_slice(file);
         }
         let result = body(buf.as_slice())?;
-        buf.clear();
+        *buf = Vec::new();
         Ok(result)
     })
 }

@@ -76,6 +76,15 @@ All notable changes to this project will be documented in this file. See [conven
   The default initial-exec TLS made `dlopen` fail with "cannot allocate
   memory in static TLS block" once the process surplus was spent. Static
   Rust binaries leave the feature off and keep initial-exec.
+- A coordinate line spells an exact `N.0` in `0` ..= `9999` from the integer
+  table. Writing an unmodified frame borrows the stored atoms instead of
+  rebuilding them through `add_atom`, which boxed a coordinate triple per
+  atom. A million-atom chemfiles lattice was several times slower than the
+  column writer of the same numbers.
+- A gzip or zstd read drops the inflated text after the frames own their
+  coordinates. A piped member parse that falls back to the full parser frees
+  the spare atom buffer instead of leaving it resident next to the frames.
+
 - A path write publishes only after every byte is stored. On Linux the store
   is an unnamed file, and `linkat` plus `rename` run in a helper that outlives
   the writer. macOS preallocates with `posix_fallocate` and Windows extends

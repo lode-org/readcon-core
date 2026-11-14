@@ -1973,6 +1973,48 @@ struct AppendOut<'a> {
     vel: Option<&'a mut Vec<u8>>,
 }
 
+fn ids_follow(atoms: &[crate::types::AtomDatum]) -> bool {
+    let Some(first) = atoms.first() else {
+        return false;
+    };
+    let origin = first.atom_id;
+    atoms
+        .iter()
+        .enumerate()
+        .all(|(index, atom)| atom.atom_id == origin + index as u64)
+}
+
+/// Coordinate rows from a contiguous slab, same bytes as [`push_xyz_line`].
+fn format_slab_rows(
+    atoms: &[crate::types::AtomDatum],
+    slab: *const f64,
+    spec_version: u32,
+) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(atoms.len().saturating_mul(24));
+    let mut ryu = ryu::Buffer::new();
+    let mut slots = [FmtSlot::new(); 3];
+    let mut ids = IdDigits::from_u64(atoms[0].atom_id);
+    for (index, atom) in atoms.iter().enumerate() {
+        let xyz = unsafe {
+            let ptr = slab.add(index * 3);
+            [*ptr, *ptr.add(1), *ptr.add(2)]
+        };
+        let mut id_buf = [0u8; 20];
+        let id_len = ids.text().len();
+        id_buf[..id_len].copy_from_slice(ids.text());
+        push_column_line(
+            &mut buf,
+            &mut ryu,
+            &mut slots,
+            xyz,
+            written_fixed_flag(atom.fixed(), spec_version),
+            &id_buf[..id_len],
+        );
+        ids.bump();
+    }
+    buf
+}
+
 fn append_coord_rows(
     buf: &mut Vec<u8>,
     fmt: LineFmt<'_>,
@@ -2010,6 +2052,12 @@ fn append_coord_rows(
         }
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
+        if !want_vel && prec == FloatFormat::RoundTrip && ids_follow(atoms) {
+            if let Some(slab) = coord_slab(atoms) {
+                buf.extend_from_slice(&format_slab_rows(atoms, slab, spec_version));
+                return Ok(());
+            }
+        }
         let mut vel_slots = [FmtSlot::new(); 3];
         let slab = coord_slab(atoms);
         for (index, atom) in atoms.iter().enumerate() {
@@ -2707,11 +2755,14 @@ fn push_xyz_line(
     let [x, y, z] = xyz;
     match prec {
         FloatFormat::RoundTrip => {
-            push_round_trip(buf, ryu, Some(&mut slots[0]), x);
+            // Lattice coordinates are exact `N.0`. The column table spells
+            // those without the general float search. Other values still
+            // go through `push_round_trip`, so the bytes do not change.
+            push_column_f64(buf, ryu, &mut slots[0], x);
             buf.push(b' ');
-            push_round_trip(buf, ryu, Some(&mut slots[1]), y);
+            push_column_f64(buf, ryu, &mut slots[1], y);
             buf.push(b' ');
-            push_round_trip(buf, ryu, Some(&mut slots[2]), z);
+            push_column_f64(buf, ryu, &mut slots[2], z);
         }
         FloatFormat::DecimalPlaces(_) => {
             push_f64(buf, ryu, x, prec);

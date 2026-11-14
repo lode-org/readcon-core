@@ -4053,6 +4053,17 @@ fn write_con(
                         })?;
                         flush_writer(&mut writer)?;
                     }
+                } else if let Some(held) = borrow_unmodified_frames(frames)? {
+                    let refs = held.refs();
+                    crate::writer::write_frame_refs_to_path(
+                        Path::new(path),
+                        &refs,
+                        workers,
+                        precision,
+                        canonical,
+                        true,
+                    )
+                    .map_err(|err| write_err_to_py(py, err))?;
                 } else {
                     let rust_frames = py_frames_to_rust(py, frames)?;
                     let refs: Vec<&ConFrame> = rust_frames.iter().collect();
@@ -4191,6 +4202,43 @@ fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
         out.push(ase_from_pyconframe(py, &view)?);
     }
     Ok(out)
+}
+
+struct BorrowedFrames<'py> {
+    held: Vec<PyRef<'py, PyConFrame>>,
+}
+
+impl<'py> BorrowedFrames<'py> {
+    fn refs(&self) -> Vec<&ConFrame> {
+        self.held
+            .iter()
+            .map(|frame| frame.inner.as_ref().expect("unmodified frame"))
+            .collect()
+    }
+}
+
+/// Frames whose Python atom list was never built still hold the import.
+///
+/// Rebuilding those through `add_atom` copies every coordinate into its
+/// own box. The writer can borrow the stored frame instead.
+fn borrow_unmodified_frames<'py>(
+    frames: &'py Bound<'_, PyAny>,
+) -> PyResult<Option<BorrowedFrames<'py>>> {
+    let mut held = Vec::new();
+    for item in PyIterator::from_object(frames)? {
+        let item = item?;
+        let Ok(frame) = item.extract::<PyRef<'py, PyConFrame>>() else {
+            return Ok(None);
+        };
+        if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) || frame.inner.is_none() {
+            return Ok(None);
+        }
+        held.push(frame);
+    }
+    if held.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(BorrowedFrames { held }))
 }
 
 fn py_frames_to_rust(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
