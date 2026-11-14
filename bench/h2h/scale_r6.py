@@ -188,10 +188,10 @@ def write_md_extxyz(path: Path, n_frames: int = 10_000) -> None:
                 (index * 12_000) % 54_000,
             )
         )
-    from frames_guard import require_distinct_frames
+    from frames_guard import require_distinct_texts
 
     frames = [_md_frame_text(frame, base) for frame in range(n_frames)]
-    require_distinct_frames(frames)
+    require_distinct_texts(frames)
     path.write_text("".join(frames), encoding="utf-8")
 
 
