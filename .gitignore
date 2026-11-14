@@ -483,7 +483,8 @@ docs/notebooks/out/
 /.snakemake/
 /asv.aa.conf.json
 /asv.cmp.conf.json
-/asv.mem.conf.json
+# The memory config is checked in. derive-conf rewrites the same file.
+!/asv.mem.conf.json
 /asv.weak.conf.json
 
 # coverage instrumentation local venv

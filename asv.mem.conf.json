@@ -1,0 +1,33 @@
+{
+    "version": 1,
+    "project": "readcon-core",
+    "project_url": "https://github.com/lode-org/readcon-core",
+    "repo": ".",
+    "environment_type": "virtualenv",
+    "pythons": ["3.12"],
+    "matrix": {
+        "req": {
+            "numpy": ["2.5.4"],
+            "ase": ["3.29.0"],
+            "asv_bench_memray": ["0.1.2"],
+            "memray": ["1.20.0"]
+        }
+    },
+    "benchmark_dir": "benchmarks",
+    "env_dir": ".asv/env-mem",
+    "results_dir": ".asv/results-mem",
+    "html_dir": ".asv/html-mem",
+    "build_cache_size": 4,
+    "install_timeout": 3600,
+    "branches": ["HEAD"],
+    "build_command": [
+        "python -m pip install maturin==1.16.0",
+        "CC=gcc CXX=g++ CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR={conf_dir}/.asv/cargo-target RUSTFLAGS=-Clink-arg=-fuse-ld=bfd maturin build --release --features python,chemfiles-from-sources,system-alloc --interpreter python --out {build_cache_dir}"
+    ],
+    "install_command": [
+        "in-dir={env_dir} python -m pip install --force-reinstall --no-deps {wheel_file}"
+    ],
+    "uninstall_command": [
+        "return-code=any python -m pip uninstall -y readcon"
+    ]
+}
