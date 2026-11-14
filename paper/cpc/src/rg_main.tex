@@ -40,6 +40,7 @@ Elsevier%
 \DeclareSIUnit\angstrom{\text{\AA}}
 \setlength{\emergencystretch}{3em}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{listings}
 \usepackage{xurl}
 \usepackage{seqsplit}
@@ -180,7 +181,7 @@ Files that earlier eOn releases wrote are grammar version 1 and read as such.
 The velocities of a file of an earlier version are read in the natural unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listing~\ref{lst:py}).
 
-\textit{References:} eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026,goswamiReadconcore01472026}.
+\textit{References:} eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026}.
 \end{small}
 
 \section{Introduction}\label{sec:introduction} Rare-event methods turn a potential energy surface into rates.
@@ -202,8 +203,8 @@ Two readers given the same bytes must then return the same fields, and that take
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain Cartesian coordinate format (XYZ) and publishes a grammar \cite{kermodeLibatomsExtxyzV0462026}.
-It keeps masks and identifiers in column names that the Atomic Simulation Environment (ASE) chose \cite{larsenAtomicSimulationEnvironmenta2017,larsenAtomicSimulationEnvironment2017}, and a file declares no version and no velocity unit.
-H5MD \cite{buylH5mdStructuredEfficient2014,deBuylH5MDStructuredEfficient2014,folkOverviewHdf5Technology2011} stores identity, velocities with units and the box in HDF5, and it defines no element for a per-component constraint.
+It keeps masks and identifiers in column names that the Atomic Simulation Environment (ASE) chose \cite{larsenAtomicSimulationEnvironmenta2017}, and a file declares no version and no velocity unit.
+H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores identity, velocities with units and the box in HDF5, and it defines no element for a per-component constraint.
 The GROMACS compressed trajectory (XTC) and full-precision trajectory (TRR) formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} store molecular dynamics output with neither a mask nor a velocity unit.
 The ASE trajectory keeps every field in a layout that the Python code of ASE defines.
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
@@ -483,18 +484,24 @@ A change to the text either decides a case that the earlier text left open, for 
 A later minor therefore never makes a reader reject a file that an earlier minor requires it to accept.
 We take changes through issues and pull requests on the repository, and each change adds the corpus files that test it.
 
-\begin{table}[tbp] \centering \small \caption{CON versions.
+{\small
+\begin{longtable}{@{}lllp{0.44\linewidth}@{}}
+\caption{CON versions.
 A row with an unmarked date takes its version, date and change from the version history of the specification.
 Its release is the first readcon-core release whose specification lists that version with that date, and version 1 is the text eOn writes.
 A date marked (tag) is the tag date of a release that changed the text of a version without a new version number, and its row names the clauses that release changed.}
-\label{tab:versions}
-\begin{tabular}{@{}lllp{0.44\linewidth}@{}}
+\label{tab:versions}\\
 \toprule
 Version & Date & Release & Change \\
 \midrule
+\endfirsthead
+\toprule
+Version & Date & Release & Change \\
+\midrule
+\endhead
 \input{figures/generated/versions_table}
-\end{tabular}
-\end{table}
+\end{longtable}
+}
 
 \section{Reference implementation}\label{sec:implementation} readcon-core implements the grammar once, in Rust (Figure~\ref{fig:architecture}).
 C++, Julia \cite{bezansonJuliaFreshApproach2017} and Fortran 2008 call its C interface, and Python calls the Rust core through PyO3 and receives NumPy arrays \cite{harrisArrayProgrammingNumpy2020}.
@@ -839,7 +846,7 @@ Unlike a format whose meaning lives in the code of one reader, CON 3.1 lets any 
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
-The deposited timing records name the candidate commit \texttt{\readconcommit}.
+The deposited timing records name the candidate commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
 That candidate is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 The git bundle readcon-core.bundle of the supplementary material holds that commit with its whole history, together with the directory paper/cpc.
 Rebuild the library from the candidate commit with \texttt{cargo build -{}-release}.

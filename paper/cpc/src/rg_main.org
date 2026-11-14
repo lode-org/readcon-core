@@ -34,13 +34,13 @@
 
 \input{authors.tex}
 
-\begin{abstract} Rare-event and saddle-search codes in the eOn family write atomic checkpoints as \texttt{.con} and \texttt{.convel} text \cite{chillEONSoftwareLong2014}.
+\begin{abstract} Rare-event and saddle-search codes in the eOn family write atomic checkpoints as \texttt{.con} and \texttt{.convel} text \cite{chillEonSoftwareLong2014}.
 The historical layout is a nine-line header plus type-grouped atom blocks.
 Independent readers treat column~4 as a boolean and do not parse declared force sections, the pre-grouping atom index, or a units object.
 This paper records CON versions~2 and~3 (JSON metadata on line~2, a spec-aware constraint bitmask, declared sections, required units in v3) and describes \texttt{readcon-core}, the reference implementation.
 The library is an hourglass: a Rust core, a C ABI (\texttt{rkr\_*}) published as \texttt{include/readcon-core.h}, and wrappers for C++, Python, Julia, and Fortran.
 Chemfiles \cite{frauxChemfiles2023} is an optional ingress path; the measured mapping is XYZ into the same \texttt{ConFrame}.
-Instruction-count measurements (Valgrind Cachegrind) and equal-geometry wall timings against the Atomic Simulation Environment (ASE) \cite{larsenAtomicSimulationEnvironment2017}, chemfiles, MDAnalysis H5MD \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016}, and raw h5py are reported with host provenance.
+Instruction-count measurements (Valgrind Cachegrind) and equal-geometry wall timings against the Atomic Simulation Environment (ASE) \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles, MDAnalysis H5MD \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMdanalysisPythonPackage2016}, and raw h5py are reported with host provenance.
 Text CON remains the on-disk authority; gzip and optional zstd compress that text; a Cap'n Proto schema is an RPC wire. The file on disk stays text.
 \end{abstract}
 
@@ -106,7 +106,7 @@ classifier. Cite the software through \texttt{CITATION.cff}
 \cite{smithSoftwareCitationPrinciples2016}. The freeze tag is the
 \texttt{v0.14.9} GitHub Release. The software archive series is
 \texttt{10.5281/zenodo.18753567}
-\cite{goswamiReadconcore01472026}. This manuscript does not invent a
+\cite{goswamiReadconcoreConConvel2026}. This manuscript does not invent a
 paper DOI. Deposit the core and readcon-db freeze tags together; do
 not write a second paper for readcon-db alone.\\
 \textit{Running time:} on the committed equal-geometry JSON (100
@@ -123,13 +123,13 @@ parse and a write wall are Table \ref{tab:io}.\\
 :PROPERTIES: :CUSTOM_ID: sec:introduction :END:
 
 Saddle searches, adaptive kinetic Monte Carlo, and nudged elastic band calculations checkpoint atomic configurations many times per image.
-The eOn =.con= file is that checkpoint \cite{chillEONSoftwareLong2014}: a short header, then atoms grouped by chemical type, each line a position, a constraint flag, and a fifth integer that historical writers used as a display index.
+The eOn =.con= file is that checkpoint \cite{chillEonSoftwareLong2014}: a short header, then atoms grouped by chemical type, each line a position, a constraint flag, and a fifth integer that historical writers used as a display index.
 Velocities were conventionally stored in a sibling =.convel= file.
 Later practice added force blocks and free-form comments in the JSON header.
 
 The format is small and human-readable.
 Independent implementations have treated column 4 as ``fixed or not'' and have ignored line 2.
-ASE's =ase.io.eon= reader is of that class \cite{larsenAtomicSimulationEnvironment2017}: it decodes column 4 with =bool(int(...))=, discards column 5, and treats leftover force-section lines after the coordinate parse as an error.
+ASE's =ase.io.eon= reader is of that class \cite{larsenAtomicSimulationEnvironmenta2017}: it decodes column 4 with =bool(int(...))=, discards column 5, and treats leftover force-section lines after the coordinate parse as an error.
 Archived eOn C++ does the same boolean decode while keeping the fifth integer on =.con= (not on =.convel=).
 Neither stack has a units object.
 Column 4 therefore cannot carry a per-axis mask unless the reader consults a spec version.
@@ -143,17 +143,17 @@ The design goal is one on-disk checkpoint and one C ABI, so a Fortran optimizer,
 
 CON is a rare-event checkpoint. It is a small campaign file.
 The nine-line type-grouped layout is the unversioned eOn de facto format.
-Chill et al. describe the eOn software and do not specify atom-line columns \cite{chillEONSoftwareLong2014}.
+Chill et al. describe the eOn software and do not specify atom-line columns \cite{chillEonSoftwareLong2014}.
 
 Extended XYZ puts ~Lattice=~ and a
 ~Properties=~ column schema on the comment line; lean XYZ has neither.
-There is no journal specification of extXYZ; the living grammar is the ASE/libAtoms dialect \cite{larsenAtomicSimulationEnvironment2017}.
+There is no journal specification of extXYZ; the living grammar is the ASE/libAtoms dialect \cite{larsenAtomicSimulationEnvironmenta2017}.
 CON uses a JSON object in the JSON header for the same job (machine metadata on a line that old tools treat as a comment) and keeps an explicit three-bit constraint mask and a pre-grouping =atom_id=.
 Lean XYZ, as timed in this paper, has no constraint mask.
 The library's ASE adapters convert a parsed =ConFrame= to =Atoms= and back; they do not register a =format='con'= plugin and do not replace =ase.io.eon=.
 That reader treats leftover force-section lines after the coordinate parse as an error.
 
-H5MD is the structured particle container in this journal \cite{deBuylH5MDStructuredEfficient2014}.
+H5MD is the structured particle container in this journal \cite{buylH5mdStructuredEfficient2014}.
 It can carry per-particle mass, force, velocity, SI unit attributes, and an observables tree.
 It has no explicit per-axis freeze mask and no type-grouped atom-index recovery.
 The equal-geometry timings below treat H5MD as a peer load path, not as ``MD tape.''
@@ -164,7 +164,7 @@ LAMMPS =dump custom= can store ids and optional forces on one row \cite{thompson
 It does not store a spec-versioned constraint bitmask and does not require type-grouped blocks.
 Atomsk converts among many crystal and MD formats and does not read or write eOn CON \cite{hirelAtomskToolManipulating2015}.
 chemfiles is the optional ingress library \cite{frauxChemfiles2023}: it opens many formats; this paper measures XYZ\(\to\)\texttt{ConFrame}.
-MDAnalysis is used only as the H5MD Python API in the wall-time table \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMDAnalysisPythonPackage2016}; MDTraj is not timed \cite{mcgibbonMDTrajModernOpen2015}.
+MDAnalysis is used only as the H5MD Python API in the wall-time table \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMdanalysisPythonPackage2016}; MDTraj is not timed \cite{mcgibbonMdtrajModernOpen2015}.
 An optional metatensor export copies four \texttt{TensorBlock}s (positions, velocities, forces, per-atom energies) \cite{bigiMetatensorMetatomicFoundational2026}; it is not a TensorMap or metatomic \texttt{System} path.
 
 * The CON format
@@ -246,7 +246,7 @@ Leftover force-section lines are an error in that reader, so the timed file is c
 
 On this identical-frame concatenation, =CON.gz= (gzip of the text CON) is $0.86\times$ the positions-only H5MD file and =CON.zst= is $0.065\times$.
 Those sizes are for this blob. They do not state a general rare-event law. h5py is faster because it loads a coordinate array.
-MDAnalysis H5MD cost is the Python API \cite{gowersMDAnalysisPythonPackage2016}.
+MDAnalysis H5MD cost is the Python API \cite{gowersMdanalysisPythonPackage2016}.
 Chemfiles ingress is a different payload: lean XYZ has no constraint mask \cite{frauxChemfiles2023}.
 The table reports them together so the payloads stay visible.
 
@@ -333,7 +333,7 @@ Julia =Project.toml= and the Fortran fpm package live in this repository and bin
 CMake FetchContent and the in-tree Meson wrap-file point at the slim cxx tarball on the matching GitHub Release.
 Cite the software through =CITATION.cff= \cite{smithSoftwareCitationPrinciples2016}.
 The freeze tag is the \texttt{v0.14.9} GitHub Release.
-The software archive series is \texttt{10.5281/zenodo.18753567} \cite{goswamiReadconcore01472026}.
+The software archive series is \texttt{10.5281/zenodo.18753567} \cite{goswamiReadconcoreConConvel2026}.
 This manuscript does not invent a paper DOI.
 
 \bibliographystyle{elsarticle-num}
