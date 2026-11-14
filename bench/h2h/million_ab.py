@@ -41,11 +41,13 @@ def _release_python(label: str, env_name: str) -> str:
     raise SystemExit(f"set {env_name} to the {label} interpreter")
 
 
-BUILDS = (
-    ("head", sys.executable),
-    ("v0.23.2", _release_python("v0.23.2", "READCON_PYTHON_0232")),
-    ("v0.23.0", _release_python("v0.23.0", "READCON_PYTHON_0230")),
-)
+def builds() -> list[tuple[str, str]]:
+    """Head plus the two released interpreters. Resolved when a run starts."""
+    return [
+        ("head", sys.executable),
+        ("v0.23.2", _release_python("v0.23.2", "READCON_PYTHON_0232")),
+        ("v0.23.0", _release_python("v0.23.0", "READCON_PYTHON_0230")),
+    ]
 
 WORKER = r"""
 import json, sys, time
@@ -210,21 +212,31 @@ def main() -> None:
                 f"ratio head/{row['build']} {row['format']} {row['op']} "
                 f"{row['head_over_this']:.3f}"
             )
-    payload = {
-        "head": head,
-        "readcon_version": readcon.__version__,
-        "host": host,
-        "rows": rows,
-        "lines": lines,
-    }
+    payload = session_record(head, readcon.__version__, host, rows, lines)
     (out / "ab.json").write_text(json.dumps(payload, indent=2) + "\n")
     (out / "ab.log").write_text("\n".join(lines) + "\n")
     print("wrote", out / "ab.json", flush=True)
 
 
+def session_record(
+    head: str, version: str, host: dict, rows: list, lines: list
+) -> dict:
+    """The ab.json document. ``readcon_version`` is the head interpreter."""
+    if not version:
+        raise SystemExit("readcon_version is empty")
+    return {
+        "head": head,
+        "readcon_version": version,
+        "host": host,
+        "rows": rows,
+        "lines": lines,
+    }
+
+
 def builds_rotated(index: int) -> list[tuple[str, str]]:
-    step = index % len(BUILDS)
-    return list(BUILDS[step:]) + list(BUILDS[:step])
+    found = builds()
+    step = index % len(found)
+    return found[step:] + found[:step]
 
 
 if __name__ == "__main__":
