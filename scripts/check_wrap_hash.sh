@@ -71,11 +71,19 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
   if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     remote="$(git remote get-url origin 2>/dev/null || true)"
     if [[ -n "$remote" ]]; then
-      peeled="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}^{}" | awk 'NR==1 {print $1}')"
-      if [[ -z "$peeled" ]]; then
-        peeled="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}" | awk 'NR==1 {print $1}')"
+      if ! peeled_out="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}^{}")"; then
+        die "could not list refs/tags/v${cargo_ver} on ${remote}"
+        peeled_out=""
       fi
-      if [[ -z "$peeled" ]]; then
+      peeled="$(printf '%s\n' "$peeled_out" | awk 'NR==1 {print $1}')"
+      if [[ -z "$peeled" && "$fail" -eq 0 ]]; then
+        if ! peeled_out="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}")"; then
+          die "could not list refs/tags/v${cargo_ver} on ${remote}"
+          peeled_out=""
+        fi
+        peeled="$(printf '%s\n' "$peeled_out" | awk 'NR==1 {print $1}')"
+      fi
+      if [[ -z "$peeled" && "$fail" -eq 0 ]]; then
         ok "v${cargo_ver} is not published; the wrap hash is the archive this tree will upload"
         compare_live=0
       fi
