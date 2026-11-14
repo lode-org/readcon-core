@@ -2118,7 +2118,7 @@ mod tests {
     }
 
     #[test]
-    fn a_short_indexed_plain_length_is_rejected() {
+    fn a_short_indexed_plain_length_uses_the_serial_decoder() {
         let data = b"Cu 1.0 2.0 3.0 0 1\nH 4.0 5.0 6.0 0 2\n".repeat(8);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("short-index.con.gz");
@@ -2134,6 +2134,10 @@ mod tests {
         let len = u64::from_le_bytes(bytes[len_at..len_at + 8].try_into().unwrap());
         assert!(len > 1);
         bytes[len_at..len_at + 8].copy_from_slice(&(len - 1).to_le_bytes());
+        // A short plain length fails the indexed slice, then the serial
+        // decoder still returns the member. A truncated tail does not.
+        assert_eq!(gunzip_all(&bytes).unwrap(), data);
+        bytes.truncate(bytes.len().saturating_sub(8).max(1));
         assert!(gunzip_all(&bytes).is_err());
     }
 

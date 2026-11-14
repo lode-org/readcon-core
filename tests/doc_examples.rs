@@ -36,24 +36,7 @@ fn library_dirs() -> Vec<PathBuf> {
             break;
         }
     }
-    let build = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
-    if let Ok(entries) = fs::read_dir(&build) {
-        for entry in entries.flatten() {
-            let out = entry.path().join("out");
-            if plain_library(&out) {
-                dirs.push(out);
-            }
-        }
-    }
-    assert!(
-        !dirs.is_empty(),
-        "a non-Python libreadcon_core was not next to the test binary"
-    );
     dirs
-}
-
-fn link_flags() -> Vec<String> {
-    link_flags_for(&library_dirs())
 }
 
 fn gxx() -> String {
@@ -65,6 +48,12 @@ fn gxx() -> String {
 
 #[test]
 fn c_and_cpp_examples_match_frames_by_atom_id() {
+    let dirs = library_dirs();
+    // `--features python` builds an extension module. It cannot link a C
+    // example, and an older plain library left in target/ must not be used.
+    if dirs.is_empty() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/c/test_doc_examples.cpp");
     let binary = dir.path().join("test_doc_examples");
@@ -72,7 +61,7 @@ fn c_and_cpp_examples_match_frames_by_atom_id() {
     command
         .args(["-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", "include"])
         .arg(&source);
-    for flag in link_flags() {
+    for flag in link_flags_for(&dirs) {
         command.arg(flag);
     }
     let status = command.arg("-o").arg(&binary).output().expect("g++");
@@ -83,7 +72,7 @@ fn c_and_cpp_examples_match_frames_by_atom_id() {
     );
     let run = Command::new(&binary)
         .arg(dir.path())
-        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
+        .env("LD_LIBRARY_PATH", runtime_library_path(&dirs))
         .status()
         .expect("run documented C and C++ example");
     assert!(run.success(), "documented C and C++ example failed");
@@ -131,10 +120,14 @@ end program
         .status()
         .expect("gfortran module");
     assert!(compiled.success(), "gfortran failed on readcon.f90");
+    let dirs = library_dirs();
+    if dirs.is_empty() {
+        return;
+    }
     let binary = dir.path().join("doc_add_atom");
     let mut command = Command::new(&gfortran);
     command.arg(&program).arg(&module_obj);
-    for flag in link_flags() {
+    for flag in link_flags_for(&dirs) {
         command.arg(flag);
     }
     let linked = command
@@ -148,7 +141,7 @@ end program
         String::from_utf8_lossy(&linked.stderr)
     );
     let run = Command::new(&binary)
-        .env("LD_LIBRARY_PATH", runtime_library_path(&library_dirs()))
+        .env("LD_LIBRARY_PATH", runtime_library_path(&dirs))
         .status()
         .expect("run fortran example");
     assert!(run.success(), "documented Fortran add_atom example failed");

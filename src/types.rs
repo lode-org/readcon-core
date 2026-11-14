@@ -4686,6 +4686,9 @@ mod tests {
     #[cfg(feature = "cuda")]
     #[test]
     fn frame_positions_as_dlpack_cuda_h2d() {
+        if crate::cuda_array::cuda_device_count().is_err() {
+            return;
+        }
         let mut b = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         b.add_atom("H", 1.0, 2.0, 3.0, [false; 3], 0, 1.0);
         b.add_atom("O", 4.0, 5.0, 6.0, [false; 3], 0, 16.0);

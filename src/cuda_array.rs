@@ -17,6 +17,20 @@ fn map_cuda(e: DriverError) -> ParseError {
     ParseError::ValidationError(format!("CUDA driver error: {e:?}"))
 }
 
+/// `CudaDevice::new` panics when `libcuda.so` is absent. That panic aborts
+/// an `extern "C"` caller, so the probe and the allocators catch it.
+fn open_device(device_id: i32) -> Result<Arc<CudaDevice>, ParseError> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        CudaDevice::new(device_id as usize)
+    })) {
+        Ok(Ok(dev)) => Ok(dev),
+        Ok(Err(err)) => Err(map_cuda(err)),
+        Err(_) => Err(ParseError::ValidationError(
+            "CUDA driver library is not available".into(),
+        )),
+    }
+}
+
 /// CUDA-resident f64 buffer owned via `cuMemAlloc` (cudarc `CudaSlice`).
 pub struct CudaF64Array {
     shape: Vec<usize>,
@@ -31,7 +45,7 @@ impl CudaF64Array {
     /// Allocate zeros on `device_id` (must match `DLDevice::cuda(device_id)`).
     pub fn alloc_zeros(shape: &[usize], device_id: i32) -> Result<Self, ParseError> {
         let n: usize = shape.iter().product();
-        let dev = CudaDevice::new(device_id as usize).map_err(map_cuda)?;
+        let dev = open_device(device_id)?;
         let slice = if n == 0 {
             // cudarc may not like zero-length; allocate 1 element and track n=0
             dev.alloc_zeros::<f64>(1).map_err(map_cuda)?
@@ -252,11 +266,9 @@ pub fn export_host_f64_as_cuda_dlpack(
 
 /// True if at least one CUDA device is visible.
 pub fn cuda_device_count() -> Result<usize, ParseError> {
-    // Probe device 0; if it fails, report zero.
-    match CudaDevice::new(0) {
-        Ok(_) => Ok(1), // cudarc 0.13 may not expose count easily; at least one works
-        Err(e) => Err(map_cuda(e)),
-    }
+    // Probe device 0. cudarc 0.13 does not expose a device count, so one
+    // successful open means at least that device is usable.
+    open_device(0).map(|_| 1)
 }
 
 #[cfg(test)]
@@ -266,6 +278,9 @@ mod tests {
 
     #[test]
     fn cuda_allocate_export_roundtrip_values() {
+        if cuda_device_count().is_err() {
+            return;
+        }
         let shape = [2usize, 3];
         let host_in: Vec<f64> = (0..6).map(|i| (i as f64) + 0.5).collect();
         let arr = CudaF64Array::from_host(&shape, &host_in, 0).expect("cuda from_host");
@@ -297,6 +312,9 @@ mod tests {
 
     #[test]
     fn cuda_alloc_zeros_via_public_allocate() {
+        if cuda_device_count().is_err() {
+            return;
+        }
         let a = allocate_cuda_f64(&[4, 3], 0).expect("allocate_cuda_f64");
         assert_eq!(a.device(), DLDevice::cuda(0));
         let t = a

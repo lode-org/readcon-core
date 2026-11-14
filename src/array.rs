@@ -413,6 +413,9 @@ mod tests {
     #[cfg(feature = "cuda")]
     #[test]
     fn allocate_cuda_succeeds_with_feature() {
+        if crate::cuda_array::cuda_device_count().is_err() {
+            return;
+        }
         let a = allocate_array_on_device(&[2, 3], DLDevice::cuda(0))
             .expect("CUDA allocate must succeed with --features cuda and a driver");
         assert_eq!(a.device(), DLDevice::cuda(0));
