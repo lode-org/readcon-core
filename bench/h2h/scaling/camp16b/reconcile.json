@@ -1,0 +1,51 @@
+{
+  "camp14_tmpfs_threads_t8_s": 0.1515,
+  "camp15_reported_t8_s": 0.213,
+  "explanation": "camp15 timed READCON_PROBE_OUT under /tmp, which is the root ext4 disk. camp14's 0.1515 s row wrote to /dev/shm. Same 64000-frame cuh2 file, same 8-thread scale_probe.",
+  "rows": [
+    {
+      "dest": "tmpfs",
+      "frames": 64000,
+      "bytes": 1073344000,
+      "workers": 8,
+      "median_s": 0.144592,
+      "iqr_s": 0.0007789999999999742,
+      "samples_s": [
+        0.143652,
+        0.145299,
+        0.144591,
+        0.144295,
+        0.144459,
+        0.144927,
+        0.143779,
+        0.144593,
+        0.144999,
+        0.145533,
+        0.144684,
+        0.142833
+      ]
+    },
+    {
+      "dest": "ext4",
+      "frames": 64000,
+      "bytes": 1073344000,
+      "workers": 8,
+      "median_s": 0.20992650000000002,
+      "iqr_s": 0.008732249999999997,
+      "samples_s": [
+        0.204521,
+        0.213934,
+        0.203615,
+        0.214987,
+        0.203687,
+        0.212324,
+        0.215648,
+        0.205669,
+        0.214655,
+        0.207529,
+        0.213812,
+        0.206923
+      ]
+    }
+  ]
+}
