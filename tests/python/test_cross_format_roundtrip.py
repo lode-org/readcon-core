@@ -22,7 +22,9 @@ import cross_format
 def test_cross_format_roundtrip(tmp_path: Path) -> None:
     rows, notes = cross_format.roundtrip_report(tmp_path, n_atoms=4, n_frames=2)
     assert any("no native CON format" in note for note in notes)
-    expected = {arm["id"] for arm in cross_format.arm_table(4)[0]}
+    expected = {
+        arm["id"] for arm in cross_format.arm_table(4)[0] if not arm.get("one_model")
+    }
     missing = expected - {row["arm"] for row in rows}
     assert not missing, (sorted(missing), notes)
     for row in rows:
@@ -122,6 +124,35 @@ def test_every_arm_names_the_write_clock() -> None:
     for arm in arms:
         assert arm["notes"].startswith("Clock: ") or " Clock: " in f" {arm['notes']}"
         assert cross_format.write_clock(arm["id"]) in arm["notes"]
+
+
+def test_mmcif_reader_is_one_model(tmp_path: Path) -> None:
+    arms, notes = cross_format.arm_table(4)
+    row = next((arm for arm in arms if arm["id"] == "mda-mmcif"), None)
+    if row is None:
+        assert any("mda-mmcif omitted" in note for note in notes)
+        return
+    assert row["one_model"] is True
+    assert row["no_writer"] is True
+    spec = cross_format.make_spec(4, 1)
+    path = cross_format.convert_arm("mda-mmcif", spec, tmp_path)
+    got = cross_format.read_arm("mda-mmcif", os.fspath(path))
+    checked = cross_format.audit(spec, got, row["precision"])
+    assert checked["position_error"] <= row["precision"], checked
+
+
+def test_extxyz_ng_reads_the_same_extended_xyz(tmp_path: Path) -> None:
+    arms, notes = cross_format.arm_table(4)
+    row = next((arm for arm in arms if arm["id"] == "extxyz-ng"), None)
+    if row is None:
+        assert any("extxyz-ng 0.0.2 was not added" in note for note in notes)
+        return
+    assert row["no_writer"] is True
+    spec = cross_format.make_spec(4, 2)
+    path = cross_format.convert_arm("extxyz-ng", spec, tmp_path)
+    got = cross_format.read_arm("extxyz-ng", os.fspath(path))
+    checked = cross_format.audit(spec, got, row["precision"])
+    assert checked["position_error"] <= row["precision"], checked
 
 
 def test_pdb_above_serial_is_reported() -> None:

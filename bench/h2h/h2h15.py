@@ -627,6 +627,11 @@ def run(out: Path, repeats: int = 12) -> None:
     payload["mdcompress_commit"] = MDC_COMMIT
     payload["chemfiles_012_version"] = CF012_VERSION
     payload["chemfiles_012_commit"] = CF012_COMMIT
+    versions = dict(payload.get("versions") or {})
+    versions["chemfiles-0.12.0-dev"] = f"{CF012_VERSION} {CF012_COMMIT}"
+    versions["mdcompress-tag"] = MDC_TAG
+    versions["mdcompress-commit"] = MDC_COMMIT
+    payload["versions"] = versions
     notes = list(payload.get("notes") or [])
     notes.append(
         "Every row in this directory was measured by bench/h2h/h2h15.py "
@@ -684,6 +689,16 @@ def run(out: Path, repeats: int = 12) -> None:
                 "MDCompress 2.0.5 times DCD as mdcompress-mdc and XTC as mdcompress-xtc.",
                 "chemfiles-dcd is 0.10.4. chemfiles-dcd-012 is 0.12.0-dev at fc1e930.",
                 "The Drops column names the DCD interval unit.",
+                "versions " + json.dumps(payload["versions"], sort_keys=True),
+                (
+                    "OVITO is 3.17.2. MDAnalysis is 2.11.0, with H5MD and the "
+                    "mmCIF reader where that reader imports."
+                ),
+                (
+                    "extxyz-ng 0.0.2 is a read arm only when its wheel sits in "
+                    "its own prefix. A default install replaces extxyz 0.4.6, "
+                    "and that install is not used."
+                ),
                 "",
             ]
         ),
