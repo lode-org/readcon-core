@@ -686,7 +686,9 @@ def weak(paths: dict[str, Path]) -> None:
         # whose frame count is per * ranks.
         sized = WORK / "thread-reads" / f"weak-cuh2-x{ranks}.con"
         if not sized.exists():
-            write_distinct_copies(sized, fixture.read_text(encoding="utf-8"), per * ranks)
+            write_distinct_copies(
+                sized, fixture.read_text(encoding="utf-8"), per * ranks
+            )
         run(
             [
                 "mpirun",
