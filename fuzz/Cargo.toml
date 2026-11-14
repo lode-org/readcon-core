@@ -192,3 +192,38 @@ path = "fuzz_targets/writer_conbin.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "ffi-misuse"
+path = "fuzz_targets/ffi_misuse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "py-readers"
+path = "fuzz_targets/py_readers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mmap-truncated"
+path = "fuzz_targets/mmap_truncated.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "chemfiles-odd"
+path = "fuzz_targets/chemfiles_odd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "diff-encodings"
+path = "fuzz_targets/diff_encodings.rs"
+test = false
+doc = false
+bench = false
