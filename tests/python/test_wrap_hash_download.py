@@ -9,4 +9,5 @@ SCRIPT = ROOT / "scripts" / "check_wrap_hash.sh"
 def test_a_failed_asset_download_is_not_success() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     assert "could not be downloaded" in text
+    assert "could not list refs/tags" in text
     assert "not published yet" not in text
