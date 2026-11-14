@@ -19,6 +19,8 @@
 # from the host triple. --prefix skips cargo and copies an existing install.
 # --no-build refuses to invoke cargo (uses --prefix or $root/target/release).
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 usage() {
     echo "usage: $0 OUTPUT_DIR [--root DIR] [--target TRIPLE] [--features FEATS] [--prefix DIR] [--no-build]" >&2
@@ -141,7 +143,7 @@ if [[ -z "$FEATURES" ]]; then
 fi
 
 ARCHIVE_NAME="readcon-core-clib-${VERSION}-${TARGET}"
-TMP_DIR="$(mktemp -d)"
+TMP_DIR="$(scratch_dir)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 DEST="${TMP_DIR}/${ARCHIVE_NAME}"

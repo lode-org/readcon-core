@@ -19,6 +19,8 @@
 # A workflow_dispatch backfill checks the tag out in one directory and
 # runs this script from a newer commit.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 if [[ $# -lt 1 ]]; then
     echo "usage: $0 OUTPUT_DIR [--vendor] [--source-root DIR]" >&2
@@ -86,7 +88,7 @@ fi
 SOURCE_DATE_EPOCH="$(bash "$SCRIPT_DIR/source-date-epoch.sh" "$ROOT_DIR")"
 export SOURCE_DATE_EPOCH
 
-TMP_DIR="$(mktemp -d)"
+TMP_DIR="$(scratch_dir)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 DEST="${TMP_DIR}/${ARCHIVE_NAME}"

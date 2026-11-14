@@ -10,6 +10,8 @@
 # otherwise HEAD. It is saved next to the digest. Later package-cxx.sh
 # runs read that pin, including a shallow CI checkout of the tagged commit.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -18,7 +20,7 @@ epoch="$(bash "$ROOT/scripts/source-date-epoch.sh" --fresh "$ROOT")"
 printf '%s\n' "$epoch" > "$ROOT/packaging/wrapdb/source-date-epoch"
 export SOURCE_DATE_EPOCH="$epoch"
 
-out="$(mktemp -d)"
+out="$(scratch_dir)"
 trap 'rm -rf "$out"' EXIT
 bash "$ROOT/scripts/package-cxx.sh" "$out"
 

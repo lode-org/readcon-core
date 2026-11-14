@@ -3,6 +3,8 @@
 # the published cxx tarball SHA used in the wrap file and consumer docs.
 # Does not compile. Run from the repository root.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
 
@@ -79,7 +81,7 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
       fi
     fi
   fi
-  asset="$(mktemp)"
+  asset="$(scratch_file)"
   if [[ "$compare_live" -eq 0 ]]; then
     rm -f "$asset"
   elif curl -fsSL "$source_url" -o "$asset"; then

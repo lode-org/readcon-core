@@ -52,7 +52,8 @@ jobs:
             # as its own job, so MPI_Comm_size is 1 (Launchpad 2072338).
             # 4.2.0-5.1 links the PMI server back in. It is newer than the
             # archive package, so apt upgrades rather than the other way.
-            tmp=$(mktemp -d)
+            tmp="${RUNNER_TEMP}/mpich-${RANDOM}"
+            mkdir -p "$tmp"
             base=https://launchpad.net/ubuntu/+source/mpich/4.2.0-5.1/+build/28285882/+files
             declare -A sums=(
               [libmpich12_4.2.0-5.1_amd64.deb]=13a233b7dd6d8a51eccf58d981cdb1ae110b673e4dfdeb607fe439918340238f

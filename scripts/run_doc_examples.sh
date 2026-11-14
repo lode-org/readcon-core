@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build the library and run the Python and C examples in tests/doc_examples.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -11,7 +13,7 @@ cargo test --release --test doc_release_notes -- --test-threads=1
 lib="$ROOT/target/release"
 export LD_LIBRARY_PATH="${lib}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-work="$(mktemp -d)"
+work="$(scratch_dir)"
 trap 'rm -rf "$work"' EXIT
 
 shopt -s nullglob

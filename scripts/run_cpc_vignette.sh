@@ -2,6 +2,8 @@
 # CPC Applications vignette: print neb_band.con, lock the TSV, optional
 # readcon-db ingest + neb_bead select.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CON="$ROOT/resources/examples/neb_band.con"
 TSV="$ROOT/resources/examples/neb_band.tsv"
@@ -23,7 +25,7 @@ for line in got[1:]:
 PY
 
 if command -v readcon-db >/dev/null 2>&1; then
-  tmp=$(mktemp -d)
+  tmp=$(scratch_dir)
   trap 'rm -rf "$tmp"' EXIT
   readcon-db ingest "$tmp" "$CON"
   echo "OK ingest $CON"

@@ -16,6 +16,8 @@
 # cargo-dist creates the Release in a different workflow. A backfill omits
 # --wait and fails when the release is missing.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 tag=""
 wait_for=0
@@ -197,7 +199,7 @@ for asset in "$@"; do
     continue
   fi
   if [ "$state" = "NODIGEST" ]; then
-    tmp=$(mktemp -d)
+    tmp=$(scratch_dir)
     gh release download "$tag" --repo "$repo" --pattern "$base" --dir "$tmp"
     state="sha256:$(sha256_file "$tmp/$base")"
     rm -rf "$tmp"
