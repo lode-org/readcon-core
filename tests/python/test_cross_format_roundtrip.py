@@ -7,6 +7,8 @@ hold the structure is skipped with a reason, not given a fake pass.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -80,6 +82,26 @@ def test_chemfiles_con_has_no_writer() -> None:
     row = next(arm for arm in arms if arm["id"] == "chemfiles-con")
     assert row["no_writer"] is True
     assert "no CON format" in row["notes"]
+
+
+def test_a_fresh_process_finds_the_mdcompress_reader(tmp_path: Path) -> None:
+    if cross_format._mdcompress_tools() is None:
+        return
+    spec = cross_format.make_spec(4, 2)
+    path = cross_format.convert_arm("mdcompress-mdc", spec, tmp_path)
+    root = Path(__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.pop("MDCOMPRESS_PYTHON", None)
+    code = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0, {str(root / 'bench' / 'h2h')!r})\n"
+        "import cross_format\n"
+        f"got = cross_format.read_mdcompress({str(path)!r})\n"
+        "assert got['positions'].shape == (2, 4, 3), got['positions'].shape\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, env=env, cwd=root)
 
 
 def test_pdb_above_serial_is_reported() -> None:
