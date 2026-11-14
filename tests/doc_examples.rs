@@ -36,7 +36,34 @@ fn library_dirs() -> Vec<PathBuf> {
             break;
         }
     }
+    // A non-Python build can leave the plain cdylib in the build-script
+    // out directory. A Python build must not pick up an older plain library
+    // from that tree.
+    if !cfg!(feature = "python") {
+        let build =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
+        if let Ok(entries) = fs::read_dir(&build) {
+            for entry in entries.flatten() {
+                let out = entry.path().join("out");
+                if plain_library(&out) {
+                    dirs.push(out);
+                }
+            }
+        }
+    }
     dirs
+}
+
+fn example_libraries() -> Option<Vec<PathBuf>> {
+    let dirs = library_dirs();
+    if cfg!(feature = "python") && dirs.is_empty() {
+        return None;
+    }
+    assert!(
+        !dirs.is_empty(),
+        "a non-Python libreadcon_core was not next to the test binary"
+    );
+    Some(dirs)
 }
 
 fn gxx() -> String {
@@ -48,12 +75,9 @@ fn gxx() -> String {
 
 #[test]
 fn c_and_cpp_examples_match_frames_by_atom_id() {
-    let dirs = library_dirs();
-    // `--features python` builds an extension module. It cannot link a C
-    // example, and an older plain library left in target/ must not be used.
-    if dirs.is_empty() {
+    let Some(dirs) = example_libraries() else {
         return;
-    }
+    };
     let dir = tempfile::tempdir().unwrap();
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/c/test_doc_examples.cpp");
     let binary = dir.path().join("test_doc_examples");
@@ -80,6 +104,9 @@ fn c_and_cpp_examples_match_frames_by_atom_id() {
 
 #[test]
 fn fortran_add_atom_example_links() {
+    let Some(dirs) = example_libraries() else {
+        return;
+    };
     let gfortran = std::env::var("FC").unwrap_or_else(|_| "gfortran".to_string());
     if Command::new(&gfortran).arg("--version").status().is_err() {
         panic!("{gfortran} is required to compile the Fortran example");
@@ -120,10 +147,6 @@ end program
         .status()
         .expect("gfortran module");
     assert!(compiled.success(), "gfortran failed on readcon.f90");
-    let dirs = library_dirs();
-    if dirs.is_empty() {
-        return;
-    }
     let binary = dir.path().join("doc_add_atom");
     let mut command = Command::new(&gfortran);
     command.arg(&program).arg(&module_obj);
