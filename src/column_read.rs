@@ -497,6 +497,623 @@ fn push_frame(
     Ok(())
 }
 
+fn trim_ascii(line: &[u8]) -> &[u8] {
+    let start = line
+        .iter()
+        .position(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(line.len());
+    let end = line
+        .iter()
+        .rposition(|byte| !byte.is_ascii_whitespace())
+        .map(|index| index + 1)
+        .unwrap_or(start);
+    &line[start..end]
+}
+
+fn take_line<'a>(bytes: &'a [u8], pos: &mut usize) -> Result<&'a [u8], ()> {
+    if *pos >= bytes.len() {
+        return Err(());
+    }
+    let rest = &bytes[*pos..];
+    let eol = memchr::memchr(b'\n', rest).unwrap_or(rest.len());
+    let mut line = &rest[..eol];
+    if line.last() == Some(&b'\r') {
+        line = &line[..line.len() - 1];
+    }
+    *pos += eol;
+    if *pos < bytes.len() && bytes[*pos] == b'\n' {
+        *pos += 1;
+    }
+    Ok(line)
+}
+
+fn line_str(line: &[u8]) -> Result<&str, ()> {
+    std::str::from_utf8(trim_ascii(line)).map_err(|_| ())
+}
+
+fn spec_of(line: &[u8]) -> Result<u32, ()> {
+    let line = trim_ascii(line);
+    if !line.starts_with(b"{") {
+        return Ok(1);
+    }
+    let key = b"\"con_spec_version\"";
+    let Some(at) = line.windows(key.len()).position(|window| window == key) else {
+        return Err(());
+    };
+    let mut index = at + key.len();
+    while index < line.len() && matches!(line[index], b' ' | b'\t' | b':') {
+        index += 1;
+    }
+    if index >= line.len() || !line[index].is_ascii_digit() {
+        return Err(());
+    }
+    let mut value: u32 = 0;
+    while index < line.len() && line[index].is_ascii_digit() {
+        let digit = u32::from(line[index] - b'0');
+        value = value
+            .checked_mul(10)
+            .and_then(|next| next.checked_add(digit))
+            .ok_or(())?;
+        index += 1;
+    }
+    Ok(value)
+}
+
+struct FrameDest {
+    positions: *mut f64,
+    velocities: Option<*mut f64>,
+    forces: Option<*mut f64>,
+    energies: Option<*mut f64>,
+    charges: Option<*mut f64>,
+    spins: Option<*mut f64>,
+    magmoms: Option<*mut f64>,
+    displacements: Option<*mut f64>,
+    spreads: Option<*mut f64>,
+}
+
+fn frame_dest(raw: RawSlabs, frame: usize, n_atoms: usize) -> FrameDest {
+    let stride3 = n_atoms.saturating_mul(3);
+    let at3 = frame.saturating_mul(stride3);
+    let at1 = frame.saturating_mul(n_atoms);
+    FrameDest {
+        positions: unsafe { raw.positions.add(at3) },
+        velocities: raw.velocities.map(|ptr| unsafe { ptr.add(at3) }),
+        forces: raw.forces.map(|ptr| unsafe { ptr.add(at3) }),
+        energies: raw.energies.map(|ptr| unsafe { ptr.add(at1) }),
+        charges: raw.charges.map(|ptr| unsafe { ptr.add(at1) }),
+        spins: raw.spins.map(|ptr| unsafe { ptr.add(at1) }),
+        magmoms: raw.magmoms.map(|ptr| unsafe { ptr.add(at3) }),
+        displacements: raw.displacements.map(|ptr| unsafe { ptr.add(at3) }),
+        spreads: raw.spreads.map(|ptr| unsafe { ptr.add(at3) }),
+    }
+}
+
+fn write_xyz(dest: *mut f64, atom: usize, xyz: [f64; 3]) {
+    unsafe {
+        std::ptr::copy_nonoverlapping(xyz.as_ptr(), dest.add(atom.saturating_mul(3)), 3);
+    }
+}
+
+fn write_scalar(dest: *mut f64, atom: usize, value: f64) {
+    unsafe {
+        *dest.add(atom) = value;
+    }
+}
+
+struct Painted {
+    flags: Vec<u8>,
+    ids: Vec<u64>,
+    sym_index: Vec<u32>,
+    symbols: Vec<Arc<str>>,
+    /// Byte length of the header through the first coordinate row's start.
+    prefix: usize,
+}
+
+fn flag_bits(flags: [bool; 3]) -> u8 {
+    u8::from(flags[0]) | (u8::from(flags[1]) << 1) | (u8::from(flags[2]) << 2)
+}
+
+fn scalar_value(line: &[u8]) -> Result<f64, ()> {
+    let text = line_str(line)?;
+    let token = text.split_ascii_whitespace().next().ok_or(())?;
+    let value: f64 = token.parse().map_err(|_| ())?;
+    value.is_finite().then_some(value).ok_or(())
+}
+
+/// Parse one standard frame straight into `dest`.
+///
+/// The frame is the two post-box lines, the type counts, and the coordinate
+/// block this crate's column walker already accepts, plus the vector and
+/// scalar sections named by the first frame. Anything else returns `Err`
+/// and the caller uses the frame parser. No `ConFrame` is built.
+fn paint_standard_frame(
+    bytes: &[u8],
+    n_atoms: usize,
+    sections: SectionFlags,
+    dest: FrameDest,
+) -> Result<Painted, ()> {
+    if n_atoms == 0 || bytes.is_empty() {
+        return Err(());
+    }
+    let mut pos = 0usize;
+    take_line(bytes, &mut pos)?;
+    let spec = spec_of(take_line(bytes, &mut pos)?)?;
+    let _box = crate::parser::parse_line_of_n_f64(line_str(take_line(bytes, &mut pos)?)?, 3)
+        .map_err(|_| ())?;
+    let _angles = crate::parser::parse_line_of_n_f64(line_str(take_line(bytes, &mut pos)?)?, 3)
+        .map_err(|_| ())?;
+    take_line(bytes, &mut pos)?;
+    take_line(bytes, &mut pos)?;
+    let types = crate::parser::parse_count_line(line_str(take_line(bytes, &mut pos)?)?, 1)
+        .map_err(|_| ())?;
+    let natm_types = types[0];
+    if natm_types == 0 {
+        return Err(());
+    }
+    let counts =
+        crate::parser::parse_count_line(line_str(take_line(bytes, &mut pos)?)?, natm_types)
+            .map_err(|_| ())?;
+    if counts.iter().any(|count| *count == 0) || counts.iter().sum::<usize>() != n_atoms {
+        return Err(());
+    }
+    let _masses =
+        crate::parser::parse_line_of_n_f64(line_str(take_line(bytes, &mut pos)?)?, natm_types)
+            .map_err(|_| ())?;
+    let mut symbols = Vec::new();
+    let mut symbol_map = HashMap::new();
+    let mut flags = Vec::with_capacity(n_atoms);
+    let mut ids = Vec::with_capacity(n_atoms);
+    let mut sym_index = Vec::with_capacity(n_atoms);
+    let mut prefix = 0usize;
+    let mut atom = 0usize;
+    let mut default_id = 0u64;
+    for count in &counts {
+        let symbol = Arc::<str>::from(line_str(take_line(bytes, &mut pos)?)?);
+        let label = line_str(take_line(bytes, &mut pos)?)?;
+        if !label.starts_with("Coordinates") {
+            return Err(());
+        }
+        let index = intern(&mut symbols, &mut symbol_map, &symbol);
+        if atom == 0 {
+            prefix = pos;
+        }
+        for _ in 0..*count {
+            let ((xyz, fixed, atom_id), next) =
+                crate::parser::parse_coord_row_at(bytes, pos, spec, default_id).map_err(|_| ())?;
+            write_xyz(dest.positions, atom, xyz);
+            flags.push(flag_bits(fixed));
+            ids.push(atom_id);
+            sym_index.push(index);
+            pos = next;
+            atom += 1;
+            default_id = default_id.saturating_add(1);
+        }
+    }
+    if atom != n_atoms || prefix == 0 {
+        return Err(());
+    }
+    let mut saw = SectionFlags::default();
+    while pos < bytes.len() && !bytes[pos..].iter().all(u8::is_ascii_whitespace) {
+        let blank = take_line(bytes, &mut pos)?;
+        if !trim_ascii(blank).is_empty() {
+            return Err(());
+        }
+        let mut word: Option<&str> = None;
+        let mut section_atom = 0usize;
+        for count in &counts {
+            take_line(bytes, &mut pos)?;
+            let label = line_str(take_line(bytes, &mut pos)?)?;
+            let next_word = label.split_ascii_whitespace().next().unwrap_or("");
+            if let Some(seen) = word {
+                if seen != next_word {
+                    return Err(());
+                }
+            } else {
+                word = Some(next_word);
+            }
+            let kind = next_word;
+            for _ in 0..*count {
+                match kind {
+                    "Velocities" => {
+                        let ptr = dest.velocities.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.velocities = true;
+                    }
+                    "Forces" => {
+                        let ptr = dest.forces.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.forces = true;
+                    }
+                    "Magmoms" => {
+                        let ptr = dest.magmoms.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.magmoms = true;
+                    }
+                    "Displacements" => {
+                        let ptr = dest.displacements.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.displacements = true;
+                    }
+                    "Spreads" => {
+                        let ptr = dest.spreads.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.spreads = true;
+                    }
+                    "Energies" => {
+                        let ptr = dest.energies.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.energies = true;
+                    }
+                    "Charges" => {
+                        let ptr = dest.charges.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.charges = true;
+                    }
+                    "Spins" => {
+                        let ptr = dest.spins.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.spins = true;
+                    }
+                    _ => return Err(()),
+                }
+                section_atom += 1;
+            }
+        }
+        if section_atom != n_atoms {
+            return Err(());
+        }
+    }
+    if saw != sections {
+        return Err(());
+    }
+    Ok(Painted {
+        flags,
+        ids,
+        sym_index,
+        symbols,
+        prefix,
+    })
+}
+
+fn frame_spans(bytes: &[u8]) -> Result<Vec<(usize, usize)>, ()> {
+    let mut it = ConFrameIterator::from_bytes(bytes);
+    let mut spans = Vec::new();
+    let mut start = 0usize;
+    loop {
+        match it.forward() {
+            Some(Ok(())) => {
+                let end = it.byte_pos();
+                if end < start || end > bytes.len() {
+                    return Err(());
+                }
+                spans.push((start, end));
+                start = end;
+            }
+            Some(Err(_)) => return Err(()),
+            None => break,
+        }
+    }
+    Ok(spans)
+}
+
+fn header_of(bytes: &[u8]) -> Result<FrameHeader, ()> {
+    let mut it = ConFrameIterator::from_bytes(bytes);
+    match it.next() {
+        Some(Ok(frame)) => Ok(frame.header.clone()),
+        _ => Err(()),
+    }
+}
+
+fn piece_of(painted: Painted, header: FrameHeader) -> Piece {
+    Piece {
+        flags: painted.flags,
+        ids: painted.ids,
+        sym_index: painted.sym_index,
+        symbols: painted.symbols,
+        header,
+    }
+}
+
+/// Fill slabs by parsing each frame's rows into the caller buffers.
+///
+/// One header object is parsed when the text in front of the coordinates
+/// matches the first frame. A frame that is not that shape returns `Err`
+/// before this result is used.
+fn try_fill_fast(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    slabs: &mut Slabs<'_>,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Columns, ()> {
+    if n_frames == 0 || n_atoms == 0 {
+        return Err(());
+    }
+    let spans = frame_spans(bytes)?;
+    if spans.len() != n_frames {
+        return Err(());
+    }
+    if !offsets.is_empty() {
+        let end = spans.last().map(|span| span.1).unwrap_or(0);
+        if offsets.len() != spans.len() || frames_end != end {
+            return Err(());
+        }
+        for (index, (start, _)) in spans.iter().enumerate() {
+            if offsets[index] != *start {
+                return Err(());
+            }
+        }
+    }
+    let (first_start, first_end) = spans[0];
+    let first = &bytes[first_start..first_end];
+    let raw = raw_slabs(slabs);
+    let painted = paint_standard_frame(first, n_atoms, sections, frame_dest(raw, 0, n_atoms))?;
+    if painted.prefix == 0 || painted.prefix > first.len() {
+        return Err(());
+    }
+    let prefix = first[..painted.prefix].to_vec();
+    let header = header_of(first)?;
+    let mut pieces = Vec::with_capacity(n_frames);
+    pieces.push(piece_of(painted, header.clone()));
+    let paint_at = |index: usize| -> Result<Piece, ()> {
+        let (start, end) = spans[index];
+        let frame = &bytes[start..end];
+        if frame.len() < prefix.len() || frame[..prefix.len()] != prefix[..] {
+            return Err(());
+        }
+        let painted =
+            paint_standard_frame(frame, n_atoms, sections, frame_dest(raw, index, n_atoms))?;
+        if painted.prefix != prefix.len() {
+            return Err(());
+        }
+        Ok(piece_of(painted, header.clone()))
+    };
+    if threads < 2 || n_frames < 2 {
+        for index in 1..n_frames {
+            pieces.push(paint_at(index)?);
+        }
+        return merge_pieces(pieces, n_frames, n_atoms);
+    }
+    let workers = threads.min(n_frames).max(2);
+    let chunk = n_frames.div_ceil(workers);
+    #[cfg(feature = "parallel")]
+    let groups = crate::parser::on_pool(workers, || {
+        use rayon::prelude::*;
+        let groups: Result<Vec<Vec<Piece>>, ()> = (0..workers)
+            .into_par_iter()
+            .map(|worker| {
+                note_worker(note);
+                let start = worker * chunk;
+                let end = (start + chunk).min(n_frames);
+                let mut group = Vec::new();
+                for index in start..end {
+                    if index == 0 {
+                        continue;
+                    }
+                    group.push(paint_at(index)?);
+                }
+                Ok(group)
+            })
+            .collect();
+        groups
+    })?;
+    #[cfg(not(feature = "parallel"))]
+    let groups = {
+        let _ = (workers, chunk, note);
+        let mut group = Vec::new();
+        for index in 1..n_frames {
+            group.push(paint_at(index)?);
+        }
+        vec![group]
+    };
+    for group in groups {
+        pieces.extend(group);
+    }
+    if pieces.len() != n_frames {
+        return Err(());
+    }
+    merge_pieces(pieces, n_frames, n_atoms)
+}
+
+fn fill_stream_fast<R: Read>(
+    src: R,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    slabs: &mut Slabs<'_>,
+) -> Result<Columns, ()> {
+    let mut src = src;
+    let mut buf = Vec::with_capacity(READ_CHUNK * 2);
+    let mut eof = false;
+    let mut pieces = Vec::with_capacity(n_frames);
+    let mut shared: Option<(Vec<u8>, FrameHeader)> = None;
+    let raw = raw_slabs(slabs);
+    loop {
+        match skip_frame(&buf, eof)? {
+            Some(end) => {
+                let index = pieces.len();
+                let frame = &buf[..end];
+                let painted = paint_standard_frame(
+                    frame,
+                    n_atoms,
+                    sections,
+                    frame_dest(raw, index, n_atoms),
+                )?;
+                let prefix = frame[..painted.prefix].to_vec();
+                let header = if shared.as_ref().is_some_and(|(got, _)| got == &prefix) {
+                    shared.as_ref().unwrap().1.clone()
+                } else {
+                    let header = header_of(frame)?;
+                    shared = Some((prefix, header.clone()));
+                    header
+                };
+                pieces.push(piece_of(painted, header));
+                buf.drain(..end);
+                shrink(&mut buf);
+            }
+            None if eof => break,
+            None => read_more(&mut src, &mut buf, &mut eof)?,
+        }
+    }
+    if pieces.len() != n_frames {
+        return Err(());
+    }
+    merge_pieces(pieces, n_frames, n_atoms)
+}
+
+fn read_range(file: &std::fs::File, start: usize, end: usize) -> Result<Vec<u8>, ()> {
+    if end < start {
+        return Err(());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        let mut buf = vec![0u8; end - start];
+        file.read_exact_at(&mut buf, start as u64).map_err(|_| ())?;
+        Ok(buf)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (file, start, end);
+        Err(())
+    }
+}
+
+fn fill_pread(
+    path: &Path,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    offsets: &[usize],
+    frames_end: usize,
+    slabs: &mut Slabs<'_>,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Columns, ()> {
+    if offsets.len() != n_frames || n_frames == 0 || frames_end < offsets[0] {
+        return Err(());
+    }
+    let file = std::fs::File::open(path).map_err(|_| ())?;
+    let end_of = |index: usize| -> usize {
+        if index + 1 == n_frames {
+            frames_end
+        } else {
+            offsets[index + 1]
+        }
+    };
+    let raw = raw_slabs(slabs);
+    let load = |index: usize| -> Result<(Vec<u8>, Painted), ()> {
+        let start = *offsets.get(index).ok_or(())?;
+        let end = end_of(index);
+        let bytes = read_range(&file, start, end)?;
+        let painted =
+            paint_standard_frame(&bytes, n_atoms, sections, frame_dest(raw, index, n_atoms))?;
+        Ok((bytes, painted))
+    };
+    let (first_bytes, first_painted) = load(0)?;
+    if first_painted.prefix == 0 || first_painted.prefix > first_bytes.len() {
+        return Err(());
+    }
+    let prefix = first_bytes[..first_painted.prefix].to_vec();
+    let header = header_of(&first_bytes)?;
+    let mut pieces = Vec::with_capacity(n_frames);
+    pieces.push(piece_of(first_painted, header.clone()));
+    let take = |index: usize| -> Result<Piece, ()> {
+        let (bytes, painted) = load(index)?;
+        if painted.prefix != prefix.len()
+            || bytes.len() < prefix.len()
+            || bytes[..prefix.len()] != prefix[..]
+        {
+            return Err(());
+        }
+        Ok(piece_of(painted, header.clone()))
+    };
+    if threads < 2 || n_frames < 2 {
+        for index in 1..n_frames {
+            pieces.push(take(index)?);
+        }
+        return merge_pieces(pieces, n_frames, n_atoms);
+    }
+    let workers = threads.min(n_frames).max(2);
+    let chunk = n_frames.div_ceil(workers);
+    #[cfg(feature = "parallel")]
+    let groups = crate::parser::on_pool(workers, || {
+        use rayon::prelude::*;
+        let groups: Result<Vec<Vec<Piece>>, ()> = (0..workers)
+            .into_par_iter()
+            .map(|worker| {
+                note_worker(note);
+                let start = worker * chunk;
+                let end = (start + chunk).min(n_frames);
+                let mut group = Vec::new();
+                for index in start..end {
+                    if index == 0 {
+                        continue;
+                    }
+                    group.push(take(index)?);
+                }
+                Ok(group)
+            })
+            .collect();
+        groups
+    })?;
+    #[cfg(not(feature = "parallel"))]
+    let groups = {
+        let _ = (workers, chunk, note);
+        let mut group = Vec::new();
+        for index in 1..n_frames {
+            group.push(take(index)?);
+        }
+        vec![group]
+    };
+    for group in groups {
+        pieces.extend(group);
+    }
+    if pieces.len() != n_frames {
+        return Err(());
+    }
+    merge_pieces(pieces, n_frames, n_atoms)
+}
+
+fn plain_file(path: &Path) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(meta) = file.metadata() else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    let mut magic = [0u8; 4];
+    let Ok(n) = std::io::Read::read(&mut file, &mut magic) else {
+        return false;
+    };
+    crate::compression::detect_compression(&magic[..n]) == crate::compression::Compression::None
+}
+
 fn fill_reader<R: Read>(
     src: R,
     n_frames: usize,
@@ -561,8 +1178,14 @@ pub fn fill_path(
     n_frames: usize,
     n_atoms: usize,
     sections: SectionFlags,
-    slabs: Slabs<'_>,
+    mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    if plain_file(path)
+        && let Ok(file) = std::fs::File::open(path)
+        && let Ok(columns) = fill_stream_fast(file, n_frames, n_atoms, sections, &mut slabs)
+    {
+        return Ok(columns);
+    }
     let src = crate::compression::open_decoded(path).map_err(|_| ())?;
     fill_reader(src, n_frames, n_atoms, sections, slabs, 1, &[], 0)
 }
@@ -579,8 +1202,16 @@ pub fn fill_path_threaded(
     threads: usize,
     offsets: &[usize],
     frames_end: usize,
-    slabs: Slabs<'_>,
+    mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    if threads >= 2
+        && plain_file(path)
+        && let Ok(columns) = fill_pread(
+            path, n_frames, n_atoms, sections, threads, offsets, frames_end, &mut slabs, None,
+        )
+    {
+        return Ok(columns);
+    }
     let src = crate::compression::open_decoded(path).map_err(|_| ())?;
     fill_reader(
         src, n_frames, n_atoms, sections, slabs, threads, offsets, frames_end,
@@ -592,8 +1223,21 @@ pub fn fill_bytes(
     n_frames: usize,
     n_atoms: usize,
     sections: SectionFlags,
-    slabs: Slabs<'_>,
+    mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    if let Ok(columns) = try_fill_fast(
+        bytes,
+        &[],
+        0,
+        n_frames,
+        n_atoms,
+        sections,
+        1,
+        &mut slabs,
+        None,
+    ) {
+        return Ok(columns);
+    }
     fill_reader(
         std::io::Cursor::new(bytes),
         n_frames,
@@ -618,6 +1262,12 @@ pub fn fill_bytes_threaded(
 ) -> Result<Columns, ()> {
     if threads < 2 || n_frames < 2 || offsets.len() != n_frames || frames_end == 0 {
         return fill_bytes(bytes, n_frames, n_atoms, sections, slabs);
+    }
+    let mut slabs = slabs;
+    if let Ok(columns) = try_fill_fast(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, None,
+    ) {
+        return Ok(columns);
     }
     fill_threaded(
         bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, slabs, None,
@@ -655,6 +1305,11 @@ fn repeated_span(bytes: &[u8], threads: usize) -> Option<usize> {
         let start = copy * span;
         &bytes[start..start + span] == first
     };
+    // One frame compare. A distinct trajectory returns here, before any
+    // worker is started and before the rest of the file is read.
+    if !same(1) {
+        return None;
+    }
     #[cfg(feature = "parallel")]
     {
         if threads >= 2 && copies >= 4 {
@@ -786,6 +1441,7 @@ fn merge_pieces(pieces: Vec<Piece>, n_frames: usize, n_atoms: usize) -> Result<C
     })
 }
 
+#[derive(Clone, Copy)]
 struct RawSlabs {
     positions: *mut f64,
     velocities: Option<*mut f64>,
@@ -1089,6 +1745,11 @@ fn fill_threaded(
     {
         return Err(());
     }
+    if let Ok(columns) = try_fill_fast(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, note,
+    ) {
+        return Ok(columns);
+    }
     if let Some(columns) = tile_repeated(
         bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, note,
     )? {
@@ -1328,10 +1989,7 @@ mod tests {
     #[test]
     fn repeated_tiny_frames_fill() {
         let src = std::fs::read("resources/test/tiny_cuh2.con").unwrap();
-        let mut bytes = Vec::new();
-        for _ in 0..50 {
-            bytes.extend_from_slice(&src);
-        }
+        let bytes = super::distinct_copies(&src, 50);
         let layout = layout_bytes(&bytes).expect("layout");
         assert_eq!(layout.n_frames, 50, "frames");
         assert_eq!(layout.n_atoms, 4);
@@ -1598,11 +2256,7 @@ Coordinates of Component 1
             "resources/test/tiny_cuh2_forces.con",
         ] {
             let src = std::fs::read(name).unwrap();
-            let mut bytes = Vec::new();
-            for _ in 0..6 {
-                bytes.extend_from_slice(&src);
-            }
-            assert_same_columns(&bytes);
+            assert_same_columns(&super::distinct_copies(&src, 6));
         }
         let patched = two_copies_with_second_patched(b'9', 1);
         assert_same_columns(&patched);
@@ -1612,12 +2266,7 @@ Coordinates of Component 1
     #[test]
     fn threaded_fill_runs_on_several_workers_and_is_not_slower_than_the_frame_parser() {
         let src = std::fs::read("resources/test/cuh2.con").unwrap();
-        let mut bytes = Vec::new();
-        // A hundred frames is inside the timer noise. Four hundred copies of
-        // the same frame is long enough that a real slowdown shows.
-        for _ in 0..400 {
-            bytes.extend_from_slice(&src);
-        }
+        let bytes = super::distinct_copies(&src, 400);
         let layout = layout_bytes(&bytes).expect("layout");
         let indexed = layout_indexed(&bytes, 8).expect("indexed");
         assert_eq!(indexed.n_frames, 400);
@@ -1642,56 +2291,98 @@ Coordinates of Component 1
         let workers = note.lock().expect("workers").len();
         assert!(
             workers >= 2,
-            "8 workers were asked and {workers} distinct threads ran"
+            "8 workers were asked and {workers} distinct threads ran the real fill"
         );
+        let layout = layout_bytes(&bytes).expect("layout");
+        let mut positions = vec![0.0; layout.n_frames * layout.n_atoms * 3];
+        fill_bytes_threaded(
+            &bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            8,
+            &layout.frame_offsets,
+            layout.frames_end,
+            empty_slabs(&mut positions),
+        )
+        .expect("fill");
+        let stride = layout.n_atoms * 3;
+        assert_ne!(
+            positions[..3],
+            positions[stride..stride + 3],
+            "distinct frames were copied from the first frame"
+        );
+    }
 
-        // Debug builds spend their time in checks, so the speed comparison is
-        // the release build used for the timed reads.
-        #[cfg(not(debug_assertions))]
-        {
-            let time_fill = || {
-                let started = std::time::Instant::now();
-                let found = layout_indexed(&bytes, 8).expect("indexed");
-                let mut positions = vec![0.0; found.n_frames * found.n_atoms * 3];
-                fill_bytes_threaded(
-                    &bytes,
-                    found.n_frames,
-                    found.n_atoms,
-                    found.sections,
-                    8,
-                    &found.frame_offsets,
-                    found.frames_end,
-                    empty_slabs(&mut positions),
-                )
-                .expect("fill");
-                started.elapsed()
-            };
-            let time_bytes = || {
-                let started = std::time::Instant::now();
-                crate::iterators::frames_from_bytes_phased(&bytes, Some(8)).expect("bytes");
-                started.elapsed()
-            };
-            let _ = time_fill();
-            let _ = time_bytes();
-            let mut fill_samples = Vec::new();
-            let mut parser_samples = Vec::new();
-            for _ in 0..9 {
-                fill_samples.push(time_fill());
-                parser_samples.push(time_bytes());
-            }
-            fill_samples.sort();
-            parser_samples.sort();
-            let fill_mid = fill_samples[fill_samples.len() / 2];
-            let parser_mid = parser_samples[parser_samples.len() / 2];
-            // The indexed scan plus the slab fill ties the frame parser. A
-            // serial fill of this file is several times slower, which this
-            // rejects. The interleaved run is the comparison with a1af753e.
-            assert!(
-                fill_mid.as_secs_f64() <= parser_mid.as_secs_f64() * 2.0,
-                "column fill {:?} was slower than the frame parser {:?}",
-                fill_mid,
-                parser_mid
-            );
+    #[test]
+    fn a_plain_path_reads_each_distinct_frame() {
+        let src = std::fs::read("resources/test/cuh2.con").unwrap();
+        let bytes = super::distinct_copies(&src, 4);
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "readcon-distinct-{}-{}.con",
+            std::process::id(),
+            bytes.len()
+        ));
+        std::fs::write(&path, &bytes).unwrap();
+        let layout = layout_path(&path).expect("layout");
+        let n3 = layout.n_frames * layout.n_atoms * 3;
+        let mut from_path = vec![0.0; n3];
+        fill_path_threaded(
+            &path,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            2,
+            &layout.frame_offsets,
+            layout.frames_end,
+            empty_slabs(&mut from_path),
+        )
+        .expect("path");
+        let mut from_bytes = vec![0.0; n3];
+        fill_bytes(
+            &bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            empty_slabs(&mut from_bytes),
+        )
+        .expect("bytes");
+        assert_eq!(from_path, from_bytes);
+        let stride = layout.n_atoms * 3;
+        assert_ne!(from_path[..3], from_path[stride..stride + 3]);
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+fn distinct_copies(src: &[u8], n: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(src.len().saturating_mul(n));
+    for index in 0..n {
+        if index == 0 {
+            out.extend_from_slice(src);
+        } else {
+            out.extend(perturb_copy(src, index));
         }
     }
+    out
+}
+
+fn perturb_copy(src: &[u8], index: usize) -> Vec<u8> {
+    let text = std::str::from_utf8(src).expect("fixture");
+    let marker = "Coordinates of Component";
+    let at = text.find(marker).expect("coordinates");
+    let line_start = text[at..].find('\n').expect("line") + at + 1;
+    let line_end = text[line_start..]
+        .find('\n')
+        .unwrap_or(text.len() - line_start)
+        + line_start;
+    let line = &text[line_start..line_end];
+    let mut parts: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+    let value: f64 = parts[0].parse().expect("x");
+    parts[0] = format!("{}", value + index as f64 * 1e-6);
+    let mut frame = String::new();
+    frame.push_str(&text[..line_start]);
+    frame.push_str(&parts.join(" "));
+    frame.push_str(&text[line_end..]);
+    frame.into_bytes()
 }

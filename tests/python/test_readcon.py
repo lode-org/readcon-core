@@ -39,6 +39,30 @@ class TestReadCon:
         assert len(frames[0]) == 4
         assert len(frames[1]) == 4
 
+    def test_distinct_frames_keep_their_own_coordinates(self, tmp_path):
+        """Each frame is parsed. A repeated-file copy would report one x."""
+        with open(_resource("tiny_cuh2.con"), encoding="utf-8") as handle:
+            text = handle.read()
+        marker = "Coordinates of Component"
+        at = text.find(marker)
+        line_start = text.find("\n", at) + 1
+        line_end = text.find("\n", line_start)
+        parts0 = text[line_start:line_end].split()
+        base = float(parts0[0])
+        chunks = []
+        for index in range(4):
+            parts = list(parts0)
+            parts[0] = format(base + index * 1e-6, ".16g")
+            chunks.append(text[:line_start] + " ".join(parts) + text[line_end:])
+        path = tmp_path / "distinct.con"
+        path.write_text("".join(chunks), encoding="utf-8")
+        for n_threads in (1, 2, 8):
+            frames = readcon.read_con(str(path), n_threads=n_threads)
+            assert len(frames) == 4
+            xs = [frames[index].atoms[0].x for index in range(4)]
+            assert xs == pytest.approx([base + index * 1e-6 for index in range(4)])
+            assert len(set(round(x, 12) for x in xs)) == 4
+
     def test_read_con_n_threads_matches(self):
         path = _resource("tiny_multi_cuh2.con")
         auto = readcon.read_con(path)

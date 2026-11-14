@@ -215,6 +215,11 @@ harness = false
 name = "traj10k"
 harness = false
 
+[[bench]]
+name = "column_fill"
+harness = false
+required-features = ["parallel"]
+
 # Match release so the 10k-frame numbers are the ones a user binary gets.
 [profile.bench]
 inherits = "release"

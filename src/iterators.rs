@@ -3248,7 +3248,13 @@ fn newline_positions_at_cuts(bytes: &[u8], cuts: &[usize]) -> Vec<usize> {
 
 #[cfg(feature = "parallel")]
 fn newline_positions(bytes: &[u8], threads: usize) -> Vec<usize> {
-    newline_positions_at_cuts(bytes, &equal_cuts(bytes.len(), threads))
+    let cuts = equal_cuts(bytes.len(), threads);
+    if threads < 2 || rayon::current_thread_index().is_some() {
+        return newline_positions_at_cuts(bytes, &cuts);
+    }
+    // Inside the column pool. A bare `par_iter` would start the global
+    // pool as well, and those extra threads sat on the same cores.
+    crate::parser::on_pool(threads, || newline_positions_at_cuts(bytes, &cuts))
 }
 
 /// Worker count for a newline scan.

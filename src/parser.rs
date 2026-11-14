@@ -113,16 +113,18 @@ pub(crate) fn fill_rows_from_breaks(
 
 /// Run `body` on a pool of `workers` threads.
 ///
-/// The pool for a given size is kept for the process. Building one per
-/// call was a serial pause on the wide-frame read and the row formatter.
+/// One pool is kept. A pool per requested size, each pinned onto cores
+/// `0..size`, left the idle pools on the cores the larger pool needed, so
+/// eight threads were slower than two. The previous pool is joined before
+/// a different size is built. A call from a worker already on a pool runs
+/// `body` there instead of starting another pool.
 #[cfg(feature = "parallel")]
 pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
-    if workers < 2 {
+    if workers < 2 || rayon::current_thread_index().is_some() {
         return body();
     }
-    // The cached pool is leaked for the process. Miri rejects a thread
-    // that is still running when the test binary exits, so it builds a
-    // pool, runs `body`, and joins.
+    // Miri rejects a thread that is still running when the test binary
+    // exits, so it builds a pool, runs `body`, and joins.
     #[cfg(miri)]
     {
         return match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
@@ -132,22 +134,22 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
     }
     #[cfg(not(miri))]
     {
+        use std::sync::{Arc, Mutex, OnceLock};
+        static POOL: OnceLock<Mutex<Option<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
+        let slot = POOL.get_or_init(|| Mutex::new(None));
         let pool = {
-            use std::sync::{Mutex, OnceLock};
-            static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> =
-                OnceLock::new();
-            let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
-            let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
-            if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
-                *pool
+            let mut guard = slot.lock().unwrap_or_else(|err| err.into_inner());
+            if let Some((size, pool)) = guard.as_ref()
+                && *size == workers
+            {
+                Some(Arc::clone(pool))
             } else {
-                let next_core = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-                let built = match rayon::ThreadPoolBuilder::new()
+                // Join the previous size before the new threads exist.
+                *guard = None;
+                let next_core = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let built = rayon::ThreadPoolBuilder::new()
                     .num_threads(workers)
                     .spawn_handler(move |thread| {
-                        // One worker per physical core. Leaving the placement to
-                        // the kernel put two of these on one core and left
-                        // another idle, which is the whole 8-thread gap.
                         let core = next_core.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         std::thread::Builder::new().spawn(move || {
                             pin_worker(core);
@@ -155,17 +157,21 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
                         })?;
                         Ok(())
                     })
-                    .build()
-                {
-                    Ok(pool) => pool,
-                    Err(_) => return body(),
-                };
-                let pool: &'static rayon::ThreadPool = Box::leak(Box::new(built));
-                guard.push((workers, pool));
-                pool
+                    .build();
+                match built {
+                    Ok(pool) => {
+                        let pool = Arc::new(pool);
+                        *guard = Some((workers, Arc::clone(&pool)));
+                        Some(pool)
+                    }
+                    Err(_) => None,
+                }
             }
         };
-        pool.install(body)
+        match pool {
+            Some(pool) => pool.install(body),
+            None => body(),
+        }
     }
 }
 

@@ -3328,25 +3328,23 @@ fn read_con_columnar(
     let threads = n_threads.unwrap_or(1);
     let path_owned = path.to_owned();
     if threads >= 2 {
+        // Offsets come from the streaming layout. Each worker reads its own
+        // frame with pread, so the file is not copied into one buffer.
         let prepared = py.detach(|| -> Option<_> {
-            let n_bytes = std::fs::metadata(&path_owned).ok()?.len();
-            let contents = crate::compression::read_file_contents(Path::new(&path_owned)).ok()?;
-            let mut layout =
-                crate::column_read::layout_indexed(contents.as_bytes(), threads).ok()?;
+            let layout = crate::column_read::layout_path(Path::new(&path_owned)).ok()?;
             if layout.n_frames < 2 || layout.n_atoms == 0 {
                 return None;
             }
-            layout.n_bytes = n_bytes;
-            Some((contents, layout))
+            Some(layout)
         });
-        let Some((contents, layout)) = prepared else {
+        let Some(layout) = prepared else {
             return Ok(None);
         };
         let offsets = layout.frame_offsets.clone();
         let frames_end = layout.frames_end;
         return materialize_columns(py, layout, threads, move |layout, slabs| {
-            crate::column_read::fill_bytes_threaded(
-                contents.as_bytes(),
+            crate::column_read::fill_path_threaded(
+                Path::new(&path_owned),
                 layout.n_frames,
                 layout.n_atoms,
                 layout.sections,

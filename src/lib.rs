@@ -34,6 +34,8 @@ mod allocator_link_tests {
 
 pub mod array;
 mod column_read;
+#[doc(hidden)]
+pub use column_read::{fill_bytes, fill_bytes_threaded, layout_bytes, Slabs};
 mod columns;
 pub mod compression;
 pub mod conbin;

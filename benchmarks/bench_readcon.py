@@ -59,8 +59,28 @@ def minimal_output_bytes(n_atoms: int, n_frames: int, extra_atom_bytes: int = 0)
     return int(n_atoms) * int(n_frames) * (MIN_ATOM_BYTES + int(extra_atom_bytes))
 
 
+def _perturb_frame(text: str, index: int) -> str:
+    """Move the first coordinate by ``index * 1e-6``.
+
+    A file of identical copies is one frame repeated. The timed reads use a
+    different value in every frame so that path cannot stand in for the parse.
+    """
+    if index == 0:
+        return text
+    marker = "Coordinates of Component"
+    at = text.find(marker)
+    if at < 0:
+        raise ValueError("fixture has no coordinate block")
+    line_start = text.find("\n", at) + 1
+    line_end = text.find("\n", line_start)
+    parts = text[line_start:line_end].split()
+    parts[0] = format(float(parts[0]) + index * 1e-6, ".16g")
+    return text[:line_start] + " ".join(parts) + text[line_end:]
+
+
 def _ladder_con(src: Path, n_frames: int) -> str:
-    return src.read_text() * n_frames
+    text = src.read_text()
+    return "".join(_perturb_frame(text, index) for index in range(n_frames))
 
 
 def _bench_dir() -> Path:
