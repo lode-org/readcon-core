@@ -914,9 +914,12 @@ fn sum_range(base: usize, start: usize, end: usize, payload_off: usize, payload_
 /// `/proc/config.gz` has that option unset, and a mapped read showed
 /// `FilePmdMapped` 0. The advice stays, because it is the switch the
 /// kernel documents, and it is a no-op without that option.
-/// `MADV_POPULATE_READ` (Linux 5.14) waits until the pages are resident
-/// and reports an error. `MAP_POPULATE` hides errors and cannot be split
-/// across the caller's threads after `mmap` returns.
+/// `MADV_POPULATE_READ` (Linux 5.14) is the span hint. A failure, including
+/// `EINVAL` from a kernel before 5.14, leaves the mapping in place and one
+/// byte of each page is read, so the caller still sees the file.
+/// `MAP_POPULATE` hides errors and cannot be split across the caller's
+/// threads after `mmap` returns. When `mmap` itself fails, the file is
+/// read into a private mapping and the accessors return those bytes.
 /// `threads` workers fault page-aligned spans. A file shorter than one
 /// page per worker stays on one worker. The page is `sysconf(SC_PAGESIZE)`.
 pub fn map_file(path: &Path, threads: usize) -> Result<ConBinMap, ParseError> {

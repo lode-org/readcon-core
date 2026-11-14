@@ -55,7 +55,11 @@ fn check(path: &Path, file_len: usize, threads: usize) {
     let header = conbin::read_header(path).ok();
     let mapped = conbin::map_file(path, threads).ok();
     if let Some(map) = &mapped {
-        assert_eq!(Some(map.header), header, "map_file and read_header disagree");
+        assert_eq!(
+            Some(map.header),
+            header,
+            "map_file and read_header disagree"
+        );
         for run in [map.positions_f64(), map.velocities_f64()]
             .into_iter()
             .flatten()
