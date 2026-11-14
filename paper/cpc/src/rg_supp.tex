@@ -429,7 +429,7 @@ Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/d
 Each head-to-head arm reports how many frames match the reference and how many do not.
 extxyz-ng 0.0.2 is a candidate extended-XYZ reader beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015,kaliberaRigorousBenchmarkingReasonable2013}.
-The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.
+The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.\label{tab:ordering}
 memray records the peak heap of a cell \cite{memrayBloomberg}.
 libxtc reads the XTC trajectory \cite{krylovLibxtcEfficientLibrary2021}.
 Resumed bands are drawn on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after iterative rotational alignment \cite{gundeIRAShapeMatching2021}.
@@ -443,6 +443,7 @@ readcon reads neither XYZ nor HDF5.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
+\input{figures/generated/sizes_table}
 \input{figures/generated/format_context}
 
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
