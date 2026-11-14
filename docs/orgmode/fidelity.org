@@ -16,7 +16,7 @@ Tools, each on the same path, with the entry point or format it documents:
 
 - readcon's Python reader and writer.
 - ASE formats =readcon-con= and =readcon-convel=, resolved through =ase.ioformats= to =ase_readcon.io=. Geometry files use =readcon-con=. convel files use =readcon-convel=.
-- ASE's built-in =eon= reader and writer, =format="eon"=.
+- ASE's built-in =eon= reader and writer, ~format="eon"~.
 - chemfiles, asked for format =CON=.
 - eOn's Python reader, =eon.fileio.loadcons= and =savecon=, when =EON_ROOT= points at a checkout. The commit used for the numbers in =bench/fidelity/results/= is recorded in =fidelity.json=. The C++ client is not built here: =client/ConFileIO.cpp:612= calls =readcon::read_all_frames=, and meson is not required by this rule.
 

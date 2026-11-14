@@ -288,7 +288,7 @@ gap:
 Both APIs mirror across every supported binding (Rust, C ABI, C++,
 Python, Julia).
 
-Matching one frame onto another is :doc:`atom-correspondence`.
+Matching one frame onto another is :doc:\`atom-correspondence\`.
 ``atom_id_permutation`` maps frame B onto frame A.
 ``reorder_like`` returns B in A's atom order.
 ``check_atom_id_consistency`` names the first frame and atom that break

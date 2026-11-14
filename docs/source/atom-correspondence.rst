@@ -1,6 +1,6 @@
-================================
+============================
 How-to — atom correspondence
-================================
+============================
 
 
 .. note::
@@ -19,20 +19,19 @@ The CPC paper treats that stable id as what makes atom correspondence
 possible. These four calls are that correspondence. ``reference`` is frame A.
 ``other`` is frame B. Errors name the frame index and the ``atom_id``.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 32 68
+.. table::
 
-   * - Call
-     - Result
-   * - ``atom_id_permutation``
-     - ``perm[i]`` is the index in B of the atom with A's id at index ``i``
-   * - ``reorder_like``
-     - B in A's order. Positions, velocities, forces, and the other per-atom sections move with the atom. Bond endpoints are remapped
-   * - ``check_atom_id_consistency``
-     - The first frame in a trajectory or NEB band that disagrees with frame 0, and the atom
-   * - ``minimum_image_displacements``
-     - Wrapped ``r_B - r_A`` for each matched pair, shape ``(N, 3)`` in A's order
+    +---------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+    | Call                            | Result                                                                                                                         |
+    +=================================+================================================================================================================================+
+    | ``atom_id_permutation``         | ``perm[i]`` is the index in B of the atom with A's id at index ``i``                                                           |
+    +---------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+    | ``reorder_like``                | B in A's order. Positions, velocities, forces, and the other per-atom sections move with the atom. Bond endpoints are remapped |
+    +---------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+    | ``check_atom_id_consistency``   | The first frame in a trajectory or NEB band that disagrees with frame 0, and the atom                                          |
+    +---------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+    | ``minimum_image_displacements`` | Wrapped ``r_B - r_A`` for each matched pair, shape ``(N, 3)`` in A's order                                                     |
+    +---------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
 
 Duplicate ids, a missing id, an extra id, and a symbol mismatch fail in
 both modes. ``strict`` (the default) also requires the mass and the fixed
