@@ -1329,6 +1329,73 @@ fn encode_fixed_decimal_into(value: f64) -> Option<([u8; 32], usize)> {
     Some((out, n))
 }
 
+/// The integer `k` near `scaled` whose quotient `k / scale` is `mag`
+/// and whose exact distance to `mag * scale` is the smallest.
+///
+/// `mag * scale` rounded to f64 can land on the farther of two decimals
+/// that parse back to `mag`. ryu prints the closer one.
+fn closest_decimal(mag: f64, scaled: f64, scale: u64) -> Option<u64> {
+    if !scaled.is_finite() || scaled > 1e16 {
+        return None;
+    }
+    let center = round_half_away(scaled);
+    let center = unsafe { center.to_int_unchecked::<u64>() };
+    // Dividing the integer back in f64 is not the parse of the decimal.
+    // A spelling round-trips when it is closer than half an ulp, which is
+    // `scale / 2` in these units. The f64 product can sit two integers off
+    // the closer spelling.
+    let limit = (scale as u128) / 2;
+    let mut best: Option<(u64, u128)> = None;
+    for delta in -2i64..=2 {
+        let k = center as i64 + delta;
+        if k < 0 {
+            continue;
+        }
+        let k = k as u64;
+        let dist = decimal_distance(mag, scale, k);
+        if dist >= limit {
+            continue;
+        }
+        let replace = match best {
+            None => true,
+            Some((_, best_dist)) if dist < best_dist => true,
+            // A tie is the even last digit, which is what ryu prints.
+            Some((best_k, best_dist)) if dist == best_dist && best_k % 2 == 1 && k % 2 == 0 => true,
+            _ => false,
+        };
+        if replace {
+            best = Some((k, dist));
+        }
+    }
+    best.map(|(k, _)| k)
+}
+
+/// `|mag * scale - k|` in units of the binary place of `mag`.
+fn decimal_distance(mag: f64, scale: u64, k: u64) -> u128 {
+    let bits = mag.to_bits();
+    let field = ((bits >> 52) & 0x7ff) as i32;
+    let (sig, exp) = if field == 0 {
+        ((bits & ((1u64 << 52) - 1)) as u128, -1022 - 52)
+    } else {
+        (
+            ((bits & ((1u64 << 52) - 1)) | (1u64 << 52)) as u128,
+            field - 1023 - 52,
+        )
+    };
+    let num = sig * scale as u128;
+    if exp >= 0 {
+        if exp >= 128 {
+            return u128::MAX;
+        }
+        return (num << exp).abs_diff(k as u128);
+    }
+    let shift = (-exp) as u32;
+    if shift >= 128 {
+        return if k == 0 { num } else { u128::MAX };
+    }
+    num.abs_diff((k as u128) << shift)
+}
+
 /// Round a non-negative finite `scaled` half away from zero.
 ///
 /// Values up to 2^53 use integer truncation, which matches `f64::round`
@@ -1394,21 +1461,8 @@ fn fixed_decimal_parts(mag: f64) -> Option<(u64, u32)> {
 
 /// Six-place probe for `scaled = mag * 1e6` at most 2^53.
 fn accept_million(mag: f64, scaled: f64) -> Option<(u64, u32)> {
-    let trunc = unsafe { scaled.to_int_unchecked::<u64>() };
-    let n = if scaled - (trunc as f64) >= 0.5 {
-        trunc + 1
-    } else {
-        trunc
-    };
-    if (n as f64) / 1_000_000.0 != mag {
-        return None;
-    }
-    let mut n = n;
-    let mut places = 6u32;
-    while places > 0 && n.is_multiple_of(10) {
-        n /= 10;
-        places -= 1;
-    }
+    let n = closest_decimal(mag, scaled, 1_000_000)?;
+    let (n, places) = shorten(mag, n, 6);
     if places == 0 {
         return Some((n, 0));
     }
@@ -1417,6 +1471,49 @@ fn accept_million(mag: f64, scaled: f64) -> Option<(u64, u32)> {
         Some((n, places))
     } else {
         None
+    }
+}
+
+/// Drop trailing zeros, then a decimal place when a shorter spelling
+/// still round-trips. ryu keeps the shortest of those.
+fn shorten(mag: f64, mut n: u64, mut places: u32) -> (u64, u32) {
+    loop {
+        while places > 0 && n.is_multiple_of(10) {
+            n /= 10;
+            places -= 1;
+        }
+        if places == 0 {
+            return (n, 0);
+        }
+        let scale = 10u64.pow(places - 1);
+        let base = n / 10;
+        let limit = (scale as u128) / 2;
+        let mut best: Option<(u64, u128)> = None;
+        for k in [base.saturating_sub(1), base, base.saturating_add(1)] {
+            let dist = decimal_distance(mag, scale, k);
+            if dist >= limit {
+                continue;
+            }
+            let replace = match best {
+                None => true,
+                Some((_, best_dist)) if dist < best_dist => true,
+                Some((best_k, best_dist)) if dist == best_dist && best_k % 2 == 1 && k % 2 == 0 => {
+                    true
+                }
+                _ => false,
+            };
+            if replace {
+                best = Some((k, dist));
+            }
+        }
+        let Some((k, _)) = best else {
+            return (n, places);
+        };
+        if fixed_digits_len(k, places - 1) >= fixed_digits_len(n, places) {
+            return (n, places);
+        }
+        n = k;
+        places -= 1;
     }
 }
 
@@ -1438,19 +1535,9 @@ fn parts_below_million(mag: f64) -> Option<(u64, u32)> {
 }
 
 fn accept_scaled(mag: f64, scaled: f64, scale: f64, places: u32) -> Option<(u64, u32)> {
-    let nearest = round_half_away(scaled);
-    // Callers pass a finite `scaled` of at most 1e16, and the rounding
-    // stays inside that range.
-    let n = unsafe { nearest.to_int_unchecked::<u64>() };
-    if nearest != n as f64 || (n as f64) / scale != mag {
-        return None;
-    }
-    let mut n = n;
-    let mut places = places;
-    while places > 0 && n.is_multiple_of(10) {
-        n /= 10;
-        places -= 1;
-    }
+    let scale_int = scale as u64;
+    let n = closest_decimal(mag, scaled, scale_int)?;
+    let (n, places) = shorten(mag, n, places);
     if places == 0 {
         if n >= 10u64.pow(16) {
             return None;
@@ -4506,6 +4593,9 @@ mod float_format_tests {
             -0.1,
             0.1 + 0.2,
             1.0 / 3.0,
+            -9088916957.866665,
+            -9345863084.186747,
+            9663676416.00047,
             1e15,
             -1e15,
             1e16,
@@ -4584,6 +4674,9 @@ mod float_format_tests {
         let mut values = vec![
             -9283744841.119225_f64,
             0.6394,
+            -9088916957.866665,
+            -9345863084.186747,
+            9663676416.00047,
             -0.0001,
             1.25,
             97.0,
@@ -4610,7 +4703,19 @@ mod float_format_tests {
             let mag = value.abs();
             let old = old_fixed(mag);
             let new = super::fixed_decimal_parts(mag);
-            assert_eq!(new, old, "{value:?}");
+            if new != old {
+                let mut got = Vec::new();
+                let mut scratch = ryu::Buffer::new();
+                super::push_round_trip(&mut got, &mut scratch, None, value);
+                let mut ryu_buf = ryu::Buffer::new();
+                let expect = ryu_buf.format(value);
+                assert_eq!(
+                    std::str::from_utf8(&got).unwrap(),
+                    expect,
+                    "{value:?} old={old:?} new={new:?}"
+                );
+                continue;
+            }
             if let Some((n, places)) = new {
                 let mut fast = [0u8; 32];
                 let mut slow = [0u8; 32];
