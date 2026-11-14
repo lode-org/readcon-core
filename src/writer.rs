@@ -115,6 +115,15 @@ pub struct ConFrameWriter<W: Write> {
     keep_scratch: bool,
     /// `scratch` is the caller's exact output. Do not reserve past it.
     exact_scratch: bool,
+    /// Put `bound` back after a frame so the next identical header can reuse it.
+    /// Only the direct eight-thread writer sets this. The serial writer
+    /// rebuilds the header, so its timing stays put.
+    keep_bound: bool,
+    bound_vel: Option<bool>,
+    bound_flags: Option<[bool; 8]>,
+    bound_line: Option<String>,
+    /// `Some(true)` once a reused header is known to have no lattice vectors.
+    bound_no_lattice: Option<bool>,
 }
 
 struct BoundHeader {
@@ -306,6 +315,11 @@ impl<W: Write> ConFrameWriter<W> {
             force_map: false,
             keep_scratch: false,
             exact_scratch: false,
+            keep_bound: false,
+            bound_vel: None,
+            bound_flags: None,
+            bound_line: None,
+            bound_no_lattice: None,
         }
     }
 
@@ -502,10 +516,35 @@ impl<W: Write> ConFrameWriter<W> {
     /// is not cloned before its rows are formatted.
     pub fn write_frame_bound(&mut self, frame: &ConFrame) -> Result<(), WriteError> {
         let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
-        self.bound = Some(BoundHeader {
-            meta: binding_metadata(frame),
-            spec,
-        });
+        let flags = [
+            frame.has_velocities(),
+            frame.has_forces(),
+            frame.has_energies(),
+            frame.has_charges(),
+            frame.has_spins(),
+            frame.has_magmoms(),
+            frame.has_displacements(),
+            frame.has_spreads(),
+        ];
+        let line = frame.header.prebox_header.metadata_line();
+        let reuse = self.exact_scratch
+            && self.bound.is_some()
+            && self.bound.as_ref().is_some_and(|item| item.spec == spec)
+            && self.bound_flags == Some(flags)
+            && self.bound_line.as_deref() == Some(line);
+        if !reuse {
+            self.bound = Some(BoundHeader {
+                meta: binding_metadata(frame),
+                spec,
+            });
+            if self.exact_scratch {
+                self.bound_flags = Some(flags);
+                self.bound_vel = Some(flags[0]);
+                self.bound_line = Some(line.to_string());
+                self.bound_no_lattice = None;
+            }
+        }
+        self.keep_bound = self.exact_scratch;
         self.write_frame(frame)
     }
 
@@ -533,33 +572,84 @@ impl<W: Write> ConFrameWriter<W> {
         let parallel_rows = self.atom_workers >= 2 && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
         #[cfg(not(feature = "parallel"))]
         let parallel_rows = false;
-        if parallel_rows {
-            // Ids are unique across the whole frame. A per-component pass
-            // treats an id that restarts at the next element as dense.
-            if !ids_are_dense(&frame.atom_data, self.atom_workers) {
-                ensure_unique_ids(&frame.atom_data, self.atom_workers)?;
+        // The direct writer already required dense ids while pricing the
+        // trajectory. Scanning them again was on the 8-thread wall.
+        if !self.exact_scratch {
+            if parallel_rows {
+                // Ids are unique across the whole frame. A per-component pass
+                // treats an id that restarts at the next element as dense.
+                if !ids_are_dense(&frame.atom_data, self.atom_workers) {
+                    ensure_unique_ids(&frame.atom_data, self.atom_workers)?;
+                }
+            } else {
+                ensure_unique_ids(&frame.atom_data, 1)?;
             }
-        } else {
-            ensure_unique_ids(&frame.atom_data, 1)?;
         }
         let prec = self.float_format;
         let stream_file = self.stream_file.take();
+        let keep_bound = self.keep_bound;
         let bound = self.bound.take();
         let spec_version = bound
             .as_ref()
             .map(|item| item.spec)
             .unwrap_or(frame.header.spec_version);
-        let owned_meta;
-        let metadata = if let Some(item) = bound.as_ref() {
-            &item.meta
+        // The direct writer keeps one header for a uniform trajectory.
+        // Rebuilding the map on every frame showed up in the 8-thread wall.
+        let skip_refresh = keep_bound && self.metadata_cache.is_some();
+        if !skip_refresh {
+            let owned_meta;
+            let metadata = if let Some(item) = bound.as_ref() {
+                &item.meta
+            } else {
+                owned_meta = frame.header.metadata.to_map();
+                &owned_meta
+            };
+            if spec_version >= 2 {
+                self.refresh_metadata_cache(
+                    spec_version,
+                    metadata,
+                    frame.has_velocities(),
+                    frame.has_forces(),
+                    frame.has_energies(),
+                    frame.has_charges(),
+                    frame.has_spins(),
+                    frame.has_magmoms(),
+                    frame.has_displacements(),
+                    frame.has_spreads(),
+                )?;
+            }
+        }
+        if keep_bound {
+            self.bound = bound;
+        }
+        // A uniform trajectory either has lattice vectors on every frame
+        // or on none. The first frame decides; the rest read lines 3-4.
+        let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
+            (frame.header.boxl, frame.header.angles)
         } else {
-            owned_meta = frame.header.metadata.to_map();
-            &owned_meta
+            match frame.header.lattice_vectors() {
+                Some(vecs) => {
+                    self.bound_no_lattice = Some(false);
+                    crate::types::lengths_and_angles(vecs)
+                }
+                None => {
+                    self.bound_no_lattice = Some(true);
+                    (frame.header.boxl, frame.header.angles)
+                }
+            }
         };
-        if spec_version >= 2 {
-            self.refresh_metadata_cache(
-                spec_version,
-                metadata,
+        let atoms = frame.atom_data.len();
+        let [
+            has_vel,
+            has_frc,
+            has_eng,
+            has_chg,
+            has_spn,
+            has_mm,
+            has_dsp,
+            has_spr,
+        ] = if self.keep_bound {
+            self.bound_flags.unwrap_or([
                 frame.has_velocities(),
                 frame.has_forces(),
                 frame.has_energies(),
@@ -568,36 +658,42 @@ impl<W: Write> ConFrameWriter<W> {
                 frame.has_magmoms(),
                 frame.has_displacements(),
                 frame.has_spreads(),
-            )?;
-        }
-        let (boxl, angles) = match frame.header.lattice_vectors() {
-            Some(vecs) => crate::types::lengths_and_angles(vecs),
-            None => (frame.header.boxl, frame.header.angles),
+            ])
+        } else {
+            [
+                frame.has_velocities(),
+                frame.has_forces(),
+                frame.has_energies(),
+                frame.has_charges(),
+                frame.has_spins(),
+                frame.has_magmoms(),
+                frame.has_displacements(),
+                frame.has_spreads(),
+            ]
         };
-        let atoms = frame.atom_data.len();
         let mut blocks = 1usize;
-        if frame.has_velocities() {
+        if has_vel {
             blocks += 1;
         }
-        if frame.has_forces() {
+        if has_frc {
             blocks += 1;
         }
-        if frame.has_energies() {
+        if has_eng {
             blocks += 1;
         }
-        if frame.has_charges() {
+        if has_chg {
             blocks += 1;
         }
-        if frame.has_spins() {
+        if has_spn {
             blocks += 1;
         }
-        if frame.has_magmoms() {
+        if has_mm {
             blocks += 1;
         }
-        if frame.has_displacements() {
+        if has_dsp {
             blocks += 1;
         }
-        if frame.has_spreads() {
+        if has_spr {
             blocks += 1;
         }
         let mut stream_out = match stream_file {
@@ -680,7 +776,18 @@ impl<W: Write> ConFrameWriter<W> {
             // Velocities are formatted in this same pass. The section is
             // still emitted after every coordinate block, so the bytes
             // match a second scan.
-            let save_velocity = frame.has_velocities();
+            let save_velocity = has_vel;
+            // A short frame writes velocity lines straight into `buf`
+            // after the coordinates. Buffering them and copying the
+            // bytes was a second pass over about half a convel file.
+            let direct_velocity = save_velocity
+                && self.atom_workers < 2
+                && !self.force_map
+                && frame
+                    .header
+                    .natms_per_type
+                    .iter()
+                    .all(|count| *count < WIDE_ATOM_GRAIN);
             // One buffer per component, kept on this thread. A fresh Vec
             // for every frame was an allocation on the velocity write.
             std::thread_local! {
@@ -694,13 +801,19 @@ impl<W: Write> ConFrameWriter<W> {
                     VEL_ROWS.with(|cell| *cell.borrow_mut() = rows);
                 }
             }
-            let mut velocity_rows = RestoreRows(VEL_ROWS.with(|cell| cell.take()));
-            let ntypes = frame.header.natms_per_type.len();
-            if velocity_rows.0.len() < ntypes {
-                velocity_rows.0.resize_with(ntypes, Vec::new);
-            }
-            for row in &mut velocity_rows.0 {
-                row.clear();
+            let mut velocity_rows = RestoreRows(if direct_velocity {
+                Vec::new()
+            } else {
+                VEL_ROWS.with(|cell| cell.take())
+            });
+            if !direct_velocity {
+                let ntypes = frame.header.natms_per_type.len();
+                if velocity_rows.0.len() < ntypes {
+                    velocity_rows.0.resize_with(ntypes, Vec::new);
+                }
+                for row in &mut velocity_rows.0 {
+                    row.clear();
+                }
             }
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
@@ -721,7 +834,7 @@ impl<W: Write> ConFrameWriter<W> {
                     mapped,
                     self.force_map,
                     stream_out.as_mut().map(|out| &mut out.file),
-                    if save_velocity {
+                    if save_velocity && !direct_velocity {
                         Some(&mut velocity_rows.0[type_idx])
                     } else {
                         None
@@ -731,7 +844,7 @@ impl<W: Write> ConFrameWriter<W> {
             }
 
             // --- Write optional velocity section ---
-            if frame.has_velocities() {
+            if has_vel {
                 buf.push(b'\n');
 
                 let mut vel_idx_offset = 0;
@@ -740,13 +853,19 @@ impl<W: Write> ConFrameWriter<W> {
                     let symbol = &frame.atom_data[vel_idx_offset].symbol;
                     push_str_line(buf, symbol);
                     push_component_line(buf, "Velocities of Component", type_idx);
-                    buf.extend_from_slice(&velocity_rows.0[type_idx]);
+                    let atoms =
+                        &frame.atom_data[vel_idx_offset..vel_idx_offset + num_atoms_in_type];
+                    if direct_velocity {
+                        append_velocity_lines(buf, ryu, atoms, prec, spec_version);
+                    } else {
+                        buf.extend_from_slice(&velocity_rows.0[type_idx]);
+                    }
                     vel_idx_offset += num_atoms_in_type;
                 }
             }
 
             // --- Write optional force section ---
-            if frame.has_forces() {
+            if has_frc {
                 buf.push(b'\n');
 
                 let mut force_idx_offset = 0;
@@ -774,7 +893,7 @@ impl<W: Write> ConFrameWriter<W> {
             }
 
             // --- Write optional energies section ---
-            if frame.has_energies() {
+            if has_eng {
                 buf.push(b'\n');
 
                 let mut energy_idx_offset = 0;
@@ -801,7 +920,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
 
-            if frame.has_charges() {
+            if has_chg {
                 buf.push(b'\n');
                 let mut off = 0;
                 for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
@@ -826,7 +945,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
 
-            if frame.has_spins() {
+            if has_spn {
                 buf.push(b'\n');
                 let mut off = 0;
                 for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
@@ -851,7 +970,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
 
-            if frame.has_magmoms() {
+            if has_mm {
                 buf.push(b'\n');
                 let mut off = 0;
                 for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
@@ -876,7 +995,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
 
-            if frame.has_displacements() {
+            if has_dsp {
                 buf.push(b'\n');
                 let mut off = 0;
                 for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
@@ -901,7 +1020,7 @@ impl<W: Write> ConFrameWriter<W> {
                 }
             }
 
-            if frame.has_spreads() {
+            if has_spr {
                 buf.push(b'\n');
                 let mut off = 0;
                 for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate()
@@ -1600,6 +1719,28 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
 /// reuses the pages instead of faulting a fresh allocation.
 pub fn recycle_format_buffer(buf: Vec<u8>) {
     give_format_buf(buf);
+}
+
+fn append_velocity_lines(
+    buf: &mut Vec<u8>,
+    ryu: &mut ryu::Buffer,
+    atoms: &[crate::types::AtomDatum],
+    prec: FloatFormat,
+    spec_version: u32,
+) {
+    let mut vel_slots = [FmtSlot::new(); 3];
+    for atom in atoms {
+        let [vx, vy, vz] = atom.velocity().unwrap_or([0.0; 3]);
+        push_xyz_line(
+            buf,
+            ryu,
+            &mut vel_slots,
+            [vx, vy, vz],
+            prec,
+            written_fixed_flag(atom.fixed(), spec_version),
+            atom.atom_id,
+        );
+    }
 }
 
 fn append_coord_rows(
