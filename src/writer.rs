@@ -3097,31 +3097,6 @@ impl Unpublished {
 
     fn commit(mut self, dest: &Path) -> io::Result<()> {
         if let Some(scratch) = self.scratch.take() {
-            // Measurement only. The default publish is the single rename
-            // below. Two renames leave a window where `dest` has no name;
-            // the previous file is the aside name until the new file is in
-            // place. The unlink of that aside name runs after the publish
-            // returns, so a crash before it leaves the previous file there.
-            if std::env::var_os("READCON_DEFER_UNLINK").is_some() {
-                let aside = dest.with_extension("aside");
-                if dest.exists() {
-                    std::fs::rename(dest, &aside)?;
-                }
-                return match std::fs::rename(&scratch, dest) {
-                    Ok(()) => {
-                        self.committed = true;
-                        std::thread::spawn(move || {
-                            let _ = std::fs::remove_file(aside);
-                        });
-                        Ok(())
-                    }
-                    Err(err) => {
-                        let _ = std::fs::rename(&aside, dest);
-                        let _ = std::fs::remove_file(&scratch);
-                        Err(err)
-                    }
-                };
-            }
             match std::fs::rename(&scratch, dest) {
                 Ok(()) => {
                     self.committed = true;
@@ -6678,15 +6653,26 @@ mod parallel_write_bytes {
         let mut got = header.clone();
         got.extend(coords);
         assert_eq!(got, full);
-        // Two ranks each format their own atom slice. The file is the same
-        // bytes as the one-rank binding write.
-        let mid = frame.atom_data.len() / 2;
-        let left = super::format_coordinate_lines(&frame.atom_data[..mid]).expect("left");
-        let right = super::format_coordinate_lines(&frame.atom_data[mid..]).expect("right");
-        let mut split = header;
-        split.extend(left);
-        split.extend(right);
-        assert_eq!(split, full);
+        // The wide-frame harness puts this header on rank 0 and lets every
+        // rank format its own atom slice. One, two, four and eight ranks
+        // write the same bytes as the one-rank binding writer.
+        let frame = copper_frame(8, "Cu", 63.546, |i| i as u64);
+        let header = super::wide_frame_header(&frame).expect("header");
+        let mut full = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut full);
+            writer.write_frame_bound(&frame).expect("bound");
+            writer.flush().expect("flush");
+        }
+        for ranks in [1usize, 2, 4, 8] {
+            let share = frame.atom_data.len() / ranks;
+            let mut split = header.clone();
+            for rank in 0..ranks {
+                let slice = &frame.atom_data[rank * share..(rank + 1) * share];
+                split.extend(super::format_coordinate_lines(slice).expect("slice"));
+            }
+            assert_eq!(split, full, "ranks {ranks}");
+        }
     }
 
     #[test]
