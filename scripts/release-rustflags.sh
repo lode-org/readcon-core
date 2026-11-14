@@ -30,6 +30,7 @@ release_rustflags() {
     local flag
     for flag in \
         "--remap-path-prefix=/io/=/src/" \
+        "--remap-path-prefix=/root/.cargo/=/cargo-home/" \
         "--remap-path-prefix=/usr/local/cargo/=/cargo-home/" \
         "--remap-path-prefix=/opt/cargo/=/cargo-home/"
     do
