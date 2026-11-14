@@ -152,7 +152,7 @@ fn main() {
                 .unwrap();
             time_logged("rewrite", repeats, || {
                 readcon_core::writer::rewrite_frame_refs_to_path(
-                    &out, &refs, workers, None, false, true,
+                    &out, &refs, workers, None, false, true, true,
                 )
                 .unwrap();
             })

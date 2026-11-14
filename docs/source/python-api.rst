@@ -130,7 +130,8 @@ text when the stream is plain CON.
 .. code:: python
 
    readcon.write_con(path, frames, precision=None, compression=None, *,
-                     canonical=False, comm=None, mode="auto", append=False)
+                     canonical=False, comm=None, mode="auto", append=False,
+                     rewrite=False, keep_spare=True)
 
 One frame is converted and written, then dropped, before the next frame is
 converted. A ``read_con`` result is written from the stored frames, so the
@@ -145,6 +146,12 @@ The wheels on PyPI are built with the ``zstd`` feature, so a ``.zst``
 path writes zstd. A source build without that feature raises
 ``ValueError`` and names ``zstd``.
 ``append=True`` extends an uncompressed file. Gzip, zstd, and ``comm=`` are refused.
+``rewrite=True`` replaces an uncompressed file from a spare named
+``path + ".rewrite"``. That spare is a second copy of the trajectory for as
+long as it is kept, so disk use doubles. ``keep_spare=False`` deletes the
+spare after the rename and the next rewrite allocates fresh pages. The
+published path stays the previous complete file until the rename, including
+when the process is killed. ``append``, ``comm``, and compression are refused.
 
 ``write_con_string``
 --------------------

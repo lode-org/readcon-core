@@ -3802,9 +3802,14 @@ fn try_fused_members(
 /// it. The bytes match one `write_con` of the old frames followed by these
 /// frames when the existing file was written by readcon. Gzip, zstd, and
 /// `comm=` are refused.
+/// `rewrite=True` replaces an existing uncompressed file from a spare inode
+/// named `path` + `.rewrite`. That spare is a second copy of the trajectory
+/// while it is kept. `keep_spare=False` deletes it after the rename, so the
+/// next rewrite allocates fresh pages. The published path stays the previous
+/// complete file until the rename, including if the process is killed.
 /// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
-#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None, compression_members=None))]
+#[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None, compression_members=None, rewrite=false, keep_spare=true))]
 #[allow(clippy::too_many_arguments)]
 fn write_con(
     py: Python<'_>,
@@ -3818,13 +3823,25 @@ fn write_con(
     append: bool,
     n_threads: Option<usize>,
     compression_members: Option<usize>,
+    rewrite: bool,
+    keep_spare: bool,
 ) -> PyResult<()> {
+    if rewrite && (append || comm.is_some()) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "rewrite replaces one file and does not take append or comm",
+        ));
+    }
     if append && comm.is_some() {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "append is not supported with comm=",
         ));
     }
     let codec = output_codec(path, compression)?;
+    if rewrite && !matches!(codec, OutputCodec::Plain) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "rewrite replaces an uncompressed file",
+        ));
+    }
     if let Some(comm) = comm {
         if !matches!(codec, OutputCodec::Plain) || canonical {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -3958,6 +3975,36 @@ fn write_con(
         }
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
+            if rewrite {
+                let store = |refs: &[&ConFrame]| {
+                    crate::writer::rewrite_frame_refs_to_path(
+                        Path::new(path),
+                        refs,
+                        workers,
+                        precision,
+                        canonical,
+                        true,
+                        keep_spare,
+                    )
+                    .map_err(|err| write_err_to_py(py, err))
+                };
+                if let Ok(list) = frames.cast::<ConFrameList>() {
+                    let borrowed = list.borrow();
+                    let slots = borrowed.frames.lock().expect("frames");
+                    if slots.iter().all(|slot| slot.is_some()) {
+                        let refs: Vec<&ConFrame> = slots
+                            .iter()
+                            .map(|slot| slot.as_ref().expect("stored frame"))
+                            .collect();
+                        store(&refs)?;
+                        return Ok(());
+                    }
+                }
+                let rust_frames = py_frames_to_rust(py, frames)?;
+                let refs: Vec<&ConFrame> = rust_frames.iter().collect();
+                store(&refs)?;
+                return Ok(());
+            }
             if !append {
                 if let Ok(list) = frames.cast::<ConFrameList>() {
                     let all_stored = {

@@ -2961,12 +2961,21 @@ fn prepare_rewrite_spare(path: &Path) -> io::Result<std::path::PathBuf> {
 
 /// Publish `spare` as `path`.
 ///
-/// `path` keeps the previous complete file until `rename`. The previous
-/// inode is then parked at the spare name, so the next same-length rewrite
-/// fills those pages instead of allocating new ones. A partial spare is
-/// never given the published name.
-fn publish_rewrite(spare: &Path, path: &Path) -> io::Result<()> {
+/// `path` keeps the previous complete file until `rename`. When
+/// `keep_spare` is set, that inode is parked at the spare name so the next
+/// same-length rewrite fills those pages. The spare then occupies a second
+/// copy of the trajectory on disk. `keep_spare == false` drops it after the
+/// rename, so the steady state is one file and the next rewrite allocates
+/// again. A partial spare is never given the published name.
+fn publish_rewrite(spare: &Path, path: &Path, keep_spare: bool) -> io::Result<()> {
     let (_, hold) = rewrite_names(path)?;
+    if !keep_spare {
+        if hold.exists() {
+            std::fs::remove_file(&hold)?;
+        }
+        std::fs::rename(spare, path)?;
+        return Ok(());
+    }
     if path.exists() {
         if hold.exists() {
             std::fs::remove_file(&hold)?;
@@ -3130,12 +3139,14 @@ fn store_pipeline_in(
 
 /// Rewrite `path` with `frames` for a workload that keeps this trajectory name.
 ///
-/// The new bytes are written into a spare inode beside `path`. `rename`
-/// publishes them, and the previous inode stays at `path.rewrite` so the
-/// next same-length call fills those pages instead of allocating a fresh
-/// file. Until that rename, `path` is still the previous complete file.
-/// A different length allocates the extra pages. The fresh-file writer is
-/// [`write_frame_refs_to_path`].
+/// The new bytes are written into `path` with the suffix `.rewrite`. That
+/// spare is a second file of the same length, so a kept spare doubles the
+/// disk the trajectory occupies. `rename` publishes the spare only after
+/// the write returns. Until then `path` is still the previous complete
+/// file, including when the process is killed. `keep_spare` parks the
+/// previous inode at `.rewrite` for the next call. Passing `false` removes
+/// that spare after the rename. A different length allocates the extra
+/// pages. The fresh-file writer is [`write_frame_refs_to_path`].
 pub fn rewrite_frame_refs_to_path(
     path: &std::path::Path,
     frames: &[&ConFrame],
@@ -3143,6 +3154,7 @@ pub fn rewrite_frame_refs_to_path(
     precision: Option<usize>,
     canonical: bool,
     bind: bool,
+    keep_spare: bool,
 ) -> Result<(), WriteError> {
     let spare = prepare_rewrite_spare(path).map_err(WriteError::Io)?;
     let file = OpenOptions::new()
@@ -3154,7 +3166,7 @@ pub fn rewrite_frame_refs_to_path(
         .map_err(WriteError::Io)?;
     store_frames_in(&file, frames, workers, precision, canonical, bind)?;
     drop(file);
-    publish_rewrite(&spare, path).map_err(WriteError::Io)
+    publish_rewrite(&spare, path, keep_spare).map_err(WriteError::Io)
 }
 
 /// [`write_frames_to_vec_with_threads`] over borrowed frames.
@@ -3909,6 +3921,8 @@ fn place_packed(
                 };
                 advise_shared_store(&cloned, map.as_mut_ptr(), map.len());
                 let dest = &mut map[delta..delta + span];
+                // A reused L2 buffer plus a plain or non-temporal copy was
+                // slower here than spelling straight into the fresh pages.
                 format_group_into(piece, dest, precision, canonical, bind)?;
                 drop(map);
                 Ok(())
@@ -5309,7 +5323,7 @@ mod parallel_write_bytes {
         let expect = std::fs::read(&fresh).unwrap();
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
         let first_ino = std::fs::metadata(&path).unwrap().ino();
-        super::rewrite_frame_refs_to_path(&path, &refs, 8, None, false, true).unwrap();
+        super::rewrite_frame_refs_to_path(&path, &refs, 8, None, false, true, true).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), expect);
         let spare = path.with_file_name(format!(
             "{}.rewrite",
@@ -5320,7 +5334,7 @@ mod parallel_write_bytes {
             first_ino,
             "the previous inode is the spare"
         );
-        super::rewrite_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
+        super::rewrite_frame_refs_to_path(&path, &refs, 1, None, false, true, true).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), expect);
         assert_eq!(
             std::fs::metadata(&path).unwrap().ino(),
@@ -5333,12 +5347,99 @@ mod parallel_write_bytes {
             std::env::temp_dir().join(format!("rc-rewrite-missing-{}/out.con", std::process::id()));
         std::fs::write(&path, &expect).unwrap();
         let before = std::fs::read(&path).unwrap();
-        let err = super::rewrite_frame_refs_to_path(&blocked, &refs, 1, None, false, true);
+        let err = super::rewrite_frame_refs_to_path(&blocked, &refs, 1, None, false, true, true);
         assert!(err.is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(&spare);
         let _ = std::fs::remove_file(&fresh);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dropping_the_spare_leaves_one_file() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/cuh2.con"
+        ))
+        .unwrap();
+        let frames = frames_from_text(&text, Some(1)).unwrap();
+        let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; 4];
+        let path = std::env::temp_dir().join(format!("rc-rewrite-drop-{}.con", std::process::id()));
+        let fresh =
+            std::env::temp_dir().join(format!("rc-rewrite-drop-fresh-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&fresh, &refs, 1, None, false, true).unwrap();
+        let expect = std::fs::read(&fresh).unwrap();
+        super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
+        super::rewrite_frame_refs_to_path(&path, &refs, 1, None, false, true, false).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), expect);
+        let spare = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        assert!(!spare.exists(), "keep_spare false removes the second inode");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&fresh);
+    }
+
+    /// Kill the process while the spare is being written. The published
+    /// path must still be the previous complete file, not a mix.
+    #[cfg(unix)]
+    #[test]
+    fn a_killed_rewrite_leaves_the_published_file_whole() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/cuh2.con"
+        ))
+        .unwrap();
+        let frames = frames_from_text(&text, Some(1)).unwrap();
+        let n = 8_000usize;
+        let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; n];
+        let path = std::env::temp_dir().join(format!("rc-rewrite-kill-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
+        let original = std::fs::read(&path).unwrap();
+        let mut changed = frames[0].clone();
+        let x = changed.atom_data[0].x();
+        changed.atom_data[0].set_x(x + 0.0001);
+        let changed_refs: Vec<&crate::types::ConFrame> = vec![&changed; n];
+        let spare = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_file(&spare);
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork");
+        if pid == 0 {
+            let _ =
+                super::rewrite_frame_refs_to_path(&path, &changed_refs, 1, None, false, true, true);
+            std::process::exit(0);
+        }
+        let started = std::time::Instant::now();
+        while started.elapsed() < std::time::Duration::from_secs(30) {
+            if spare.exists()
+                && std::fs::metadata(&spare)
+                    .map(|meta| meta.len() > 65_536)
+                    .unwrap_or(false)
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        unsafe { libc::kill(pid, libc::SIGKILL) };
+        let mut status = 0i32;
+        unsafe { libc::waitpid(pid, &mut status, 0) };
+        assert!(
+            libc::WIFSIGNALED(status),
+            "the rewrite finished before the kill; status {status}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&spare);
+        let hold = path.with_file_name(format!(
+            "{}.rewrite-hold",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_file(&hold);
     }
 
     #[test]

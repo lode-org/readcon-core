@@ -2065,6 +2065,22 @@ write_frames_to_string(const std::vector<ConFrame> &frames) {
     return out;
 }
 
+/// Rewrite `path`. See `rkr_rewrite_path`. `keep_spare` retains the
+/// previous inode as `path.rewrite`, which doubles the bytes on disk.
+inline void rewrite_path(const std::string &path, const std::vector<ConFrame> &frames,
+                         std::size_t n_threads, bool keep_spare) {
+    std::vector<const RKRConFrame *> handles;
+    handles.reserve(frames.size());
+    for (const auto &frame : frames) {
+        handles.push_back(frame.get_handle());
+    }
+    throw_on_error(rkr_rewrite_path(path.c_str(),
+                                    frames.empty() ? nullptr : handles.data(),
+                                    frames.size(), n_threads,
+                                    keep_spare ? 1 : 0),
+                   "rkr_rewrite_path");
+}
+
 inline void ConFrameWriter::extend(const std::vector<ConFrame> &frames) {
     if (frames.empty())
         return;

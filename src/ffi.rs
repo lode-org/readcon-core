@@ -2217,6 +2217,62 @@ pub unsafe extern "C" fn rkr_write_frames_to_string(
     }
 }
 
+/// Rewrite `path` from `frame_handles`.
+///
+/// The new bytes are written to `path` + `.rewrite`, a second file of the
+/// same length while `keep_spare` is non-zero. `rename` publishes that spare
+/// only after the write finishes, so a crash leaves `path` as the previous
+/// complete file. `keep_spare == 0` deletes the spare after the rename.
+/// `n_threads == 0` uses one thread. The bytes match
+/// [`rewrite_frame_refs_to_path`](crate::writer::rewrite_frame_refs_to_path).
+///
+/// # Safety
+/// `path` must be a valid NUL-terminated string. Each frame handle must be
+/// valid when `num_frames > 0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_rewrite_path(
+    path: *const c_char,
+    frame_handles: *const *const RKRConFrame,
+    num_frames: usize,
+    n_threads: usize,
+    keep_spare: u8,
+) -> RKRStatus {
+    let Some(path) = (unsafe { cstr_path(path) }) else {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    };
+    if num_frames > 0 && frame_handles.is_null() {
+        return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+    }
+    let mut frames = Vec::with_capacity(num_frames);
+    for i in 0..num_frames {
+        let handle = unsafe { *frame_handles.add(i) };
+        let Some(frame) = (unsafe { (handle as *const ConFrame).as_ref() }) else {
+            return note(RKRStatus::RKR_STATUS_NULL_POINTER);
+        };
+        frames.push(frame);
+    }
+    match crate::writer::rewrite_frame_refs_to_path(
+        std::path::Path::new(path),
+        &frames,
+        n_threads.max(1),
+        None,
+        false,
+        true,
+        keep_spare != 0,
+    ) {
+        Ok(()) => note(RKRStatus::RKR_STATUS_SUCCESS),
+        Err(err) => {
+            set_last_error(
+                RKRStatus::RKR_STATUS_IO_ERROR as i32,
+                &err.to_string(),
+                0,
+                0,
+            );
+            RKRStatus::RKR_STATUS_IO_ERROR
+        }
+    }
+}
+
 /// Enable (`canonical != 0`) or disable campaign-stable CON serialization on an open writer.
 /// Matches Rust `ConFrameWriter::canonical(true)` (deterministic metadata key order).
 ///
