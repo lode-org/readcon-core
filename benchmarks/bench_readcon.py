@@ -642,8 +642,9 @@ class RayReadForcesTiny:
         assert frames[0].has_forces
 
 
-def _thread_params(frame_counts: tuple[int, ...]) -> list[tuple[int, int]]:
-    return [(frames, threads) for frames in frame_counts for threads in THREAD_COUNTS]
+def _thread_params(frame_counts: tuple[int, ...]) -> list[list[int]]:
+    """asv crosses these two axes. The length matches ``param_names``."""
+    return [list(frame_counts), list(THREAD_COUNTS)]
 
 
 class TimeReadConCuh2Threads:
@@ -704,7 +705,10 @@ class TimeReadConvelThreads:
     param_names = ["n_frames", "n_threads"]
 
     def setup_cache(self) -> dict[int, str]:
-        return {n: _write_temp(_ladder_con(FIXTURE_CONVEL, n), suffix=".convel") for n in (100, 200)}
+        return {
+            n: _write_temp(_ladder_con(FIXTURE_CONVEL, n), suffix=".convel")
+            for n in (100, 200)
+        }
 
     def time_read_con_threads(self, cache: dict, n_frames: int, n_threads: int) -> None:
         _read_con_threads(cache[int(n_frames)], int(n_frames), 4, int(n_threads))
