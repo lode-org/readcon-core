@@ -219,6 +219,10 @@ harness = false
 name = "traj10k"
 harness = false
 
+[[bench]]
+name = "wide_write"
+harness = false
+
 # Match release so the 10k-frame numbers are the ones a user binary gets.
 [profile.bench]
 inherits = "release"
