@@ -407,6 +407,29 @@ fn stage_store(
     Ok((held, tmp))
 }
 
+/// `READCON_RANKED_WRITE`, as seen by rank 0.
+///
+/// A later rank does not consult its own environment. An empty value
+/// means rank 0 did not set the variable.
+fn ranked_write_override(comm: &Comm) -> Option<String> {
+    let mut buf = [0u8; 32];
+    if comm.rank() == 0 {
+        if let Ok(value) = std::env::var("READCON_RANKED_WRITE") {
+            let raw = value.as_bytes();
+            let n = raw.len().min(buf.len() - 1);
+            buf[0] = u8::try_from(n).unwrap_or(0);
+            buf[1..1 + n].copy_from_slice(&raw[..n]);
+        }
+    }
+    comm.raw().process_at_rank(0).broadcast_into(&mut buf);
+    let n = buf[0] as usize;
+    if n == 0 {
+        None
+    } else {
+        Some(String::from_utf8_lossy(&buf[1..1 + n]).into_owned())
+    }
+}
+
 fn trace(comm: &Comm, phase: &str, started: std::time::Instant) {
     if comm.rank() == 0 && std::env::var_os("READCON_WRITE_TRACE").is_some() {
         eprintln!(
@@ -645,7 +668,9 @@ pub fn write_block_refs(
     trace(comm, "layout", marked);
     // `sequential` and `mpiio` must not take the mapped spell: that path
     // ignores the override and always writes each rank's range itself.
-    let forced = std::env::var("READCON_RANKED_WRITE").ok();
+    // The variable is read on rank 0 and broadcast. Other ranks may not
+    // have it in their environment.
+    let forced = ranked_write_override(comm);
     let spell = can_spell
         && agree(comm, priced.is_some() || frames.is_empty())
         && !matches!(forced.as_deref(), Some("sequential") | Some("mpiio"));
@@ -1808,6 +1833,13 @@ mod wide_rank_sha {
         let universe = mpi::initialize().expect("mpi");
         let world = universe.world();
         let comm = Comm::dup_of(&world);
+        // The parent exports the override to every rank. Drop it everywhere
+        // except rank 0 so the broadcast, not the local environment, decides.
+        if std::env::var_os("READCON_RANK0_ONLY").is_some() && comm.rank() != 0 {
+            // SAFETY: this MPI rank is one process running this test, and no
+            // other thread reads the variable. Rank 0 keeps its copy.
+            unsafe { std::env::remove_var("READCON_RANKED_WRITE") }
+        }
         let frames = frames();
         let expect = bound_bytes(&frames);
         let range = block_range(frames.len(), comm.size(), comm.rank());
@@ -1861,6 +1893,48 @@ mod wide_rank_sha {
                 }
                 let _ = std::fs::remove_file(&out);
             }
+        }
+    }
+
+    #[test]
+    fn ranked_override_is_read_on_rank_zero() {
+        if std::env::var("READCON_WIDE_CHILD").is_ok() {
+            child();
+            return;
+        }
+        let exe = std::env::current_exe().expect("test binary");
+        let mut digest = None;
+        // One rank keeps the variable because it is rank 0. Two ranks drop
+        // it after `MPI_Init` on every rank but 0.
+        for (ranks, rank0_only) in [(1u32, false), (2, true)] {
+            let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("build")
+                .join("test")
+                .join(format!("readcon-rank0-{ranks}-{}.con", std::process::id()));
+            let _ = std::fs::create_dir_all(out.parent().expect("parent"));
+            let mut cmd = crate::mpi_launch::mpi_command();
+            cmd.args([
+                "-n",
+                &ranks.to_string(),
+                exe.to_str().expect("utf8"),
+                "ranked_override_is_read_on_rank_zero",
+            ])
+            .env("READCON_WIDE_CHILD", "1")
+            .env("READCON_RANKED_WRITE", "sequential")
+            .env("READCON_RANK_OUT", &out);
+            if rank0_only {
+                cmd.env("READCON_RANK0_ONLY", "1");
+            }
+            let output = cmd
+                .output()
+                .unwrap_or_else(|err| panic!("mpirun -n {ranks}: {err}"));
+            crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} rank0-only"));
+            let got = sha256_hex(&std::fs::read(&out).expect("written"));
+            match &digest {
+                None => digest = Some(got),
+                Some(expected) => assert_eq!(&got, expected, "ranks {ranks}"),
+            }
+            let _ = std::fs::remove_file(&out);
         }
     }
 
