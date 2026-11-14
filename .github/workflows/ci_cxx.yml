@@ -104,9 +104,9 @@ jobs:
 
       - name: cxx tarball FetchContent (file:// URL)
         run: |
-          mkdir -p /tmp/cxx-out
-          bash scripts/package-cxx.sh /tmp/cxx-out
-          TAR=$(ls /tmp/cxx-out/readcon-core-cxx-*.tar.gz | grep -v vendor | head -1)
+          mkdir -p "$RUNNER_TEMP/cxx-out"
+          bash scripts/package-cxx.sh "$RUNNER_TEMP/cxx-out"
+          TAR=$(ls "$RUNNER_TEMP"/cxx-out/readcon-core-cxx-*.tar.gz | grep -v vendor | head -1)
           tar -tzf "$TAR" | grep -E 'include/readcon-core\.h$'
           if tar -tzf "$TAR" | grep -E '(^|/)cbindgen(\.toml)?$'; then
             echo "cxx tarball must not ship cbindgen.toml or a cbindgen binary" >&2

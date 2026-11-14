@@ -227,17 +227,13 @@ contains
 
   subroutine make_work_dir(dir)
     character(len=:), allocatable, intent(out) :: dir
-    character(len=:), allocatable :: base, raw
+    character(len=:), allocatable :: raw
     character(kind=c_char), allocatable :: tmpl(:)
-    integer :: k, n, st
-    call get_environment_variable("TMPDIR", length=n, status=st)
-    if (st == 0 .and. n > 0) then
-      allocate(character(len=n) :: base)
-      call get_environment_variable("TMPDIR", value=base)
-    else
-      base = "/tmp"
-    end if
-    raw = base // "/readcon_fortran_restart_XXXXXX"
+    integer :: k, st
+    ! CWD is the fpm package directory, or the CMake/Meson build directory
+    ! when the test is launched from there. mkdtemp needs the parent.
+    call execute_command_line("mkdir -p build", exitstat=st)
+    raw = "build/readcon_fortran_restart_XXXXXX"
     tmpl = cstr(raw)
     if (.not. c_associated(c_mkdtemp(tmpl))) then
       print *, "FAIL mkdtemp"

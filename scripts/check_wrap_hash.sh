@@ -62,19 +62,19 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
-  # The published cxx asset belongs to the v$VERSION tag. A later commit
-  # on the release branch re-records the pin for its own archive.
+  # The wrap URL names one archive. If that release exists, its bytes
+  # must be this hash. Skipping the compare whenever HEAD was not the
+  # tag let the v0.23.2 URL keep a hash the upload does not have.
   compare_live=1
   if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    head_sha="$(git rev-parse HEAD)"
     remote="$(git remote get-url origin 2>/dev/null || true)"
     if [[ -n "$remote" ]]; then
       peeled="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}^{}" | awk 'NR==1 {print $1}')"
       if [[ -z "$peeled" ]]; then
         peeled="$(git ls-remote "$remote" "refs/tags/v${cargo_ver}" | awk 'NR==1 {print $1}')"
       fi
-      if [[ -n "$peeled" && "$head_sha" != "$peeled" ]]; then
-        ok "HEAD is not v${cargo_ver}; the published cxx asset stays with that tag"
+      if [[ -z "$peeled" ]]; then
+        ok "v${cargo_ver} is not published; the wrap hash is the archive this tree will upload"
         compare_live=0
       fi
     fi

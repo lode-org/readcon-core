@@ -181,9 +181,7 @@ mod chemfiles_include_tests {
 
     #[test]
     fn nested_hash_directory_is_found() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("build")
-            .join("test")
+        let root = std::path::PathBuf::from("build/test")
             .join(format!("readcon-chemfiles-layout-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let include = root.join("chemfiles-sys/77b8730f9d878a0f/out/include/chemfiles");
@@ -196,9 +194,7 @@ mod chemfiles_include_tests {
 
     #[test]
     fn target_triple_build_is_found_from_the_host_out_dir() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("build")
-            .join("test")
+        let root = std::path::PathBuf::from("build/test")
             .join(format!("readcon-chemfiles-triple-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let out = root.join("target/release/build/readcon-core/hosthash/out");

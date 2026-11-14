@@ -139,14 +139,12 @@ pub fn read_frames_for_convert(input: &Path) -> Result<(Vec<ConFrame>, bool), Co
 /// use std::path::Path;
 ///
 /// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
-/// let dir = readcon_core::scratch::root().join(format!("readcon-convert-doc-{}", std::process::id()));
-/// std::fs::create_dir_all(&dir).unwrap();
-/// let out = dir.join("out.con");
+/// let dir = tempfile::tempdir().unwrap();
+/// let out = dir.path().join("out.con");
 /// let report = convert_path_to_con(&src, &out).unwrap();
 /// assert!(report.native_con);
 /// assert_eq!(report.n_frames, 1);
 /// assert_eq!(report.n_atoms_last, 4);
-/// let _ = std::fs::remove_dir_all(dir);
 /// ```
 pub fn convert_path_to_con(input: &Path, output: &Path) -> Result<ConvertReport, ConvertError> {
     let (frames, native_con) = read_frames_for_convert(input)?;
@@ -187,7 +185,7 @@ mod tests {
     #[test]
     fn convert_native_con_roundtrip() {
         let dir = tempfile_dir();
-        let out = dir.join("out.con");
+        let out = dir.path().join("out.con");
         let report = convert_path_to_con(&fixture("tiny_multi_cuh2.con"), &out).unwrap();
         assert!(report.native_con);
         assert_eq!(report.n_frames, 2);
@@ -203,13 +201,13 @@ mod tests {
     #[cfg(feature = "chemfiles")]
     fn convert_xyz_via_chemfiles() {
         let dir = tempfile_dir();
-        let xyz = dir.join("water.xyz");
+        let xyz = dir.path().join("water.xyz");
         fs::write(
             &xyz,
             "3\nwater migrate\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n",
         )
         .unwrap();
-        let out = dir.join("water.con");
+        let out = dir.path().join("water.con");
         let report = convert_path_to_con(&xyz, &out).unwrap();
         assert!(!report.native_con);
         assert_eq!(report.n_frames, 1);
@@ -229,9 +227,9 @@ mod tests {
     #[cfg(not(feature = "chemfiles"))]
     fn convert_xyz_fails_without_chemfiles() {
         let dir = tempfile_dir();
-        let xyz = dir.join("water.xyz");
+        let xyz = dir.path().join("water.xyz");
         fs::write(&xyz, "3\nx\nO 0 0 0\nH 1 0 0\nH 0 1 0\n").unwrap();
-        let out = dir.join("water.con");
+        let out = dir.path().join("water.con");
         let err = convert_path_to_con(&xyz, &out).unwrap_err();
         assert!(matches!(
             err,
@@ -239,16 +237,7 @@ mod tests {
         ));
     }
 
-    fn tempfile_dir() -> PathBuf {
-        let dir = crate::scratch::root().join(format!(
-            "readcon-convert-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    fn tempfile_dir() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
     }
 }

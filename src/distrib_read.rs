@@ -835,9 +835,10 @@ mod tests {
     /// largest buffer the count may hold.
     #[test]
     fn shared_prefix_count_does_not_allocate_a_vec_of_size_lo() {
+        let _scratch = tempfile::tempdir().unwrap();
         with_comm(|comm| {
             let at = PREFIX_COUNT_CHUNK * 2 + 7;
-            let path = crate::scratch::root().join(format!(
+            let path = _scratch.path().join(format!(
                 "readcon-mpi-prefix-count-{}.con",
                 std::process::id()
             ));
@@ -886,9 +887,10 @@ mod tests {
     /// at byte 0.
     #[test]
     fn successful_shared_read_does_not_count_the_prefix() {
+        let _scratch = tempfile::tempdir().unwrap();
         with_comm(|comm| {
             let frame = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
-            let path = crate::scratch::root().join(format!(
+            let path = _scratch.path().join(format!(
                 "readcon-mpi-prefix-success-{}.con",
                 std::process::id()
             ));
@@ -909,9 +911,11 @@ mod tests {
     /// The serial reader covers this text when the MPI feature is off.
     #[test]
     fn distrib_later_frame_metadata_reports_its_file_line() {
+        let _scratch = tempfile::tempdir().unwrap();
         with_comm(|comm| {
             let owned = if comm.rank() == 0 {
-                let path = crate::scratch::root()
+                let path = _scratch
+                    .path()
                     .join(format!("readcon-mpi-later-line-{}.con", std::process::id()));
                 std::fs::write(&path, two_frames()).unwrap();
                 path.to_string_lossy().into_owned().into_bytes()
@@ -1136,10 +1140,13 @@ mod atom_range_tests {
 
     #[test]
     fn a_trailing_newline_still_tiles_equal_frames() {
+        let _scratch = tempfile::tempdir().unwrap();
         let frame = "grid\n{\"con_spec_version\":2}\n1 1 1\n90 90 90\n0 0\n0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
         let mut bytes = frame.repeat(3);
         bytes.push('\n');
-        let path = crate::scratch::root().join(format!("readcon-tail-{}.con", std::process::id()));
+        let path = _scratch
+            .path()
+            .join(format!("readcon-tail-{}.con", std::process::id()));
         std::fs::write(&path, bytes).unwrap();
         let tiled = super::tiled_span(&path);
         let _ = std::fs::remove_file(&path);

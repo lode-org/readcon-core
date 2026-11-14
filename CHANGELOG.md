@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
-## Unreleased
+## v0.23.3 - 2026-11-14
 
 ### Features
 
@@ -44,6 +44,10 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- The published library does not embed the build machine's path. Test
+  scratch uses the tempfile crate. A conbin readahead test that needs a
+  real disk uses a test-only directory under `target/` or `build/`, and
+  skips when both are tmpfs.
 - CON-bin payload values are little-endian. A failed populate hint leaves
   the mapping in place, and one byte of each page is read so the caller
   still sees the file. When `mmap` itself fails, the file is read into a
@@ -1601,6 +1605,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.23.3]: https://github.com/lode-org/readcon-core/compare/v0.23.2...v0.23.3
 [v0.23.2]: https://github.com/lode-org/readcon-core/compare/v0.23.1...v0.23.2
 [v0.23.1]: https://github.com/lode-org/readcon-core/compare/v0.23.0...v0.23.1
 [v0.23.0]: https://github.com/lode-org/readcon-core/compare/v0.22.0...v0.23.0

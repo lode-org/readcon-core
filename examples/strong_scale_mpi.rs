@@ -83,10 +83,7 @@ fn main() {
     let out_buf = std::env::var("READCON_MPI_OUT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
-            let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("build")
-                .join("bench")
-                .join("readcon-r7-mpi.con");
+            let path = std::path::PathBuf::from("build/bench/readcon-r7-mpi.con");
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
