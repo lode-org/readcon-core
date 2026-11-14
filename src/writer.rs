@@ -1172,31 +1172,22 @@ fn written_fixed_flag(fixed: [bool; 3], spec_version: u32) -> u8 {
     }
 }
 
+/// Two ASCII digits for `0..100`, indexed by `n * 2`.
+const DIGIT_PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
 fn push_u64(buf: &mut Vec<u8>, n: u64) {
-    // Two digits per division. u64 stays in a hardware remainder; the old
-    // path widened every atom id to u128 and called the software divider.
-    const DIGITS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-    let mut tmp = [0u8; 20];
-    let mut i = 20;
-    let mut n = n;
-    while n >= 100 {
-        let q = n / 100;
-        let r = (n % 100) as usize;
-        i -= 2;
-        tmp[i] = DIGITS[r * 2];
-        tmp[i + 1] = DIGITS[r * 2 + 1];
-        n = q;
+    // Spell straight into the spare tail. A stack buffer plus
+    // `extend_from_slice` called memcpy for every atom id.
+    let width = count_digits(n) as usize;
+    let start = buf.len();
+    if buf.capacity() - start < width {
+        buf.reserve(width);
     }
-    if n < 10 {
-        i -= 1;
-        tmp[i] = b'0' + n as u8;
-    } else {
-        let r = n as usize;
-        i -= 2;
-        tmp[i] = DIGITS[r * 2];
-        tmp[i + 1] = DIGITS[r * 2 + 1];
+    unsafe {
+        let dst = buf.as_mut_ptr().add(start);
+        write_digit_width(std::slice::from_raw_parts_mut(dst, width), n);
+        buf.set_len(start + width);
     }
-    buf.extend_from_slice(&tmp[i..]);
 }
 
 fn push_u128(buf: &mut Vec<u8>, mut n: u128) {
@@ -1272,22 +1263,32 @@ fn push_round_trip(
 }
 
 fn write_finite(buf: &mut Vec<u8>, value: f64) {
+    // Thirty-two bytes covers the longest fixed decimal this path emits.
+    // An exact frame slice often has less room left than that, and growing
+    // it would move the bytes off the mapping, so a short tail uses a
+    // stack slot and copies only the finished spelling.
+    let spare = buf.capacity() - buf.len();
+    if spare >= 32 {
+        let start = buf.len();
+        let n = unsafe {
+            let dst = std::slice::from_raw_parts_mut(buf.as_mut_ptr().add(start), spare);
+            match encode_fixed_decimal(value, dst) {
+                Some(n) => n,
+                None => ryu::raw::format64(value, dst.as_mut_ptr()),
+            }
+        };
+        debug_assert!(n <= 24);
+        unsafe { buf.set_len(start + n) };
+        return;
+    }
     if let Some((bytes, n)) = encode_fixed_decimal_into(value) {
         buf.extend_from_slice(&bytes[..n]);
         return;
     }
-    // An exact output slice cannot spare 24 bytes of reserve. Spell into
-    // a stack slot unless the destination already has that room.
-    if buf.capacity() - buf.len() < 24 {
-        let mut tmp = [0u8; 24];
-        let n = unsafe { ryu::raw::format64(value, tmp.as_mut_ptr()) };
-        debug_assert!(n <= 24);
-        buf.extend_from_slice(&tmp[..n]);
-        return;
-    }
-    let n = unsafe { ryu::raw::format64(value, buf.as_mut_ptr().add(buf.len())) };
+    let mut tmp = [0u8; 24];
+    let n = unsafe { ryu::raw::format64(value, tmp.as_mut_ptr()) };
     debug_assert!(n <= 24);
-    unsafe { buf.set_len(buf.len() + n) };
+    buf.extend_from_slice(&tmp[..n]);
 }
 
 /// Byte length of one round-trip spelling. Matches [`push_round_trip`].
@@ -1315,22 +1316,137 @@ fn fixed_decimal_width(mag: f64, sign: bool) -> Option<usize> {
     if mag == 0.0 {
         return Some(sign_len + 3);
     }
-    if mag <= 1e16 && mag.fract() == 0.0 {
-        let n = mag as u64;
-        if n < 10u64.pow(16) && n as f64 == mag {
-            return Some(sign_len + count_digits(n) as usize + 2);
+    let (n, places) = fixed_decimal_parts(mag)?;
+    Some(sign_len + fixed_digits_len(n, places))
+}
+
+/// Shortest fixed decimal that matches `ryu`, when the value is an exact
+/// integer or an exact fraction of at most six digits and ryu would not
+/// switch to scientific form. `None` leaves the general formatter to run.
+fn encode_fixed_decimal_into(value: f64) -> Option<([u8; 32], usize)> {
+    let mut out = [0u8; 32];
+    let n = encode_fixed_decimal(value, &mut out[..])?;
+    Some((out, n))
+}
+
+/// Round a non-negative finite `scaled` half away from zero.
+///
+/// Values up to 2^53 use integer truncation, which matches `f64::round`
+/// there. Larger values, still at most 1e16, use the libm rounding.
+fn round_half_away(scaled: f64) -> f64 {
+    const EXACT_INT: f64 = 9007199254740992.0;
+    if scaled <= EXACT_INT {
+        // `scaled` is finite and in `0.0..=2^53`, so the truncation fits.
+        let trunc = unsafe { scaled.to_int_unchecked::<u64>() };
+        let frac = scaled - trunc as f64;
+        if frac >= 0.5 {
+            (trunc + 1) as f64
+        } else {
+            trunc as f64
+        }
+    } else {
+        scaled.round()
+    }
+}
+
+/// `Some(n)` when `mag` is an integer in `1 .. 1e16`.
+///
+/// The exponent bits reject fractions without a saturating float-to-int.
+fn exact_small_integer(mag: f64) -> Option<u64> {
+    let bits = mag.to_bits();
+    let exp = ((bits >> 52) & 0x7ff) as i32 - 1023;
+    if !(0..=53).contains(&exp) {
+        return None;
+    }
+    if exp < 52 {
+        let frac = bits & ((1u64 << 52) - 1);
+        let shift = (52 - exp) as u32;
+        if frac & ((1u64 << shift) - 1) != 0 {
+            return None;
         }
     }
+    // The exponent gate puts `mag` in `1.0 .. 2^54`.
+    let n = unsafe { mag.to_int_unchecked::<u64>() };
+    if n < 10_000_000_000_000_000 && (n as f64).to_bits() == bits {
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// `(digits, decimal places)` of the shortest exact decimal of at most
+/// six places, or `None` when [`encode_fixed_decimal`] must refuse.
+fn fixed_decimal_parts(mag: f64) -> Option<(u64, u32)> {
+    if let Some(n) = exact_small_integer(mag) {
+        return Some((n, 0));
+    }
+    // An exact k-place decimal with k <= 6 is exact at 6 places too,
+    // while 1e6 still fits. Coordinates land in this range.
     let scaled = mag * 1_000_000.0;
-    if !scaled.is_finite() || scaled > 1e16 {
+    if scaled <= 9007199254740992.0 {
+        return accept_million(mag, scaled);
+    }
+    if scaled.is_finite() && scaled <= 1e16 {
+        return accept_scaled(mag, scaled, 1_000_000.0, 6);
+    }
+    parts_below_million(mag)
+}
+
+/// Six-place probe for `scaled = mag * 1e6` at most 2^53.
+fn accept_million(mag: f64, scaled: f64) -> Option<(u64, u32)> {
+    let trunc = unsafe { scaled.to_int_unchecked::<u64>() };
+    let n = if scaled - (trunc as f64) >= 0.5 {
+        trunc + 1
+    } else {
+        trunc
+    };
+    if (n as f64) / 1_000_000.0 != mag {
         return None;
     }
-    let nearest = scaled.round();
-    let mut n = nearest as u64;
-    if nearest != n as f64 || (n as f64) / 1_000_000.0 != mag {
-        return None;
-    }
+    let mut n = n;
     let mut places = 6u32;
+    while places > 0 && n.is_multiple_of(10) {
+        n /= 10;
+        places -= 1;
+    }
+    if places == 0 {
+        return Some((n, 0));
+    }
+    let kk = count_digits(n) as i32 - places as i32;
+    if kk > -5 && kk <= 16 {
+        Some((n, places))
+    } else {
+        None
+    }
+}
+
+/// `mag * 1e6` overflowed. A shorter scale can still be exact.
+#[inline(never)]
+fn parts_below_million(mag: f64) -> Option<(u64, u32)> {
+    let mut scale = 10.0f64;
+    for d in 1u32..=5 {
+        let scaled = mag * scale;
+        if !scaled.is_finite() || scaled > 1e16 {
+            break;
+        }
+        if let Some(parts) = accept_scaled(mag, scaled, scale, d) {
+            return Some(parts);
+        }
+        scale *= 10.0;
+    }
+    None
+}
+
+fn accept_scaled(mag: f64, scaled: f64, scale: f64, places: u32) -> Option<(u64, u32)> {
+    let nearest = round_half_away(scaled);
+    // Callers pass a finite `scaled` of at most 1e16, and the rounding
+    // stays inside that range.
+    let n = unsafe { nearest.to_int_unchecked::<u64>() };
+    if nearest != n as f64 || (n as f64) / scale != mag {
+        return None;
+    }
+    let mut n = n;
+    let mut places = places;
     while places > 0 && n.is_multiple_of(10) {
         n /= 10;
         places -= 1;
@@ -1339,31 +1455,17 @@ fn fixed_decimal_width(mag: f64, sign: bool) -> Option<usize> {
         if n >= 10u64.pow(16) {
             return None;
         }
-        return Some(sign_len + count_digits(n) as usize + 2);
+        return Some((n, 0));
     }
     let digits = count_digits(n);
     let kk = digits as i32 - places as i32;
     if !(kk > -5 && kk <= 16) {
         return None;
     }
-    let body = if kk > 0 {
-        digits as usize + 1
-    } else {
-        2 + (-kk) as usize + digits as usize
-    };
-    Some(sign_len + body)
+    Some((n, places))
 }
 
-/// Shortest fixed decimal that matches `ryu`, when the value is an exact
-/// integer or an exact fraction of at most six digits and ryu would not
-/// switch to scientific form. `None` leaves the general formatter to run.
-fn encode_fixed_decimal_into(value: f64) -> Option<([u8; 32], usize)> {
-    let mut out = [0u8; 32];
-    let n = encode_fixed_decimal(value, &mut out)?;
-    Some((out, n))
-}
-
-fn encode_fixed_decimal(value: f64, out: &mut [u8; 32]) -> Option<usize> {
+fn encode_fixed_decimal(value: f64, out: &mut [u8]) -> Option<usize> {
     let bits = value.to_bits();
     let sign = bits >> 63 != 0;
     let mag = f64::from_bits(bits & !(1u64 << 63));
@@ -1372,90 +1474,66 @@ fn encode_fixed_decimal(value: f64, out: &mut [u8; 32]) -> Option<usize> {
         out[..text.len()].copy_from_slice(text);
         return Some(text.len());
     }
-    if mag <= 1e16 && mag.fract() == 0.0 {
-        let n = mag as u64;
-        if n < 10u64.pow(16) && n as f64 == mag {
-            return Some(write_fixed_digits(out, sign, n, 0));
-        }
-    }
-    let mut scale = 10.0f64;
-    for d in 1u32..=6 {
-        let scaled = mag * scale;
-        if !scaled.is_finite() || scaled > 1e16 {
-            break;
-        }
-        let nearest = scaled.round();
-        let n = nearest as u64;
-        if nearest == n as f64 && (n as f64) / scale == mag {
-            let mut n = n;
-            let mut places = d;
-            while places > 0 && n.is_multiple_of(10) {
-                n /= 10;
-                places -= 1;
-            }
-            if places == 0 {
-                if n >= 10u64.pow(16) {
-                    return None;
-                }
-                return Some(write_fixed_digits(out, sign, n, 0));
-            }
-            let digits = count_digits(n);
-            let kk = digits as i32 - places as i32;
-            if !(kk > -5 && kk <= 16) {
-                return None;
-            }
-            return Some(write_fixed_digits(out, sign, n, places));
-        }
-        scale *= 10.0;
-    }
-    None
+    let (n, places) = fixed_decimal_parts(mag)?;
+    Some(write_fixed_digits(out, sign, n, places))
 }
 
-fn count_digits(mut n: u64) -> u32 {
-    let mut digits = 1u32;
-    while n >= 10 {
-        n /= 10;
-        digits += 1;
+fn fixed_digits_len(n: u64, places: u32) -> usize {
+    let digits = count_digits(n) as usize;
+    if places == 0 {
+        return digits + 2;
     }
-    digits
-}
-
-fn write_fixed_digits(out: &mut [u8; 32], sign: bool, mut n: u64, places: u32) -> usize {
-    let mut tmp = [0u8; 20];
-    let mut i = tmp.len();
-    if n == 0 {
-        tmp[i - 1] = b'0';
-        i -= 1;
+    let kk = digits as i32 - places as i32;
+    if kk > 0 {
+        digits + 1
     } else {
-        while n > 0 {
-            i -= 1;
-            tmp[i] = b'0' + (n % 10) as u8;
-            n /= 10;
-        }
+        2 + (-kk) as usize + digits
     }
-    let digs = &tmp[i..];
+}
+
+fn count_digits(n: u64) -> u32 {
+    if n == 0 { 1 } else { n.ilog10() + 1 }
+}
+
+/// Write exactly `dst.len()` digits of `n`, with leading zeros.
+fn write_digit_width(dst: &mut [u8], mut n: u64) {
+    let mut i = dst.len();
+    while i >= 2 {
+        i -= 2;
+        let q = n / 100;
+        let r = (n % 100) as usize;
+        dst[i] = DIGIT_PAIRS[r * 2];
+        dst[i + 1] = DIGIT_PAIRS[r * 2 + 1];
+        n = q;
+    }
+    if i == 1 {
+        dst[0] = b'0' + (n % 10) as u8;
+    }
+}
+
+fn write_fixed_digits(out: &mut [u8], sign: bool, n: u64, places: u32) -> usize {
+    const POW10: [u64; 7] = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
+    let digits = count_digits(n) as usize;
     let mut at = 0usize;
     if sign {
         out[at] = b'-';
         at += 1;
     }
     if places == 0 {
-        out[at..at + digs.len()].copy_from_slice(digs);
-        at += digs.len();
+        write_digit_width(&mut out[at..at + digits], n);
+        at += digits;
         out[at] = b'.';
         out[at + 1] = b'0';
         return at + 2;
     }
-    let kk = digs.len() as i32 - places as i32;
+    let kk = digits as i32 - places as i32;
     if kk > 0 {
         let cut = kk as usize;
-        out[at..at + cut].copy_from_slice(&digs[..cut]);
-        at += cut;
-        out[at] = b'.';
-        at += 1;
-        out[at..at + digs.len() - cut].copy_from_slice(&digs[cut..]);
-        at += digs.len() - cut;
-        return at;
+        let scale = POW10[places as usize];
+        write_digit_width(&mut out[at..at + cut], n / scale);
+        out[at + cut] = b'.';
+        write_digit_width(&mut out[at + cut + 1..at + digits + 1], n % scale);
+        return at + digits + 1;
     }
     out[at] = b'0';
     out[at + 1] = b'.';
@@ -1464,8 +1542,8 @@ fn write_fixed_digits(out: &mut [u8; 32], sign: bool, mut n: u64, places: u32) -
         out[at] = b'0';
         at += 1;
     }
-    out[at..at + digs.len()].copy_from_slice(digs);
-    at + digs.len()
+    write_digit_width(&mut out[at..at + digits], n);
+    at + digits
 }
 
 /// Fixed-point `f64` with `prec` digits after the decimal, matching `{:.prec$}`.
@@ -3902,6 +3980,39 @@ fn write_group<W: Write>(
     writer.extend(group.iter().copied())
 }
 
+fn loose_frame_bytes(frame: &ConFrame) -> usize {
+    let mut blocks = 1usize;
+    if frame.has_velocities() {
+        blocks += 1;
+    }
+    if frame.has_forces() {
+        blocks += 1;
+    }
+    if frame.has_energies() {
+        blocks += 1;
+    }
+    if frame.has_charges() {
+        blocks += 1;
+    }
+    if frame.has_spins() {
+        blocks += 1;
+    }
+    if frame.has_magmoms() {
+        blocks += 1;
+    }
+    if frame.has_displacements() {
+        blocks += 1;
+    }
+    if frame.has_spreads() {
+        blocks += 1;
+    }
+    256 + frame
+        .atom_data
+        .len()
+        .saturating_mul(64)
+        .saturating_mul(blocks)
+}
+
 fn format_group_bytes(
     group: &[&ConFrame],
     workers: usize,
@@ -3919,6 +4030,10 @@ fn format_group_bytes(
     if workers >= 2 {
         writer = writer.parallel_atoms(workers);
     }
+    // One frame's reserve, repeated, copies the whole group each time it
+    // doubles. Size the scratch for every frame before the first byte.
+    let need: usize = group.iter().map(|frame| loose_frame_bytes(frame)).sum();
+    writer.scratch.reserve(need);
     write_group(&mut writer, group, bind)?;
     Ok(std::mem::take(&mut writer.scratch))
 }
@@ -4180,6 +4295,122 @@ mod float_format_tests {
                 continue;
             }
             assert_eq!(std::str::from_utf8(&got).unwrap(), expect, "{value:?}");
+        }
+    }
+
+    fn old_fixed(mag: f64) -> Option<(u64, u32)> {
+        if mag <= 1e16 && mag.fract() == 0.0 {
+            let n = mag as u64;
+            if n < 10u64.pow(16) && n as f64 == mag {
+                return Some((n, 0));
+            }
+        }
+        let mut scale = 10.0f64;
+        for d in 1u32..=6 {
+            let scaled = mag * scale;
+            if !scaled.is_finite() || scaled > 1e16 {
+                break;
+            }
+            let nearest = scaled.round();
+            let n = nearest as u64;
+            if nearest == n as f64 && (n as f64) / scale == mag {
+                let mut n = n;
+                let mut places = d;
+                while places > 0 && n.is_multiple_of(10) {
+                    n /= 10;
+                    places -= 1;
+                }
+                if places == 0 {
+                    if n >= 10u64.pow(16) {
+                        return None;
+                    }
+                    return Some((n, 0));
+                }
+                let digits = super::count_digits(n);
+                let kk = digits as i32 - places as i32;
+                if !(kk > -5 && kk <= 16) {
+                    return None;
+                }
+                return Some((n, places));
+            }
+            scale *= 10.0;
+        }
+        None
+    }
+
+    #[test]
+    fn one_scale_matches_the_six_step_search() {
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut values = vec![
+            -9283744841.119225_f64,
+            0.6394,
+            -0.0001,
+            1.25,
+            97.0,
+            -0.0,
+            1.0e-7,
+            -1.0e-7,
+            1.0e20,
+            -1.0e20,
+            1.0e16,
+            0.5,
+            1.5,
+            2.5,
+            f64::MIN,
+            f64::MAX,
+        ];
+        for _ in 0..50_000 {
+            state = state.wrapping_mul(0x5851_f42d_4c95_7f2d).wrapping_add(1);
+            values.push(f64::from_bits(state));
+        }
+        for value in values {
+            if !value.is_finite() {
+                continue;
+            }
+            let mag = value.abs();
+            let old = old_fixed(mag);
+            let new = super::fixed_decimal_parts(mag);
+            assert_eq!(new, old, "{value:?}");
+            if let Some((n, places)) = new {
+                let mut fast = [0u8; 32];
+                let mut slow = [0u8; 32];
+                let nfast =
+                    super::write_fixed_digits(&mut fast, value.is_sign_negative(), n, places);
+                let mut i = slow.len();
+                let mut x = n;
+                if x == 0 {
+                    i -= 1;
+                    slow[i] = b'0';
+                } else {
+                    while x > 0 {
+                        i -= 1;
+                        slow[i] = b'0' + (x % 10) as u8;
+                        x /= 10;
+                    }
+                }
+                let digs = &slow[i..];
+                let mut expect = Vec::new();
+                if value.is_sign_negative() {
+                    expect.push(b'-');
+                }
+                if places == 0 {
+                    expect.extend_from_slice(digs);
+                    expect.extend_from_slice(b".0");
+                } else {
+                    let kk = digs.len() as i32 - places as i32;
+                    if kk > 0 {
+                        let cut = kk as usize;
+                        expect.extend_from_slice(&digs[..cut]);
+                        expect.push(b'.');
+                        expect.extend_from_slice(&digs[cut..]);
+                    } else {
+                        expect.extend_from_slice(b"0.");
+                        expect.extend(std::iter::repeat_n(b'0', (-kk) as usize));
+                        expect.extend_from_slice(digs);
+                    }
+                }
+                assert_eq!(&fast[..nfast], expect.as_slice(), "{value:?} {n} {places}");
+            }
         }
     }
 
