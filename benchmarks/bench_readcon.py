@@ -83,6 +83,140 @@ def _ladder_con(src: Path, n_frames: int) -> str:
     return "".join(_perturb_frame(text, index) for index in range(n_frames))
 
 
+# Fixed seed for every-atom-moves files. The sequence is an xorshift64, not
+# the language runtime's generator, so the bytes do not depend on the host.
+_MOVE_SEED = 0x5EED_0C0FFE
+
+
+def _move_draw(seed: int = _MOVE_SEED):
+    state = seed & 0xFFFFFFFFFFFFFFFF or 1
+
+    def draw() -> int:
+        nonlocal state
+        x = state
+        x ^= (x << 13) & 0xFFFFFFFFFFFFFFFF
+        x ^= x >> 7
+        x ^= (x << 17) & 0xFFFFFFFFFFFFFFFF
+        state = x
+        return x
+
+    return draw
+
+
+def _move_delta(draw) -> float:
+    unit = (draw() >> 11) * (1.0 / 9007199254740992.0)
+    delta = (unit - 0.5) * 1.0e-2
+    if delta == 0.0:
+        return 1.0e-6
+    return delta
+
+
+def _numeric_token(token: str) -> bool:
+    body = token[1:] if token[:1] in "+-" else token
+    return bool(body) and (body[0].isdigit() or body[0] == ".")
+
+
+def _displace_frame(text: str, draw) -> str:
+    """Add a seeded shift to every coordinate, velocity, and force row."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    numeric = False
+    labels = (
+        "Coordinates of Component",
+        "Velocities of Component",
+        "Forces of Component",
+    )
+    for line in lines:
+        head = line.lstrip()
+        if head.startswith(labels):
+            numeric = True
+            out.append(line)
+            continue
+        if numeric:
+            if not line.strip():
+                numeric = False
+                out.append(line)
+                continue
+            parts = line.split()
+            if len(parts) >= 3 and _numeric_token(parts[0]):
+                for axis in range(3):
+                    parts[axis] = format(float(parts[axis]) + _move_delta(draw), ".16g")
+                end = "\n" if line.endswith("\n") else ""
+                out.append(" ".join(parts) + end)
+                continue
+            numeric = False
+        out.append(line)
+    return "".join(out)
+
+
+def _moving_con(src: Path, n_frames: int, seed: int = _MOVE_SEED) -> str:
+    """``n_frames`` copies of ``src`` with every atom moved after frame 0.
+
+    Frame 0 is the fixture. Each later frame draws new shifts for every
+    coordinate, velocity, and force component, so no numeric row is copied
+    from frame 0. The same seed always rebuilds the same text.
+    """
+    text = src.read_text()
+    draw = _move_draw(seed)
+    frames = [text]
+    for _ in range(1, n_frames):
+        frames.append(_displace_frame(text, draw))
+    return "".join(frames)
+
+
+def _repo() -> Path:
+    fixture = Path("resources") / "test" / "cuh2.con"
+    here = Path(__file__).resolve().parent.parent
+    if (here / fixture).is_file():
+        return here
+    cwd = Path.cwd().resolve()
+    if (cwd / fixture).is_file():
+        return cwd
+    raise FileNotFoundError("resources/test/cuh2.con")
+
+
+_MOVING_READ: dict[tuple[str, int], str] = {}
+_MOVING_WRITE: dict[tuple[str, int], list] = {}
+
+
+def _moving_source(kind: str) -> tuple[Path, str]:
+    root = _repo() / "resources" / "test"
+    src = {
+        "cuh2": root / "cuh2.con",
+        "convel": root / "tiny_cuh2.convel",
+        "forces": root / "tiny_cuh2_forces.con",
+    }[kind]
+    suffix = ".convel" if kind == "convel" else ".con"
+    return src, suffix
+
+
+def _moving_text(kind: str, n_frames: int) -> str:
+    src, _suffix = _moving_source(kind)
+    return _moving_con(src, int(n_frames))
+
+
+def _moving_path(kind: str, n_frames: int) -> str:
+    key = (kind, int(n_frames))
+    cached = _MOVING_READ.get(key)
+    if cached is not None:
+        return cached
+    _src, suffix = _moving_source(kind)
+    path = _write_temp(_moving_text(kind, int(n_frames)), suffix=suffix)
+    _MOVING_READ[key] = path
+    return path
+
+
+def _moving_write_frames(kind: str, n_frames: int):
+    key = (kind, int(n_frames))
+    cached = _MOVING_WRITE.get(key)
+    if cached is None:
+        import readcon
+
+        cached = readcon.read_con(_moving_path(kind, int(n_frames)))
+        _MOVING_WRITE[key] = cached
+    return cached
+
+
 def _bench_dir() -> Path:
     path = REPO / "build" / "bench"
     path.mkdir(parents=True, exist_ok=True)
@@ -810,6 +944,141 @@ class RayReadForcesThreads:
         _read_con_threads(self._path, self._n, 4, self._threads)
 
 
+class TimeReadMovingCuh2:
+    """Threaded read of cuh2 where every atom moves on every frame."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params((50, 100))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _moving_path("cuh2", n) for n in (50, 100)}
+
+    def time_read_moving(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 218, int(n_threads))
+
+
+class RayReadMovingCuh2:
+    """Memray peak of the every-atom-moves cuh2 read."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params((50, 100))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        self._path = _write_temp(_moving_text("cuh2", n_frames))
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 218, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_moving(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 218, self._threads)
+
+
+class TimeReadMovingConvel:
+    """Threaded read of the velocity file where every atom moves."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _moving_path("convel", n) for n in (100, 200)}
+
+    def time_read_moving(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 4, int(n_threads))
+
+
+class RayReadMovingConvel:
+    """Memray peak of the every-atom-moves velocity read."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        self._path = _write_temp(_moving_text("convel", n_frames), suffix=".convel")
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_moving(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+
+class TimeReadMovingForces:
+    """Threaded read of the force file where every atom moves."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _moving_path("forces", n) for n in (100, 200)}
+
+    def time_read_moving(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 4, int(n_threads))
+
+
+class RayReadMovingForces:
+    """Memray peak of the every-atom-moves force read."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        self._path = _write_temp(_moving_text("forces", n_frames))
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_moving(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+
 def _built_cuh2(n_frames: int):
     """Constructed frames, not a column-backed read of a repeated file."""
     import readcon
@@ -932,6 +1201,93 @@ class RayWritePythonCuh2:
             pass
 
     def ray_write_python_frames(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(self._path, self._frames)
+
+
+class TimeWriteMovingCuh2:
+    """``write_con`` of cuh2 frames whose atoms all move."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = [50, 100]
+    param_names = ["n_frames"]
+
+    def time_write_moving(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(
+            _write_target("write-moving-cuh2.con"),
+            _moving_write_frames("cuh2", n_frames),
+        )
+
+
+class TimeWriteMovingConvel:
+    """``write_con`` of velocity frames whose atoms all move."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = [100, 200]
+    param_names = ["n_frames"]
+
+    def time_write_moving(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(
+            _write_target("write-moving-convel.con"),
+            _moving_write_frames("convel", n_frames),
+        )
+
+
+class TimeWriteMovingForces:
+    """``write_con`` of force frames whose atoms all move."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = [100, 200]
+    param_names = ["n_frames"]
+
+    def time_write_moving(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(
+            _write_target("write-moving-forces.con"),
+            _moving_write_frames("forces", n_frames),
+        )
+
+
+class RayWriteMovingCuh2:
+    """Memray peak of writing cuh2 frames whose atoms all move."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = [50, 100]
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        self._frames = _moving_write_frames("cuh2", n_frames)
+        self._path = _write_target("ray-write-moving-cuh2.con")
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_write_moving(self, n_frames: int) -> None:
         import readcon
 
         readcon.write_con(self._path, self._frames)
