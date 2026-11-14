@@ -530,17 +530,28 @@ impl<W: Write> ConFrameWriter<W> {
             frame.has_spreads(),
         ];
         let line = frame.header.prebox_header.metadata_line();
+        // Energy, neb_bead, and every other metadata key live in the header.
+        // A matching atom skeleton is not the same header.
+        let incoming = binding_metadata(frame);
+        let meta_same = self
+            .bound
+            .as_ref()
+            .is_some_and(|item| item.spec == spec && item.meta == incoming);
         let reuse = self.exact_scratch
-            && self.bound.is_some()
-            && self.bound.as_ref().is_some_and(|item| item.spec == spec)
+            && meta_same
             && self.bound_flags == Some(flags)
             && self.bound_line.as_deref() == Some(line);
         if !reuse {
             self.bound = Some(BoundHeader {
-                meta: binding_metadata(frame),
+                meta: incoming,
                 spec,
             });
             if self.exact_scratch {
+                // The cached JSON also lists the sections. Drop it whenever
+                // this frame is not the one that filled the cache.
+                if !meta_same || self.bound_flags != Some(flags) {
+                    self.metadata_cache = None;
+                }
                 self.bound_flags = Some(flags);
                 self.bound_vel = Some(flags[0]);
                 self.bound_line = Some(line.to_string());
