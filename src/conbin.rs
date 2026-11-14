@@ -2082,8 +2082,8 @@ fn mix_unit(seed: u64, index: u64) -> f64 {
 /// use std::path::Path;
 ///
 /// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
-/// let dir = readcon_core::conbin::streaming_dir().expect("build/test");
-/// let out = dir.join("tiny.bin");
+/// let dir = tempfile::tempdir().unwrap();
+/// let out = dir.path().join("tiny.bin");
 /// let header = write_from_con(&src, &out, false).unwrap();
 /// assert_eq!((header.n_frames, header.n_atoms), (1, 4));
 /// let (again, positions, velocities) = read_owned_f64(&out, 1).unwrap();
@@ -2091,7 +2091,6 @@ fn mix_unit(seed: u64, index: u64) -> f64 {
 /// assert_eq!(positions.len(), 12);
 /// assert!((positions[0] - 0.6394).abs() < 1e-4);
 /// assert_eq!(velocities.len(), 12);
-/// let _ = std::fs::remove_dir_all(dir);
 /// ```
 pub fn write_from_con(
     con_path: &Path,
@@ -2215,40 +2214,6 @@ fn write_conbin_body(
         .map_err(|err| ParseError::ValidationError(err.to_string()))?;
     write_header_page(file, &header, page)?;
     Ok(())
-}
-
-/// Unique directory under `build/test` for a conbin test or doctest.
-/// `None` when that directory is tmpfs: `POSIX_FADV_DONTNEED` does not
-/// drop tmpfs pages, so a residency check there cannot fail closed.
-/// Hidden: the read and write paths do not call it.
-#[doc(hidden)]
-pub fn streaming_dir() -> Option<std::path::PathBuf> {
-    let base = crate::scratch::root();
-    #[cfg(target_os = "linux")]
-    if dir_is_tmpfs(&base) {
-        return None;
-    }
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let dir = base.join(format!(
-        "conbin-stream-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).ok()?;
-    Some(dir)
-}
-
-#[cfg(target_os = "linux")]
-fn dir_is_tmpfs(path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    let Ok(c) = std::ffi::CString::new(text.as_bytes()) else {
-        return false;
-    };
-    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-    let rc = unsafe { libc::statfs(c.as_ptr(), &mut stat) };
-    // include/uapi/linux/magic.h TMPFS_MAGIC
-    rc == 0 && stat.f_type == 0x01021994
 }
 
 #[cfg(test)]
@@ -2403,7 +2368,8 @@ mod tests {
 
     #[test]
     fn mapped_runs_match_the_pread_fill() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let mapped = map_file(&path, 2).unwrap();
@@ -2418,7 +2384,7 @@ mod tests {
         read_into_threads(&path, &mut got_pos, Some(&mut got_vel), 2).unwrap();
         assert_eq!(got_pos, pos);
         assert_eq!(got_vel, vel);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     struct HookGuard {
@@ -2440,7 +2406,8 @@ mod tests {
 
     #[test]
     fn populate_failure_still_reads_the_same_values() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let plain = map_file(&path, 2).unwrap();
@@ -2456,12 +2423,13 @@ mod tests {
         read_into_threads(&path, &mut got_pos, Some(&mut got_vel), 2).unwrap();
         assert_eq!(got_pos, expect_pos);
         assert_eq!(got_vel, expect_vel);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn mmap_failure_still_reads_the_same_values() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let plain = map_file(&path, 1).unwrap();
@@ -2472,12 +2440,13 @@ mod tests {
         let mapped = map_file(&path, 1).unwrap();
         assert_eq!(mapped.positions_f64().unwrap(), expect_pos.as_slice());
         assert_eq!(mapped.velocities_f64().unwrap(), expect_vel.as_slice());
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn writer_stores_one_known_value_little_endian() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("one.conbin");
         // Second position is 0.25. Its little-endian bytes are fixed.
         write_known(&path, 1, 1);
@@ -2491,12 +2460,13 @@ mod tests {
         let mut vel = vec![0.0; got.len()];
         read_into_threads(&path, &mut got, Some(&mut vel), 1).unwrap();
         assert_eq!(got[1], known);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn write_from_con_round_trips_text() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let con = dir.join("two.con");
         std::fs::write(
             &con,
@@ -2517,12 +2487,13 @@ mod tests {
         assert_eq!(mapped.cell_f64().unwrap().unwrap().len(), 2 * 6);
         assert_eq!(mapped.fixed_masks().unwrap().unwrap().len(), 2 * 4);
         assert_eq!(mapped.atom_ids().unwrap().unwrap().len(), 2 * 4);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_store_copies_the_page_and_leaves_the_file() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("known.conbin");
         write_known(&path, 2, 4);
         let before = std::fs::read(&path).unwrap();
@@ -2537,7 +2508,7 @@ mod tests {
         assert_eq!(before, after);
         let reread = map_file(&path, 1).unwrap();
         assert_eq!(reread.positions_f64().unwrap()[0], 0.0);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -2556,14 +2527,15 @@ mod tests {
         assert_eq!(off, 4096);
         assert_ne!(off, 16 * 1024);
         assert_ne!(off, 64 * 1024);
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let path = dir.join("known.conbin");
         std::fs::write(&path, &bytes).unwrap();
         let mapped = map_file(&path, 1).unwrap();
         assert_eq!(mapped.payload_off, 4096);
         assert_eq!(mapped.positions_f64().unwrap()[0], 1.25);
         assert_eq!(mapped.velocities_f64().unwrap()[0], -2.5);
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn write_typed(path: &Path, binary32: bool, velocities: bool) {
@@ -2575,7 +2547,8 @@ mod tests {
 
     #[test]
     fn sum_mapped_rejects_binary32_and_a_missing_velocity_run() {
-        let dir = super::streaming_dir().expect("build/test");
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch.path();
         let binary32 = dir.join("f32.conbin");
         write_typed(&binary32, true, true);
         let err = sum_mapped(&binary32, 1).unwrap_err();
@@ -2592,19 +2565,45 @@ mod tests {
         let mapped = map_file(&known, 1).unwrap();
         assert_eq!(pos.as_slice(), mapped.positions_f64().unwrap());
         assert_eq!(vel.as_slice(), mapped.velocities_f64().unwrap());
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
-    fn streaming_dir() -> Option<std::path::PathBuf> {
-        super::streaming_dir()
+    /// A real disk for the readahead check. `POSIX_FADV_DONTNEED` does not
+    /// drop tmpfs pages, so a tmpfs directory cannot host that test.
+    #[cfg(target_os = "linux")]
+    fn disk_dir() -> Option<tempfile::TempDir> {
+        for rel in ["target", "build"] {
+            let base = Path::new(rel);
+            if std::fs::create_dir_all(base).is_err() || dir_is_tmpfs(base) {
+                continue;
+            }
+            if let Ok(dir) = tempfile::tempdir_in(base) {
+                return Some(dir);
+            }
+        }
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    fn dir_is_tmpfs(path: &Path) -> bool {
+        let text = path.to_string_lossy();
+        let Ok(c) = std::ffi::CString::new(text.as_bytes()) else {
+            return false;
+        };
+        let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
+        let rc = unsafe { libc::statfs(c.as_ptr(), &mut stat) };
+        // include/uapi/linux/magic.h TMPFS_MAGIC
+        rc == 0 && stat.f_type == 0x01021994
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn a_cold_multi_megabyte_file_uses_the_readahead_stream() {
-        let Some(dir) = streaming_dir() else {
-            panic!("no non-tmpfs directory for the readahead stream");
+        let Some(tmp) = disk_dir() else {
+            eprintln!("skip: target and build are tmpfs, so the readahead check cannot drop pages");
+            return;
         };
+        let dir = tmp.path();
         let path = dir.join("cold.conbin");
         // Larger than the kernel readahead window, so `MADV_SEQUENTIAL`
         // cannot make every page resident before the stream starts.
@@ -2627,19 +2626,16 @@ mod tests {
             + mapped.velocities_f64().unwrap().iter().sum::<f64>();
         assert_eq!(got, expect);
         assert_eq!(split, expect);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn sum_mapped_streams_when_pages_are_not_resident() {
-        let Some(dir) = streaming_dir() else {
-            panic!(
-                "sum_mapped_streams_when_pages_are_not_resident: build/test is tmpfs, and POSIX_FADV_DONTNEED leaves tmpfs pages resident"
-            );
+        let Some(tmp) = disk_dir() else {
+            eprintln!("skip: target and build are tmpfs, so the readahead check cannot drop pages");
+            return;
         };
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = tmp.path();
         let path = dir.join("known.conbin");
         write_known(&path, 2, 32);
         let file = File::open(&path).unwrap();
@@ -2673,7 +2669,7 @@ mod tests {
         let expect = mapped.positions_f64().unwrap().iter().sum::<f64>()
             + mapped.velocities_f64().unwrap().iter().sum::<f64>();
         assert_eq!(got, expect, "{got} {expect}");
-        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// Fills both columns with `pread` into spare capacity.

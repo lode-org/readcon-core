@@ -867,7 +867,10 @@ mod tests {
 
     #[test]
     fn sidecar_roundtrip_and_staleness() {
-        let dir = crate::scratch::root().join(format!("rcidx-test-{}", std::process::id()));
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch
+            .path()
+            .join(format!("rcidx-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
         let text = fixture(5);
@@ -900,7 +903,10 @@ mod tests {
 
     #[test]
     fn content_hash_matches_file_fingerprint() {
-        let dir = crate::scratch::root().join(format!("rcidx-hash-{}", std::process::id()));
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch
+            .path()
+            .join(format!("rcidx-hash-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
         for text in [String::new(), fixture(40)] {
@@ -1028,6 +1034,7 @@ mod tests {
     /// matches a sidecar fingerprinted from the file.
     #[test]
     fn rank_slices_hash_matches_the_full_file() {
+        let _scratch = tempfile::tempdir().unwrap();
         let data: Vec<u8> = (0..HASH_BLOCK * 2 + 64).map(|i| (i % 251) as u8).collect();
         let whole = content_hash(&data);
         let layouts: [&[usize]; 4] = [
@@ -1061,7 +1068,9 @@ mod tests {
             );
         }
 
-        let dir = crate::scratch::root().join(format!("rcidx-ranks-{}", std::process::id()));
+        let dir = _scratch
+            .path()
+            .join(format!("rcidx-ranks-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("t.con");
         std::fs::write(&path, &data).unwrap();
@@ -1086,7 +1095,10 @@ mod tests {
 
     #[test]
     fn known_hash_sidecar_matches_a_file_fingerprint() {
-        let dir = crate::scratch::root().join(format!("rcidx-known-{}", std::process::id()));
+        let _scratch = tempfile::tempdir().unwrap();
+        let dir = _scratch
+            .path()
+            .join(format!("rcidx-known-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
         let text = fixture(4);
@@ -1119,8 +1131,11 @@ mod tests {
     /// Publish a sidecar scanned from `old`, then put `new` (same length)
     /// on disk and open it with and without write-back.
     fn reopen_after_edit(name: &str, old: &str, new: &str) -> Vec<FrameIndex> {
+        let _scratch = tempfile::tempdir().unwrap();
         assert_eq!(old.len(), new.len());
-        let dir = crate::scratch::root().join(format!("rcidx-{name}-{}", std::process::id()));
+        let dir = _scratch
+            .path()
+            .join(format!("rcidx-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let con = dir.join("t.con");
         std::fs::write(&con, old).unwrap();

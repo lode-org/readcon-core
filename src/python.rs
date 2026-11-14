@@ -5278,19 +5278,13 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
 mod batch_location_tests {
     use super::{CountFail, box_to_count_fail};
 
-    fn later_frame_path() -> std::path::PathBuf {
-        let path = crate::scratch::root().join(format!(
-            "readcon-batch-later-{}-{}.con",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ));
+    fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("later.con");
         let good = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
         let bad = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n-1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
         std::fs::write(&path, format!("{good}{bad}")).unwrap();
-        path
+        (dir, path)
     }
 
     fn assert_later(fail: CountFail) {
@@ -5313,7 +5307,7 @@ mod batch_location_tests {
     #[test]
     #[allow(clippy::type_complexity)]
     fn batch_readers_keep_the_later_frame_location() {
-        let path = later_frame_path();
+        let (_dir, path) = later_frame_path();
         let cases: [(
             Option<usize>,
             fn(&std::path::Path, Option<usize>) -> CountFail,
@@ -5355,17 +5349,11 @@ mod batch_location_tests {
         format!("{good}{bad}").into_bytes()
     }
 
-    fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
-        let path = crate::scratch::root().join(format!(
-            "readcon-batch-class-{}-{}.con",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ));
+    fn write_temp(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("case.con");
         std::fs::write(&path, bytes).unwrap();
-        path
+        (dir, path)
     }
 
     #[allow(clippy::type_complexity)]
@@ -5392,7 +5380,7 @@ mod batch_location_tests {
         let mut bytes = later_frame_bytes();
         bytes.resize(64 * 1024, b' ');
         bytes.push(0xff);
-        let path = write_temp(&bytes);
+        let (_dir, path) = write_temp(&bytes);
         for (threads, fail_of_reader) in class_cases() {
             assert_later(fail_of_reader(&path, threads));
         }
@@ -5416,7 +5404,7 @@ mod batch_location_tests {
             (None, err_positions),
             (Some(2), err_positions),
         ] {
-            let path = write_temp(&bytes);
+            let (_dir, path) = write_temp(&bytes);
             let err = read_err(&path, threads);
             std::fs::remove_file(&path).unwrap();
             assert_later(box_to_count_fail(err));

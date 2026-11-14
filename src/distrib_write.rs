@@ -1458,6 +1458,7 @@ mod ranked_sink_tests {
     /// boundary must not leave the previous contents in place.
     #[test]
     fn a_same_length_rewrite_replaces_every_byte() {
+        let _scratch = tempfile::tempdir().unwrap();
         let splits: &[&[usize]] = &[&[16], &[10, 6], &[1, 0, 15], &[4090, 20], &[3, 5, 0, 8]];
         for (case, split) in splits.iter().enumerate() {
             let total: usize = split.iter().sum();
@@ -1466,7 +1467,8 @@ mod ranked_sink_tests {
                 std::process::id()
             ));
             if std::fs::write(&path, vec![b'x'; total]).is_err() {
-                let path = crate::scratch::root()
+                let path = _scratch
+                    .path()
                     .join(format!("readcon-rewrite-{}-{case}", std::process::id()));
                 rewrite_same_length(&path, split);
                 let _ = std::fs::remove_file(&path);
@@ -1507,8 +1509,10 @@ mod ranked_sink_tests {
     /// The default store is the shared publisher. It leaves no `.rewrite` file.
     #[test]
     fn a_fresh_ranked_file_leaves_no_rewrite_sibling() {
-        let path =
-            crate::scratch::root().join(format!("readcon-fresh-rank-{}.con", std::process::id()));
+        let _scratch = tempfile::tempdir().unwrap();
+        let path = _scratch
+            .path()
+            .join(format!("readcon-fresh-rank-{}.con", std::process::id()));
         let spare = path.with_file_name(format!(
             "{}.rewrite",
             path.file_name().unwrap().to_string_lossy()
@@ -1547,9 +1551,11 @@ mod ranked_sink_tests {
     /// third same-length store fills the first inode.
     #[test]
     fn a_ranked_spare_reuses_the_inode_and_leaves_the_published_file() {
+        let _scratch = tempfile::tempdir().unwrap();
         use std::os::unix::fs::MetadataExt;
-        let path =
-            crate::scratch::root().join(format!("readcon-rank-spare-{}.con", std::process::id()));
+        let path = _scratch
+            .path()
+            .join(format!("readcon-rank-spare-{}.con", std::process::id()));
         let spare_name = path.with_file_name(format!(
             "{}.rewrite",
             path.file_name().unwrap().to_string_lossy()

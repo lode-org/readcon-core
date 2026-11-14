@@ -3105,6 +3105,7 @@ Cu 4.0 5.0 6.0 63.546
 
     #[test]
     fn frames_cover_quotes_angles_blank_lines_and_errors() {
+        let _scratch = tempfile::tempdir().unwrap();
         assert_eq!(
             tables_from_extxyz_bytes(
                 b"1\nLattice=\"1 0 0 0 1 0 0 0 1\" Properties=pos:R:3\nCu nope 0 0\n"
@@ -3202,8 +3203,9 @@ Cu 4.0 5.0 6.0 63.546
 
         let missing = tables_from_extxyz_path(std::path::Path::new("/no/such/extxyz")).unwrap_err();
         assert_eq!(missing, "read");
-        let path =
-            crate::scratch::root().join(format!("readcon-extxyz-{}.xyz", std::process::id()));
+        let path = _scratch
+            .path()
+            .join(format!("readcon-extxyz-{}.xyz", std::process::id()));
         std::fs::write(&path, no_newline).unwrap();
         let from_path = tables_from_extxyz_path(&path).unwrap();
         assert_eq!(from_path.n_frames, 1);
@@ -3410,7 +3412,8 @@ Al 2 0 0 delta 0.125 0.25 0.5
 
     #[test]
     fn path_writes_match_the_serial_bytes_for_mixed_frames_and_a_wide_frame() {
-        fn write_both(text: &str, workers: usize) -> (Vec<u8>, Vec<u8>) {
+        let scratch = tempfile::tempdir().unwrap();
+        fn write_both(dir: &std::path::Path, text: &str, workers: usize) -> (Vec<u8>, Vec<u8>) {
             let tables = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
             let symbols = expanded_species(&tables);
             let mut columns = tables.columns.clone();
@@ -3432,7 +3435,7 @@ Al 2 0 0 delta 0.125 0.25 0.5
                 1,
             )
             .unwrap();
-            let path = crate::scratch::root().join(format!(
+            let path = dir.join(format!(
                 "readcon-extxyz-path-{}-{workers}-{}.xyz",
                 std::process::id(),
                 tables.n_frames
@@ -3456,7 +3459,7 @@ Al 2 0 0 delta 0.125 0.25 0.5
                 "2\nLattice=\"{frame}.5 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\nCu 0.1 0.2 0.3\nH 1 0 0\n"
             ));
         }
-        let (memory, got) = write_both(&many, 8);
+        let (memory, got) = write_both(scratch.path(), &many, 8);
         assert_eq!(got, memory);
         let mut wide = String::from(
             "4096\nLattice=\"4 0 0 0 5 0 0 0 6\" Properties=species:S:1:pos:R:3 pbc=\"T T T\"\n",
@@ -3465,7 +3468,7 @@ Al 2 0 0 delta 0.125 0.25 0.5
             let symbol = if index < 2048 { "Cu" } else { "Ni" };
             wide.push_str(&format!("{symbol} {index}.125 0.25 0.5\n"));
         }
-        let (memory, got) = write_both(&wide, 8);
+        let (memory, got) = write_both(scratch.path(), &wide, 8);
         assert_eq!(got, memory);
     }
 

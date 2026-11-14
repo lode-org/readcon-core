@@ -69,7 +69,7 @@ Path A — Python full wheel (recommended)
 .. code:: shell
 
     python -m venv .venv && source .venv/bin/activate
-    pip install -U 'readcon-chemfiles==0.23.2'
+    pip install -U 'readcon-chemfiles==0.23.3'
     python -c "import readcon; print(readcon.has_chemfiles_support())"  # True
 
 Path B — Rust with chemfiles

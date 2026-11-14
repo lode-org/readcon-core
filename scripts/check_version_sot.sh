@@ -205,11 +205,12 @@ allow_exact = {
     # The one macro the paper reads. scripts/cargo_version_tex.py writes
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
-    # The fidelity campaign records the package it measured.
+}
+# Measured campaigns keep the package version they were timed with.
+# A later release must not rewrite that field to VERSION.
+recorded_results = {
     "bench/fidelity/results/fidelity.json",
     "bench/fidelity/results/timing.json",
-    # The head-to-head pin records the readcon build that was timed,
-    # the same way the fidelity results do.
     "bench/h2h/versions.json",
 }
 skip_dirs = {
@@ -241,7 +242,7 @@ for raw in listed.split(b"\0"):
     parts = set(pathlib.PurePosixPath(rel).parts)
     if rel.startswith(skip_prefixes) or parts & skip_dirs or any(part in skip_dirs for part in parts):
         continue
-    if rel in allow_exact or rel.startswith("docs/source/") and rel.endswith(".rst"):
+    if rel in allow_exact or rel in recorded_results or rel.startswith("docs/source/") and rel.endswith(".rst"):
         continue
     try:
         data = path.read_text(encoding="utf-8")
@@ -262,6 +263,28 @@ else:
     print("OK: no stray package-version strings")
 
 required = sorted(allow_exact - {"VERSION", "CHANGELOG.md", "Cargo.lock"})
+measured = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]+)?$")
+for rel in sorted(recorded_results):
+    payload = json.loads((root / rel).read_text(encoding="utf-8"))
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            value = node.get("readcon")
+            if isinstance(value, str) and measured.fullmatch(value):
+                found.append(value)
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(payload)
+    versions = sorted(set(found))
+    if len(versions) != 1:
+        die(f"{rel} must record one measured readcon version, found {versions}")
+    else:
+        print(f"OK: {rel} records measured readcon {versions[0]}")
 for rel in required:
     data = (root / rel).read_text(encoding="utf-8")
     if version not in data:

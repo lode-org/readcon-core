@@ -178,7 +178,7 @@ How to install lean CON I/O only (no libchemfiles)
 
 .. code:: shell
 
-    pip install 'readcon==0.23.2'          # has_chemfiles_support() is False
+    pip install 'readcon==0.23.3'          # has_chemfiles_support() is False
     cargo build                            # stubs; FeatureDisabled on import/select
 
 Selection symbols still import in Python/Rust; they error clearly. Use this
@@ -189,7 +189,7 @@ How to install full chemfiles support
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.23.2'   # preferred PyPI
+    pip install 'readcon-chemfiles==0.23.3'   # preferred PyPI
     # or: pip install 'readcon[chemfiles]'   # depends on readcon-chemfiles==X.Y.Z
     cargo build --features chemfiles
     maturin develop --features python,chemfiles

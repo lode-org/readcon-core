@@ -5300,8 +5300,9 @@ mod phased_read_tests {
 
     #[test]
     fn phased_file_matches_serial_and_maps_a_wide_file() {
+        let _scratch = tempfile::tempdir().unwrap();
         let text = fixture("cuh2.con").repeat(5);
-        let dir = crate::scratch::root();
+        let dir = _scratch.path();
         let path = dir.join("readcon-phased-wide.con");
         std::fs::write(&path, &text).expect("write");
         let phased = read_all_frames_phased(&path, Some(4)).expect("phased");
@@ -5547,7 +5548,8 @@ mod later_frame_location_tests {
     /// A second open of the path is not required.
     #[test]
     fn batch_readers_keep_the_later_frame_on_the_first_pass() {
-        let path = crate::scratch::root().join(format!(
+        let _scratch = tempfile::tempdir().unwrap();
+        let path = _scratch.path().join(format!(
             "readcon-later-frame-first-{}.con",
             std::process::id()
         ));
@@ -5598,7 +5600,8 @@ mod later_frame_location_tests {
 
     #[test]
     fn count_frames_locates_the_later_frame() {
-        let path = crate::scratch::root().join(format!(
+        let _scratch = tempfile::tempdir().unwrap();
+        let path = _scratch.path().join(format!(
             "readcon-later-frame-count-{}.con",
             std::process::id()
         ));
@@ -5642,12 +5645,14 @@ mod later_frame_location_tests {
     /// that used to return the later slot.
     #[test]
     fn parallel_positions_report_the_earliest_failing_slot() {
+        let _scratch = tempfile::tempdir().unwrap();
         const SLOW_ATOMS: usize = 20_000;
         let slow = counted_frame(SLOW_ATOMS);
         let bad = counted_frame(1);
         let text = format!("{slow}{bad}{bad}{bad}");
         let earliest_line = 1 + slow.bytes().filter(|byte| *byte == b'\n').count() as u32;
-        let path = crate::scratch::root()
+        let path = _scratch
+            .path()
             .join(format!("readcon-earliest-slot-{}.con", std::process::id()));
         fs::write(&path, &text).unwrap();
         assert_earliest_slot(

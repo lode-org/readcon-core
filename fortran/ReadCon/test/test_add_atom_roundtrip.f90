@@ -314,10 +314,13 @@ contains
 
   subroutine make_work_dir(dir)
     character(len=:), allocatable, intent(out) :: dir
-    character(len=*), parameter :: raw = "/tmp/readcon_fortran_add_atom_XXXXXX"
+    character(len=*), parameter :: raw = "build/readcon_fortran_add_atom_XXXXXX"
     character(kind=c_char) :: tmpl(len(raw) + 1)
     type(c_ptr) :: p
-    integer :: i
+    integer :: i, st
+    ! CWD is the fpm package directory, or the CMake/Meson build directory
+    ! when the test is launched from there. mkdtemp needs the parent.
+    call execute_command_line("mkdir -p build", exitstat=st)
     do i = 1, len(raw)
       tmpl(i) = raw(i:i)
     end do
