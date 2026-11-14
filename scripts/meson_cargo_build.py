@@ -83,8 +83,6 @@ def main(argv: list[str]) -> int:
         cmd.append("--offline")
     if profile == "release":
         cmd.append("--release")
-    if features.strip():
-        cmd.extend(["--features", features.strip()])
     env = os.environ.copy()
     rustc_extra: list[str] = []
     if sys.platform.startswith("linux"):
@@ -93,8 +91,19 @@ def main(argv: list[str]) -> int:
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
+    # The cdylib asks mimalloc for local-dynamic TLS. The staticlib does
+    # not, so a statically linked binary keeps initial-exec.
     for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
-        crate_cmd = cmd + ["--crate-type", crate_type]
+        crate_features = features.strip()
+        if crate_type == "cdylib":
+            crate_features = ",".join(
+                part for part in (crate_features, "local_dynamic_tls") if part
+            )
+        crate_cmd = list(cmd)
+        if crate_features:
+            crate_cmd.extend(["--features", crate_features])
+        crate_cmd.append("--crate-type")
+        crate_cmd.append(crate_type)
         if extra:
             crate_cmd += ["--", *extra]
         crate_env = env.copy()
