@@ -276,7 +276,7 @@ def con_atoms(im):
 
 
 def con_frame(readcon, im):
-    """The CON 3.1 frame of an image; from_ase stamps the library's own minor (1 in readcon-core 0.23.3)."""
+    """The CON 3.1 frame of an image; from_ase stamps the minor this library stamps."""
     f = readcon.ConFrame.from_ase(con_atoms(im))
     f.metadata = dict(f.metadata, con_spec_version=3, con_spec_minor=1)
     return f
