@@ -9,6 +9,8 @@
 # Requires chemfiles-linked readcon. Optional papermill (READCON_NB_PAPERMILL=1)
 # fails hard if enabled and papermill fails.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -60,7 +62,7 @@ ensure_chemfiles_python() {
 
 ensure_chemfiles_python
 
-BEFORE="$(mktemp)"
+BEFORE="$(scratch_file)"
 if [[ -f "$TANGLE_PY" ]]; then
   cp "$TANGLE_PY" "$BEFORE"
 else

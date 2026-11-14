@@ -10,6 +10,8 @@
 # (that was the prior bug: maturin built an uninstrumented extension → no
 # profraw → empty report).
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT="${1:-python_lcov.info}"
@@ -86,7 +88,7 @@ if ! compgen -G "${PROF_GLOB}"/*.profraw > /dev/null 2>&1 \
 fi
 
 # Full report then filter to src/python.rs (rustc regex has no lookaround)
-TMP_LCOV="$(mktemp)"
+TMP_LCOV="$(scratch_file)"
 cargo llvm-cov report --lcov --output-path "$TMP_LCOV"
 python3 - "$TMP_LCOV" "$OUT" <<'PY'
 import sys

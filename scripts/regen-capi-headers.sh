@@ -13,6 +13,8 @@
 #
 # Requires cbindgen on PATH. Install with: cargo install cbindgen
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HEADER_DST="${ROOT_DIR}/include/readcon-core.h"
@@ -28,7 +30,7 @@ if ! command -v cbindgen >/dev/null 2>&1; then
 fi
 
 if [[ "${CHECK_ONLY}" -eq 1 ]]; then
-    tmp="$(mktemp)"
+    tmp="$(scratch_file)"
     trap 'rm -f "${tmp}"' EXIT
     cbindgen \
         --config "${ROOT_DIR}/cbindgen.toml" \

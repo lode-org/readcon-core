@@ -9,6 +9,8 @@
 # Local interactive C-c C-c in Emacs is fine for humans; CI does not use
 # session execute as a second success path (session vs tangle can disagree).
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -56,7 +58,7 @@ if ! python3 -c "import readcon" 2>/dev/null; then
 fi
 
 # Snapshot committed (or pre-tangle) bytes for drift check.
-BEFORE="$(mktemp)"
+BEFORE="$(scratch_file)"
 if [[ -f "$TANGLE_PY" ]]; then
   cp "$TANGLE_PY" "$BEFORE"
 else

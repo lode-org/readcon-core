@@ -18,6 +18,8 @@
 # line, when a fixture is supposed to be this large. The figure above is
 # not listed: it is not part of this branch.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -42,7 +44,7 @@ if [[ -f "$allowfile" ]]; then
   done < "$allowfile"
 fi
 
-list="$(mktemp)"
+list="$(scratch_file)"
 trap 'rm -f "$list"' EXIT
 git rev-list --objects HEAD \
   | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' \

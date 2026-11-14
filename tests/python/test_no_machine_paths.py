@@ -25,6 +25,10 @@ RESULT_TOKENS = (
     "temp_directory_path",
     "tempfile",
 )
+# Commands that reach the system scratch directory. ``temp_dir(`` is the
+# Rust standard-library call. The others are the shell and CMake forms.
+BUILD_TOKENS = ("mktemp", "GetTempPath", "get_tempdir")
+TMPDIR_READ = re.compile(r"(?<![A-Za-z0-9_])TMPDIR(?![A-Za-z0-9_])")
 
 ROOTS = (
     "src/",
@@ -200,6 +204,21 @@ def _result_scope(path: str) -> bool:
     return path.startswith("bench/") and scanned(path)
 
 
+def _library_scope(path: str) -> bool:
+    """The library and the build script, outside doctests and ``#[cfg(test)]``."""
+    return path == "build.rs" or (path.startswith("src/") and path.endswith(".rs"))
+
+
+def _tool_scope(path: str) -> bool:
+    """Sources that build or ship the library, plus the workflows and scripts."""
+    return (
+        path == "build.rs"
+        or path == "CMakeLists.txt"
+        or path.endswith("/CMakeLists.txt")
+        or path.startswith(("src/", ".github/", "cmake/", "scripts/"))
+    )
+
+
 def offenders(path: str, lines: list[str]) -> list[str]:
     allowed = {text for text, _reason in allowlist().get(path, [])}
     manifest_ok = (
@@ -219,6 +238,16 @@ def offenders(path: str, lines: list[str]) -> list[str]:
             found.append(f"{path}:{number}: {stripped}")
             continue
         if _result_scope(path) and any(token in line for token in RESULT_TOKENS):
+            found.append(f"{path}:{number}: {stripped}")
+        if (
+            _library_scope(path)
+            and "temp_dir(" in line
+            and not (manifest_ok and manifest_ok[number - 1])
+        ):
+            found.append(f"{path}:{number}: {stripped}")
+        if _tool_scope(path) and any(token in line for token in BUILD_TOKENS):
+            found.append(f"{path}:{number}: {stripped}")
+        if _tool_scope(path) and TMPDIR_READ.search(line):
             found.append(f"{path}:{number}: {stripped}")
         if (
             check_manifest
@@ -291,6 +320,37 @@ def test_a_reintroduced_prefix_is_reported() -> None:
         )
         == []
     )
+
+
+def test_temp_dir_in_library_code_is_reported() -> None:
+    planted = ["let directory = std::env::temp_dir();"]
+    assert offenders("src/planted.rs", planted)
+    assert offenders("build.rs", planted)
+    inside_test = [
+        "#[cfg(test)]",
+        "mod tests {",
+        "    let directory = std::env::temp_dir();",
+        "}",
+    ]
+    assert offenders("src/planted.rs", inside_test) == []
+    assert offenders("tests/planted.rs", planted) == []
+
+
+def test_each_scratch_command_is_reported() -> None:
+    samples = {
+        "mktemp": "tmp=$(mktemp -d)",
+        "GetTempPath": "[System.IO.Path]::GetTempPath()",
+        "get_tempdir": "get_tempdir(OUT)",
+        "TMPDIR": 'dir="${TMPDIR}/work"',
+    }
+    for token, line in samples.items():
+        assert offenders("scripts/planted.sh", [line]), token
+        assert offenders(".github/workflows/planted.yml", [line]), token
+        assert offenders("cmake/planted.cmake", [line]), token
+        assert offenders("CMakeLists.txt", [line]), token
+        assert offenders("src/planted.rs", [line]), token
+        assert offenders("build.rs", [line]), token
+        assert offenders("tests/planted.sh", [line]) == [], token
 
 
 def test_tracked_sources_have_no_machine_paths() -> None:

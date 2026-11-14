@@ -10,6 +10,8 @@
 # member list is sorted here and passed with --files-from. Two runs on the
 # same tar produce the same bytes.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 if [[ $# -ne 4 ]]; then
     echo "usage: $0 SOURCE_ROOT TAR_DIR ARCHIVE_NAME OUT_TGZ" >&2
@@ -107,7 +109,7 @@ if [[ -n "$TAR_BIN" ]]; then
     fi
     "$TAR_BIN" "${gnu_args[@]}" -cf "$tar_path" "$ARCHIVE_NAME"
 else
-    list="$(mktemp)"
+    list="$(scratch_file)"
     (
         cd "$TAR_DIR"
         find "$ARCHIVE_NAME" -print | LC_ALL=C sort

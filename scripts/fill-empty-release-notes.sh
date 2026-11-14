@@ -4,6 +4,8 @@
 # Usage: fill-empty-release-notes.sh --tag vX.Y.Z --changelog PATH
 # Reads GITHUB_REPOSITORY. Does not create a release or move a tag.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 tag=""
 changelog=""
@@ -41,7 +43,7 @@ if [[ -n "${body//[[:space:]]/}" && "$body" != "null" ]]; then
     exit 0
 fi
 
-notes="$(mktemp)"
+notes="$(scratch_file)"
 python3 - "$changelog" "$version" "$notes" <<'PY'
 import pathlib
 import sys

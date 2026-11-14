@@ -9,6 +9,8 @@
 #   scripts/check-clib-dist.sh --self-test      # fixture prefix -> package -> unpack
 #   scripts/check-clib-dist.sh --no-self-test   # source gate only
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 fail=0
@@ -110,7 +112,7 @@ fi
 assert_unpacked() {
     local tarpath="$1"
     local unpack
-    unpack="$(mktemp -d)"
+    unpack="$(scratch_dir)"
     # shellcheck disable=SC2064
     trap "rm -rf '$unpack'" RETURN
 
@@ -184,8 +186,8 @@ assert_unpacked() {
 # --- fixture prefix so the unpack path runs without cargo ---
 
 if [[ "$SELFTEST" -eq 1 ]]; then
-    FIX="$(mktemp -d)"
-    OUT="$(mktemp -d)"
+    FIX="$(scratch_dir)"
+    OUT="$(scratch_dir)"
     # shellcheck disable=SC2064
     trap "rm -rf '$FIX' '$OUT'" EXIT
     mkdir -p "$FIX/include" "$FIX/lib/pkgconfig"

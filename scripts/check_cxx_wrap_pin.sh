@@ -10,6 +10,8 @@
 # not change the digest. A src or workflow edit does. Catch that before the
 # tag upload, which refuses a different digest.
 set -euo pipefail
+# shellcheck source=scripts/scratch.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -35,7 +37,7 @@ if [[ "$wrap_hash" != "$recorded" ]]; then
     die "wrap source_hash ${wrap_hash} and sha256 sidecar ${recorded} disagree"
 fi
 
-out="$(mktemp -d)"
+out="$(scratch_dir)"
 trap 'rm -rf "$out"' EXIT
 bash scripts/package-cxx.sh "$out" >/dev/null
 packaged="$(tr -d '[:space:]' < "${out}/${archive}.sha256")"
