@@ -1273,7 +1273,7 @@ def host() -> None:
             {
                 "commit": _capture(["git", "rev-parse", "HEAD"]),
                 "tree": _capture(["git", "rev-parse", "HEAD^{tree}"]),
-                "base": "cee507197a6e9cad2d66d633fd97395b1ec028e9",
+                "base": "b1e279ac1740e46d0b32be1ce89af4371e6e268d",
                 "cpu_model": model,
                 "lscpu": lscpu,
                 "disk": str(disk),
