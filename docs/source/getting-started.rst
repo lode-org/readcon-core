@@ -100,14 +100,14 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.23.2/readcon-core-cxx-0.23.2.tar.gz
-      URL_HASH SHA256=f08dfa919f61671636f01032f7c49a0f74f464a9f04bcd86f054f85402575b4a
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.23.3/readcon-core-cxx-0.23.3.tar.gz
+      URL_HASH SHA256=116b855445cb2bc100415090e5d6b68a8a81edc632a2b946c9d12e58b878a853
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
 
 The slim cxx tarball on the ``v0.23.3`` GitHub Release is the FetchContent
-URL. A vendor tarball (``readcon-core-cxx-0.23.2-vendor.tar.gz``) ships
+URL. A vendor tarball (``readcon-core-cxx-0.23.3-vendor.tar.gz``) ships
 crates for offline builds. The Meson wrap file is
 ``packaging/wrapdb/readcon-core.wrap`` on that same release.
 
