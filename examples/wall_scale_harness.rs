@@ -11,8 +11,8 @@
 
 use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::{
-    frame_start_offsets, frames_from_text, parse_frames_parallel_with_threads,
-    read_nth_frame_from_text, ConFrameIterator,
+    ConFrameIterator, frame_start_offsets, frames_from_text, parse_frames_parallel_with_threads,
+    read_nth_frame_from_text,
 };
 use readcon_core::writer::ConFrameWriter;
 use std::env;

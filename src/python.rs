@@ -3,19 +3,19 @@ use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
     PyUntypedArrayMethods,
 };
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PySequence, PySlice, PyString, PyTuple};
-use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
-use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
+use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -5557,7 +5557,7 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
 
 #[cfg(test)]
 mod batch_location_tests {
-    use super::{box_to_count_fail, CountFail};
+    use super::{CountFail, box_to_count_fail};
 
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();

@@ -11,7 +11,7 @@
 
 use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::frames_from_text;
-use readcon_core::rcso::{encode_batch, Rcso};
+use readcon_core::rcso::{Rcso, encode_batch};
 use readcon_core::rpc::client::RpcClient;
 use readcon_core::rpc::server;
 use std::env;

@@ -1412,7 +1412,7 @@ unsafe fn mpi_write_block(
 
 #[cfg(test)]
 mod ranked_store_tests {
-    use crate::writer::{ranked_store_for_magic, ranked_store_override, RankedStore};
+    use crate::writer::{RankedStore, ranked_store_for_magic, ranked_store_override};
 
     #[test]
     fn filesystem_choice_does_not_read_the_environment() {
@@ -1729,7 +1729,7 @@ mod slice_part_codec {
 #[cfg(test)]
 mod split_hash {
     use super::{fold_ranked_slices, local_ready, planned_hashes};
-    use crate::frame_index::{block_hash, fold_block_hashes, HASH_BLOCK};
+    use crate::frame_index::{HASH_BLOCK, block_hash, fold_block_hashes};
 
     fn one_shot(data: &[u8]) -> u64 {
         let blocks: Vec<u64> = data.chunks(HASH_BLOCK).map(block_hash).collect();
@@ -1789,7 +1789,7 @@ mod split_hash {
 #[cfg(all(test, feature = "mpi"))]
 mod wide_rank_sha {
     use super::write_block;
-    use crate::distrib::{block_range, Comm};
+    use crate::distrib::{Comm, block_range};
     use crate::distrib_write::WriteMode;
     use crate::types::ConFrameBuilder;
     use crate::writer::ConFrameWriter;
