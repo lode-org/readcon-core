@@ -56,6 +56,10 @@ All notable changes to this project will be documented in this file. See [conven
   so it disagreed with the serial decoder. A truncated tail is still rejected.
 - A million-atom frame stores each coordinate row in the column walk.
   The reader used to copy that three-float row once per atom.
+- A cdylib and a Python extension build mimalloc with `local_dynamic_tls`.
+  The default initial-exec TLS made `dlopen` fail with "cannot allocate
+  memory in static TLS block" once the process surplus was spent. Static
+  Rust binaries leave the feature off and keep initial-exec.
 - A path write publishes only after every byte is stored. On Linux the store
   is an unnamed file, and `linkat` plus `rename` run in a helper that outlives
   the writer. macOS preallocates with `posix_fallocate` and Windows extends
