@@ -1,5 +1,8 @@
 //! Thread-local C ABI error channel (D1, D4, D10).
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::PathBuf;
@@ -21,7 +24,7 @@ use readcon_core::units::{
 };
 
 fn path_for(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("readcon-{name}-{}", std::process::id()))
+    scratch_dir::scratch().join(format!("readcon-{name}-{}", std::process::id()))
 }
 
 fn write(name: &str, text: &str) -> CString {

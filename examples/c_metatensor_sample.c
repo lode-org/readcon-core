@@ -5,7 +5,7 @@
  *   gcc -I include -I "$READCON_METATENSOR_INCLUDE" examples/c_metatensor_sample.c \
  *       -L target/release -L "$READCON_METATENSOR_LIB_DIR" \
  *       -Wl,-rpath,"$READCON_METATENSOR_LIB_DIR" -Wl,-rpath,"$PWD/target/release" \
- *       -lreadcon_core -lmetatensor -o /tmp/c_mts
+ *       -lreadcon_core -lmetatensor -o build/c_mts
  *
  * Or include readcon-metatensor.h (defines READCON_CORE_HAS_METATENSOR + metatensor.h).
  */

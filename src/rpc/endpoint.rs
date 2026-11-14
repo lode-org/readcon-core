@@ -72,16 +72,16 @@ mod tests {
     #[test]
     fn parses_unix_prefix_and_absolute_path() {
         assert_eq!(
-            Endpoint::parse("unix:/tmp/readcon.sock").unwrap(),
-            Endpoint::Unix(PathBuf::from("/tmp/readcon.sock"))
+            Endpoint::parse("unix:build/test/readcon.sock").unwrap(),
+            Endpoint::Unix(PathBuf::from("build/test/readcon.sock"))
         );
         assert_eq!(
-            Endpoint::parse("unix:///var/run/readcon.sock").unwrap(),
-            Endpoint::Unix(PathBuf::from("/var/run/readcon.sock"))
+            Endpoint::parse("unix://build/test/readcon.sock").unwrap(),
+            Endpoint::Unix(PathBuf::from("build/test/readcon.sock"))
         );
         assert_eq!(
-            Endpoint::parse("/tmp/readcon.sock").unwrap(),
-            Endpoint::Unix(PathBuf::from("/tmp/readcon.sock"))
+            Endpoint::parse("/build/test/readcon.sock").unwrap(),
+            Endpoint::Unix(PathBuf::from("/build/test/readcon.sock"))
         );
     }
 

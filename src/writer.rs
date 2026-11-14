@@ -2833,7 +2833,7 @@ impl ConFrameWriter<File> {
     /// use readcon_core::iterators::read_all_frames;
     /// use readcon_core::types::ConFrameBuilder;
     /// use readcon_core::writer::ConFrameWriter;
-    /// let path = std::env::temp_dir().join(format!(
+    /// let path = readcon_core::scratch::root().join(format!(
     ///     "readcon-append-doc-{}",
     ///     std::process::id()
     /// ));
@@ -5878,7 +5878,7 @@ mod parallel_write_tests {
             }
             writer.flush().unwrap();
         }
-        let path = std::env::temp_dir().join(format!("rc-pack-{}.con", std::process::id()));
+        let path = crate::scratch::root().join(format!("rc-pack-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&path, &refs, 2, None, false, true).unwrap();
         let got = std::fs::read(&path).unwrap();
         assert_eq!(got, serial);
@@ -5938,7 +5938,7 @@ mod parallel_write_tests {
             }
             writer.flush().unwrap();
         }
-        let path = std::env::temp_dir().join(format!("rc-mix-{}.con", std::process::id()));
+        let path = crate::scratch::root().join(format!("rc-mix-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), serial);
         let _ = std::fs::remove_file(&path);
@@ -5949,7 +5949,7 @@ mod parallel_write_tests {
     /// empty slice's offset, would not rebuild the concatenation.
     #[test]
     fn disjoint_parts_rebuild_the_concatenation() {
-        let path = std::env::temp_dir().join(format!("rc-parts-{}.con", std::process::id()));
+        let path = crate::scratch::root().join(format!("rc-parts-{}.con", std::process::id()));
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -6062,7 +6062,7 @@ mod parallel_write_tests {
             writer.flush().unwrap();
         }
         assert_eq!(dest, serial);
-        let path = std::env::temp_dir().join(format!("rc-packed-{}.con", std::process::id()));
+        let path = crate::scratch::root().join(format!("rc-packed-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), serial);
         let _ = std::fs::remove_file(&path);
@@ -6193,7 +6193,7 @@ mod parallel_write_bytes {
         .unwrap();
         let serial = write_frames_to_vec(&one).unwrap();
         let refs: Vec<&crate::types::ConFrame> = one.iter().collect();
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-pwrite-{}-{}.con",
             std::process::id(),
             one.len()
@@ -6225,7 +6225,7 @@ mod parallel_write_bytes {
             }
         }
         let refs: Vec<&crate::types::ConFrame> = one.iter().collect();
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-pwrite-bind-{}-{}.con",
             std::process::id(),
             one.len()
@@ -6250,9 +6250,9 @@ mod parallel_write_bytes {
         .unwrap();
         let frames = frames_from_text(&text, Some(1)).unwrap();
         let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; 32];
-        let path = std::env::temp_dir().join(format!("rc-rewrite-{}.con", std::process::id()));
+        let path = crate::scratch::root().join(format!("rc-rewrite-{}.con", std::process::id()));
         let fresh =
-            std::env::temp_dir().join(format!("rc-rewrite-fresh-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("rc-rewrite-fresh-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&fresh, &refs, 8, None, false, true).unwrap();
         let expect = std::fs::read(&fresh).unwrap();
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
@@ -6277,8 +6277,8 @@ mod parallel_write_bytes {
         );
         // The published name is still the previous bytes if the spare write
         // is what failed. An empty directory component cannot be created.
-        let blocked =
-            std::env::temp_dir().join(format!("rc-rewrite-missing-{}/out.con", std::process::id()));
+        let blocked = crate::scratch::root()
+            .join(format!("rc-rewrite-missing-{}/out.con", std::process::id()));
         std::fs::write(&path, &expect).unwrap();
         let before = std::fs::read(&path).unwrap();
         let err = super::rewrite_frame_refs_to_path(&blocked, &refs, 1, None, false, true, true);
@@ -6299,9 +6299,10 @@ mod parallel_write_bytes {
         .unwrap();
         let frames = frames_from_text(&text, Some(1)).unwrap();
         let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; 4];
-        let path = std::env::temp_dir().join(format!("rc-rewrite-drop-{}.con", std::process::id()));
-        let fresh =
-            std::env::temp_dir().join(format!("rc-rewrite-drop-fresh-{}.con", std::process::id()));
+        let path =
+            crate::scratch::root().join(format!("rc-rewrite-drop-{}.con", std::process::id()));
+        let fresh = crate::scratch::root()
+            .join(format!("rc-rewrite-drop-fresh-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&fresh, &refs, 1, None, false, true).unwrap();
         let expect = std::fs::read(&fresh).unwrap();
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
@@ -6329,7 +6330,8 @@ mod parallel_write_bytes {
         let frames = frames_from_text(&text, Some(1)).unwrap();
         let n = 8_000usize;
         let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; n];
-        let path = std::env::temp_dir().join(format!("rc-rewrite-kill-{}.con", std::process::id()));
+        let path =
+            crate::scratch::root().join(format!("rc-rewrite-kill-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
         let original = std::fs::read(&path).unwrap();
         let mut changed = frames[0].clone();
@@ -6395,7 +6397,7 @@ mod parallel_write_bytes {
         let parallel = write_frames_to_vec_with_threads(&frames, 8, None, false).unwrap();
         assert_eq!(parallel, serial);
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-wide-stream-{}-{n}.con",
             std::process::id()
         ));
@@ -6449,7 +6451,7 @@ mod parallel_write_bytes {
     #[test]
     fn pwrite_offsets_follow_an_exclusive_scan() {
         let path =
-            std::env::temp_dir().join(format!("readcon-pwrite-scan-{}.bin", std::process::id()));
+            crate::scratch::root().join(format!("readcon-pwrite-scan-{}.bin", std::process::id()));
         let parts: [&[u8]; 4] = [b"abc", b"", b"def\n", b"g"];
         super::publish_new(
             &path,
@@ -6476,7 +6478,7 @@ mod parallel_write_bytes {
             let frame = builder.build().expect("frame");
             let serial = super::write_frames_to_vec(std::slice::from_ref(&frame)).expect("serial");
             for workers in [1usize, 2, 3, 8] {
-                let path = std::env::temp_dir().join(format!(
+                let path = crate::scratch::root().join(format!(
                     "readcon-map-{n}-{workers}-{}.con",
                     std::process::id()
                 ));
@@ -6531,7 +6533,7 @@ mod parallel_write_bytes {
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
         let serial = super::write_frames_to_vec(&frames).expect("serial");
         let path =
-            std::env::temp_dir().join(format!("readcon-weak-write-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-weak-write-{}.con", std::process::id()));
         super::write_frame_refs_to_path(&path, &refs, 2, None, false, false).expect("parallel");
         let got = std::fs::read(&path).expect("read");
         let _ = std::fs::remove_file(&path);
@@ -6541,7 +6543,7 @@ mod parallel_write_bytes {
         // stay in the coverage build. The byte comparison above still runs.
         let time = |frames: &[crate::types::ConFrame], workers: usize| {
             let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::scratch::root().join(format!(
                 "readcon-weak-time-{}-{workers}.con",
                 std::process::id()
             ));
@@ -6603,7 +6605,7 @@ mod parallel_write_bytes {
         assert!(serial.is_err(), "serial writer accepted a repeated id");
         assert!(parallel.is_err(), "parallel writer accepted a repeated id");
         let path =
-            std::env::temp_dir().join(format!("readcon-repeat-id-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-repeat-id-{}.con", std::process::id()));
         std::fs::write(&path, b"keep").unwrap();
         let refs = [&frame];
         let err = super::write_frame_refs_to_path(&path, &refs, 4, None, false, false);
@@ -6617,7 +6619,7 @@ mod parallel_write_bytes {
         let good = copper_frame(2, "Cu", 63.546, |i| i as u64);
         let bad = copper_frame(2, "Cu", 63.546, |_| 0);
         let path =
-            std::env::temp_dir().join(format!("readcon-group-fail-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-group-fail-{}.con", std::process::id()));
         std::fs::write(&path, b"keep").unwrap();
         let refs = [&good, &bad];
         let err = super::write_frame_refs_to_path(&path, &refs, 4, None, false, false);
@@ -6632,7 +6634,7 @@ mod parallel_write_bytes {
         let frames = [frame];
         let serial = write_frames_to_vec_with_threads(&frames, 1, Some(40), false).unwrap();
         let path =
-            std::env::temp_dir().join(format!("readcon-long-line-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-long-line-{}.con", std::process::id()));
         let mut writer = super::ConFrameWriter::with_precision(Vec::<u8>::new(), 40)
             .parallel_atoms(4)
             .map_rows(true);
@@ -6672,7 +6674,7 @@ mod parallel_write_bytes {
         let mut frame = builder.build().expect("frame");
         frame.atom_data[0].set_spread(Some([-1.0, 0.0, 0.0]));
         let path =
-            std::env::temp_dir().join(format!("readcon-spread-fail-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-spread-fail-{}.con", std::process::id()));
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -6751,7 +6753,7 @@ mod gzip_stream_memory {
                 .iter()
                 .all(|frame| !frame.header.metadata.has_cached_map())
         );
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-gzip-peak-{}-{}.con.gz",
             std::process::id(),
             std::time::SystemTime::now()
@@ -6809,7 +6811,7 @@ Coordinates of Component 1
             "reading lattice vectors cached the whole metadata map"
         );
         let path =
-            std::env::temp_dir().join(format!("readcon-lattice-line-{}.con", std::process::id()));
+            crate::scratch::root().join(format!("readcon-lattice-line-{}.con", std::process::id()));
         {
             let mut writer = ConFrameWriter::from_path(&path).unwrap();
             writer.write_frame(&frame).unwrap();

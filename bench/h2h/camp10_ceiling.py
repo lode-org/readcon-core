@@ -37,11 +37,12 @@ STORES = (
     "falloc_pwrite",
     "touch",
 )
+_DISK = str(bench_disk())
 FILESYSTEMS = (
     ("tmpfs", "/dev/shm", 0),
     ("thp", "/mnt/camp7-thp", 0),
-    ("ext4", "/home/ubuntu/camp7-ext4", 0),
-    ("ext4-fsync", "/home/ubuntu/camp7-ext4", 1),
+    ("ext4", _DISK, 0),
+    ("ext4-fsync", _DISK, 1),
 )
 CON = ROOT / "resources/test/cuh2.con"
 

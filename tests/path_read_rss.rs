@@ -4,6 +4,9 @@
 //! reads a file of that shape in a fresh process and requires the added
 //! peak to stay at or below that rate.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
@@ -19,7 +22,7 @@ fn path_read_rss_within_ase() {
         child();
         return;
     }
-    let dir = std::env::temp_dir().join(format!("readcon-rss-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("readcon-rss-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("frames.con");
     write_frames(&path, FRAMES, ATOMS, 1);
@@ -61,7 +64,7 @@ fn path_read_rss_within_ase() {
 
 #[test]
 fn wide_two_species_keeps_its_coordinates() {
-    let dir = std::env::temp_dir().join(format!("readcon-wide-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("readcon-wide-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("wide.con");
     let per_type = 4096usize;

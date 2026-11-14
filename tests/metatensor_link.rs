@@ -3,6 +3,9 @@
 // C, C++, and Fortran programs that link that shared library search the
 // recorded directory when they link and when they run.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 fn metatensor_lib_dirs(library_dirs: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
     let mut extra = Vec::new();
     for dir in library_dirs {
@@ -50,7 +53,7 @@ fn empty_dirs_link_only_the_core_library() {
 
 #[test]
 fn env_file_adds_the_metatensor_directory() {
-    let dir = std::env::temp_dir().join(format!("rc-mts-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("rc-mts-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let nested = dir.join("mts");

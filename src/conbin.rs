@@ -2082,8 +2082,7 @@ fn mix_unit(seed: u64, index: u64) -> f64 {
 /// use std::path::Path;
 ///
 /// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
-/// let dir = std::env::temp_dir().join(format!("readcon-conbin-doc-{}", std::process::id()));
-/// std::fs::create_dir_all(&dir).unwrap();
+/// let dir = readcon_core::conbin::streaming_dir().expect("build/test");
 /// let out = dir.join("tiny.bin");
 /// let header = write_from_con(&src, &out, false).unwrap();
 /// assert_eq!((header.n_frames, header.n_atoms), (1, 4));
@@ -2216,6 +2215,40 @@ fn write_conbin_body(
         .map_err(|err| ParseError::ValidationError(err.to_string()))?;
     write_header_page(file, &header, page)?;
     Ok(())
+}
+
+/// Unique directory under `build/test` for a conbin test or doctest.
+/// `None` when that directory is tmpfs: `POSIX_FADV_DONTNEED` does not
+/// drop tmpfs pages, so a residency check there cannot fail closed.
+/// Hidden: the read and write paths do not call it.
+#[doc(hidden)]
+pub fn streaming_dir() -> Option<std::path::PathBuf> {
+    let base = crate::scratch::root();
+    #[cfg(target_os = "linux")]
+    if dir_is_tmpfs(&base) {
+        return None;
+    }
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = base.join(format!(
+        "conbin-stream-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+#[cfg(target_os = "linux")]
+fn dir_is_tmpfs(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    let Ok(c) = std::ffi::CString::new(text.as_bytes()) else {
+        return false;
+    };
+    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
+    let rc = unsafe { libc::statfs(c.as_ptr(), &mut stat) };
+    // include/uapi/linux/magic.h TMPFS_MAGIC
+    rc == 0 && stat.f_type == 0x01021994
 }
 
 #[cfg(test)]
@@ -2370,9 +2403,7 @@ mod tests {
 
     #[test]
     fn mapped_runs_match_the_pread_fill() {
-        let dir = std::env::temp_dir().join(format!("conbin-map-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let mapped = map_file(&path, 2).unwrap();
@@ -2409,9 +2440,7 @@ mod tests {
 
     #[test]
     fn populate_failure_still_reads_the_same_values() {
-        let dir = std::env::temp_dir().join(format!("conbin-populate-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let plain = map_file(&path, 2).unwrap();
@@ -2432,9 +2461,7 @@ mod tests {
 
     #[test]
     fn mmap_failure_still_reads_the_same_values() {
-        let dir = std::env::temp_dir().join(format!("conbin-mmap-fail-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("known.conbin");
         write_known(&path, 4, 3);
         let plain = map_file(&path, 1).unwrap();
@@ -2450,9 +2477,7 @@ mod tests {
 
     #[test]
     fn writer_stores_one_known_value_little_endian() {
-        let dir = std::env::temp_dir().join(format!("conbin-le-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("one.conbin");
         // Second position is 0.25. Its little-endian bytes are fixed.
         write_known(&path, 1, 1);
@@ -2471,9 +2496,7 @@ mod tests {
 
     #[test]
     fn write_from_con_round_trips_text() {
-        let dir = std::env::temp_dir().join(format!("conbin-text-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let con = dir.join("two.con");
         std::fs::write(
             &con,
@@ -2499,9 +2522,7 @@ mod tests {
 
     #[test]
     fn a_store_copies_the_page_and_leaves_the_file() {
-        let dir = std::env::temp_dir().join(format!("conbin-cow-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("known.conbin");
         write_known(&path, 2, 4);
         let before = std::fs::read(&path).unwrap();
@@ -2535,9 +2556,7 @@ mod tests {
         assert_eq!(off, 4096);
         assert_ne!(off, 16 * 1024);
         assert_ne!(off, 64 * 1024);
-        let dir = std::env::temp_dir().join(format!("conbin-off-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let path = dir.join("known.conbin");
         std::fs::write(&path, &bytes).unwrap();
         let mapped = map_file(&path, 1).unwrap();
@@ -2556,9 +2575,7 @@ mod tests {
 
     #[test]
     fn sum_mapped_rejects_binary32_and_a_missing_velocity_run() {
-        let dir = std::env::temp_dir().join(format!("conbin-kind-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = super::streaming_dir().expect("build/test");
         let binary32 = dir.join("f32.conbin");
         write_typed(&binary32, true, true);
         let err = sum_mapped(&binary32, 1).unwrap_err();
@@ -2578,37 +2595,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    #[cfg(target_os = "linux")]
-    fn dir_is_tmpfs(path: &Path) -> bool {
-        let text = path.to_string_lossy();
-        let Ok(c) = std::ffi::CString::new(text.as_bytes()) else {
-            return false;
-        };
-        let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-        let rc = unsafe { libc::statfs(c.as_ptr(), &mut stat) };
-        // include/uapi/linux/magic.h TMPFS_MAGIC
-        rc == 0 && stat.f_type == 0x01021994
-    }
-
-    #[cfg(target_os = "linux")]
     fn streaming_dir() -> Option<std::path::PathBuf> {
-        let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("build")
-            .join("test");
-        if std::fs::create_dir_all(&base).is_err() || dir_is_tmpfs(&base) {
-            return None;
-        }
-        // Each caller gets its own directory. Two tests in one process must
-        // not delete each other's file.
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let dir = base.join(format!(
-            "conbin-stream-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).ok()?;
-        Some(dir)
+        super::streaming_dir()
     }
 
     #[cfg(target_os = "linux")]
@@ -2647,7 +2635,7 @@ mod tests {
     fn sum_mapped_streams_when_pages_are_not_resident() {
         let Some(dir) = streaming_dir() else {
             panic!(
-                "sum_mapped_streams_when_pages_are_not_resident: temp, the working directory and /var/tmp are tmpfs, and POSIX_FADV_DONTNEED leaves tmpfs pages resident"
+                "sum_mapped_streams_when_pages_are_not_resident: build/test is tmpfs, and POSIX_FADV_DONTNEED leaves tmpfs pages resident"
             );
         };
         let _ = std::fs::remove_dir_all(&dir);

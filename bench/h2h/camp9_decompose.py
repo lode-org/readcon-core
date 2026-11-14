@@ -36,11 +36,12 @@ MATCH = {
     "ext4": "pwrite",
     "ext4-fsync": "pwrite",
 }
+_DISK = str(bench_disk())
 FILESYSTEMS = (
     ("tmpfs", "/dev/shm", 0),
     ("thp", "/mnt/camp7-thp", 0),
-    ("ext4", "/home/ubuntu/camp7-ext4", 0),
-    ("ext4-fsync", "/home/ubuntu/camp7-ext4", 1),
+    ("ext4", _DISK, 0),
+    ("ext4-fsync", _DISK, 1),
 )
 
 

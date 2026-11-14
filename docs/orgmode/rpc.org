@@ -95,9 +95,9 @@ parsed frame with =readcon_core::rcso::Rcso::encode_frame= (magic
 one =RCSB= envelope. This crate MUST NOT call =MPI_Init=.
 
 #+begin_src rust
-readcon_core::rpc::server::start_server("unix:/tmp/readcon.sock")
+readcon_core::rpc::server::start_server("unix:build/test/readcon.sock")
 #+end_src
 
 #+begin_src rust
-let client = RpcClient::new("unix:/tmp/readcon.sock").unwrap();
+let client = RpcClient::new("unix:build/test/readcon.sock").unwrap();
 #+end_src

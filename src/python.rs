@@ -5279,7 +5279,7 @@ mod batch_location_tests {
     use super::{CountFail, box_to_count_fail};
 
     fn later_frame_path() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-batch-later-{}-{}.con",
             std::process::id(),
             std::time::SystemTime::now()
@@ -5356,7 +5356,7 @@ mod batch_location_tests {
     }
 
     fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-batch-class-{}-{}.con",
             std::process::id(),
             std::time::SystemTime::now()

@@ -16,7 +16,10 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(10_000usize);
-    let dir = std::env::temp_dir();
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("build")
+        .join("test");
+    std::fs::create_dir_all(&dir).expect("build/test");
     let con_path = dir.join("readcon-traj10k.con");
     let xyz_path = dir.join("readcon-traj10k.xyz");
     let con = generate_con(nframes);

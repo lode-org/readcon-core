@@ -5301,7 +5301,7 @@ mod phased_read_tests {
     #[test]
     fn phased_file_matches_serial_and_maps_a_wide_file() {
         let text = fixture("cuh2.con").repeat(5);
-        let dir = std::env::temp_dir();
+        let dir = crate::scratch::root();
         let path = dir.join("readcon-phased-wide.con");
         std::fs::write(&path, &text).expect("write");
         let phased = read_all_frames_phased(&path, Some(4)).expect("phased");
@@ -5547,7 +5547,7 @@ mod later_frame_location_tests {
     /// A second open of the path is not required.
     #[test]
     fn batch_readers_keep_the_later_frame_on_the_first_pass() {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-later-frame-first-{}.con",
             std::process::id()
         ));
@@ -5598,7 +5598,7 @@ mod later_frame_location_tests {
 
     #[test]
     fn count_frames_locates_the_later_frame() {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::scratch::root().join(format!(
             "readcon-later-frame-count-{}.con",
             std::process::id()
         ));
@@ -5647,8 +5647,8 @@ mod later_frame_location_tests {
         let bad = counted_frame(1);
         let text = format!("{slow}{bad}{bad}{bad}");
         let earliest_line = 1 + slow.bytes().filter(|byte| *byte == b'\n').count() as u32;
-        let path =
-            std::env::temp_dir().join(format!("readcon-earliest-slot-{}.con", std::process::id()));
+        let path = crate::scratch::root()
+            .join(format!("readcon-earliest-slot-{}.con", std::process::id()));
         fs::write(&path, &text).unwrap();
         assert_earliest_slot(
             take_err(read_positions_with_threads(&path, Some(1))),

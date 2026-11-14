@@ -3202,7 +3202,8 @@ Cu 4.0 5.0 6.0 63.546
 
         let missing = tables_from_extxyz_path(std::path::Path::new("/no/such/extxyz")).unwrap_err();
         assert_eq!(missing, "read");
-        let path = std::env::temp_dir().join(format!("readcon-extxyz-{}.xyz", std::process::id()));
+        let path =
+            crate::scratch::root().join(format!("readcon-extxyz-{}.xyz", std::process::id()));
         std::fs::write(&path, no_newline).unwrap();
         let from_path = tables_from_extxyz_path(&path).unwrap();
         assert_eq!(from_path.n_frames, 1);
@@ -3431,7 +3432,7 @@ Al 2 0 0 delta 0.125 0.25 0.5
                 1,
             )
             .unwrap();
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::scratch::root().join(format!(
                 "readcon-extxyz-path-{}-{workers}-{}.xyz",
                 std::process::id(),
                 tables.n_frames

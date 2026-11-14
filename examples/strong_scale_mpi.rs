@@ -77,11 +77,21 @@ fn main() {
     let world = universe.world();
     let comm = Comm::dup_of(&world);
     let held = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("read");
-    // Default stays on /tmp. READCON_MPI_OUT points the same collective at
-    // another directory so a tmpfs and a disk can be timed apart.
+    // READCON_MPI_OUT selects the collective output. The default is
+    // build/bench/readcon-r7-mpi.con in this checkout, so a tmpfs and a
+    // disk can be timed apart by pointing the variable at the other store.
     let out_buf = std::env::var("READCON_MPI_OUT")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/readcon-r7-mpi.con"));
+        .unwrap_or_else(|_| {
+            let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("build")
+                .join("bench")
+                .join("readcon-r7-mpi.con");
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            path
+        });
     let out = out_buf.as_path();
     let file_bytes = std::fs::read(path).expect("map");
     let split = held.n_total == 1 && comm.size() > 1;
