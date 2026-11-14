@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Host files and the comparison with the 0.23.0 million-atom rows.
+"""Host files for one million-atom session.
 
-The baseline is ``bench/h2h/scaling/h2h9/cross-format.json`` (readcon
-0.23.0). This script only reads that file. The two tables are different
-CPUs, so a readcon row is not compared by its raw seconds. Peer rows on
-this machine supply a factor for reads and a factor for writes. A readcon
-row regresses when it is more than 25% slower than that factor and the
-excess is larger than its IQR. It loses a lead when it was faster than a
-peer in the baseline, is slower now, and that ratio moved by more than 25%
-by more than both IQRs.
+The notes name this machine and this commit. They do not scale another
+CPU's table onto these seconds. Release ratios come from the interleaved
+A/B in ``ab.json`` (v0.23.0, v0.23.2, and this tree, same file, n=12).
+``bench/h2h/scaling/h2h9`` is only read, and only so a caller can still
+ask the old peer-factor helpers. Those helpers are not written into the
+notes.
 """
 
 from __future__ import annotations
@@ -82,7 +80,8 @@ def index_rows(doc: dict) -> dict[tuple, dict]:
     for row in doc["rows"]:
         if row.get("structure") != STRUCTURE:
             continue
-        if row.get("median_s") is None:
+        median = row.get("median_s")
+        if not isinstance(median, (int, float)):
             continue
         cache = row.get("cache")
         if cache not in ("warm", "create"):
@@ -93,6 +92,7 @@ def index_rows(doc: dict) -> dict[tuple, dict]:
 
 
 def machine_factor(old: dict, new: dict, op: str) -> tuple[float, int]:
+    """Peer slowdown between two saved tables. Not used in the notes."""
     ratios = []
     for key, old_row in old.items():
         if key[2] != op or old_row.get("tool") == "readcon":
@@ -174,81 +174,198 @@ def _fmt(value) -> str:
     return str(value)
 
 
-def render_notes(
-    doc: dict, old: dict, factors: dict, counts: dict, flags: list[str]
-) -> str:
+def _ab_index(ab: dict) -> dict[tuple[str, str, str], dict]:
+    found = {}
+    for row in ab.get("rows", []):
+        median = row.get("median_s")
+        if not isinstance(median, (int, float)):
+            continue
+        found[(row["build"], row["format"], row["op"])] = row
+    return found
+
+
+def release_ratios(ab: dict) -> list[str]:
+    """head/release for each format and op. Same file, same host."""
+    indexed = _ab_index(ab)
+    lines = []
+    for fmt in ("con", "con.gz"):
+        for op in ("read", "write"):
+            head = indexed.get(("head", fmt, op))
+            if head is None:
+                continue
+            parts = [
+                f"{fmt} {op} head {_fmt(head['median_s'])} iqr {_fmt(head['iqr_s'])}"
+            ]
+            for release in ("v0.23.0", "v0.23.2"):
+                other = indexed.get((release, fmt, op))
+                if other is None or not other["median_s"]:
+                    continue
+                ratio = float(head["median_s"]) / float(other["median_s"])
+                parts.append(f"{release} {_fmt(other['median_s'])} ratio {ratio:.3f}")
+            lines.append(" ".join(parts))
+    return lines
+
+
+def release_flags(ab: dict) -> list[str]:
+    """A head row that is slower than a release by more than its own IQR."""
+    indexed = _ab_index(ab)
+    flags = []
+    for fmt in ("con", "con.gz"):
+        for op in ("read", "write"):
+            head = indexed.get(("head", fmt, op))
+            if head is None:
+                continue
+            for release in ("v0.23.0", "v0.23.2"):
+                other = indexed.get((release, fmt, op))
+                if other is None:
+                    continue
+                gap = float(head["median_s"]) - float(other["median_s"])
+                if gap > float(head.get("iqr_s") or 0.0):
+                    flags.append(
+                        f"{fmt} {op} {head['median_s']:.4g}s vs {release} "
+                        f"{other['median_s']:.4g}s ({gap:.4g}s above, "
+                        f"IQR {float(head.get('iqr_s') or 0.0):.4g}s)"
+                    )
+    return flags
+
+
+def render_notes(doc: dict, flags: list[str], ab: dict | None = None) -> str:
     host = doc["host"]
+    ops = []
+    for row in doc["rows"]:
+        if row.get("op") in ("read", "write") and row["op"] not in ops:
+            if isinstance(row.get("median_s"), (int, float)):
+                ops.append(row["op"])
     lines = [
-        "Million-atom " + " and ".join(f"{op}s" for op in factors) + ", one machine.",
+        "Million-atom "
+        + " and ".join(f"{op}s" for op in ops)
+        + ", one machine, one commit.",
         f"commit {doc['commit']}",
+        "measured readcon " + str(doc.get("versions", {}).get("readcon", "")),
         f"protocol warmup {doc['warmup']} samples {doc['repeats']} "
         f"{doc['percentile']} serial fresh-process rotate {doc['affinity']}",
         f"versions {json.dumps(doc['versions'], sort_keys=True)}",
         f"cpu_mhz {host.get('cpu_mhz')} loadavg {host.get('loadavg')}",
-        "Baseline is bench/h2h/scaling/h2h9 (readcon 0.23.0, Xeon model 173 at 2700 MHz). "
-        "That file was not modified. Raw seconds are not compared across the two CPUs. "
-        + " ".join(
-            f"Peer {op}s on this machine are {factors[op]:.3f}x that record "
-            f"({counts[op]} rows)."
-            for op in factors
-        ),
+        "Seconds are this host only. bench/h2h/scaling/h2h9 was not modified and "
+        "is not used to scale these rows.",
         "",
-        "readcon rows. median and IQR are seconds. RSS and file size are bytes. "
-        "loses is what the format did not round-trip.",
-        "arm op median iqr rss file loses adjusted",
+        "This table times read_con(n_threads=1) plus NumPy copies of positions, "
+        "the cell, and masses, on the alloy file that stores velocities and "
+        "constraints. camp18 times read_positions on "
+        "bench/h2h/work/inputs/con-1000000x1.con, the column slab. Those are "
+        "different operations and different files.",
+        "",
+        "Same-host release comparison. v0.23.0, v0.23.2 at 8c2d9984, and this "
+        "tree alternate on one file, n=12, one warmup. The timed read is the "
+        "same read_con plus NumPy copies. Ratios are head/release.",
     ]
-    new = index_rows(doc)
-    for key in sorted(new):
-        row = new[key]
-        if row.get("tool") != "readcon":
+    if ab is None:
+        lines.append("No ab.json was recorded for this directory.")
+    else:
+        lines.extend(release_ratios(ab))
+    lines.extend(
+        [
+            "",
+            "readcon rows. median and IQR are seconds. RSS and file size are bytes. "
+            "loses is what that arm's round trip did not keep.",
+            "arm op cache median iqr rss file loses",
+        ]
+    )
+    for row in doc["rows"]:
+        if row.get("tool") != "readcon" or row.get("structure") != STRUCTURE:
             continue
-        old_row = old.get(key)
-        adjusted = ""
-        if old_row is not None and old_row.get("median_s"):
-            expected = float(old_row["median_s"]) * factors[key[2]]
-            adjusted = f"{float(row['median_s']) / expected:.3f}"
+        if row.get("cache") not in ("warm", "create", "cold"):
+            continue
         lines.append(
             " ".join(
                 [
-                    key[1],
-                    key[2],
+                    str(row.get("arm")),
+                    str(row.get("op")),
+                    str(row.get("cache")),
                     _fmt(row.get("median_s")),
                     _fmt(row.get("iqr_s")),
                     _fmt(row.get("rss_bytes")),
                     _fmt(row.get("file_bytes")),
                     str(row.get("loses")),
-                    adjusted,
                 ]
             )
         )
     lines.append("")
     if flags:
-        lines.append("Regressions against the machine-adjusted 0.23.0 rows:")
+        lines.append("Same-host rows slower than a release by more than the head IQR:")
         lines.extend(flags)
+    elif ab is None:
+        lines.append("Release ratios were not recorded in this directory.")
     else:
         lines.append(
-            "No readcon row is more than 25% slower than the machine-adjusted "
-            "0.23.0 record, and none lost a lead it held there."
+            "No same-host readcon row is slower than v0.23.0 or v0.23.2 by more "
+            "than its own IQR."
         )
     lines.append("")
     lines.append(
         "CON plain, gzip, and zstd keep masses, velocities, constraints, and "
-        "the text precision. Extended XYZ is the other format in this table "
-        "that keeps those fields. CON-bin keeps positions and velocities at "
-        "float64 and drops masses, constraints, and the cell. PDB, XYZ, DCD, "
-        "XTC, NetCDF, TRR, and GRO each drop at least one of mass, velocity, "
-        "constraints, the cell, or precision. A faster row that drops those "
-        "fields is not the same file."
+        "the text precision. Extended XYZ is the other text format in this "
+        "table that keeps those fields. The loses column is the audit for "
+        "that arm, including CON-bin. A faster row whose loses list is not "
+        "none dropped mass, velocity, constraints, the cell, or precision, "
+        "and it is not the same file."
+    )
+    lines.append("")
+    lines.append(
+        "gzip_into inflates a member straight into the caller's slice. "
+        "The other gzip change is decode_thread_budget: a budget of 1 skips "
+        "the indexed path and uses MultiGzDecoder on the calling thread. "
+        "This harness calls read_con with n_threads=1 and does not pass "
+        "decode_threads, so the indexed path still calls gzip_into. The two "
+        "meet only when a caller sets the decode budget to 1."
     )
     lines.append("")
     return "\n".join(lines)
 
 
+def cpu_model_name(lscpu: str) -> str:
+    for line in lscpu.splitlines():
+        if line.startswith("Model name:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def disk_filesystem(root: Path) -> str:
+    """`stat -f -c %T` of the directory the disk rows actually use."""
+    found = subprocess.run(
+        ["stat", "-f", "-c", "%T", str(root)],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+    if not found:
+        raise SystemExit(f"no filesystem type for {root}")
+    return found
+
+
+def tree_hash(root: Path = ROOT) -> str:
+    found = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"],
+        cwd=root,
+        text=True,
+    ).strip()
+    if len(found) != 40:
+        raise SystemExit(f"tree is not a sha: {found!r}")
+    return found
+
+
 def write_record(out: Path, doc: dict, notes: str, library: str | None = None) -> None:
     fresh_output(out)
-    host = doc["host"]
+    host = dict(doc["host"])
+    disk = BENCH / "work" / "cross-format"
+    disk.mkdir(parents=True, exist_ok=True)
+    host["tree"] = tree_hash()
+    host["cpu_model"] = cpu_model_name(host.get("lscpu") or "")
+    host["disk"] = str(disk)
+    host["disk_filesystem"] = disk_filesystem(disk)
     payload = {
         "commit": doc["commit"],
+        "tree": host["tree"],
         "library_commit": library,
         "warmup": doc["warmup"],
         "repeats": doc["repeats"],
@@ -265,26 +382,23 @@ def write_record(out: Path, doc: dict, notes: str, library: str | None = None) -
         raise SystemExit("host record contains the hostname")
     (out / "host.json").write_text(text, encoding="utf-8")
     (out / "lscpu.txt").write_text(host.get("lscpu") or "", encoding="utf-8")
+    notes = (
+        notes.rstrip()
+        + "\n\n"
+        + f"disk {disk} filesystem {host['disk_filesystem']} (stat -f -c %T). "
+        + f"cpu_model {host['cpu_model']}. tree {host['tree']}.\n"
+    )
     (out / "NOTES.txt").write_text(notes, encoding="utf-8")
     if library:
         (out / "library-commit.txt").write_text(library + "\n", encoding="utf-8")
 
 
-def build_notes(doc: dict, baseline_doc: dict) -> tuple[str, list[str]]:
-    old = index_rows(baseline_doc)
+def build_notes(doc: dict, ab: dict | None = None) -> tuple[str, list[str]]:
     new = index_rows(doc)
-    ops = [op for op in ("read", "write") if any(key[2] == op for key in new)]
-    if not ops:
+    if not new:
         raise SystemExit("the campaign has no timed rows")
-    factors = {}
-    counts = {}
-    for op in ops:
-        factor, count = machine_factor(old, new, op)
-        factors[op] = factor
-        counts[op] = count
-    covered = {key: row for key, row in old.items() if key[2] in ops}
-    flags = self_regressions(covered, new, factors) + lost_leads(covered, new)
-    return render_notes(doc, covered, factors, counts, flags), flags
+    flags = release_flags(ab) if ab else []
+    return render_notes(doc, flags, ab), flags
 
 
 def main() -> None:
@@ -296,12 +410,13 @@ def main() -> None:
     args = parser.parse_args()
     fresh_output(args.out, args.baseline)
     doc = json.loads((args.out / "cross-format.json").read_text(encoding="utf-8"))
-    baseline_doc = json.loads(args.baseline.read_text(encoding="utf-8"))
     if doc.get("repeats") != 12 or doc.get("warmup") != 1:
         raise SystemExit(
             f"campaign protocol is not warmup 1 n=12: {doc.get('repeats')}"
         )
-    notes, flags = build_notes(doc, baseline_doc)
+    ab_path = args.out / "ab.json"
+    ab = json.loads(ab_path.read_text(encoding="utf-8")) if ab_path.is_file() else None
+    notes, flags = build_notes(doc, ab)
     library = library_commit(ROOT)
     notes = f"library_commit {library}\n" + notes
     write_record(args.out, doc, notes, library)

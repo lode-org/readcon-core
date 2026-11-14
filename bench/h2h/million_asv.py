@@ -19,7 +19,7 @@ from pathlib import Path
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 CONFIG = ROOT / "asv.million.conf.json"
-MACHINE = "million-v0232"
+MACHINE = "million-v0232b"
 
 
 def cpu_description() -> str:
