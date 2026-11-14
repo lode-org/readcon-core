@@ -89,6 +89,13 @@ def main(argv: list[str]) -> int:
     rustc_extra: list[str] = []
     if sys.platform.startswith("linux"):
         rustc_extra.append(f"-Clink-arg=-Wl,-soname,{shared_name}")
+        # initial-exec TLS marks the cdylib DF_STATIC_TLS. dlopen then
+        # fails with "cannot allocate memory in static TLS block" once
+        # the process surplus is spent. Rust TLS uses -Z tls-model
+        # (RUSTC_BOOTSTRAP; -C tls-model is not stable through 1.100).
+        # mimalloc, the global allocator, is C and keeps initial-exec
+        # unless CFLAGS says otherwise. Both are required.
+        rustc_extra.append("-Ztls-model=global-dynamic")
     elif sys.platform == "darwin":
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
@@ -98,6 +105,11 @@ def main(argv: list[str]) -> int:
         if extra:
             crate_cmd += ["--", *extra]
         crate_env = env.copy()
+        if sys.platform.startswith("linux"):
+            crate_env["RUSTC_BOOTSTRAP"] = "1"
+            cflags = crate_env.get("CFLAGS", "")
+            if "-ftls-model=global-dynamic" not in cflags:
+                crate_env["CFLAGS"] = (cflags + " -ftls-model=global-dynamic").strip()
         if crate_type == "staticlib":
             # Keep runtime object boundaries so a consumer can link several
             # Rust archives without duplicate symbols from merged LTO units.
