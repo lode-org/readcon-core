@@ -400,15 +400,49 @@ def strong_mpi(paths: dict[tuple[str, str], Path]) -> None:
     save_rows(dest, rows, repeats=REPEATS, warmup=1)
 
 
+def _fixture_frames(text: str, one: str) -> list[str]:
+    """Split ``text`` on the first line of the cuh2 frame."""
+    mark = one.splitlines(keepends=True)[0]
+    starts = []
+    pos = 0
+    while True:
+        at = text.find(mark, pos)
+        if at < 0:
+            break
+        starts.append(at)
+        pos = at + len(mark)
+    if not starts:
+        return []
+    return [
+        text[start : starts[index + 1] if index + 1 < len(starts) else len(text)]
+        for index, start in enumerate(starts)
+    ]
+
+
 def repeat_fixture(dest: Path, frames: int) -> None:
-    blob = CUH2.read_bytes()
-    expect = len(blob) * frames
-    if dest.is_file() and dest.stat().st_size == expect:
-        return
+    """``frames`` cuh2 geometries whose coordinates are not copies.
+
+    Tiling one blob is the repeated-frame shortcut. ``frames_guard``
+    writes a seeded nudge into each frame and refuses identical texts.
+    """
+    from frames_guard import distinct_frame_list, require_distinct_frames
+
+    if frames < 1:
+        raise SystemExit("repeat_fixture needs at least one frame")
+    one = CUH2.read_text(encoding="utf-8")
+    if dest.is_file():
+        cached = _fixture_frames(dest.read_text(encoding="utf-8"), one)
+        if len(cached) == frames:
+            try:
+                require_distinct_frames(cached)
+            except SystemExit:
+                pass
+            else:
+                return
+    texts = distinct_frame_list(one, frames)
+    require_distinct_frames(texts)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with dest.open("wb") as handle:
-        for _ in range(frames):
-            handle.write(blob)
+    dest.write_text("".join(texts), encoding="utf-8")
 
 
 def weak_threads() -> None:
