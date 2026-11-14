@@ -673,7 +673,7 @@ The fidelity check on these rows is exact.
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
-Write scaling in this paper is camp16b, and camp17 replaces the thread writes it remeasured.
+Strong and weak scaling in this paper is camp21.
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
 Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are h2h12: one frame of \(10^{6}\) atoms and one trajectory, on the model 173 host.
@@ -709,34 +709,26 @@ A file that drops those fields cannot stand in for a CON file.
 The ASE extended XYZ row drops none.
 \input{campaign/final/cross_format}
 
-Tables~\ref{tab:camp16b-threads-read-memory} and~\ref{tab:camp16b-mpi-write-memory} are camp16b, one session on the model 173 host.
-The record is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
-camp18 replaces the con-100k and con-1e6 reads in Table~\ref{tab:camp16b-threads-read-memory}.
-The record is \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
-The one-thread read of the million-atom frame is 0.03634~s.
-Coordinate rows are stored directly, instead of a per-atom copy.
+Tables~\ref{tab:camp21-threads-read-ext4} through~\ref{tab:camp21-weak} are camp21.
+Strong efficiency is $(t(1)/t(n))/n$ and weak efficiency is $t(1)/t(n)$.
+A row prints that value when the record has worker counts 1, 2, 4 and 8.
+The record is \path{bench/h2h/scaling/camp21} at \texttt{f44a7a73}.
 Each median is twelve samples.
 A write in these tables unlinks the destination before the clock.
-camp17 replaces the thread-write cells named in the write-table captions.
-The record is \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
-The host record's commit is \texttt{9b43ec68}, with 8 CPUs.
-The thread writes in these tables are the fresh-file path with no spare.
-The one-thread disk write is 0.4678~s for con-100k and 0.03544~s for the million-atom frame.
-The eight-thread disk write of that frame is 0.01132~s.
-Those three times sit under the rel1 medians, 0.4688~s, 0.04132~s and 0.01203~s.
-The serial path fallocates the fresh file and spells into a shared mapping once the frame lengths are priced.
-Table~\ref{tab:camp20} is the ranked fresh-file writes, with the earlier fresh-file times and a warm-inode overwrite beside them.
-The million-atom frame at 8 ranks on ext4 takes \rankedEightExtFour~s.
-The earlier fresh-file time of that cell is \rankedEightExtFourPrior~s, and the warm-inode overwrite is \rankedEightExtFourWarm~s.
-A plain copy of the same bytes takes \rankedEightExtFourCopy~s.
+% Under revision for camp22: the con-100k thread read, the 4-rank ext4 write, and the 8-rank ext4 million-atom write against cp.
+The con-100k thread read on tmpfs is \conHundredKTmpfsOne~s at one thread and \conHundredKTmpfsEight~s at eight threads, and the strong efficiency is \conHundredKTmpfsEff.
+On ext4 that read is \conHundredKExtFourOne~s and \conHundredKExtFourEight~s, and the strong efficiency is \conHundredKExtFourEff.
+The 4-rank ext4 write of the million-atom frame is \fourRankExtFourMillion~s, and the strong efficiency is \fourRankExtFourMillionEff.
+The 8-rank ext4 write of the million-atom frame is \eightRankExtFourMillion~s.
+A plain copy of those bytes is \rankedEightExtFourCopy~s (Table~\ref{tab:camp20}).
 On ext2, ext3, ext4, XFS and btrfs, rank 0 writes the slices in order.
 Every other filesystem keeps one write per rank.
 \texttt{READCON\_RANKED\_WRITE=parallel} or \texttt{sequential}, read on rank 0, overrides that choice.
-On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.7845 for threaded convel.
-The weak parses are Table~\ref{tab:camp16b-weak}.
-Eight threads keep the time at 0.1225~s, and \(T(1)/T(8)\) is 0.884.
-Eight ranks keep the time at 0.02963~s, and \(T(1)/T(8)\) is 0.9858.
-The rank file has 2000 frames on each rank, and the thread file has 8000 frames on each worker.
+Table~\ref{tab:camp20} is the ranked fresh-file writes, with the earlier fresh-file times and a warm-inode overwrite beside them.
+The earlier fresh-file time of the million-atom frame at 8 ranks on ext4 is \rankedEightExtFourPrior~s, and the warm-inode overwrite is \rankedEightExtFourWarm~s.
+The weak table keeps 8000 frames on each worker.
+Eight threads parse cuh2 in \weakThreadEight~s, and \(T(1)/T(8)\) is \weakThreadEff.
+\input{campaign/final/camp21}
 Gzip of that million-atom frame, one member and one thread, takes 0.3277~s to write and leaves a 2.648~MB file.
 zstd at level 3, one member and one thread, takes 0.05996~s and leaves a 0.7552~MB file.
 Eight members at eight threads write gzip in 0.04272~s and zstd in 0.007717~s (Table~\ref{tab:camp16b-compressed}).
@@ -777,10 +769,9 @@ The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
-Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
-The con-100k and con-1e6 reads are \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
-The ranked writes and the plain-copy column are \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
-The camp20 column is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
+Strong and weak scaling is \path{bench/h2h/scaling/camp21} at \texttt{f44a7a73}.
+Gzip, zstd and CON-bin are \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
+The ranked comparison and the plain copy are \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
 The readcon-db records are on \path{lode-org/readcon-db}, branch \texttt{fix/ingest-species-count}.
 The inserts are \path{bench/db9} at \texttt{89105ce4}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.

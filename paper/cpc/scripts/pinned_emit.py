@@ -1,6 +1,6 @@
 """Emit the later pinned tables from git show of the record commits.
 
-camp16b, camp17, camp18, camp19 and camp20 live in readcon-core.
+camp16b, camp17, camp18, camp19, camp20 and camp21 live in readcon-core.
 db16, db17 and db18 live in readcon-db. A row's 1/2/4/8 ladder and its
 efficiency come from one record. A later record that measured only some
 worker counts fills those cells and leaves the efficiency blank.
@@ -33,6 +33,7 @@ CAMP17 = "a350668818694095c7f9a10250a32aa1911e7001"
 CAMP18 = "63f1db1fe72ca085a2540cd87d99c4d1f066afeb"
 CAMP19 = "87beea40ae3c6f21bb7d24cbc7f879b9ed9312ff"
 CAMP20 = "ef4d6946e8e148428c964be7f48975ebfde06fa1"
+CAMP21 = "f44a7a73b4d03d3c76dcc3f0cf5224526b4049a0"
 DB16 = "fe3e0d54db993e0e6750cd48939823f32d663f23"
 DB18 = "06ffcbddc44039b4bf3f3c38793a0927a5709d8a"
 
@@ -272,156 +273,10 @@ def weak_medians(samples: list[float]) -> tuple[float, float]:
 
 
 def camp16b_tex() -> str:
-    root = "bench/h2h/scaling"
-    threads = index_rows(load(REPO, CAMP16B, f"{root}/camp16b/strong-threads.json")["rows"])
-    mpi = index_rows(load(REPO, CAMP16B, f"{root}/camp16b/strong-mpi.json")["rows"])
-    camp17 = index_rows(load(REPO, CAMP17, f"{root}/camp17/threads.json")["rows"])
-    reads = index_rows(load(REPO, CAMP18, f"{root}/camp18/reads.json")["rows"])
-    # The ext4-file read is camp18's disk sink. It replaces a whole ladder or nothing.
-    read_later = {
-        key: row
-        for key, row in reads.items()
-        if key[4] == "disk" and key[3] == "threads" and key[0] == "read"
-    }
-    # Present those reads in the memory-sink table: the file is on ext4.
-    read_later = {
-        (op, name, workers, kind, "memory"): row
-        for (op, name, workers, kind, _sink), row in read_later.items()
-    }
-    host = host_line(load(REPO, CAMP16B, f"{root}/camp16b/host.json")["lscpu"])
-    fresh = "Each write unlinks the destination before the clock, so the row is a fresh file. "
-    eff = (
-        "The 8-way column is $T(1)/(8T(8))$ when the four worker counts are one measurement. "
-    )
-    chunks = [
-        _scaling_table(
-            "Strong scaling across cores, read of the ext4 file into memory. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + eff
-            + host,
-            "tab:camp16b-threads-read-memory",
-            threads,
-            read_later,
-            "read",
-            "threads",
-            "memory",
-            FILES,
-            None,
-        )
-        + "\\FloatBarrier\n",
-        _scaling_table(
-            "Strong scaling across cores, fresh-file write onto disk. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + fresh + eff + host,
-            "tab:camp16b-threads-write-disk",
-            threads,
-            camp17,
-            "write",
-            "threads",
-            "disk",
-            FILES,
-            None,
-        ),
-        _scaling_table(
-            "Strong scaling across cores, fresh-file write into memory. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + fresh + eff + host,
-            "tab:camp16b-threads-write-memory",
-            threads,
-            camp17,
-            "write",
-            "threads",
-            "memory",
-            FILES,
-            None,
-        ),
-        _scaling_table(
-            "Strong scaling across cores, fresh-file write onto disk, then fdatasync. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + fresh + eff + host,
-            "tab:camp16b-threads-write-disksync",
-            threads,
-            camp17,
-            "write",
-            "threads",
-            "disk_sync",
-            FILES,
-            None,
-        )
-        + "\\FloatBarrier\n",
-        _scaling_table(
-            "Strong scaling across ranks, read into memory. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + eff + host,
-            "tab:camp16b-mpi-read-memory",
-            mpi,
-            None,
-            "read",
-            "mpi",
-            "memory",
-            FILES,
-            None,
-        )
-        + "\\FloatBarrier\n",
-    ]
-    copy_rows = load(REPO, CAMP19, f"{root}/camp19/copy.json")["rows"]
-    copy_for = {(row["file"], row["sink"]): row for row in copy_rows}
-    ranked = index_rows(load(REPO, CAMP19, f"{root}/camp19/ranked.json")["rows"])
-    mount = cpu_sentence(load(REPO, CAMP16B, f"{root}/camp16b/host.json"))
-    chunks.append(
-        _scaling_table(
-            "Ranked fresh-file writes onto ext4. "
-            "Time is the type-7 median in seconds, the interquartile range, and $n$. "
-            "Copy is a plain copy of the formatted bytes. "
-            "Each cell is the time that measurement recorded. "
-            + mount,
-            "tab:camp16b-mpi-write-disk",
-            mpi,
-            ranked,
-            "write",
-            "mpi",
-            "disk",
-            FILES,
-            copy_for,
-        )
-        + "\\FloatBarrier\n"
-    )
-    chunks.append(
-        _scaling_table(
-            "Ranked fresh-file writes onto tmpfs. "
-            "Time is the type-7 median in seconds, the interquartile range, and $n$. "
-            "Copy is a plain copy of the formatted bytes. "
-            "Each cell is the time that measurement recorded. "
-            + mount,
-            "tab:camp16b-mpi-write-memory",
-            mpi,
-            ranked,
-            "write",
-            "mpi",
-            "memory",
-            FILES,
-            copy_for,
-        )
-    )
-    chunks.append(
-        _scaling_table(
-            "Ranked fresh-file writes onto disk, then fdatasync. "
-            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-            + eff + host,
-            "tab:camp16b-mpi-write-disksync",
-            mpi,
-            None,
-            "write",
-            "mpi",
-            "disk_sync",
-            FILES,
-            None,
-        )
-    )
-    chunks.append(weak_tex(host))
-    chunks.append(compressed_tex(host))
-    chunks.append(conbin_tex(host))
-    return "\n".join(chunks)
+    """Gzip, zstd and CON-bin stay on camp16b. Strong and weak scaling are camp21."""
+    host = host_line(load(REPO, CAMP16B, "bench/h2h/scaling/camp16b/host.json")["lscpu"])
+    return "\n".join((compressed_tex(host), conbin_tex(host)))
+
 
 
 def weak_tex(host: str) -> str:
@@ -627,6 +482,221 @@ def db15_tex() -> str:
     )
 
 
+def _camp21(name: str):
+    return load(REPO, CAMP21, f"bench/h2h/scaling/camp21/{name}")
+
+
+def _one(rows: list[dict], **match) -> dict:
+    hits = [row for row in rows if all(row[key] == value for key, value in match.items())]
+    if len(hits) != 1:
+        raise SystemExit(f"camp21 expected one row for {match}, found {len(hits)}")
+    return hits[0]
+
+
+def _ladder_cells(rows: list[dict], **match) -> tuple[list[str], dict[int, float] | None]:
+    chosen = {
+        int(row["workers"]): row
+        for row in rows
+        if all(row[key] == value for key, value in match.items())
+    }
+    cells = []
+    medians = {}
+    for workers in WORKERS:
+        row = chosen.get(workers)
+        if row is None:
+            cells.append("")
+            continue
+        cells.append(cell(row))
+        medians[workers] = float(row["median_s"])
+    if set(WORKERS) <= set(medians):
+        return cells, medians
+    return cells, None
+
+
+def _strong_eff(medians: dict[int, float] | None, workers: int = 8) -> str:
+    if medians is None or workers not in medians or 1 not in medians:
+        return ""
+    return sig(medians[1] / (workers * medians[workers]))
+
+
+def _weak_eff(medians: dict[int, float] | None) -> str:
+    if medians is None:
+        return ""
+    return sig(medians[1] / medians[8])
+
+
+def _strong_table(rows: list[dict], op: str, kind: str, sink: str, caption: str, label: str) -> str:
+    body = []
+    any_eff = False
+    for name in FILES:
+        cells, medians = _ladder_cells(rows, op=op, file=name, kind=kind, sink=sink)
+        if not any(cells):
+            raise SystemExit(f"camp21 has no {op} {name} {kind} {sink}")
+        eight = _strong_eff(medians)
+        if eight:
+            any_eff = True
+        body.append(" & ".join([name, *cells, eight]) + r" \\")
+    if not any_eff:
+        trimmed = []
+        for line in body:
+            bits = [bit.strip() for bit in line[:-3].split("&")]
+            trimmed.append(" & ".join(bits[:5]) + r" \\")
+        body = trimmed
+        header = "File & 1 & 2 & 4 & 8"
+        spec = "@{}lcccc@{}"
+    else:
+        header = "File & 1 & 2 & 4 & 8 & 8-way"
+        spec = "@{}lccccc@{}"
+    return table(caption, label, spec, header, body) + "\\FloatBarrier\n"
+
+
+def camp21_tex() -> str:
+    threads = _camp21("strong-threads.json")["rows"]
+    mpi = _camp21("strong-mpi.json")["rows"]
+    host = cpu_sentence(_camp21("host.json"))
+    fresh = "Each write unlinks the destination before the clock, so the row is a fresh file. "
+    strong = (
+        "The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. "
+    )
+    mounts = (("disk", "ext4"), ("memory", "tmpfs"))
+    chunks = []
+    for sink, mount in mounts:
+        chunks.append(
+            _strong_table(
+                threads,
+                "read",
+                "threads",
+                sink,
+                "Strong scaling of the thread read on "
+                + mount
+                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
+                + strong
+                + host,
+                f"tab:camp21-threads-read-{mount}",
+            )
+        )
+        chunks.append(
+            _strong_table(
+                threads,
+                "write",
+                "threads",
+                sink,
+                "Strong scaling of the fresh-file thread write on "
+                + mount
+                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
+                + fresh
+                + strong
+                + host,
+                f"tab:camp21-threads-write-{mount}",
+            )
+        )
+        chunks.append(
+            _strong_table(
+                mpi,
+                "read",
+                "mpi",
+                sink,
+                "Strong scaling of the ranked read on "
+                + mount
+                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
+                + strong
+                + host,
+                f"tab:camp21-mpi-read-{mount}",
+            )
+        )
+        chunks.append(
+            _strong_table(
+                mpi,
+                "write",
+                "mpi",
+                sink,
+                "Strong scaling of the fresh-file ranked write on "
+                + mount
+                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
+                + fresh
+                + strong
+                + host,
+                f"tab:camp21-mpi-write-{mount}",
+            )
+        )
+    weak_rows = []
+    parse = {int(point["workers"]): point for point in _camp21("weak-threads.json")["points"]}
+    parse_cells = []
+    parse_medians: dict[int, float] = {}
+    for workers in WORKERS:
+        point = parse.get(workers)
+        if point is None:
+            parse_cells.append("")
+            continue
+        parse_cells.append(cell(point))
+        parse_medians[workers] = float(point["median_s"])
+    if not set(WORKERS) <= set(parse_medians):
+        parse_medians = {}
+    weak_rows.append(("thread parse", parse_cells, parse_medians or None))
+    writes = _camp21("weak-thread-writes.json")["rows"]
+    reads = _camp21("weak-mpi-reads.json")["rows"]
+    ranked_writes = _camp21("weak-mpi-writes.json")["rows"]
+    for sink, mount in mounts:
+        cells, medians = _ladder_cells(writes, op="write", kind="threads", sink=sink)
+        weak_rows.append((f"thread write, {mount}", cells, medians))
+        cells, medians = _ladder_cells(reads, op="read", kind="mpi", sink=sink)
+        weak_rows.append((f"rank read, {mount}", cells, medians))
+        cells, medians = _ladder_cells(ranked_writes, op="write", kind="mpi", sink=sink)
+        weak_rows.append((f"rank write, {mount}", cells, medians))
+    body = []
+    for label, cells, medians in weak_rows:
+        if not any(cells):
+            raise SystemExit(f"camp21 weak series {label} is empty")
+        body.append(" & ".join([label, *cells, _weak_eff(medians)]) + r" \\")
+    chunks.append(
+        table(
+            "Weak scaling. Each worker keeps 8000 frames. "
+            "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
+            "The last column is $t(1)/t(8)$ when this record has worker counts 1, 2, 4 and 8. "
+            + host,
+            "tab:camp21-weak",
+            "@{}lccccc@{}",
+            r"Series & 1 & 2 & 4 & 8 & $t(1)/t(8)$",
+            body,
+        )
+    )
+    return "\n".join(chunks)
+
+
+def _camp21_macros() -> dict[str, str]:
+    threads = _camp21("strong-threads.json")["rows"]
+    mpi = _camp21("strong-mpi.json")["rows"]
+    read_mem = {
+        workers: _one(threads, op="read", file="con-100k", kind="threads", sink="memory", workers=workers)
+        for workers in (1, 8)
+    }
+    read_disk = {
+        workers: _one(threads, op="read", file="con-100k", kind="threads", sink="disk", workers=workers)
+        for workers in (1, 8)
+    }
+    four = {
+        workers: _one(mpi, op="write", file="con-1e6", kind="mpi", sink="disk", workers=workers)
+        for workers in (1, 4)
+    }
+    eight = _one(mpi, op="write", file="con-1e6", kind="mpi", sink="disk", workers=8)
+    weak = {int(point["workers"]): point for point in _camp21("weak-threads.json")["points"]}
+    def strong(rows: dict[int, dict], workers: int) -> str:
+        return sig(float(rows[1]["median_s"]) / (workers * float(rows[workers]["median_s"])))
+    return {
+        "conHundredKTmpfsOne": sig(read_mem[1]["median_s"]),
+        "conHundredKTmpfsEight": sig(read_mem[8]["median_s"]),
+        "conHundredKTmpfsEff": strong(read_mem, 8),
+        "conHundredKExtFourOne": sig(read_disk[1]["median_s"]),
+        "conHundredKExtFourEight": sig(read_disk[8]["median_s"]),
+        "conHundredKExtFourEff": strong(read_disk, 8),
+        "fourRankExtFourMillion": sig(four[4]["median_s"]),
+        "fourRankExtFourMillionEff": strong(four, 4),
+        "eightRankExtFourMillion": sig(eight["median_s"]),
+        "weakThreadEight": sig(weak[8]["median_s"]),
+        "weakThreadEff": sig(float(weak[1]["median_s"]) / float(weak[8]["median_s"])),
+    }
+
+
 def pinned_macros() -> str:
     sizes = load(readcon_db(), DB18, "bench/db18/campaign.json")["fair"]
     disk = {
@@ -661,6 +731,7 @@ def pinned_macros() -> str:
         "rankedEightExtFourPrior": sig(wide["camp19_s"]),
         "rankedEightExtFourWarm": sig(wide["camp5c_s"]),
         "rankedEightExtFourCopy": sig(copied["median_s"]),
+        **_camp21_macros(),
     }
     lines = ["% Written by paper/cpc/scripts/make_tables.py from the pinned records."]
     for name, value in commands.items():
@@ -671,6 +742,7 @@ def pinned_macros() -> str:
 def write_all(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "camp16b.tex").write_text(camp16b_tex(), encoding="utf-8")
+    (out / "camp21.tex").write_text(camp21_tex(), encoding="utf-8")
     (out / "camp20.tex").write_text(camp20_tex(), encoding="utf-8")
     (out / "db15.tex").write_text(db15_tex(), encoding="utf-8")
     (out / "pinned_macros.tex").write_text(pinned_macros(), encoding="utf-8")
