@@ -327,10 +327,10 @@ Ranked writes
 
 One ``MPI_Allgather`` shares each rank's byte length and frame count.
 The default store is a fresh file, not a spare reused in place. Rank 0
-renames that file onto the path only after every byte is stored. On ext2,
-ext3, ext4, XFS, and btrfs, rank 0 writes the slices in order. Other
-filesystems keep one write per rank. ``READCON_RANKED_WRITE=parallel`` or
-``sequential``, read on rank 0, overrides that. One gather of the frame offsets and block hashes then writes the ``.rcidx``
+renames that file onto the path only after every byte is stored. Each
+rank pwrites its own range into the scratch. Lustre, GPFS, BeeGFS, and
+PanFS use collective MPI-IO. ``READCON_RANKED_WRITE=parallel``,
+``sequential``, or ``mpiio``, read on rank 0, overrides that. One gather of the frame offsets and block hashes then writes the ``.rcidx``
 sidecar. Until the rename the new bytes are a second copy, and the
 published path is still the previous complete file. After the rename it
 is the finished new one.
