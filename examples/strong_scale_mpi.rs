@@ -4,15 +4,10 @@
 //! `repeats` samples. Rank 0 prints the samples. The timer is inside the
 //! process, after `mpirun` has started.
 //!
-//! A single wide frame is formatted per rank and written with one
-//! `pwrite` at the exclusive-scan offset. On tmpfs a shared mapping of
-//! that slice is faster. Each rank is one core, so the format and the
-//! sink add. At 8 ranks on tmpfs that split is about 0.0044 s of format,
-//! 0.0014 s for rank 0's truncate, and 0.0040 s of faulting copy.
-//! Prefaulting the slice on a second thread, splicing, and formatting
-//! straight into the mapping were all slower: the extra pass or the
-//! second thread stole the only core. `READCON_MPI_SYNC` fdatasyncs on
-//! rank 0 before the sample ends.
+//! A single wide frame is formatted per rank. The library writes a fresh
+//! temporary and renames it onto the destination, so no `.rewrite` file
+//! remains. `READCON_MPI_REWRITE=1` opts into that spare.
+//! `READCON_MPI_SYNC` fdatasyncs on rank 0 before the sample ends.
 
 use mpi::traits::*;
 use readcon_core::distrib::Comm;
@@ -47,74 +42,17 @@ fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
     std::sync::Arc::from(symbol)
 }
 
-fn is_tmpfs(path: &std::path::Path) -> bool {
-    let parent = path
-        .parent()
-        .filter(|dir| !dir.as_os_str().is_empty())
-        .unwrap_or(path);
-    let bytes = std::os::unix::ffi::OsStrExt::as_bytes(parent.as_os_str());
-    let Ok(text) = std::ffi::CString::new(bytes) else {
-        return false;
-    };
-    let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
-    let rc = unsafe { libc::statfs(text.as_ptr(), &mut stat) };
-    // TMPFS_MAGIC. A shared mapping beat pwrite here and lost on ext4,
-    // where the faulting store was slower than pwrite.
-    rc == 0 && stat.f_type == 0x0102_1994
-}
-
-fn write_mapped_body(comm: &Comm, path: &std::path::Path, body: &[u8]) {
-    let world = comm.raw();
-    let len = body.len() as u64;
-    let mut local_off = 0u64;
-    world.exclusive_scan_into(
-        &len,
-        &mut local_off,
-        mpi::collective::SystemOperation::sum(),
-    );
-    if comm.rank() == 0 {
-        local_off = 0;
-    }
-    let mut total = 0u64;
-    world.all_reduce_into(&len, &mut total, mpi::collective::SystemOperation::sum());
-    if comm.rank() == 0 {
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .expect("create");
-        file.set_len(total).expect("truncate");
-    }
-    world.barrier();
-    if !body.is_empty() {
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(path)
-            .expect("open");
-        let page = 4096u64;
-        let aligned = local_off & !(page - 1);
-        let delta = (local_off - aligned) as usize;
-        let mut map = unsafe {
-            memmap2::MmapOptions::new()
-                .offset(aligned)
-                .len(delta + body.len())
-                .map_mut(&file)
-                .expect("mmap")
-        };
-        map[delta..delta + body.len()].copy_from_slice(body);
-        drop(map);
-    }
-    world.barrier();
+fn rewrite_flags() -> (bool, bool) {
+    let rewrite = std::env::var_os("READCON_MPI_REWRITE").is_some();
+    let keep_spare = std::env::var("READCON_MPI_KEEP_SPARE")
+        .map(|value| value != "0")
+        .unwrap_or(true);
+    (rewrite, keep_spare)
 }
 
 fn write_rank(comm: &Comm, out: &std::path::Path, body: &[u8]) {
-    if is_tmpfs(out) {
-        write_mapped_body(comm, out, body);
-    } else {
-        write_ranked_bytes(comm, out, body).expect("pwrite");
-    }
+    let (rewrite, keep_spare) = rewrite_flags();
+    write_ranked_bytes(comm, out, body, rewrite, keep_spare).expect("pwrite");
     maybe_sync(comm, out);
 }
 
@@ -170,7 +108,17 @@ fn main() {
             );
             write_rank(&comm, out, &body);
         } else {
-            write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("warmup write");
+            let (rewrite, keep_spare) = rewrite_flags();
+            write_block(
+                &comm,
+                out,
+                &held.frames,
+                WriteMode::MpiIo,
+                None,
+                rewrite,
+                keep_spare,
+            )
+            .expect("warmup write");
             maybe_sync(&comm, out);
         }
     } else if let Some((_, rows, _, _)) = &prepared {
@@ -191,7 +139,17 @@ fn main() {
                 );
                 write_rank(&comm, out, &body);
             } else {
-                write_block(&comm, out, &held.frames, WriteMode::MpiIo, None).expect("write");
+                let (rewrite, keep_spare) = rewrite_flags();
+                write_block(
+                    &comm,
+                    out,
+                    &held.frames,
+                    WriteMode::MpiIo,
+                    None,
+                    rewrite,
+                    keep_spare,
+                )
+                .expect("write");
                 maybe_sync(&comm, out);
             }
         } else if let Some((_, _, start, end)) = &prepared {

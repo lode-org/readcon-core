@@ -360,7 +360,16 @@ fn run_weak_writes(
         }
         world.barrier();
         let started = Instant::now();
-        write_block(comm, &dest, mine_frames, WriteMode::Auto, None).expect("collective write");
+        write_block(
+            comm,
+            &dest,
+            mine_frames,
+            WriteMode::Auto,
+            None,
+            false,
+            false,
+        )
+        .expect("collective write");
         if comm.rank() == 0 && env::var_os("READCON_WEAK_FSYNC").is_some() {
             if let Ok(file) = std::fs::File::open(&dest) {
                 let _ = file.sync_all();

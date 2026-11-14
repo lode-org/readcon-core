@@ -107,6 +107,28 @@ static inline int rkr_mpi_write_block(MPI_Comm comm, const char *path,
                                mode, precision, total_bytes);
 }
 
+/*
+ * Spare form of rkr_mpi_write_block_f. The bytes land in path + ".rewrite"
+ * and that file is renamed over path, so a crash leaves path complete.
+ * keep_spare != 0 parks the previous inode at the spare name, which is a
+ * second copy of the trajectory. Zero deletes it after the rename.
+ * The default rkr_mpi_write_block_f writes a fresh temporary and leaves
+ * no .rewrite file.
+ */
+int rkr_mpi_rewrite_block_f(MPI_Fint comm_f, const char *path,
+                            const struct RKRConFrame *const *frames,
+                            size_t num_frames, int mode, int precision,
+                            int keep_spare, uint64_t *total_bytes);
+
+static inline int rkr_mpi_rewrite_block(MPI_Comm comm, const char *path,
+                                        const struct RKRConFrame *const *frames,
+                                        size_t num_frames, int mode,
+                                        int precision, int keep_spare,
+                                        uint64_t *total_bytes) {
+  return rkr_mpi_rewrite_block_f(MPI_Comm_c2f(comm), path, frames, num_frames,
+                                 mode, precision, keep_spare, total_bytes);
+}
+
 /**
  * Broadcast a byte blob from `root` of `comm`.
  *
@@ -312,6 +334,19 @@ inline uint64_t write(MPI_Comm comm, const std::string &path,
                       const std::vector<const RKRConFrame *> &frames,
                       int mode = RKR_MPI_WRITE_AUTO, int precision = -1) {
   return write(comm, path, frames.data(), frames.size(), mode, precision);
+}
+
+/* rewrite keeps a spare at path + ".rewrite". keep_spare parks the
+ * previous inode there. The published path stays complete until rename. */
+inline uint64_t rewrite(MPI_Comm comm, const std::string &path,
+                        const RKRConFrame *const *frames, std::size_t n,
+                        bool keep_spare, int mode = RKR_MPI_WRITE_AUTO,
+                        int precision = -1) {
+  uint64_t total = 0;
+  if (rkr_mpi_rewrite_block(comm, path.c_str(), frames, n, mode, precision,
+                            keep_spare ? 1 : 0, &total) != 0)
+    throw std::runtime_error("readcon: collective rewrite failed: " + path);
+  return total;
 }
 
 } // namespace mpi
