@@ -559,6 +559,7 @@ fn spec_of(line: &[u8]) -> Result<u32, ()> {
     Ok(value)
 }
 
+#[derive(Clone, Copy)]
 struct FrameDest {
     positions: *mut f64,
     velocities: Option<*mut f64>,
@@ -607,6 +608,8 @@ struct Painted {
     symbols: Vec<Arc<str>>,
     /// Byte length of the header through the first coordinate row's start.
     prefix: usize,
+    spec: u32,
+    counts: Vec<usize>,
 }
 
 fn flag_bits(flags: [bool; 3]) -> u8 {
@@ -638,6 +641,7 @@ fn paint_standard_frame(
     let mut pos = 0usize;
     take_line(bytes, &mut pos)?;
     let spec = spec_of(take_line(bytes, &mut pos)?)?;
+    let spec_kept = spec;
     let _box = crate::parser::parse_line_of_n_f64(line_str(take_line(bytes, &mut pos)?)?, 3)
         .map_err(|_| ())?;
     let _angles = crate::parser::parse_line_of_n_f64(line_str(take_line(bytes, &mut pos)?)?, 3)
@@ -790,7 +794,161 @@ fn paint_standard_frame(
         sym_index,
         symbols,
         prefix,
+        spec: spec_kept,
+        counts,
     })
+}
+
+/// Paint one later frame that shares `template`'s header, symbols, flags, and ids.
+///
+/// The coordinate numbers may differ. Nothing is allocated: the rows are
+/// checked against the first frame and written into `dest`.
+fn paint_checked(
+    bytes: &[u8],
+    n_atoms: usize,
+    sections: SectionFlags,
+    dest: FrameDest,
+    template: &Painted,
+    first: &[u8],
+) -> Result<(), ()> {
+    if template.prefix == 0
+        || first.len() < template.prefix
+        || bytes.len() < template.prefix
+        || bytes[..template.prefix] != first[..template.prefix]
+    {
+        return Err(());
+    }
+    // The prefix already matched, so the header and the first component
+    // label are the same bytes. Coordinates start at `prefix`.
+    let spec = template.spec;
+    let mut pos = template.prefix;
+    let mut atom = 0usize;
+    let mut default_id = 0u64;
+    for (component, count) in template.counts.iter().enumerate() {
+        if component > 0 {
+            let symbol = line_str(take_line(bytes, &mut pos)?)?;
+            let expected = template
+                .symbols
+                .get(template.sym_index.get(atom).copied().unwrap_or(u32::MAX) as usize)
+                .map(|item| item.as_ref())
+                .unwrap_or("");
+            if symbol != expected {
+                return Err(());
+            }
+            let label = line_str(take_line(bytes, &mut pos)?)?;
+            if !label.starts_with("Coordinates") {
+                return Err(());
+            }
+        }
+        for _ in 0..*count {
+            let ((xyz, fixed, atom_id), next) =
+                crate::parser::parse_coord_row_at(bytes, pos, spec, default_id).map_err(|_| ())?;
+            if template.flags.get(atom).copied() != Some(flag_bits(fixed))
+                || template.ids.get(atom).copied() != Some(atom_id)
+            {
+                return Err(());
+            }
+            write_xyz(dest.positions, atom, xyz);
+            pos = next;
+            atom += 1;
+            default_id = default_id.saturating_add(1);
+        }
+    }
+    if atom != n_atoms {
+        return Err(());
+    }
+    let mut saw = SectionFlags::default();
+    while pos < bytes.len() && !bytes[pos..].iter().all(u8::is_ascii_whitespace) {
+        let blank = take_line(bytes, &mut pos)?;
+        if !trim_ascii(blank).is_empty() {
+            return Err(());
+        }
+        let mut word: Option<&str> = None;
+        let mut section_atom = 0usize;
+        for count in &template.counts {
+            take_line(bytes, &mut pos)?;
+            let label = line_str(take_line(bytes, &mut pos)?)?;
+            let next_word = label.split_ascii_whitespace().next().unwrap_or("");
+            if let Some(seen) = word {
+                if seen != next_word {
+                    return Err(());
+                }
+            } else {
+                word = Some(next_word);
+            }
+            for _ in 0..*count {
+                match next_word {
+                    "Velocities" => {
+                        let ptr = dest.velocities.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.velocities = true;
+                    }
+                    "Forces" => {
+                        let ptr = dest.forces.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.forces = true;
+                    }
+                    "Magmoms" => {
+                        let ptr = dest.magmoms.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.magmoms = true;
+                    }
+                    "Displacements" => {
+                        let ptr = dest.displacements.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.displacements = true;
+                    }
+                    "Spreads" => {
+                        let ptr = dest.spreads.ok_or(())?;
+                        let ((xyz, _, _), next) =
+                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        write_xyz(ptr, section_atom, xyz);
+                        pos = next;
+                        saw.spreads = true;
+                    }
+                    "Energies" => {
+                        let ptr = dest.energies.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.energies = true;
+                    }
+                    "Charges" => {
+                        let ptr = dest.charges.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.charges = true;
+                    }
+                    "Spins" => {
+                        let ptr = dest.spins.ok_or(())?;
+                        let line = take_line(bytes, &mut pos)?;
+                        write_scalar(ptr, section_atom, scalar_value(line)?);
+                        saw.spins = true;
+                    }
+                    _ => return Err(()),
+                }
+                section_atom += 1;
+            }
+        }
+        if section_atom != n_atoms {
+            return Err(());
+        }
+    }
+    if saw != sections {
+        return Err(());
+    }
+    Ok(())
 }
 
 fn frame_spans(bytes: &[u8]) -> Result<Vec<(usize, usize)>, ()> {
@@ -830,6 +988,150 @@ fn piece_of(painted: Painted, header: FrameHeader) -> Piece {
         symbols: painted.symbols,
         header,
     }
+}
+
+/// How many workers pay for themselves on this file.
+///
+/// Measured on a distinct 100-frame cuh2 (16.8 KB/frame, 1.68 MB): an empty
+/// pool install is 4 µs, a serial frame walk is about 180 µs, and building a
+/// piece per frame adds about 125 µs. Paint itself is about 0.6 µs per KB.
+/// Below 48 KB the parallel call does not beat one thread, so it stays serial.
+fn workers_for(bytes: usize, frames: usize, threads: usize) -> usize {
+    const MIN_BYTES: usize = 48 * 1024;
+    if threads < 2 || frames < 2 || bytes < MIN_BYTES {
+        return 1;
+    }
+    threads.min(frames).max(2)
+}
+
+/// Frame-index ranges whose bytes are about equal.
+fn byte_ranges(offsets: &[usize], frames_end: usize, workers: usize) -> Vec<(usize, usize)> {
+    let n = offsets.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let workers = workers.min(n).max(1);
+    if workers == 1 {
+        return vec![(0, n)];
+    }
+    let total = frames_end.saturating_sub(offsets[0]).max(1);
+    let share = total.div_ceil(workers);
+    let mut out = Vec::with_capacity(workers);
+    let mut index = 0usize;
+    for worker in 0..workers {
+        if index >= n {
+            break;
+        }
+        let begin = index;
+        if worker + 1 == workers {
+            out.push((begin, n));
+            break;
+        }
+        let origin = offsets[index];
+        index += 1;
+        while index < n && offsets[index].saturating_sub(origin) < share {
+            index += 1;
+        }
+        if index == begin {
+            index = begin + 1;
+        }
+        out.push((begin, index.min(n)));
+    }
+    out
+}
+
+/// Paint every frame from `offsets` without a second scan or a per-frame piece.
+///
+/// Frame 0 keeps the identity and the header. Later frames are written into
+/// their own slab slice and checked against that identity. A mismatch returns
+/// `Err` and the caller uses the general fill.
+fn fill_shared(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    slabs: &mut Slabs<'_>,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Columns, ()> {
+    if n_frames == 0 || n_atoms == 0 || offsets.len() != n_frames || frames_end < offsets[0] {
+        return Err(());
+    }
+    let end_of = |index: usize| -> usize {
+        if index + 1 == n_frames {
+            frames_end
+        } else {
+            offsets[index + 1]
+        }
+    };
+    if end_of(0) > bytes.len() || offsets[0] > end_of(0) {
+        return Err(());
+    }
+    let raw = raw_slabs(slabs);
+    let first = &bytes[offsets[0]..end_of(0)];
+    let painted = paint_standard_frame(first, n_atoms, sections, frame_dest(raw, 0, n_atoms))?;
+    let header = header_of(first)?;
+    let workers = workers_for(frames_end.saturating_sub(offsets[0]), n_frames, threads);
+    let paint_rest = |index: usize| -> Result<(), ()> {
+        let start = *offsets.get(index).ok_or(())?;
+        let end = end_of(index);
+        if start > end || end > bytes.len() {
+            return Err(());
+        }
+        paint_checked(
+            &bytes[start..end],
+            n_atoms,
+            sections,
+            frame_dest(raw, index, n_atoms),
+            &painted,
+            first,
+        )
+    };
+    if workers < 2 {
+        for index in 1..n_frames {
+            paint_rest(index)?;
+        }
+    } else {
+        let ranges = byte_ranges(offsets, frames_end, workers);
+        #[cfg(feature = "parallel")]
+        {
+            crate::parser::on_pool(ranges.len().max(2), || {
+                use rayon::prelude::*;
+                let result: Result<(), ()> = ranges.par_iter().try_for_each(|&(start, end)| {
+                    note_worker(note);
+                    for index in start..end {
+                        if index == 0 {
+                            continue;
+                        }
+                        paint_rest(index)?;
+                    }
+                    Ok(())
+                });
+                result
+            })?;
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let _ = (ranges, note);
+            for index in 1..n_frames {
+                paint_rest(index)?;
+            }
+        }
+    }
+    let _ = note;
+    Ok(Columns {
+        n_frames,
+        n_atoms,
+        flags: painted.flags,
+        ids: painted.ids,
+        sym_index: painted.sym_index,
+        symbols: painted.symbols,
+        identity_shared: true,
+        headers: vec![header],
+        header_index: vec![0; n_frames],
+    })
 }
 
 /// Fill slabs by parsing each frame's rows into the caller buffers.
@@ -947,40 +1249,62 @@ fn fill_stream_fast<R: Read>(
     let mut src = src;
     let mut buf = Vec::with_capacity(READ_CHUNK * 2);
     let mut eof = false;
-    let mut pieces = Vec::with_capacity(n_frames);
-    let mut shared: Option<(Vec<u8>, FrameHeader)> = None;
     let raw = raw_slabs(slabs);
+    let mut seen = 0usize;
+    let mut kept: Option<(Painted, FrameHeader, Vec<u8>)> = None;
     loop {
         match skip_frame(&buf, eof)? {
             Some(end) => {
-                let index = pieces.len();
                 let frame = &buf[..end];
-                let painted = paint_standard_frame(
-                    frame,
-                    n_atoms,
-                    sections,
-                    frame_dest(raw, index, n_atoms),
-                )?;
-                let prefix = frame[..painted.prefix].to_vec();
-                let header = if shared.as_ref().is_some_and(|(got, _)| got == &prefix) {
-                    shared.as_ref().unwrap().1.clone()
-                } else {
+                if seen == 0 {
+                    let painted = paint_standard_frame(
+                        frame,
+                        n_atoms,
+                        sections,
+                        frame_dest(raw, 0, n_atoms),
+                    )?;
                     let header = header_of(frame)?;
-                    shared = Some((prefix, header.clone()));
-                    header
-                };
-                pieces.push(piece_of(painted, header));
+                    let prefix = frame[..painted.prefix].to_vec();
+                    kept = Some((painted, header, prefix));
+                } else {
+                    let (painted, _, prefix) = kept.as_ref().ok_or(())?;
+                    if frame.len() < prefix.len() || frame[..prefix.len()] != prefix[..] {
+                        return Err(());
+                    }
+                    // `prefix` is the first frame's header bytes. paint_checked
+                    // compares against `first`, which must be that same text.
+                    paint_checked(
+                        frame,
+                        n_atoms,
+                        sections,
+                        frame_dest(raw, seen, n_atoms),
+                        painted,
+                        prefix,
+                    )?;
+                }
+                seen += 1;
                 buf.drain(..end);
-                shrink(&mut buf);
+                buf.shrink_to(READ_CHUNK * 2);
             }
             None if eof => break,
             None => read_more(&mut src, &mut buf, &mut eof)?,
         }
     }
-    if pieces.len() != n_frames {
+    if seen != n_frames {
         return Err(());
     }
-    merge_pieces(pieces, n_frames, n_atoms)
+    let (painted, header, _) = kept.ok_or(())?;
+    Ok(Columns {
+        n_frames,
+        n_atoms,
+        flags: painted.flags,
+        ids: painted.ids,
+        sym_index: painted.sym_index,
+        symbols: painted.symbols,
+        identity_shared: true,
+        headers: vec![header],
+        header_index: vec![0; n_frames],
+    })
 }
 
 fn read_range(file: &std::fs::File, start: usize, end: usize) -> Result<Vec<u8>, ()> {
@@ -1204,6 +1528,23 @@ pub fn fill_path_threaded(
     frames_end: usize,
     mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    if threads >= 2 && plain_file(path) {
+        if let Ok(source) = crate::compression::read_bytes_owned(path)
+            && let Ok(columns) = fill_shared(
+                source.as_slice(),
+                offsets,
+                frames_end,
+                n_frames,
+                n_atoms,
+                sections,
+                threads,
+                &mut slabs,
+                None,
+            )
+        {
+            return Ok(columns);
+        }
+    }
     if threads >= 2
         && plain_file(path)
         && let Ok(columns) = fill_pread(
@@ -1225,6 +1566,24 @@ pub fn fill_bytes(
     sections: SectionFlags,
     mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    if let Ok(layout) = layout_indexed(bytes, 1)
+        && layout.n_frames == n_frames
+        && layout.n_atoms == n_atoms
+        && layout.sections == sections
+        && let Ok(columns) = fill_shared(
+            bytes,
+            &layout.frame_offsets,
+            layout.frames_end,
+            n_frames,
+            n_atoms,
+            sections,
+            1,
+            &mut slabs,
+            None,
+        )
+    {
+        return Ok(columns);
+    }
     if let Ok(columns) = try_fill_fast(
         bytes,
         &[],
@@ -1260,10 +1619,17 @@ pub fn fill_bytes_threaded(
     frames_end: usize,
     slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
+    let mut slabs = slabs;
+    if offsets.len() == n_frames && n_frames > 0 && frames_end > 0 {
+        if let Ok(columns) = fill_shared(
+            bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, None,
+        ) {
+            return Ok(columns);
+        }
+    }
     if threads < 2 || n_frames < 2 || offsets.len() != n_frames || frames_end == 0 {
         return fill_bytes(bytes, n_frames, n_atoms, sections, slabs);
     }
-    let mut slabs = slabs;
     if let Ok(columns) = try_fill_fast(
         bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, None,
     ) {
@@ -1704,6 +2070,11 @@ fn fill_threaded(
     mut slabs: Slabs<'_>,
     note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
 ) -> Result<Columns, ()> {
+    if let Ok(columns) = fill_shared(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, note,
+    ) {
+        return Ok(columns);
+    }
     let stride3 = n_atoms.saturating_mul(3);
     let need3 = n_frames.saturating_mul(stride3);
     let need1 = n_frames.saturating_mul(n_atoms);

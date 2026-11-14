@@ -3313,11 +3313,13 @@ fn slab_mut(raw: RawF64) -> &'static mut [f64] {
 }
 
 fn zeros3<'py>(py: Python<'py>, n_frames: usize, n_atoms: usize) -> Bound<'py, PyArray3<f64>> {
-    numpy::PyArray3::<f64>::zeros(py, [n_frames, n_atoms, 3], false)
+    // The fill writes every element before this array is returned. Zeroing
+    // it first was a second pass over the slab.
+    unsafe { numpy::PyArray3::<f64>::new(py, [n_frames, n_atoms, 3], false) }
 }
 
 fn zeros2<'py>(py: Python<'py>, n_frames: usize, n_atoms: usize) -> Bound<'py, PyArray2<f64>> {
-    numpy::PyArray2::<f64>::zeros(py, [n_frames, n_atoms], false)
+    unsafe { numpy::PyArray2::<f64>::new(py, [n_frames, n_atoms], false) }
 }
 
 fn read_con_columnar(
@@ -3327,44 +3329,65 @@ fn read_con_columnar(
 ) -> PyResult<Option<Py<ConFrameList>>> {
     let threads = n_threads.unwrap_or(1);
     let path_owned = path.to_owned();
-    if threads >= 2 {
-        // Offsets come from the streaming layout. Each worker reads its own
-        // frame with pread, so the file is not copied into one buffer.
-        let prepared = py.detach(|| -> Option<_> {
-            let layout = crate::column_read::layout_path(Path::new(&path_owned)).ok()?;
-            if layout.n_frames < 2 || layout.n_atoms == 0 {
-                return None;
-            }
-            Some(layout)
-        });
-        let Some(layout) = prepared else {
-            return Ok(None);
+    if threads < 2 {
+        // One thread streams. Holding the file for the whole call makes the
+        // memray peak the file plus the slab.
+        let layout = match py.detach(|| crate::column_read::layout_path(Path::new(&path_owned))) {
+            Ok(layout) => layout,
+            Err(()) => return Ok(None),
         };
-        let offsets = layout.frame_offsets.clone();
-        let frames_end = layout.frames_end;
-        return materialize_columns(py, layout, threads, move |layout, slabs| {
-            crate::column_read::fill_path_threaded(
+        if layout.n_frames == 0 || layout.n_atoms == 0 {
+            return list_from_columns(
+                py,
+                empty_columns(layout.n_frames, layout.n_atoms),
+                None,
+                SectionStore::default(),
+                layout.n_bytes,
+                1,
+            )
+            .map(Some);
+        }
+        return materialize_columns(py, layout, 1, move |layout, slabs| {
+            crate::column_read::fill_path(
                 Path::new(&path_owned),
                 layout.n_frames,
                 layout.n_atoms,
                 layout.sections,
-                threads,
-                &offsets,
-                frames_end,
                 slabs,
             )
         });
     }
-    let layout = match py.detach(|| crate::column_read::layout_path(Path::new(&path_owned))) {
-        Ok(layout) => layout,
-        Err(()) => return Ok(None),
+    // Several threads map the file once. The newline index was 97 µs where
+    // the iterator walk was 248 µs on a 1.68 MB cuh2, and each worker paints
+    // its own byte range from that map.
+    let prepared = py.detach(move || -> Option<_> {
+        let source = crate::compression::read_bytes_owned(Path::new(&path_owned)).ok()?;
+        let layout = crate::column_read::layout_indexed(source.as_slice(), 1).ok()?;
+        Some((source, layout))
+    });
+    let Some((source, layout)) = prepared else {
+        return Ok(None);
     };
+    if layout.n_frames == 0 || layout.n_atoms == 0 {
+        return list_from_columns(
+            py,
+            empty_columns(layout.n_frames, layout.n_atoms),
+            None,
+            SectionStore::default(),
+            layout.n_bytes,
+            threads.max(1),
+        )
+        .map(Some);
+    }
     materialize_columns(py, layout, threads, move |layout, slabs| {
-        crate::column_read::fill_path(
-            Path::new(&path_owned),
+        crate::column_read::fill_bytes_threaded(
+            source.as_slice(),
             layout.n_frames,
             layout.n_atoms,
             layout.sections,
+            threads.max(1),
+            &layout.frame_offsets,
+            layout.frames_end,
             slabs,
         )
     })
