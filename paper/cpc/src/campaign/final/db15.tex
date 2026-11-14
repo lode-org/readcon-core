@@ -1,11 +1,11 @@
 {\scriptsize\setlength{\tabcolsep}{3pt}
 \begin{longtable}{@{}llllrrrr@{}}
-\caption{db15 scale comparison of readcon-db and the ASE database. Time is the type-7 median in seconds, and $n{=}12$. frames/s and MB/s are the ingest of the CON text. Disk is the database file in bytes after the db16 ingest. The times, frames/s and MB/s are db15. A cold read drops the page cache until the mincore resident fraction is 0, opens outside the clock, and times the query. A warm read times the query after one warmup read. A range read returns an inclusive frame-index span. A metadata read returns the frame indexes whose energy is in the last tenth. Times are \texttt{bench/db15} at \texttt{9e568240a2d734085da2c411be0977e604e12ed6}. Disk bytes are \texttt{bench/db16} at \texttt{fe3e0d54db993e0e6750cd48939823f32d663f23}. The db15 log's rev-parse is \texttt{a48040701073c9fd41e49e57d5ac52b9b274e4fc}. Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}\label{tab:db15}\\
+\caption{Scale comparison of readcon-db and the ASE database. Time is the type-7 median in seconds, and $n{=}12$. frames/s and MB/s are the ingest of the CON text. Disk is the database file in bytes after the later ingest. The times, frames/s and MB/s are the earlier measurement. A cold read drops the page cache until the mincore resident fraction is 0, opens outside the clock, and times the query. A warm read times the query after one warmup read. A range read returns an inclusive frame-index span. A metadata read returns the frame indexes whose energy is in the last tenth. Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}\label{tab:db15}\\
 \toprule
 Workload & Tool & Op & Cache & Time (s) & frames/s & MB/s & Disk (B) \\
 \midrule
 \endfirsthead
-\caption[]{db15 scale comparison, continued.}\\
+\caption[]{Scale comparison, continued.}\\
 \toprule
 Workload & Tool & Op & Cache & Time (s) & frames/s & MB/s & Disk (B) \\
 \midrule

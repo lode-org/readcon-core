@@ -82,6 +82,7 @@ Elsevier%
 \input{figures/generated/dlpack_macros}
 \input{campaign/final/campaign_macros}
 \input{campaign/final/paper21_macros}
+\input{campaign/final/pinned_macros}
 \input{figures/generated/host_macros}
 \input{figures/generated/db_macros}
 % A value from a macro printed to a fixed number of significant figures.
@@ -651,21 +652,20 @@ cold-open times the open and the query.
 Every cold sample has mincore resident fraction 0, and $n{=}12$.
 The full-read cold-open median is 0.0003673~s for readcon-db and 0.009745~s for the ASE database.
 The full-read cold-open IQR/median is 0.06149 for readcon-db.
-Table~\ref{tab:db15} keeps the db15 times, \path{bench/db15} at \texttt{9e568240}.
+Table~\ref{tab:db15} keeps the timed scale comparison.
 The workloads are 1000 frames of 8 atoms, 10000 frames of 8 atoms, and 64 frames of \(10^{5}\) atoms.
-The disk sizes are the db16 ingest, \path{bench/db16} at \texttt{fe3e0d54}.
-frames-1000 is 700416 bytes for readcon-db and 1138688 bytes for the ASE database.
-frames-10000 is 6266880 bytes and 10792960 bytes.
-traj-100k is 342003712 bytes and 384503808 bytes.
-An aligned run of 64 frames shares one zstd frame when that group is shorter than the per-frame values, and a larger value stays in its own frame.
-On traj-100k cold reads, the db17 interleaved comparison, \path{bench/db17} at \texttt{fe3e0d54}, gives db17/db15 of 0.9689 for selected, 0.9841 for range, and 1.015 for metadata.
-With db17 first, the metadata ratio is 1.000.
+The disk sizes are the later ingest of those files.
+frames-1000 is \dbFramesThousandReadconBytes\ bytes for readcon-db and \dbFramesThousandAseBytes\ bytes for the ASE database.
+frames-10000 is \dbFramesTenThousandReadconBytes\ bytes and \dbFramesTenThousandAseBytes\ bytes.
+traj-100k is \dbTrajReadconBytes\ bytes and \dbTrajAseBytes\ bytes.
+An aligned run of \pinnedZstdGroup\ frames shares one zstd frame when that group is shorter than the per-frame values, and a larger value stays in its own frame.
+On the \(10^{5}\)-atom cold reads, the interleaved comparison gives a ratio of \abSelectedRatio\ for the selected frame, \abRangeRatio\ for the range, and \abMetaRatio\ for metadata.
+With the order reversed, the metadata ratio is \abMetaReverseRatio.
 A streamed insert of 10000 frames yields one frame at a time, puts groups of 64 into one LMDB transaction, and drops each group's text after the put (Table~\ref{tab:db11-memory}).
 The ASE atom list stays allocated for the whole trajectory.
 Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
 The record is \path{bench/db11} at \texttt{4dbb746e}.
 The fidelity check on these rows is exact.
-The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 \input{campaign/final/db9}
 \input{campaign/final/db14}
 \input{campaign/final/db15}
@@ -725,14 +725,10 @@ The one-thread disk write is 0.4678~s for con-100k and 0.03544~s for the million
 The eight-thread disk write of that frame is 0.01132~s.
 Those three times sit under the rel1 medians, 0.4688~s, 0.04132~s and 0.01203~s.
 The serial path fallocates the fresh file and spells into a shared mapping once the frame lengths are priced.
-camp19 replaces the ranked writes named in the ext4 and tmpfs captions.
-The record is \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
-Table~\ref{tab:camp20} places camp20 next to those camp19 times and the camp5c times.
-The record is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
-The million-atom frame at 8 ranks on ext4 takes 0.01245~s.
-camp19 recorded 0.01372~s for that cell, and camp5c's warm-inode overwrite is 0.007465~s.
-A plain copy of the same bytes takes 0.009467~s.
-The remaining gap is the rename and the fresh inode, against that warm overwrite.
+Table~\ref{tab:camp20} is the ranked fresh-file writes, with the earlier fresh-file times and a warm-inode overwrite beside them.
+The million-atom frame at 8 ranks on ext4 takes \rankedEightExtFour~s.
+The earlier fresh-file time of that cell is \rankedEightExtFourPrior~s, and the warm-inode overwrite is \rankedEightExtFourWarm~s.
+A plain copy of the same bytes takes \rankedEightExtFourCopy~s.
 On ext2, ext3, ext4, XFS and btrfs, rank 0 writes the slices in order.
 Every other filesystem keeps one write per rank.
 \texttt{READCON\_RANKED\_WRITE=parallel} or \texttt{sequential}, read on rank 0, overrides that choice.
@@ -785,7 +781,8 @@ Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the 
 The con-100k and con-1e6 reads are \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
 The ranked writes and the plain-copy column are \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
 The camp20 column is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
-The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
+The readcon-db records are on \path{lode-org/readcon-db}, branch \texttt{fix/ingest-species-count}.
+The inserts are \path{bench/db9} at \texttt{89105ce4}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
 The scale comparison times are \path{bench/db15} at \texttt{9e568240}.
 The disk sizes are \path{bench/db16} at \texttt{fe3e0d54}, and the interleaved cold reads are \path{bench/db17} at \texttt{fe3e0d54}.

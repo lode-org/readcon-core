@@ -137,6 +137,20 @@ rule regen_figures_log:
 FINAL_COMMIT = "ee7662a955e173ea7faffcae614b4d0a78dd7682"
 CROSS_COMMIT = "beb158ad7cb9d9e8fbc38c860c85b0b5f343a196"
 
+CAMP16B = "e3d33a13f77b7cd52b719ad114d5f419d969f81d"
+CAMP20 = "ef4d6946e8e148428c964be7f48975ebfde06fa1"
+DB15 = "9e568240a2d734085da2c411be0977e604e12ed6"
+DB16 = "fe3e0d54db993e0e6750cd48939823f32d663f23"
+
+rule pinned_records:
+    output:
+        "src/campaign/final/camp16b.tex",
+        "src/campaign/final/camp20.tex",
+        "src/campaign/final/db15.tex",
+        "src/campaign/final/pinned_macros.tex",
+    shell:
+        "python3 scripts/make_tables.py --pinned-only --out src/campaign/final"
+
 rule final_campaign:
     output:
         "src/campaign/final/strong.tex",

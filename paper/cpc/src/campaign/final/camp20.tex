@@ -1,12 +1,12 @@
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Ranked fresh-file writes from camp20, beside the camp19 and camp5c medians stored in that record. camp20 is the type-7 median in seconds, the interquartile range, and $n$. Copy is a plain copy of the same formatted bytes. Record \texttt{bench/h2h/scaling/camp20} at \texttt{ef4d6946e8e148428c964be7f48975ebfde06fa1}.}
+\caption{Ranked fresh-file writes. The fresh-file column is the type-7 median in seconds, the interquartile range, and $n$. The earlier fresh-file column is the previous fresh-file measurement of the same cells. The warm-overwrite column is a warm-inode overwrite, a different operation from the fresh-file write. Plain copy is a copy of the same formatted bytes. 8 CPUs. /tmp is the root ext4 filesystem. /dev/shm is tmpfs. Each ranked sample writes a fresh file.}
 \label{tab:camp20}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}ll l r r r r@{}}
 \toprule
-File & Ranks & Mount & camp20 (IQR, $n$) & camp19 (s) & camp5c (s) & Copy (IQR, $n$) \\
+File & Ranks & Mount & Fresh file (IQR, $n$) & Earlier fresh file (s) & Warm overwrite (s) & Plain copy (IQR, $n$) \\
 \midrule
 con-1e6 & 8 & ext4 & 0.01245 (0.001313, $n{=}12$) & 0.01372 & 0.007465 & 0.009467 (0.0002799, $n{=}12$) \\
 con-1e6 & 8 & tmpfs & 0.007525 (0.000281, $n{=}12$) & 0.007274 & 0.008964 & 0.007452 (0.001173, $n{=}12$) \\

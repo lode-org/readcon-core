@@ -910,8 +910,16 @@ def h2h9_million_tex(tsv: Path, host: str) -> str:
     raise SystemExit("h2h9_1m.tex was replaced by the h2h12 cross-format tables")
 
 
+def emit_pinned_tables(out: Path) -> None:
+    """camp16b, the ranked fresh-file comparison, and the database scale table."""
+    from pinned_emit import write_all
+
+    write_all(out)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--pinned-only", action="store_true")
     parser.add_argument("--commit", default="")
     parser.add_argument(
         "--cross-commit",
@@ -923,13 +931,17 @@ def main() -> None:
     parser.add_argument("--db", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    out = args.out if args.out.is_absolute() else REPO / "paper" / "cpc" / args.out
+    if args.pinned_only:
+        emit_pinned_tables(out)
+        print(f"wrote pinned tables to {out}")
+        return
     store = Store(args.commit or None, args.scaling, args.fidelity, args.db)
     host = host_line(store.json(f"{REL1}/hardware.json")["lscpu"])
     if args.cross_commit != CROSS_COMMIT:
         raise SystemExit(f"--cross-commit must be {CROSS_COMMIT}")
     cross = Store(CROSS_COMMIT, None, None, None)
     cross_host = host_line(cross.json(f"{REL1}/hardware.json")["lscpu"])
-    out = args.out if args.out.is_absolute() else REPO / "paper" / "cpc" / args.out
     out.mkdir(parents=True, exist_ok=True)
     files = {
         "strong.tex": strong_tables(store, host),
@@ -956,6 +968,7 @@ def main() -> None:
     )
     for name, text in files.items():
         (out / name).write_text(text, encoding="utf-8")
+    emit_pinned_tables(out)
     print(f"wrote {len(files)} tex files and 2 figures to {out}")
 
 
