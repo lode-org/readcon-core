@@ -1,0 +1,242 @@
+[
+  {
+    "filesystem": "tmpfs",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 1,
+    "median_s": 0.1514555,
+    "iqr_s": 0.001324249999999999,
+    "samples_s": [
+      0.151659,
+      0.15212,
+      0.15013,
+      0.152359,
+      0.151252,
+      0.15049
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0
+  },
+  {
+    "filesystem": "tmpfs",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 2,
+    "median_s": 0.150907,
+    "iqr_s": 0.0015164999999999762,
+    "samples_s": [
+      0.152323,
+      0.15118,
+      0.150634,
+      0.154246,
+      0.149278,
+      0.150483
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0036346889143644
+  },
+  {
+    "filesystem": "tmpfs",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 4,
+    "median_s": 0.16647699999999999,
+    "iqr_s": 0.0017287500000000011,
+    "samples_s": [
+      0.168742,
+      0.166483,
+      0.166271,
+      0.168679,
+      0.166378,
+      0.166471
+    ],
+    "n": 6,
+    "weak_efficiency": 0.9097683163439995
+  },
+  {
+    "filesystem": "tmpfs",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 8,
+    "median_s": 0.1911195,
+    "iqr_s": 0.003526750000000023,
+    "samples_s": [
+      0.191801,
+      0.195357,
+      0.192517,
+      0.190438,
+      0.185961,
+      0.188269
+    ],
+    "n": 6,
+    "weak_efficiency": 0.7924649237780551
+  },
+  {
+    "filesystem": "thp",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 1,
+    "median_s": 0.1509855,
+    "iqr_s": 0.0014625000000000055,
+    "samples_s": [
+      0.152182,
+      0.151194,
+      0.150371,
+      0.156559,
+      0.150777,
+      0.150341
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0
+  },
+  {
+    "filesystem": "thp",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 2,
+    "median_s": 0.13966800000000001,
+    "iqr_s": 0.0013632499999999825,
+    "samples_s": [
+      0.141274,
+      0.139562,
+      0.138341,
+      0.139774,
+      0.142762,
+      0.139527
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0810314460005153
+  },
+  {
+    "filesystem": "thp",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 4,
+    "median_s": 0.1457755,
+    "iqr_s": 0.002472749999999996,
+    "samples_s": [
+      0.150993,
+      0.144725,
+      0.144963,
+      0.145423,
+      0.148025,
+      0.146128
+    ],
+    "n": 6,
+    "weak_efficiency": 1.035739887704038
+  },
+  {
+    "filesystem": "thp",
+    "fsync": false,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 8,
+    "median_s": 0.1473895,
+    "iqr_s": 0.004739249999999973,
+    "samples_s": [
+      0.139978,
+      0.147668,
+      0.141392,
+      0.148502,
+      0.147325,
+      0.147454
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0243979387948259
+  },
+  {
+    "filesystem": "ext4-fsync",
+    "fsync": true,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 1,
+    "median_s": 0.196924,
+    "iqr_s": 0.015128000000000003,
+    "samples_s": [
+      0.222206,
+      0.189122,
+      0.20429,
+      0.189558,
+      0.204382,
+      0.184235
+    ],
+    "n": 6,
+    "weak_efficiency": 1.0
+  },
+  {
+    "filesystem": "ext4-fsync",
+    "fsync": true,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 2,
+    "median_s": 0.2226845,
+    "iqr_s": 0.003983750000000008,
+    "samples_s": [
+      0.222079,
+      0.22329,
+      0.226399,
+      0.220329,
+      0.221412,
+      0.22632
+    ],
+    "n": 6,
+    "weak_efficiency": 0.8843183966553576
+  },
+  {
+    "filesystem": "ext4-fsync",
+    "fsync": true,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 4,
+    "median_s": 0.288643,
+    "iqr_s": 0.005494249999999978,
+    "samples_s": [
+      0.289433,
+      0.300379,
+      0.284699,
+      0.287853,
+      0.283154,
+      0.291498
+    ],
+    "n": 6,
+    "weak_efficiency": 0.6822406917888187
+  },
+  {
+    "filesystem": "ext4-fsync",
+    "fsync": true,
+    "kind": "threads",
+    "op": "write",
+    "file": "con",
+    "workers": 8,
+    "median_s": 0.41574849999999997,
+    "iqr_s": 0.0076065000000000715,
+    "samples_s": [
+      0.418766,
+      0.412732,
+      0.418765,
+      0.410635,
+      0.403706,
+      0.435417
+    ],
+    "n": 6,
+    "weak_efficiency": 0.47366136017327787
+  }
+]

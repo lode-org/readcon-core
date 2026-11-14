@@ -1,0 +1,295 @@
+{
+  "note": {
+    "decision": "readcon weak-write efficiency is above the pure-copy ceiling on every filesystem measured, so the formatter is not leaving a scaling gap on top of the store",
+    "within_90_percent_of_ceiling_eff": true,
+    "populate_procs_thp_16MiB_eff_above_1": "8x16MiB finishes faster than 1x16MiB because only the larger file is backed by huge pages; that efficiency is not a formatter target",
+    "madv_populate_write": "slower than the plain first touch on tmpfs and on huge=within_size",
+    "per_thread_pwrite": "slower weak efficiency than mmap on tmpfs at 16MiB and 64MiB",
+    "store_choice": "tmpfs uses a shared mapping; other filesystems use pwrite; a mount with huge=within_size|always|advise|force also gets MADV_HUGEPAGE. Publication is temp file plus rename."
+  },
+  "comparisons": [
+    {
+      "kind": "mpi",
+      "filesystem": "tmpfs",
+      "bytes_per_worker": 16777216,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.0093165,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.0432657605,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.2153319366708
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.011030499999999999,
+          "ceiling_eff": 0.8446126648837315,
+          "readcon_s": 0.047756550999999994,
+          "readcon_eff": 0.9059649324340865,
+          "eff_fraction": 1.0726395306407117,
+          "time_fraction": 0.23097354748252236
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.013093500000000001,
+          "ceiling_eff": 0.7115362584488486,
+          "readcon_s": 0.048371560499999994,
+          "readcon_eff": 0.8944462418159944,
+          "eff_fraction": 1.2570634752554848,
+          "time_fraction": 0.27068591264488984
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.021257,
+          "ceiling_eff": 0.4382791551018488,
+          "readcon_s": 0.059273055000000005,
+          "readcon_eff": 0.7299397761765443,
+          "eff_fraction": 1.665467699477787,
+          "time_fraction": 0.35862838519121376
+        }
+      ]
+    },
+    {
+      "kind": "mpi",
+      "filesystem": "thp",
+      "bytes_per_worker": 16777216,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0116545,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.03986894,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.2923202874217373
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0077005,
+          "ceiling_eff": 1.5134731510940849,
+          "readcon_s": 0.040898455,
+          "readcon_eff": 0.974827533216108,
+          "eff_fraction": 0.6440996541705469,
+          "time_fraction": 0.18828339603537592
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0105155,
+          "ceiling_eff": 1.1083162949931054,
+          "readcon_s": 0.0426274345,
+          "readcon_eff": 0.9352882824792095,
+          "eff_fraction": 0.8438820999965788,
+          "time_fraction": 0.24668385802105922
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0038665,
+          "ceiling_eff": 3.0142247510668563,
+          "readcon_s": 0.0465423935,
+          "readcon_eff": 0.8566155928358089,
+          "eff_fraction": 0.2841910154618092,
+          "time_fraction": 0.08307479932247146
+        }
+      ]
+    },
+    {
+      "kind": "mpi",
+      "filesystem": "ext4-fsync",
+      "bytes_per_worker": 16777216,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0158675,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.051770105999999996,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.30649927585622483
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.032493,
+          "ceiling_eff": 0.48833594928138363,
+          "readcon_s": 0.0680342705,
+          "readcon_eff": 0.760941590459179,
+          "eff_fraction": 1.5582338174753494,
+          "time_fraction": 0.47759753667087534
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.0466465,
+          "ceiling_eff": 0.3401648569560417,
+          "readcon_s": 0.08737137249999999,
+          "readcon_eff": 0.5925293894175693,
+          "eff_fraction": 1.7418889026920843,
+          "time_fraction": 0.5338876872971179
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "populate",
+          "ceiling_s": 0.1118285,
+          "ceiling_eff": 0.14189137831590337,
+          "readcon_s": 0.133643014,
+          "readcon_eff": 0.38737607339505226,
+          "eff_fraction": 2.7300888749745456,
+          "time_fraction": 0.8367702632028338
+        }
+      ]
+    },
+    {
+      "kind": "threads",
+      "filesystem": "tmpfs",
+      "bytes_per_worker": 67108864,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.028274,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.1514555,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.18668189666271612
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.0344085,
+          "ceiling_eff": 0.821715564468082,
+          "readcon_s": 0.150907,
+          "readcon_eff": 1.0036346889143644,
+          "eff_fraction": 1.221389410536532,
+          "time_fraction": 0.22801129172271664
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.0445765,
+          "ceiling_eff": 0.6342803943782038,
+          "readcon_s": 0.16647699999999999,
+          "readcon_eff": 0.9097683163439995,
+          "eff_fraction": 1.4343314477438032,
+          "time_fraction": 0.2677637151077927
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.07999500000000001,
+          "ceiling_eff": 0.35344709044315265,
+          "readcon_s": 0.1911195,
+          "readcon_eff": 0.7924649237780551,
+          "eff_fraction": 2.242103401627839,
+          "time_fraction": 0.41856011552981254
+        }
+      ]
+    },
+    {
+      "kind": "threads",
+      "filesystem": "thp",
+      "bytes_per_worker": 67108864,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.008879,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.1509855,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.05880697153037875
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.0102375,
+          "ceiling_eff": 0.8673015873015872,
+          "readcon_s": 0.13966800000000001,
+          "readcon_eff": 1.0810314460005153,
+          "eff_fraction": 1.246430840007915,
+          "time_fraction": 0.07329882292293152
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.033238000000000004,
+          "ceiling_eff": 0.26713400324929293,
+          "readcon_s": 0.1457755,
+          "readcon_eff": 1.035739887704038,
+          "eff_fraction": 3.877229686620883,
+          "time_fraction": 0.22800813579785356
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "mmap",
+          "ceiling_s": 0.024454,
+          "ceiling_eff": 0.3630898830457185,
+          "readcon_s": 0.1473895,
+          "readcon_eff": 1.0243979387948259,
+          "eff_fraction": 2.821334293871908,
+          "time_fraction": 0.16591412549740653
+        }
+      ]
+    },
+    {
+      "kind": "threads",
+      "filesystem": "ext4-fsync",
+      "bytes_per_worker": 67108864,
+      "points": [
+        {
+          "workers": 1,
+          "ceiling_store": "huge",
+          "ceiling_s": 0.047411999999999996,
+          "ceiling_eff": 1.0,
+          "readcon_s": 0.196924,
+          "readcon_eff": 1.0,
+          "eff_fraction": 1.0,
+          "time_fraction": 0.24076293392374723
+        },
+        {
+          "workers": 2,
+          "ceiling_store": "huge",
+          "ceiling_s": 0.082693,
+          "ceiling_eff": 0.5733496184683105,
+          "readcon_s": 0.2226845,
+          "readcon_eff": 0.8843183966553576,
+          "eff_fraction": 1.5423719981148547,
+          "time_fraction": 0.37134600746796476
+        },
+        {
+          "workers": 4,
+          "ceiling_store": "huge",
+          "ceiling_s": 0.1642285,
+          "ceiling_eff": 0.2886953238932341,
+          "readcon_s": 0.288643,
+          "readcon_eff": 0.6822406917888187,
+          "eff_fraction": 2.3631858063663214,
+          "time_fraction": 0.5689675481477119
+        },
+        {
+          "workers": 8,
+          "ceiling_store": "huge",
+          "ceiling_s": 0.343704,
+          "ceiling_eff": 0.1379442776342434,
+          "readcon_s": 0.41574849999999997,
+          "readcon_eff": 0.47366136017327787,
+          "eff_fraction": 3.4337151804816566,
+          "time_fraction": 0.8267113411112729
+        }
+      ]
+    }
+  ],
+  "commit": "847a717a32e4b4c5fc280df5fb43cf531302314b"
+}
