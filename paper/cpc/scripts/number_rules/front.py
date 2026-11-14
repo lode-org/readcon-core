@@ -101,14 +101,14 @@ U64_BITS = int(grep("/src/types.rs", r"pub atom_id: u(\d+),"))
 ANGLE_LIMIT = float(grep("/src/parser.rs", r"\*angle >= ([\d.]+)\)"))
 
 
-def si_factor(aliases: str) -> float:
-    """``si_factor`` of the unit that src/units.rs inserts under ``aliases``."""
-    pattern = re.escape(aliases) + r",\s*UnitValue \{\s*si_factor: ([\d_.e+-]+),"
+def si_factor(name: str) -> float:
+    """``si_factor`` of the base unit ``name`` in src/units.rs."""
+    pattern = rf'name: "{re.escape(name)}",\s*value: unit\(([\d_.e+-]+),'
     return float(grep("/src/units.rs", pattern).replace("_", ""))
 
 
-ANGSTROM_M = si_factor('&["angstrom", "a", "å"]')
-ELECTRONVOLT_J = si_factor('&["ev"]')
+ANGSTROM_M = si_factor("angstrom")
+ELECTRONVOLT_J = si_factor("ev")
 if (ANGSTROM_M, ELECTRONVOLT_J) != (
     scipy.constants.angstrom,
     scipy.constants.electron_volt,
@@ -116,7 +116,7 @@ if (ANGSTROM_M, ELECTRONVOLT_J) != (
     raise SystemExit(
         "src/units.rs: the angstrom or the electronvolt is not the CODATA value of scipy.constants"
     )
-AMU_KG = si_factor('&["u", "amu", "dalton", "da"]')
+AMU_KG = si_factor("amu")
 # scipy.constants follows the latest CODATA set, and the text names the 2018 value that the unit table holds.
 if AMU_KG != 1.66053906660e-27:
     raise SystemExit(
@@ -144,12 +144,16 @@ GRIND_FRAMES = int(
 PEER_SHIFT = r"pos\[:, 0, 2\] \+= np\.arange\(n, dtype=np\.float64\) \* ([\d.e+-]+)$"
 
 
-if float(
-    grep("/benches/make_velocity_campaign.py", r"^    shift = index \* ([\d.e+-]+)$")
-) != float(grep("/benches/headtohead.py", PEER_SHIFT)):
-    raise SystemExit(
-        "make_velocity_campaign.py and headtohead.py move the first atom by different steps"
+if (
+    float(
+        grep(
+            "/bench/h2h/frames_guard.py",
+            r"out\[atom, axis\] = sign \* steps \* ([\d.e+-]+)",
+        )
     )
+    != 0.01
+):
+    raise SystemExit("frames_guard.thermal_shift does not step by 0.01 angstrom")
 
 CONTOURS = variance_contours()
 if CONTOURS[0] != 0.05 or len(CONTOURS) != 2:
@@ -218,44 +222,21 @@ RULES: list[Rule] = [
         (f"{SUPP}~Cachegrind",),
     ),
     Rule(
-        "19,545",
-        int(
-            grep("/src/iterators.rs", r"let n_cases = ([\d_]+)usize;").replace("_", "")
-        ),
-        "/src/iterators.rs",
-        "n_cases of the test differential_19545_agree_across_entry_points_and_thread_counts",
-        (f"{DOC}~differential cases", f"{SUPP}~19,545 cases"),
-    ),
-    Rule(
-        "61",
-        int(
+        "10^{-6}",
+        float(
             grep(
-                "/src/iterators.rs",
-                r"for size in \[1, (\d+), crate::stream::DEFAULT_READ_SIZE\]",
+                "/bench/h2h/frames_guard.py",
+                r"out\[atom, axis\] = sign \* steps \* ([\d.e+-]+)",
             )
         ),
-        "/src/iterators.rs",
-        "middle read size of the stream reader in the differential, bytes",
-        (f"{SUPP}~read sizes of",),
-    ),
-    Rule(
-        "305",
-        int(grep("/src/iterators.rs", r"if i % (\d+) == 0 \{")),
-        "/src/iterators.rs",
-        "stride of the cases that the differential also reads as a padded mapped file",
-        (f"{SUPP}~One case in every",),
-    ),
-    Rule(
-        "10^{-6}",
-        float(grep("/benches/headtohead.py", PEER_SHIFT)),
-        "/benches/headtohead.py",
+        "/bench/h2h/frames_guard.py",
         "step by which ensure_peers moves the z coordinate of the first atom from one frame to the next, in angstrom",
         (f"{SUPP}~moved along",),
     ),
     Rule(
         "64",
-        int(grep("/src/soa_traj.rs", r"^const RCBIN_HEADER: usize = (\d+);")),
-        "/src/soa_traj.rs",
+        int(grep("/src/conbin.rs", r"^const FIELD_BYTES: usize = (\d+);")),
+        "/src/conbin.rs",
         "RCBIN_HEADER, bytes",
         (f"{SUPP}~header of 64 bytes",),
     ),

@@ -39,7 +39,6 @@ from pathlib import Path
 
 import indep_reader
 import provenance
-import readcon
 from error_class import classify
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -199,6 +198,8 @@ def read_indep(text: str) -> dict:
 
 
 def read_readcon(text: str) -> dict:
+    import readcon
+
     try:
         frames = readcon.read_con_string(text)
     except (KeyboardInterrupt, SystemExit):

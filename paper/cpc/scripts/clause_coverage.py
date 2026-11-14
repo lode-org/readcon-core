@@ -71,6 +71,41 @@ REASONS = {
     "whose energy differs from the sum of its energies rows, and "
     "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such "
     "a frame.",
+    "CON-file.6": "A writer rule against an extra blank line between frames. A reader still finds the next "
+    "frame; no corpus file has that blank as its only fault.",
+    "CON-header.1": "A MAY that leaves lines 5 and 6 empty. The reader accepts an empty line and a filled one, "
+    "and the clause names no rejection.",
+    "CON-count.6": "Coordinate blocks follow the header order. The parser reads them in that order; no corpus "
+    "file is only a reordered block.",
+    "CON-mask.6": "A spec 2 writer must not emit 1 for all-fixed. The writer emits 7, and a legacy 1 stays "
+    "all-fixed for a reader of spec 1.",
+    "CON-mask.7": "A spec 2 writer emits 7 for an atom fixed on x, y and z. That is the same writer path as "
+    "CON-mask.6.",
+    "CON-id.2": "A reader must not assume an id starts at 0 or 1. The parser accepts any integer id, and no "
+    "probe is named with this clause.",
+    "CON-id.7": "A consumer that returns atoms in pre-grouping order uses CON-id.5. The library returns file "
+    "order, so this consumer rule has no call.",
+    "CON-section.3": "A writer must not put a blank line between the component blocks of a section. No corpus "
+    "file is only that blank.",
+    "CON-section.5": "The per-atom energy section name is energies. The parser looks up that name.",
+    "CON-section.6": "atom_energies is not a section name. An unknown name is skipped with the unknown-section rule.",
+    "CON-section.19": "A reader must not reject a frame whose energy differs from the sum of its energies rows. "
+    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads that frame, and "
+    "its name does not spell this clause.",
+    "CON-validate.2": "validate true must not relax a check that already applies. The flag only adds checks.",
+    "CON-bonds.1": "bonds must not appear in sections. The named bonds probes are CON-bonds.2, a malformed bonds entry.",
+    "CON-bonds.2": "scripts/indep_reader.py rejects a malformed bonds entry. The scan reads the corpus, the "
+    "referee probes and the library tests, not that reader.",
+    "CON-units.15": "A consumer may apply a velocity time-unit override when a file breaks CON-units.8 through "
+    "CON-units.10. No library call takes that override.",
+    "CON-num.4": "The C ABI absent-value NaN is not a file token. The writer prints a finite decimal and refuses "
+    "a non-finite coordinate.",
+    "CON-compress.4": "A writer may split one frame across gzip members and store an RCZ1 index. "
+    "src/iterators.rs checks that the index bytes are present; the test name does not spell this clause.",
+    "CON-compress.5": "A writer may split one frame across zstd frames with the same RCZ1 index. A one-frame "
+    "zstd file has no index, and that is the file the corpus reads.",
+    "CON-token.1": "An integer token is ASCII digits with no sign and no decimal point. The finite-number parser "
+    "rejects the other spellings, and the tests name the function rather than this clause.",
 }
 
 

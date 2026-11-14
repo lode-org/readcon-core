@@ -1,0 +1,48 @@
+{
+ "provenance": {
+  "build": {
+   "readcon_version": "0.17.4",
+   "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [],
+   "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+   "source_files": 47,
+   "source_tag": null,
+   "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+  },
+  "host": {
+   "kernel": "6.12.94+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel(R) Xeon(R) Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342768
+  },
+  "peers": {
+   "ase": "3.29.0",
+   "chemfiles": "0.10.4",
+   "MDAnalysis": "2.10.0",
+   "h5py": "3.16.0",
+   "numpy": "2.5.4",
+   "scipy": "1.18.1",
+   "ovito": "3.16.1",
+   "openbabel": "3.2.1",
+   "python": "3.12.16"
+  }
+ },
+ "c_abi": {
+  "binary": "target/release/libreadcon_core.so",
+  "binary_sha256": "cbe65aa61b24f3bdcd84f5779a54ea0b7925617f07d8d14e6c7183b32566aa58",
+  "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+  "newer_sources": [],
+  "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+  "source_files": 47,
+  "source_tag": null,
+  "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+ },
+ "files": 22,
+ "disagreements": 0
+}

@@ -23,9 +23,12 @@
 *.tectonic.txt
 auto/
 bench/work/
-bench/results/
-evidence/results/
-src/figures/generated/**
+# Timing and evidence records are inputs of scripts/regen_paper.py.
+src/figures/generated/*
+!src/figures/generated/survey_frame.con
+!src/figures/generated/restart.pdf
+!src/figures/generated/dlpack_macros.tex
+!src/figures/generated/version_map.tex
 src/rg_main.pdf
 src/rg_supp.pdf
 src/figures/generated/work/
@@ -39,9 +42,6 @@ build/
 logs/reader-work/
 logs/dlpack-work/
 
-# Generated records live in the handoff archive. The two notes stay tracked.
-data/**
-!data/**/
-!data/cloud-runs-2/SUMMARY.md
-!data/db/RESULTS.md
-!data/spec/version_drift.json
+# Records under data/ are inputs of scripts/regen_paper.py.
+# regen_paper.py rewrites this ledger after the format steps.
+data/trace/reads.json

@@ -1,0 +1,52 @@
+{
+  "checks": [
+    {
+      "detail": "9 stored frames match readcon-core spans byte for byte",
+      "name": "round_trip",
+      "pass": true
+    },
+    {
+      "detail": "9 duplicated frames: one hash-index entry each, 9 stored texts kept twice",
+      "name": "dedup_identical_bytes",
+      "pass": true
+    },
+    {
+      "detail": "one coordinate digit changed the digest; find_by_hash(old)=Some(FrameKey { traj_id: 1, frame_idx: 0 }) find_by_hash(new)=Some(FrameKey { traj_id: 3, frame_idx: 0 })",
+      "name": "one_byte_change",
+      "pass": true
+    },
+    {
+      "detail": "frames without forces miss force and fmax indexes; frames without velocities miss the velocity flag; missing energy misses the energy index",
+      "name": "missing_forces_or_velocities",
+      "pass": true
+    },
+    {
+      "detail": "TTF=[4] TTT=[5] FFF=[6]; periodicity comes only from metadata pbc; a box without that key matches no mask",
+      "name": "periodicity_not_inferred",
+      "pass": true
+    },
+    {
+      "detail": "reindex rebuilt 19 frames; logical dump and query answers match the pre-reindex corpus",
+      "name": "rebuild_from_text",
+      "pass": true
+    },
+    {
+      "detail": "second reindex left the logical dump unchanged",
+      "name": "reindex_twice",
+      "pass": true
+    },
+    {
+      "detail": "cooked 19 frames (120 bytes on one frame); hash, CON text, secondary indexes, and query answers stayed put across cook and reindex",
+      "name": "numeric_cache_ignored",
+      "pass": true
+    },
+    {
+      "detail": "after rewriting traj 1, identical traj 2 still stored=true, find_by_hash returns Some(FrameKey { traj_id: 2, frame_idx: 0 }) (expected the surviving key), after reindex Some(FrameKey { traj_id: 2, frame_idx: 0 })",
+      "name": "hash_index_survives_rewrite_of_duplicate",
+      "pass": true
+    }
+  ],
+  "n_checks": 9,
+  "n_fail": 0,
+  "n_pass": 9
+}
