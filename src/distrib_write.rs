@@ -199,9 +199,9 @@ fn write_pwrite(
     let mut choice_err = None;
     if comm.rank() == 0 {
         match std::fs::File::open(&tmp) {
-            Ok(file) => match choose_ranked_store(&file) {
-                Ok(RankedStore::Parallel) => kind[0] = 0,
-                Ok(RankedStore::Sequential) => kind[0] = 1,
+            Ok(file) => match crate::writer::choose_ranked_store(&file) {
+                Ok(crate::writer::RankedStore::Parallel) => kind[0] = 0,
+                Ok(crate::writer::RankedStore::Sequential) => kind[0] = 1,
                 Err(err) => {
                     kind[0] = 2;
                     choice_err = Some(err);
@@ -239,67 +239,6 @@ fn write_pwrite(
     };
     collective(comm, published, "publish")?;
     Ok(())
-}
-
-/// How a fresh ranked file is filled after rank 0 has allocated it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RankedStore {
-    /// Each rank writes its own slice. This is the path on tmpfs and on
-    /// parallel network filesystems.
-    Parallel,
-    /// Rank 0 pwrites every slice in order. Local block filesystems contend
-    /// when every rank faults the same fresh inode.
-    Sequential,
-}
-
-/// `statfs.f_type` values. ext2, ext3, and ext4 share one magic.
-const EXT_SUPER_MAGIC: u32 = 0xEF53;
-const XFS_SUPER_MAGIC: u32 = 0x5846_5342;
-const BTRFS_SUPER_MAGIC: u32 = 0x9123_683E;
-
-/// Sequential gather only for a local block filesystem. Every other magic,
-/// including tmpfs and unknown types, stays on the per-rank store.
-fn ranked_store_for_magic(magic: i64) -> RankedStore {
-    match magic as u32 {
-        EXT_SUPER_MAGIC | XFS_SUPER_MAGIC | BTRFS_SUPER_MAGIC => RankedStore::Sequential,
-        _ => RankedStore::Parallel,
-    }
-}
-
-/// `READCON_RANKED_WRITE=parallel` or `sequential`. Anything else is an error.
-fn ranked_store_override(value: &str) -> Result<RankedStore, String> {
-    match value {
-        "parallel" => Ok(RankedStore::Parallel),
-        "sequential" => Ok(RankedStore::Sequential),
-        _ => Err(format!(
-            "READCON_RANKED_WRITE={value} is not parallel or sequential"
-        )),
-    }
-}
-
-fn choose_ranked_store(file: &std::fs::File) -> Result<RankedStore, String> {
-    if let Ok(value) = std::env::var("READCON_RANKED_WRITE") {
-        return ranked_store_override(&value);
-    }
-    Ok(ranked_store_for_magic(filesystem_magic(file).unwrap_or(0)))
-}
-
-fn filesystem_magic(file: &std::fs::File) -> Option<i64> {
-    #[cfg(all(target_os = "linux", not(miri)))]
-    {
-        use std::os::fd::AsRawFd;
-        let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
-        let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
-        if rc == 0 {
-            return Some(stat.f_type as i64);
-        }
-        None
-    }
-    #[cfg(any(not(target_os = "linux"), miri))]
-    {
-        let _ = file;
-        None
-    }
 }
 
 /// One sequential pwrite of the whole file. Slices arrive in rank order,
@@ -1362,7 +1301,7 @@ unsafe fn mpi_write_block(
 
 #[cfg(test)]
 mod ranked_store_tests {
-    use super::{RankedStore, ranked_store_for_magic, ranked_store_override};
+    use crate::writer::{RankedStore, ranked_store_for_magic, ranked_store_override};
 
     #[test]
     fn local_block_magics_use_one_sequential_writer() {
