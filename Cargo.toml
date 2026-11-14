@@ -228,6 +228,12 @@ cc = { version = "1", optional = true }
 capnpc = { version = "0.20", optional = true }
 metatensor-sys = { version = "0.2.0-rc4", optional = true }
 
+# metatensor-sys's CMake probe runs `cargo rustc` while this cargo still
+# holds the target-directory lock. The path crate points that probe at
+# OUT_DIR/nested-cargo-target. Same version, same sources, that one change.
+[patch.crates-io]
+metatensor-sys = { path = "third_party/metatensor-sys" }
+
 [package.metadata.capi]
 min_version = "0.10.17"
 

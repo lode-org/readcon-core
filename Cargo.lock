@@ -1077,8 +1077,6 @@ dependencies = [
 [[package]]
 name = "metatensor-sys"
 version = "0.2.0-rc4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbbeac932fcdc04c3f5e6f5382ce223a60f1afcfe1c8dec8456c99e1ceb29829"
 dependencies = [
  "cmake",
  "dlpk 0.3.0",
