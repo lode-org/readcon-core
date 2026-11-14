@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "project": "readcon-million",
+  "project_url": "https://github.com/lode-org/readcon-core",
+  "repo": ".",
+  "environment_type": "existing",
+  "pythons": ["same"],
+  "benchmark_dir": "bench/h2h/million/asv",
+  "env_dir": "bench/h2h/million/v0232/asv-env",
+  "results_dir": "bench/h2h/million/v0232/asv-results",
+  "html_dir": "bench/h2h/million/v0232/asv-html",
+  "branches": ["HEAD"]
+}

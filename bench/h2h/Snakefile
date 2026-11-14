@@ -463,3 +463,84 @@ rule camp16b:
         "bench/h2h/scaling/camp16b/DONE",
     shell:
         "mkdir -p bench/h2h/scaling/camp16b/logs && python3 bench/h2h/camp16b_run.py"
+
+
+# Million-atom read and write matrix. One machine, one new directory.
+# Does not write under bench/h2h/scaling and does not replace a saved record.
+# Fresh process per sample, pinned to the starting CPU set, one warmup,
+# n=12, type-7 median and IQR. The asv class times the same readcon calls.
+MILLION = "bench/h2h/million/v0232"
+
+
+rule million_measure:
+    output:
+        f"{MILLION}/cross-format.json",
+        f"{MILLION}/cross-format.log",
+        f"{MILLION}/cross-format.tsv",
+        f"{MILLION}/chemfiles-write-profile.txt",
+    params:
+        out=MILLION,
+    shell:
+        """
+        set -euo pipefail
+        case "{params.out}" in
+            bench/h2h/scaling|bench/h2h/scaling/*) echo "refusing to write a saved record" >&2; exit 1 ;;
+        esac
+        export READCON_CROSS_STRUCTURES=1M
+        export OMP_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+        export VECLIB_MAXIMUM_THREADS=1
+        export RAYON_NUM_THREADS=1
+        python3 bench/h2h/cross_format.py --out "{params.out}" --repeats 12
+        rm -f "{params.out}/profile.dcd"
+        """
+
+
+rule million_asv:
+    input:
+        f"{MILLION}/cross-format.json",
+    output:
+        f"{MILLION}/asv.json",
+        f"{MILLION}/asv-machine.json",
+    params:
+        out=MILLION,
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+        export VECLIB_MAXIMUM_THREADS=1
+        export RAYON_NUM_THREADS=1
+        python3 bench/h2h/million_asv.py "{params.out}"
+        """
+
+
+rule million_record:
+    input:
+        f"{MILLION}/cross-format.json",
+        f"{MILLION}/asv.json",
+    output:
+        f"{MILLION}/host.json",
+        f"{MILLION}/lscpu.txt",
+        f"{MILLION}/NOTES.txt",
+    params:
+        out=MILLION,
+    shell:
+        "python3 bench/h2h/million_report.py --out {params.out}"
+
+
+rule million:
+    input:
+        f"{MILLION}/cross-format.json",
+        f"{MILLION}/cross-format.log",
+        f"{MILLION}/cross-format.tsv",
+        f"{MILLION}/chemfiles-write-profile.txt",
+        f"{MILLION}/asv.json",
+        f"{MILLION}/asv-machine.json",
+        f"{MILLION}/host.json",
+        f"{MILLION}/lscpu.txt",
+        f"{MILLION}/NOTES.txt",
