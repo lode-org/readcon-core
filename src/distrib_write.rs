@@ -14,9 +14,10 @@
 //! - [`WriteMode::MpiIo`]: the same publish as
 //!   [`crate::writer::publish_ranked_slices`]. Rank 0 allocates a fresh
 //!   file with [`crate::writer::begin_shared_store`]. A multi-frame group
-//!   is spelled into that mapping, which removes the second copy. One wide
-//!   frame is formatted and then stored with `pwrite`: spelling it into
-//!   the mapping, and overlapping two halves, were both slower.
+//!   is spelled into that mapping, which removes the second copy. A wide
+//!   frame is formatted, then stored as one sequential ext4 pwrite: eight
+//!   concurrent pwrites of a fresh inode contend and finish slower. tmpfs
+//!   keeps a shared mapping per rank.
 //!   [`crate::writer::commit_shared_store`] publishes the file. No spare is
 //!   left behind. `rewrite` instead fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
@@ -171,8 +172,6 @@ pub fn write_ranked_bytes(
     Ok(total)
 }
 
-/// Each rank writes its own bytes at `offset`. Lengths were already
-/// exchanged by an exclusive scan. Nothing is gathered to rank 0.
 fn write_pwrite(
     comm: &Comm,
     path: &Path,
@@ -186,42 +185,34 @@ fn write_pwrite(
         return write_pwrite_spare(comm, path, bytes, offset, total, keep_spare);
     }
     // Rank 0's file is the same unpublished inode `commit_shared_store`
-    // renames onto `path`. A hole filled by eight `pwrite`s serializes on
-    // the extent lock, so the helper allocates the blocks first.
-    let mut held = None;
-    let mut create_err = None;
-    let encoded = if comm.rank() == 0 {
-        match crate::writer::begin_shared_store(path, total) {
-            Ok(store) => {
-                let encoded = store.path().as_os_str().as_encoded_bytes().to_vec();
-                held = Some(store);
-                encoded
-            }
-            Err(err) => {
-                create_err = Some(err.to_string());
-                Vec::new()
-            }
-        }
-    } else {
-        Vec::new()
-    };
-    let raw = bcast_short(comm, &encoded);
-    if raw.is_empty() {
-        return Err(create_err
-            .unwrap_or_else(|| "create failed on rank 0".to_string())
-            .into());
+    // renames onto `path`. fallocate of the whole length happens once,
+    // inside `begin_shared_store`, before any rank writes.
+    let (held, tmp) = stage_store(comm, path, total)?;
+    // Eight concurrent pwrites of a fresh ext4 inode contend on the page
+    // cache and finish slower than one sequential pass. tmpfs does not,
+    // and keeps a shared mapping per rank.
+    let mut kind = [0u8];
+    if comm.rank() == 0 {
+        kind[0] = match std::fs::File::open(&tmp) {
+            Ok(file) if crate::writer::file_is_tmpfs(&file) => 1,
+            Ok(_) => 0,
+            Err(_) => 2,
+        };
     }
-    // SAFETY: `raw` is the path rank 0 just exposed for this inode.
-    let tmp =
-        std::path::PathBuf::from(unsafe { std::ffi::OsString::from_encoded_bytes_unchecked(raw) });
-    let wrote = (|| -> std::io::Result<()> {
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&tmp)?;
-        store_ranked_slice(&file, bytes, offset)
-    })();
-    if let Err(err) = collective(comm, wrote.map_err(BoxErr::from), "pwrite") {
+    comm.raw().process_at_rank(0).broadcast_into(&mut kind);
+    let wrote = match kind[0] {
+        1 => (|| -> std::io::Result<()> {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&tmp)?;
+            store_ranked_slice(&file, bytes, offset)
+        })()
+        .map_err(BoxErr::from),
+        0 => write_ext4_sequential(comm, &tmp, bytes, total),
+        _ => Err("create failed on rank 0".into()),
+    };
+    if let Err(err) = collective(comm, wrote, "pwrite") {
         drop(held);
         return Err(err);
     }
@@ -232,6 +223,39 @@ fn write_pwrite(
     };
     collective(comm, published, "publish")?;
     Ok(())
+}
+
+/// One sequential pwrite of the whole file. Concurrent pwrites of a fresh
+/// ext4 inode contend in the page cache and finish slower than this pass.
+/// Slices arrive in rank order, so the write starts at offset 0.
+fn write_ext4_sequential(comm: &Comm, tmp: &Path, bytes: &[u8], total: u64) -> Result<(), BoxErr> {
+    let world = comm.raw();
+    if comm.rank() == 0 {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(tmp)
+            .map_err(|err| err.to_string())?;
+        let mut at = 0u64;
+        if !bytes.is_empty() {
+            pwrite_all(&file, bytes, at).map_err(|err| err.to_string())?;
+        }
+        at += bytes.len() as u64;
+        for src in 1..comm.size() {
+            let (chunk, _) = world.process_at_rank(src as i32).receive_vec::<u8>();
+            if !chunk.is_empty() {
+                pwrite_all(&file, &chunk, at).map_err(|err| err.to_string())?;
+            }
+            at += chunk.len() as u64;
+        }
+        if at != total {
+            return Err(format!("ranked store wrote {at} bytes of {total}").into());
+        }
+        Ok(())
+    } else {
+        world.process_at_rank(0).send(bytes);
+        Ok(())
+    }
 }
 
 fn write_spelled(
