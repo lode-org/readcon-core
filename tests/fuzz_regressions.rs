@@ -272,3 +272,37 @@ Lattice=\"1 0 0 0 1 0 0 0 1\" Properties=species:S:1:pos:R:3
 ";
     extxyz_does_not_panic(bytes);
 }
+
+#[test]
+fn conbin_huge_column_does_not_allocate() {
+    // Minimized crash: CONBIN01, version 1, velocity flag, one frame,
+    // 50_000_000 atoms, payload offset 40. The file is only the header.
+    // `read_owned_f64` used to reserve both columns from that count.
+    let bytes = include_bytes!("fuzz_data/conbin_huge_column.bin");
+    assert_eq!(bytes.len(), 40);
+    let dir = std::env::temp_dir().join(format!(
+        "conbin-huge-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("huge.conbin");
+    std::fs::write(&path, bytes).unwrap();
+    for threads in [1usize, 2] {
+        let before = resident_bytes();
+        let err = readcon_core::conbin::read_owned_f64(&path, threads).unwrap_err();
+        let after = resident_bytes();
+        assert!(
+            matches!(err, ParseError::IncompleteFrame),
+            "t{threads}: {err:?}"
+        );
+        assert!(
+            after < before.saturating_add(8 << 20),
+            "t{threads} resident {before} -> {after}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

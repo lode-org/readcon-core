@@ -1228,11 +1228,19 @@ pub fn read_into_threads(
 /// Each vector is `with_capacity`, then `pread` fills `spare_capacity_mut`
 /// and `set_len` publishes those slots. The byte view is not a `&mut [f64]`
 /// over uninitialised memory. A missing velocity run is an error.
+///
+/// The header's frame and atom counts are not reserved until both columns
+/// fit in the file. A count the file cannot hold is [`ParseError::IncompleteFrame`].
 pub fn read_owned_f64(
     path: &Path,
     threads: usize,
 ) -> Result<(ConBinHeader, Vec<f64>, Vec<f64>), ParseError> {
-    let header = read_header(path)?;
+    let file = File::open(path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    let mut raw = [0u8; FIELD_BYTES];
+    (&file)
+        .read_exact(&mut raw)
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    let (header, offset) = parse_fields(&raw)?;
     if header.binary32 {
         return Err(ParseError::ValidationError(
             "CON-bin file is binary32; use read_into_f32".into(),
@@ -1244,6 +1252,24 @@ pub fn read_owned_f64(
         ));
     }
     let n = header.position_len()?;
+    let column = n
+        .checked_mul(std::mem::size_of::<f64>())
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column byte length overflows".into()))?;
+    let file_len = file
+        .metadata()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?
+        .len() as usize;
+    let pos_off = checked_payload_offset(offset, file_len)?;
+    let both = column
+        .checked_mul(2)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column byte length overflows".into()))?;
+    let end = pos_off
+        .checked_add(both)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin payload offset overflows".into()))?;
+    if end > file_len {
+        return Err(ParseError::IncompleteFrame);
+    }
+    drop(file);
     let mut positions = Vec::<f64>::with_capacity(n);
     let mut velocities = Vec::<f64>::with_capacity(n);
     fill_owned_f64(path, &mut positions, &mut velocities, n, threads)?;
