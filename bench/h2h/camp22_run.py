@@ -22,8 +22,19 @@ import numpy as np
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
+
+
+def bench_root() -> Path:
+    """Ext4 bench files. Never /tmp. READCON_BENCH_DISK overrides the default."""
+    chosen = os.environ.get("READCON_BENCH_DISK", "").strip()
+    root = Path(chosen) if chosen else ROOT / "build" / "bench"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+DISK = bench_root()
 OUT = BENCH / "scaling" / "camp22"
-CAMP20_MPI = Path("/tmp/camp20-mpi-8e5351ff")
+CAMP20_MPI = ROOT / "build" / "camp20-mpi-8e5351ff"
 LOGS = OUT / "logs"
 WORK = BENCH / "work"
 REPEATS = 12
@@ -113,9 +124,14 @@ def strong_efficiency(rows: list[dict]) -> None:
 def copy_inputs() -> dict[tuple[str, str], Path]:
     shm = Path("/dev/shm/camp22-in")
     shm.mkdir(parents=True, exist_ok=True)
+    disk_in = DISK / "in"
+    disk_in.mkdir(parents=True, exist_ok=True)
     paths: dict[tuple[str, str], Path] = {}
     for name, src in INPUTS.items():
-        paths[(name, "disk")] = src
+        disk_dest = disk_in / src.name
+        if not disk_dest.is_file() or disk_dest.stat().st_size != src.stat().st_size:
+            shutil.copyfile(src, disk_dest)
+        paths[(name, "disk")] = disk_dest
         dest = shm / src.name
         if not dest.is_file() or dest.stat().st_size != src.stat().st_size:
             shutil.copyfile(src, dest)
@@ -181,7 +197,7 @@ def strong_threads(paths: dict[tuple[str, str], Path]) -> None:
                     kind="threads",
                     sink=sink,
                 ):
-                    out = (Path("/tmp") if sink == "disk" else Path("/dev/shm")) / (
+                    out = (DISK if sink == "disk" else Path("/dev/shm")) / (
                         f"camp22-thread-{name}-{workers}.con"
                     )
                     text = run(
@@ -276,7 +292,7 @@ def strong_mpi(paths: dict[tuple[str, str], Path]) -> None:
                 if not have(
                     rows, op="write", file=name, workers=ranks, kind="mpi", sink=sink
                 ):
-                    out = (Path("/tmp") if sink == "disk" else Path("/dev/shm")) / (
+                    out = (DISK if sink == "disk" else Path("/dev/shm")) / (
                         f"camp22-mpi-{name}-{ranks}.con"
                     )
                     text = run(
@@ -372,7 +388,7 @@ def weak_thread_writes() -> None:
     dest = OUT / "weak-thread-writes.json"
     rows = load_rows(dest)
     for sink, root in (
-        ("disk", Path("/tmp/camp22-weak")),
+        ("disk", DISK / "weak"),
         ("memory", Path("/dev/shm/camp22-weak")),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -428,7 +444,7 @@ def weak_mpi() -> None:
     read_rows = load_rows(reads)
     write_rows = load_rows(writes)
     for sink, root in (
-        ("disk", Path("/tmp/camp22-weak")),
+        ("disk", DISK / "weak"),
         ("memory", Path("/dev/shm/camp22-weak")),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -576,7 +592,7 @@ def compressed() -> None:
     frames = readcon.read_con(os.fspath(INPUTS["con-1e6"]), n_threads=1)
     sinks = (
         ("memory", Path("/dev/shm/camp22-comp")),
-        ("disk", Path("/tmp/camp22-comp")),
+        ("disk", DISK / "comp"),
     )
     for _sink, root in sinks:
         root.mkdir(parents=True, exist_ok=True)
@@ -672,7 +688,7 @@ def conbin() -> None:
     dest = OUT / "conbin.json"
     rows = load_rows(dest)
     shm = Path("/dev/shm/camp22-conbin")
-    disk = Path("/tmp/camp22-conbin")
+    disk = DISK / "conbin"
     shm.mkdir(parents=True, exist_ok=True)
     disk.mkdir(parents=True, exist_ok=True)
     src = INPUTS["con-1e6"]
@@ -726,7 +742,7 @@ def ranked() -> None:
     rows = load_rows(dest)
     cells = (("con-1e6", 8), ("con-1e6", 4), ("con-100k", 8), ("convel", 8))
     for name, ranks in cells:
-        for sink, root in (("disk", Path("/tmp")), ("memory", Path("/dev/shm"))):
+        for sink, root in (("disk", DISK), ("memory", Path("/dev/shm"))):
             for strategy in ("default", "sequential", "parallel"):
                 if have(
                     rows,
@@ -809,7 +825,7 @@ def ab_ranked() -> None:
         got = {"camp20": [], "camp22": []}
         for _ in range(REPEATS):
             for label in ("camp20", "camp22"):
-                out = Path(f"/tmp/camp22-ab-{label}-{ranks}.con")
+                out = DISK / f"ab-{label}-{ranks}.con"
                 text = run(
                     [
                         "taskset",
@@ -868,7 +884,7 @@ def compressed_ranks() -> None:
     frames = readcon.read_con(os.fspath(INPUTS["con-100k"]), n_threads=1)
     for sink, root in (
         ("memory", Path("/dev/shm/camp22-comp")),
-        ("disk", Path("/tmp/camp22-comp")),
+        ("disk", DISK / "comp"),
     ):
         root.mkdir(parents=True, exist_ok=True)
         for codec in ("gzip", "zstd"):
@@ -945,7 +961,7 @@ def weak_compressed() -> None:
     dest = OUT / "weak-compressed.json"
     rows = load_rows(dest)
     for sink, root in (
-        ("disk", Path("/tmp/camp22-weak")),
+        ("disk", DISK / "weak"),
         ("memory", Path("/dev/shm/camp22-weak")),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -1091,7 +1107,7 @@ def conbin_writes() -> None:
     rows = load_rows(dest)
     for sink, root in (
         ("memory", Path("/dev/shm/camp22-conbin")),
-        ("disk", Path("/tmp/camp22-conbin")),
+        ("disk", DISK / "conbin"),
     ):
         root.mkdir(parents=True, exist_ok=True)
         path = root / "million.conbin"
@@ -1135,9 +1151,7 @@ def conbin_writes() -> None:
         for workers in WORKERS:
             frames_n = FRAMES_PER_WORKER * workers
             src = (
-                Path("/tmp/camp22-weak")
-                if sink == "disk"
-                else Path("/dev/shm/camp22-weak")
+                DISK / "weak" if sink == "disk" else Path("/dev/shm/camp22-weak")
             ) / f"in-{frames_n}.con"
             if not src.is_file():
                 repeat_fixture(src, frames_n)
@@ -1229,8 +1243,8 @@ def conbin_writes() -> None:
 
 
 def host() -> None:
-    text = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
+    tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -1241,32 +1255,37 @@ def host() -> None:
     for line in lscpu.splitlines():
         if line.startswith("Model name:"):
             model = line.split(":", 1)[1].strip()
+    fstype = subprocess.run(
+        ["stat", "-f", "-c", "%T", str(DISK)],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
     shm = subprocess.run(
         ["findmnt", "-n", "/dev/shm"], text=True, capture_output=True, check=True
-    ).stdout
-    root = subprocess.run(
-        ["findmnt", "-n", "/"], text=True, capture_output=True, check=True
     ).stdout
     (OUT / "host.json").write_text(
         json.dumps(
             {
-                "commit": text,
+                "tree": tree,
                 "base": "524d878f93539f19e442490c934b53e2d96758db",
                 "nproc": 8,
                 "model_name": model,
                 "lscpu": lscpu,
+                "bench_root": str(DISK),
+                "bench_fstype": fstype,
                 "tmpfs": shm,
-                "root": root,
-                "tmp_is_ext4": True,
                 "repeats": REPEATS,
                 "warmup": 1,
                 "pinned": "taskset -c 0-7",
                 "mpi": "mpirun --bind-to core",
                 "note": (
-                    "/tmp is the root ext4 filesystem. /dev/shm is tmpfs. "
-                    "Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n). "
-                    "Gzip and zstd writes are threaded. Rank rows read those files. "
-                    "CON-bin has no rank path; its series is mapped threads."
+                    "Disk rows use the bench root, never /tmp. Memory rows use "
+                    "/dev/shm (tmpfs). Strong efficiency is (t(1)/t(n))/n. "
+                    "Weak efficiency is t(1)/t(n). Gzip and zstd writes are "
+                    "threaded. Rank rows read those files. CON-bin has no rank "
+                    "path; its series is mapped threads. Prior campaigns are "
+                    "not copied in unless their host.json is in the repo."
                 ),
             },
             indent=2,
