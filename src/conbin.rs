@@ -2235,6 +2235,51 @@ mod tests {
     }
 
     #[test]
+    fn wide_columns_are_read_by_several_workers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide-workers.conbin");
+        write_known(&path, 2, 2048);
+        let (header, pos, vel) = read_owned_f64(&path, 4).unwrap();
+        let n = header.position_len().unwrap();
+        let mut again_pos = vec![0.0; n];
+        let mut again_vel = vec![0.0; n];
+        read_into_threads(&path, &mut again_pos, Some(&mut again_vel), 4).unwrap();
+        assert_eq!(pos, again_pos);
+        assert_eq!(vel, again_vel);
+        assert_eq!(pos[0], 0.0);
+        assert_eq!(vel[1], -0.5);
+    }
+
+    #[test]
+    fn column_writer_publishes_every_optional_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("columns.conbin");
+        let header = write_f64_columns(
+            &path,
+            1,
+            2,
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            Some(&[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]),
+            Some(&[63.5, 1.0]),
+            Some(&[10.0, 10.0, 10.0, 90.0, 90.0, 90.0]),
+            Some(&[7, 8]),
+            Some(&[0b001, 0b100]),
+        )
+        .unwrap();
+        assert!(
+            header.velocities && header.masses && header.cell && header.atom_ids && header.fixed
+        );
+        let again = read_header(&path).unwrap();
+        assert_eq!(again.n_atoms, 2);
+        assert!(again.masses && again.atom_ids);
+        let mapped = map_file(&path, 1).unwrap();
+        assert_eq!(
+            mapped.positions_f64().unwrap(),
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+    }
+
+    #[test]
     fn every_prefetch_reads_the_same_columns() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("wide.conbin");
@@ -2562,6 +2607,53 @@ mod tests {
             }
         }
         None
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_cold_multi_megabyte_file_uses_the_readahead_stream() {
+        let mut dir = None;
+        let mut candidates = vec![std::env::temp_dir()];
+        if let Ok(cwd) = std::env::current_dir() {
+            candidates.push(cwd);
+        }
+        candidates.push(std::path::PathBuf::from("/var/tmp"));
+        for base in candidates {
+            if base.is_dir() && !dir_is_tmpfs(&base) {
+                let path = base.join(format!("conbin-cold-{}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&path);
+                if std::fs::create_dir_all(&path).is_ok() {
+                    dir = Some(path);
+                    break;
+                }
+            }
+        }
+        let Some(dir) = dir else {
+            panic!("no non-tmpfs directory for the readahead stream");
+        };
+        let path = dir.join("cold.conbin");
+        // Larger than the kernel readahead window, so `MADV_SEQUENTIAL`
+        // cannot make every page resident before the stream starts.
+        write_known(&path, 8, 65536);
+        let file = File::open(&path).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        let file = File::open(&path).unwrap();
+        let rc = unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) };
+        assert_eq!(rc, 0);
+        drop(file);
+        let got = sum_mapped(&path, 2).unwrap();
+        let file = File::open(&path).unwrap();
+        let rc = unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) };
+        assert_eq!(rc, 0);
+        drop(file);
+        let split = sum_split_streams(&path, 2).unwrap();
+        let mapped = map_file(&path, 1).unwrap();
+        let expect = mapped.positions_f64().unwrap().iter().sum::<f64>()
+            + mapped.velocities_f64().unwrap().iter().sum::<f64>();
+        assert_eq!(got, expect);
+        assert_eq!(split, expect);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(target_os = "linux")]

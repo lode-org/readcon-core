@@ -1114,6 +1114,7 @@ mod tests {
     fn all_hosted_kinds_allocate_2d_and_dlpack() {
         for &k in ElementKind::all_hosted() {
             let mut a = Array2Storage::zeros(k, 2, 3);
+            assert!(!a.data_ptr().is_null());
             a.set_f64_row(0, [1.0, 2.0, 3.0]);
             let t = a.as_dlpack(dlpk::sys::DLDevice::cpu());
             if k == ElementKind::Float16 {
@@ -1136,6 +1137,7 @@ mod tests {
     fn all_hosted_kinds_allocate_1d_and_dlpack() {
         for &k in ElementKind::all_hosted() {
             let mut a = Array1Storage::zeros(k, 4);
+            assert!(!a.data_ptr().is_null());
             a.set_f64(0, 1.0);
             let t = a.as_dlpack(dlpk::sys::DLDevice::cpu());
             if k == ElementKind::Float16 {
