@@ -19,11 +19,14 @@
 //!   rank 0 pwrites every slice in order, because concurrent pwrites of one
 //!   fresh local inode contend. That store is still slower than a warm
 //!   overwrite and slower than a plain copy of the same million-atom bytes.
-//!   An 8-rank ext4 run of the 23,589,082-byte frame does no fsync. The eight
-//!   pwrites sum to about 0.007 s, beside a fresh in-process copy of those
-//!   bytes at about 0.005–0.007 s. The rename that frees the previous inode
-//!   is about 0.002 s, and formatting plus the gather fill the rest of the
-//!   0.013 s sample. The timed write stays above that fresh-file copy.
+//!   An 8-rank ext4 run of the 23,589,082-byte frame does no fsync. After the
+//!   warmup settles, the ordered gather is about 0.0112 s. Letting every rank
+//!   pwrite its own slice into the same temp file is about 0.0126 s, and a
+//!   fresh in-process copy of those bytes is about 0.0051 s. The per-rank
+//!   store matches the gather byte for byte (sha256
+//!   `361546ecf1305d2c0174ba13777081b034ac72a56ec711e90779bc00604b4ad7` at 1,
+//!   2, 4 and 8 ranks) and is slower here, so ext4 keeps the gather. The
+//!   fresh copy does not format, gather, or free the previous inode.
 //!   Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
 //!   keeps a per-rank store so each rank writes its own range.
 //!   `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0,
@@ -1678,5 +1681,133 @@ mod split_hash {
             assert!(owned > 0 || data.is_empty(), "no rank owned a block");
             assert_eq!(fold_ranked_slices(&parts), expect, "split {split:?}");
         }
+    }
+}
+
+#[cfg(all(test, feature = "mpi"))]
+mod wide_rank_sha {
+    use super::write_ranked_bytes;
+    use crate::distrib::Comm;
+    use crate::types::ConFrameBuilder;
+    use crate::writer::{ConFrameWriter, format_coordinate_lines, wide_frame_header};
+    use mpi::collective::CommunicatorCollectives;
+    use std::path::PathBuf;
+
+    fn frame() -> crate::types::ConFrame {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        for index in 0..8 {
+            builder.add_atom(
+                "Cu",
+                index as f64 * 0.125,
+                0.25,
+                0.5,
+                [false, false, false],
+                index,
+                63.546,
+            );
+        }
+        builder.build().expect("frame")
+    }
+
+    fn bound_bytes(frame: &crate::types::ConFrame) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut writer = ConFrameWriter::new(&mut buf);
+            writer.write_frame_bound(frame).expect("bound");
+            writer.flush().expect("flush");
+        }
+        buf
+    }
+
+    fn child() {
+        let universe = mpi::initialize().expect("mpi");
+        let world = universe.world();
+        let comm = Comm::dup_of(&world);
+        let frame = frame();
+        let expect = bound_bytes(&frame);
+        let share = frame.atom_data.len() / comm.size();
+        let rank = comm.rank();
+        let slice = format_coordinate_lines(&frame.atom_data[rank * share..(rank + 1) * share])
+            .expect("slice");
+        let mut body = if rank == 0 {
+            wide_frame_header(&frame).expect("header")
+        } else {
+            Vec::new()
+        };
+        body.extend(slice);
+        let out = PathBuf::from(std::env::var("READCON_RANK_OUT").expect("out"));
+        write_ranked_bytes(&comm, &out, &body, false, false).expect("write");
+        comm.raw().barrier();
+        if rank == 0 {
+            let got = std::fs::read(&out).expect("read");
+            assert_eq!(got, expect, "ranks {}", comm.size());
+        }
+    }
+
+    #[test]
+    fn one_two_four_and_eight_ranks_share_one_file() {
+        if std::env::var("READCON_WIDE_CHILD").is_ok() {
+            child();
+            return;
+        }
+        let exe = std::env::current_exe().expect("test binary");
+        let mut digest = None;
+        for ranks in [1u32, 2, 4, 8] {
+            for mode in ["sequential", "parallel"] {
+                let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("build")
+                    .join("test")
+                    .join(format!(
+                        "readcon-wide-{ranks}-{mode}-{}.con",
+                        std::process::id()
+                    ));
+                let _ = std::fs::create_dir_all(out.parent().expect("parent"));
+                let status = std::process::Command::new("mpirun")
+                    .args([
+                        "-n",
+                        &ranks.to_string(),
+                        exe.to_str().expect("utf8"),
+                        "one_two_four_and_eight_ranks_share_one_file",
+                    ])
+                    .env("READCON_WIDE_CHILD", "1")
+                    .env("READCON_RANKED_WRITE", mode)
+                    .env("READCON_RANK_OUT", &out)
+                    .status()
+                    .unwrap_or_else(|err| panic!("mpirun -n {ranks} {mode}: {err}"));
+                assert!(status.success(), "mpirun -n {ranks} {mode} failed");
+                let bytes = std::fs::read(&out).expect("written");
+                let got = sha256_hex(&bytes);
+                match &digest {
+                    None => digest = Some(got),
+                    Some(expected) => assert_eq!(&got, expected, "ranks {ranks} {mode}"),
+                }
+                let _ = std::fs::remove_file(&out);
+            }
+        }
+    }
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        // Compare through the system digest so the assertion is a sha256, not
+        // only a byte-wise assert_eq.
+        let mut child = std::process::Command::new("sha256sum")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("sha256sum");
+        use std::io::Write;
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(bytes)
+            .expect("write");
+        let output = child.wait_with_output().expect("sha256sum");
+        assert!(output.status.success());
+        String::from_utf8(output.stdout)
+            .expect("utf8")
+            .split_whitespace()
+            .next()
+            .expect("digest")
+            .to_string()
     }
 }
