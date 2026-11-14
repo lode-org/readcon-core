@@ -116,6 +116,20 @@ def test_notes_name_the_fields_con_keeps(tmp_path: Path):
     assert (tmp_path / "lscpu.txt").read_text().startswith("Model name")
 
 
+def test_library_commit_matches_the_sources_at_head():
+    import subprocess
+
+    found = report.library_commit(report.ROOT)
+    head_src = subprocess.check_output(
+        ["git", "rev-parse", "HEAD:src"], cwd=report.ROOT, text=True
+    )
+    lib_src = subprocess.check_output(
+        ["git", "rev-parse", f"{found}:src"], cwd=report.ROOT, text=True
+    )
+    assert head_src == lib_src
+    assert found == "80dde969650cdfdd736f78328b371a7a98597159"
+
+
 def test_write_only_campaign_does_not_demand_read_rows():
     doc = {
         "commit": "abc",

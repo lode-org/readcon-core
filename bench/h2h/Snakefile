@@ -534,6 +534,7 @@ rule million_record:
         f"{MILLION}/host.json",
         f"{MILLION}/lscpu.txt",
         f"{MILLION}/NOTES.txt",
+        f"{MILLION}/library-commit.txt",
     params:
         out=MILLION,
     shell:
@@ -548,3 +549,4 @@ rule million:
         f"{MILLION}/host.json",
         f"{MILLION}/lscpu.txt",
         f"{MILLION}/NOTES.txt",
+        f"{MILLION}/library-commit.txt",
