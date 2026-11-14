@@ -1,0 +1,55 @@
+"""MDAnalysis and OVITO are pinned to one version in every place the paper runs them."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+MDA = "2.11.0"
+OVITO = "3.17.2"
+
+
+def _pixi() -> tuple[str, str]:
+    text = (ROOT / "paper/cpc/pixi.toml").read_text(encoding="utf-8")
+    mda = re.search(r'(?m)^mdanalysis\s*=\s*"==([^"]+)"', text)
+    ovito = re.search(r'(?m)^ovito\s*=\s*"==([^"]+)"', text)
+    assert mda and ovito
+    return mda.group(1), ovito.group(1)
+
+
+def _requirements(path: Path) -> tuple[str, str]:
+    text = path.read_text(encoding="utf-8")
+
+    def pin(name: str) -> str:
+        found = re.search(rf"(?m)^{name}==(\S+)\s*$", text)
+        assert found, f"{path} has no {name} pin"
+        return found.group(1)
+
+    return pin("MDAnalysis"), pin("ovito")
+
+
+def _library_versions() -> tuple[str, str]:
+    text = (ROOT / "bench/h2h/cross_format.py").read_text(encoding="utf-8")
+    block = re.search(r"required = \{([^}]+)\}", text)
+    assert block, "library_versions() has no required pin"
+    body = block.group(1)
+    mda = re.search(r'"MDAnalysis": "([^"]+)"', body)
+    ovito = re.search(r'"ovito": "([^"]+)"', body)
+    assert mda and ovito
+    return mda.group(1), ovito.group(1)
+
+
+def test_competitor_versions_are_one_set() -> None:
+    found = {
+        "paper/cpc/pixi.toml": _pixi(),
+        "paper/cpc/environment/requirements.txt": _requirements(
+            ROOT / "paper/cpc/environment/requirements.txt"
+        ),
+        "bench/h2h/requirements.txt": _requirements(
+            ROOT / "bench/h2h/requirements.txt"
+        ),
+        "library_versions()": _library_versions(),
+    }
+    for name, pair in found.items():
+        assert pair == (MDA, OVITO), (name, pair)
