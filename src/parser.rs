@@ -44,6 +44,23 @@ std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
 }
 
+/// Output columns for a parallel coordinate fill.
+#[derive(Clone, Copy)]
+pub(crate) struct CoordPtrs {
+    pub xyz: *mut f64,
+    pub ids: *mut u64,
+    pub flags: *mut u8,
+}
+
+/// Output columns for one indexed member, including the atom records.
+#[derive(Clone, Copy)]
+pub(crate) struct CoordRunOut {
+    pub xyz: *mut f64,
+    pub ids: *mut u64,
+    pub flags: *mut [bool; 3],
+    pub atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+}
+
 /// Fill `n` coordinate rows.
 ///
 /// `breaks[i]` is the absolute index of that row's `\n`. Row 0 begins at
@@ -57,10 +74,9 @@ pub(crate) fn fill_rows_from_breaks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    ptrs: CoordPtrs,
 ) -> Result<(), ParseError> {
+    let CoordPtrs { xyz, ids, flags } = ptrs;
     let n = breaks.len();
     if n == 0 {
         return Ok(());
@@ -308,11 +324,14 @@ pub(crate) fn parse_coord_run(
     spec_version: u32,
     row_base: usize,
     symbol: Option<&std::sync::Arc<str>>,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut [bool; 3],
-    atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+    ptrs: CoordRunOut,
 ) -> Result<usize, ParseError> {
+    let CoordRunOut {
+        xyz,
+        ids,
+        flags,
+        atoms,
+    } = ptrs;
     let mut pos = start;
     let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
     for step in 0..nrows {
@@ -542,10 +561,9 @@ pub(crate) fn fill_rows_from_chunks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    ptrs: CoordPtrs,
 ) -> Result<(), ParseError> {
+    let CoordPtrs { xyz, ids, flags } = ptrs;
     if chunks.is_empty() {
         return Ok(());
     }
@@ -655,46 +673,6 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
     // SAFETY: the store wrote every index in `0..total`.
     unsafe { out.set_len(total) };
     out
-}
-
-#[cfg(feature = "parallel")]
-#[allow(dead_code)]
-fn write_coord_group(
-    bytes: &[u8],
-    group: &[(usize, usize)],
-    row0: usize,
-    spec_version: u32,
-    start_id: u64,
-    symbol: Option<&std::sync::Arc<str>>,
-    xyz_ptr: usize,
-    ids_ptr: usize,
-    flags_ptr: usize,
-    atoms_ptr: usize,
-) -> Result<(), ParseError> {
-    let mut shares = symbol.map(|symbol| symbol_shares(symbol, group.len()));
-    for (offset, &(start, end)) in group.iter().enumerate() {
-        let row_index = row0 + offset;
-        let default_id = start_id + row_index as u64;
-        let ((row, fixed, atom_id), _next) =
-            parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                row.as_ptr(),
-                (xyz_ptr as *mut f64).add(row_index * 3),
-                3,
-            );
-            *((ids_ptr as *mut u64).add(row_index)) = atom_id;
-            *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
-            if let Some(shares) = shares.as_mut() {
-                let slot = (xyz_ptr as *mut f64).add(row_index * 3);
-                let atom = crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
-                (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
-                    .add(row_index))
-                .write(atom);
-            }
-        }
-    }
-    Ok(())
 }
 
 pub trait LineStream<'a> {
@@ -2108,15 +2086,8 @@ pub fn parse_frame_header<'a>(
     })
 }
 
-/// Spec line limited to `con_spec_version`, optional `con_spec_minor`, and `units`.
-///
-/// Returns the major version when the object is exactly that shape and, for
-/// version 3 or newer, `length` and `energy` are valid units. Anything else
-/// is `None` so the general JSON parser can accept or reject it.
-/// Reuse the allocation when the next frame repeats a header line.
-///
-/// A trajectory stamps the same metadata line on every frame. A fresh
-/// `Arc` per frame showed up in the all-frames read.
+// A trajectory stamps the same metadata line on every frame. A fresh
+// `Arc` per frame showed up in the all-frames read.
 thread_local! {
     static SEQUENTIAL_PLAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
@@ -2136,7 +2107,7 @@ pub(crate) fn take_sequential_plain() -> bool {
 fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
     thread_local! {
         static RECENT: std::cell::RefCell<Vec<std::sync::Arc<str>>> =
-            std::cell::RefCell::new(Vec::new());
+            const { std::cell::RefCell::new(Vec::new()) };
     }
     RECENT.with(|slot| {
         let mut slot = slot.borrow_mut();
@@ -2152,6 +2123,11 @@ fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
     })
 }
 
+/// Spec line limited to `con_spec_version`, optional `con_spec_minor`, and `units`.
+///
+/// Returns the major version when the object is exactly that shape and, for
+/// version 3 or newer, `length` and `energy` are valid units. Anything else
+/// is `None` so the general JSON parser can accept or reject it.
 fn simple_metadata_version(line: &str) -> Option<u32> {
     let bytes = line.as_bytes();
     let mut i = 0usize;
@@ -2217,10 +2193,10 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
             i += 1;
             break;
         }
-        if version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit {
-            if !eat(&mut i, b',') {
-                return None;
-            }
+        if (version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit)
+            && !eat(&mut i, b',')
+        {
+            return None;
         }
         let key = quoted(&mut i)?;
         if !eat(&mut i, b':') {
@@ -2242,10 +2218,8 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                         i += 1;
                         break;
                     }
-                    if length.is_some() || energy.is_some() || extra_unit {
-                        if !eat(&mut i, b',') {
-                            return None;
-                        }
+                    if (length.is_some() || energy.is_some() || extra_unit) && !eat(&mut i, b',') {
+                        return None;
                     }
                     let ukey = quoted(&mut i)?;
                     if !eat(&mut i, b':') {
@@ -2585,9 +2559,11 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
-            &mut pos_flat,
-            &mut ids,
-            &mut atom_data,
+            ClonedRows {
+                pos: &mut pos_flat,
+                ids: &mut ids,
+                atoms: &mut atom_data,
+            },
         )?;
     }
     let mut positions = FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat);
@@ -2717,6 +2693,12 @@ where
     Ok(global_atom_idx)
 }
 
+struct ClonedRows<'a> {
+    pos: &'a mut Vec<f64>,
+    ids: &'a mut Vec<u64>,
+    atoms: &'a mut Vec<AtomDatum>,
+}
+
 /// Coordinate rows when the declared count must not bump an `Arc` by `n`.
 fn ingest_coord_rows_cloned<'a, L>(
     lines: &mut L,
@@ -2724,13 +2706,16 @@ fn ingest_coord_rows_cloned<'a, L>(
     spec_version: u32,
     mut global_atom_idx: u64,
     symbol: &Arc<str>,
-    pos_flat: &mut Vec<f64>,
-    ids: &mut Vec<u64>,
-    atom_data: &mut Vec<AtomDatum>,
+    rows: ClonedRows<'_>,
 ) -> Result<u64, ParseError>
 where
     L: LineStream<'a>,
 {
+    let ClonedRows {
+        pos: pos_flat,
+        ids,
+        atoms: atom_data,
+    } = rows;
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
         pos_flat.extend_from_slice(&xyz);

@@ -41,6 +41,33 @@ fn link_flags_for(library_dirs: &[std::path::PathBuf]) -> Vec<String> {
     flags
 }
 
+#[test]
+fn empty_dirs_link_only_the_core_library() {
+    assert_eq!(link_flags_for(&[]), vec!["-lreadcon_core".to_string()]);
+    assert!(runtime_library_path(&[]).is_empty());
+    assert!(metatensor_lib_dirs(&[]).is_empty());
+}
+
+#[test]
+fn env_file_adds_the_metatensor_directory() {
+    let dir = std::env::temp_dir().join(format!("rc-mts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let nested = dir.join("mts");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(
+        dir.join("readcon-metatensor.env"),
+        format!("READCON_METATENSOR_LIB_DIR={}\n", nested.display()),
+    )
+    .unwrap();
+    let flags = link_flags_for(std::slice::from_ref(&dir));
+    assert!(flags.iter().any(|flag| flag == "-lmetatensor"));
+    assert!(flags.iter().any(|flag| flag.contains("rpath-link")));
+    let path = runtime_library_path(std::slice::from_ref(&dir));
+    assert!(path.contains(&nested.display().to_string()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 fn runtime_library_path(library_dirs: &[std::path::PathBuf]) -> String {
     let mut dirs = library_dirs.to_vec();
     dirs.extend(metatensor_lib_dirs(library_dirs));

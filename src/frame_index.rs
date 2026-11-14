@@ -318,6 +318,8 @@ impl BlockCursor {
             .fold(tail, |hash, lane| fnv1a(hash, &lane.to_le_bytes()))
     }
 
+    /// Snapshot the lanes so the next rank can continue a partial block.
+    #[cfg(any(test, feature = "mpi"))]
     pub(crate) fn to_bytes(&self) -> [u8; 129] {
         let mut out = [0u8; 129];
         for (index, lane) in self.lanes.iter().enumerate() {
@@ -328,6 +330,8 @@ impl BlockCursor {
         out
     }
 
+    /// Restore a snapshot from the previous rank's partial block.
+    #[cfg(any(test, feature = "mpi"))]
     pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         let mut lanes = [0u64; 8];
         for (index, lane) in lanes.iter_mut().enumerate() {
@@ -367,11 +371,13 @@ pub(crate) fn fold_block_hashes(total: u64, blocks: &[u64]) -> u64 {
 
 /// Block hashes this slice can finish, plus the bytes that share a
 /// block with a neighbour. `offset` is the slice's position in the file.
+#[cfg(any(test, feature = "mpi"))]
 pub(crate) struct SliceParts {
     pub hashed: Vec<(u64, u64)>,
     pub fragments: Vec<(u64, Vec<u8>)>,
 }
 
+#[cfg(any(test, feature = "mpi"))]
 pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
     let mut hashed = Vec::new();
     let mut fragments = Vec::new();
@@ -401,6 +407,7 @@ pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
 /// Content hash of a file split into ordered pieces. The pieces may
 /// start mid-block. The result matches [`content_hash`] of the
 /// concatenation.
+#[cfg(test)]
 pub(crate) fn fold_slice_parts(total: u64, parts: &[SliceParts]) -> u64 {
     if total == 0 {
         return fold_block_hashes(0, &[]);
@@ -569,6 +576,7 @@ pub fn write_sidecar(path: &Path, idx: &FrameIndex) -> io::Result<()> {
 /// holds those bytes, so reading the file again is a serial pass over
 /// the whole trajectory. `content` is the hash of the bytes just written,
 /// and `idx.data_len` is their length.
+#[cfg(any(test, feature = "mpi"))]
 pub(crate) fn write_sidecar_known(path: &Path, idx: &FrameIndex, content: u64) -> io::Result<()> {
     let fp = Fingerprint {
         size: idx.data_len,

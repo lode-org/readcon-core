@@ -102,9 +102,9 @@ fn species(layout: Layout) -> Vec<(&'static str, f64)> {
         ],
         Layout::Wide => {
             let mut atoms = Vec::new();
-            atoms.extend(std::iter::repeat(("Cu", 64.0)).take(20));
-            atoms.extend(std::iter::repeat(("H", 1.0)).take(17));
-            atoms.extend(std::iter::repeat(("O", 16.0)).take(11));
+            atoms.extend(std::iter::repeat_n(("Cu", 64.0), 20));
+            atoms.extend(std::iter::repeat_n(("H", 1.0), 17));
+            atoms.extend(std::iter::repeat_n(("O", 16.0), 11));
             atoms
         }
     }

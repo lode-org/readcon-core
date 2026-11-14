@@ -1,0 +1,44 @@
+name: Clippy
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: clippy-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  clippy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install a C++ toolchain for chemfiles
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy
+
+      - name: cargo clippy -D warnings
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: |
+          cargo clippy --locked --all-targets \
+            --features parallel,chemfiles,zstd,grammar,metatensor \
+            -- -D warnings

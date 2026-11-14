@@ -353,7 +353,7 @@ fn lattice_vectors_json(cell: &UnitCell) -> Option<Value> {
 ///   [`chemfiles_internal_units_json`].
 /// - `generator` defaults to `readcon-core chemfiles import` when unset.
 /// - `frame_index` defaults to chemfiles `step` when unset.
-/// Positions without `Frame::positions`.
+///   Positions without `Frame::positions`.
 ///
 /// Chemfiles 0.10 builds a slice from a null pointer when a corrupt file
 /// produces a frame with no coordinate storage. That violates
@@ -414,7 +414,7 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
         None
     };
 
-    let geometry = import_geometry(frame, positions, velocities.as_deref())?;
+    let geometry = import_geometry(frame, positions, velocities)?;
 
     let mut metadata = BTreeMap::new();
     for (key, prop) in frame.properties() {
@@ -842,8 +842,6 @@ fn parallel_mixed(
             if range.begin >= range.end {
                 continue;
             }
-            let sym_bits = sym_bits;
-            let handle_bits = handle_bits;
             scope.spawn(move || {
                 let status = unsafe {
                     rc_chemfiles_classify_range(
@@ -877,7 +875,7 @@ fn parallel_mixed(
     let mut kinds: Vec<ImportedKind> = Vec::new();
     for range in &ranges {
         let mut remap = [0u32; 64];
-        for local in 0..range.n_kinds as usize {
+        for (local, slot) in remap[..range.n_kinds as usize].iter_mut().enumerate() {
             let end = range.names[local]
                 .iter()
                 .position(|&byte| byte == 0)
@@ -899,7 +897,7 @@ fn parallel_mixed(
                 });
                 kinds.len() - 1
             };
-            remap[local] = global as u32;
+            *slot = global as u32;
         }
         for index in range.begin..range.end {
             sym_of[index] = remap[sym_of[index] as usize];
@@ -935,10 +933,8 @@ fn grouped_geometry(
         next[kind as usize] = slot + 1;
         chem_at[slot] = index;
     }
-    let mut flat = Vec::with_capacity(n * 3);
-    unsafe { flat.set_len(n * 3) };
-    for grouped in 0..n {
-        let chem = chem_at[grouped];
+    let mut flat = vec![0.0f64; n.saturating_mul(3)];
+    for (grouped, &chem) in chem_at.iter().enumerate() {
         let row = positions[chem];
         flat[grouped * 3..grouped * 3 + 3].copy_from_slice(&row);
     }
@@ -950,8 +946,7 @@ fn grouped_geometry(
     let mut atoms = Vec::with_capacity(n);
     let mut ids = Vec::with_capacity(n);
     let ptr = flat.as_mut_ptr();
-    for grouped in 0..n {
-        let chem = chem_at[grouped];
+    for (grouped, &chem) in chem_at.iter().enumerate() {
         let kind = sym_of[chem] as usize;
         let symbol = if velocities.is_none() {
             crate::types::share_arc_str(&kinds[kind].symbol)
@@ -1201,8 +1196,7 @@ fn import_geometry(
     let mut atoms = Vec::with_capacity(n);
     let mut ids = Vec::with_capacity(n);
     let ptr = flat.as_mut_ptr();
-    for grouped in 0..n {
-        let chem = chem_at[grouped];
+    for (grouped, &chem) in chem_at.iter().enumerate() {
         let kind = sym_of[chem] as usize;
         let symbol = Arc::clone(&kinds[kind].symbol);
         let atom_id = chem as u64;
@@ -1847,23 +1841,23 @@ Cu 0.00000000 0.00000000 0.00000000
             "bridge allocated {delta} times for {n} identical atoms (limit {n})"
         );
     }
-}
 
-fn mimalloc_mallocs() -> u64 {
-    let stats = mimalloc::MiMalloc::stats_json().expect("mimalloc stats");
-    let text = stats.to_str().expect("stats utf-8");
-    // Count every `"count":N` under the process stats. The snapshot itself
-    // allocates, so callers subtract two snapshots.
-    let mut total = 0u64;
-    for chunk in text.split("\"count\":") {
-        let digits: String = chunk
-            .chars()
-            .skip_while(|c| c.is_whitespace())
-            .take_while(|c| c.is_ascii_digit())
-            .collect();
-        if let Ok(value) = digits.parse::<u64>() {
-            total += value;
+    fn mimalloc_mallocs() -> u64 {
+        let stats = mimalloc::MiMalloc::stats_json().expect("mimalloc stats");
+        let text = stats.to_str().expect("stats utf-8");
+        // Count every `"count":N` under the process stats. The snapshot itself
+        // allocates, so callers subtract two snapshots.
+        let mut total = 0u64;
+        for chunk in text.split("\"count\":") {
+            let digits: String = chunk
+                .chars()
+                .skip_while(|c| c.is_whitespace())
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if let Ok(value) = digits.parse::<u64>() {
+                total += value;
+            }
         }
+        total
     }
-    total
 }

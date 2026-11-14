@@ -165,9 +165,11 @@ pub(crate) fn positions_parallel(
             dest,
             workers,
             rich,
-            positions_ptr as *mut f64,
-            ids_ptr as *mut u64,
-            flags_ptr as *mut u8,
+            crate::parser::CoordPtrs {
+                xyz: positions_ptr as *mut f64,
+                ids: ids_ptr as *mut u64,
+                flags: flags_ptr as *mut u8,
+            },
         )?;
     } else if !jobs.is_empty() {
         // One worker per frame once there is a frame for every worker.
@@ -236,9 +238,11 @@ pub(crate) fn positions_parallel(
                     dest,
                     frame_workers,
                     rich,
-                    positions_ptr as *mut f64,
-                    ids_ptr as *mut u64,
-                    flags_ptr as *mut u8,
+                    crate::parser::CoordPtrs {
+                        xyz: positions_ptr as *mut f64,
+                        ids: ids_ptr as *mut u64,
+                        flags: flags_ptr as *mut u8,
+                    },
                 )?;
             }
         }
@@ -271,10 +275,13 @@ fn fill_frame_rows(
     dest: usize,
     workers: usize,
     rich: bool,
-    positions: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    ptrs: crate::parser::CoordPtrs,
 ) -> Result<(), ParseError> {
+    let crate::parser::CoordPtrs {
+        xyz: positions,
+        ids,
+        flags,
+    } = ptrs;
     let count = out.counts[frame];
     if count == 0 {
         return Ok(());
@@ -303,9 +310,11 @@ fn fill_frame_rows(
             spec,
             0,
             workers,
-            unsafe { positions.add(dest * 3) },
-            ids_ptr,
-            flags_ptr,
+            crate::parser::CoordPtrs {
+                xyz: unsafe { positions.add(dest * 3) },
+                ids: ids_ptr,
+                flags: flags_ptr,
+            },
         );
     }
     if out.wide_breaks.get(frame).map(|item| item.len()) == Some(count) {
@@ -327,9 +336,11 @@ fn fill_frame_rows(
             spec,
             0,
             workers,
-            unsafe { positions.add(dest * 3) },
-            ids_ptr,
-            flags_ptr,
+            crate::parser::CoordPtrs {
+                xyz: unsafe { positions.add(dest * 3) },
+                ids: ids_ptr,
+                flags: flags_ptr,
+            },
         );
     }
     let rows = if count >= 4096 {
@@ -537,17 +548,21 @@ fn parse_repeated_copies(
                     let start = frame * span;
                     let (certified, saw) = fill_copied_frame(
                         bytes,
-                        start,
-                        start + span,
-                        head0 + start,
+                        CopiedSpan {
+                            start,
+                            end: start + span,
+                            head: head0 + start,
+                        },
                         count0,
                         mass,
                         frame * count0,
                         rich,
-                        positions_ptr,
-                        masses_ptr,
-                        ids_ptr,
-                        flags_ptr,
+                        CopiedCols {
+                            positions: positions_ptr,
+                            masses: masses_ptr,
+                            ids: ids_ptr,
+                            flags: flags_ptr,
+                        },
                     )?;
                     if saw {
                         saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -608,6 +623,19 @@ struct PeekedHeader {
     symbol: Arc<str>,
 }
 
+struct CopiedSpan {
+    start: usize,
+    end: usize,
+    head: usize,
+}
+
+struct CopiedCols {
+    positions: usize,
+    masses: usize,
+    ids: usize,
+    flags: usize,
+}
+
 /// Parse one copied frame straight into the shared column buffers.
 ///
 /// A temporary `Vec` per copy allocated, copied, and freed on the same
@@ -616,18 +644,24 @@ struct PeekedHeader {
 #[cfg(feature = "parallel")]
 fn fill_copied_frame(
     bytes: &[u8],
-    frame_start: usize,
-    frame_end: usize,
-    head: usize,
+    span: CopiedSpan,
     count: usize,
     mass: f64,
     dest: usize,
     rich: bool,
-    positions: usize,
-    masses: usize,
-    ids: usize,
-    flags: usize,
+    cols: CopiedCols,
 ) -> Result<(bool, bool), ParseError> {
+    let CopiedSpan {
+        start: frame_start,
+        end: frame_end,
+        head,
+    } = span;
+    let CopiedCols {
+        positions,
+        masses,
+        ids,
+        flags,
+    } = cols;
     let spec = frame_spec(bytes, frame_start)?;
     let mut pos = head;
     for row in 0..count {

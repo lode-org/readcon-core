@@ -94,13 +94,14 @@ fn compile_chemfiles_atom_view() {
 ///
 /// Cargo used to name that directory `chemfiles-sys-<hash>`. A target
 /// build now uses `chemfiles-sys/<hash>`. Both layouts are accepted.
+#[cfg(feature = "chemfiles")]
 fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
     let exports = |dir: &Path| {
         let include = dir.join("out/include");
         include
             .join("chemfiles/exports.h")
             .is_file()
-            .then(|| include)
+            .then_some(include)
     };
     let entries = fs::read_dir(build_dir).ok()?;
     for entry in entries.flatten() {
@@ -131,6 +132,7 @@ fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
 /// dependency is built under `target/<triple>/<profile>/build` even when
 /// the triple is the host. The package directory is either
 /// `<crate>-<hash>` or `<crate>/<hash>`.
+#[cfg(feature = "chemfiles")]
 fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     let Some(hash_or_pkg) = out_dir.parent() else {
@@ -174,7 +176,7 @@ fn chemfiles_generated_include() -> PathBuf {
     panic!("chemfiles-sys did not generate include/chemfiles/exports.h");
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "chemfiles"))]
 mod chemfiles_include_tests {
     use super::{chemfiles_build_dirs, chemfiles_exports_include};
     use std::fs;

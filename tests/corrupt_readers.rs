@@ -484,22 +484,20 @@ fn line_endings_counts_and_nonfinite_stay_clean() {
     );
     let xyz_nan = xyz.replacen("0.0", "nan", 1);
     for threads in THREADS {
-        match read_extxyz(xyz_nan.as_bytes(), threads) {
-            Ok(tables) => assert!(
+        if let Ok(tables) = read_extxyz(xyz_nan.as_bytes(), threads) {
+            assert!(
                 tables.positions.iter().any(|value| value.is_nan()),
                 "extxyz nan t{threads} dropped the value"
-            ),
-            Err(_) => {}
+            );
         }
     }
     let xyz_inf = xyz.replacen("0.0", "inf", 1);
     for threads in THREADS {
-        match read_extxyz(xyz_inf.as_bytes(), threads) {
-            Ok(tables) => assert!(
+        if let Ok(tables) = read_extxyz(xyz_inf.as_bytes(), threads) {
+            assert!(
                 tables.positions.iter().any(|value| value.is_infinite()),
                 "extxyz inf t{threads} dropped the value"
-            ),
-            Err(_) => {}
+            );
         }
     }
 }

@@ -40,7 +40,7 @@ fn one_atom(coord: &str) -> String {
 fn trailing_non_utf8_keeps_the_earlier_invalid_count() {
     let mut bytes = format!("{}{}", one_atom("0 0 0 0 0"), bad_count_frame()).into_bytes();
     let pad = (64 * 1024usize).saturating_sub(bytes.len());
-    bytes.extend(std::iter::repeat(b' ').take(pad));
+    bytes.extend(std::iter::repeat_n(b' ', pad));
     bytes.push(0xff);
     let path = path_for("tail-ff");
     fs::write(&path, &bytes).unwrap();

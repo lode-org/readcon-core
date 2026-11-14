@@ -709,7 +709,7 @@ fn write_fused_frame(
     }
     let header = crate::writer::binding_header_bytes(frame)
         .map_err(|err| io::Error::other(err.to_string()))?;
-    let slots: Vec<std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>> = (0..ranges.len())
+    let slots: Vec<GzipMemberSlot> = (0..ranges.len())
         .map(|_| std::sync::Mutex::new(None))
         .collect();
     let threads = threads.max(1).min(ranges.len());
@@ -724,7 +724,7 @@ fn write_fused_frame(
                     let (atom_from, atom_to) = ranges_ref[index];
                     plain.clear();
                     if atom_from == 0 {
-                        plain.extend_from_slice(&header);
+                        plain.extend_from_slice(header);
                     }
                     plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
                     let plain_len = plain.len();
@@ -873,6 +873,8 @@ struct MemberPlan {
     /// one coordinate block after a single header.
     rows: Option<Vec<(u32, u32)>>,
 }
+
+type GzipMemberSlot = std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>;
 
 fn gzip_member_starts(bytes: &[u8]) -> Option<MemberPlan> {
     if bytes.len() < 16 || bytes[0] != 0x1f || bytes[1] != 0x8b || bytes[3] & 0x04 == 0 {
@@ -1229,7 +1231,7 @@ where
     // eight-thread gzip write slower than four.
     let ranges = worker_ranges(parts.len(), threads);
     std::thread::scope(|scope| {
-        for (_worker, (begin, end)) in ranges.into_iter().enumerate() {
+        for (begin, end) in ranges {
             let slots = &slots;
             let parts = &parts;
             let encode = &encode;
@@ -1555,7 +1557,7 @@ pub fn codec_deflate(
         for part in encoded {
             out.extend(part);
         }
-        return Ok(out);
+        Ok(out)
     }
     #[cfg(not(feature = "zstd"))]
     {

@@ -55,8 +55,7 @@ fn path_read_rss_within_ase() {
     let per = (added as f64) * 1024.0 / frames as f64;
     assert!(
         per <= ASE_BYTES_PER_FRAME,
-        "added {added} KiB over {frames} frames is {per:.1} B/frame, bound {:.1}",
-        ASE_BYTES_PER_FRAME
+        "added {added} KiB over {frames} frames is {per:.1} B/frame, bound {ASE_BYTES_PER_FRAME:.1}"
     );
 }
 
