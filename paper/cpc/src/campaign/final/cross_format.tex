@@ -1,96 +1,102 @@
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{One frame of \(10^{6}\) atoms. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. chemfiles has no CON writer. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
-\label{tab:cross-1m}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lllccrrl@{}}
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}lllrr r p{0.28\textwidth}@{}}
+\caption{One frame of \(10^{6}\) atoms from h2h12. Time is the type-7 median in seconds. $n$ is the sample count. Rows with $n{=}12$ were repeated because the interquartile range exceeded 5 percent of the median. Size is the file in megabytes, the recorded byte count divided by $10^{6}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a readcon parse copied into a chemfiles.Frame. chemfiles has no CON writer. Record \texttt{bench/h2h/scaling/h2h12/cross-format.tsv} at \texttt{f157a124149b40ba4986f66a993a06f3e32a34e3}. The file's commit line is \texttt{fe9f7079588443daf2b4bd878d07ec1536cbd47b}. readcon writes were measured again at \texttt{ac25f71298bffa90bc27e63814494250fb992dd9}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}\label{tab:cross-1m}\\
 \toprule
-Tool & Format & Op & Warm (IQR, $n$) & Cold (IQR, $n$) & RSS & File & Drops \\
+Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\
 \midrule
-mdanalysis & pdb & read & unsupported &  &  &  & unsupported: PDB atom serial is five digits (max 99999 atoms) \\
-readcon & con & read & 0.09917 (0.002152, $n{=}6$) & 0.1212 (0.004301, $n{=}6$) & 273 & 43.28 & none \\
-readcon & con & write & 0.181 (0.004321, $n{=}6$) &  & 510.7 & 43.28 & none \\
-readcon & con.gz & read & 0.1233 (0.01414, $n{=}6$) & 0.1229 (0.02403, $n{=}6$) & 363.5 & 5.169 & none \\
-readcon & con.gz & write & 0.4484 (0.002753, $n{=}6$) &  & 425.3 & 5.169 & none \\
-readcon & con.zst & read & 0.09823 (0.004344, $n{=}6$) & 0.1015 (0.002581, $n{=}6$) & 304.6 & 1.349 & none \\
-readcon & con.zst & write & 0.1297 (0.002608, $n{=}6$) &  & 424.3 & 1.349 & none \\
-readcon & chemfiles.Frame & read & 0.1638 (0.002437, $n{=}6$) & 0.1864 (0.01064, $n{=}6$) & 366.6 & 43.28 & masses, velocities, constraints \\
-chemfiles & con & write & no writer &  &  &  &  \\
-readcon & xyz & read & 1.241 (0.01081, $n{=}6$) & 1.294 (0.04281, $n{=}6$) & 1073 & 36.91 & velocities, constraints \\
-readcon & xyz & write & 1.648 (0.01149, $n{=}6$) &  & 1760 & 36.91 & velocities, constraints \\
-chemfiles & xyz & read & 0.187 (0.006147, $n{=}6$) & 0.2019 (0.004489, $n{=}6$) & 223.3 & 11.16 & masses, velocities, constraints \\
-chemfiles & xyz & write & 8.306 (0.18, $n{=}6$) &  & 308.4 & 11.16 & masses, velocities, constraints \\
-chemfiles & xyz.gz & read & 0.2075 (0.006423, $n{=}6$) & 0.2104 (0.001465, $n{=}6$) & 223.6 & 1.598 & masses, velocities, constraints \\
-chemfiles & xyz.gz & write & 8.763 (0.1299, $n{=}6$) &  & 308.9 & 1.598 & masses, velocities, constraints \\
-chemfiles & xyz.xz & read & 0.2593 (0.01, $n{=}6$) & 0.2567 (0.007508, $n{=}6$) & 231.6 & 0.09991 & masses, velocities, constraints \\
-chemfiles & xyz.xz & write & 12.26 (0.5029, $n{=}6$) &  & 386.5 & 0.09991 & masses, velocities, constraints \\
-chemfiles & xyz.bz2 & read & 0.4355 (0.007984, $n{=}6$) & 0.4375 (0.01009, $n{=}6$) & 225.8 & 0.8531 & masses, velocities, constraints \\
-chemfiles & xyz.bz2 & write & 8.751 (0.06177, $n{=}6$) &  & 312.8 & 0.8531 & masses, velocities, constraints \\
-chemfiles & trr & read & 0.1209 (0.004997, $n{=}6$) & 0.159 (0.02807, $n{=}6$) & 258.2 & 22.89 & masses, constraints \\
-chemfiles & trr & write & 8.179 (0.1328, $n{=}6$) &  & 411.3 & 22.89 & masses, constraints \\
-ase & extxyz & read & 2.053 (0.0319, $n{=}6$) & 2.143 (0.07255, $n{=}6$) & 638.6 & 119.2 & none \\
-ase & extxyz & write & 4.243 (0.05306, $n{=}6$) &  & 411.3 & 119.2 & none \\
-ase & extxyz.gz & read & 2.322 (0.0401, $n{=}6$) & 2.368 (0.04329, $n{=}6$) & 639 & 2.647 & none \\
-ase & extxyz.gz & write & 9.001 (0.06071, $n{=}6$) &  & 417 & 2.647 & none \\
-mdanalysis & dcd & read & 0.03372 (0.001174, $n{=}6$) & 0.05072 (0.002088, $n{=}6$) & 170.5 & 11.44 & masses, velocities, constraints \\
-mdanalysis & dcd & write & 0.2192 (0.003406, $n{=}6$) &  & 311.9 & 11.44 & masses, velocities, constraints \\
-mdanalysis & xtc & read & 0.08068 (0.0005277, $n{=}6$) & 0.09123 (0.003827, $n{=}6$) & 140 & 3.548 & masses, velocities, constraints \\
-mdanalysis & xtc & write & 0.2367 (0.003919, $n{=}6$) &  & 315.4 & 3.548 & masses, velocities, constraints \\
-mdanalysis & ncdf & read & 0.01422 (0.0006528, $n{=}6$) & 0.02585 (0.001371, $n{=}6$) & 135.9 & 11.44 & masses, velocities, constraints \\
-mdanalysis & ncdf & write & 0.2476 (0.005866, $n{=}6$) &  & 357.6 & 11.44 & masses, velocities, constraints \\
-ovito & xyz & read & 0.09036 (0.003339, $n{=}6$) & 0.1009 (0.002234, $n{=}6$) & 168.8 & 16.88 & masses, velocities, constraints \\
-ovito & xyz & write & 0.2127 (0.003937, $n{=}6$) &  & 272.8 & 16.88 & masses, velocities, constraints \\
+\endfirsthead
+\caption[]{One frame of \(10^{6}\) atoms from h2h12, continued.}\\
+\toprule
+Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\
+\midrule
+\endhead
+readcon & con & read & 0.1148 & 12 & 45.38 & none \\
+readcon & con & write & 0.07441 & 6 & 45.38 & none \\
+readcon & con.gz & read & 0.1423 & 12 & 5.42 & none \\
+readcon & con.gz & write & 0.1549 & 6 & 5.42 & none \\
+readcon & con.zst & read & 0.1149 & 12 & 1.415 & none \\
+readcon & con.zst & write & 0.08006 & 12 & 1.415 & none \\
+readcon & conbin & read & 0.01574 & 12 & 65 & none \\
+readcon & conbin & write & 0.03923 & 6 & 65 & none \\
+readcon & xyz & read & 0.2468 & 12 & 11.7 & velocities, constraints \\
+readcon & xyz & write & 0.5928 & 12 & 23.59 & velocities, constraints \\
+readcon & chemfiles.Frame & read & 0.2042 & 12 & 45.38 & masses, velocities, constraints \\
+chemfiles & con & write & no writer &  &  &  \\
+chemfiles & xyz & read & 0.2137 & 12 & 11.7 & masses, velocities, constraints \\
+chemfiles & xyz & write & 0.2973 & 12 & 11.7 & masses, velocities, constraints \\
+chemfiles & dcd & read & 0.1099 & 12 & 12 & masses, velocities, constraints \\
+chemfiles & dcd & write & 0.03522 & 12 & 12 & masses, velocities, constraints \\
+chemfiles & xtc & read & 0.1306 & 12 & 3.72 & masses, velocities, constraints, precision \\
+chemfiles & xtc & write & 0.04101 & 12 & 3.72 & masses, velocities, constraints, precision \\
+chemfiles & trr & read & 0.1492 & 12 & 24 & masses, constraints, precision \\
+chemfiles & trr & write & 0.1074 & 6 & 24 & masses, constraints, precision \\
+chemfiles & ncdf & read & 0.1344 & 12 & 24 & masses, constraints \\
+chemfiles & ncdf & write & 0.0755 & 12 & 24 & masses, constraints \\
+ase & extxyz & read & 2.25 & 6 & 125 & none \\
+ase & extxyz & write & 4.574 & 6 & 125 & none \\
+ase & extxyz.gz & read & 2.487 & 6 & 2.776 & none \\
+ase & extxyz.gz & write & 8.731 & 12 & 2.776 & none \\
+mdanalysis & pdb & read & unsupported &  &  & unsupported: PDB atom serial is five digits (max 99999 atoms) \\
+mdanalysis & dcd & read & 0.03159 & 12 & 12 & masses, velocities, constraints \\
+mdanalysis & dcd & write & 0.2045 & 12 & 12 & masses, velocities, constraints \\
+mdanalysis & xtc & read & 0.08499 & 12 & 3.72 & masses, velocities, constraints, precision \\
+mdanalysis & xtc & write & 0.2374 & 6 & 3.72 & masses, velocities, constraints, precision \\
+mdanalysis & ncdf & read & 0.03723 & 12 & 24 & masses, constraints \\
+mdanalysis & ncdf & write & 0.2657 & 12 & 24 & masses, constraints \\
+ovito & xyz & read & 0.2035 & 12 & 37.6 & constraints \\
+ovito & xyz & write & 0.5914 & 12 & 37.6 & constraints \\
 \bottomrule
-\end{tabular}
+\end{longtable}
 }
-\end{table}
 
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{The trajectory. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. chemfiles has no CON writer. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
-\label{tab:cross-traj}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lllccrrl@{}}
+{\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}lllrr r p{0.28\textwidth}@{}}
+\caption{One trajectory from h2h12. Time is the type-7 median in seconds. $n$ is the sample count. Rows with $n{=}12$ were repeated because the interquartile range exceeded 5 percent of the median. Size is the file in megabytes, the recorded byte count divided by $10^{6}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a readcon parse copied into a chemfiles.Frame. chemfiles has no CON writer. Record \texttt{bench/h2h/scaling/h2h12/cross-format.tsv} at \texttt{f157a124149b40ba4986f66a993a06f3e32a34e3}. The file's commit line is \texttt{fe9f7079588443daf2b4bd878d07ec1536cbd47b}. readcon writes were measured again at \texttt{ac25f71298bffa90bc27e63814494250fb992dd9}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}\label{tab:cross-traj}\\
 \toprule
-Tool & Format & Op & Warm (IQR, $n$) & Cold (IQR, $n$) & RSS & File & Drops \\
+Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\
 \midrule
-readcon & con & read & 0.000781 (9.589e-06, $n{=}6$) & 0.002746 (0.001064, $n{=}6$) & 42.19 & 0.2886 & none \\
-readcon & con & write & 0.002616 (0.000846, $n{=}6$) &  & 51.18 & 0.2886 & none \\
-readcon & con.gz & read & 0.001011 (2.045e-05, $n{=}6$) & 0.001954 (0.0002911, $n{=}6$) & 46.06 & 0.04213 & none \\
-readcon & con.gz & write & 0.005658 (4.186e-05, $n{=}6$) &  & 47.87 & 0.04213 & none \\
-readcon & con.zst & read & 0.001358 (0.0007824, $n{=}6$) & 0.002523 (0.0007194, $n{=}6$) & 50.55 & 0.009314 & none \\
-readcon & con.zst & write & 0.001335 (2.396e-05, $n{=}6$) &  & 47.22 & 0.009314 & none \\
-readcon & chemfiles.Frame & read & 0.001214 (1.599e-05, $n{=}6$) & 0.003221 (0.001104, $n{=}6$) & 42.59 & 0.2886 & masses, velocities, constraints \\
-chemfiles & con & write & no writer &  &  &  &  \\
-readcon & xyz & read & 0.007009 (9.772e-05, $n{=}6$) & 0.008955 (0.001058, $n{=}6$) & 46.56 & 0.2752 & velocities, constraints \\
-readcon & xyz & write & 0.0128 (9.608e-05, $n{=}6$) &  & 62.32 & 0.2752 & velocities, constraints \\
-chemfiles & xyz & read & 0.001203 (4.461e-05, $n{=}6$) & 0.002379 (0.0008291, $n{=}6$) & 33.27 & 0.08922 & masses, velocities, constraints \\
-chemfiles & xyz & write & 0.06592 (0.001554, $n{=}6$) &  & 34.41 & 0.08922 & masses, velocities, constraints \\
-chemfiles & xyz.gz & read & 0.001436 (2.899e-05, $n{=}6$) & 0.002619 (0.0005134, $n{=}6$) & 33.46 & 0.01304 & masses, velocities, constraints \\
-chemfiles & xyz.gz & write & 0.06995 (0.006041, $n{=}6$) &  & 34.87 & 0.01304 & masses, velocities, constraints \\
-chemfiles & xyz.xz & read & 0.001717 (7.406e-05, $n{=}6$) & 0.002735 (0.0001021, $n{=}6$) & 33.73 & 0.00127 & masses, velocities, constraints \\
-chemfiles & xyz.xz & write & 0.08485 (0.001108, $n{=}6$) &  & 36.67 & 0.00127 & masses, velocities, constraints \\
-chemfiles & xyz.bz2 & read & 0.002472 (4.264e-05, $n{=}6$) & 0.003689 (0.001056, $n{=}6$) & 33.77 & 0.006486 & masses, velocities, constraints \\
-chemfiles & xyz.bz2 & write & 0.06883 (0.0005928, $n{=}6$) &  & 35.44 & 0.006486 & masses, velocities, constraints \\
-chemfiles & trr & read & 0.0005406 (3.626e-05, $n{=}6$) & 0.002336 (0.0004255, $n{=}6$) & 33.83 & 0.184 & masses, constraints \\
-chemfiles & trr & write & 0.06657 (0.000788, $n{=}6$) &  & 34.55 & 0.184 & masses, constraints \\
-ase & extxyz & read & 0.01509 (1.839e-05, $n{=}6$) & 0.01805 (0.001185, $n{=}6$) & 80.8 & 0.9547 & none \\
-ase & extxyz & write & 0.03419 (0.0007087, $n{=}6$) &  & 79.88 & 0.9547 & none \\
-ase & extxyz.gz & read & 0.02108 (0.0002425, $n{=}6$) & 0.02365 (0.002261, $n{=}6$) & 80.75 & 0.02218 & none \\
-ase & extxyz.gz & write & 0.07894 (0.002792, $n{=}6$) &  & 80.27 & 0.02218 & none \\
-mdanalysis & pdb & read & 0.01537 (0.0001195, $n{=}6$) & 0.01719 (0.0009522, $n{=}6$) & 81.9 & 0.6183 & velocities, constraints \\
-mdanalysis & pdb & write & 0.05274 (0.0005731, $n{=}6$) &  & 80.18 & 0.6183 & velocities, constraints \\
-mdanalysis & dcd & read & 0.0004885 (6.279e-06, $n{=}6$) & 0.002234 (0.0003038, $n{=}6$) & 79.55 & 0.0925 & masses, velocities, constraints \\
-mdanalysis & dcd & write & 0.001984 (0.0006274, $n{=}6$) &  & 79.88 & 0.0925 & masses, velocities, constraints \\
-mdanalysis & xtc & read & 0.001348 (2.908e-05, $n{=}6$) & 0.003269 (0.0009181, $n{=}6$) & 79.68 & 0.0282 & masses, velocities, constraints \\
-mdanalysis & xtc & write & 0.002166 (6.153e-05, $n{=}6$) &  & 79.95 & 0.0282 & masses, velocities, constraints \\
-mdanalysis & ncdf & read & 0.0004939 (1.767e-05, $n{=}6$) & 0.002092 (0.001461, $n{=}6$) & 79.21 & 0.09273 & masses, velocities, constraints \\
-mdanalysis & ncdf & write & 0.002807 (4.012e-05, $n{=}6$) &  & 79.96 & 0.09273 & masses, velocities, constraints \\
-ovito & xyz & read & 0.003705 (0.0005512, $n{=}6$) & 0.00603 (0.001466, $n{=}6$) & 89.4 & 0.1219 & masses, velocities, constraints \\
-ovito & xyz & write & 0.005707 (0.00183, $n{=}6$) &  & 83.48 & 0.1219 & masses, velocities, constraints \\
+\endfirsthead
+\caption[]{One trajectory from h2h12, continued.}\\
+\toprule
+Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\
+\midrule
+\endhead
+readcon & con & read & 0.0008327 & 12 & 0.3027 & none \\
+readcon & con & write & 0.002112 & 12 & 0.3027 & none \\
+readcon & con.gz & read & 0.001021 & 6 & 0.04417 & none \\
+readcon & con.gz & write & 0.005732 & 6 & 0.04417 & none \\
+readcon & con.zst & read & 0.00101 & 6 & 0.009766 & none \\
+readcon & con.zst & write & 0.001375 & 12 & 0.009766 & none \\
+readcon & conbin & read & 9.291e-05 & 6 & 0.5245 & none \\
+readcon & conbin & write & 0.001525 & 12 & 0.5245 & none \\
+readcon & xyz & read & 0.001422 & 6 & 0.09355 & velocities, constraints \\
+readcon & xyz & write & 0.005406 & 6 & 0.1542 & velocities, constraints \\
+readcon & chemfiles.Frame & read & 0.001242 & 6 & 0.3027 & masses, velocities, constraints \\
+chemfiles & con & write & no writer &  &  &  \\
+chemfiles & xyz & read & 0.001363 & 6 & 0.09355 & masses, velocities, constraints \\
+chemfiles & xyz & write & 0.002186 & 6 & 0.09355 & masses, velocities, constraints \\
+chemfiles & dcd & read & 0.0005357 & 6 & 0.09676 & masses, velocities, constraints, precision \\
+chemfiles & dcd & write & 0.001854 & 12 & 0.09676 & masses, velocities, constraints, precision \\
+chemfiles & xtc & read & 0.0006968 & 6 & 0.02957 & masses, velocities, constraints, precision \\
+chemfiles & xtc & write & 0.001628 & 12 & 0.02957 & masses, velocities, constraints, precision \\
+chemfiles & trr & read & 0.0008243 & 6 & 0.193 & masses, constraints, precision \\
+chemfiles & trr & write & 0.001813 & 12 & 0.193 & masses, constraints, precision \\
+chemfiles & ncdf & read & 0.0007832 & 12 & 0.193 & masses, constraints, precision \\
+chemfiles & ncdf & write & 0.002157 & 12 & 0.193 & masses, constraints, precision \\
+ase & extxyz & read & 0.01535 & 6 & 1.001 & none \\
+ase & extxyz & write & 0.03481 & 6 & 1.001 & none \\
+ase & extxyz.gz & read & 0.02165 & 6 & 0.02326 & none \\
+ase & extxyz.gz & write & 0.07552 & 6 & 0.02326 & none \\
+mdanalysis & pdb & read & 0.01543 & 6 & 0.6483 & velocities, constraints, precision \\
+mdanalysis & pdb & write & 0.05474 & 6 & 0.6483 & velocities, constraints, precision \\
+mdanalysis & dcd & read & 0.0005195 & 6 & 0.097 & masses, velocities, constraints, precision \\
+mdanalysis & dcd & write & 0.001252 & 6 & 0.097 & masses, velocities, constraints, precision \\
+mdanalysis & xtc & read & 0.001359 & 6 & 0.02957 & masses, velocities, constraints, precision \\
+mdanalysis & xtc & write & 0.001385 & 6 & 0.02957 & masses, velocities, constraints, precision \\
+mdanalysis & ncdf & read & 0.000767 & 6 & 0.1933 & masses, constraints, precision \\
+mdanalysis & ncdf & write & 0.003937 & 6 & 0.1933 & masses, constraints, precision \\
+ovito & xyz & read & 0.003237 & 12 & 0.2871 & constraints \\
+ovito & xyz & write & 0.008454 & 6 & 0.2871 & constraints \\
 \bottomrule
-\end{tabular}
+\end{longtable}
 }
-\end{table}

@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""Camp5c write-scaling tables and the h2h9 million-atom cross-format table.
+"""Camp5c write-scaling tables.
 
 Write scaling is bench/h2h/scaling/camp5c at CAMP5C, on the model 173 host.
-CON-bin rows are pending h2h10. Weak-write efficiencies stay pending.
+The cross-format table is h2h12, written by make_tables.cross_format.
 """
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-H2H9 = REPO / "bench" / "h2h" / "scaling" / "h2h9"
 OUT = REPO / "paper" / "cpc" / "src" / "campaign" / "final"
-TIP = "c8ee7096539fc06ff3db0bc3242238f64b1170fc"
 # Directory commit on feat/release-0.23.0. The JSON commit field is not on the branch.
 CAMP5C = "dc9abaf5a08e92c9a2b78d624b586fccea8928e2"
 
@@ -110,68 +106,9 @@ def write_scaling(host: str) -> str:
 
 
 def h2h9_table(host: str) -> str:
-    raw = (H2H9 / "cross-format.tsv").read_text(encoding="utf-8")
-    lines = raw.splitlines()
-    if not lines[0].startswith("commit "):
-        raise SystemExit("h2h9 tsv has no commit line")
-    record = lines[0].split()[1]
-    rows = list(csv.DictReader(io.StringIO("\n".join(lines[1:])), delimiter="\t"))
-    body = []
-    for row in rows:
-        if row["structure"] != "1M" or row["format"] == "conbin":
-            continue
-        if (row["tool"], row["format"], row["op"]) in {
-            ("chemfiles", "con", "write"),
-            ("readcon", "chemfiles.Frame", "write"),
-        }:
-            body.append(r"chemfiles & con & write & no writer &  &  \\")
-            continue
-        if (row["tool"], row["format"], row["op"]) == ("chemfiles", "con", "read"):
-            row = {**row, "tool": "readcon", "format": "chemfiles.Frame"}
-        loses = row["loses"]
-        if loses.startswith("unsupported") or not row["median_s"].strip():
-            timing = "unsupported"
-            size = ""
-        else:
-            timing = sig(row["median_s"])
-            size = sig(int(row["file_bytes"]) / (1024 * 1024))
-        drops = esc(loses.replace(",", ", "))
-        body.append(
-            f"{esc(row['tool'])} & {esc(row['format'])} & {esc(row['op'])} "
-            f"& {timing} & {size} & {drops} \\\\"
-        )
-    body.append(
-        r"readcon & conbin & read & \multicolumn{3}{l}{pending h2h10} \\"
-    )
-    body.append(
-        r"readcon & conbin & write & \multicolumn{3}{l}{pending h2h10} \\"
-    )
-    caption = (
-        r"One frame of \(10^{6}\) atoms from h2h9. "
-        "Time is the type-7 median in seconds of six samples. "
-        "Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. "
-        "Drops names the fields that format does not keep. "
-        "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
-        "chemfiles has no CON writer. "
-        r"CON-bin rows are pending h2h10. "
-        f"Record \\texttt{{bench/h2h/scaling/h2h9/cross-format.tsv}} at \\texttt{{{TIP}}}. "
-        f"The file's commit line is \\texttt{{{record}}}. "
-        f"{host}"
-    )
-    joined = "\n".join(body)
-    return (
-        "{\\scriptsize\\setlength{\\tabcolsep}{3pt}\n"
-        "\\begin{longtable}{@{}lllrr p{0.30\\textwidth}@{}}\n"
-        f"\\caption{{{caption}}}\\label{{tab:h2h9-1m}}\\\\\n"
-        "\\toprule\n"
-        "Tool & Format & Op & Time (s) & Size & Drops \\\\\n"
-        "\\midrule\n\\endfirsthead\n"
-        "\\caption[]{One frame of \\(10^{6}\\) atoms from h2h9, continued.}\\\\\n"
-        "\\toprule\n"
-        "Tool & Format & Op & Time (s) & Size & Drops \\\\\n"
-        "\\midrule\n\\endhead\n"
-        f"{joined}\n\\bottomrule\n\\end{{longtable}}\n}}\n"
-    )
+    """The h2h9 table is gone. Its chemfiles CON write cells were stubs."""
+    del host
+    raise SystemExit("h2h9_1m.tex was replaced by the h2h12 cross-format tables")
 
 
 def main() -> None:
@@ -179,14 +116,9 @@ def main() -> None:
     host = host_line(hardware["lscpu"])
     if "model 173" not in host:
         raise SystemExit(f"camp5c host is not model 173: {host}")
-    h2h9 = json.loads((H2H9 / "cross-format.json").read_text(encoding="utf-8"))
-    h2h9_host = host_line(h2h9["host"]["lscpu"])
-    if "model 173" not in h2h9_host:
-        raise SystemExit(f"h2h9 host is not model 173: {h2h9_host}")
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "camp5c_writes.tex").write_text(write_scaling(host), encoding="utf-8")
-    (OUT / "h2h9_1m.tex").write_text(h2h9_table(h2h9_host), encoding="utf-8")
-    print("wrote camp5c_writes.tex and h2h9_1m.tex")
+    print("wrote camp5c_writes.tex")
 
 
 if __name__ == "__main__":

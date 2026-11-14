@@ -25,9 +25,34 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
 REL1 = "bench/h2h/scaling/rel1"
-# The printed cross-format table is this file. Later rel1 TSVs remeasured
-# some million-atom rows and do not match. Model 173 records do not either.
+# Peer-table macros still come from this model 207 file. The printed
+# cross-format table is H2H12, not this commit.
 CROSS_COMMIT = "beb158ad7cb9d9e8fbc38c860c85b0b5f343a196"
+H2H12 = "bench/h2h/scaling/h2h12"
+H2H12_COMMIT = "f157a124149b40ba4986f66a993a06f3e32a34e3"
+H2H12_WRITE_COMMIT = "ac25f71298bffa90bc27e63814494250fb992dd9"
+# Formats the cross-format section discusses. A full dump of every tool
+# makes the longtable too long for the section.
+H2H12_FORMATS = (
+    ("readcon", "con"),
+    ("readcon", "con.gz"),
+    ("readcon", "con.zst"),
+    ("readcon", "conbin"),
+    ("readcon", "xyz"),
+    ("readcon", "readcon parse + chemfiles.Frame"),
+    ("chemfiles", "xyz"),
+    ("chemfiles", "dcd"),
+    ("chemfiles", "xtc"),
+    ("chemfiles", "trr"),
+    ("chemfiles", "ncdf"),
+    ("ase", "extxyz"),
+    ("ase", "extxyz.gz"),
+    ("mdanalysis", "pdb"),
+    ("mdanalysis", "dcd"),
+    ("mdanalysis", "xtc"),
+    ("mdanalysis", "ncdf"),
+    ("ovito", "xyz"),
+)
 
 
 def git_show(commit: str, path: str) -> str:
@@ -490,12 +515,18 @@ def con_writer_cell(row: dict) -> tuple[str, str, str] | None:
     """Tool, format and op to print.
 
     None means chemfiles has no CON writer: the row is rendered ``no writer``.
-    A read of that pair is a read of readcon-written CON into a chemfiles.Frame.
+    A read of that pair is a readcon parse copied into a chemfiles.Frame.
     """
     tool, fmt, op = row["tool"], row["format"], row["op"]
+    if str(row.get("median_s", "")).strip() == "no writer":
+        return None
     if (tool, fmt) == ("readcon-chemfiles", "con-via-xyz"):
         tool, fmt = "readcon", "xyz"
-    if (tool, fmt) in {("chemfiles", "con"), ("readcon", "chemfiles.Frame")}:
+    if (tool, fmt) in {
+        ("chemfiles", "con"),
+        ("readcon", "chemfiles.Frame"),
+        ("readcon", "readcon parse + chemfiles.Frame"),
+    }:
         if op == "write":
             return None
         return ("readcon", "chemfiles.Frame", "read")
@@ -503,71 +534,88 @@ def con_writer_cell(row: dict) -> tuple[str, str, str] | None:
 
 
 def cross_format(store: Store, host: str) -> str:
-    """1M-atom frame and trajectory from the pinned rel1 cross-format.tsv.
+    """1M-atom frame and trajectory from h2h12.
 
-    ``store`` and ``host`` are not the source. The cells and the host
-    sentence come from CROSS_COMMIT, family 6 model 207.
+    ``store`` and ``host`` are not the source. The cells come from
+    H2H12_COMMIT, family 6 model 173. Size is decimal megabytes.
     """
     del store, host
-    raw = git_show(CROSS_COMMIT, f"{REL1}/cross-format.tsv")
-    host = host_line(json.loads(git_show(CROSS_COMMIT, f"{REL1}/hardware.json"))["lscpu"])
-    rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
+    raw = git_show(H2H12_COMMIT, f"{H2H12}/cross-format.tsv")
+    lines = raw.splitlines()
+    if not lines or not lines[0].startswith("commit "):
+        raise SystemExit("h2h12 tsv has no commit line")
+    record = lines[0].split()[1]
+    rows = list(csv.DictReader(io.StringIO("\n".join(lines[1:])), delimiter="\t"))
     if not rows or "n" not in rows[0]:
-        raise SystemExit("cross-format.tsv has no n column")
-    chunks = []
+        raise SystemExit("h2h12 cross-format.tsv has no n column")
+    payload = json.loads(git_show(H2H12_COMMIT, f"{H2H12}/cross-format.json"))
+    if payload.get("readcon_write_commit") != H2H12_WRITE_COMMIT:
+        raise SystemExit("h2h12 readcon write commit moved")
+    host = host_line(payload["host"]["lscpu"])
+    index = {(row["structure"], row["tool"], row["format"], row["op"]): row for row in rows}
     specs = (
-        ("1M", r"One frame of \(10^{6}\) atoms.", "tab:cross-1m"),
-        ("traj", "The trajectory.", "tab:cross-traj"),
+        (r"One frame of \(10^{6}\) atoms from h2h12.", "1M", "tab:cross-1m"),
+        ("One trajectory from h2h12.", "traj", "tab:cross-traj"),
     )
-    # chemfiles has no CON writer. A ('chemfiles','con') write, including
-    # one already stored as readcon/chemfiles.Frame, is 'no writer'.
-    # The read is of readcon-written CON into a chemfiles.Frame.
-    # h2h6 renamed ('readcon-chemfiles','con-via-xyz') to readcon/xyz.
-    # chemfiles 0.10.4 reads TRR velocities; the bench copied none, so the
-    # old Drops cell listed them.
-    for structure, title, label in specs:
+    chunks = []
+    for title, structure, label in specs:
         body = []
-        for row in rows:
-            if row["structure"] != structure:
-                continue
-            shown = con_writer_cell(row)
-            if shown is None:
-                body.append(r"chemfiles & con & write & no writer &  &  &  &  \\")
-                continue
-            tool, fmt, op = shown
-            loses = row["loses"]
-            if row["tool"] == "chemfiles" and row["format"] == "trr":
-                loses = loses.replace("velocities,", "").replace(",velocities", "")
-            if loses.startswith("unsupported") or not str(row["median_s"]).strip():
-                warm = "unsupported"
-                cold = ""
-            else:
-                warm = timed(row, "")
-                cold = timed(row, "cold_")
-            body.append(
-                f"{esc(tool)} & {esc(fmt)} & {esc(op)} "
-                f"& {warm} & {cold} "
-                f"& {mib(row['rss_bytes']) if str(row['rss_bytes']).strip() else ''} "
-                f"& {mib(row['file_bytes']) if str(row['file_bytes']).strip() else ''} "
-                f"& {drops(loses)} \\\\"
-            )
-        chunks.append(table(
-            title + " The structure is an orthogonal copper grid with integer coordinates. "
-            "The cell edges are side, side$+$0.5 and side$+$1. "
-            "Compressed sizes depend on that regularity. "
-            "Each tool uses the format in its row. "
-            "Warm is the main read or write: the median in seconds, the interquartile range, and $n$. "
-            "Cold is the cold-cache read, with its own median, interquartile range, and $n$. "
-            "RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. "
+        for tool, fmt in H2H12_FORMATS:
+            for op in ("read", "write"):
+                row = index.get((structure, tool, fmt, op))
+                if row is None:
+                    continue
+                shown = con_writer_cell(row)
+                if shown is None:
+                    body.append(r"chemfiles & con & write & no writer &  &  &  \\")
+                    continue
+                tool_s, fmt_s, op_s = shown
+                loses = row["loses"]
+                if loses.startswith("unsupported") or not str(row["median_s"]).strip():
+                    timing = "unsupported"
+                    count = ""
+                    size = ""
+                else:
+                    timing = sig(float(row["median_s"]))
+                    count = row["n"]
+                    size = (
+                        sig(int(float(row["file_bytes"])) / 1e6)
+                        if str(row["file_bytes"]).strip()
+                        else ""
+                    )
+                body.append(
+                    f"{esc(tool_s)} & {esc(fmt_s)} & {esc(op_s)} "
+                    f"& {timing} & {count} & {size} & {drops(loses)} \\\\"
+                )
+        caption = (
+            f"{title} "
+            "Time is the type-7 median in seconds. "
+            "$n$ is the sample count. "
+            "Rows with $n{=}12$ were repeated because the interquartile range exceeded 5 percent of the median. "
+            "Size is the file in megabytes, the recorded byte count divided by $10^{6}$. "
             "Drops names the fields that format does not keep. "
-            "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
-            "chemfiles has no CON writer.",
-            label,
-            "@{}lllccrrl@{}",
-            r"Tool & Format & Op & Warm (IQR, $n$) & Cold (IQR, $n$) & RSS & File & Drops",
-            body,
-            host,
-        ))
+            "The chemfiles.Frame read is a readcon parse copied into a chemfiles.Frame. "
+            "chemfiles has no CON writer. "
+            f"Record \\texttt{{{H2H12}/cross-format.tsv}} at \\texttt{{{H2H12_COMMIT}}}. "
+            f"The file's commit line is \\texttt{{{record}}}. "
+            f"readcon writes were measured again at \\texttt{{{H2H12_WRITE_COMMIT}}}. "
+            f"{host}"
+        )
+        joined = "\n".join(body)
+        short = title[:-1] if title.endswith(".") else title
+        chunks.append(
+            "{\\scriptsize\\setlength{\\tabcolsep}{3pt}\n"
+            "\\begin{longtable}{@{}lllrr r p{0.28\\textwidth}@{}}\n"
+            f"\\caption{{{caption}}}\\label{{{label}}}\\\\\n"
+            "\\toprule\n"
+            "Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\\\\n"
+            "\\midrule\n\\endfirsthead\n"
+            f"\\caption[]{{{short}, continued.}}\\\\\n"
+            "\\toprule\n"
+            "Tool & Format & Op & Time (s) & $n$ & Size (MB) & Drops \\\\\n"
+            "\\midrule\n\\endhead\n"
+            f"{joined}\n\\bottomrule\n\\end{{longtable}}\n}}\n"
+        )
     return "\n".join(chunks)
 
 
@@ -857,61 +905,9 @@ def figure_tex(out_name: str, graphic: str, caption: str, label: str, host: str)
 
 
 def h2h9_million_tex(tsv: Path, host: str) -> str:
-    """Million-atom h2h9 table. chemfiles has no CON writer."""
-    raw = tsv.read_text(encoding="utf-8")
-    lines = raw.splitlines()
-    if not lines or not lines[0].startswith("commit "):
-        raise SystemExit("h2h9 tsv has no commit line")
-    record = lines[0].split()[1]
-    rows = list(csv.DictReader(io.StringIO("\n".join(lines[1:])), delimiter="\t"))
-    body = []
-    for row in rows:
-        if row["structure"] != "1M" or row["format"] == "conbin":
-            continue
-        shown = con_writer_cell(row)
-        if shown is None:
-            body.append(r"chemfiles & con & write & no writer &  &  \\")
-            continue
-        tool, fmt, op = shown
-        loses = row["loses"]
-        if loses.startswith("unsupported") or not str(row["median_s"]).strip():
-            timing = "unsupported"
-            size = ""
-        else:
-            timing = sig(float(row["median_s"]))
-            size = sig(int(row["file_bytes"]) / (1024 * 1024)) if str(row["file_bytes"]).strip() else ""
-        body.append(
-            f"{esc(tool)} & {esc(fmt)} & {esc(op)} "
-            f"& {timing} & {size} & {drops(loses)} \\\\"
-        )
-    body.append(r"readcon & conbin & read & \multicolumn{3}{l}{pending h2h10} \\")
-    body.append(r"readcon & conbin & write & \multicolumn{3}{l}{pending h2h10} \\")
-    caption = (
-        r"One frame of \(10^{6}\) atoms from h2h9. "
-        "Time is the type-7 median in seconds of six samples. "
-        "Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. "
-        "Drops names the fields that format does not keep. "
-        "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
-        "chemfiles has no CON writer. "
-        r"CON-bin rows are pending h2h10. "
-        f"Record \\texttt{{bench/h2h/scaling/h2h9/cross-format.tsv}} at \\texttt{{c8ee7096539fc06ff3db0bc3242238f64b1170fc}}. "
-        f"The file's commit line is \\texttt{{{record}}}. "
-        f"{host}"
-    )
-    joined = "\n".join(body)
-    return (
-        "{\\scriptsize\\setlength{\\tabcolsep}{3pt}\n"
-        "\\begin{longtable}{@{}lllrr p{0.30\\textwidth}@{}}\n"
-        f"\\caption{{{caption}}}\\label{{tab:h2h9-1m}}\\\\\n"
-        "\\toprule\n"
-        "Tool & Format & Op & Time (s) & Size & Drops \\\\\n"
-        "\\midrule\n\\endfirsthead\n"
-        "\\caption[]{One frame of \\(10^{6}\\) atoms from h2h9, continued.}\\\\\n"
-        "\\toprule\n"
-        "Tool & Format & Op & Time (s) & Size & Drops \\\\\n"
-        "\\midrule\n\\endhead\n"
-        f"{joined}\n\\bottomrule\n\\end{{longtable}}\n}}\n"
-    )
+    """The h2h9 table is gone. h2h12 is cross_format()."""
+    del tsv, host
+    raise SystemExit("h2h9_1m.tex was replaced by the h2h12 cross-format tables")
 
 
 def main() -> None:

@@ -153,7 +153,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 \begin{highlights}
 \item On the CON peer table, readcon reads a million-atom frame in \conReadconMedian~s and ASE takes \conAseMedian~s.
 \item On the extended XYZ peer table, readcon is faster than OVITO, chemfiles and ASE.
-\item In the h2h9 record, CON.zst is the smallest million-atom file that drops nothing.
+\item In the h2h12 record, CON.zst is the smallest million-atom file that drops nothing.
 \item On 10000 frames of 8 atoms, readcon-db inserts in 0.2826~s and the ASE database in 2.524~s.
 \item On the CON peer table, eOn takes longer than readcon on the million-atom frame.
 \end{highlights}
@@ -576,7 +576,7 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \subsection{Computational details}\label{sec:compute}
 The peer tables in this section were timed on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
-The h2h9 and camp5c records are a separate session on a Xeon of family 6, model 173.
+The h2h12 and camp5c records are a separate session on a Xeon of family 6, model 173.
 The readcon-db comparison is the db9 record \path{bench/db9} at \texttt{89105ce4}.
 The reads use readcon-core \benchReadcon\ and Python 3.12.3.
 The libraries beside those reads are NumPy \benchNumpy\ \cite{harrisArrayProgrammingNumpy2020}, ASE \benchAse\ \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz \benchExtxyz\ \cite{kermodeLibatomsExtxyzV0462026}, chemfiles \benchChemfiles\ \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \benchMda\ \cite{gowersMdanalysis21102026} and OVITO \benchOvito\ \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{\benchEon}, after the \eOneEonTag\ release \cite{rohitgoswamiTheochemuieonV3602026}.
@@ -660,22 +660,27 @@ The write rows in those model 207 tables are an earlier session.
 Write scaling in this paper is camp5c.
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
-Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are the model 207 session: one frame of \(10^{6}\) atoms and one trajectory.
+Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are h2h12: one frame of \(10^{6}\) atoms and one trajectory, on the model 173 host.
 Each tool reads and writes the format named in its row.
-The cross-format comparison is Table~\ref{tab:h2h9-1m}, from \path{bench/h2h/scaling/h2h9} at \path{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
-On that million-atom frame, readcon reads plain CON in \hNineConRead~s.
-CON.zst is the smallest file that drops nothing, at \hNineZstMib~MiB.
-ASE's gzipped extended XYZ is \hNineExtxyzGzMib~MiB, \hNineExtxyzGzOverZst\ times CON.zst.
-Among writes that drop nothing, CON.zst is the fastest, at \hNineZstWrite~s.
-Plain CON takes \hNineConWrite~s, \hNineConOverZst\ times that write.
-chemfiles writes DCD in \hNineDcdWrite~s and XTC in \hNineXtcWrite~s.
-Both are faster than CON.zst, and both drop masses, velocities and constraints.
+The record is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
+chemfiles has no CON format.
+The chemfiles.Frame read is a readcon parse copied into a chemfiles.Frame, and its write is no writer.
+On that million-atom frame, readcon reads plain CON in 0.1148~s and writes it in 0.07441~s.
+CON.zst is 1.415~MB and drops nothing.
+XTC is 3.72~MB and drops precision.
+ASE's gzipped extended XYZ is 2.776~MB, 1.96 times CON.zst.
+readcon writes CON.zst in 0.08006~s and CON-bin in 0.03923~s.
+CON-bin drops nothing.
+chemfiles writes DCD in 0.03522~s and XTC in 0.04101~s.
+Both are faster than the plain CON write, and both drop masses, velocities and constraints.
 XTC also drops precision.
-MDAnalysis reads NetCDF, DCD and XTC faster than plain CON.
-OVITO's XYZ read is slower than plain CON.
-ASE's extended XYZ read is \hNineAseOverCon\ times the plain CON read.
+chemfiles reads DCD in 0.1099~s, beside the plain CON read of 0.1148~s.
+readcon writes XYZ in 0.5928~s.
+chemfiles writes XYZ in 0.2973~s.
+MDAnalysis reads DCD in 0.03159~s, XTC in 0.08499~s and NetCDF in 0.03723~s.
+OVITO reads XYZ in 0.2035~s.
+ASE reads extended XYZ in 2.25~s, 19.6 times the plain CON read.
 The million-atom PDB read is unsupported: the atom serial is five digits.
-The CON-bin rows are \todoPending\ until h2h10.
 XTC stores coordinates only, and TRR stores coordinates, velocities and forces \cite{abrahamGromacsHighPerformance2015,krylovLibxtcEfficientLibrary2021,gromacsTrajectoryFormats2026}.
 DCD is the CHARMM coordinate trajectory \cite{brooksCharmmBiomolecular2009}.
 The AMBER NetCDF trajectory stores coordinates and the cell, not a mass or a constraint, and a velocity array is optional \cite{amberNetcdfConvention2026,caseAmberBiomolecularSimulation2005}.
@@ -683,7 +688,7 @@ A PDB ATOM record stores coordinates, occupancy and the temperature factor, not 
 Plain XYZ, as chemfiles and OVITO write it here, is the species and the coordinates \cite{frauxChemfileschemfilesVersion01042023,stukowskiVisualizationAnalysisAtomistic2010}.
 Extended XYZ can carry the extra columns, and the ASE row drops none \cite{kermodeLibatomsExtxyzV0462026,larsenAtomicSimulationEnvironmenta2017}.
 chemfiles 0.10.4 reads the velocities in a TRR file.
-The h2h9 drops cell for TRR lists masses, constraints and precision.
+The TRR row drops masses, constraints and precision.
 A file that drops those fields cannot stand in for a CON file.
 The ASE extended XYZ row drops none.
 \input{campaign/final/cross_format}
@@ -694,7 +699,6 @@ Each median is twelve samples.
 On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.9834 for threaded con-100k, 0.8596 for threaded convel, 0.9493 for MPI con-100k and 0.9667 for MPI convel.
 The convel writer keeps the first header, skips the identifier scan already done while pricing the frame, appends velocity lines to the frame buffer, and releases each worker's mapping on that worker.
 The disk and disk-sync tables are the same record.
-\input{campaign/final/h2h9_1m}
 \input{campaign/final/camp5c_writes}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
@@ -729,7 +733,7 @@ The ASE plugin installs from the repository directory and registers \texttt{read
 The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
-The cross-format comparison is \path{bench/h2h/scaling/h2h9} at \path{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
+The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
 Write scaling is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold-open reads are \path{bench/db13} at \texttt{b6680e00}.
