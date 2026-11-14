@@ -546,7 +546,11 @@ impl PyConFrame {
 
     #[getter]
     fn has_velocities(&self, py: Python<'_>) -> PyResult<bool> {
-        self.section_present(py, self.sections.velocities.is_some(), PyAtomDatum::has_velocity)
+        self.section_present(
+            py,
+            self.sections.velocities.is_some(),
+            PyAtomDatum::has_velocity,
+        )
     }
 
     #[getter]
@@ -638,7 +642,11 @@ impl PyConFrame {
             let mut masses = Vec::with_capacity(n);
             let mut filled = 0usize;
             for (type_index, &count) in header.natms_per_type.iter().enumerate() {
-                let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+                let mass = header
+                    .masses_per_type
+                    .get(type_index)
+                    .copied()
+                    .unwrap_or(0.0);
                 let take = count.min(n.saturating_sub(filled));
                 masses.extend(std::iter::repeat_n(mass, take));
                 filled += take;
@@ -668,7 +676,12 @@ impl PyConFrame {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return self.velocities_array(py);
         }
-        if let Some(values) = copied_frame_row(py, self.sections.velocities.as_ref(), self.slab_index, self.n_atoms)? {
+        if let Some(values) = copied_frame_row(
+            py,
+            self.sections.velocities.as_ref(),
+            self.slab_index,
+            self.n_atoms,
+        )? {
             return Ok(Some(values.into_pyarray(py)));
         }
         if self.columns_index.is_some() {
@@ -699,7 +712,12 @@ impl PyConFrame {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return self.forces_array(py);
         }
-        if let Some(values) = copied_frame_row(py, self.sections.forces.as_ref(), self.slab_index, self.n_atoms)? {
+        if let Some(values) = copied_frame_row(
+            py,
+            self.sections.forces.as_ref(),
+            self.slab_index,
+            self.n_atoms,
+        )? {
             return Ok(Some(values.into_pyarray(py)));
         }
         if self.columns_index.is_some() {
@@ -1401,7 +1419,11 @@ impl PyConFrame {
             let mut filled = 0usize;
             let mut masses = Vec::with_capacity(n);
             for (type_index, &count) in header.natms_per_type.iter().enumerate() {
-                let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+                let mass = header
+                    .masses_per_type
+                    .get(type_index)
+                    .copied()
+                    .unwrap_or(0.0);
                 let take = count.min(n.saturating_sub(filled));
                 masses.extend(std::iter::repeat_n(mass, take));
                 filled += take;
@@ -1425,7 +1447,8 @@ impl PyConFrame {
                 let at = atom.saturating_mul(3);
                 let symbol = columns.symbol_at(*index, atom).to_string();
                 let tri = |row: &Option<Vec<f64>>, axis: usize| {
-                    row.as_ref().and_then(|values| values.get(at + axis).copied())
+                    row.as_ref()
+                        .and_then(|values| values.get(at + axis).copied())
                 };
                 list.append(PyAtomDatum {
                     symbol,
@@ -2487,7 +2510,11 @@ impl ConFrameList {
         let mut masses = Vec::with_capacity(n);
         let mut filled = 0usize;
         for (type_index, &count) in header.natms_per_type.iter().enumerate() {
-            let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+            let mass = header
+                .masses_per_type
+                .get(type_index)
+                .copied()
+                .unwrap_or(0.0);
             let take = count.min(n.saturating_sub(filled));
             masses.extend(std::iter::repeat_n(mass, take));
             filled += take;
@@ -2632,7 +2659,11 @@ impl ConFrameList {
             let header = &columns.headers[columns.header_index[frame] as usize];
             let mut filled = 0usize;
             for (type_index, &count) in header.natms_per_type.iter().enumerate() {
-                let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+                let mass = header
+                    .masses_per_type
+                    .get(type_index)
+                    .copied()
+                    .unwrap_or(0.0);
                 let take = count.min(n_atoms.saturating_sub(filled));
                 masses.extend(std::iter::repeat_n(mass, take));
                 filled += take;
@@ -3218,6 +3249,7 @@ fn list_from_columns(
     slab: Option<Py<PyArray3<f64>>>,
     sections: SectionStore,
     n_bytes: u64,
+    workers: usize,
 ) -> PyResult<Py<ConFrameList>> {
     let n_frames = columns.n_frames;
     let n_atoms = columns.n_atoms;
@@ -3241,7 +3273,7 @@ fn list_from_columns(
             sections,
             columns: Some(std::sync::Arc::new(columns)),
             n_atoms,
-            workers: 1,
+            workers: workers.max(1),
             phases: std::sync::Mutex::new(record),
             pool: std::sync::Mutex::new(None),
         },
@@ -3280,29 +3312,57 @@ fn slab_mut(raw: RawF64) -> &'static mut [f64] {
     unsafe { std::slice::from_raw_parts_mut(raw.ptr, raw.len) }
 }
 
-fn zeros3<'py>(
-    py: Python<'py>,
-    n_frames: usize,
-    n_atoms: usize,
-) -> Bound<'py, PyArray3<f64>> {
+fn zeros3<'py>(py: Python<'py>, n_frames: usize, n_atoms: usize) -> Bound<'py, PyArray3<f64>> {
     numpy::PyArray3::<f64>::zeros(py, [n_frames, n_atoms, 3], false)
 }
 
-fn zeros2<'py>(
-    py: Python<'py>,
-    n_frames: usize,
-    n_atoms: usize,
-) -> Bound<'py, PyArray2<f64>> {
+fn zeros2<'py>(py: Python<'py>, n_frames: usize, n_atoms: usize) -> Bound<'py, PyArray2<f64>> {
     numpy::PyArray2::<f64>::zeros(py, [n_frames, n_atoms], false)
 }
 
-fn read_con_columnar(py: Python<'_>, path: &Path) -> PyResult<Option<Py<ConFrameList>>> {
+fn read_con_columnar(
+    py: Python<'_>,
+    path: &Path,
+    n_threads: Option<usize>,
+) -> PyResult<Option<Py<ConFrameList>>> {
+    let threads = n_threads.unwrap_or(1);
     let path_owned = path.to_owned();
+    if threads >= 2 {
+        let prepared = py.detach(|| -> Option<_> {
+            let n_bytes = std::fs::metadata(&path_owned).ok()?.len();
+            let mut src = crate::compression::open_decoded(Path::new(&path_owned)).ok()?;
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut src, &mut bytes).ok()?;
+            let mut layout = crate::column_read::layout_bytes(&bytes).ok()?;
+            if layout.n_frames < 2 || layout.n_atoms == 0 {
+                return None;
+            }
+            layout.n_bytes = n_bytes;
+            Some((bytes, layout))
+        });
+        let Some((bytes, layout)) = prepared else {
+            return Ok(None);
+        };
+        let offsets = layout.frame_offsets.clone();
+        let frames_end = layout.frames_end;
+        return materialize_columns(py, layout, threads, move |layout, slabs| {
+            crate::column_read::fill_bytes_threaded(
+                &bytes,
+                layout.n_frames,
+                layout.n_atoms,
+                layout.sections,
+                threads,
+                &offsets,
+                frames_end,
+                slabs,
+            )
+        });
+    }
     let layout = match py.detach(|| crate::column_read::layout_path(Path::new(&path_owned))) {
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
-    materialize_columns(py, layout, move |layout, slabs| {
+    materialize_columns(py, layout, threads, move |layout, slabs| {
         crate::column_read::fill_path(
             Path::new(&path_owned),
             layout.n_frames,
@@ -3313,7 +3373,12 @@ fn read_con_columnar(py: Python<'_>, path: &Path) -> PyResult<Option<Py<ConFrame
     })
 }
 
-fn read_string_columnar(py: Python<'_>, contents: &str) -> PyResult<Option<Py<ConFrameList>>> {
+fn read_string_columnar(
+    py: Python<'_>,
+    contents: &str,
+    n_threads: Option<usize>,
+) -> PyResult<Option<Py<ConFrameList>>> {
+    let threads = n_threads.unwrap_or(1);
     // The argument keeps the Python string alive. Parsing borrows those
     // bytes with the GIL released, so the trajectory is not copied first.
     let bytes = contents.as_bytes();
@@ -3321,25 +3386,41 @@ fn read_string_columnar(py: Python<'_>, contents: &str) -> PyResult<Option<Py<Co
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
-    materialize_columns(py, layout, |layout, slabs| {
-        crate::column_read::fill_bytes(
-            bytes,
-            layout.n_frames,
-            layout.n_atoms,
-            layout.sections,
-            slabs,
-        )
+    let offsets = layout.frame_offsets.clone();
+    let frames_end = layout.frames_end;
+    materialize_columns(py, layout, threads, |layout, slabs| {
+        if threads >= 2 {
+            crate::column_read::fill_bytes_threaded(
+                bytes,
+                layout.n_frames,
+                layout.n_atoms,
+                layout.sections,
+                threads,
+                &offsets,
+                frames_end,
+                slabs,
+            )
+        } else {
+            crate::column_read::fill_bytes(
+                bytes,
+                layout.n_frames,
+                layout.n_atoms,
+                layout.sections,
+                slabs,
+            )
+        }
     })
 }
 
 fn materialize_columns(
     py: Python<'_>,
     layout: crate::column_read::Layout,
+    workers: usize,
     fill: impl FnOnce(
-            crate::column_read::Layout,
-            crate::column_read::Slabs<'_>,
-        ) -> Result<crate::column_read::Columns, ()>
-        + Send,
+        crate::column_read::Layout,
+        crate::column_read::Slabs<'_>,
+    ) -> Result<crate::column_read::Columns, ()>
+    + Send,
 ) -> PyResult<Option<Py<ConFrameList>>> {
     if layout.n_frames == 0 || layout.n_atoms == 0 {
         return list_from_columns(
@@ -3348,6 +3429,7 @@ fn materialize_columns(
             None,
             SectionStore::default(),
             layout.n_bytes,
+            workers,
         )
         .map(Some);
     }
@@ -3355,16 +3437,34 @@ fn materialize_columns(
     let n_atoms = layout.n_atoms;
     let n_bytes = layout.n_bytes;
     let mut positions = zeros3(py, n_frames, n_atoms);
-    let mut velocities = layout.sections.velocities.then(|| zeros3(py, n_frames, n_atoms));
-    let mut forces = layout.sections.forces.then(|| zeros3(py, n_frames, n_atoms));
-    let mut magmoms = layout.sections.magmoms.then(|| zeros3(py, n_frames, n_atoms));
+    let mut velocities = layout
+        .sections
+        .velocities
+        .then(|| zeros3(py, n_frames, n_atoms));
+    let mut forces = layout
+        .sections
+        .forces
+        .then(|| zeros3(py, n_frames, n_atoms));
+    let mut magmoms = layout
+        .sections
+        .magmoms
+        .then(|| zeros3(py, n_frames, n_atoms));
     let mut displacements = layout
         .sections
         .displacements
         .then(|| zeros3(py, n_frames, n_atoms));
-    let mut spreads = layout.sections.spreads.then(|| zeros3(py, n_frames, n_atoms));
-    let mut energies = layout.sections.energies.then(|| zeros2(py, n_frames, n_atoms));
-    let mut charges = layout.sections.charges.then(|| zeros2(py, n_frames, n_atoms));
+    let mut spreads = layout
+        .sections
+        .spreads
+        .then(|| zeros3(py, n_frames, n_atoms));
+    let mut energies = layout
+        .sections
+        .energies
+        .then(|| zeros2(py, n_frames, n_atoms));
+    let mut charges = layout
+        .sections
+        .charges
+        .then(|| zeros2(py, n_frames, n_atoms));
     let mut spins = layout.sections.spins.then(|| zeros2(py, n_frames, n_atoms));
     let raw = |array: &mut Bound<'_, PyArray3<f64>>| -> PyResult<RawF64> {
         let slice = unsafe { array.as_slice_mut() }.map_err(|err| {
@@ -3432,6 +3532,7 @@ fn materialize_columns(
         Some(positions.unbind()),
         sections,
         n_bytes,
+        workers,
     )
     .map(Some)
 }
@@ -3441,7 +3542,7 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    if let Some(list) = read_con_columnar(py, Path::new(path))? {
+    if let Some(list) = read_con_columnar(py, Path::new(path), n_threads)? {
         return Ok(list);
     }
     let (
@@ -3763,7 +3864,7 @@ fn read_con_string(
 ) -> PyResult<Py<ConFrameList>> {
     // A coordinate-only string stays borrowed. The full clone is only the
     // path that keeps every frame, which also releases the GIL.
-    if let Some(list) = read_string_columnar(py, contents)? {
+    if let Some(list) = read_string_columnar(py, contents, n_threads)? {
         return Ok(list);
     }
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
@@ -4047,7 +4148,7 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
         return Err(PyValueError::new_err("mmap and stream cannot both be true"));
     }
     if !mmap && !stream {
-        if let Some(list) = read_con_columnar(py, Path::new(path))? {
+        if let Some(list) = read_con_columnar(py, Path::new(path), None)? {
             return Ok(PyConFrameIterator {
                 source: FrameSource::Columns(list),
                 line_base: 0,
@@ -4375,6 +4476,11 @@ fn column_frame_for_write(
     }
 }
 
+/// Stored frames from a `read_con` result, in order.
+///
+/// A slot that is still held is cloned. A slot already moved into a Python
+/// frame is rebuilt from that frame. Collective and serial writes of the
+/// same result then start from the same frames.
 fn con_frame_list_stored(
     py: Python<'_>,
     list: &Bound<'_, ConFrameList>,
@@ -4440,11 +4546,7 @@ fn chunk_wide_frame(frames: &Bound<'_, PyAny>, compression_members: Option<usize
                 .map(|frame| frame.atom_data.len())
                 .unwrap_or(0)
         };
-        if stored > 0 {
-            stored
-        } else {
-            borrowed.n_atoms
-        }
+        if stored > 0 { stored } else { borrowed.n_atoms }
     } else if frames.len().ok() == Some(1) {
         // A one-element Python list still goes through the chunk path only
         // when the formatted text is large. `plain_binding_bytes` decides

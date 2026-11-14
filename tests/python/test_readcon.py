@@ -170,6 +170,33 @@ class TestReadCon:
             original = getattr(loaded[2].atoms[1], attr)
             assert later == pytest.approx(original)
 
+    def test_thread_counts_read_the_same_bytes(self, tmp_path):
+        import numpy as np
+
+        names = (
+            "tiny_cuh2.con",
+            "tiny_multi_cuh2.con",
+            "tiny_multi_cuh2.convel",
+            "tiny_cuh2_forces.con",
+        )
+        for name in names:
+            with open(_resource(name), encoding="utf-8") as handle:
+                text = handle.read()
+            path = tmp_path / name
+            path.write_text(text * 6)
+            one = readcon.read_con(str(path), n_threads=1)
+            eight = readcon.read_con(str(path), n_threads=8)
+            assert len(one) == len(eight) == 6 * (2 if "multi" in name else 1)
+            xyz_one = np.stack([np.asarray(frame.xyz) for frame in one])
+            xyz_eight = np.stack([np.asarray(frame.xyz) for frame in eight])
+            assert np.array_equal(xyz_one, xyz_eight)
+            assert one[2].atoms[0].atom_id == eight[2].atoms[0].atom_id
+            assert one[2].atoms[0].fixed == eight[2].atoms[0].fixed
+            if name.endswith(".convel"):
+                assert one[3].atoms[1].vx == pytest.approx(eight[3].atoms[1].vx)
+            if name.endswith("_forces.con"):
+                assert one[4].atoms[0].fx == pytest.approx(eight[4].atoms[0].fx)
+
     def test_mass_column_comes_from_the_header(self):
         import numpy as np
 

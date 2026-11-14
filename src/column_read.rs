@@ -1,11 +1,13 @@
 //! Rectangular trajectories as columns.
 //!
-//! One streaming pass counts frames and reads the section shape, skipping
-//! atom bodies after the first frame. A second pass is the only full parse:
-//! it writes coordinates and any per-atom section into caller-owned slabs.
-//! Ids, fixed flags, and the symbol index are stored once when every frame
-//! has the same atoms, and per frame when they change. The source window
-//! stays near one frame, so the file is not retained next to the slabs.
+//! One streaming pass counts frames, records each frame's decoded byte
+//! offset, and reads the section shape, skipping atom bodies after the
+//! first frame. A second pass is the only full parse: it writes coordinates
+//! and any per-atom section into caller-owned slabs. One thread streams
+//! that pass. Two or more threads each parse the frames in their own offset
+//! range and write that range of the slabs. Ids, fixed flags, and the
+//! symbol index are stored once when every frame has the same atoms, and
+//! per frame when they change.
 
 use crate::iterators::ConFrameIterator;
 use crate::stream::settled;
@@ -59,6 +61,10 @@ pub struct Layout {
     pub n_atoms: usize,
     pub n_bytes: u64,
     pub sections: SectionFlags,
+    /// Decoded-byte start of each frame, in order.
+    pub frame_offsets: Vec<usize>,
+    /// Decoded-byte offset just past the last frame.
+    pub frames_end: usize,
 }
 
 /// Caller-owned section slabs. Absent sections are `None`.
@@ -205,6 +211,9 @@ fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
     let mut n_atoms = 0usize;
     let mut sections = SectionFlags::default();
     let mut shaped = false;
+    // `file_pos` is the decoded offset of `buf[0]`.
+    let mut file_pos = 0usize;
+    let mut frame_offsets = Vec::new();
     loop {
         if !shaped {
             match take_frame(&buf, eof)? {
@@ -214,6 +223,8 @@ fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
                     sections = flags;
                     n_frames = 1;
                     shaped = true;
+                    frame_offsets.push(file_pos);
+                    file_pos += end;
                     buf.drain(..end);
                     shrink(&mut buf);
                 }
@@ -224,6 +235,8 @@ fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
             match skip_frame(&buf, eof)? {
                 Some(end) => {
                     n_frames += 1;
+                    frame_offsets.push(file_pos);
+                    file_pos += end;
                     buf.drain(..end);
                     shrink(&mut buf);
                 }
@@ -237,6 +250,8 @@ fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
         n_atoms,
         n_bytes,
         sections,
+        frame_offsets,
+        frames_end: file_pos,
     })
 }
 
@@ -380,31 +395,19 @@ fn push_frame(
         [item.x(), item.y(), item.z()]
     })?;
     if let Some(dest) = slabs.velocities.as_deref_mut() {
-        write_vec3(
-            frame_index,
-            n,
-            dest,
-            frame.velocities.f64_slice(),
-            |atom| frame.velocities.as_f64_row(atom),
-        )?;
+        write_vec3(frame_index, n, dest, frame.velocities.f64_slice(), |atom| {
+            frame.velocities.as_f64_row(atom)
+        })?;
     }
     if let Some(dest) = slabs.forces.as_deref_mut() {
-        write_vec3(
-            frame_index,
-            n,
-            dest,
-            frame.forces.f64_slice(),
-            |atom| frame.forces.as_f64_row(atom),
-        )?;
+        write_vec3(frame_index, n, dest, frame.forces.f64_slice(), |atom| {
+            frame.forces.as_f64_row(atom)
+        })?;
     }
     if let Some(dest) = slabs.magmoms.as_deref_mut() {
-        write_vec3(
-            frame_index,
-            n,
-            dest,
-            frame.magmoms.f64_slice(),
-            |atom| frame.magmoms.as_f64_row(atom),
-        )?;
+        write_vec3(frame_index, n, dest, frame.magmoms.f64_slice(), |atom| {
+            frame.magmoms.as_f64_row(atom)
+        })?;
     }
     if let Some(dest) = slabs.displacements.as_deref_mut() {
         write_vec3(
@@ -416,13 +419,9 @@ fn push_frame(
         )?;
     }
     if let Some(dest) = slabs.spreads.as_deref_mut() {
-        write_vec3(
-            frame_index,
-            n,
-            dest,
-            frame.spreads.f64_slice(),
-            |atom| frame.spreads.as_f64_row(atom),
-        )?;
+        write_vec3(frame_index, n, dest, frame.spreads.f64_slice(), |atom| {
+            frame.spreads.as_f64_row(atom)
+        })?;
     }
     if let Some(dest) = slabs.energies.as_deref_mut() {
         write_vec1(
@@ -434,22 +433,14 @@ fn push_frame(
         )?;
     }
     if let Some(dest) = slabs.charges.as_deref_mut() {
-        write_vec1(
-            frame_index,
-            n,
-            dest,
-            frame.charges.f64_slice(),
-            |atom| frame.charges.get_f64(atom),
-        )?;
+        write_vec1(frame_index, n, dest, frame.charges.f64_slice(), |atom| {
+            frame.charges.get_f64(atom)
+        })?;
     }
     if let Some(dest) = slabs.spins.as_deref_mut() {
-        write_vec1(
-            frame_index,
-            n,
-            dest,
-            frame.spins.f64_slice(),
-            |atom| frame.spins.get_f64(atom),
-        )?;
+        write_vec1(frame_index, n, dest, frame.spins.f64_slice(), |atom| {
+            frame.spins.get_f64(atom)
+        })?;
     }
     push_identity(frame, frame_index, columns, symbols)?;
     let header_at = if columns
@@ -467,6 +458,27 @@ fn push_frame(
 }
 
 fn fill_reader<R: Read>(
+    src: R,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    slabs: Slabs<'_>,
+    threads: usize,
+    offsets: &[usize],
+    frames_end: usize,
+) -> Result<Columns, ()> {
+    if threads >= 2 && n_frames >= 2 && offsets.len() == n_frames && frames_end > 0 {
+        let mut src = src;
+        let mut bytes = Vec::new();
+        src.read_to_end(&mut bytes).map_err(|_| ())?;
+        return fill_threaded(
+            &bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, slabs, None,
+        );
+    }
+    fill_reader_serial(src, n_frames, n_atoms, sections, slabs)
+}
+
+fn fill_reader_serial<R: Read>(
     src: R,
     n_frames: usize,
     n_atoms: usize,
@@ -512,7 +524,27 @@ pub fn fill_path(
     slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
     let src = crate::compression::open_decoded(path).map_err(|_| ())?;
-    fill_reader(src, n_frames, n_atoms, sections, slabs)
+    fill_reader(src, n_frames, n_atoms, sections, slabs, 1, &[], 0)
+}
+
+/// Fill slabs from `offsets` recorded by the layout pass.
+///
+/// `threads < 2` is the serial fill. Each worker parses its own frames and
+/// writes only that frame's slice of the slabs.
+pub fn fill_path_threaded(
+    path: &Path,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    offsets: &[usize],
+    frames_end: usize,
+    slabs: Slabs<'_>,
+) -> Result<Columns, ()> {
+    let src = crate::compression::open_decoded(path).map_err(|_| ())?;
+    fill_reader(
+        src, n_frames, n_atoms, sections, slabs, threads, offsets, frames_end,
+    )
 }
 
 pub fn fill_bytes(
@@ -528,6 +560,361 @@ pub fn fill_bytes(
         n_atoms,
         sections,
         slabs,
+        1,
+        &[],
+        0,
+    )
+}
+
+pub fn fill_bytes_threaded(
+    bytes: &[u8],
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    offsets: &[usize],
+    frames_end: usize,
+    slabs: Slabs<'_>,
+) -> Result<Columns, ()> {
+    if threads < 2 || n_frames < 2 || offsets.len() != n_frames || frames_end == 0 {
+        return fill_bytes(bytes, n_frames, n_atoms, sections, slabs);
+    }
+    fill_threaded(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, slabs, None,
+    )
+}
+
+struct Piece {
+    flags: Vec<u8>,
+    ids: Vec<u64>,
+    sym_index: Vec<u32>,
+    symbols: Vec<Arc<str>>,
+    header: FrameHeader,
+}
+
+fn piece_symbols_match(left: &Piece, right: &Piece) -> bool {
+    left.sym_index.len() == right.sym_index.len()
+        && left
+            .sym_index
+            .iter()
+            .zip(right.sym_index.iter())
+            .all(|(a, b)| left.symbols[*a as usize].as_ref() == right.symbols[*b as usize].as_ref())
+}
+
+fn piece_from_frame(
+    frame: &ConFrame,
+    n_atoms: usize,
+    sections: SectionFlags,
+    slabs: &mut Slabs<'_>,
+) -> Result<Piece, ()> {
+    let mut columns = Columns {
+        n_frames: 1,
+        n_atoms,
+        flags: Vec::with_capacity(n_atoms),
+        ids: Vec::with_capacity(n_atoms),
+        sym_index: Vec::with_capacity(n_atoms),
+        symbols: Vec::new(),
+        identity_shared: true,
+        headers: Vec::new(),
+        header_index: Vec::with_capacity(1),
+    };
+    let mut symbols = HashMap::new();
+    push_frame(frame, 0, sections, slabs, &mut columns, &mut symbols)?;
+    let header = columns.headers.pop().ok_or(())?;
+    Ok(Piece {
+        flags: columns.flags,
+        ids: columns.ids,
+        sym_index: columns.sym_index,
+        symbols: columns.symbols,
+        header,
+    })
+}
+
+fn merge_pieces(pieces: Vec<Piece>, n_frames: usize, n_atoms: usize) -> Result<Columns, ()> {
+    if pieces.len() != n_frames || pieces.is_empty() {
+        return Err(());
+    }
+    let shared = pieces.iter().skip(1).all(|piece| {
+        piece.flags == pieces[0].flags
+            && piece.ids == pieces[0].ids
+            && piece_symbols_match(piece, &pieces[0])
+    });
+    let (flags, ids, sym_index, symbols, identity_shared) = if shared {
+        let first = &pieces[0];
+        (
+            first.flags.clone(),
+            first.ids.clone(),
+            first.sym_index.clone(),
+            first.symbols.clone(),
+            true,
+        )
+    } else {
+        let mut table = Vec::new();
+        let mut map = HashMap::new();
+        let mut flags = Vec::with_capacity(n_frames.saturating_mul(n_atoms));
+        let mut ids = Vec::with_capacity(flags.capacity());
+        let mut sym_index = Vec::with_capacity(flags.capacity());
+        for piece in &pieces {
+            if piece.flags.len() != n_atoms || piece.ids.len() != n_atoms {
+                return Err(());
+            }
+            for atom in 0..n_atoms {
+                flags.push(piece.flags[atom]);
+                ids.push(piece.ids[atom]);
+                let name = &piece.symbols[piece.sym_index[atom] as usize];
+                sym_index.push(intern(&mut table, &mut map, name));
+            }
+        }
+        (flags, ids, sym_index, table, false)
+    };
+    let mut headers = Vec::new();
+    let mut header_index = Vec::with_capacity(n_frames);
+    for piece in &pieces {
+        let at = if headers.last().is_some_and(|kept| kept == &piece.header) {
+            (headers.len() - 1) as u32
+        } else {
+            headers.push(piece.header.clone());
+            (headers.len() - 1) as u32
+        };
+        header_index.push(at);
+    }
+    Ok(Columns {
+        n_frames,
+        n_atoms,
+        flags,
+        ids,
+        sym_index,
+        symbols,
+        identity_shared,
+        headers,
+        header_index,
+    })
+}
+
+struct RawSlabs {
+    positions: *mut f64,
+    velocities: Option<*mut f64>,
+    forces: Option<*mut f64>,
+    energies: Option<*mut f64>,
+    charges: Option<*mut f64>,
+    spins: Option<*mut f64>,
+    magmoms: Option<*mut f64>,
+    displacements: Option<*mut f64>,
+    spreads: Option<*mut f64>,
+}
+
+unsafe impl Send for RawSlabs {}
+unsafe impl Sync for RawSlabs {}
+
+fn raw_slabs(slabs: &mut Slabs<'_>) -> RawSlabs {
+    RawSlabs {
+        positions: slabs.positions.as_mut_ptr(),
+        velocities: slabs.velocities.as_mut().map(|slice| slice.as_mut_ptr()),
+        forces: slabs.forces.as_mut().map(|slice| slice.as_mut_ptr()),
+        energies: slabs.energies.as_mut().map(|slice| slice.as_mut_ptr()),
+        charges: slabs.charges.as_mut().map(|slice| slice.as_mut_ptr()),
+        spins: slabs.spins.as_mut().map(|slice| slice.as_mut_ptr()),
+        magmoms: slabs.magmoms.as_mut().map(|slice| slice.as_mut_ptr()),
+        displacements: slabs.displacements.as_mut().map(|slice| slice.as_mut_ptr()),
+        spreads: slabs.spreads.as_mut().map(|slice| slice.as_mut_ptr()),
+    }
+}
+
+/// `slabs` must be large enough for every frame. Each call uses one frame's range.
+unsafe fn frame_slabs(raw: &RawSlabs, frame: usize, n_atoms: usize) -> Slabs<'static> {
+    let stride3 = n_atoms.saturating_mul(3);
+    let at3 = frame.saturating_mul(stride3);
+    let at1 = frame.saturating_mul(n_atoms);
+    unsafe {
+        Slabs {
+            positions: std::slice::from_raw_parts_mut(raw.positions.add(at3), stride3),
+            velocities: raw
+                .velocities
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at3), stride3)),
+            forces: raw
+                .forces
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at3), stride3)),
+            energies: raw
+                .energies
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at1), n_atoms)),
+            charges: raw
+                .charges
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at1), n_atoms)),
+            spins: raw
+                .spins
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at1), n_atoms)),
+            magmoms: raw
+                .magmoms
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at3), stride3)),
+            displacements: raw
+                .displacements
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at3), stride3)),
+            spreads: raw
+                .spreads
+                .map(|ptr| std::slice::from_raw_parts_mut(ptr.add(at3), stride3)),
+        }
+    }
+}
+
+fn note_worker(note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>) {
+    let Some(note) = note else {
+        return;
+    };
+    std::thread_local! {
+        static SEEN: std::cell::Cell<*const ()> = const { std::cell::Cell::new(std::ptr::null()) };
+    }
+    let key = note as *const _ as *const ();
+    SEEN.with(|seen| {
+        if seen.get() == key {
+            return;
+        }
+        seen.set(key);
+        if let Ok(mut guard) = note.lock() {
+            guard.insert(std::thread::current().id());
+        }
+    });
+}
+
+fn fill_threaded(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    mut slabs: Slabs<'_>,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Columns, ()> {
+    let stride3 = n_atoms.saturating_mul(3);
+    let need3 = n_frames.saturating_mul(stride3);
+    let need1 = n_frames.saturating_mul(n_atoms);
+    if slabs.positions.len() < need3 {
+        return Err(());
+    }
+    if slabs
+        .velocities
+        .as_ref()
+        .is_some_and(|slice| slice.len() < need3)
+        || slabs
+            .forces
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need3)
+        || slabs
+            .magmoms
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need3)
+        || slabs
+            .displacements
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need3)
+        || slabs
+            .spreads
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need3)
+        || slabs
+            .energies
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need1)
+        || slabs
+            .charges
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need1)
+        || slabs
+            .spins
+            .as_ref()
+            .is_some_and(|slice| slice.len() < need1)
+    {
+        return Err(());
+    }
+    let raw = raw_slabs(&mut slabs);
+    let pieces = fill_pieces(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &raw, note,
+    )?;
+    merge_pieces(pieces, n_frames, n_atoms)
+}
+
+#[cfg(feature = "parallel")]
+fn fill_pieces(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    raw: &RawSlabs,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Vec<Piece>, ()> {
+    let workers = threads.min(n_frames).max(2);
+    let chunk = n_frames.div_ceil(workers);
+    crate::parser::on_pool(workers, || {
+        use rayon::prelude::*;
+        let groups: Result<Vec<Vec<Piece>>, ()> = (0..workers)
+            .into_par_iter()
+            .map(|worker| {
+                note_worker(note);
+                let start = worker * chunk;
+                let end = (start + chunk).min(n_frames);
+                fill_worker_range(
+                    bytes, offsets, frames_end, start, end, n_atoms, sections, raw,
+                )
+            })
+            .collect();
+        groups.map(|groups| groups.into_iter().flatten().collect())
+    })
+}
+
+fn fill_worker_range(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    start: usize,
+    end: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    raw: &RawSlabs,
+) -> Result<Vec<Piece>, ()> {
+    if start >= end {
+        return Ok(Vec::new());
+    }
+    let range_start = *offsets.get(start).ok_or(())?;
+    let range_end = if end == offsets.len() {
+        frames_end
+    } else {
+        *offsets.get(end).ok_or(())?
+    };
+    if range_start > range_end || range_end > bytes.len() {
+        return Err(());
+    }
+    let mut it = ConFrameIterator::from_bytes(&bytes[range_start..range_end]);
+    let mut pieces = Vec::with_capacity(end - start);
+    for frame in start..end {
+        let parsed = match it.next() {
+            Some(Ok(frame)) => frame,
+            _ => return Err(()),
+        };
+        let mut dest = unsafe { frame_slabs(raw, frame, n_atoms) };
+        pieces.push(piece_from_frame(&parsed, n_atoms, sections, &mut dest)?);
+    }
+    Ok(pieces)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn fill_pieces(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    _threads: usize,
+    raw: &RawSlabs,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Vec<Piece>, ()> {
+    note_worker(note);
+    fill_worker_range(
+        bytes, offsets, frames_end, 0, n_frames, n_atoms, sections, raw,
     )
 }
 
@@ -563,12 +950,7 @@ impl Columns {
             let coords = &positions[start..start + stride];
             let symbols = (0..self.n_atoms).map(|atom| self.symbol_at(frame, atom));
             let header = &self.headers[self.header_index[frame] as usize];
-            acc ^= crate::iterators::hash_touch_frame(
-                frame as u64,
-                header.boxl,
-                symbols,
-                coords,
-            );
+            acc ^= crate::iterators::hash_touch_frame(frame as u64, header.boxl, symbols, coords);
         }
         acc
     }
@@ -857,5 +1239,187 @@ Coordinates of Component 1
             empty_slabs(&mut positions),
         );
         assert!(filled.is_err());
+    }
+
+    fn fill_both(bytes: &[u8]) -> (Columns, Vec<f64>, Columns, Vec<f64>, Vec<f64>, Vec<f64>) {
+        let layout = layout_bytes(bytes).expect("layout");
+        assert_eq!(layout.frame_offsets.len(), layout.n_frames);
+        if layout.n_frames > 0 {
+            assert!(layout.frame_offsets[0] <= layout.frames_end);
+            assert!(layout.frames_end <= bytes.len());
+        }
+        let n3 = layout.n_frames * layout.n_atoms * 3;
+        let mut serial_pos = vec![0.0; n3];
+        let mut serial_extra = vec![0.0; n3];
+        let mut serial_slabs = empty_slabs(&mut serial_pos);
+        if layout.sections.velocities {
+            serial_slabs.velocities = Some(serial_extra.as_mut_slice());
+        } else if layout.sections.forces {
+            serial_slabs.forces = Some(serial_extra.as_mut_slice());
+        }
+        let serial = fill_bytes(
+            bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            serial_slabs,
+        )
+        .expect("serial");
+        let mut thread_pos = vec![0.0; n3];
+        let mut thread_extra = vec![0.0; n3];
+        let mut thread_slabs = empty_slabs(&mut thread_pos);
+        if layout.sections.velocities {
+            thread_slabs.velocities = Some(thread_extra.as_mut_slice());
+        } else if layout.sections.forces {
+            thread_slabs.forces = Some(thread_extra.as_mut_slice());
+        }
+        let threaded = fill_bytes_threaded(
+            bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            8,
+            &layout.frame_offsets,
+            layout.frames_end,
+            thread_slabs,
+        )
+        .expect("threaded");
+        (
+            serial,
+            serial_extra,
+            threaded,
+            thread_pos,
+            thread_extra,
+            serial_pos,
+        )
+    }
+
+    fn assert_same_columns(bytes: &[u8]) {
+        let (serial, serial_extra, threaded, thread_pos, thread_extra, serial_pos) =
+            fill_both(bytes);
+        assert_eq!(serial.n_frames, threaded.n_frames);
+        assert_eq!(serial.n_atoms, threaded.n_atoms);
+        assert_eq!(serial.identity_shared, threaded.identity_shared);
+        assert_eq!(serial.flags, threaded.flags);
+        assert_eq!(serial.ids, threaded.ids);
+        assert_eq!(serial_pos, thread_pos);
+        assert_eq!(serial_extra, thread_extra);
+        for frame in 0..serial.n_frames {
+            assert_eq!(
+                serial.headers[serial.header_index[frame] as usize].boxl,
+                threaded.headers[threaded.header_index[frame] as usize].boxl
+            );
+            for atom in 0..serial.n_atoms {
+                assert_eq!(
+                    serial.symbol_at(frame, atom),
+                    threaded.symbol_at(frame, atom)
+                );
+            }
+        }
+        assert_eq!(
+            serial.touch_checksum(&serial_pos),
+            threaded.touch_checksum(&thread_pos)
+        );
+    }
+
+    #[test]
+    fn threaded_fill_matches_the_serial_fill() {
+        for name in [
+            "resources/test/tiny_cuh2.con",
+            "resources/test/tiny_multi_cuh2.con",
+            "resources/test/tiny_multi_cuh2.convel",
+            "resources/test/tiny_cuh2_forces.con",
+        ] {
+            let src = std::fs::read(name).unwrap();
+            let mut bytes = Vec::new();
+            for _ in 0..6 {
+                bytes.extend_from_slice(&src);
+            }
+            assert_same_columns(&bytes);
+        }
+        let patched = two_copies_with_second_patched(b'9', 1);
+        assert_same_columns(&patched);
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn threaded_fill_runs_on_several_workers_and_is_not_slower_than_the_frame_parser() {
+        let src = std::fs::read("resources/test/cuh2.con").unwrap();
+        let mut bytes = Vec::new();
+        // A hundred frames is inside the timer noise. Four hundred copies of
+        // the same frame is long enough that a real slowdown shows.
+        for _ in 0..400 {
+            bytes.extend_from_slice(&src);
+        }
+        let layout = layout_bytes(&bytes).expect("layout");
+        assert_eq!(layout.n_frames, 400);
+        assert_eq!(layout.frame_offsets.len(), 400);
+        let n3 = layout.n_frames * layout.n_atoms * 3;
+        let note = std::sync::Mutex::new(std::collections::HashSet::new());
+        let mut once = vec![0.0; n3];
+        fill_threaded(
+            &bytes,
+            &layout.frame_offsets,
+            layout.frames_end,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            8,
+            empty_slabs(&mut once),
+            Some(&note),
+        )
+        .expect("noted fill");
+        let workers = note.lock().expect("workers").len();
+        assert!(
+            workers >= 2,
+            "8 workers were asked and {workers} distinct threads ran"
+        );
+
+        // Debug builds spend their time in checks, so the speed comparison is
+        // the release build used for the timed reads.
+        #[cfg(not(debug_assertions))]
+        {
+            let time_fill = || {
+                let mut positions = vec![0.0; n3];
+                let started = std::time::Instant::now();
+                fill_bytes_threaded(
+                    &bytes,
+                    layout.n_frames,
+                    layout.n_atoms,
+                    layout.sections,
+                    8,
+                    &layout.frame_offsets,
+                    layout.frames_end,
+                    empty_slabs(&mut positions),
+                )
+                .expect("fill");
+                started.elapsed()
+            };
+            let time_bytes = || {
+                let started = std::time::Instant::now();
+                crate::iterators::frames_from_bytes_phased(&bytes, Some(8)).expect("bytes");
+                started.elapsed()
+            };
+            let _ = time_fill();
+            let _ = time_bytes();
+            let mut fill_samples = Vec::new();
+            let mut parser_samples = Vec::new();
+            for _ in 0..9 {
+                fill_samples.push(time_fill());
+                parser_samples.push(time_bytes());
+            }
+            fill_samples.sort();
+            parser_samples.sort();
+            let fill_mid = fill_samples[fill_samples.len() / 2];
+            let parser_mid = parser_samples[parser_samples.len() / 2];
+            // The two parsers tie. A few microseconds is the timer. The serial
+            // column fill this replaces was several times slower.
+            assert!(
+                fill_mid.as_secs_f64() <= parser_mid.as_secs_f64() * 1.05,
+                "column fill {:?} was slower than the frame parser {:?}",
+                fill_mid,
+                parser_mid
+            );
+        }
     }
 }
