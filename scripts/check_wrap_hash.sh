@@ -100,7 +100,7 @@ if command -v curl >/dev/null 2>&1 && command -v sha256sum >/dev/null 2>&1; then
     fi
   else
     rm -f "$asset"
-    ok "GitHub Release asset not published yet (tag tarball)"
+    die "v${cargo_ver} is published but ${source_url} could not be downloaded"
   fi
 fi
 
