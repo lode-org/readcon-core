@@ -1,0 +1,9 @@
+{
+  "fresh_file_each_sample": true,
+  "kept": "fallocate the fresh inode, then spell directly into a shared mapping. The serial multi-frame path uses that store once the frame lengths are priced. No fsync or msync was added.",
+  "rejected": [
+    "MAP_POPULATE and MADV_POPULATE_WRITE were slower than the first touch on a 24 MB and an 80 MB fresh file.",
+    "A shared mapping used only to copy already-formatted bytes was slower than pwrite on ext4. The writer does not do that copy: it spells into the mapping, which is the end-to-end winner.",
+    "Formatting each serial frame into its own buffer and handing the buffer to a writer thread was slower than spelling into the file."
+  ]
+}

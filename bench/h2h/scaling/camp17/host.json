@@ -1,0 +1,6 @@
+{
+  "commit": "9b43ec685009fb244a8b26b445ebe47034e31d9d",
+  "base": "e3d33a13f77b7cd52b719ad114d5f419d969f81d",
+  "nproc": 8,
+  "note": "/tmp is the root ext4 filesystem. /dev/shm is tmpfs."
+}

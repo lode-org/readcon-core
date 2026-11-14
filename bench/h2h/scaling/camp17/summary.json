@@ -1,0 +1,6 @@
+{
+  "base": "e3d33a13f77b7cd52b719ad114d5f419d969f81d",
+  "protocol": "one warmup, n=12, type-7 median and IQR, serial, taskset -c 0-7",
+  "threads": "before-after.json holds the cells camp16b lost to rel1. The headline writes are the fresh-file path with no spare.",
+  "ranked_ext4": "ranked.json does not beat camp5c. camp5c rewrote a warm inode. These rows are a new file every sample."
+}
