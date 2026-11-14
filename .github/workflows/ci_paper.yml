@@ -43,6 +43,9 @@ jobs:
           rm -f tectonic.tar.gz tectonic
           tectonic --version
 
+      - name: Run the figure and record producer tests
+        run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_figure_producers.py tests/python/test_record_producers.py
+
       - name: Regenerate the paper from the committed records
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-regen
 
