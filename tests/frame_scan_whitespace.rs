@@ -33,7 +33,11 @@ fn parallel_readers_match_the_sequential_reader() {
         let one = frames_from_text(&text, Some(1)).ok();
         assert!(one.is_some(), "{text:?}");
         assert_eq!(frames_from_text(&text, Some(2)).ok(), one, "{text:?}");
-        assert_eq!(frames_from_bytes(text.as_bytes(), Some(2)).ok(), one, "{text:?}");
+        assert_eq!(
+            frames_from_bytes(text.as_bytes(), Some(2)).ok(),
+            one,
+            "{text:?}"
+        );
     }
 }
 
@@ -47,7 +51,11 @@ fn frame_scans_find_the_frames_the_iterator_reads() {
             .collect();
         assert_eq!(frame_start_offsets(&text), starts, "{text:?}");
         let offsets: Vec<u64> = starts.iter().map(|&s| s as u64).collect();
-        assert_eq!(FrameIndex::scan(&text).unwrap().offsets, offsets, "{text:?}");
+        assert_eq!(
+            FrameIndex::scan(&text).unwrap().offsets,
+            offsets,
+            "{text:?}"
+        );
     }
 }
 

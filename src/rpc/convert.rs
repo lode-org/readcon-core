@@ -457,7 +457,10 @@ mod tests {
         for (a, b) in frame.atom_data.iter().zip(back.atom_data.iter()) {
             assert_eq!(a.velocity(), b.velocity());
             assert_eq!(a.force(), b.force());
-            assert_eq!(encode_fixed_bitmask(a.fixed()), encode_fixed_bitmask(b.fixed()));
+            assert_eq!(
+                encode_fixed_bitmask(a.fixed()),
+                encode_fixed_bitmask(b.fixed())
+            );
         }
     }
 }

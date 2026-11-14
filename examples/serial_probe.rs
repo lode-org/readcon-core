@@ -42,9 +42,7 @@ fn read_frames(path: &Path, mode: &str) -> usize {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!(
-            "usage: serial_probe FILE OUT.json [REPEATS] [default|one|memory|positions]"
-        );
+        eprintln!("usage: serial_probe FILE OUT.json [REPEATS] [default|one|memory|positions]");
         std::process::exit(2);
     }
     let path = Path::new(&args[1]);

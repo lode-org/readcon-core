@@ -115,8 +115,11 @@ fn sectioned_atoms(n: usize) -> Vec<AtomDatum> {
 fn positions_reusing_constructor_fills_every_section() {
     let template = builder(3).build().unwrap();
     let atoms = sectioned_atoms(3);
-    let positions =
-        FloatArray2::from_f64_row_major(3, 3, atoms.iter().flat_map(|a| [a.x(), a.y(), a.z()]).collect());
+    let positions = FloatArray2::from_f64_row_major(
+        3,
+        3,
+        atoms.iter().flat_map(|a| [a.x(), a.y(), a.z()]).collect(),
+    );
     let frame =
         con_frame_from_atom_data_with_positions(template.header.clone(), atoms.clone(), positions);
     assert_eq!(frame.positions.as_f64_row(2), [2.0, 0.5, 1.5]);

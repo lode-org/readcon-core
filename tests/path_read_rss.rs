@@ -48,7 +48,10 @@ fn path_read_rss_within_ase() {
     let sum: f64 = field_f64(&stdout, "sum");
     assert_eq!(frames, FRAMES as u64);
     let expected = (0..FRAMES).map(|frame| coord(frame, 0, 0)).sum::<f64>();
-    assert!((sum - expected).abs() < 1e-6, "sum {sum} expected {expected}");
+    assert!(
+        (sum - expected).abs() < 1e-6,
+        "sum {sum} expected {expected}"
+    );
     let per = (added as f64) * 1024.0 / frames as f64;
     assert!(
         per <= ASE_BYTES_PER_FRAME,

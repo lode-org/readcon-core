@@ -448,14 +448,14 @@ fn parallel_blank_chunk_is_not_a_frame() {
     // The located reader, the slot list, and the sequential iterator agree:
     // a whitespace tail is not a frame (CON-frame.1). `str::trim` removes a
     // non-breaking space, so that tail is not a chunk either.
-    assert!(frames_from_text_located(" \n", Some(2))
-        .unwrap()
-        .is_empty());
+    assert!(frames_from_text_located(" \n", Some(2)).unwrap().is_empty());
     let parts = readcon_core::iterators::parse_frames_parallel(" \n");
     assert!(parts.is_empty());
-    assert!(frames_from_bytes("\u{00A0}\n".as_bytes(), Some(2))
-        .unwrap()
-        .is_empty());
+    assert!(
+        frames_from_bytes("\u{00A0}\n".as_bytes(), Some(2))
+            .unwrap()
+            .is_empty()
+    );
 
     // A truncated header starts with a graphic byte, so the scan keeps it
     // and the parser reports the short header.

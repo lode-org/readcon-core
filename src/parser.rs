@@ -125,49 +125,47 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
     // pool, runs `body`, and joins.
     #[cfg(miri)]
     {
-        return match rayon::ThreadPoolBuilder::new()
-            .num_threads(workers)
-            .build()
-        {
+        return match rayon::ThreadPoolBuilder::new().num_threads(workers).build() {
             Ok(pool) => pool.install(body),
             Err(_) => body(),
         };
     }
     #[cfg(not(miri))]
     {
-    let pool = {
-        use std::sync::{Mutex, OnceLock};
-        static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> = OnceLock::new();
-        let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
-        let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
-        if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
-            *pool
-        } else {
-            let next_core = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-            let built = match rayon::ThreadPoolBuilder::new()
-                .num_threads(workers)
-                .spawn_handler(move |thread| {
-                    // One worker per physical core. Leaving the placement to
-                    // the kernel put two of these on one core and left
-                    // another idle, which is the whole 8-thread gap.
-                    let core = next_core.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    std::thread::Builder::new().spawn(move || {
-                        pin_worker(core);
-                        thread.run();
-                    })?;
-                    Ok(())
-                })
-                .build()
-            {
-                Ok(pool) => pool,
-                Err(_) => return body(),
-            };
-            let pool: &'static rayon::ThreadPool = Box::leak(Box::new(built));
-            guard.push((workers, pool));
-            pool
-        }
-    };
-    pool.install(body)
+        let pool = {
+            use std::sync::{Mutex, OnceLock};
+            static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> =
+                OnceLock::new();
+            let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
+            let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
+            if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
+                *pool
+            } else {
+                let next_core = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let built = match rayon::ThreadPoolBuilder::new()
+                    .num_threads(workers)
+                    .spawn_handler(move |thread| {
+                        // One worker per physical core. Leaving the placement to
+                        // the kernel put two of these on one core and left
+                        // another idle, which is the whole 8-thread gap.
+                        let core = next_core.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        std::thread::Builder::new().spawn(move || {
+                            pin_worker(core);
+                            thread.run();
+                        })?;
+                        Ok(())
+                    })
+                    .build()
+                {
+                    Ok(pool) => pool,
+                    Err(_) => return body(),
+                };
+                let pool: &'static rayon::ThreadPool = Box::leak(Box::new(built));
+                guard.push((workers, pool));
+                pool
+            }
+        };
+        pool.install(body)
     }
 }
 
