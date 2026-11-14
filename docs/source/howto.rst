@@ -278,6 +278,8 @@ Control the number of decimal places in output coordinates:
     use readcon_core::writer::ConFrameWriter;
 
     // Default text round-trips every finite binary64 value.
+    // NaN and infinity are spelled and rejected on read (CON-num.1),
+    // so a file that contains them is not a round trip.
     let file = File::create("output.con").unwrap();
     let mut writer = ConFrameWriter::new(file);
 
@@ -1169,7 +1171,9 @@ way. Every frame must have the same atom count. ``write_conbin`` streams a
 CON text file into that layout. ``read_conbin`` returns a writable view of
 the position run, the velocity run, and the atom count. The arrays are
 shaped ``(frames, atoms * 3)``. A frame with no velocity section is stored
-as zeros. A binary32 file is ``read_conbin_f32``.
+as zeros. The cell, element symbols, masses, atom ids, and fixed flags are
+not stored. binary32 stores each binary64 value as binary32, so those bits
+are not kept. A binary32 file is ``read_conbin_f32``.
 
 .. code:: python
 
