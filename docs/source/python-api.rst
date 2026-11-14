@@ -151,7 +151,9 @@ path writes zstd. A source build without that feature raises
 long as it is kept, so disk use doubles. ``keep_spare=False`` deletes the
 spare after the rename and the next rewrite allocates fresh pages. The
 published path stays the previous complete file until the rename, including
-when the process is killed. ``append``, ``comm``, and compression are refused.
+when the process is killed. ``append`` and compression are refused.
+``comm=`` writes a fresh file and leaves no spare. ``rewrite=True`` with
+``comm=`` is that same spare for the collective file.
 
 ``write_con_string``
 --------------------
