@@ -80,25 +80,25 @@ def main() -> None:
         raise SystemExit("need chemfiles-linked readcon")
 
     fr0 = list(readcon.iter_con(str(args.fixture)))[0]
-    atoms0 = fr0.to_ase()
-    atoms_list = [atoms0.copy() for _ in range(args.frames)]
     work = bench_dir("traj-vs-con")
     try:
         xyz = work / "traj.xyz"
         traj = work / "traj.traj"
         netcdf = work / "traj.nc"
         con = work / "traj.con"
-        ase_write(str(xyz), atoms_list, format="xyz")
-        with Trajectory(str(traj), "w") as t:
-            for a in atoms_list:
-                t.write(a)
-        ase_write(str(netcdf), atoms_list, format="netcdftrajectory")
         import sys
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
         from frames_guard import write_distinct_copies
 
+        # Every arm reads the same distinct frames as the CON file.
         write_distinct_copies(con, args.fixture.read_text(), args.frames)
+        atoms_list = [frame.to_ase() for frame in readcon.iter_con(str(con))]
+        ase_write(str(xyz), atoms_list, format="xyz")
+        with Trajectory(str(traj), "w") as t:
+            for a in atoms_list:
+                t.write(a)
+        ase_write(str(netcdf), atoms_list, format="netcdftrajectory")
 
         sizes = {p.name: p.stat().st_size for p in work.iterdir() if p.is_file()}
 
