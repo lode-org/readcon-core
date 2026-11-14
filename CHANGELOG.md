@@ -44,6 +44,10 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- A packed `write_con` of a frame list reused the first frame's header
+  whenever the atom skeleton matched. Later frames came back with that
+  frame's energy, bead, and any other metadata key. The header is reused
+  only when that metadata matches too.
 - The metatensor build no longer deadlocks on the cargo target-directory
   lock. The fix is a `[patch.crates-io]` of `metatensor-sys` in this
   repository. `cargo package` drops `[patch]`, so a crates.io install of
