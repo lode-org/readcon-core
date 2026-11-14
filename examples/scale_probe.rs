@@ -135,6 +135,28 @@ fn main() {
                 }
             })
         }
+        "rewrite" => {
+            let text = std::fs::read_to_string(&path).unwrap();
+            let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
+            let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
+            let out_owned = std::env::var("READCON_PROBE_OUT")
+                .unwrap_or_else(|_| "/dev/shm/r7-rust-rewrite.con".to_string());
+            let out = std::path::PathBuf::from(&out_owned);
+            let repeats = std::env::var("READCON_PROBE_REPEATS")
+                .ok()
+                .and_then(|text| text.parse().ok())
+                .unwrap_or(6);
+            // The warmup rewrite allocates the spare. The samples fill it.
+            let _ = std::fs::remove_file(&out);
+            readcon_core::writer::write_frame_refs_to_path(&out, &refs, workers, None, false, true)
+                .unwrap();
+            time_logged("rewrite", repeats, || {
+                readcon_core::writer::rewrite_frame_refs_to_path(
+                    &out, &refs, workers, None, false, true,
+                )
+                .unwrap();
+            })
+        }
         "floats" => {
             let n = 1_000_000usize;
             let values: Vec<f64> = (0..n).map(|i| (i as f64) * 0.001 + 1.25).collect();

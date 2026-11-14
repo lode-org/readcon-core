@@ -2931,6 +2931,232 @@ pub fn write_frame_refs_to_path(
     }
 }
 
+fn rewrite_names(path: &Path) -> io::Result<(std::path::PathBuf, std::path::PathBuf)> {
+    let name = path.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "rewrite path has no file name")
+    })?;
+    let mut spare_name = name.to_os_string();
+    spare_name.push(".rewrite");
+    let mut hold_name = name.to_os_string();
+    hold_name.push(".rewrite-hold");
+    let dir = match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        _ => std::path::PathBuf::from("."),
+    };
+    Ok((dir.join(spare_name), dir.join(hold_name)))
+}
+
+/// The spare is the inode the next rewrite overwrites. A crash during the
+/// name swap leaves that inode under the hold name; adopt it so the pages
+/// are not thrown away.
+fn prepare_rewrite_spare(path: &Path) -> io::Result<std::path::PathBuf> {
+    let (spare, hold) = rewrite_names(path)?;
+    if !spare.exists() && hold.exists() {
+        std::fs::rename(&hold, &spare)?;
+    } else if hold.exists() {
+        std::fs::remove_file(&hold)?;
+    }
+    Ok(spare)
+}
+
+/// Publish `spare` as `path`.
+///
+/// `path` keeps the previous complete file until `rename`. The previous
+/// inode is then parked at the spare name, so the next same-length rewrite
+/// fills those pages instead of allocating new ones. A partial spare is
+/// never given the published name.
+fn publish_rewrite(spare: &Path, path: &Path) -> io::Result<()> {
+    let (_, hold) = rewrite_names(path)?;
+    if path.exists() {
+        if hold.exists() {
+            std::fs::remove_file(&hold)?;
+        }
+        std::fs::hard_link(path, &hold)?;
+    }
+    std::fs::rename(spare, path)?;
+    if hold.exists() {
+        std::fs::rename(&hold, spare)?;
+    }
+    Ok(())
+}
+
+fn finish_open_length(file: &File) -> io::Result<()> {
+    let mut file = file.try_clone()?;
+    let end = file.stream_position()?;
+    file.set_len(end)
+}
+
+/// Bytes of `frames` into an already-open file, starting at offset 0.
+///
+/// The file's inode is kept. `set_len` to the same length does not drop
+/// pages, which is what a same-length rewrite uses.
+fn store_frames_in(
+    file: &File,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    file.try_clone()
+        .and_then(|mut file| file.seek(SeekFrom::Start(0)).map(|_| ()))
+        .map_err(WriteError::Io)?;
+    if workers < 2 {
+        let mut writer = match precision {
+            Some(precision) => {
+                ConFrameWriter::with_precision(file.try_clone().map_err(WriteError::Io)?, precision)
+            }
+            None => ConFrameWriter::new(file.try_clone().map_err(WriteError::Io)?),
+        }
+        .canonical(canonical);
+        write_group(&mut writer, frames, bind)
+            .and_then(|_| writer.flush().map_err(WriteError::Io))?;
+        drop(writer);
+        return finish_open_length(file).map_err(WriteError::Io);
+    }
+    if workers >= 2 && frames.len() >= 2 {
+        return store_pipeline_in(file, frames, workers, precision, canonical, bind);
+    }
+    if workers >= 2 && frames.len() == 1 && frames[0].atom_data.len() >= WIDE_ATOM_GRAIN {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(Vec::<u8>::new(), precision),
+            None => ConFrameWriter::new(Vec::<u8>::new()),
+        }
+        .canonical(canonical)
+        .parallel_atoms(workers);
+        writer.stream_file = Some(file.try_clone().map_err(WriteError::Io)?);
+        let result = if bind {
+            writer.write_frame_bound(frames[0])
+        } else {
+            writer.write_frame(frames[0])
+        };
+        drop(writer);
+        result?;
+        return finish_open_length(file).map_err(WriteError::Io);
+    }
+    let parts = formatted_parts(frames, workers, precision, canonical, bind)?;
+    store_disjoint_parts(file, &parts).map_err(WriteError::Io)
+}
+
+fn store_pipeline_in(
+    file: &File,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    if (2..=workers).contains(&frames.len()) {
+        let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
+        std::thread::scope(|scope| {
+            let mut guards = Vec::with_capacity(frames.len());
+            for (index, frame) in frames.iter().enumerate() {
+                guards.push(scope.spawn(move || {
+                    #[cfg(feature = "parallel")]
+                    crate::parser::pin_worker(index);
+                    format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
+                }));
+            }
+            for guard in guards {
+                parts.push(match guard.join() {
+                    Ok(part) => part,
+                    Err(_) => Err(WriteError::Io(io::Error::other("frame formatter panicked"))),
+                });
+            }
+        });
+        let mut formatted = Vec::with_capacity(parts.len());
+        for part in parts {
+            formatted.push(part?);
+        }
+        return store_disjoint_parts(file, &formatted).map_err(WriteError::Io);
+    }
+    let heavy = direct_slice_write(
+        workers,
+        frame_byte_weight(frames[0]).saturating_mul(frames.len()),
+    );
+    if heavy
+        && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
+    {
+        return place_packed(file, frames, &lengths, workers, precision, canonical, bind);
+    }
+    let groups = workers.saturating_mul(4).max(workers);
+    let ranges = group_frame_ranges(frames, groups);
+    let pieces: Vec<&[&ConFrame]> = ranges
+        .iter()
+        .map(|&(start, end)| &frames[start..end])
+        .collect();
+    let format_threads = pipeline_format_threads(workers).min(pieces.len().max(1));
+    let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let result = std::thread::scope(|scope| -> Result<(), WriteError> {
+        for _ in 0..format_threads {
+            let tx = tx.clone();
+            let pieces = &pieces;
+            let next_job = &next_job;
+            scope.spawn(move || {
+                loop {
+                    let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= pieces.len() {
+                        break;
+                    }
+                    let message = format_group_bytes(pieces[index], 1, precision, canonical, bind);
+                    if tx.send((index, message)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        let mut out = file.try_clone().map_err(WriteError::Io)?;
+        out.seek(SeekFrom::Start(0)).map_err(WriteError::Io)?;
+        let mut next = 0usize;
+        let mut pending = BTreeMap::<usize, Vec<u8>>::new();
+        while next < pieces.len() {
+            let (index, part) = rx
+                .recv()
+                .map_err(|err| WriteError::Io(io::Error::other(err.to_string())))?;
+            pending.insert(index, part?);
+            while let Some(part) = pending.remove(&next) {
+                out.write_all(&part).map_err(WriteError::Io)?;
+                next += 1;
+            }
+        }
+        out.flush().map_err(WriteError::Io)?;
+        Ok(())
+    });
+    result?;
+    finish_open_length(file).map_err(WriteError::Io)
+}
+
+/// Rewrite `path` with `frames` for a workload that keeps this trajectory name.
+///
+/// The new bytes are written into a spare inode beside `path`. `rename`
+/// publishes them, and the previous inode stays at `path.rewrite` so the
+/// next same-length call fills those pages instead of allocating a fresh
+/// file. Until that rename, `path` is still the previous complete file.
+/// A different length allocates the extra pages. The fresh-file writer is
+/// [`write_frame_refs_to_path`].
+pub fn rewrite_frame_refs_to_path(
+    path: &std::path::Path,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    let spare = prepare_rewrite_spare(path).map_err(WriteError::Io)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&spare)
+        .map_err(WriteError::Io)?;
+    store_frames_in(&file, frames, workers, precision, canonical, bind)?;
+    drop(file);
+    publish_rewrite(&spare, path).map_err(WriteError::Io)
+}
+
 /// [`write_frames_to_vec_with_threads`] over borrowed frames.
 ///
 /// A `read_con` result can be written without cloning the trajectory.
@@ -5060,6 +5286,59 @@ mod parallel_write_bytes {
         let got = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(got, serial);
+    }
+
+    /// A same-length rewrite matches a fresh write. The published path keeps
+    /// the previous complete file until rename, and that inode becomes the
+    /// spare the next rewrite fills.
+    #[cfg(unix)]
+    #[test]
+    fn a_rewrite_matches_a_fresh_write_and_reuses_the_inode() {
+        use std::os::unix::fs::MetadataExt;
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/test/cuh2.con"
+        ))
+        .unwrap();
+        let frames = frames_from_text(&text, Some(1)).unwrap();
+        let refs: Vec<&crate::types::ConFrame> = vec![&frames[0]; 32];
+        let path = std::env::temp_dir().join(format!("rc-rewrite-{}.con", std::process::id()));
+        let fresh =
+            std::env::temp_dir().join(format!("rc-rewrite-fresh-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&fresh, &refs, 8, None, false, true).unwrap();
+        let expect = std::fs::read(&fresh).unwrap();
+        super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
+        let first_ino = std::fs::metadata(&path).unwrap().ino();
+        super::rewrite_frame_refs_to_path(&path, &refs, 8, None, false, true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), expect);
+        let spare = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        assert_eq!(
+            std::fs::metadata(&spare).unwrap().ino(),
+            first_ino,
+            "the previous inode is the spare"
+        );
+        super::rewrite_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), expect);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().ino(),
+            first_ino,
+            "the second rewrite publishes the spare inode"
+        );
+        // The published name is still the previous bytes if the spare write
+        // is what failed. An empty directory component cannot be created.
+        let blocked =
+            std::env::temp_dir().join(format!("rc-rewrite-missing-{}/out.con", std::process::id()));
+        std::fs::write(&path, &expect).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let err = super::rewrite_frame_refs_to_path(&blocked, &refs, 1, None, false, true);
+        assert!(err.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&spare);
+        let _ = std::fs::remove_file(&fresh);
     }
 
     #[test]
