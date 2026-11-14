@@ -73,3 +73,15 @@ def test_camp24_host_refuses_a_stale_build(monkeypatch) -> None:
     _install_stale(monkeypatch)
     with pytest.raises(SystemExit, match="not built from HEAD"):
         camp24_run.host()
+
+
+def test_camp24_main_refuses_a_stale_build(monkeypatch) -> None:
+    _install_stale(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["camp24_run.py", "ranked"])
+
+    def _ranked() -> None:
+        raise AssertionError("ranked ran")
+
+    monkeypatch.setattr(camp24_run, "ranked", _ranked)
+    with pytest.raises(SystemExit, match="not built from HEAD"):
+        camp24_run.main()

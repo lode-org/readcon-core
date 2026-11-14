@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from bench_disk import bench_disk
-from measured_commit import measurement, record_path, refuse_stale_build
+from measured_commit import record_path, refuse_stale_build
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
@@ -1529,7 +1529,7 @@ def host() -> None:
 
 
 def main() -> None:
-    measurement(ROOT)
+    refuse_stale_build(ROOT)
     OUT.mkdir(parents=True, exist_ok=True)
     LOGS.mkdir(parents=True, exist_ok=True)
     steps = {
