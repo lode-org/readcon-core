@@ -235,6 +235,7 @@ required-features = ["parallel"]
 inherits = "release"
 
 [build-dependencies]
+sha2 = "0.10"
 cc = { version = "1", optional = true }
 capnpc = { version = "0.20", optional = true }
 metatensor-sys = { version = "0.2.0-rc4", optional = true }
