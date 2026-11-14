@@ -423,36 +423,41 @@
   },
   "provenance": {
     "build": {
-      "readcon_version": "0.17.4",
-      "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
-      "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+      "readcon_version": "0.23.3",
+      "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+      "readcon_module_sha256": "d6643eb8e4681196d84686c01aa23a889f854464a76257181dcf3f880f42a7c9",
       "rustc": "1.88.0 (6b00bc388 2025-06-23)",
-      "newer_sources": [],
-      "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
-      "source_files": 47,
+      "newer_sources": [
+        "Cargo.toml",
+        "src/columns.rs",
+        "src/compression.rs",
+        "src/distrib_read.rs",
+        "src/distrib_write.rs",
+        "src/index_proj.rs",
+        "src/iterators.rs",
+        "src/python.rs",
+        "src/writer.rs"
+      ],
+      "library_digest": "3d3612d39c7767ee4fadcd9c5480a6a1caa3bc8f5f8f792dc72730c2dde52e72",
+      "source_files": 52,
       "source_tag": null,
-      "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+      "source_commit": "753312d61d8f6ea23890193eefb82255ef5cfe99"
     },
     "host": {
-      "kernel": "6.12.94+",
+      "kernel": "6.12.113+",
       "uname_m": "x86_64",
       "nproc": 8,
       "family": "6",
       "model": "207",
-      "cpu_model": "Intel(R) Xeon(R) Processor",
+      "cpu_model": "Intel Xeon Processor",
       "mhz": 2400.0,
-      "mem_kb": 49342768
+      "mem_kb": 49342816
     },
     "peers": {
       "ase": "3.29.0",
-      "chemfiles": "0.10.4",
-      "MDAnalysis": "2.10.0",
-      "h5py": "3.16.0",
       "numpy": "2.5.4",
       "scipy": "1.18.1",
-      "ovito": "3.16.1",
-      "openbabel": "3.2.1",
-      "python": "3.12.16"
+      "python": "3.12.3"
     }
   }
 }

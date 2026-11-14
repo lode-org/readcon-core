@@ -205,6 +205,8 @@ allow_exact = {
     # The one macro the paper reads. scripts/cargo_version_tex.py writes
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
+    # Provenance names the readcon module that ran the spec probes.
+    "paper/cpc/data/spec/version_drift.json",
 }
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.

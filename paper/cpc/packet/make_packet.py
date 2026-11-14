@@ -344,21 +344,31 @@ def absolute_paths(line: str) -> list[str]:
 
 
 def check_release(version: str, concept: str) -> list[str]:
-    """CITATION.cff, codemeta.json and .zenodo.json of the checkout name the version of ``release.tex``, and
-    CITATION.cff and codemeta.json the concept DOI of section Data availability."""
+    """Citation files name Cargo.toml of this checkout.
+
+    ``version`` is the released tag ``release.tex`` describes. This checkout
+    can be a later unreleased version. The paper's commit and that tag's
+    Cargo.toml are checked by the paper revision test.
+    """
+    cargo = re.search(
+        r'^version = "([^"]+)"', (REPO / "Cargo.toml").read_text(), re.M
+    ).group(1)
+    bad = []
+    if re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
+        bad.append(f"release.tex names {version}, not a dotted version")
     zenodo = json.loads((REPO / ".zenodo.json").read_text())
     codemeta = json.loads((REPO / "codemeta.json").read_text())
     citation = (REPO / "CITATION.cff").read_text()
     cff_version = re.search(r"^version:\s*(\S+)", citation, re.M)
-    bad = [
-        f"{name} is version {found}; release.tex names {version}"
+    bad.extend(
+        f"{name} is version {found}; Cargo.toml is {cargo}"
         for name, found in (
             (".zenodo.json", zenodo.get("version")),
             ("codemeta.json", codemeta.get("version")),
             ("CITATION.cff", cff_version and cff_version.group(1).strip("\"'")),
         )
-        if found != version
-    ]
+        if found != cargo
+    )
     dois = re.findall(r"-\s*type:\s*doi\s*\n\s*value:\s*(10\.\d{4,}/\S+)", citation)
     if concept not in dois:
         bad.append(

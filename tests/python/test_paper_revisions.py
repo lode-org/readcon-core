@@ -53,7 +53,8 @@ def _tags() -> list[str]:
 
 def test_named_commits_and_tags_exist() -> None:
     macros = _macros()
-    assert macros["readconversion"] == r"\readconCargoVersion"
+    assert macros["readconversion"] == "0.23.2"
+    assert macros["readconversion"] != macros["readconCargoVersion"]
     assert "v0.17.4" not in (CPC / "release.tex").read_text(encoding="utf-8")
     if not _tags():
         pytest.skip("this clone has no release tags")
@@ -104,16 +105,70 @@ def _external_pin(lines: list[str], digest: str) -> bool:
     return False
 
 
+# Saved logs name a commit of eOn, readcon-db, or a driver checkout that
+# this clone does not hold. The logs are records, so those hashes stay.
+RECORD_ALLOW = {
+    "paper/cpc/logs/eon-build.log": {
+        "579738a9387e8d0ea55496f45dd057812cfab892",
+        "cb70a6b6b256e539384b547613e458962e2462ff",
+    },
+    "paper/cpc/logs/eon-driver.log": {
+        "7df8390b6ee7cfd73f0b849b02313a365121d4a2",
+    },
+    "paper/cpc/logs/db.log": {
+        "aba123678f3a995f0127aa717d4dfa1f8603d01b",
+        "39ee7bbc72638a8999cb4571ff160d346e7de4b8",
+    },
+    "paper/cpc/logs/reader-exchange.log": {
+        "7df8390b6ee7cfd73f0b849b02313a365121d4a2",
+        "579738a9387e8d0ea55496f45dd057812cfab892",
+    },
+    "paper/cpc/logs/mpi.log": {
+        "0f195ed54cb7a29a16c442e6807dea48f585aeab",
+    },
+    "paper/cpc/logs/mpi-fallback.log": {
+        "0f195ed54cb7a29a16c442e6807dea48f585aeab",
+    },
+    "paper/cpc/logs/regen-figures.log": {
+        "7df8390b6ee7cfd73f0b849b02313a365121d4a2",
+    },
+    "paper/cpc/logs/dlpack-exchange.log": {
+        "cb70a6b6b256e539384b547613e458962e2462ff",
+    },
+    "paper/cpc/logs/install.log": {
+        "7df8390b6ee7cfd73f0b849b02313a365121d4a2",
+    },
+    "paper/cpc/logs/build.log": {
+        "7df8390b6ee7cfd73f0b849b02313a365121d4a2",
+    },
+}
+
+
 def _paper_sources() -> list[tuple[Path, str]]:
     root = ROOT / "paper" / "cpc"
     listings = root / "evidence" / "listings"
+    suffixes = {".md", ".py", ".tex", ".json", ".log", ".org", ".bib", ".toml"}
     found: list[tuple[Path, str]] = []
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if path.suffix in {".md", ".py", ".tex"} or listings in path.parents:
-            found.append((path, path.read_text(encoding="utf-8")))
+        if path.suffix in suffixes or listings in path.parents:
+            found.append((path, path.read_text(encoding="utf-8", errors="replace")))
     return found
+
+
+def _sha_context(line: str, digest: str) -> bool:
+    """A short hash named as a commit, not a library digest."""
+    if digest not in line:
+        return False
+    low = line.lower()
+    if "digest" in low or "sha256" in low or "sha-256" in low:
+        return False
+    if "eon commit" in low or "eon commit" in line:
+        return False
+    if digest.isdigit() and "doi.org" in low:
+        return False
+    return "commit" in low or "revision" in low or f"`{digest}`" in line
 
 
 def test_unpublished_identity_is_absent() -> None:
@@ -129,17 +184,30 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
     full = re.compile(r"(?<![0-9A-Za-z])[0-9a-f]{40}(?![0-9A-Za-z])")
     for path, text in _paper_sources():
         rel = path.relative_to(ROOT)
-        for version in TAG.findall(text):
+        tag_text = text
+        if path.suffix == ".bib":
+            tag_text = "\n".join(
+                line for line in text.splitlines() if "readcon" in line.lower()
+            )
+        for version in TAG.findall(tag_text):
             if (
                 _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode
                 != 0
             ):
                 missing.append(f"{rel}: v{version}")
         lines = text.splitlines()
-        for value in full.findall(text):
+        allowed = RECORD_ALLOW.get(rel.as_posix(), set())
+        short = re.compile(r"(?<![0-9A-Za-z])[0-9a-f]{7,39}(?![0-9A-Za-z])")
+        seen: set[str] = set(full.findall(text))
+        for value in short.findall(text):
+            if any(_sha_context(line, value) for line in lines):
+                seen.add(value)
+        for value in seen:
+            if value in allowed:
+                continue
             if _git("cat-file", "-e", f"{value}^{{commit}}").returncode == 0:
                 continue
-            if _external_pin(lines, value):
+            if len(value) == 40 and _external_pin(lines, value):
                 continue
             missing.append(f"{rel}: {value}")
     assert not missing, missing
@@ -152,7 +220,8 @@ def test_shipped_spec_blob_is_this_tree() -> None:
     assert blob.stdout.strip().startswith(macros["rcReleaseSpecBlob"])
     supp = (CPC / "rg_supp.tex").read_text(encoding="utf-8")
     assert r"\rcReleaseSpecBlob" in supp
-    assert r"\rcMeasuredSpecBlob" in supp
+    release = (CPC / "release.tex").read_text(encoding="utf-8")
+    assert r"\rcMeasuredSpecBlob" in release
 
 
 def test_measured_commit_matches_its_cargo_and_spec() -> None:
@@ -167,7 +236,8 @@ def test_measured_commit_matches_its_cargo_and_spec() -> None:
     spec = _git("rev-parse", f"{commit}:docs/orgmode/spec.org")
     assert spec.returncode == 0
     assert spec.stdout.strip().startswith(macros["rcMeasuredSpecBlob"])
-    assert macros["rcMeasuredSpecBlob"] != macros["rcReleaseSpecBlob"]
+    assert macros["rcMeasuredVersion"] == macros["readconversion"]
+    assert macros["rcMeasuredSpecBlob"] == macros["rcReleaseSpecBlob"]
 
 
 def test_recorded_tags_match_git() -> None:
