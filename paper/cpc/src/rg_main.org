@@ -165,6 +165,15 @@ It does not store a spec-versioned constraint bitmask and does not require type-
 Atomsk converts among many crystal and MD formats and does not read or write eOn CON \cite{hirelAtomskToolManipulating2015}.
 chemfiles is the optional ingress library \cite{frauxChemfiles2023}: it opens many formats; this paper measures XYZ\(\to\)\texttt{ConFrame}.
 MDAnalysis is used only as the H5MD Python API in the wall-time table \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMdanalysisPythonPackage2016}; MDTraj is not timed \cite{mcgibbonMdtrajModernOpen2015}.
+
+OVITO 3.17.2 writes the periodic boundary conditions of the simulation cell into every extended XYZ file \cite{ovitoChangelog3172026}.
+The reader accepts whitespace around an equals sign, escape sequences inside quoted strings, and the array values =[1, 2, 3]= and =[[1, 2], [3, 4]]=.
+An array-valued parameter is a list-valued global attribute, a tuple in Python, and a logical parameter is a Boolean attribute.
+A text column of data format =S=, of any name, is a particle property of type string.
+MDAnalysis 2.11.0 reads one frame of an mmCIF/PDBx file, including a gzipped =.cif.gz=, through the optional gemmi library \cite{alibayMdanalysisRelease21102026}.
+extxyz-ng 0.0.2 parses extended XYZ in Rust \cite{yuExtxyzNgV0022026}.
+An info line that is not a key-value pair is unextended XYZ with the default =Properties= shape.
+An integer in an array is promoted to a float, and no other promotion is defined.
 An optional metatensor export copies four \texttt{TensorBlock}s (positions, velocities, forces, per-atom energies) \cite{bigiMetatensorMetatomicFoundational2026}; it is not a TensorMap or metatomic \texttt{System} path.
 
 * The CON format
