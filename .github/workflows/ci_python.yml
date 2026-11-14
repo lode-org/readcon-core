@@ -118,7 +118,7 @@ jobs:
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install -U pip
-          .venv/bin/python -m pip install maturin pytest numpy ase
+          .venv/bin/python -m pip install maturin pytest numpy ase chemfiles
           .venv/bin/python -m pip install -e ase-readcon
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends emacs-nox

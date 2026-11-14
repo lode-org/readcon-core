@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench" / "h2h"))
 
 import cross_format
@@ -78,6 +80,16 @@ def test_a_stub_file_is_not_a_million_atom_write() -> None:
 
 
 def test_chemfiles_con_has_no_writer() -> None:
+    pytest.importorskip(
+        "chemfiles",
+        reason="the chemfiles Python package is not installed",
+    )
+    import readcon
+
+    if not readcon.has_chemfiles_support():
+        pytest.skip(
+            "this readcon build does not link chemfiles, so the chemfiles-con arm is not offered"
+        )
     arms, _notes = cross_format.arm_table(8)
     row = next(arm for arm in arms if arm["id"] == "chemfiles-con")
     assert row["no_writer"] is True
