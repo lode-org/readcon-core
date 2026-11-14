@@ -1365,7 +1365,9 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             f"mdcompress {version} (refresh-bio). 1.0.0 is not on PyPI and "
             "this row is not relabeled as 1.0.0. Archive preset, one thread. "
             "The clock compresses a DCD that is already on disk, and the "
-            "read queries one frame at a time. The binding views the float64 "
+            "read queries one frame at a time. A one-frame trajectory cannot "
+            "be read ('Cannot read first frame' on DCD, XTC and TRR), so "
+            "those rows are unsupported. The binding views the float64 "
             "box as float32; the cell is read from those bytes as float64."
         )
     return arms, notes
@@ -2218,6 +2220,14 @@ def run(
                 lines.append(f"note {note}")
         usable = []
         for arm in arms:
+            if arm["id"] == "mdcompress-mdc" and n_frames < 2:
+                arm = dict(arm)
+                arm["unsupported"] = True
+                arm["drops"] = (
+                    "unsupported: MDCompress 2.0.5 cannot read a one-frame "
+                    "trajectory (DCD, XTC and TRR all return "
+                    "'Cannot read first frame')"
+                )
             if arm.get("unsupported"):
                 rows.append(
                     {
