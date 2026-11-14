@@ -2,7 +2,7 @@
 directory = readcon-core-cxx-0.23.2
 source_url = https://github.com/lode-org/readcon-core/releases/download/v0.23.2/readcon-core-cxx-0.23.2.tar.gz
 source_filename = readcon-core-cxx-0.23.2.tar.gz
-source_hash = 937bf5fdeed575fdc816e33323f6323c338509a4a3bd0bf1c9f425f3ce422dfa
+source_hash = 7d4729c6ffe4aa226037756504fc6227d168f90990349e24809158ade35b1a58
 
 [provide]
 dependency_names = readcon-core
