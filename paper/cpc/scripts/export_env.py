@@ -5,9 +5,10 @@
 ``conda-linux-64.txt`` is the conda explicit list of the conda prefix of this
 Python (its base prefix when it runs in a venv): the URL and MD5 of every
 package of the prefix's ``conda-meta`` records, each after the packages it
-depends on.  ``requirements.txt`` pins every other distribution on this
-Python's path, the first of each name as the import system finds it, except
-readcon, which ``pip install .`` builds from the checkout, and pip.
+depends on.  ``requirements.txt`` pins every distribution installed in this prefix's
+site-packages that conda does not own, except readcon, which ``pip install .``
+builds from the checkout, and pip. A package on the user site is not a pin
+of this environment.
 """
 
 from __future__ import annotations
@@ -64,23 +65,26 @@ def explicit(records: list[dict]) -> str:
 
 def pins(records: list[dict]) -> str:
     conda_files = {f for r in records for f in r.get("files", [])}
+    site = (
+        CONDA
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
     found: dict[str, str] = {}
-    for entry in sys.path:
-        if not entry or not Path(entry).is_dir():
+    for info in sorted(site.glob("*.dist-info")):
+        dist = metadata.PathDistribution(info)
+        name = dist.metadata["Name"]
+        if canonical(name) in found or canonical(name) in SKIP:
+            found.setdefault(canonical(name), "")
             continue
-        for info in sorted(Path(entry).glob("*.dist-info")):
-            dist = metadata.PathDistribution(info)
-            name = dist.metadata["Name"]
-            if canonical(name) in found or canonical(name) in SKIP:
-                found.setdefault(canonical(name), "")
-                continue
-            if (
-                info.is_relative_to(CONDA)
-                and f"{info.relative_to(CONDA)}/METADATA" in conda_files
-            ):
-                found[canonical(name)] = ""
-                continue
-            found[canonical(name)] = f"{name}=={dist.version}\n"
+        if (
+            info.is_relative_to(CONDA)
+            and f"{info.relative_to(CONDA)}/METADATA" in conda_files
+        ):
+            found[canonical(name)] = ""
+            continue
+        found[canonical(name)] = f"{name}=={dist.version}\n"
     return HEADER + "".join(line for _, line in sorted(found.items()) if line)
 
 

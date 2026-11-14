@@ -54,6 +54,19 @@ NO_BUILD = {
     "evidence/results/e4_cells.csv",
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
+    # Stored tables the restored figures draw. The database rows come from
+    # readcon-db, and these files carry no readcon-core provenance block.
+    "data/db/dedup.json",
+    "data/db/sizes.csv",
+    "data/db/summary.csv",
+    "data/mpi/db_serial.csv",
+    "data/mpi/strong.csv",
+    "data/novel/anatomy.json",
+    "data/novel/dedup_graph.json",
+    "data/novel/errors.json",
+    "data/novel/fidelity.json",
+    "data/novel/restart_diff.json",
+    "data/novel/velocity.json",
 }
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
 PREFIXES = {
