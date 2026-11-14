@@ -64,18 +64,12 @@ The default store is a fresh file, not a spare reused in place.
 Rank 0 renames it onto the path only after every byte is stored, so the
 published path is the previous complete file or the finished new one.
 Until that rename the new bytes are a second copy.
-Each rank pwrites its own byte range into that fresh file. One pwrite
-holds the inode lock once; a pwrite per frame re-takes it and loses to
-the ordered gather. On an ext4 file of 64 frames (41.6 MB of output),
-eight ranks, twelve samples, that one-pwrite path has median 0.0335 s
-and the ordered gather 0.0424 s. A plain copy of the same bytes is
-0.0106 s. The gap is formatting into the mapping (about 0.022 s); stage,
-hash, and the index sidecar are each under 0.002 s, and the write does
-not fsync. The length walk is about 0.45 s and is outside the timed
-samples once the process has warmed up.
-Lustre, GPFS, BeeGFS, and PanFS use collective MPI-IO into the same
-scratch. =READCON_RANKED_WRITE=parallel=, =sequential=, or =mpiio=, read
-on rank 0, overrides the filesystem choice. Leave it unset.
+The default store is Parallel: one pwrite per rank at the offsets from
+the layout pass. ext2, ext3, ext4, XFS, and btrfs use that store, as
+does every other filesystem except Lustre, GPFS, BeeGFS, and PanFS,
+which use collective MPI-IO into the same scratch.
+=READCON_RANKED_WRITE= selects =sequential=, =parallel=, or =mpiio=.
+Rank 0 reads the variable and broadcasts the choice. Leave it unset.
 =READCON_MPI_TEST_CHUNK=<bytes>= lowers the gather chunk and the Gatherv
 limit so a test can take the multi-round path. Leave it unset.
 One gather of the offsets and block hashes then writes the =.rcidx=

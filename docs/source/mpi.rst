@@ -87,15 +87,12 @@ The default store is a fresh file, not a spare reused in place.
 Rank 0 renames it onto the path only after every byte is stored, so the
 published path is the previous complete file or the finished new one.
 Until that rename the new bytes are a second copy.
-On ext2, ext3, ext4, XFS, and btrfs, rank 0 then writes every slice in
-order. Concurrent writes of one fresh local inode contend in the page
-cache. In ``bench/h2h/scaling/camp21/strong-mpi.json`` that million-atom
-frame on disk takes 0.0401 s at one rank and 0.0119 s at eight ranks,
-3.4 times as fast.
-Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
-keeps one write per rank.
-``READCON_RANKED_WRITE=parallel`` or ``sequential``, read on rank 0, overrides
-that choice. Leave it unset. The benchmark does.
+The default store is Parallel: one pwrite per rank at the offsets from
+the layout pass. ext2, ext3, ext4, XFS, and btrfs use that store, as
+does every other filesystem except Lustre, GPFS, BeeGFS, and PanFS,
+which use collective MPI-IO into the same scratch.
+``READCON_RANKED_WRITE`` selects ``sequential``, ``parallel``, or ``mpiio``.
+Rank 0 reads the variable and broadcasts the choice. Leave it unset.
 ``READCON_MPI_TEST_CHUNK=<bytes>`` lowers the gather chunk and the Gatherv
 limit so a test can take the multi-round path. Leave it unset.
 One gather of the offsets and block hashes then writes the ``.rcidx``
