@@ -129,38 +129,44 @@ def write_grid(path: Path, n_atoms: int, n_frames: int) -> None:
     while side * side * side < n_atoms:
         side += 1
     span = float(side)
-    from frames_guard import thermal_shift
+    from frames_guard import require_distinct_frames, thermal_shift
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for frame in range(n_frames):
-            delta = thermal_shift(n_atoms, frame)
-            handle.write("grid\n")
-            handle.write('{"con_spec_version":2}\n')
-            handle.write(f"{span:.6f} {span:.6f} {span:.6f}\n")
-            handle.write("90.000000 90.000000 90.000000\n")
-            handle.write("0 0\n")
-            handle.write("0 0\n")
-            handle.write("1\n")
-            handle.write(f"{n_atoms}\n")
-            handle.write("63.546000\n")
-            handle.write("Cu\n")
-            handle.write("Coordinates of Component 1\n")
-            written = 0
-            for z in range(side):
-                for y in range(side):
-                    for x in range(side):
-                        if written >= n_atoms:
-                            break
-                        dx, dy, dz = (float(value) for value in delta[written])
-                        handle.write(
-                            f" {float(x) + dx:.6f} {float(y) + dy:.6f} {float(z) + dz:.6f} 0 {written}\n"
-                        )
-                        written += 1
+    frames: list[str] = []
+    for frame in range(n_frames):
+        delta = thermal_shift(n_atoms, frame)
+        lines = [
+            "grid\n",
+            '{"con_spec_version":2}\n',
+            f"{span:.6f} {span:.6f} {span:.6f}\n",
+            "90.000000 90.000000 90.000000\n",
+            "0 0\n",
+            "0 0\n",
+            "1\n",
+            f"{n_atoms}\n",
+            "63.546000\n",
+            "Cu\n",
+            "Coordinates of Component 1\n",
+        ]
+        written = 0
+        for z in range(side):
+            for y in range(side):
+                for x in range(side):
                     if written >= n_atoms:
                         break
+                    dx, dy, dz = (float(value) for value in delta[written])
+                    lines.append(
+                        f" {float(x) + dx:.6f} {float(y) + dy:.6f} {float(z) + dz:.6f} 0 {written}\n"
+                    )
+                    written += 1
                 if written >= n_atoms:
                     break
+            if written >= n_atoms:
+                break
+        frames.append("".join(lines))
+    if n_frames > 1:
+        require_distinct_frames(frames)
+    path.write_text("".join(frames), encoding="utf-8")
 
 
 def write_inputs() -> dict[str, Path]:
