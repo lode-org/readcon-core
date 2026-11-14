@@ -1,0 +1,54 @@
+name: Release smoke
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: release-smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  published-assets:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compilers for the C and C++ smoke programs
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential
+
+      - name: Reject a clib tarball that omits the version header
+        run: python3 scripts/check_release_smoke.py --self-test
+
+      - name: Download the published assets for this version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          args=()
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            args+=(--require-published)
+          fi
+          python3 scripts/check_release_smoke.py "${args[@]}"
+
+  install-docs:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install the documented commands
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          args=()
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            args+=(--require-published)
+          fi
+          python3 scripts/check_install_docs.py "${args[@]}"
