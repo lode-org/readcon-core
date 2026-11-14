@@ -3643,6 +3643,13 @@ fn stitch_ranges(parts: &[RangeStarts]) -> Result<Vec<usize>, ()> {
 /// start that continues the previous range. A gap falls back to one walk.
 #[cfg(feature = "parallel")]
 fn frame_start_offsets_ranged(text: &str, threads: usize) -> Vec<usize> {
+    // One walk is faster when a worker would own only a few kilobytes.
+    // 100-frame convel is 58 KB and the seam search made 2/4/8 threads
+    // slower; 50-frame cuh2 is 838 KB and was not.
+    const MIN_BYTES: usize = 96 * 1024;
+    if text.len() < MIN_BYTES {
+        return frame_start_offsets_serial(text);
+    }
     let cuts = equal_cuts(text.len(), threads);
     let ranges: Vec<(usize, usize)> = cuts
         .windows(2)
