@@ -5,7 +5,10 @@ classes. asv-runner 0.3.2 calls a method named ``teardown`` and never calls
 ``teardown_cache``. ``TimeReadConTiny`` and ``TimeReadConCuh2`` therefore
 create their file in ``setup`` and delete it in ``teardown``. Defining
 ``setup`` makes asv record ``number = 1`` (``asv_runner/benchmarks/time.py``).
-``TimeChemfilesXyz`` and ``TimeSelectAtoms`` still have no ``setup``, so asv
+``TimeChemfilesXyz`` creates its file in ``setup`` and deletes it in
+``teardown``. That forces ``number = 1``, so those rows are not comparable
+with older asv rows that calibrated ``number``; they are rerun together
+later. ``TimeSelectAtoms`` still has no ``setup``, so asv
 calibrates ``number`` until each sample takes about ``sample_time`` seconds.
 That target is asv_runner's default of 0.01 s. Memory classes set
 ``number = 1`` so memray records one call. The workflow passes ``repeat``
@@ -111,30 +114,6 @@ def _optional_select_frame():
 
 
 _SELECT_FRAME = _optional_select_frame()
-
-
-def _skip_if_needed(cache) -> None:
-    if isinstance(cache, dict) and cache.get("skip"):
-        from asv_runner.benchmarks.mark import SkipNotImplemented
-
-        raise SkipNotImplemented("chemfiles not linked")
-
-
-def _xyz_files() -> dict:
-    import readcon
-
-    if not readcon.has_chemfiles_support():
-        return {"skip": True}
-    frame = readcon.read_first_frame(str(FIXTURE_CUH2))
-    atoms = frame.to_ase()
-    from ase.io import write
-
-    out: dict = {}
-    for n in CUH2_FRAMES:
-        path = _write_temp("", suffix=".xyz")
-        write(path, [atoms] * n, format="xyz")
-        out[n] = path
-    return out
 
 
 class TimeReadConTiny:
@@ -244,7 +223,11 @@ class RayReadConCuh2:
 
 
 class TimeChemfilesXyz:
-    """Foreign XYZ to ConFrame via shipped readcon.read_chemfiles (skip if lean)."""
+    """Foreign XYZ to ConFrame via shipped readcon.read_chemfiles (skip if lean).
+
+    ``setup`` forces asv ``number = 1``. Rows from a run that calibrated
+    ``number`` are not comparable with these; rerun the table together.
+    """
 
     timeout = 300
     repeat = REPEAT
@@ -254,12 +237,30 @@ class TimeChemfilesXyz:
     params = list(CUH2_FRAMES)
     param_names = ["n_frames"]
 
-    def setup_cache(self) -> dict:
-        return _xyz_files()
+    def setup(self, n_frames: int) -> None:
+        import readcon
 
-    def time_read_chemfiles(self, cache: dict, n_frames: int) -> None:
-        _skip_if_needed(cache)
-        _read_chemfiles(cache[int(n_frames)], int(n_frames))
+        if not readcon.has_chemfiles_support():
+            try:
+                from asv_runner.benchmarks.mark import SkipNotImplemented
+            except ImportError:
+                raise NotImplementedError("chemfiles not linked") from None
+            raise SkipNotImplemented("chemfiles not linked")
+        frame = readcon.read_first_frame(str(FIXTURE_CUH2))
+        atoms = frame.to_ase()
+        from ase.io import write
+
+        path = _write_temp("", suffix=".xyz")
+        write(path, [atoms] * int(n_frames), format="xyz")
+        self._path = path
+
+    def teardown(self, n_frames: int) -> None:
+        path = getattr(self, "_path", None)
+        if path:
+            Path(path).unlink(missing_ok=True)
+
+    def time_read_chemfiles(self, n_frames: int) -> None:
+        _read_chemfiles(self._path, int(n_frames))
 
 
 class RayChemfilesXyz:
