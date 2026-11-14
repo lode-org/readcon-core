@@ -576,7 +576,7 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \subsection{Computational details}\label{sec:compute}
 The peer tables in this section were timed on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
-The h2h12 and camp5c records are a separate session on a Xeon of family 6, model 173.
+The h2h12 and camp16b records are a separate session on a Xeon of family 6, model 173.
 The readcon-db comparison is the db9 record \path{bench/db9} at \texttt{89105ce4}.
 The reads use readcon-core \benchReadcon\ and Python 3.12.3.
 The libraries beside those reads are NumPy \benchNumpy\ \cite{harrisArrayProgrammingNumpy2020}, ASE \benchAse\ \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz \benchExtxyz\ \cite{kermodeLibatomsExtxyzV0462026}, chemfiles \benchChemfiles\ \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \benchMda\ \cite{gowersMdanalysis21102026} and OVITO \benchOvito\ \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{\benchEon}, after the \eOneEonTag\ release \cite{rohitgoswamiTheochemuieonV3602026}.
@@ -596,6 +596,10 @@ Readcon's weak efficiency sits above the fresh-file copy on every row: tmpfs thr
 The same-length rewrite is its own row: 0.9484 on tmpfs and 0.8581 on ext4 at 8 threads.
 It overwrites a same-length spare and renames it into place.
 The record is \path{bench/h2h/scaling/camp14/kvm-8} at \texttt{80dde969}.
+The 0.1515~s tmpfs cell and the 0.206~s ext4 cell are that camp14 record.
+camp16b times the same 64000-frame file at 8 threads.
+The median is 0.1446~s on tmpfs and 0.2099~s on ext4.
+That pair is \path{bench/h2h/scaling/camp16b/reconcile.json} at \texttt{e3d33a13}.
 Camp13 compares fresh-file stores on the model 173 host (Table~\ref{tab:camp13-store}).
 On tmpfs the fastest store at 8 workers is a plain per-worker mmap.
 \texttt{shmem\_enabled} is never, so a default tmpfs file stays on base pages under \texttt{MADV\_HUGEPAGE}.
@@ -657,7 +661,7 @@ The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
-Write scaling in this paper is camp5c.
+Write scaling in this paper is camp16b.
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
 Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are h2h12: one frame of \(10^{6}\) atoms and one trajectory, on the model 173 host.
@@ -693,13 +697,21 @@ A file that drops those fields cannot stand in for a CON file.
 The ASE extended XYZ row drops none.
 \input{campaign/final/cross_format}
 
-Tables~\ref{tab:camp5c-threads-write-memory} and~\ref{tab:camp5c-mpi-write-memory} are the camp5c write-scaling record on the model 173 host, and they supersede camp4.
-The record is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
+Tables~\ref{tab:camp16b-threads-read-memory} and~\ref{tab:camp16b-mpi-write-memory} are camp16b, one session on the model 173 host.
+The record is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
 Each median is twelve samples.
-On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.9834 for threaded con-100k, 0.8596 for threaded convel, 0.9493 for MPI con-100k and 0.9667 for MPI convel.
-The convel writer keeps the first header, skips the identifier scan already done while pricing the frame, appends velocity lines to the frame buffer, and releases each worker's mapping on that worker.
-The disk and disk-sync tables are the same record.
-\input{campaign/final/camp5c_writes}
+A write in these tables unlinks the destination before the clock.
+On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.8883 for threaded con-100k, 0.7845 for threaded convel, 0.8874 for MPI con-100k and 0.8717 for MPI convel.
+The fresh-file write of the million-atom frame to disk takes 0.04605~s at one thread and 0.01515~s at eight threads.
+The weak parses are Table~\ref{tab:camp16b-weak}.
+Eight threads keep the time at 0.1225~s, and \(T(1)/T(8)\) is 0.884.
+Eight ranks keep the time at 0.02963~s, and \(T(1)/T(8)\) is 0.9858.
+The rank file has 2000 frames on each rank, and the thread file has 8000 frames on each worker.
+Gzip of that million-atom frame, one member and one thread, takes 0.3277~s to write and leaves a 2.648~MB file.
+zstd at level 3, one member and one thread, takes 0.05996~s and leaves a 0.7552~MB file.
+Eight members at eight threads write gzip in 0.04272~s and zstd in 0.007717~s (Table~\ref{tab:camp16b-compressed}).
+\texttt{write\_conbin} of the million-atom frame takes 0.1526~s, and \texttt{read\_conbin} takes 0.002137~s (Table~\ref{tab:camp16b-conbin}).
+\input{campaign/final/camp16b}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
@@ -734,7 +746,7 @@ The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
-Write scaling is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
+Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold-open reads are \path{bench/db13} at \texttt{b6680e00}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
@@ -745,6 +757,7 @@ The stream bandwidth is \path{bench/h2h/scaling/camp11} at that commit.
 The formatter and the million-atom frame write are \path{bench/h2h/scaling/camp12} at \texttt{0c78ce7e}.
 The fresh-file stores are \path{bench/h2h/scaling/camp13} at \texttt{fa51a162}.
 The weak writes are \path{bench/h2h/scaling/camp14/kvm-8} at \texttt{80dde969}.
+The 8-thread tmpfs and ext4 medians beside that table are \path{bench/h2h/scaling/camp16b/reconcile.json} at \texttt{e3d33a13}.
 The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 One input is \path{frames-32x100000.con}.
