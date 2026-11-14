@@ -299,10 +299,10 @@ def load_frames(copies: int):
     if copies == 1:
         frames = readcon.read_con(os.fspath(CON), n_threads=1)
     else:
-        blob = CON.read_bytes() * copies
+        from frames_guard import write_distinct_copies
+
         path = PAGE / f"input-x{copies}.con"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(blob)
+        write_distinct_copies(path, CON.read_bytes(), copies)
         try:
             frames = readcon.read_con(os.fspath(path), n_threads=1)
         finally:

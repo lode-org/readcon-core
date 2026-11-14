@@ -10,9 +10,13 @@ and the species lines and nudges each frame's coordinates with a fixed seed.
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import numpy as np
+
+_MASK64 = (1 << 64) - 1
+_FLOAT = re.compile(r"[-+]?\d+\.\d+")
 
 
 def _coord_parts(line: str) -> list[str] | None:
@@ -30,21 +34,65 @@ def _coord_parts(line: str) -> list[str] | None:
     return parts
 
 
+def _splitmix64(value: int) -> int:
+    z = value & _MASK64
+    z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & _MASK64
+    z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & _MASK64
+    return (z ^ (z >> 31)) & _MASK64
+
+
+def _pcg32(state: int) -> tuple[int, int]:
+    """PCG-XSH-RR. One stream per frame, not a 997-step linear residue."""
+    state = (state * 6364136223846793005 + 1442695040888963407) & _MASK64
+    xorshifted = (((state >> 18) ^ state) >> 27) & 0xFFFFFFFF
+    rot = state >> 59
+    bits = ((xorshifted >> rot) | (xorshifted << ((-rot) & 31))) & 0xFFFFFFFF
+    return state, bits
+
+
+def _frame_state(frame: int, seed: int) -> int:
+    mixed = (seed & _MASK64) ^ (((frame + 1) * 0x9E3779B97F4A7C15) & _MASK64) ^ 0xC0FFEE
+    return _splitmix64(mixed)
+
+
+def _bump_token(token: str, draw: int) -> str:
+    """Change the last digit. The field width and the other digits stay."""
+    chars = list(token)
+    delta = (draw % 9) + 1
+    for index in range(len(chars) - 1, -1, -1):
+        if chars[index].isdigit():
+            chars[index] = str((int(chars[index]) + delta) % 10)
+            return "".join(chars)
+    return token
+
+
 def perturb_frame(text: str, frame: int, seed: int = 1) -> str:
-    """One copy of ``text`` whose coordinates depend on ``frame`` and ``seed``."""
-    atom = 0
+    """One copy of ``text`` whose coordinates depend on ``frame`` and ``seed``.
+
+    The printed field widths stay those of ``text``, so a 16771-byte cuh2
+    frame is still 16771 bytes. The nudge is a per-frame PCG32 stream.
+    """
+    state = _frame_state(frame, seed)
     out: list[str] = []
     for line in text.splitlines(keepends=True):
         newline = "\n" if line.endswith("\n") else ""
-        body = line[:-1] if newline else line
-        parts = _coord_parts(body)
-        if parts is None:
+        body = line[: -len(newline)] if newline else line
+        if _coord_parts(body) is None:
             out.append(line)
             continue
-        nudge = ((seed + (frame + 1) * 1_000_003 + atom * 17) % 997) * 1e-6
-        parts[0] = f"{float(parts[0]) + nudge:.8f}"
-        out.append(" ".join(parts) + newline)
-        atom += 1
+        pieces: list[str] = []
+        last = 0
+        bumped = 0
+        for match in _FLOAT.finditer(body):
+            if bumped >= 3:
+                break
+            pieces.append(body[last : match.start()])
+            state, draw = _pcg32(state)
+            pieces.append(_bump_token(match.group(0), draw))
+            last = match.end()
+            bumped += 1
+        pieces.append(body[last:])
+        out.append("".join(pieces) + newline)
     return "".join(out)
 
 
@@ -124,7 +172,10 @@ def require_distinct_frames(frames: np.ndarray | list[str]) -> list[str]:
 def write_distinct_copies(path: Path, one: str | bytes, n: int, seed: int = 1) -> None:
     """Write ``n`` distinct copies of one CON frame. An older tiled file is replaced."""
     text = one.decode("utf-8") if isinstance(one, bytes) else one
+    frames = distinct_frame_list(text, n, seed)
+    if n > 1:
+        require_distinct_frames(frames)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        for frame in distinct_frame_list(text, n, seed):
+        for frame in frames:
             handle.write(frame)

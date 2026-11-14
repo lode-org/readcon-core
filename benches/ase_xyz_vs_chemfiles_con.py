@@ -74,7 +74,12 @@ def main() -> None:
         xyz = work / "traj.xyz"
         con = work / "traj.con"
         ase_write(str(xyz), atoms_list, format="xyz")
-        con.write_text(args.fixture.read_text() * args.frames)
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+        from frames_guard import write_distinct_copies
+
+        write_distinct_copies(con, args.fixture.read_text(), args.frames)
 
         def ase_xyz() -> int:
             return len(ase_read(str(xyz), index=":", format="xyz"))

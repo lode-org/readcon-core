@@ -120,7 +120,12 @@ def main() -> None:
         # Multi-frame CON: identical text concat is the rare-event checkpoint pattern
         # (repeated / near-repeated frames). Size rows also report gzip/zstd of that blob.
         con = work / "traj.con"
-        con_text = args.fixture.read_text() * args.frames
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+        from frames_guard import distinct_frames
+
+        con_text = distinct_frames(args.fixture.read_text(), args.frames)
         con.write_text(con_text)
 
         con_gz = work / "traj.con.gz"

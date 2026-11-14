@@ -11,7 +11,7 @@
 
 use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::frames_from_text;
-use readcon_core::rcso::{Rcso, encode_batch};
+use readcon_core::rcso::{encode_batch, Rcso};
 use readcon_core::rpc::client::RpcClient;
 use readcon_core::rpc::server;
 use std::env;
@@ -30,13 +30,8 @@ fn fixture_text(name: &str) -> String {
     fs::read_to_string(repo_root().join("resources/test").join(name)).expect("fixture")
 }
 
-fn repeat_text(one: &str, n: usize) -> String {
-    let mut buf = String::with_capacity(one.len() * n);
-    for _ in 0..n {
-        buf.push_str(one);
-    }
-    buf
-}
+#[path = "../bench/h2h/frames_guard.rs"]
+mod frames_guard;
 
 fn median_ms(mut samples: Vec<f64>) -> f64 {
     samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -121,7 +116,7 @@ fn main() {
     let repeats = 5usize;
     let n_frames = 100usize;
     let one = fixture_text("cuh2.con");
-    let text = repeat_text(&one, n_frames);
+    let text = frames_guard::distinct_frames(&one, n_frames);
     let frames = frames_from_text(&text, Some(1)).expect("parse payload");
     assert_eq!(frames.len(), n_frames);
     let n_atoms = frames[0].atom_data.len();

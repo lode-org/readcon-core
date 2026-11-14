@@ -93,7 +93,12 @@ def main() -> None:
             for a in atoms_list:
                 t.write(a)
         ase_write(str(netcdf), atoms_list, format="netcdftrajectory")
-        con.write_text(args.fixture.read_text() * args.frames)
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+        from frames_guard import write_distinct_copies
+
+        write_distinct_copies(con, args.fixture.read_text(), args.frames)
 
         sizes = {p.name: p.stat().st_size for p in work.iterdir() if p.is_file()}
 
