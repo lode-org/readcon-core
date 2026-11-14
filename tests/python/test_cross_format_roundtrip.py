@@ -51,6 +51,21 @@ def test_readcon_chemfiles_roundtrip_without_the_python_package(tmp_path, monkey
     assert row["position_error"] <= row["precision"], row
 
 
+def test_a_written_file_round_trips_the_atom_count(tmp_path: Path) -> None:
+    spec = cross_format.make_spec(4, 2)
+    path = tmp_path / "round.con"
+    cross_format.write_readcon(path, spec, None)
+    cross_format.expect_written_roundtrip("readcon-con", path, 4, 2)
+    empty = tmp_path / "empty.con"
+    empty.write_bytes(b"")
+    try:
+        cross_format.expect_written_roundtrip("readcon-con", empty, 4, 2)
+    except SystemExit as exc:
+        assert "0 bytes" in str(exc)
+        return
+    raise AssertionError("an empty write was accepted")
+
+
 def test_a_stub_file_is_not_a_million_atom_write() -> None:
     try:
         cross_format.expect_file_bytes("chemfiles-xyz", 1_000_000, 1, 10)
