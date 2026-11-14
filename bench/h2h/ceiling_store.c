@@ -7,8 +7,15 @@
  *
  *   ceiling_store MODE STORE BYTES WORKERS REPEATS DIR FSYNC
  *
- * MODE is threads or procs. STORE is mmap, pwrite, populate, huge, or
- * populate_write. FSYNC is 0 or 1.
+ * MODE is threads or procs. STORE is mmap, shared, pwrite, pwrite1m,
+ * populate, huge, populate_write, hugepage, falloc, falloc_pwrite, or
+ * touch. FSYNC is 0 or 1.
+ *
+ * falloc allocates this worker's span with fallocate, then copies through
+ * a mapping. falloc_pwrite does the same allocation and then pwrites.
+ * touch stores one byte per page, then copies. pwrite1m splits the span
+ * into 1 MiB pwrites. shared is one mapping of the whole file, and each
+ * worker copies into its own slice of that mapping.
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -38,7 +45,12 @@ enum store {
     STORE_POPULATE,
     STORE_HUGE,
     STORE_POPULATE_WRITE,
-    STORE_HUGEPAGE
+    STORE_HUGEPAGE,
+    STORE_PWRITE_1M,
+    STORE_FALLOC,
+    STORE_FALLOC_PWRITE,
+    STORE_TOUCH,
+    STORE_SHARED
 };
 
 struct job {
@@ -47,6 +59,7 @@ struct job {
     int store;
     size_t bytes;
     const unsigned char *src;
+    unsigned char *shared;
 };
 
 static double now_s(void) {
@@ -67,25 +80,46 @@ static void die(const char *what) {
     exit(2);
 }
 
+static void pwrite_span(int fd, const unsigned char *src, size_t n, off_t at, size_t chunk) {
+    size_t done = 0;
+    while (done < n) {
+        size_t want = n - done;
+        if (chunk != 0 && want > chunk) {
+            want = chunk;
+        }
+        ssize_t wrote = pwrite(fd, src + done, want, at + (off_t)done);
+        if (wrote < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            die("pwrite");
+        }
+        if (wrote == 0) {
+            die("pwrite short");
+        }
+        done += (size_t)wrote;
+    }
+}
+
 static void store_range(const struct job *job) {
     size_t offset = (size_t)job->id * job->bytes;
-    if (job->store == STORE_PWRITE) {
-        size_t done = 0;
-        while (done < job->bytes) {
-            ssize_t n = pwrite(job->fd, job->src + done, job->bytes - done,
-                               (off_t)(offset + done));
-            if (n < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                die("pwrite");
-            }
-            if (n == 0) {
-                die("pwrite short");
-            }
-            done += (size_t)n;
-        }
+    if (job->shared != NULL) {
+        memcpy(job->shared + offset, job->src, job->bytes);
         return;
+    }
+    if (job->store == STORE_PWRITE || job->store == STORE_PWRITE_1M) {
+        size_t chunk = job->store == STORE_PWRITE_1M ? (1u << 20) : 0;
+        pwrite_span(job->fd, job->src, job->bytes, (off_t)offset, chunk);
+        return;
+    }
+    if (job->store == STORE_FALLOC || job->store == STORE_FALLOC_PWRITE) {
+        if (fallocate(job->fd, 0, (off_t)offset, (off_t)job->bytes) != 0) {
+            die("fallocate");
+        }
+        if (job->store == STORE_FALLOC_PWRITE) {
+            pwrite_span(job->fd, job->src, job->bytes, (off_t)offset, 0);
+            return;
+        }
     }
     int flags = MAP_SHARED;
     if (job->store == STORE_POPULATE) {
@@ -103,6 +137,11 @@ static void store_range(const struct job *job) {
     if (job->store == STORE_POPULATE_WRITE || job->store == STORE_HUGE) {
         if (madvise(map, job->bytes, MADV_POPULATE_WRITE) != 0) {
             die("MADV_POPULATE_WRITE");
+        }
+    }
+    if (job->store == STORE_TOUCH) {
+        for (size_t i = 0; i < job->bytes; i += 4096) {
+            map[i] = 0;
         }
     }
     memcpy(map, job->src, job->bytes);
@@ -135,6 +174,13 @@ static double one_sample(int procs, int store, size_t bytes, int workers, const 
     if (ftruncate(fd, (off_t)total) != 0) {
         die("ftruncate");
     }
+    unsigned char *shared = NULL;
+    if (store == STORE_SHARED) {
+        shared = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (shared == MAP_FAILED) {
+            die("mmap");
+        }
+    }
     if (procs) {
         for (int id = 0; id < workers; id++) {
             pid_t child = fork();
@@ -142,7 +188,7 @@ static double one_sample(int procs, int store, size_t bytes, int workers, const 
                 die("fork");
             }
             if (child == 0) {
-                struct job job = {fd, id, store, bytes, src};
+                struct job job = {fd, id, store, bytes, src, shared};
                 pin(id);
                 store_range(&job);
                 _exit(0);
@@ -164,7 +210,7 @@ static double one_sample(int procs, int store, size_t bytes, int workers, const 
             exit(2);
         }
         for (int id = 0; id < workers; id++) {
-            jobs[id] = (struct job){fd, id, store, bytes, src};
+            jobs[id] = (struct job){fd, id, store, bytes, src, shared};
             if (pthread_create(&threads[id], NULL, thread_main, &jobs[id]) != 0) {
                 die("pthread_create");
             }
@@ -172,6 +218,9 @@ static double one_sample(int procs, int store, size_t bytes, int workers, const 
         for (int id = 0; id < workers; id++) {
             pthread_join(threads[id], NULL);
         }
+    }
+    if (shared != NULL && munmap(shared, total) != 0) {
+        die("munmap");
     }
     if (do_fsync && fsync(fd) != 0) {
         die("fsync");
@@ -201,6 +250,21 @@ static int parse_store(const char *text) {
     }
     if (strcmp(text, "hugepage") == 0) {
         return STORE_HUGEPAGE;
+    }
+    if (strcmp(text, "pwrite1m") == 0) {
+        return STORE_PWRITE_1M;
+    }
+    if (strcmp(text, "falloc") == 0) {
+        return STORE_FALLOC;
+    }
+    if (strcmp(text, "falloc_pwrite") == 0) {
+        return STORE_FALLOC_PWRITE;
+    }
+    if (strcmp(text, "touch") == 0) {
+        return STORE_TOUCH;
+    }
+    if (strcmp(text, "shared") == 0) {
+        return STORE_SHARED;
     }
     fprintf(stderr, "unknown store %s\n", text);
     exit(2);
