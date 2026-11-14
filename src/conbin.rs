@@ -1941,15 +1941,19 @@ fn decode_le<T: StoreLe>(values: &mut [T]) {
     }
 }
 
+fn header_page_bytes(header: &ConBinHeader, page: usize) -> Vec<u8> {
+    let mut header_page = vec![0u8; page];
+    let prefix = header_fields(header, page as u64);
+    header_page[..FIELD_BYTES].copy_from_slice(&prefix);
+    header_page
+}
+
 fn write_header_page(
     file: &mut File,
     header: &ConBinHeader,
     page: usize,
 ) -> Result<(), ParseError> {
-    let mut header_page = vec![0u8; page];
-    let prefix = header_fields(header, page as u64);
-    header_page[..FIELD_BYTES].copy_from_slice(&prefix);
-    file.write_all(&header_page)
+    file.write_all(&header_page_bytes(header, page))
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
@@ -2104,11 +2108,15 @@ pub fn write_from_con(
 ///
 /// A file that is not a sequence of equal-length frames stays on one
 /// thread: the frame boundaries are only known by parsing it in order.
-/// On 8,000 copies of `cuh2.con` (114 MB of CON-bin) one thread took
-/// 0.35 s and eight threads took 0.38 s. The parse itself dropped from
-/// 0.29 s to 0.18 s, and the rest is one sequential write of the columns.
-/// Weak scaling adds frames per worker, so that write grows with the
-/// worker count and the wall time cannot stay flat.
+/// Equal-length frames are parsed on `threads` workers. Each worker then
+/// `pwrite`s its own column chunks into a preallocated file, and the
+/// publish is still one rename. A file that is not equal-length frames
+/// stays on one thread. The output matches the one-thread writer.
+///
+/// Eight thousand copies of `cuh2.con` (114 MB of CON-bin) took 0.343 s,
+/// 0.212 s, 0.138 s and 0.117 s at 1, 2, 4 and 8 threads. The speedup is
+/// about 2.9 at 8 threads. Weak scaling still grows the file with the
+/// worker count, so the wall time cannot stay flat.
 pub fn write_from_con_with_threads(
     con_path: &Path,
     out_path: &Path,
@@ -2278,6 +2286,202 @@ fn accumulate_text(text: &str, threads: usize) -> Result<FrameColumns, ParseErro
     Ok(merged)
 }
 
+fn equal_parts(text: &str, threads: usize) -> Result<Option<Vec<(u64, FrameColumns)>>, ParseError> {
+    let Some(span) = equal_frame_span(text) else {
+        return Ok(None);
+    };
+    let n = text.len() / span;
+    let threads = threads.max(1).min(n);
+    if threads < 2 {
+        return Ok(None);
+    }
+    let mut parts = Vec::with_capacity(threads);
+    std::thread::scope(|scope| {
+        let mut jobs = Vec::with_capacity(threads);
+        for thread in 0..threads {
+            let start = n * thread / threads;
+            let end = n * (thread + 1) / threads;
+            let chunk = &text[start * span..end * span];
+            jobs.push(scope.spawn(move || (start as u64, accumulate_frames(chunk))));
+        }
+        for job in jobs {
+            parts.push(job.join().expect("frame parse"));
+        }
+    });
+    let mut built = Vec::with_capacity(parts.len());
+    for (begin, columns) in parts {
+        built.push((begin, columns?));
+    }
+    Ok(Some(built))
+}
+
+fn write_at(file: &File, mut bytes: &[u8], mut offset: u64) -> Result<(), ParseError> {
+    while !bytes.is_empty() {
+        #[cfg(unix)]
+        let wrote = {
+            use std::os::unix::fs::FileExt;
+            file.write_at(bytes, offset)
+                .map_err(|err| ParseError::ValidationError(err.to_string()))?
+        };
+        #[cfg(not(unix))]
+        let wrote = {
+            use std::os::windows::fs::FileExt;
+            file.seek_write(bytes, offset)
+                .map_err(|err| ParseError::ValidationError(err.to_string()))?
+        };
+        if wrote == 0 {
+            return Err(ParseError::ValidationError(
+                "positioned write stored no bytes".into(),
+            ));
+        }
+        bytes = &bytes[wrote..];
+        offset += wrote as u64;
+    }
+    Ok(())
+}
+
+fn store_at<T: StoreLe>(file: &File, values: &[T], offset: u64) -> Result<(), ParseError> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    if cfg!(target_endian = "little") {
+        let bytes = unsafe {
+            std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
+        };
+        return write_at(file, bytes, offset);
+    }
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
+    for value in values {
+        value.store_le(&mut bytes);
+    }
+    write_at(file, &bytes, offset)
+}
+
+fn store_f32_at(file: &File, values: &[f64], offset: u64) -> Result<(), ParseError> {
+    let narrow: Vec<f32> = values.iter().map(|value| *value as f32).collect();
+    store_at(file, &narrow, offset)
+}
+
+fn preallocate(file: &File, len: u64) -> Result<(), ParseError> {
+    file.set_len(len)
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        let rc = unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, len as libc::off_t) };
+        if rc != 0 {
+            let err = std::io::Error::last_os_error();
+            match err.raw_os_error() {
+                Some(code)
+                    if code == libc::EOPNOTSUPP || code == libc::ENOSYS || code == libc::EINVAL => {
+                }
+                _ => return Err(ParseError::ValidationError(err.to_string())),
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_parts_at(
+    file: &File,
+    parts: &[(u64, FrameColumns)],
+    binary32: bool,
+    page: usize,
+) -> Result<(), ParseError> {
+    let n_atoms = parts[0].1.n_atoms;
+    let mut n_frames = 0u64;
+    let mut any_force = false;
+    for (begin, columns) in parts {
+        if columns.n_atoms != n_atoms {
+            return Err(ParseError::InvalidCount(
+                "CON-bin requires the same atom count in every frame".into(),
+            ));
+        }
+        if *begin != n_frames {
+            return Err(ParseError::ValidationError(
+                "CON-bin frame chunks are not in order".into(),
+            ));
+        }
+        n_frames += columns.n_frames;
+        any_force |= columns.any_force;
+    }
+    let elem = if binary32 { 4u64 } else { 8 };
+    let xyz = n_frames * n_atoms * 3 * elem;
+    let mut at = page as u64;
+    let pos_at = at;
+    at += xyz;
+    let vel_at = at;
+    at += xyz;
+    let force_at = if any_force {
+        let here = at;
+        at += xyz;
+        Some(here)
+    } else {
+        None
+    };
+    let mass_at = at;
+    at += n_frames * n_atoms * elem;
+    let cell_at = at;
+    at += n_frames * 6 * elem;
+    let id_at = at;
+    at += n_frames * n_atoms * 8;
+    let fix_at = at;
+    at += n_frames * n_atoms;
+    preallocate(file, at)?;
+    let stride_xyz = n_atoms * 3 * elem;
+    let stride_atom = n_atoms * elem;
+    let mut failed: Option<ParseError> = None;
+    std::thread::scope(|scope| {
+        let mut jobs = Vec::with_capacity(parts.len());
+        for (begin, columns) in parts {
+            jobs.push(scope.spawn(move || -> Result<(), ParseError> {
+                if binary32 {
+                    store_f32_at(file, &columns.positions, pos_at + begin * stride_xyz)?;
+                    store_f32_at(file, &columns.velocities, vel_at + begin * stride_xyz)?;
+                    if let Some(force_at) = force_at {
+                        store_f32_at(file, &columns.forces, force_at + begin * stride_xyz)?;
+                    }
+                    store_f32_at(file, &columns.masses, mass_at + begin * stride_atom)?;
+                    store_f32_at(file, &columns.cells, cell_at + begin * 6 * elem)?;
+                } else {
+                    store_at(file, &columns.positions, pos_at + begin * stride_xyz)?;
+                    store_at(file, &columns.velocities, vel_at + begin * stride_xyz)?;
+                    if let Some(force_at) = force_at {
+                        store_at(file, &columns.forces, force_at + begin * stride_xyz)?;
+                    }
+                    store_at(file, &columns.masses, mass_at + begin * stride_atom)?;
+                    store_at(file, &columns.cells, cell_at + begin * 6 * elem)?;
+                }
+                store_at(file, &columns.ids, id_at + begin * n_atoms * 8)?;
+                store_at(file, &columns.fixed, fix_at + begin * n_atoms)?;
+                Ok(())
+            }));
+        }
+        for job in jobs {
+            if let Err(err) = job.join().expect("column write") {
+                failed = Some(err);
+            }
+        }
+    });
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    let header = ConBinHeader {
+        version: VERSION_2,
+        n_frames,
+        n_atoms,
+        binary32,
+        velocities: true,
+        forces: any_force,
+        masses: true,
+        fixed: true,
+        cell: true,
+        atom_ids: true,
+    };
+    let page_bytes = header_page_bytes(&header, page);
+    write_at(file, &page_bytes, 0)
+}
+
 fn write_conbin_body(
     file: &mut File,
     text: &str,
@@ -2285,6 +2489,11 @@ fn write_conbin_body(
     page: usize,
     threads: usize,
 ) -> Result<(), ParseError> {
+    if threads > 1 {
+        if let Some(parts) = equal_parts(text, threads)? {
+            return write_parts_at(file, &parts, binary32, page);
+        }
+    }
     write_header_page(file, &ConBinHeader::version1(0, 0, binary32, true), page)?;
 
     let built = accumulate_text(text, threads)?;
@@ -2382,11 +2591,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let input = dir.path().join("in.con");
         std::fs::write(&input, frame.repeat(4)).unwrap();
-        let one = dir.path().join("one.conbin");
-        let many = dir.path().join("many.conbin");
-        write_from_con_with_threads(&input, &one, false, 1).unwrap();
-        write_from_con_with_threads(&input, &many, false, 4).unwrap();
-        assert_eq!(std::fs::read(&one).unwrap(), std::fs::read(&many).unwrap());
+        for binary32 in [false, true] {
+            let one = dir.path().join(format!("one-{binary32}.conbin"));
+            write_from_con_with_threads(&input, &one, binary32, 1).unwrap();
+            let serial = std::fs::read(&one).unwrap();
+            for threads in [2usize, 4, 8] {
+                let many = dir.path().join(format!("t{threads}-{binary32}.conbin"));
+                write_from_con_with_threads(&input, &many, binary32, threads).unwrap();
+                assert_eq!(
+                    std::fs::read(&many).unwrap(),
+                    serial,
+                    "threads {threads} binary32 {binary32}"
+                );
+            }
+        }
     }
 
     #[test]
