@@ -1,0 +1,5 @@
+Benchmarks that have improved:
+
+| Change   | Before [6766e4a68e8fc0e7a97f420105c1892e43601eef]   | After [6766e4a68e8fc0e7a97f420105c1892e43601eef]   | Ratio             | Benchmark (Parameter)                                                                                                  |
+|----------|-----------------------------------------------------|----------------------------------------------------|-------------------|------------------------------------------------------------------------------------------------------------------------|
+| -        | 39.2±0.5ms                                          | 2.60±0.08ms                                        | 0.07 [0.07, 0.07] | bench_readcon.TimeWritePythonCuh2.time_write_python_frames(50) / bench_readcon.TimeWriteAseCuh2.time_write_ase_eon(50) |

@@ -209,6 +209,11 @@ def main(argv: list[str] | None = None) -> int:
         help="display unit for the median; seconds for timing, bytes for a peak",
     )
     parser.add_argument(
+        "--cross",
+        action="store_true",
+        help="compare the one benchmark in each file even when the names differ",
+    )
+    parser.add_argument(
         "--include",
         default="",
         help="keep labels containing this text; empty keeps every shared label",
@@ -229,6 +234,14 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parents[1]
     before_sha = require_published(before_sha, root)
     after_sha = require_published(after_sha, root)
+    if args.cross:
+        if len(before) != 1 or len(after) != 1:
+            raise SystemExit("a cross comparison needs one benchmark in each file")
+        before_label, before_row = next(iter(before.items()))
+        after_label, after_row = next(iter(after.items()))
+        label = f"{after_label} / {before_label}"
+        before = {label: before_row}
+        after = {label: after_row}
     needle = args.include
     dropped = args.exclude
 

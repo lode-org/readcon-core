@@ -1,0 +1,5 @@
+Benchmarks that have improved:
+
+| Change   | Before [6766e4a68e8fc0e7a97f420105c1892e43601eef]   | After [6766e4a68e8fc0e7a97f420105c1892e43601eef]   | Ratio             | Benchmark (Parameter)                                                                                              |
+|----------|-----------------------------------------------------|----------------------------------------------------|-------------------|--------------------------------------------------------------------------------------------------------------------|
+| -        | 45.2±0k                                             | 38.2±0k                                            | 0.85 [0.85, 0.85] | bench_readcon.RayWritePythonCuh2.ray_write_python_frames(50) / bench_readcon.RayWriteAseCuh2.ray_write_ase_eon(50) |
