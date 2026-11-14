@@ -42,6 +42,17 @@ fn component_symbol(bytes: &[u8]) -> std::sync::Arc<str> {
     std::sync::Arc::from(symbol)
 }
 
+fn read_mode() -> ReadMode {
+    match std::env::var("READCON_MPI_READ").ok().as_deref() {
+        Some("scatter") => ReadMode::Scatter,
+        Some("shared") | None => ReadMode::Shared,
+        Some(other) => {
+            eprintln!("READCON_MPI_READ must be shared or scatter, got {other}");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn rewrite_flags() -> (bool, bool) {
     let rewrite = std::env::var_os("READCON_MPI_REWRITE").is_some();
     let keep_spare = std::env::var("READCON_MPI_KEEP_SPARE")
@@ -76,7 +87,8 @@ fn main() {
     let universe = mpi::initialize().expect("mpi");
     let world = universe.world();
     let comm = Comm::dup_of(&world);
-    let held = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("read");
+    let mode = read_mode();
+    let held = read_block(&comm, path, mode, Some(1)).expect("read");
     // READCON_MPI_OUT selects the collective output. The default is
     // build/bench/readcon-r7-mpi.con in this checkout, so a tmpfs and a
     // disk can be timed apart by pointing the variable at the other store.
@@ -131,7 +143,7 @@ fn main() {
     } else if let Some((_, rows, _, _)) = &prepared {
         std::hint::black_box(rows.atoms.len());
     } else {
-        let _ = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("warmup read");
+        let _ = read_block(&comm, path, mode, Some(1)).expect("warmup read");
     }
     world.barrier();
     let mut samples = Vec::with_capacity(repeats);
@@ -164,7 +176,7 @@ fn main() {
             let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
             std::hint::black_box(coords.len());
         } else {
-            let got = read_block(&comm, path, ReadMode::Shared, Some(1)).expect("read");
+            let got = read_block(&comm, path, mode, Some(1)).expect("read");
             std::hint::black_box(got.n_total);
         }
         world.barrier();
