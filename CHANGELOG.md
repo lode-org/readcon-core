@@ -48,6 +48,10 @@ All notable changes to this project will be documented in this file. See [conven
   scratch uses the tempfile crate. A conbin readahead test that needs a
   real disk uses a test-only directory under `target/` or `build/`, and
   skips when both are tmpfs.
+- A trajectory of equal frames is filled straight into one coordinate slab.
+  A trailing newline used to reject that tiling, and each frame was parsed
+  into its own buffer. One hundred thousand frames of 32 atoms now scale
+  across the requested threads.
 - CON-bin payload values are little-endian. A failed populate hint leaves
   the mapping in place, and one byte of each page is read so the caller
   still sees the file. When `mmap` itself fails, the file is read into a
