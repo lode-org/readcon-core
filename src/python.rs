@@ -530,13 +530,10 @@ impl PyConFrame {
     }
 
     #[getter]
-    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        if !self.metadata_local
-            && let Some((columns, index)) = &self.columns_index
-        {
-            let header = &columns.headers[columns.header_index[*index] as usize];
-            return json_map_to_py_dict(py, &header.metadata.to_map());
-        }
+    fn metadata(&mut self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        // A fresh dict would drop `frames[i].metadata[k] = v`. Build the
+        // header map once and hand back that same object.
+        self.materialize_metadata(py)?;
         Ok(self.metadata.clone_ref(py))
     }
 
@@ -2498,11 +2495,17 @@ impl ConFrameList {
         if masses.len() < n {
             masses.resize(n, 0.0);
         }
+        let mut meta = header.metadata.to_map();
+        crate::writer::stamp_legacy_velocity_time(
+            &mut meta,
+            header.spec_version,
+            velocity.is_some(),
+        );
         let mut builder = ConFrameBuilder::new(header.boxl, header.angles);
         builder
             .prebox_header(header.prebox_header.user.clone())
             .postbox_header(header.postbox_header.clone())
-            .metadata(header.metadata.to_map());
+            .metadata(meta);
         for atom in 0..n {
             let at = atom.saturating_mul(3);
             builder.add_atom(
@@ -3311,14 +3314,16 @@ fn read_con_columnar(py: Python<'_>, path: &Path) -> PyResult<Option<Py<ConFrame
 }
 
 fn read_string_columnar(py: Python<'_>, contents: &str) -> PyResult<Option<Py<ConFrameList>>> {
-    let owned = contents.as_bytes().to_vec();
-    let layout = match py.detach(|| crate::column_read::layout_bytes(&owned)) {
+    // The argument keeps the Python string alive. Parsing borrows those
+    // bytes with the GIL released, so the trajectory is not copied first.
+    let bytes = contents.as_bytes();
+    let layout = match py.detach(|| crate::column_read::layout_bytes(bytes)) {
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
-    materialize_columns(py, layout, move |layout, slabs| {
+    materialize_columns(py, layout, |layout, slabs| {
         crate::column_read::fill_bytes(
-            &owned,
+            bytes,
             layout.n_frames,
             layout.n_atoms,
             layout.sections,
@@ -4349,12 +4354,41 @@ fn write_stamped_frame<W: std::io::Write>(
 /// A slot that is still held is cloned. A slot already moved into a Python
 /// frame is rebuilt from that frame. Collective and serial writes of the
 /// same result then start from the same frames.
+fn column_frame_for_write(
+    py: Python<'_>,
+    list: &Bound<'_, ConFrameList>,
+    index: usize,
+) -> PyResult<ConFrame> {
+    let cached = {
+        let borrowed = list.borrow();
+        borrowed
+            .cache
+            .lock()
+            .expect("cache")
+            .get(index)
+            .and_then(|slot| slot.as_ref().map(|obj| obj.clone_ref(py)))
+    };
+    if let Some(obj) = cached {
+        obj.borrow(py).to_con_frame(py)
+    } else {
+        list.borrow().frame_from_store(py, index)
+    }
+}
+
 fn con_frame_list_stored(
     py: Python<'_>,
     list: &Bound<'_, ConFrameList>,
 ) -> PyResult<Vec<ConFrame>> {
     let n = list.borrow().len_frames();
     let mut out = Vec::with_capacity(n);
+    // Column lists keep the slabs, not one ConFrame per index. Building a
+    // Python frame here would cache that object for every frame.
+    if list.borrow().columns.is_some() {
+        for index in 0..n {
+            out.push(column_frame_for_write(py, list, index)?);
+        }
+        return Ok(out);
+    }
     for index in 0..n {
         let cloned = {
             let borrowed = list.borrow();
@@ -4475,20 +4509,7 @@ fn write_bound_frames<W: std::io::Write>(
         if list.borrow().columns.is_some() {
             let n = list.borrow().len_frames();
             for index in 0..n {
-                let cached = {
-                    let borrowed = list.borrow();
-                    borrowed
-                        .cache
-                        .lock()
-                        .expect("cache")
-                        .get(index)
-                        .and_then(|slot| slot.as_ref().map(|obj| obj.clone_ref(py)))
-                };
-                let frame = if let Some(obj) = cached {
-                    obj.borrow(py).to_con_frame(py)?
-                } else {
-                    list.borrow().frame_from_store(py, index)?
-                };
+                let frame = column_frame_for_write(py, list, index)?;
                 writer
                     .write_frame_bound(&frame)
                     .map_err(|err| write_err_to_py(py, err))?;
@@ -4834,6 +4855,28 @@ fn write_con(
                             true,
                         )
                         .map_err(|err| write_err_to_py(py, err))?;
+                    } else if list.borrow().columns.is_some() {
+                        // The slabs already hold the trajectory. Walk them
+                        // one frame at a time, and use a cached Python frame
+                        // only when that index was edited.
+                        let mut writer = if let Some(precision) = precision {
+                            crate::writer::ConFrameWriter::from_path_with_precision(path, precision)
+                                .map_err(|e| {
+                                    PyIOError::new_err(format!("failed to create writer: {e}"))
+                                })?
+                        } else {
+                            crate::writer::ConFrameWriter::from_path(path).map_err(|e| {
+                                PyIOError::new_err(format!("failed to create writer: {e}"))
+                            })?
+                        }
+                        .canonical(canonical);
+                        let n = list.borrow().len_frames();
+                        for index in 0..n {
+                            let frame = column_frame_for_write(py, &list, index)?;
+                            write_stamped_frame(&mut writer, &frame)
+                                .map_err(|e| write_err_to_py(py, e))?;
+                        }
+                        flush_writer(&mut writer)?;
                     } else {
                         // Indexing a frame moves it into the Python cache.
                         // The write then uses that object instead of the slot.
