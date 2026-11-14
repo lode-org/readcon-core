@@ -1,0 +1,105 @@
+{
+  "finding": "Readcon's weak efficiency sits above the fresh-file copy on every row: tmpfs threads 0.665 against a copy at 0.268, tmpfs ranks 0.702 against 0.381, ext4 threads 0.524 against 0.167, ext4 ranks 0.454 against 0.200. The absolute gap versus that copy is the formatter. On tmpfs threads the write is 1.55 times the copy; format-only is 0.087 s and the copy is 0.098 s, and the write lands between them because the formatter fills the mapping directly. A cpu-clock profile of that write is the decimal speller plus clear_page, not a hand-off or a shared-state hotspot. Ranks format their slice and then store it, and the sum matches the measured write. No second runner with more cores was connected. The rewrite row overwrites a same-length spare and renames it into place; it is not the fresh-file number.",
+  "tables": [
+    {
+      "fs": "tmpfs",
+      "shape": "63MB threads",
+      "ceiling_s": {
+        "1": 0.0261335,
+        "2": 0.0354475,
+        "4": 0.0514015,
+        "8": 0.0976785
+      },
+      "ceiling_eff_8": 0.2675460823006086,
+      "readcon_s": {
+        "1": 0.100773,
+        "2": 0.103514,
+        "4": 0.1211995,
+        "8": 0.1515155
+      },
+      "readcon_eff_8": 0.6651002702693783,
+      "readcon_over_ceiling_at_8": 1.551165302497479
+    },
+    {
+      "fs": "tmpfs",
+      "shape": "16MB procs",
+      "ceiling_s": {
+        "1": 0.008959,
+        "2": 0.010909499999999999,
+        "4": 0.0141955,
+        "8": 0.023488500000000002
+      },
+      "ceiling_eff_8": 0.3814206952338378,
+      "readcon_s": {
+        "1": 0.0339045305,
+        "2": 0.0365995645,
+        "4": 0.038321426,
+        "8": 0.0482992265
+      },
+      "readcon_eff_8": 0.7019683948768828,
+      "readcon_over_ceiling_at_8": 2.056292504842795
+    },
+    {
+      "fs": "ext4",
+      "shape": "63MB threads",
+      "ceiling_s": {
+        "1": 0.035959500000000005,
+        "2": 0.060501,
+        "4": 0.099524,
+        "8": 0.2153955
+      },
+      "ceiling_eff_8": 0.16694638467377457,
+      "readcon_s": {
+        "1": 0.107941,
+        "2": 0.1127885,
+        "4": 0.134272,
+        "8": 0.205957
+      },
+      "readcon_eff_8": 0.5240948353297047,
+      "readcon_over_ceiling_at_8": 0.9561806073014525
+    },
+    {
+      "fs": "ext4",
+      "shape": "16MB procs",
+      "ceiling_s": {
+        "1": 0.011099000000000001,
+        "2": 0.0165065,
+        "4": 0.027435,
+        "8": 0.055357500000000004
+      },
+      "ceiling_eff_8": 0.20049677098857427,
+      "readcon_s": {
+        "1": 0.036761942,
+        "2": 0.041777831,
+        "4": 0.049854657999999996,
+        "8": 0.080947593
+      },
+      "readcon_eff_8": 0.4541449675965041,
+      "readcon_over_ceiling_at_8": 1.4622696653569975
+    }
+  ],
+  "rewrite": [
+    {
+      "fs": "tmpfs",
+      "mode": "threads",
+      "median_s": {
+        "1": 0.097084,
+        "2": 0.097328,
+        "4": 0.1056955,
+        "8": 0.1023615
+      },
+      "eff_8": 0.9484425296620312
+    },
+    {
+      "fs": "ext4",
+      "mode": "threads",
+      "median_s": {
+        "1": 0.098825,
+        "2": 0.095529,
+        "4": 0.1026635,
+        "8": 0.1151675
+      },
+      "eff_8": 0.8580979877135476
+    }
+  ]
+}
