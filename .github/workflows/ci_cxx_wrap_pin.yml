@@ -1,0 +1,38 @@
+name: cxx wrap pin
+
+# Rebuild the slim cxx archive on every push and pull request and fail when
+# packaging/wrapdb still names the previous tree. bench/** does not enter
+# the archive, so a campaign-only change does not run this job.
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+    paths-ignore:
+      - 'bench/**'
+  pull_request:
+    paths-ignore:
+      - 'bench/**'
+  workflow_dispatch:
+
+concurrency:
+  group: cxx-wrap-pin-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  cxx-wrap-pin:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Rebuild the cxx tarball and compare the wrap pin
+        env:
+          CC: gcc
+          CXX: g++
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: bash scripts/check_cxx_wrap_pin.sh
