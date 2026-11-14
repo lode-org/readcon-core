@@ -4,6 +4,9 @@
 //! One, two and eight threads, and one, two and four MPI ranks, must
 //! reproduce those bytes or the same serial binding write.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::writer::{
@@ -110,7 +113,7 @@ fn one_two_and_four_ranks_match_the_serial_writer() {
     let exe = std::env::current_exe().expect("test binary");
     for ranks in [1u32, 2, 4] {
         let out =
-            std::env::temp_dir().join(format!("readcon-rank-{ranks}-{}.con", std::process::id()));
+            scratch_dir::scratch().join(format!("readcon-rank-{ranks}-{}.con", std::process::id()));
         let status = std::process::Command::new("mpirun")
             .args([
                 "-n",
@@ -217,7 +220,7 @@ fn wide_frame(
 }
 
 fn mapped_bytes(frame: &readcon_core::types::ConFrame, workers: usize) -> Vec<u8> {
-    let path = std::env::temp_dir().join(format!(
+    let path = scratch_dir::scratch().join(format!(
         "readcon-wide-map-{}-{}-{}.con",
         workers,
         std::process::id(),
@@ -265,7 +268,7 @@ fn wide_mapping_matches_serial_for_velocities_and_gapped_ids() {
             // through.
             let refs = [&frame];
             let fixed = write_frame_refs_with_threads(&refs, 1, Some(6), false).expect("decimals");
-            let path = std::env::temp_dir()
+            let path = scratch_dir::scratch()
                 .join(format!("readcon-wide-decimals-{}.con", std::process::id()));
             write_frame_refs_to_path(&path, &refs, 8, Some(6), false, false).expect("decimals");
             let got = fs::read(&path).expect("read back");
@@ -288,7 +291,7 @@ fn wide_mapping_matches_serial_for_velocities_and_gapped_ids() {
         recycle_format_buffer(lines);
     }
     let duplicated = wide_frame(4096, false, |i| if i == 10 { 0 } else { i as u64 });
-    let path = std::env::temp_dir().join(format!("readcon-wide-dup-{}.con", std::process::id()));
+    let path = scratch_dir::scratch().join(format!("readcon-wide-dup-{}.con", std::process::id()));
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)

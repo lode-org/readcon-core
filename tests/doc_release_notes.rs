@@ -2,6 +2,9 @@
 //!
 //! Short decimals, a crash-safe path publish, and a same-length rewrite.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use std::fs;
 use std::path::Path;
 
@@ -26,14 +29,17 @@ fn scratches(dir: &Path) -> Vec<String> {
 
 #[test]
 fn short_decimals_round_trip() {
-    let dir = std::env::temp_dir().join(format!("rc-doc-fmt-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("rc-doc-fmt-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("short.con");
     let frame = one_atom(1.5, [false, false, false], 1);
     write_frame_refs_to_path(&path, &[&frame], 1, None, false, false).unwrap();
     let text = fs::read_to_string(&path).unwrap();
-    assert!(text.contains("1.5") && text.contains("0.25") && text.contains("2.0"), "{text}");
+    assert!(
+        text.contains("1.5") && text.contains("0.25") && text.contains("2.0"),
+        "{text}"
+    );
     assert!(scratches(&dir).is_empty());
     let back = read_first_frame(&path).unwrap();
     assert_eq!(back.atom_data[0].x(), 1.5);
@@ -42,7 +48,7 @@ fn short_decimals_round_trip() {
 
 #[test]
 fn rewrite_publishes_one_complete_file() {
-    let dir = std::env::temp_dir().join(format!("rc-doc-rew-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("rc-doc-rew-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("traj.con");

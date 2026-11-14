@@ -2,6 +2,9 @@
 //! writer when that harness is built. Every worker count and every rank
 //! count is compared with the serial bytes.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use proptest::prelude::*;
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::units::NATURAL_TIME_UNIT;
@@ -53,7 +56,7 @@ fn serial_bytes(frames: &[readcon_core::types::ConFrame]) -> Vec<u8> {
 
 fn path_bytes(frames: &[readcon_core::types::ConFrame], workers: usize, bind: bool) -> Vec<u8> {
     let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
-    let path = std::env::temp_dir().join(format!(
+    let path = scratch_dir::scratch().join(format!(
         "readcon-prop-{}-{}-{workers}-{bind}.con",
         std::process::id(),
         frames.len()
@@ -83,7 +86,7 @@ fn unstored_groups_match_the_file_writer() {
     for part in &parts {
         got.extend_from_slice(part);
     }
-    let path = std::env::temp_dir().join(format!("readcon-unstored-{}", std::process::id()));
+    let path = scratch_dir::scratch().join(format!("readcon-unstored-{}", std::process::id()));
     write_frame_refs_to_path(&path, &refs, 8, None, false, true).expect("path");
     let disk = std::fs::read(&path).expect("read");
     let _ = std::fs::remove_file(&path);
@@ -98,7 +101,7 @@ fn assert_groups_match(frames: &[readcon_core::types::ConFrame], workers: usize)
         got.extend_from_slice(part);
     }
     let path =
-        std::env::temp_dir().join(format!("readcon-unstored-{}-{workers}", std::process::id()));
+        scratch_dir::scratch().join(format!("readcon-unstored-{}-{workers}", std::process::id()));
     write_frame_refs_to_path(&path, &refs, workers, None, false, true).expect("path");
     let disk = std::fs::read(&path).expect("read");
     let _ = std::fs::remove_file(&path);
@@ -218,7 +221,8 @@ fn mpi_ranks_match_the_serial_writer() {
                 .map(|i| one_frame(counts[i], velocity[i] && counts[i] > 0, i as f64))
                 .collect();
             let text = serial_bytes(&frames);
-            let dir = std::env::temp_dir().join(format!("readcon-mpi-prop-{}", std::process::id()));
+            let dir =
+                scratch_dir::scratch().join(format!("readcon-mpi-prop-{}", std::process::id()));
             std::fs::create_dir_all(&dir).expect("dir");
             let input = dir.join("in.con");
             std::fs::write(&input, &text).expect("input");
@@ -246,7 +250,7 @@ fn mpi_index_bytes_match_a_fresh_fingerprint() {
     let frames = vec![frame; 700];
     let text = binding_bytes(&frames);
     assert!(text.len() > 1 << 20, "fixture is {} bytes", text.len());
-    let dir = std::env::temp_dir().join(format!("readcon-mpi-index-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("readcon-mpi-index-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dir");
     let input = dir.join("in.con");
     std::fs::write(&input, &text).expect("input");
@@ -279,7 +283,7 @@ fn mpi_same_length_rewrite_matches_the_second_write() {
         "the rewrite must keep the length"
     );
     assert_ne!(first, second);
-    let dir = std::env::temp_dir().join(format!("readcon-mpi-rewrite-{}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("readcon-mpi-rewrite-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dir");
     let input = dir.join("first.con");
     let other = dir.join("second.con");

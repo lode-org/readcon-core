@@ -26,7 +26,7 @@ BEFORE = bench_disk() / "format_profile_before"
 WIDTHS = (1, 2, 4, 8)
 REPEATS = 12
 CON = ROOT / "resources/test/cuh2.con"
-EXT4 = Path("/home/ubuntu/camp7-ext4/camp12")
+EXT4 = bench_disk() / "camp12"
 
 
 def median(values: list[float]) -> float:
@@ -132,7 +132,7 @@ def main() -> None:
             ["awk", "/MemTotal|MemAvailable|Hugepagesize/", "/proc/meminfo"]
         ),
         "tmpfs": capture(["findmnt", "-no", "TARGET,OPTIONS", "/dev/shm"]),
-        "ext4": capture(["findmnt", "-no", "TARGET,FSTYPE,OPTIONS", "/home/ubuntu"]),
+        "ext4": capture(["findmnt", "-no", "TARGET,FSTYPE,OPTIONS", str(bench_disk())]),
         "online_cpus": os.cpu_count(),
     }
     (OUT / "host.json").write_text(json.dumps(host, indent=2) + "\n")

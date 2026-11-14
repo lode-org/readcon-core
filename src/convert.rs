@@ -139,7 +139,7 @@ pub fn read_frames_for_convert(input: &Path) -> Result<(Vec<ConFrame>, bool), Co
 /// use std::path::Path;
 ///
 /// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
-/// let dir = std::env::temp_dir().join(format!("readcon-convert-doc-{}", std::process::id()));
+/// let dir = readcon_core::scratch::root().join(format!("readcon-convert-doc-{}", std::process::id()));
 /// std::fs::create_dir_all(&dir).unwrap();
 /// let out = dir.join("out.con");
 /// let report = convert_path_to_con(&src, &out).unwrap();
@@ -240,7 +240,7 @@ mod tests {
     }
 
     fn tempfile_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::scratch::root().join(format!(
             "readcon-convert-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()

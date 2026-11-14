@@ -72,7 +72,7 @@ rule campaign:
 # bench/h2h/scaling/rel1 with n=6. A smoke run does not touch that
 # directory:
 #   snakemake -s bench/h2h/Snakefile --cores 1 \
-#     --config out=/tmp/readcon-final-smoke repeats=1 final_campaign
+#     --config out=build/bench-smoke repeats=1 final_campaign
 # Each rule: one warmup, serial samples, type-7 median and IQR, raw
 # samples in the JSON, unlink+create on writes, STREAM / fdatasync /
 # raw pwrite ceilings, and the HEAD sha stamped into every output.

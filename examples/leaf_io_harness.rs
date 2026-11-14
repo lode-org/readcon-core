@@ -158,7 +158,11 @@ fn main() {
         std::hint::black_box(n);
     });
 
-    let sock = std::env::temp_dir().join(format!("readcon-leaf-{}.sock", std::process::id()));
+    let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("build")
+        .join("test");
+    std::fs::create_dir_all(&scratch).expect("build/test");
+    let sock = scratch.join(format!("readcon-leaf-{}.sock", std::process::id()));
     let _ = fs::remove_file(&sock);
     let unix_spec = format!("unix:{}", sock.display());
     spawn_rpc(unix_spec.clone());

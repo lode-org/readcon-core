@@ -23,10 +23,11 @@ WIDTHS = (1, 2, 4, 8)
 STORES = ("mmap", "pwrite", "populate", "huge", "populate_write")
 MODES = ("threads", "procs")
 SIZES = (16 << 20, 64 << 20)
+_DISK = str(bench_disk())
 FILESYSTEMS = (
     ("tmpfs", "/dev/shm", 0),
     ("thp", "/mnt/camp7-thp", 0),
-    ("ext4", "/home/ubuntu/camp7-ext4", 1),
+    ("ext4", _DISK, 1),
 )
 
 

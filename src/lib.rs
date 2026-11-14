@@ -29,6 +29,10 @@ mod allocator_link_tests {
     }
 }
 
+/// Test and doctest scratch. Hidden: the read and write paths do not call it.
+#[doc(hidden)]
+pub mod scratch;
+
 pub mod array;
 mod columns;
 pub mod compression;

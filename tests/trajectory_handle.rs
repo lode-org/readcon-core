@@ -7,8 +7,11 @@ use std::path::{Path, PathBuf};
 
 mod common;
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rc-traj-{}-{name}", std::process::id()));
+    let dir = scratch_dir::scratch().join(format!("rc-traj-{}-{name}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }

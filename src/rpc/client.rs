@@ -135,7 +135,7 @@ mod unix_tests {
 
     #[test]
     fn unix_socket_parse_roundtrip() {
-        let sock = std::env::temp_dir().join(format!("readcon-rpc-{}.sock", std::process::id()));
+        let sock = crate::scratch::root().join(format!("readcon-rpc-{}.sock", std::process::id()));
         let _ = std::fs::remove_file(&sock);
         let spec = format!("unix:{}", sock.display());
         let spec_server = spec.clone();

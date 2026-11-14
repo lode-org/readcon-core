@@ -6,6 +6,9 @@
 //! `u32::MAX` gives a reservation of tens of GiB, more than most hosts can
 //! map.
 
+#[path = "common/scratch.rs"]
+mod scratch_dir;
+
 use readcon_core::error::{LocatedParseError, ParseError};
 use readcon_core::iterators::{ConFrameIterator, read_positions_with_threads};
 use readcon_core::parser::{parse_line_of_n_f64, parse_single_frame};
@@ -280,7 +283,7 @@ fn conbin_huge_column_does_not_allocate() {
     // `read_owned_f64` used to reserve both columns from that count.
     let bytes = include_bytes!("fuzz_data/conbin_huge_column.bin");
     assert_eq!(bytes.len(), 40);
-    let dir = std::env::temp_dir().join(format!(
+    let dir = scratch_dir::scratch().join(format!(
         "conbin-huge-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -312,7 +315,7 @@ fn column_walker_does_not_reserve_a_declared_atom_count() {
     // One coordinate row and a header that says 50_000_000 atoms. The
     // column walker used to reserve that count before it counted rows.
     let text = frame_declaring_atoms(50_000_000);
-    let dir = std::env::temp_dir().join(format!(
+    let dir = scratch_dir::scratch().join(format!(
         "column-huge-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()

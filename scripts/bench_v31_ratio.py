@@ -16,6 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "benches"))
+sys.path.insert(0, str(ROOT / "bench" / "h2h"))
+from bench_disk import bench_disk  # noqa: E402
 from cpu_model import cpu_model  # noqa: E402
 
 OUT = ROOT / "benches" / "results" / "v31_parse_ratio.csv"
@@ -117,8 +119,8 @@ def main():
         print("usage: bench_v31_ratio.py BASE_BIN BRANCH_BIN", file=sys.stderr)
         return 2
     base_bin, branch_bin = sys.argv[1:]
-    data = Path("/tmp/v31-bench")
-    data.mkdir(exist_ok=True)
+    data = bench_disk() / "v31-bench"
+    data.mkdir(parents=True, exist_ok=True)
     cuh2 = (ROOT / "resources" / "test" / "cuh2.con").read_text()
     (data / "cuh2x100.con").write_text(cuh2 * 100)
     lines = [

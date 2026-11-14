@@ -83,7 +83,7 @@ reads back as the same binary64 value.
 
     #[test]
     fn short_decimals_round_trip() {
-        let dir = std::env::temp_dir().join(format!("rc-doc-fmt-{}", std::process::id()));
+        let dir = Path::new("build/test").join(format!("rc-doc-fmt-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("short.con");
@@ -99,7 +99,7 @@ reads back as the same binary64 value.
 
     #[test]
     fn rewrite_publishes_one_complete_file() {
-        let dir = std::env::temp_dir().join(format!("rc-doc-rew-{}", std::process::id()));
+        let dir = Path::new("build/test").join(format!("rc-doc-rew-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("traj.con");
