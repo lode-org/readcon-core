@@ -776,7 +776,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.23.2/readcon-core-cxx-0.23.2.tar.gz
-      URL_HASH SHA256=595ed6a4187afddfa680f0237ca32a99c45d6bc1b0f6d8c3992d8a6496996ee7
+      URL_HASH SHA256=f4885f51caffdb3effb7b37fee294b3318c5457b9252dc99f7161d1ebfc0f2f1
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)
