@@ -17,10 +17,11 @@ All notable changes to this project will be documented in this file. See [conven
   `write_ranked_bytes` in Rust, `write_con(..., comm=..., rewrite=True)` in
   Python, and `rkr_mpi_rewrite_block` in C. `keep_spare` parks the previous
   inode at `path.rewrite`, a second copy of the file. The default leaves no
-  spare. On ext2, ext3, ext4, XFS, and btrfs, rank 0 writes the slices in
-  order. Every other filesystem keeps one write per rank.
-  `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0, overrides
-  that choice.
+  spare. The default store is Parallel: one pwrite per rank at the
+  precomputed offsets, on every filesystem except Lustre, GPFS, BeeGFS, and
+  PanFS, which use collective MPI-IO. `READCON_RANKED_WRITE` selects
+  `sequential`, `parallel`, or `mpiio`. Rank 0 reads it and broadcasts the
+  choice.
 - `rewrite_frame_refs_to_path`, `write_con(..., rewrite=True)`, and
   `rkr_rewrite_path` replace a same-length trajectory from a spare named
   `path.rewrite`. `keep_spare=True` parks the previous inode there, which
@@ -152,9 +153,12 @@ All notable changes to this project will be documented in this file. See [conven
 ### Features
 
 - An MPI read tiles equal frames even when the file ends in whitespace, and
-  splits one frame by atom lines. Each rank writes its formatted bytes with
-  pwrite at the offset from an exclusive scan of the lengths. The file matches
-  the serial writer.
+  splits one frame by atom lines. A ranked write defaults to Parallel: one
+  pwrite per rank at the offsets from the layout pass, on every filesystem
+  except Lustre, GPFS, BeeGFS, and PanFS, which use collective MPI-IO.
+  `READCON_RANKED_WRITE` selects `sequential`, `parallel`, or `mpiio`. Rank 0
+  reads that variable and broadcasts the choice. The file matches the serial
+  writer.
 - Threaded CON and extended XYZ reads and writes split frames, or the atoms of
   one wide frame, across the requested workers. A uniform extended XYZ file is
   one scan. Mixed symbols, or a header that changes from frame to frame, stay
@@ -213,8 +217,7 @@ All notable changes to this project will be documented in this file. See [conven
 - Linux wheels build on PyPy. Tuple items are read through the API PyPy
   exports. `PyTuple_GET_ITEM` is a CPython macro and is not in that build.
 - A multi-frame write formats on every worker. Two threads no longer leave
-  one worker idle on a channel that only waits. A ranked write on tmpfs copies
-  through a shared mapping instead of `pwrite`.
+  one worker idle on a channel that only waits.
 
 ### Performance
 
