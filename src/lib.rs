@@ -33,6 +33,7 @@ mod allocator_link_tests {
 }
 
 pub mod array;
+mod column_read;
 mod columns;
 pub mod compression;
 pub mod conbin;

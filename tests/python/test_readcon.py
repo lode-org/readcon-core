@@ -48,6 +48,28 @@ class TestReadCon:
         assert auto[0].atoms[0].atom_id == one[0].atoms[0].atom_id
         assert one[1].atoms[0].x == pytest.approx(two[1].atoms[0].x)
 
+    def test_plain_con_is_one_contiguous_slab(self, tmp_path):
+        import numpy as np
+
+        with open(_resource("tiny_cuh2.con"), encoding="utf-8") as handle:
+            text = handle.read()
+        path = tmp_path / "ladder.con"
+        path.write_text(text * 3)
+        auto = readcon.read_con(str(path))
+        parallel = readcon.read_con(str(path), n_threads=2)
+        assert auto.touch_checksum()[0] == parallel.touch_checksum()[0]
+        positions = np.asarray(auto.columns()["positions"])
+        assert positions.flags.c_contiguous
+        assert positions.shape == (3, 4, 3)
+        stacked = np.stack([np.asarray(frame.xyz) for frame in parallel])
+        assert np.array_equal(positions, stacked)
+        streamed = np.stack(
+            [np.asarray(frame.xyz) for frame in readcon.iter_con(str(path))]
+        )
+        assert np.array_equal(streamed, positions)
+        written = readcon.read_con_string(readcon.write_con_string(auto))
+        assert np.array_equal(np.asarray(written.columns()["positions"]), positions)
+
     def test_lazy_list_matches_serial_positions(self):
         import numpy as np
 

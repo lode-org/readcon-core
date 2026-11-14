@@ -4582,18 +4582,28 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
     Some(values)
 }
 
-fn mix_touch(hash: u64, value: u64) -> u64 {
+pub(crate) fn mix_touch(hash: u64, value: u64) -> u64 {
     hash.wrapping_mul(0x9E3779B185EBCA87) ^ value
 }
 
-fn one_frame_touch(frame: &types::ConFrame, coords: &[f64], index: u64) -> u64 {
+/// Checksum of one frame: index, box lengths, symbols in atom order, coordinates.
+///
+/// The columnar reader and the stored-frame reader both call this, so a
+/// one-thread read and a parallel read hash the same way.
+pub(crate) fn hash_touch_frame(
+    index: u64,
+    boxl: [f64; 3],
+    symbols: impl Iterator<Item = impl AsRef<str>>,
+    coords: &[f64],
+) -> u64 {
     let mut hash = index;
-    for value in frame.header.boxl {
+    for value in boxl {
         hash = mix_touch(hash, value.to_bits());
     }
-    for atom in &frame.atom_data {
-        hash = mix_touch(hash, atom.symbol.len() as u64);
-        for byte in atom.symbol.as_bytes() {
+    for symbol in symbols {
+        let symbol = symbol.as_ref();
+        hash = mix_touch(hash, symbol.len() as u64);
+        for byte in symbol.as_bytes() {
             hash = mix_touch(hash, u64::from(*byte));
         }
     }
@@ -4601,6 +4611,15 @@ fn one_frame_touch(frame: &types::ConFrame, coords: &[f64], index: u64) -> u64 {
         hash = mix_touch(hash, value.to_bits());
     }
     hash
+}
+
+fn one_frame_touch(frame: &types::ConFrame, coords: &[f64], index: u64) -> u64 {
+    hash_touch_frame(
+        index,
+        frame.header.boxl,
+        frame.atom_data.iter().map(|atom| atom.symbol.as_ref()),
+        coords,
+    )
 }
 
 /// XOR of positions, cell lengths, and atom-type symbols.
