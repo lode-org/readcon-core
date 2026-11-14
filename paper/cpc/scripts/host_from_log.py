@@ -3,16 +3,18 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
 LOG = ROOT / "logs" / "reader-exchange.log"
 GEN = ROOT / "src" / "figures" / "generated"
 
 LABELS = {
     "readcon_tip": "readcon, tip",
-    "readcon_v0173": r"readcon-core \readconCargoVersion{}",
+    "readcon_v0173": r"readcon-core \rcReleaseVersion{}",
     "readcon_base": "readcon, main",
     "ase_eon": r"ASE ase.io (format eon)",
     "eon_py": r"eOn \texttt{loadcons}",
@@ -94,6 +96,33 @@ def table(
     return "\n".join(lines)
 
 
+def release_commit(text: str) -> str | None:
+    for line in text.splitlines():
+        if line.startswith("release_commit "):
+            return line.split()[1]
+    return None
+
+
+def release_version(text: str, repo: Path = REPO) -> str:
+    """The tag on the log's release commit. The cargo version is a different build."""
+    commit = release_commit(text)
+    if not commit:
+        return "unknown"
+    try:
+        raw = subprocess.check_output(
+            ["git", "tag", "--points-at", commit],
+            cwd=repo,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        return "unknown"
+    versions = [tag[1:] for tag in raw.split() if tag.startswith("v") and tag[1:2].isdigit()]
+    if len(versions) == 1:
+        return versions[0]
+    return "unknown"
+
+
 def rev_short(text: str) -> str:
     for line in text.splitlines():
         if line.startswith("rev_parse "):
@@ -123,6 +152,7 @@ def main() -> int:
     macros = "\n".join(
         [
             "% Generated from paper/cpc/logs/reader-exchange.log by scripts/host_from_log.py.",
+            f"\\newcommand{{\\rcReleaseVersion}}{{{release_version(text)}}}",
             f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",

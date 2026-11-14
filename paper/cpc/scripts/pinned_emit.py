@@ -1,6 +1,6 @@
 """Emit the later pinned tables from git show of the record commits.
 
-camp16b, camp17, camp18, camp19, camp20 and camp21 live in readcon-core.
+camp16b, camp17, camp18, camp19, camp20 and camp22 live in readcon-core.
 db16, db17 and db18 live in readcon-db. A row's 1/2/4/8 ladder and its
 efficiency come from one record. A later record that measured only some
 worker counts fills those cells and leaves the efficiency blank.
@@ -33,7 +33,7 @@ CAMP17 = "a350668818694095c7f9a10250a32aa1911e7001"
 CAMP18 = "63f1db1fe72ca085a2540cd87d99c4d1f066afeb"
 CAMP19 = "87beea40ae3c6f21bb7d24cbc7f879b9ed9312ff"
 CAMP20 = "ef4d6946e8e148428c964be7f48975ebfde06fa1"
-CAMP21 = "f44a7a73b4d03d3c76dcc3f0cf5224526b4049a0"
+CAMP22 = "427c1a8f4eeb76ae515a941c813fe5853e27d395"
 DB16 = "fe3e0d54db993e0e6750cd48939823f32d663f23"
 DB18 = "06ffcbddc44039b4bf3f3c38793a0927a5709d8a"
 
@@ -78,7 +78,7 @@ def cpu_sentence(host: dict) -> str:
     if model:
         cpu = f"{model}, {count}"
     else:
-        cpu = count + "The host record gives the CPU count without a model name. "
+        cpu = count
     return (
         cpu
         + "Files are written to the root ext4 filesystem and to tmpfs (/dev/shm). "
@@ -273,7 +273,7 @@ def weak_medians(samples: list[float]) -> tuple[float, float]:
 
 
 def camp16b_tex() -> str:
-    """Gzip, zstd and CON-bin stay on camp16b. Strong and weak scaling are camp21."""
+    """Gzip, zstd and CON-bin stay on camp16b. Strong and weak scaling are camp22."""
     host = host_line(load(REPO, CAMP16B, "bench/h2h/scaling/camp16b/host.json")["lscpu"])
     return "\n".join((compressed_tex(host), conbin_tex(host)))
 
@@ -482,14 +482,14 @@ def db15_tex() -> str:
     )
 
 
-def _camp21(name: str):
-    return load(REPO, CAMP21, f"bench/h2h/scaling/camp21/{name}")
+def _camp22(name: str):
+    return load(REPO, CAMP22, f"bench/h2h/scaling/camp22/{name}")
 
 
 def _one(rows: list[dict], **match) -> dict:
     hits = [row for row in rows if all(row[key] == value for key, value in match.items())]
     if len(hits) != 1:
-        raise SystemExit(f"camp21 expected one row for {match}, found {len(hits)}")
+        raise SystemExit(f"camp22 expected one row for {match}, found {len(hits)}")
     return hits[0]
 
 
@@ -531,7 +531,7 @@ def _strong_table(rows: list[dict], op: str, kind: str, sink: str, caption: str,
     for name in FILES:
         cells, medians = _ladder_cells(rows, op=op, file=name, kind=kind, sink=sink)
         if not any(cells):
-            raise SystemExit(f"camp21 has no {op} {name} {kind} {sink}")
+            raise SystemExit(f"camp22 has no {op} {name} {kind} {sink}")
         eight = _strong_eff(medians)
         if eight:
             any_eff = True
@@ -550,15 +550,19 @@ def _strong_table(rows: list[dict], op: str, kind: str, sink: str, caption: str,
     return table(caption, label, spec, header, body) + "\\FloatBarrier\n"
 
 
-def camp21_tex() -> str:
-    threads = _camp21("strong-threads.json")["rows"]
-    mpi = _camp21("strong-mpi.json")["rows"]
-    host = cpu_sentence(_camp21("host.json"))
+def camp22_tex() -> str:
+    threads = _camp22("strong-threads.json")["rows"]
+    mpi = _camp22("strong-mpi.json")["rows"]
+    record = _camp22("host.json")
+    host = (
+        host_line(record["lscpu"])
+        + f" Disk rows use {record['disk_filesystem']}. Memory rows use tmpfs (/dev/shm). "
+    )
     fresh = "Each write unlinks the destination before the clock, so the row is a fresh file. "
     strong = (
         "The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. "
     )
-    mounts = (("disk", "ext4"), ("memory", "tmpfs"))
+    mounts = (("disk", record["disk_filesystem"]), ("memory", "tmpfs"))
     chunks = []
     for sink, mount in mounts:
         chunks.append(
@@ -572,7 +576,7 @@ def camp21_tex() -> str:
                 + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
                 + strong
                 + host,
-                f"tab:camp21-threads-read-{mount}",
+                f"tab:camp22-threads-read-{sink}",
             )
         )
         chunks.append(
@@ -587,7 +591,7 @@ def camp21_tex() -> str:
                 + fresh
                 + strong
                 + host,
-                f"tab:camp21-threads-write-{mount}",
+                f"tab:camp22-threads-write-{sink}",
             )
         )
         chunks.append(
@@ -601,7 +605,7 @@ def camp21_tex() -> str:
                 + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
                 + strong
                 + host,
-                f"tab:camp21-mpi-read-{mount}",
+                f"tab:camp22-mpi-read-{sink}",
             )
         )
         chunks.append(
@@ -616,11 +620,11 @@ def camp21_tex() -> str:
                 + fresh
                 + strong
                 + host,
-                f"tab:camp21-mpi-write-{mount}",
+                f"tab:camp22-mpi-write-{sink}",
             )
         )
     weak_rows = []
-    parse = {int(point["workers"]): point for point in _camp21("weak-threads.json")["points"]}
+    parse = {int(point["workers"]): point for point in _camp22("weak-threads.json")["points"]}
     parse_cells = []
     parse_medians: dict[int, float] = {}
     for workers in WORKERS:
@@ -633,9 +637,9 @@ def camp21_tex() -> str:
     if not set(WORKERS) <= set(parse_medians):
         parse_medians = {}
     weak_rows.append(("thread parse", parse_cells, parse_medians or None))
-    writes = _camp21("weak-thread-writes.json")["rows"]
-    reads = _camp21("weak-mpi-reads.json")["rows"]
-    ranked_writes = _camp21("weak-mpi-writes.json")["rows"]
+    writes = _camp22("weak-thread-writes.json")["rows"]
+    reads = _camp22("weak-mpi-reads.json")["rows"]
+    ranked_writes = _camp22("weak-mpi-writes.json")["rows"]
     for sink, mount in mounts:
         cells, medians = _ladder_cells(writes, op="write", kind="threads", sink=sink)
         weak_rows.append((f"thread write, {mount}", cells, medians))
@@ -646,7 +650,7 @@ def camp21_tex() -> str:
     body = []
     for label, cells, medians in weak_rows:
         if not any(cells):
-            raise SystemExit(f"camp21 weak series {label} is empty")
+            raise SystemExit(f"camp22 weak series {label} is empty")
         body.append(" & ".join([label, *cells, _weak_eff(medians)]) + r" \\")
     chunks.append(
         table(
@@ -654,18 +658,149 @@ def camp21_tex() -> str:
             "Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
             "The last column is $t(1)/t(8)$ when this record has worker counts 1, 2, 4 and 8. "
             + host,
-            "tab:camp21-weak",
+            "tab:camp22-weak",
             "@{}lccccc@{}",
             r"Series & 1 & 2 & 4 & 8 & $t(1)/t(8)$",
             body,
         )
+        + "\\FloatBarrier\n"
     )
+    chunks.append(_compressed_tex(host))
+    chunks.append(_conbin_tex(host))
+    chunks.append(_ranked_tex(host, record["disk_filesystem"]))
     return "\n".join(chunks)
 
 
-def _camp21_macros() -> dict[str, str]:
-    threads = _camp21("strong-threads.json")["rows"]
-    mpi = _camp21("strong-mpi.json")["rows"]
+def _thread_ladder(rows: list[dict], **match) -> tuple[list[str], str]:
+    chosen = {
+        int(row["threads"]): row
+        for row in rows
+        if all(row.get(key) == value for key, value in match.items())
+    }
+    cells = []
+    medians = {}
+    for workers in WORKERS:
+        row = chosen.get(workers)
+        if row is None:
+            cells.append("")
+            continue
+        cells.append(cell(row))
+        medians[workers] = float(row["median_s"])
+    if set(WORKERS) <= set(medians):
+        return cells, sig(medians[1] / (8 * medians[8]))
+    return cells, ""
+
+
+def _compressed_tex(host: str) -> str:
+    rows = _camp22("compressed.json")["rows"]
+    body = []
+    for codec in ("gzip", "zstd"):
+        for op in ("write", "read"):
+            for members in (1, 8):
+                for sink, shown in (("disk", "disk"), ("memory", "tmpfs")):
+                    cells, eight = _thread_ladder(
+                        rows, codec=codec, op=op, members=members, sink=sink
+                    )
+                    if not any(cells):
+                        continue
+                    size = next(
+                        row["bytes"]
+                        for row in rows
+                        if row["codec"] == codec
+                        and row["op"] == op
+                        and row["members"] == members
+                        and row["sink"] == sink
+                    )
+                    body.append(
+                        f"{codec} & {op} & {members} & {shown} & "
+                        + " & ".join(cells)
+                        + f" & {sig(size / 1e6)} & {eight} \\\\"
+                    )
+    return table(
+        "Gzip and zstd of the million-atom CON frame. "
+        "A write unlinks the destination before the clock. "
+        "Time is the type-7 median in seconds, the interquartile range, and $n$. "
+        "Size is the stored file in megabytes, the byte count divided by $10^{6}$. "
+        "The 8-way column is $(t(1)/t(8))/8$ when this record has thread counts 1, 2, 4 and 8. "
+        + host,
+        "tab:camp22-compressed",
+        "@{}llrl cccc rr@{}",
+        "Codec & Op & Members & Mount & 1 & 2 & 4 & 8 & Size (MB) & 8-way",
+        body,
+    ) + "\\FloatBarrier\n"
+
+
+def _conbin_tex(host: str) -> str:
+    rows = _camp22("conbin.json")["rows"]
+    body = []
+    for op in ("write", "read"):
+        for sink, shown in (("disk", "disk"), ("memory", "tmpfs")):
+            chosen = [
+                row
+                for row in rows
+                if row.get("file") == "con-1e6" and row["op"] == op and row["sink"] == sink
+            ]
+            if not chosen:
+                continue
+            cells, eight = _thread_ladder(chosen, op=op, sink=sink, file="con-1e6")
+            body.append(
+                f"{op} & {shown} & " + " & ".join(cells) + f" & {eight} \\\\"
+            )
+    return table(
+        "CON-bin of the million-atom frame. "
+        "The write unlinks the destination before the clock. "
+        "Time is the type-7 median in seconds, the interquartile range, and $n$. "
+        "The 8-way column is $(t(1)/t(8))/8$ when this record has thread counts 1, 2, 4 and 8. "
+        + host,
+        "tab:camp22-conbin",
+        "@{}llccccc@{}",
+        "Op & Mount & 1 & 2 & 4 & 8 & 8-way",
+        body,
+    ) + "\\FloatBarrier\n"
+
+
+def _ranked_tex(host: str, disk_name: str) -> str:
+    rows = _camp22("ranked.json")["rows"]
+    mounts = {"disk": disk_name, "memory": "tmpfs"}
+    body = []
+    for strategy in ("default", "sequential", "parallel"):
+        for name in FILES:
+            for sink in ("disk", "memory"):
+                for workers in (8, 4):
+                    row = next(
+                        (
+                            item
+                            for item in rows
+                            if item["strategy"] == strategy
+                            and item["file"] == name
+                            and item["sink"] == sink
+                            and int(item["workers"]) == workers
+                        ),
+                        None,
+                    )
+                    if row is None:
+                        continue
+                    copied = sig(row["cp_s"]) if row.get("cp_s") else ""
+                    body.append(
+                        f"{name} & {workers} & {mounts[sink]} & {strategy} & {cell(row)} & {copied} \\\\"
+                    )
+    return table(
+        "Ranked fresh-file writes. "
+        "Time is the type-7 median in seconds, the interquartile range, and $n$. "
+        "Default follows the filesystem: one rank writes the slices in order on a local block filesystem, and each rank writes its own file on tmpfs. "
+        "Sequential and parallel are the two READCON\\_RANKED\\_WRITE settings. "
+        "Fresh-name copy is a copy of the same bytes to a new name, a different operation from the ranked write. "
+        + host,
+        "tab:camp22-ranked",
+        "@{}ll ll r r@{}",
+        "File & Ranks & Mount & Strategy & Time (IQR, $n$) & Fresh-name copy (s)",
+        body,
+    )
+
+
+def _camp22_macros() -> dict[str, str]:
+    threads = _camp22("strong-threads.json")["rows"]
+    mpi = _camp22("strong-mpi.json")["rows"]
     read_mem = {
         workers: _one(threads, op="read", file="con-100k", kind="threads", sink="memory", workers=workers)
         for workers in (1, 8)
@@ -679,7 +814,7 @@ def _camp21_macros() -> dict[str, str]:
         for workers in (1, 4)
     }
     eight = _one(mpi, op="write", file="con-1e6", kind="mpi", sink="disk", workers=8)
-    weak = {int(point["workers"]): point for point in _camp21("weak-threads.json")["points"]}
+    weak = {int(point["workers"]): point for point in _camp22("weak-threads.json")["points"]}
     def strong(rows: dict[int, dict], workers: int) -> str:
         return sig(float(rows[1]["median_s"]) / (workers * float(rows[workers]["median_s"])))
     return {
@@ -692,6 +827,16 @@ def _camp21_macros() -> dict[str, str]:
         "fourRankExtFourMillion": sig(four[4]["median_s"]),
         "fourRankExtFourMillionEff": strong(four, 4),
         "eightRankExtFourMillion": sig(eight["median_s"]),
+        "freshNameCopy": sig(
+            _one(
+                _camp22("copy.json")["rows"],
+                op="cp",
+                file="con-1e6",
+                sink="disk",
+                payload="con",
+            )["median_s"]
+        ),
+        "campTwoTwoCommit": _camp22("host.json")["commit"][:8],
         "weakThreadEight": sig(weak[8]["median_s"]),
         "weakThreadEff": sig(float(weak[1]["median_s"]) / float(weak[8]["median_s"])),
     }
@@ -705,16 +850,6 @@ def pinned_macros() -> str:
         if row["op"] == "insert"
     }
     ab = load(readcon_db(), DB16, "bench/db17/ab.json")
-    ranked = {
-        (row["file"], int(row["workers"]), row["sink"]): row
-        for row in load(REPO, CAMP20, "bench/h2h/scaling/camp20/ranked.json")["rows"]
-    }
-    copies = {
-        (row["file"], row["sink"]): row
-        for row in load(REPO, CAMP20, "bench/h2h/scaling/camp20/copy.json")["rows"]
-    }
-    wide = ranked[("con-1e6", 8, "disk")]
-    copied = copies[("con-1e6", "disk")]
     commands = {
         "dbFramesThousandReadconBytes": disk[("frames-1000", "readcon-db")],
         "dbFramesThousandAseBytes": disk[("frames-1000", "ase.db")],
@@ -727,11 +862,7 @@ def pinned_macros() -> str:
         "abRangeRatio": sig(ab["ops"]["range"]["ratio_db17_over_db15"]),
         "abMetaRatio": sig(ab["ops"]["metadata"]["ratio_db17_over_db15"]),
         "abMetaReverseRatio": sig(ab["metadata_reverse_order"]["ratio_db17_over_db15"]),
-        "rankedEightExtFour": sig(wide["median_s"]),
-        "rankedEightExtFourPrior": sig(wide["camp19_s"]),
-        "rankedEightExtFourWarm": sig(wide["camp5c_s"]),
-        "rankedEightExtFourCopy": sig(copied["median_s"]),
-        **_camp21_macros(),
+        **_camp22_macros(),
     }
     lines = ["% Written by paper/cpc/scripts/make_tables.py from the pinned records."]
     for name, value in commands.items():
@@ -741,8 +872,6 @@ def pinned_macros() -> str:
 
 def write_all(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    (out / "camp16b.tex").write_text(camp16b_tex(), encoding="utf-8")
-    (out / "camp21.tex").write_text(camp21_tex(), encoding="utf-8")
-    (out / "camp20.tex").write_text(camp20_tex(), encoding="utf-8")
+    (out / "camp22.tex").write_text(camp22_tex(), encoding="utf-8")
     (out / "db15.tex").write_text(db15_tex(), encoding="utf-8")
     (out / "pinned_macros.tex").write_text(pinned_macros(), encoding="utf-8")

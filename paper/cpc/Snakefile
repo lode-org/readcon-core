@@ -139,7 +139,7 @@ CROSS_COMMIT = "beb158ad7cb9d9e8fbc38c860c85b0b5f343a196"
 
 CAMP16B = "e3d33a13f77b7cd52b719ad114d5f419d969f81d"
 CAMP20 = "ef4d6946e8e148428c964be7f48975ebfde06fa1"
-CAMP21 = "f44a7a73b4d03d3c76dcc3f0cf5224526b4049a0"
+CAMP22 = "427c1a8f4eeb76ae515a941c813fe5853e27d395"
 DB16 = "fe3e0d54db993e0e6750cd48939823f32d663f23"
 DB18 = "06ffcbddc44039b4bf3f3c38793a0927a5709d8a"
 
@@ -147,9 +147,7 @@ READCON_DB = str(Path(workflow.basedir).parents[1] / "build" / "readcon-db")
 
 rule pinned_records:
     output:
-        "src/campaign/final/camp16b.tex",
-        "src/campaign/final/camp21.tex",
-        "src/campaign/final/camp20.tex",
+        "src/campaign/final/camp22.tex",
         "src/campaign/final/db15.tex",
         "src/campaign/final/pinned_macros.tex",
     params:

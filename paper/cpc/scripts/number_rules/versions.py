@@ -7,14 +7,6 @@ from pathlib import Path
 from numbers_lib import Rule, jget
 
 
-def _cargo_version() -> str:
-    root = Path(__file__).resolve().parents[4]
-    for line in (root / "Cargo.toml").read_text(encoding="utf-8").splitlines():
-        if line.startswith('version = "'):
-            return line.split('"', 2)[1]
-    raise SystemExit("Cargo.toml has no version")
-
-
 DOC = "rg_main.tex"
 OPENERS = "data/failure/con_openers.json"
 DRIFT = "data/spec/version_drift.json"
@@ -46,6 +38,24 @@ def drift_reader(version: str) -> str:
     return jget(DRIFT, "reported_versions")[version]
 
 
+def _drift_rules() -> list[Rule]:
+    """Each wheel's reported version. The cargo version is not one of these readers."""
+    record = Path(__file__).resolve().parents[2] / DRIFT
+    if not record.is_file():
+        return []
+    reported = jget(DRIFT, "reported_versions")
+    return [
+        Rule(
+            reported[name],
+            reported[name],
+            DRIFT,
+            f"published wheel {name} the drift probes ran",
+            DRIFT_LINE,
+        )
+        for name in jget(DRIFT, "readers")
+    ]
+
+
 RULES = [
     Rule(
         "0.10.4",
@@ -75,14 +85,5 @@ RULES = [
         "Open Babel version; opens neither file",
         OPEN_NEITHER,
     ),
-    *(
-        Rule(
-            v,
-            drift_reader(v),
-            DRIFT,
-            f"published wheel {v} the drift probes ran",
-            DRIFT_LINE,
-        )
-        for v in ("0.17.0", "0.17.1", "0.17.2", _cargo_version())
-    ),
+    *_drift_rules(),
 ]

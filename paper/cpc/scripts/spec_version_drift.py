@@ -122,6 +122,44 @@ def landed(results: dict, labels: list[str], name: str) -> list[dict]:
     ]
 
 
+def drift_versions(record: Path | None = None) -> list[str]:
+    """Versions the drift wheels reported. An absent record has no version."""
+    path = record if record is not None else OUT / "version_drift.json"
+    if not path.is_file():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    reported = data.get("reported_versions") or {}
+    return [str(reported.get(name) or "unknown") for name in data.get("readers") or []]
+
+
+def wheel_phrase(versions: list[str]) -> str:
+    if not versions:
+        return "unknown"
+    if len(versions) == 1:
+        return versions[0]
+    return ", ".join(versions[:-1]) + " and " + versions[-1]
+
+
+def drift_macros_text(record: Path | None = None) -> str:
+    versions = drift_versions(record)
+    slots = (versions + ["unknown"] * 4)[:4]
+    names = ("driftWheelOne", "driftWheelTwo", "driftWheelThree", "driftWheelFour")
+    lines = [
+        "% Written by paper/cpc/scripts/spec_version_drift.py from data/spec/version_drift.json."
+    ]
+    for name, value in zip(names, slots):
+        lines.append(f"\\newcommand{{\\{name}}}{{{value}}}")
+    lines.append(f"\\newcommand{{\\driftWheels}}{{{wheel_phrase(versions)}}}")
+    return "\n".join(lines) + "\n"
+
+
+def write_drift_macros(out: Path | None = None, record: Path | None = None) -> Path:
+    target = out or (ROOT / "src" / "drift_macros.tex")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(drift_macros_text(record), encoding="utf-8")
+    return target
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(

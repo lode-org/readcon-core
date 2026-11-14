@@ -54,6 +54,7 @@ Elsevier%
 \input{affilfix}
 \input{commit}
 \input{cargo_version}
+\input{drift_macros}
 \input{release}
 \input{placeholders}
 \input{figures/generated/case_macros}
@@ -585,15 +586,16 @@ medians are 0.567~s and 0.657~s.
 The drift files of Table~\ref{tab:drift} use ASE 3.29.0, extxyz 0.4.6, chemfiles 0.10.4, OVITO 3.17.2 and MDAnalysis 2.11.0.
 The readers timed on the Xeon are named in Section~\ref{sec:host}.
 
-The version-drift check gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, each in its own process.
-On a file of two frames whose first line is empty, 0.17.0 returns no frames and 0.17.1, 0.17.2 and 0.17.3 return two frames.
-On a legacy velocity label in capitals or separated by tabs, 0.17.1 returns no frame and the other three return the frame.
-On a blank symbol line and on a symbol line that starts with \texttt{\{}, 0.17.2 and 0.17.3 return no frame and 0.17.0 and 0.17.1 return the frame, and 0.17.3 returns the outcome of 0.17.2 on every probe.
+The version-drift check gives the probe files to the published readcon wheels, each in its own process.
+The wheel versions are \driftWheels{}.
+On a file of two frames whose first line is empty, \driftWheelOne{} returns no frames and \driftWheelTwo{}, \driftWheelThree{} and \driftWheelFour{} return two frames.
+On a legacy velocity label in capitals or separated by tabs, \driftWheelTwo{} returns no frame and the other three return the frame.
+On a blank symbol line and on a symbol line that starts with \texttt{\{}, \driftWheelThree{} and \driftWheelFour{} return no frame and \driftWheelOne{} and \driftWheelTwo{} return the frame, and \driftWheelFour{} returns the outcome of \driftWheelThree{} on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 The measurements other than the one-core timings use readcon-core~\readconversion{}.
 The one-core timings of Section~\ref{sec:performance} of the main text use readcon-core \benchReadcon.
-Two records also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
+Two records also run other builds, which their headings name: the drift comparison reads the published wheels \driftWheels{}, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 The provenance step writes the digests of the readcon module and of the library sources into each record.
 The version history of Table~\ref{tab:versions} is read from the specification at each release tag and runs no readcon-core code, so the table does not list it.
 Nor does the table list the clause coverage, which is read from the specification, the corpus manifests, the probes and the sources of the tests without running readcon-core.
@@ -622,7 +624,7 @@ The eOn restart step reruns the eOn band, the wall-time step the times of Table~
 For the performance records, the payload step writes the timed files, the provenance step the record of the build, the C++ step builds and checks the C++ programs, and the read, heap and cachegrind steps write the timing, heap and cachegrind records.
 The chemfiles build and then the head-to-head step write the head-to-head records, and the settle and native-reader steps the records of the native readers.
 For the conformance records, the corpus step runs the corpus report of readcon-core over the CON 3.1 corpus, the path step reads both corpora through the readcon module and through the C library in the default build and the parallel build, the path-count step runs the reader-path tests and counts their inputs, the cross-check step runs the three readers of Table~\ref{tab:corpus-crosscheck}, the probe step runs the probes, the mutant step reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and the clause step lists what names each clause.
-The version-drift step reads each of four published wheels in its own process, the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and 0.17.3.
+The version-drift step reads each published wheel in its own process, the readcon wheels \driftWheels{}.
 
 \begin{lstlisting}[caption={Rebuild of the paper in a checkout of readcon-core 0.22.0.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=true,columns=fullflexible,keepspaces=true,literate={-}{{\mbox{\char45}}}1,escapeinside={(*}{*)}]
 git clone https://github.com/lode-org/readcon-core
