@@ -33,6 +33,7 @@ printf '%s\\n' "${{RUSTFLAGS}}"
     flags = done.stdout.strip()
     assert "--remap-path-prefix=/opt/cargo-home/=/cargo-home/" in flags
     assert "--remap-path-prefix=/work/readcon-core/=/src/" in flags
+    assert "--remap-path-prefix=/root/.cargo/=/cargo-home/" in flags
     cargo_at = flags.index("--remap-path-prefix=/opt/cargo-home/=/cargo-home/")
     root_at = flags.index("--remap-path-prefix=/work/readcon-core/=/src/")
     assert cargo_at != root_at
