@@ -3540,8 +3540,9 @@ fn write_python_frame(
 ) -> PyResult<()> {
     if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
         && let Some(inner) = frame.inner.as_ref()
-        && inner.positions.nrows() > 0
+        && !inner.atom_data.is_empty()
     {
+        BORROW_FRAME_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         write(inner)?;
         return Ok(());
     }
@@ -4251,7 +4252,25 @@ fn borrow_unmodified_frames<'py>(
     if held.is_empty() {
         return Ok(None);
     }
+    BORROW_LIST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     Ok(Some(BorrowedFrames { held }))
+}
+
+static BORROW_FRAME_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BORROW_LIST_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many times the unmodified-frame writer borrowed a stored frame.
+///
+/// The first count is ``write_python_frame`` writing ``inner`` while atoms
+/// are not built. The second is ``borrow_unmodified_frames`` handing the
+/// stored frames to the path writer. Tests use the pair to see that those
+/// branches ran.
+#[pyfunction]
+fn borrow_path_counts() -> (u64, u64) {
+    (
+        BORROW_FRAME_HITS.load(std::sync::atomic::Ordering::Relaxed),
+        BORROW_LIST_HITS.load(std::sync::atomic::Ordering::Relaxed),
+    )
 }
 
 fn py_frames_to_rust(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
@@ -5574,6 +5593,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
+    m.add_function(wrap_pyfunction!(borrow_path_counts, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(convert_to_con, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_as_ase, m)?)?;
