@@ -141,7 +141,14 @@ jobs:
         run: |
           scripts/run-chemfiles-notebook.sh
 
+      - name: extxyz-ng prefix
+        run: |
+          bash bench/h2h/install_extxyz_ng.sh
+
       - name: pytest tests/python
+        env:
+          # A missing reader fails these runs instead of leaving its test empty.
+          READCON_REQUIRE_ARMS: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md,mda-mmcif,extxyz-ng
         run: |
           python -m pytest tests/python/ -q --tb=short
 
