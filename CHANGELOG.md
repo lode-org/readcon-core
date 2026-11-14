@@ -36,9 +36,19 @@ All notable changes to this project will be documented in this file. See [conven
   thread count. Deflate uses one worker per core when the caller did not ask
   for two or more threads. The members stay independent, so a reader can
   still open them together.
+- A CON-bin file can be mapped and faulted in place. `write_uniform` and
+  the column writer publish that file by rename. A mapped read started
+  after the rename sees the published inode, not a mapping of the file
+  the rename replaced. The `conbin-reader` fuzz target checks the mapped
+  reader against the copy. The `conbin-binary-spec` page describes the
+  layout.
 
 ### Bugfixes
 
+- CON-bin payload values are little-endian. A failed populate hint leaves
+  the mapping in place, and one byte of each page is read so the caller
+  still sees the file. When `mmap` itself fails, the file is read into a
+  private mapping and the accessors return those bytes.
 - An indexed gzip or zstd read keeps a member concatenated after the index.
   The parallel reader used to stop at the indexed slices and drop the rest,
   so it disagreed with the serial decoder. A truncated tail is still rejected.

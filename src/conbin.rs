@@ -1121,7 +1121,49 @@ pub fn map_file_with(
     threads: usize,
     prefetch: Prefetch,
 ) -> Result<ConBinMap, ParseError> {
+    // A crash-safe write publishes by rename. An open taken before that
+    // rename still names the previous inode, so the map of that open is
+    // not the file now at `path`. If the path changes while this call
+    // holds the first mapping, map the published file instead.
+    let mapped = map_current(path, threads, prefetch)?;
+    #[cfg(unix)]
+    if path_identity(path) != Some(mapped.0) {
+        return Ok(map_current(path, threads, prefetch)?.1);
+    }
+    Ok(mapped.1)
+}
+
+/// `(device, inode)` of `path`, when the path exists.
+#[cfg(unix)]
+fn path_identity(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some(file_identity_meta(&meta))
+}
+
+#[cfg(unix)]
+fn file_identity(file: &File) -> Result<(u64, u64), ParseError> {
+    let meta = file
+        .metadata()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    Ok(file_identity_meta(&meta))
+}
+
+#[cfg(unix)]
+fn file_identity_meta(meta: &std::fs::Metadata) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    (meta.dev(), meta.ino())
+}
+
+fn map_current(
+    path: &Path,
+    threads: usize,
+    prefetch: Prefetch,
+) -> Result<((u64, u64), ConBinMap), ParseError> {
     let file = File::open(path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    #[cfg(unix)]
+    let identity = file_identity(&file)?;
+    #[cfg(not(unix))]
+    let identity = (0, 0);
     // MAP_PRIVATE, PROT_READ|PROT_WRITE. Writes copy the page.
     // When `mmap` itself fails, the file is read into a private mapping
     // that holds the same bytes, so the accessors return the same values.
@@ -1135,11 +1177,64 @@ pub fn map_file_with(
     let page = page_size()?;
     let payload_off = checked_payload_offset(offset, map.len())?;
     fault_in(path, &map, threads, page, prefetch)?;
-    Ok(ConBinMap {
-        map,
-        header,
-        payload_off,
-    })
+    Ok((
+        identity,
+        ConBinMap {
+            map,
+            header,
+            payload_off,
+        },
+    ))
+}
+
+#[cfg(test)]
+thread_local! {
+    static POPULATE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static MAP_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// File-backed private map, or an anonymous map filled by `read` when `mmap` fails.
+fn map_copy_or_read(file: &File) -> Result<memmap2::MmapMut, ParseError> {
+    #[cfg(test)]
+    if MAP_FAILS.with(|flag| flag.get()) {
+        return private_copy(file);
+    }
+    match unsafe { memmap2::MmapOptions::new().map_copy(file) } {
+        Ok(map) => Ok(map),
+        Err(_) => private_copy(file),
+    }
+}
+
+fn private_copy(file: &File) -> Result<memmap2::MmapMut, ParseError> {
+    let len = usize::try_from(
+        file.metadata()
+            .map_err(|err| ParseError::ValidationError(err.to_string()))?
+            .len(),
+    )
+    .map_err(|_| ParseError::InvalidCount("CON-bin file length overflows".into()))?;
+    if len < FIELD_BYTES {
+        return Err(ParseError::ValidationError(
+            "CON-bin header is not CONBIN01".into(),
+        ));
+    }
+    let mut anon = memmap2::MmapOptions::new()
+        .len(len)
+        .map_anon()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    let mut reader = file
+        .try_clone()
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    reader
+        .read_exact(&mut anon[..])
+        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+    Ok(anon)
+}
+
+fn touch_mapped_pages(map: &memmap2::MmapMut, page: usize) {
+    let page = page.max(1);
+    for chunk in map.chunks(page) {
+        std::hint::black_box(chunk.first().copied());
+    }
 }
 
 #[cfg(test)]
@@ -2122,6 +2217,22 @@ mod tests {
         let expect = expect_pos.iter().sum::<f64>() + expect_vel.iter().sum::<f64>();
         assert_eq!(sum_split_streams(&path, 2).unwrap(), expect);
         assert_eq!(sum_mapped(&path, 2).unwrap(), expect);
+    }
+
+    #[test]
+    fn a_rename_publish_is_not_read_through_the_previous_mapping() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("republish.conbin");
+        write_uniform(&path, 1, 4, 1).unwrap();
+        let first = map_file(&path, 1).unwrap();
+        let first_pos = first.positions_f64().unwrap().to_vec();
+        write_uniform(&path, 1, 4, 99).unwrap();
+        let second = map_file(&path, 1).unwrap();
+        let second_pos = second.positions_f64().unwrap().to_vec();
+        assert_ne!(first_pos, second_pos);
+        assert_eq!(first.positions_f64().unwrap(), first_pos.as_slice());
+        let (_header, owned, _velocities) = read_owned_f64(&path, 1).unwrap();
+        assert_eq!(owned, second_pos);
     }
 
     #[cfg(target_os = "linux")]
