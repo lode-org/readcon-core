@@ -19,20 +19,11 @@ import time
 from pathlib import Path
 
 import numpy as np
+from bench_disk import bench_disk
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
-
-
-def bench_root() -> Path:
-    """Ext4 bench files. Never /tmp. READCON_BENCH_DISK overrides the default."""
-    chosen = os.environ.get("READCON_BENCH_DISK", "").strip()
-    root = Path(chosen) if chosen else ROOT / "build" / "bench"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
-DISK = bench_root()
+DISK = bench_disk()
 OUT = BENCH / "scaling" / "camp22"
 CAMP20_MPI = ROOT / "build" / "camp20-mpi-8e5351ff"
 LOGS = OUT / "logs"
@@ -1246,50 +1237,47 @@ def conbin_writes() -> None:
     save_rows(dest, rows, repeats=REPEATS, warmup=1)
 
 
-def host() -> None:
-    tree = subprocess.run(
-        ["git", "rev-parse", "HEAD^{tree}"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=True,
+def _capture(cmd: list[str]) -> str:
+    return subprocess.run(
+        cmd, cwd=ROOT, text=True, capture_output=True, check=True
     ).stdout.strip()
+
+
+def host() -> None:
+    disk = bench_disk()
     lscpu = subprocess.run(["lscpu"], text=True, capture_output=True, check=True).stdout
     model = ""
     for line in lscpu.splitlines():
         if line.startswith("Model name:"):
             model = line.split(":", 1)[1].strip()
     fstype = subprocess.run(
-        ["stat", "-f", "-c", "%T", str(DISK)],
+        ["stat", "-f", "-c", "%T", str(disk)],
         text=True,
         capture_output=True,
         check=True,
     ).stdout.strip()
-    shm = subprocess.run(
-        ["findmnt", "-n", "/dev/shm"], text=True, capture_output=True, check=True
-    ).stdout
     (OUT / "host.json").write_text(
         json.dumps(
             {
-                "tree": tree,
-                "base": "524d878f93539f19e442490c934b53e2d96758db",
-                "nproc": 8,
-                "model_name": model,
+                "commit": _capture(["git", "rev-parse", "HEAD"]),
+                "tree": _capture(["git", "rev-parse", "HEAD^{tree}"]),
+                "base": "cee507197a6e9cad2d66d633fd97395b1ec028e9",
+                "cpu_model": model,
                 "lscpu": lscpu,
-                "bench_root": str(DISK),
-                "bench_fstype": fstype,
-                "tmpfs": shm,
+                "disk": str(disk),
+                "disk_filesystem": fstype,
+                "nproc": 8,
                 "repeats": REPEATS,
                 "warmup": 1,
                 "pinned": "taskset -c 0-7",
                 "mpi": "mpirun --bind-to core",
                 "note": (
-                    "Disk rows use the bench root, never /tmp. Memory rows use "
-                    "/dev/shm (tmpfs). Strong efficiency is (t(1)/t(n))/n. "
-                    "Weak efficiency is t(1)/t(n). Gzip and zstd writes are "
-                    "threaded. Rank rows read those files. CON-bin has no rank "
-                    "path; its series is mapped threads. Prior campaigns are "
-                    "not copied in unless their host.json is in the repo."
+                    f"Disk rows use {disk} ({fstype}). /dev/shm is tmpfs. "
+                    "Strong efficiency is (t(1)/t(n))/n. Weak efficiency is "
+                    "t(1)/t(n). Gzip and zstd writes are threaded. Rank rows "
+                    "read those files with READCON_MPI_READ=scatter. CON-bin "
+                    "has no rank path; its series is mapped threads. camp5c "
+                    "has no host.json, so its column is not copied."
                 ),
             },
             indent=2,
