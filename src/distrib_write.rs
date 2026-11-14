@@ -1412,7 +1412,7 @@ unsafe fn mpi_write_block(
 
 #[cfg(test)]
 mod ranked_store_tests {
-    use crate::writer::{RankedStore, ranked_store_for_magic, ranked_store_override};
+    use crate::writer::{ranked_store_for_magic, ranked_store_override, RankedStore};
 
     #[test]
     fn filesystem_choice_does_not_read_the_environment() {
@@ -1729,7 +1729,7 @@ mod slice_part_codec {
 #[cfg(test)]
 mod split_hash {
     use super::{fold_ranked_slices, local_ready, planned_hashes};
-    use crate::frame_index::{HASH_BLOCK, block_hash, fold_block_hashes};
+    use crate::frame_index::{block_hash, fold_block_hashes, HASH_BLOCK};
 
     fn one_shot(data: &[u8]) -> u64 {
         let blocks: Vec<u64> = data.chunks(HASH_BLOCK).map(block_hash).collect();
@@ -1789,12 +1789,63 @@ mod split_hash {
 #[cfg(all(test, feature = "mpi"))]
 mod wide_rank_sha {
     use super::write_block;
-    use crate::distrib::{Comm, block_range};
+    use crate::distrib::{block_range, Comm};
     use crate::distrib_write::WriteMode;
     use crate::types::ConFrameBuilder;
     use crate::writer::ConFrameWriter;
     use mpi::collective::CommunicatorCollectives;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Output};
+    use std::time::{Duration, Instant};
+
+    /// The `.con` and the `.rcidx` beside it. Drop removes both, including
+    /// when the test panics.
+    struct RankedOut {
+        path: PathBuf,
+    }
+
+    impl RankedOut {
+        fn new(path: PathBuf) -> Self {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for RankedOut {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+            let mut side = self.path.as_os_str().to_os_string();
+            side.push(".rcidx");
+            let _ = std::fs::remove_file(side);
+        }
+    }
+
+    fn finish_within(cmd: &mut Command, limit: Duration, label: &str) -> Output {
+        let mut child = cmd
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|err| panic!("{label}: {err}"));
+        let started = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => return child.wait_with_output().expect("output"),
+                Ok(None) if started.elapsed() > limit => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("{label} exceeded {limit:?}");
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+                Err(err) => panic!("{label}: {err}"),
+            }
+        }
+    }
 
     /// Eight frames. Frame `n` is not a copy of frame 0: its coordinates move.
     fn frames() -> Vec<crate::types::ConFrame> {
@@ -1863,14 +1914,15 @@ mod wide_rank_sha {
         let mut digest = None;
         for ranks in [1u32, 2, 4, 8] {
             for mode in ["sequential", "parallel", "mpiio"] {
-                let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("build")
-                    .join("test")
-                    .join(format!(
-                        "readcon-wide-{ranks}-{mode}-{}.con",
-                        std::process::id()
-                    ));
-                let _ = std::fs::create_dir_all(out.parent().expect("parent"));
+                let out = RankedOut::new(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("build")
+                        .join("test")
+                        .join(format!(
+                            "readcon-wide-{ranks}-{mode}-{}.con",
+                            std::process::id()
+                        )),
+                );
                 let mut cmd = crate::mpi_launch::mpi_command();
                 cmd.args([
                     "-n",
@@ -1880,18 +1932,19 @@ mod wide_rank_sha {
                 ])
                 .env("READCON_WIDE_CHILD", "1")
                 .env("READCON_RANKED_WRITE", mode)
-                .env("READCON_RANK_OUT", &out);
-                let output = cmd
-                    .output()
-                    .unwrap_or_else(|err| panic!("mpirun -n {ranks} {mode}: {err}"));
+                .env("READCON_RANK_OUT", out.path());
+                let output = finish_within(
+                    &mut cmd,
+                    Duration::from_secs(60),
+                    &format!("mpirun -n {ranks} {mode}"),
+                );
                 crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} {mode}"));
-                let bytes = std::fs::read(&out).expect("written");
+                let bytes = std::fs::read(out.path()).expect("written");
                 let got = sha256_hex(&bytes);
                 match &digest {
                     None => digest = Some(got),
                     Some(expected) => assert_eq!(&got, expected, "ranks {ranks} {mode}"),
                 }
-                let _ = std::fs::remove_file(&out);
             }
         }
     }
@@ -1907,11 +1960,12 @@ mod wide_rank_sha {
         // One rank keeps the variable because it is rank 0. Two ranks drop
         // it after `MPI_Init` on every rank but 0.
         for (ranks, rank0_only) in [(1u32, false), (2, true)] {
-            let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("build")
-                .join("test")
-                .join(format!("readcon-rank0-{ranks}-{}.con", std::process::id()));
-            let _ = std::fs::create_dir_all(out.parent().expect("parent"));
+            let out = RankedOut::new(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("build")
+                    .join("test")
+                    .join(format!("readcon-rank0-{ranks}-{}.con", std::process::id())),
+            );
             let mut cmd = crate::mpi_launch::mpi_command();
             cmd.args([
                 "-n",
@@ -1921,20 +1975,21 @@ mod wide_rank_sha {
             ])
             .env("READCON_WIDE_CHILD", "1")
             .env("READCON_RANKED_WRITE", "sequential")
-            .env("READCON_RANK_OUT", &out);
+            .env("READCON_RANK_OUT", out.path());
             if rank0_only {
                 cmd.env("READCON_RANK0_ONLY", "1");
             }
-            let output = cmd
-                .output()
-                .unwrap_or_else(|err| panic!("mpirun -n {ranks}: {err}"));
+            let output = finish_within(
+                &mut cmd,
+                Duration::from_secs(30),
+                &format!("mpirun -n {ranks} rank0-only"),
+            );
             crate::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks} rank0-only"));
-            let got = sha256_hex(&std::fs::read(&out).expect("written"));
+            let got = sha256_hex(&std::fs::read(out.path()).expect("written"));
             match &digest {
                 None => digest = Some(got),
                 Some(expected) => assert_eq!(&got, expected, "ranks {ranks}"),
             }
-            let _ = std::fs::remove_file(&out);
         }
     }
 
