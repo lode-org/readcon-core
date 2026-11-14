@@ -757,4 +757,105 @@ mod tests {
         assert_eq!(forces[1], force[1]);
         assert_eq!(forces[2], force[2]);
     }
+
+    fn two_copies_with_second_patched(patch: u8, from_end: usize) -> Vec<u8> {
+        let src = std::fs::read("resources/test/tiny_cuh2.con").unwrap();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&src);
+        bytes.extend_from_slice(&src);
+        let marker = b"6.97529999999999539 7    0";
+        let mut hits = Vec::new();
+        let mut start = 0usize;
+        while let Some(pos) = bytes[start..]
+            .windows(marker.len())
+            .position(|window| window == marker)
+        {
+            hits.push(start + pos);
+            start += pos + marker.len();
+        }
+        assert!(hits.len() >= 2, "marker hits {}", hits.len());
+        let at = hits[1] + marker.len() - from_end;
+        bytes[at] = patch;
+        bytes
+    }
+
+    fn fill_copies(bytes: &[u8]) -> Columns {
+        let layout = layout_bytes(bytes).expect("layout");
+        let mut positions = vec![0.0; layout.n_frames * layout.n_atoms * 3];
+        fill_bytes(
+            bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            empty_slabs(&mut positions),
+        )
+        .expect("fill")
+    }
+
+    #[test]
+    fn a_later_frame_with_a_new_id_expands_identity() {
+        // The id is the last byte of `7    0`.
+        let bytes = two_copies_with_second_patched(b'9', 1);
+        let columns = fill_copies(&bytes);
+        assert!(!columns.identity_shared);
+        assert_eq!(columns.ids.len(), columns.n_frames * columns.n_atoms);
+        assert_eq!(columns.flags.len(), columns.ids.len());
+        assert_eq!(columns.ids[0], 0);
+        assert_eq!(columns.ids[columns.n_atoms], 9);
+    }
+
+    #[test]
+    fn a_later_frame_with_a_new_flag_expands_identity() {
+        // The fixed mask is the `7` six bytes before the end of `7    0`.
+        let bytes = two_copies_with_second_patched(b'0', 6);
+        let columns = fill_copies(&bytes);
+        assert!(!columns.identity_shared);
+        assert_eq!(columns.flags.len(), columns.n_frames * columns.n_atoms);
+        assert_eq!(columns.flags[0], 7);
+        assert_eq!(columns.flags[columns.n_atoms], 0);
+    }
+
+    #[test]
+    fn a_changed_atom_count_refuses_the_column_fill() {
+        let text = "\
+Frame
+one
+8.0 8.0 4.0
+90.0 90.0 90.0
+0 0
+0 0
+1
+2
+63.546
+Cu
+Coordinates of Component 1
+0.0 0.0 0.0 0 0
+1.0 0.0 0.0 0 1
+Frame
+two
+8.0 8.0 4.0
+90.0 90.0 90.0
+0 0
+0 0
+1
+1
+63.546
+Cu
+Coordinates of Component 1
+2.0 0.0 0.0 0 0
+";
+        let bytes = text.as_bytes();
+        let layout = layout_bytes(bytes).expect("first frame still sets the shape");
+        assert_eq!(layout.n_frames, 2);
+        assert_eq!(layout.n_atoms, 2);
+        let mut positions = vec![0.0; layout.n_frames * layout.n_atoms * 3];
+        let filled = fill_bytes(
+            bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            empty_slabs(&mut positions),
+        );
+        assert!(filled.is_err());
+    }
 }

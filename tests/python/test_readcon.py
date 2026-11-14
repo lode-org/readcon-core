@@ -85,6 +85,91 @@ class TestReadCon:
         assert restored[1].frame_index == 9
         assert restored[0].metadata.get("generator") != restored[1].metadata.get("generator")
 
+    @pytest.mark.parametrize("n_threads", [1, 2, 8])
+    def test_column_metadata_item_assignment_is_kept(self, tmp_path, n_threads):
+        with open(_resource("tiny_cuh2.con"), encoding="utf-8") as handle:
+            text = handle.read()
+        path = tmp_path / "meta.con"
+        path.write_text(text + text)
+        frames = readcon.read_con(str(path), n_threads=n_threads)
+        meta = frames[1].metadata
+        assert meta is frames[1].metadata
+        meta["kept"] = "yes"
+        assert frames[1].metadata["kept"] == "yes"
+        restored = readcon.read_con_string(readcon.write_con_string(frames))
+        assert restored[1].metadata["kept"] == "yes"
+        assert "kept" not in restored[0].metadata
+
+    @pytest.mark.parametrize("n_threads", [1, 8])
+    def test_shared_identity_atom_edit_survives_write(self, tmp_path, n_threads):
+        with open(_resource("tiny_cuh2.con"), encoding="utf-8") as handle:
+            text = handle.read()
+        path = tmp_path / "in.con"
+        path.write_text(text + text)
+        frames = readcon.read_con(str(path), n_threads=n_threads)
+        frames[0].atoms[0].x = 1.25
+        frames[0].atoms[0].atom_id = 42
+        frames[0].atoms[0].fixed = [False, True, False]
+        out = tmp_path / "out.con"
+        readcon.write_con(str(out), frames)
+        again = readcon.read_con(str(out))
+        assert again[0].atoms[0].x == pytest.approx(1.25)
+        assert again[0].atoms[0].atom_id == 42
+        assert again[0].atoms[0].fixed == [False, True, False]
+        assert again[1].atoms[0].x == pytest.approx(0.6394, abs=1e-3)
+        assert again[1].atoms[0].atom_id == 0
+        assert again[1].atoms[0].fixed == [True, True, True]
+
+    def test_changed_atom_count_falls_back_to_frames(self, tmp_path):
+        def frame(n_atoms: int, tag: str) -> str:
+            lines = [
+                tag,
+                "fallback",
+                "8.0 8.0 4.0",
+                "90.0 90.0 90.0",
+                "0 0",
+                "0 0",
+                "1",
+                str(n_atoms),
+                "63.546",
+                "Cu",
+                "Coordinates of Component 1",
+            ]
+            lines.extend(f"{atom}.0 0.0 0.0 0 {atom}" for atom in range(n_atoms))
+            return "\n".join(lines) + "\n"
+
+        path = tmp_path / "ragged.con"
+        path.write_text(frame(2, "wide") + frame(1, "narrow"))
+        for n_threads in (1, 8):
+            frames = readcon.read_con(str(path), n_threads=n_threads)
+            assert len(frames) == 2
+            assert len(frames[0]) == 2
+            assert len(frames[1]) == 1
+            assert frames[1].atoms[0].x == pytest.approx(0.0)
+
+    def test_velocity_and_force_slabs_round_trip(self, tmp_path):
+        cases = (
+            ("tiny_multi_cuh2.convel", "vx", 0, 0),
+            ("tiny_cuh2_forces.con", "fx", 0, 0),
+        )
+        for name, attr, frame_index, atom_index in cases:
+            with open(_resource(name), encoding="utf-8") as handle:
+                text = handle.read()
+            path = tmp_path / name
+            path.write_text(text * 3)
+            loaded = readcon.read_con(str(path), n_threads=4)
+            out = tmp_path / f"out-{name}"
+            readcon.write_con(str(out), loaded)
+            again = readcon.read_con(str(out))
+            assert len(again) == len(loaded)
+            before = getattr(loaded[frame_index].atoms[atom_index], attr)
+            after = getattr(again[frame_index].atoms[atom_index], attr)
+            assert after == pytest.approx(before)
+            # A later frame was not turned into Python atoms before the write.
+            later = getattr(again[2].atoms[1], attr)
+            original = getattr(loaded[2].atoms[1], attr)
+            assert later == pytest.approx(original)
+
     def test_mass_column_comes_from_the_header(self):
         import numpy as np
 
