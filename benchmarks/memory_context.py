@@ -163,12 +163,23 @@ def write_peaks(result_json: Path, dest: Path, repo: Path) -> None:
             medians = [medians]
             samples = [samples]
             frame_params = [""]
+        repeats = record.get("stats_repeat") or []
+        q25 = record.get("stats_q_25") or []
+        q75 = record.get("stats_q_75") or []
         for index, frames_text in enumerate(frame_params):
             frames = int(frames_text) if str(frames_text).strip() else 1
             sample_row = samples[index] if index < len(samples) else []
             if not isinstance(sample_row, list):
                 sample_row = []
             median = float(medians[index])
+            if sample_row:
+                count = len(sample_row)
+                spread = _quartile_gap([float(item) for item in sample_row])
+            else:
+                count = int(repeats[index]) if index < len(repeats) else 0
+                low = float(q25[index]) if index < len(q25) else median
+                high = float(q75[index]) if index < len(q75) else median
+                spread = high - low
             atoms = _atoms_for(benchmark)
             minimal = atoms * frames * MIN_ATOM_BYTES if atoms else ""
             ratio = f"{median / minimal:.6f}" if minimal else ""
@@ -179,8 +190,8 @@ def write_peaks(result_json: Path, dest: Path, repo: Path) -> None:
                     "frames": frames if frames_text != "" else "",
                     "file_bytes": _file_bytes(benchmark, frames, repo),
                     "peak_median": f"{median:.1f}",
-                    "n": len(sample_row),
-                    "iqr": f"{_quartile_gap([float(item) for item in sample_row]):.1f}",
+                    "n": count,
+                    "iqr": f"{spread:.1f}",
                     "minimal_bytes": minimal,
                     "peak_over_minimal": ratio,
                     "same_con": same_con,
