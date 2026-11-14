@@ -79,6 +79,7 @@ Elsevier%
 \input{figures/generated/si_macros}
 \input{figures/generated/dlpack_macros}
 \input{campaign/final/campaign_macros}
+\input{campaign/final/paper21_macros}
 \input{figures/generated/exchange_macros}
 % Import labels from the main text without its \\bibcite entries (same keys in both aux files).
 % Captions in the main text contain generated macros, so those macros are defined first.
@@ -929,9 +930,20 @@ The extended XYZ timings run every reader in one process, one arm after another.
 The harness is a Snakemake rule called from an asv class.
 The timing rule generates the files larger than ten atoms.
 
-% PENDING perf19
-Figures~\ref{fig:timing} and~\ref{fig:ratios} are the reader-exchange record: readcon-core \exReadconVersion, one file of \exFrames{} frames and \exAtoms{} atoms, $n{=}\exN$, on \exHost, \exCpus{} CPUs.
+Table~\ref{tab:perf22} is the reader-exchange record.
+One file of 100000 frames of 32 atoms is pinned to core 0.
+Each arm runs one warmup and then six repeats, warm phase then cold phase.
+The median is type 7.
+Warm primes the page cache, and cold drops the cache before the clock.
+The clock is the parse.
+Every cited interquartile range is under 10 percent of its median.
+readcon-db calls \texttt{get\_positions} once per frame.
+That fallback stays \todoPending\ while a fix is in progress.
+The eOn C++ client row is one frame.
+The readcon-through-eOn row is the all-frames client.
+Figures~\ref{fig:timing} and~\ref{fig:ratios} are the earlier log: readcon-core \exReadconVersion, one file of \exFrames{} frames and \exAtoms{} atoms, $n{=}\exN$, on \exHost, \exCpus{} CPUs.
 Those arms return full frames, so the times differ from the one-core reads, which return arrays.
+\input{campaign/final/perf22}
 
 % PENDING perf19
 \begin{figure}[htbp]

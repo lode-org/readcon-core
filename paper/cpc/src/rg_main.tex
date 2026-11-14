@@ -223,6 +223,8 @@ frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
 The library is readcon-core \benchReadcon.
+readcon-core 0.23.0 is published on crates.io.
+The Python packages readcon 0.23.0 and readcon-chemfiles 0.23.0 are published on PyPI.
 The companion programs are readcon-db \benchReadconDb, under the MIT licence, at
 \url{https://github.com/lode-org/readcon-db}, and readcon-ops \opsVersion,
 under the \opsLicense\ licence, at
@@ -666,11 +668,15 @@ The next steps are a declared section for that optimiser state and a patch to AS
 \FloatBarrier \section*{Data availability}\label{sec:data}
 readcon-core \benchReadcon\ is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
 The Zenodo record for readcon-core \benchReadcon\ is \readconZenodoDOI.
+readcon-core 0.23.0 is on crates.io.
+readcon 0.23.0 and readcon-chemfiles 0.23.0 are on PyPI.
+The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h9} at \path{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
 Write scaling is \path{bench/h2h/scaling/camp4} at that tip.
 readcon-db is \path{bench/db4} of \path{lode-org/readcon-db} at \path{a86d62e1218c77fffcd97b1ae3cd094b7ebf2996}.
+The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 One input is \path{frames-32x100000.con}.
 Another is \path{frames-32x100000.convel}.

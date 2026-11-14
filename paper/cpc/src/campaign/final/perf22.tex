@@ -1,0 +1,41 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Reader exchange from perf22.
+One file of 100000 frames of 32 atoms, pinned to core 0.
+Each arm runs one warmup and then six repeats, warm phase then cold phase.
+The median is type 7.
+Warm primes the page cache, and cold drops the cache before the clock.
+The clock is the parse.
+RSS is the high-water mark after the read, minus the mark after the import, in mebibytes.
+Every cited interquartile range is under 10 percent of its median.
+Record \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
+The file's commit field is \texttt{55ece7cb}.
+readcon-db calls \texttt{get\_positions} once per frame and stays pending.
+The h2h9 CON-bin rows stay pending for h2h10.}
+\label{tab:perf22}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Reader & Warm (s) & IQR (s) & Cold (s) & RSS \\
+\midrule
+readcon tip, all frames & 0.1938 & 0.01749 & 0.2437 & 323 \\
+readcon 0.17.3, all frames & 2.752 & 0.02347 & 2.812 & 2531 \\
+readcon baseline, all frames & 2.753 & 0.01324 & 2.869 & 2531 \\
+readcon, first frame & 0.02583 & 0.000309 & 0.1098 & 131.1 \\
+readcon CON-bin, all frames & 0.1523 & 0.002528 & 0.1014 & 293.1 \\
+eOn C++ client, one frame & 0.3139 & 0.004878 & 0.4228 & 263 \\
+readcon through eOn, all frames & 1.58 & 0.01451 & 1.601 & 1059 \\
+eOn Python, all frames & 19.78 & 0.1251 & 19.16 & 2407 \\
+ASE eon, all frames & 10.72 & 0.1087 & 10.77 & 383.9 \\
+ASE, all frames & 7.643 & 0.09984 & 7.637 & 346 \\
+NumPy, all frames & 1.173 & 0.02046 & 1.208 & 390.9 \\
+chemfiles, all frames & 1.391 & 0.008723 & 1.444 & 203.4 \\
+OVITO, all frames & 2.984 & 0.023 & 3.043 & 172 \\
+pymatgen, all frames & 15.62 & 0.1158 & 15.6 & 2119 \\
+h5py, all frames & 0.6092 & 0.01672 & 0.6319 & 758.7 \\
+MDAnalysis, all frames & 49.42 & 0.4107 & 49.61 & 139.3 \\
+readcon-db, all frames & \multicolumn{4}{l}{\todoPending} \\
+\bottomrule
+\end{tabular}}
+\end{table}
