@@ -32,9 +32,24 @@ def test_howto_pdb_block_survives_the_rewrite() -> None:
     assert 'read_pdb("one.pdb")' in fixed
     assert "    assert list(cell[0][:3]) == [10.0, 12.0, 14.0]" in fixed
     assert ":doc:`chemfiles-howto`" in fixed
-    broken = _broken(text)
+    # The published page no longer keeps a raw ``.rst`` link after ``ENDMDL``.
+    # This specimen is the old shape: a code span, a ``<`` inside the block,
+    # then a link the naive substitution can swallow.
+    specimen = (
+        "filled for H and Cu. Any other element is NaN. ``ENDMDL`` closes a frame.\n"
+        "A file with no model records is one frame.\n"
+        "\n"
+        ".. code:: python\n"
+        "\n"
+        "    assert abs(masses[0, 0] - 63.546) < 1e-9\n"
+        "    assert list(cell[0][:3]) == [10.0, 12.0, 14.0]\n"
+        "\n"
+        "See `chemfiles-howto.org <chemfiles-howto.rst>`_.\n"
+    )
+    broken = _broken(specimen)
     assert "``ENDMDL`:doc:`" in broken
-    assert broken.splitlines()[1214].startswith("    assert list")
+    assert any(line.startswith("    assert list") for line in broken.splitlines())
+    assert "``ENDMDL``" in _module().fix_text(specimen)
 
 
 def test_the_old_pattern_is_a_docutils_error() -> None:
