@@ -172,6 +172,7 @@ mpi4py; ``readcon.has_mpi_support()`` reports it.
     comm = MPI.COMM_WORLD.Split(0, MPI.COMM_WORLD.rank)
     mine = readcon.read_con("neb.con", comm=comm)            # this rank's block
     readcon.write_con("out.con", mine, comm=comm, mode="mpiio")
+    # rewrite=True keeps a spare inode at out.con.rewrite. The default does not.
 
 ``comm`` is converted with ``comm.py2f()``.
 ``read_all_frames`` takes the same ``comm`` and ``mode`` keywords.

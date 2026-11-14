@@ -13,7 +13,11 @@ All notable changes to this project will be documented in this file. See [conven
   `MPI_Allgather`. Each rank stores into a fresh file. Rank 0 renames that
   file onto the path only after every byte is stored, then one gather of the
   frame offsets and block hashes writes the `.rcidx` sidecar. Spare reuse is
-  not the default.
+  opt-in through the same `rewrite` / `keep_spare` switch: `write_block` and
+  `write_ranked_bytes` in Rust, `write_con(..., comm=..., rewrite=True)` in
+  Python, and `rkr_mpi_rewrite_block` in C. `keep_spare` parks the previous
+  inode at `path.rewrite`, a second copy of the file. The default leaves no
+  spare.
 - `rewrite_frame_refs_to_path`, `write_con(..., rewrite=True)`, and
   `rkr_rewrite_path` replace a same-length trajectory from a spare named
   `path.rewrite`. `keep_spare=True` parks the previous inode there, which

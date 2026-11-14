@@ -460,9 +460,15 @@ is the finished new one.
         _Exit(0);
     }
 
-The collective call is ``rkr_mpi_write_block`` in C and ``write_con`` with
-``comm=`` in Python. Rust calls ``distrib_write::write_block_refs``.
-``tests/doc_release_notes.rs`` runs the fresh-file publish.
+The default collective call is ``rkr_mpi_write_block`` in C and ``write_con``
+with ``comm=`` in Python. Rust calls ``write_block`` or ``write_ranked_bytes``
+with rewrite left off. The same ``rewrite`` and ``keep_spare`` switch used for
+a threaded rewrite opts the ranked write into the spare: those Rust
+functions take the two flags, ``write_con`` takes ``rewrite=True`` together
+with ``comm=``, and C calls ``rkr_mpi_rewrite_block``. ``keep_spare`` parks the
+previous inode at ``path`` plus ``.rewrite``, a second copy of the file. The
+default leaves no spare. ``tests/doc_release_notes.rs`` runs the fresh-file
+publish.
 
 Serial CON text
 ---------------
