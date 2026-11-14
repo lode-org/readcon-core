@@ -168,12 +168,15 @@ endif()
 
 # rustc native-static-libs for consumers of the static archive
 if (CARGO_VERSION_CHANGED OR NOT DEFINED CARGO_DEFAULT_LIBRARIES)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tempdir.cmake)
-    get_tempdir(TMPDIR)
-
+    # A nested cargo rustc inherits the parent's target directory and waits
+    # on its lock. Keep the empty project and that probe under the build
+    # tree, which is not the directory the parent cargo has locked.
+    set(CARGO_PROBE_DIR "${CMAKE_CURRENT_BINARY_DIR}/_cargo_required_libs")
+    set(CARGO_PROBE_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo-probe-target")
+    file(REMOVE_RECURSE "${CARGO_PROBE_DIR}")
     execute_process(
         COMMAND "${CARGO_EXE}" new --lib _cargo_required_libs
-        WORKING_DIRECTORY "${TMPDIR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         RESULT_VARIABLE cargo_new_result
         OUTPUT_VARIABLE cargo_new_stdout
         ERROR_VARIABLE cargo_new_stderr
@@ -183,16 +186,20 @@ if (CARGO_VERSION_CHANGED OR NOT DEFINED CARGO_DEFAULT_LIBRARIES)
             "could not create empty project to find cargo's default static libs (error ${cargo_new_result})\n"
             "stdout:\n${cargo_new_stdout}\nstderr:\n${cargo_new_stderr}")
     endif()
-    file(APPEND "${TMPDIR}/_cargo_required_libs/Cargo.toml" "[lib]\ncrate-type=[\"staticlib\"]\n")
+    file(APPEND "${CARGO_PROBE_DIR}/Cargo.toml" "[lib]\ncrate-type=[\"staticlib\"]\n")
 
     execute_process(
-        COMMAND ${CARGO_EXE} rustc --color never --target=${RUST_BUILD_TARGET} -- --print=native-static-libs
-        WORKING_DIRECTORY "${TMPDIR}/_cargo_required_libs"
+        COMMAND ${CMAKE_COMMAND} -E env "CARGO_TARGET_DIR=${CARGO_PROBE_TARGET_DIR}"
+            ${CARGO_EXE} rustc --color never --target=${RUST_BUILD_TARGET}
+            --target-dir=${CARGO_PROBE_TARGET_DIR}
+            -- --print=native-static-libs
+        WORKING_DIRECTORY "${CARGO_PROBE_DIR}"
         RESULT_VARIABLE cargo_rustc_result
         OUTPUT_VARIABLE cargo_rustc_stdout
         ERROR_VARIABLE  cargo_rustc_stderr
     )
-    file(REMOVE_RECURSE "${TMPDIR}")
+    file(REMOVE_RECURSE "${CARGO_PROBE_DIR}")
+    file(REMOVE_RECURSE "${CARGO_PROBE_TARGET_DIR}")
     if(cargo_rustc_result)
         message(FATAL_ERROR
             "could not extract cargo's default static libs (error ${cargo_rustc_result})\n"
