@@ -608,6 +608,7 @@ def run(out: Path, repeats: int = 12) -> None:
     ident = refuse_stale_build(ROOT)
     head = ident["commit"]
     import readcon
+
     pin_mdcompress()
     version = readcon.__version__
     out.mkdir(parents=True, exist_ok=True)

@@ -33,9 +33,7 @@ _LET = re.compile(
     r"""(?:let|const|static)\s+(?:mut\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*&str\s*)?=\s*"((?:\\.|[^"\\])*)"\s*;""",
     re.S,
 )
-_ALIAS = re.compile(
-    r"use\s+(?:std::)?env::var(?:_os)?\s+as\s+([A-Za-z_][A-Za-z0-9_]*)"
-)
+_ALIAS = re.compile(r"use\s+(?:std::)?env::var(?:_os)?\s+as\s+([A-Za-z_][A-Za-z0-9_]*)")
 _FORMAT = re.compile(r'format!\s*\(\s*"(READCON_\{[^"]*)"')
 _VARS = re.compile(r"env::vars\s*\(")
 
