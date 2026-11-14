@@ -49,6 +49,8 @@ All notable changes to this project will be documented in this file. See [conven
   the mapping in place, and one byte of each page is read so the caller
   still sees the file. When `mmap` itself fails, the file is read into a
   private mapping and the accessors return those bytes.
+- An equal-frame MPI read learns the frame length on rank 0. The other
+  ranks check the file length instead of mapping the whole file.
 - An indexed gzip or zstd read keeps a member concatenated after the index.
   The parallel reader used to stop at the indexed slices and drop the rest,
   so it disagreed with the serial decoder. A truncated tail is still rejected.

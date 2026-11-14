@@ -445,6 +445,35 @@ fn tiled_span(path: &Path) -> Option<(usize, usize)> {
     Some((span, n))
 }
 
+/// True when `path` is `n` frames of `span` bytes plus optional whitespace.
+fn tiled_length_matches(path: &Path, span: usize, n: usize) -> bool {
+    if span < 2 || n == 0 {
+        return false;
+    }
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(meta) = file.metadata() else {
+        return false;
+    };
+    let len = meta.len() as usize;
+    let body = n.saturating_mul(span);
+    if len < body {
+        return false;
+    }
+    let tail = len - body;
+    if tail == 0 {
+        return true;
+    }
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = file;
+    if file.seek(SeekFrom::Start(body as u64)).is_err() {
+        return false;
+    }
+    let mut buf = vec![0u8; tail];
+    file.read_exact(&mut buf).is_ok() && buf.iter().all(|byte| byte.is_ascii_whitespace())
+}
+
 /// Equal-length frames: every rank, including rank 0, reads only its span.
 ///
 /// `Ok(None)` means the file is not one frame length and the caller keeps
@@ -454,9 +483,11 @@ fn read_tiled(
     path: &Path,
     threads: Option<usize>,
 ) -> Result<Option<RankFrames>, BoxErr> {
-    let local = tiled_span(path);
+    // Only rank 0 maps the file to learn the frame length. The other
+    // ranks used to map it too, which made an 8-rank read of a long
+    // equal-frame file slower than four ranks.
     let packed = if comm.rank() == 0 {
-        match local {
+        match tiled_span(path) {
             Some((span, n)) => {
                 let mut bytes = Vec::with_capacity(16);
                 bytes.extend_from_slice(&(span as u64).to_le_bytes());
@@ -478,7 +509,8 @@ fn read_tiled(
     let Some((span, n)) = decided else {
         return Ok(None);
     };
-    if !agree(comm, local == Some((span, n))) {
+    let same = tiled_length_matches(path, span, n);
+    if !agree(comm, same) {
         return Ok(None);
     }
     let r = comm.my_frames(n);

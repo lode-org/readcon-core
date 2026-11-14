@@ -69,14 +69,20 @@ fn main() {
     }
     let workers: usize = args.next().unwrap_or_else(|| "1".into()).parse().unwrap();
     let samples = match which.as_str() {
-        "pos" => time_logged("read", 6, || {
-            let block = readcon_core::iterators::read_positions_with_threads(
-                std::path::Path::new(&path),
-                Some(workers),
-            )
-            .unwrap();
-            std::hint::black_box(block.values.len());
-        }),
+        "pos" => {
+            let repeats = std::env::var("READCON_PROBE_REPEATS")
+                .ok()
+                .and_then(|text| text.parse().ok())
+                .unwrap_or(12);
+            time_logged("read", repeats, || {
+                let block = readcon_core::iterators::read_positions_with_threads(
+                    std::path::Path::new(&path),
+                    Some(workers),
+                )
+                .unwrap();
+                std::hint::black_box(block.values.len());
+            })
+        }
         "fmt" => {
             let text = std::fs::read_to_string(&path).unwrap();
             let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
