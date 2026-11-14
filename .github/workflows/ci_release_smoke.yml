@@ -11,6 +11,11 @@ on:
       - "v*"
   pull_request:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag whose published assets to smoke
+        required: true
+        type: string
 
 concurrency:
   group: release-smoke-${{ github.ref }}
@@ -31,9 +36,31 @@ jobs:
       - name: Download the published assets for this version
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SMOKE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
         run: |
-          args=()
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          set -euo pipefail
+          # The worktree is the workflow ref. Its wrap describes the next
+          # unreleased tree. Pins come from the tag being smoked.
+          require=0
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$SMOKE_TAG"
+            require=1
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+            require=1
+          else
+            tag="v$(tr -d '[:space:]' < VERSION)"
+          fi
+          if ! git fetch --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"; then
+            if [ "$require" = 1 ]; then
+              echo "tag ${tag} is not on origin" >&2
+              exit 1
+            fi
+            echo "${tag} is not published yet"
+            exit 0
+          fi
+          args=(--tag "$tag")
+          if [ "$require" = 1 ]; then
             args+=(--require-published)
           fi
           python3 scripts/check_release_smoke.py "${args[@]}"

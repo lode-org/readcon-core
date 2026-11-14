@@ -7,8 +7,13 @@ the header itself, so ``gcc`` against the published prefix failed. The
 self-test builds that broken layout and requires the checker to fail.
 
 A version that is not on GitHub yet exits 0 unless ``--require-published``
-(tag pushes). A release that exists must carry the crate, both wheels, the
-cxx tarball, every clib tarball, and the cargo-dist archives.
+(tag pushes and workflow_dispatch). A release that exists must carry the
+crate, both wheels, the cxx tarball, every clib tarball, and the cargo-dist
+archives.
+
+The wrap pin and ``VERSION`` are read with ``git show <tag>:path``. The
+checked-out branch head is a later tree and its wrap describes the next
+unreleased archive, not the tarball attached to the tag.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -68,18 +74,70 @@ class SmokeError(Exception):
     """A published asset is missing or does not build."""
 
 
-def version_of(root: Path) -> str:
-    return (root / "VERSION").read_text(encoding="utf-8").strip()
-
-
-def wrap_hash(root: Path) -> str:
-    text = (root / "packaging" / "wrapdb" / "readcon-core.wrap").read_text(
-        encoding="utf-8"
+def git_show(root: Path, tag: str, path: str) -> str:
+    """File contents at ``tag``, not the checked-out worktree."""
+    ran = subprocess.run(
+        ["git", "-C", str(root), "show", f"{tag}:{path}"],
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    if ran.returncode != 0:
+        detail = ran.stderr.strip() or f"git show {tag}:{path} failed"
+        raise SmokeError(detail)
+    return ran.stdout
+
+
+def tag_version(tag: str) -> str:
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        raise SmokeError(f"tag {tag} is not vX.Y.Z")
+    return tag[1:]
+
+
+def wrap_pin(text: str) -> tuple[str, str]:
+    """Return ``(version, source_hash)`` from a wrap file body."""
+    fields = {}
     for line in text.splitlines():
-        if line.startswith("source_hash"):
-            return line.split("=", 1)[1].strip()
-    raise SmokeError("wrap file has no source_hash")
+        if "=" not in line or line.strip().startswith("["):
+            continue
+        key, value = line.split("=", 1)
+        fields[key.strip()] = value.strip()
+    versions = set()
+    for key in ("directory", "source_filename", "source_url"):
+        found = re.findall(r"\d+\.\d+\.\d+", fields.get(key, ""))
+        if not found:
+            raise SmokeError(f"wrap {key} has no X.Y.Z version")
+        versions.update(found)
+    if len(versions) != 1:
+        raise SmokeError("wrap version fields disagree: " + ", ".join(sorted(versions)))
+    source_hash = fields.get("source_hash", "")
+    if not re.fullmatch(r"[0-9a-f]{64}", source_hash):
+        raise SmokeError(f"wrap source_hash is not 64 hex digits: {source_hash!r}")
+    return versions.pop(), source_hash
+
+
+def pin_at_tag(root: Path, tag: str) -> tuple[str, str]:
+    """Version and cxx hash recorded on ``tag``.
+
+    The tag name, ``VERSION``, the wrap filename, and the sha256 sidecar
+    must all name that same release. A branch head's wrap is not consulted.
+    """
+    version = tag_version(tag)
+    tagged = git_show(root, tag, "VERSION").strip()
+    if tagged != version:
+        raise SmokeError(f"tag {tag} and VERSION {tagged} at that tag disagree")
+    wrap_version, source_hash = wrap_pin(
+        git_show(root, tag, "packaging/wrapdb/readcon-core.wrap")
+    )
+    if wrap_version != version:
+        raise SmokeError(f"tag {tag} and wrap version {wrap_version} disagree")
+    sidecar = git_show(root, tag, "packaging/wrapdb/readcon-core.sha256").strip()
+    if sidecar != source_hash:
+        raise SmokeError(
+            f"tag {tag} wrap source_hash {source_hash} and sha256 sidecar {sidecar} disagree"
+        )
+    print(f"tag {tag} wrap {source_hash}")
+    return version, source_hash
 
 
 def member_names(blob: bytes) -> list[str]:
@@ -238,7 +296,7 @@ def unpack_clib(blob: bytes, dest: Path) -> Path:
     return include.parent
 
 
-def check_published(root: Path, version: str) -> None:
+def check_published(version: str, pinned: str, tag: str) -> None:
     release = github_release(version)
     if release is None:
         raise SmokeError(f"GitHub release v{version} does not exist")
@@ -248,10 +306,9 @@ def check_published(root: Path, version: str) -> None:
     cxx_name = f"readcon-core-cxx-{version}.tar.gz"
     cxx = download_asset(asset_named(release, cxx_name))
     digest = sha256(cxx)
-    pinned = wrap_hash(root)
     if digest != pinned:
-        raise SmokeError(f"{cxx_name} sha256 {digest} != wrap {pinned}")
-    print(f"cxx {cxx_name} matches wrap {digest}")
+        raise SmokeError(f"{cxx_name} sha256 {digest} != wrap {pinned} at {tag}")
+    print(f"cxx {cxx_name} matches wrap {digest} at {tag}")
     clib_names = [
         asset["name"]
         for asset in release.get("assets", [])
@@ -311,6 +368,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument(
+        "--tag",
+        help="vX.Y.Z tag whose VERSION and wrap pin are authoritative",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="only prove a missing version header is rejected",
@@ -318,13 +379,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-published",
         action="store_true",
-        help="fail when this VERSION has no GitHub release yet",
+        help="fail when this tag has no GitHub release yet",
     )
     args = parser.parse_args(argv)
     self_test()
     if args.self_test:
         return 0
-    version = version_of(args.root)
+    if not args.tag:
+        raise SmokeError(
+            "pass --tag vX.Y.Z; the wrap is read from that tag, not the worktree"
+        )
+    version, pinned = pin_at_tag(args.root, args.tag)
     release = github_release(version)
     if release is None:
         message = f"v{version} is not published yet"
@@ -332,7 +397,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SmokeError(message)
         print(message)
         return 0
-    check_published(args.root, version)
+    check_published(version, pinned, args.tag)
     return 0
 
 
