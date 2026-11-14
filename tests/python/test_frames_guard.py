@@ -27,6 +27,37 @@ def test_identical_copies_are_refused() -> None:
         guard.require_distinct_frames([one, one])
 
 
+def _coordinate_rows(frame: str) -> list[tuple[float, float, float]]:
+    rows = []
+    for line in frame.splitlines():
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        try:
+            rows.append((float(parts[0]), float(parts[1]), float(parts[2])))
+        except ValueError:
+            continue
+    return rows
+
+
+def _rms(left: str, right: str) -> float:
+    a = _coordinate_rows(left)
+    b = _coordinate_rows(right)
+    assert len(a) == len(b) and a
+    total = 0.0
+    for (x1, y1, z1), (x2, y2, z2) in zip(a, b, strict=True):
+        total += (x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2
+    return (total / len(a)) ** 0.5
+
+
+def test_consecutive_frames_differ_by_at_least_half_a_hundredth() -> None:
+    guard = _guard()
+    one = CUH2.read_text(encoding="utf-8")
+    frames = [guard.perturb_frame(one, index) for index in range(4)]
+    for left, right in zip(frames, frames[1:]):
+        assert _rms(left, right) >= 0.005
+
+
 def test_cuh2_keeps_its_width_past_the_old_period() -> None:
     guard = _guard()
     one = CUH2.read_text(encoding="utf-8")

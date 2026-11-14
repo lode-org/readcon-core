@@ -123,8 +123,12 @@ print(json.dumps({"kind": kind, "seconds": dt, "rss_bytes": rss, "frames": int(f
 
 
 def write_con(path: Path) -> None:
+    sys.path.insert(0, str(HERE.parents[2] / "bench" / "h2h"))
+    from frames_guard import thermal_shift
+
     lines = [""]
     for frame in range(40):
+        delta = thermal_shift(8, frame)
         lines += [
             '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}',
             "10.0 10.0 10.0",
@@ -138,7 +142,10 @@ def write_con(path: Path) -> None:
             "Coordinates of Component 1",
         ]
         for atom in range(8):
-            lines.append(f"{atom + frame * 0.01:.4f} 0.1 0.2 0 {atom}")
+            x = atom + float(delta[atom, 0])
+            y = 0.1 + float(delta[atom, 1])
+            z = 0.2 + float(delta[atom, 2])
+            lines.append(f"{x:.4f} {y:.4f} {z:.4f} 0 {atom}")
         lines.append("")
     path.write_text("\n".join(lines))
 

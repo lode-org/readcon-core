@@ -3,7 +3,7 @@
 A file of identical copies hits the repeated-frame shortcut
 (``repeated_span``, ``tiled_frame_count``, ``parse_repeated_copies``), so a
 timed read measures that shortcut. ``distinct_frames`` keeps the atom count
-and the species lines and nudges each frame's coordinates with a fixed seed.
+and the species lines and moves each coordinate by a seeded 0.01–0.05 Å.
 ``require_distinct_frames`` refuses a run of byte-identical frames.
 """
 
@@ -55,22 +55,67 @@ def _frame_state(frame: int, seed: int) -> int:
     return _splitmix64(mixed)
 
 
-def _bump_token(token: str, draw: int) -> str:
-    """Change the last digit. The field width and the other digits stay."""
-    chars = list(token)
-    delta = (draw % 9) + 1
-    for index in range(len(chars) - 1, -1, -1):
-        if chars[index].isdigit():
-            chars[index] = str((int(chars[index]) + delta) % 10)
-            return "".join(chars)
+def _apply_hundredths(token: str, steps: int) -> str | None:
+    """Add ``steps`` hundredths of an Ångström. ``None`` if the width would change."""
+    if steps == 0:
+        return None
+    sign = ""
+    body = token
+    if body[:1] in "+-":
+        sign = body[0]
+        body = body[1:]
+    if "." not in body:
+        return None
+    whole, frac = body.split(".", 1)
+    if len(frac) < 2 or not whole.isdigit() or not frac.isdigit():
+        return None
+    width = len(whole) + len(frac)
+    value = int(whole + frac)
+    if sign == "-":
+        value = -value
+    value += steps * 10 ** (len(frac) - 2)
+    negative = value < 0
+    digits = str(abs(value)).zfill(width)
+    if len(digits) != width:
+        return None
+    new_sign = "-" if negative else ("+" if sign == "+" else "")
+    if len(new_sign) != len(sign):
+        return None
+    rebuilt = f"{new_sign}{digits[: len(whole)]}.{digits[len(whole) :]}"
+    if len(rebuilt) != len(token):
+        return None
+    return rebuilt
+
+
+def _shift_hundredths(token: str, draw: int) -> str:
+    """Move one coordinate by 0.01–0.05 Å, keeping the printed field width."""
+    steps = (draw % 5) + 1
+    sign = 1 if (draw & 16) == 0 else -1
+    for direction in (sign, -sign):
+        shifted = _apply_hundredths(token, direction * steps)
+        if shifted is not None:
+            return shifted
     return token
+
+
+def thermal_shift(n_atoms: int, frame: int, seed: int = 1) -> np.ndarray:
+    """Per-atom displacement of ±0.01–0.05 Å. One PCG32 stream per frame."""
+    state = _frame_state(frame, seed)
+    out = np.empty((n_atoms, 3), dtype=np.float64)
+    for atom in range(n_atoms):
+        for axis in range(3):
+            state, draw = _pcg32(state)
+            steps = (draw % 5) + 1
+            sign = 1.0 if (draw & 16) == 0 else -1.0
+            out[atom, axis] = sign * steps * 0.01
+    return out
 
 
 def perturb_frame(text: str, frame: int, seed: int = 1) -> str:
     """One copy of ``text`` whose coordinates depend on ``frame`` and ``seed``.
 
-    The printed field widths stay those of ``text``, so a 16771-byte cuh2
-    frame is still 16771 bytes. The nudge is a per-frame PCG32 stream.
+    Each coordinate moves by 0.01–0.05 Å. The printed field widths stay those
+    of ``text``, so a 16771-byte cuh2 frame is still 16771 bytes.
     """
     state = _frame_state(frame, seed)
     out: list[str] = []
@@ -88,7 +133,7 @@ def perturb_frame(text: str, frame: int, seed: int = 1) -> str:
                 break
             pieces.append(body[last : match.start()])
             state, draw = _pcg32(state)
-            pieces.append(_bump_token(match.group(0), draw))
+            pieces.append(_shift_hundredths(match.group(0), draw))
             last = match.end()
             bumped += 1
         pieces.append(body[last:])
