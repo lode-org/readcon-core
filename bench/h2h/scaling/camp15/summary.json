@@ -1,0 +1,9 @@
+{
+  "finding": "Each worker spelled into a reused 2 MiB buffer, this core's L2, then copied into the mapping. Plain and non-temporal copies were slower than spelling into the fresh pages. The writer keeps the direct fill.",
+  "t8_s": {
+    "direct": 0.2127065,
+    "buf": 0.26564,
+    "nt": 0.2626305
+  },
+  "rewrite": "keep_spare defaults to retaining path.rewrite, which doubles disk. keep_spare false deletes it after rename. A kill during the spare write leaves the published file as the previous complete bytes."
+}
