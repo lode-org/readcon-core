@@ -41,6 +41,8 @@ pub mod distrib;
 pub mod distrib_read;
 #[cfg(feature = "mpi")]
 pub mod distrib_write;
+#[cfg(feature = "mpi")]
+pub mod mpi_launch;
 pub mod error;
 pub mod extxyz_scan;
 mod fast_dec;
