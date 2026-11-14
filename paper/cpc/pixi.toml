@@ -22,7 +22,7 @@ scipy = "*"
 matplotlib-base = "==3.11.2"
 cycler = "*"
 chemfiles-python = "==0.10.4"
-mdanalysis = "==2.10.0"
+mdanalysis = "==2.11.0"
 openbabel = "==3.2.1"
 # ira provides the ira_mod module of the NEB figure.
 ira = "==2.2.0"
@@ -37,7 +37,7 @@ memray = "==1.20.0"
 valgrind = "*"
 
 [pypi-dependencies]
-ovito = "==3.16.1"
+ovito = "==3.17.2"
 xyzrender = "==0.3.8"
 abnf = "==2.9.1"
 extxyz = "==0.4.6"
