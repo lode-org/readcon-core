@@ -132,7 +132,15 @@ fn skip_frame(buf: &[u8], eof: bool) -> Result<Option<usize>, ()> {
 
 fn read_more(src: &mut impl Read, buf: &mut Vec<u8>, eof: &mut bool) -> Result<(), ()> {
     let start = buf.len();
-    buf.resize(start + READ_CHUNK, 0);
+    // Fill the spare capacity. Growing by a fixed 8 KB was one read per
+    // chunk even when the window already had room for the next frame.
+    let spare = buf.capacity().saturating_sub(start);
+    let want = if spare >= READ_CHUNK {
+        spare
+    } else {
+        READ_CHUNK
+    };
+    buf.resize(start + want, 0);
     match src.read(&mut buf[start..]) {
         Ok(0) => {
             buf.truncate(start);
@@ -610,6 +618,10 @@ struct Painted {
     prefix: usize,
     spec: u32,
     counts: Vec<usize>,
+    /// The first frame's coordinate rows were six fractional digits.
+    coord_short6: bool,
+    /// The first frame's vector-section rows were six fractional digits.
+    section_short6: bool,
 }
 
 fn flag_bits(flags: [bool; 3]) -> u8 {
@@ -671,6 +683,7 @@ fn paint_standard_frame(
     let mut prefix = 0usize;
     let mut atom = 0usize;
     let mut default_id = 0u64;
+    let mut coord_short6 = None;
     for count in &counts {
         let symbol = Arc::<str>::from(line_str(take_line(bytes, &mut pos)?)?);
         let label = line_str(take_line(bytes, &mut pos)?)?;
@@ -682,8 +695,14 @@ fn paint_standard_frame(
             prefix = pos;
         }
         for _ in 0..*count {
-            let ((xyz, fixed, atom_id), next) =
-                crate::parser::parse_coord_row_at(bytes, pos, spec, default_id).map_err(|_| ())?;
+            let ((xyz, fixed, atom_id), next) = crate::parser::parse_coord_row_shaped(
+                bytes,
+                pos,
+                spec,
+                Some(default_id),
+                &mut coord_short6,
+            )
+            .map_err(|_| ())?;
             write_xyz(dest.positions, atom, xyz);
             flags.push(flag_bits(fixed));
             ids.push(atom_id);
@@ -697,6 +716,7 @@ fn paint_standard_frame(
         return Err(());
     }
     let mut saw = SectionFlags::default();
+    let mut section_short6 = None;
     while pos < bytes.len() && !bytes[pos..].iter().all(u8::is_ascii_whitespace) {
         let blank = take_line(bytes, &mut pos)?;
         if !trim_ascii(blank).is_empty() {
@@ -720,40 +740,70 @@ fn paint_standard_frame(
                 match kind {
                     "Velocities" => {
                         let ptr = dest.velocities.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.velocities = true;
                     }
                     "Forces" => {
                         let ptr = dest.forces.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.forces = true;
                     }
                     "Magmoms" => {
                         let ptr = dest.magmoms.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.magmoms = true;
                     }
                     "Displacements" => {
                         let ptr = dest.displacements.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.displacements = true;
                     }
                     "Spreads" => {
                         let ptr = dest.spreads.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.spreads = true;
@@ -796,6 +846,8 @@ fn paint_standard_frame(
         prefix,
         spec: spec_kept,
         counts,
+        coord_short6: coord_short6 == Some(true),
+        section_short6: section_short6 == Some(true),
     })
 }
 
@@ -824,6 +876,7 @@ fn paint_checked(
     let mut pos = template.prefix;
     let mut atom = 0usize;
     let mut default_id = 0u64;
+    let mut coord_short6 = Some(template.coord_short6);
     for (component, count) in template.counts.iter().enumerate() {
         if component > 0 {
             let symbol = line_str(take_line(bytes, &mut pos)?)?;
@@ -841,8 +894,14 @@ fn paint_checked(
             }
         }
         for _ in 0..*count {
-            let ((xyz, fixed, atom_id), next) =
-                crate::parser::parse_coord_row_at(bytes, pos, spec, default_id).map_err(|_| ())?;
+            let ((xyz, fixed, atom_id), next) = crate::parser::parse_coord_row_shaped(
+                bytes,
+                pos,
+                spec,
+                Some(default_id),
+                &mut coord_short6,
+            )
+            .map_err(|_| ())?;
             if template.flags.get(atom).copied() != Some(flag_bits(fixed))
                 || template.ids.get(atom).copied() != Some(atom_id)
             {
@@ -858,6 +917,7 @@ fn paint_checked(
         return Err(());
     }
     let mut saw = SectionFlags::default();
+    let mut section_short6 = Some(template.section_short6);
     while pos < bytes.len() && !bytes[pos..].iter().all(u8::is_ascii_whitespace) {
         let blank = take_line(bytes, &mut pos)?;
         if !trim_ascii(blank).is_empty() {
@@ -880,40 +940,70 @@ fn paint_checked(
                 match next_word {
                     "Velocities" => {
                         let ptr = dest.velocities.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.velocities = true;
                     }
                     "Forces" => {
                         let ptr = dest.forces.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.forces = true;
                     }
                     "Magmoms" => {
                         let ptr = dest.magmoms.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.magmoms = true;
                     }
                     "Displacements" => {
                         let ptr = dest.displacements.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.displacements = true;
                     }
                     "Spreads" => {
                         let ptr = dest.spreads.ok_or(())?;
-                        let ((xyz, _, _), next) =
-                            crate::parser::parse_vector_row_at(bytes, pos, spec).map_err(|_| ())?;
+                        let ((xyz, _, _), next) = crate::parser::parse_coord_row_shaped(
+                            bytes,
+                            pos,
+                            spec,
+                            None,
+                            &mut section_short6,
+                        )
+                        .map_err(|_| ())?;
                         write_xyz(ptr, section_atom, xyz);
                         pos = next;
                         saw.spreads = true;
@@ -1305,7 +1395,9 @@ fn fill_stream_fast<R: Read>(
                 }
                 seen += 1;
                 buf.drain(..end);
-                buf.shrink_to(READ_CHUNK * 2);
+                // Same cap as the layout pass. Shrinking to 16 KB threw away
+                // a 32 KB window that the next frame immediately grew back.
+                shrink(&mut buf);
             }
             None if eof => break,
             None => read_more(&mut src, &mut buf, &mut eof)?,
@@ -2744,6 +2836,78 @@ Coordinates of Component 1
         let stride = layout.n_atoms * 3;
         assert_ne!(from_path[..3], from_path[stride..stride + 3]);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn stream_matches_every_thread_count() {
+        for name in ["cuh2.con", "tiny_cuh2.convel", "tiny_cuh2_forces.con"] {
+            let src = std::fs::read(format!("resources/test/{name}")).unwrap();
+            let bytes = super::distinct_copies(&src, 8);
+            let path = std::env::temp_dir().join(format!(
+                "readcon-threads-{}-{}",
+                std::process::id(),
+                name.replace('.', "-")
+            ));
+            std::fs::write(&path, &bytes).unwrap();
+            let layout = layout_path(&path).expect(name);
+            let n3 = layout.n_frames * layout.n_atoms * 3;
+            let mut base_pos = vec![0.0; n3];
+            let mut base_vel = vec![0.0; n3];
+            let mut base_frc = vec![0.0; n3];
+            let base = fill_path(
+                &path,
+                layout.n_frames,
+                layout.n_atoms,
+                layout.sections,
+                Slabs {
+                    positions: &mut base_pos,
+                    velocities: layout
+                        .sections
+                        .velocities
+                        .then_some(base_vel.as_mut_slice()),
+                    forces: layout.sections.forces.then_some(base_frc.as_mut_slice()),
+                    energies: None,
+                    charges: None,
+                    spins: None,
+                    magmoms: None,
+                    displacements: None,
+                    spreads: None,
+                },
+            )
+            .expect(name);
+            for threads in [2usize, 4, 8] {
+                let mut pos = vec![0.0; n3];
+                let mut vel = vec![0.0; n3];
+                let mut frc = vec![0.0; n3];
+                let got = fill_bytes_threaded(
+                    &bytes,
+                    layout.n_frames,
+                    layout.n_atoms,
+                    layout.sections,
+                    threads,
+                    &layout.frame_offsets,
+                    layout.frames_end,
+                    Slabs {
+                        positions: &mut pos,
+                        velocities: layout.sections.velocities.then_some(vel.as_mut_slice()),
+                        forces: layout.sections.forces.then_some(frc.as_mut_slice()),
+                        energies: None,
+                        charges: None,
+                        spins: None,
+                        magmoms: None,
+                        displacements: None,
+                        spreads: None,
+                    },
+                )
+                .unwrap_or_else(|_| panic!("{name} at {threads}"));
+                assert_eq!(pos, base_pos, "{name} positions at {threads}");
+                assert_eq!(vel, base_vel, "{name} velocities at {threads}");
+                assert_eq!(frc, base_frc, "{name} forces at {threads}");
+                assert_eq!(got.ids, base.ids, "{name} ids at {threads}");
+                assert_eq!(got.flags, base.flags, "{name} flags at {threads}");
+            }
+            let _ = std::fs::remove_file(&path);
+        }
     }
 }
 

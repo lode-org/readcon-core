@@ -1296,6 +1296,57 @@ fn parse_coord_fields(
     parse_coord_fields_detailed(bytes, i, spec_version, default_id)
 }
 
+/// Coordinate or vector row.
+///
+/// `short6` is `None` until the first row of a block decides. `Some(true)`
+/// keeps trying the six-digit parser, and a row that does not match uses the
+/// general parser without turning the block off. `Some(false)` skips the
+/// six-digit attempt, which is the long-decimal files.
+#[inline(always)]
+pub(crate) fn parse_coord_row_shaped(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: Option<u64>,
+    short6: &mut Option<bool>,
+) -> Result<(ParsedCoord, usize), ParseError> {
+    if short6.unwrap_or(true) {
+        if let Some(parsed) = parse_coord_fields_short6(bytes, i, spec_version, default_id) {
+            if short6.is_none() {
+                *short6 = Some(true);
+            }
+            return Ok(parsed);
+        }
+        if short6.is_none() {
+            *short6 = Some(false);
+        }
+    }
+    parse_coord_fields(bytes, i, spec_version, default_id)
+}
+
+#[inline(always)]
+fn parse_coord_fields_short6(
+    bytes: &[u8],
+    i: usize,
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Option<(ParsedCoord, usize)> {
+    let mut i = skip_field_ws(bytes, i);
+    let mut xyz = [0.0f64; 3];
+    for dest in &mut xyz {
+        if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
+            return None;
+        }
+        let (val, next) = crate::fast_dec::parse_f64_short6(bytes, i)?;
+        if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
+            return None;
+        }
+        *dest = val;
+        i = skip_field_ws(bytes, next);
+    }
+    finish_xyz_row(bytes, i, xyz, spec_version, default_id)
+}
+
 /// Common coordinate row: three finite decimals, a small flag, an optional id.
 #[inline(always)]
 fn parse_coord_fields_fast(
@@ -1317,6 +1368,17 @@ fn parse_coord_fields_fast(
         *dest = val;
         i = skip_field_ws(bytes, next);
     }
+    finish_xyz_row(bytes, i, xyz, spec_version, default_id)
+}
+
+#[inline(always)]
+fn finish_xyz_row(
+    bytes: &[u8],
+    mut i: usize,
+    xyz: [f64; 3],
+    spec_version: u32,
+    default_id: Option<u64>,
+) -> Option<(ParsedCoord, usize)> {
     let (fixed, next) = parse_flag_fast(bytes, i, spec_version)?;
     i = skip_field_ws(bytes, next);
     let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {

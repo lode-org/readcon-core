@@ -96,10 +96,21 @@ fn read_u64(bytes: &[u8], i: usize) -> u64 {
     u64::from_le_bytes(buf)
 }
 
-/// Parse one decimal at `i`. The returned index is the first byte after the
+/// Digits of one decimal, before the binary conversion.
+///
+/// A coordinate row scans all three numbers first and converts them after,
+/// so the three conversions are not stuck behind each other.
+#[derive(Clone, Copy)]
+pub(crate) struct Scanned {
+    pub(crate) neg: bool,
+    pub(crate) mant: u64,
+    pub(crate) exp: i32,
+}
+
+/// Scan one decimal at `i`. The returned index is the first byte after the
 /// number. `None` means the general parser must handle this token.
 #[inline(always)]
-pub(crate) fn parse_f64_hot(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
+pub(crate) fn scan_f64(bytes: &[u8], i: usize) -> Option<(Scanned, usize)> {
     if i >= bytes.len() {
         return None;
     }
@@ -163,8 +174,88 @@ pub(crate) fn parse_f64_hot(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
     if p < bytes.len() && (bytes[p] == b'e' || bytes[p] == b'E') {
         return None;
     }
-    let val = finish(neg, mant, exp)?;
-    Some((val, p))
+    Some((Scanned { neg, mant, exp }, p))
+}
+
+/// Binary value of a scanned decimal.
+#[inline(always)]
+pub(crate) fn finish_scanned(scanned: Scanned) -> Option<f64> {
+    finish(scanned.neg, scanned.mant, scanned.exp)
+}
+
+/// Parse one decimal at `i`. The returned index is the first byte after the
+/// number. `None` means the general parser must handle this token.
+#[inline(always)]
+pub(crate) fn parse_f64_hot(bytes: &[u8], i: usize) -> Option<(f64, usize)> {
+    let (scanned, next) = scan_f64(bytes, i)?;
+    Some((finish_scanned(scanned)?, next))
+}
+
+/// One or two integer digits, a dot, and exactly six fractional digits.
+#[inline(always)]
+pub(crate) fn parse_f64_short6(bytes: &[u8], mut p: usize) -> Option<(f64, usize)> {
+    if p >= bytes.len() {
+        return None;
+    }
+    let mut neg = false;
+    match bytes[p] {
+        b'+' => p += 1,
+        b'-' => {
+            neg = true;
+            p += 1;
+        }
+        _ => {}
+    }
+    if p >= bytes.len() || !bytes[p].is_ascii_digit() {
+        return None;
+    }
+    let mut mant = u64::from(bytes[p] - b'0');
+    p += 1;
+    if p < bytes.len() && bytes[p].is_ascii_digit() {
+        mant = mant * 10 + u64::from(bytes[p] - b'0');
+        p += 1;
+        if p < bytes.len() && bytes[p].is_ascii_digit() {
+            return None;
+        }
+    }
+    if p >= bytes.len() || bytes[p] != b'.' || p + 6 >= bytes.len() {
+        return None;
+    }
+    p += 1;
+    // A 7th fractional digit is the long-decimal shape. Reject it before
+    // the 4-digit conversion so that path stays on the general parser.
+    if p + 6 < bytes.len() && bytes[p + 6].is_ascii_digit() {
+        return None;
+    }
+    let word = u32::from_le_bytes(bytes[p..p + 4].try_into().ok()?);
+    if !is_4digits(word) {
+        return None;
+    }
+    mant = mant * 10_000 + u64::from(parse_4digits(word));
+    p += 4;
+    if p + 2 > bytes.len() || !bytes[p].is_ascii_digit() || !bytes[p + 1].is_ascii_digit() {
+        return None;
+    }
+    mant = mant * 10 + u64::from(bytes[p] - b'0');
+    mant = mant * 10 + u64::from(bytes[p + 1] - b'0');
+    p += 2;
+    if p < bytes.len() && bytes[p].is_ascii_digit() {
+        return None;
+    }
+    Some((finish(neg, mant, -6)?, p))
+}
+
+#[inline(always)]
+fn is_4digits(v: u32) -> bool {
+    let a = v.wrapping_add(0x4646_4646);
+    let b = v.wrapping_sub(0x3030_3030);
+    (a | b) & 0x8080_8080 == 0
+}
+
+#[inline(always)]
+fn parse_4digits(v: u32) -> u32 {
+    let v = (v & 0x0F0F_0F0F).wrapping_mul(2561) >> 8;
+    (v & 0x00FF_00FF).wrapping_mul(6_553_601) >> 16
 }
 
 #[inline(always)]
@@ -200,7 +291,7 @@ fn finish(neg: bool, mant: u64, exp: i32) -> Option<f64> {
     value.is_finite().then_some(value)
 }
 
-#[inline]
+#[inline(always)]
 fn compute_float(q: i64, mut w: u64) -> Adjusted {
     let lz = w.leading_zeros();
     w <<= lz;
@@ -656,6 +747,42 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn short6_matches_the_general_parser_when_it_accepts() {
+        let samples = [
+            "0.639400",
+            "-0.003456",
+            "6.975300",
+            "15.345600",
+            "0.001234",
+            "-1.234567",
+            "90.000000",
+            "+0.904500",
+            "0.639401",
+        ];
+        for text in samples {
+            let bytes = text.as_bytes();
+            let Some((val, next)) = super::parse_f64_short6(bytes, 0) else {
+                panic!("{text} should use the six-digit parser");
+            };
+            let (hot, hot_next) = parse_f64_hot(bytes, 0).unwrap();
+            assert_eq!(next, hot_next, "{text}");
+            assert_eq!(val.to_bits(), hot.to_bits(), "{text}");
+        }
+        for text in [
+            "0.6394",
+            "0.63939999999999997",
+            "1e-2",
+            "0.12345",
+            "0.1234567",
+        ] {
+            assert!(
+                super::parse_f64_short6(text.as_bytes(), 0).is_none(),
+                "{text}"
+            );
         }
     }
 }
