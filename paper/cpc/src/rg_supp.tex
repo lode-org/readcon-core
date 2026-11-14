@@ -266,7 +266,7 @@ Path writer: temporary file, rename and removal & \texttt{\srcReplaceFile} \\
 All frames at the offsets of a frame index & \texttt{\srcReadIndexed} \\
 Trajectory open, with or without a written index & \texttt{\srcTrajectoryOpen} \\
 Binary image: layout check and copy & \texttt{\srcRcbinCopy} \\
-Binary image: CRC-32C check & \texttt{\srcRcbinCrc} \\
+Binary image: header check & \texttt{\srcRcbinCrc} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -299,13 +299,6 @@ The independent reader rejects such a number anywhere in line 2, and readcon-cor
 In the third, the last byte of the input is a carriage return, of which CON-file.3 states nothing: readcon-core reads it as a line end, so the input ends in trailing whitespace, and the independent reader takes it for line 1 of a further frame, which ends before its line 2.
 \path{paper/cpc/data/spec/clause_coverage.json}, the record of \texttt{scripts/\allowbreak clause\_coverage.py}, lists for each of the \clauseTotal{} clauses the corpus files whose manifest entries name it, the probes whose rules name it, the tests of the library whose names or documentation name it and whether the independent reader names it.
 No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given consumer, since no writer of readcon-core takes a consumer or a target version; CON-section.10 and CON-section.11, which govern how a later revision adds a reserved section name; and CON-section.18, a SHOULD on the energies a producer stores, whose reader side CON-section.19, accepting a frame whose energy differs from the sum of its energies rows, \texttt{tests/\allowbreak clause\_coverage.rs} reads.
-
-The test \texttt{differential\_\allowbreak 19545\_\allowbreak agree\_\allowbreak across\_\allowbreak entry\_\allowbreak points\_\allowbreak and\_\allowbreak thread\_\allowbreak counts} of \texttt{src/\allowbreak iterators.rs} draws 19,545 cases from a fixed seed, each a test file or a conformance file of the release with one edit, such as a form feed, a no-break space, two blank lines or a further section at its end.
-Each case is read from a string and from bytes at one to sixteen threads, by the stream reader at read sizes of 1 and 61 bytes and 1~MiB, and by the column reader with the positions alone and with every section, from bytes and streamed from the file.
-It is then written to a plain and a gzip file, and each file is read again at the same thread counts, with the stream reader and through the indexed trajectory.
-Every read returns the frame count, the coordinates and the section presence of the one-thread string read or stops with its error at the same line, and the trajectory refuses to open a file only when the string read rejects the case.
-One case in every 305 is also padded with blank lines past the mapping threshold and read as a mapped file at one to sixteen threads, and each read returns the outcome of a one-thread read of the padded text.
-\texttt{cargo test -{}-release -{}-lib differential\_19545} runs it.
 
 \begin{footnotesize} \input{figures/generated/corpus31_table} \end{footnotesize}
 
