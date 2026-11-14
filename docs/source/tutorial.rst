@@ -47,16 +47,23 @@ Parameters
 
     from __future__ import annotations
 
+    import json
     import os
     import sys
     from pathlib import Path
+
+    import readcon
 
     # Repo root: CI and local runs cwd to repository root.
     REPO = Path(os.environ.get("READCON_TUT_ROOT", Path.cwd())).resolve()
     FIXTURES = REPO / "resources" / "test"
     MULTI = FIXTURES / "tiny_multi_cuh2.con"
     FORCES = FIXTURES / "tiny_cuh2_forces.con"
-    work_dir = Path(os.environ.get("READCON_TUT_WORK", REPO / "docs" / "notebooks" / "out" / "tutorial_core"))
+    work_dir = Path(
+        os.environ.get(
+            "READCON_TUT_WORK", REPO / "docs" / "notebooks" / "out" / "tutorial_core"
+        )
+    )
     work_dir.mkdir(parents=True, exist_ok=True)
     roundtrip_path = work_dir / "tutorial_roundtrip.con"
     built_path = work_dir / "tutorial_built.con"
@@ -68,8 +75,6 @@ Setup
 
 .. code:: python
     :name: setup
-
-    import readcon
 
     print("readcon", getattr(readcon, "__version__", "?"))
     print("CON_SPEC_VERSION", readcon.CON_SPEC_VERSION)
@@ -176,8 +181,6 @@ Checkpoint
 
 .. code:: python
     :name: checkpoint
-
-    import json
 
     summary = {
         "multi_frames": 2,
