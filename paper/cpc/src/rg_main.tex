@@ -651,9 +651,15 @@ cold-open times the open and the query.
 Every cold sample has mincore resident fraction 0, and $n{=}12$.
 The full-read cold-open median is 0.0003673~s for readcon-db and 0.009745~s for the ASE database.
 The full-read cold-open IQR/median is 0.06149 for readcon-db.
-Table~\ref{tab:db15} is the db15 scale comparison, \path{bench/db15} at \texttt{9e568240}.
+Table~\ref{tab:db15} keeps the db15 times, \path{bench/db15} at \texttt{9e568240}.
 The workloads are 1000 frames of 8 atoms, 10000 frames of 8 atoms, and 64 frames of \(10^{5}\) atoms.
-On the 1000-frame corpus, readcon-db is 1.343~MB and the ASE database is 1.147~MB, because readcon-db keeps cooked columns and indexes.
+The disk sizes are the db16 ingest, \path{bench/db16} at \texttt{fe3e0d54}.
+frames-1000 is 700416 bytes for readcon-db and 1138688 bytes for the ASE database.
+frames-10000 is 6266880 bytes and 10792960 bytes.
+traj-100k is 342003712 bytes and 384503808 bytes.
+An aligned run of 64 frames shares one zstd frame when that group is shorter than the per-frame values, and a larger value stays in its own frame.
+On traj-100k cold reads, the db17 interleaved comparison, \path{bench/db17} at \texttt{fe3e0d54}, gives db17/db15 of 0.9689 for selected, 0.9841 for range, and 1.015 for metadata.
+With db17 first, the metadata ratio is 1.000.
 A streamed insert of 10000 frames yields one frame at a time, puts groups of 64 into one LMDB transaction, and drops each group's text after the put (Table~\ref{tab:db11-memory}).
 The ASE atom list stays allocated for the whole trajectory.
 Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
@@ -781,7 +787,8 @@ The ranked writes and the plain-copy column are \path{bench/h2h/scaling/camp19} 
 The camp20 column is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
-The scale comparison is \path{bench/db15} at \texttt{9e568240}.
+The scale comparison times are \path{bench/db15} at \texttt{9e568240}.
+The disk sizes are \path{bench/db16} at \texttt{fe3e0d54}, and the interleaved cold reads are \path{bench/db17} at \texttt{fe3e0d54}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
 The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 The weak reads and the write split are \path{bench/h2h/scaling/camp9} at \texttt{20a7ff13}.
