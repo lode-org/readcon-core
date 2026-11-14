@@ -11,6 +11,7 @@ times one ``read_con`` call on the same files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -58,6 +59,12 @@ def input_paths() -> dict[str, Path]:
 
 
 def write_inputs(coords: np.ndarray) -> dict[str, Path]:
+    from frames_guard import require_distinct_frames
+
+    if len(coords) > 1:
+        require_distinct_frames(coords)
+    digest = hashlib.sha256(np.ascontiguousarray(coords, dtype="<f8").tobytes())
+    coords_sha256 = digest.hexdigest()
     WORK.mkdir(parents=True, exist_ok=True)
     paths = input_paths()
     stamp = WORK / "stamp.json"
@@ -65,14 +72,14 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
         path.exists() and path.stat().st_size > 0 for path in paths.values()
     ):
         found = json.loads(stamp.read_text(encoding="utf-8"))
-        if found.get("frames") == N_FRAMES and found.get("atoms") == N_ATOMS:
+        if (
+            found.get("frames") == N_FRAMES
+            and found.get("atoms") == N_ATOMS
+            and found.get("coords_sha256") == coords_sha256
+        ):
             return paths
     for path in paths.values():
         path.unlink(missing_ok=True)
-    from frames_guard import require_distinct_frames
-
-    if len(coords) > 1:
-        require_distinct_frames(coords)
     header = _header()
     con_parts: list[str] = ["\n"]
     vel_parts: list[str] = []
@@ -115,6 +122,7 @@ def write_inputs(coords: np.ndarray) -> dict[str, Path]:
             {
                 "frames": N_FRAMES,
                 "atoms": N_ATOMS,
+                "coords_sha256": coords_sha256,
                 "bytes": {key: paths[key].stat().st_size for key in paths},
             }
         ),
