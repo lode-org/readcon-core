@@ -4855,19 +4855,25 @@ fn read_conbin<'py>(
 
 /// Stream a CON text file into a CON-bin. One frame is parsed at a time.
 #[pyfunction]
-#[pyo3(signature = (con_path, out_path, binary32=false))]
+#[pyo3(signature = (con_path, out_path, binary32=false, n_threads=1))]
 fn write_conbin(
     py: Python<'_>,
     con_path: &str,
     out_path: &str,
     binary32: bool,
+    n_threads: usize,
 ) -> PyResult<(u64, u64)> {
     let con_path = con_path.to_owned();
     let out_path = out_path.to_owned();
     let header = py
         .detach(|| {
-            crate::conbin::write_from_con(Path::new(&con_path), Path::new(&out_path), binary32)
-                .map_err(|e| e.to_string())
+            crate::conbin::write_from_con_with_threads(
+                Path::new(&con_path),
+                Path::new(&out_path),
+                binary32,
+                n_threads,
+            )
+            .map_err(|e| e.to_string())
         })
         .map_err(PyIOError::new_err)?;
     Ok((header.n_frames, header.n_atoms))
