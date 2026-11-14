@@ -10,10 +10,14 @@ from __future__ import annotations
 import argparse
 import ast
 import csv
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+# 3 float64 coordinates, one byte of fixed flags, one uint64 id, one float64 mass.
+MIN_ATOM_BYTES = 3 * 8 + 1 + 8 + 8
 
 # ``lscpu`` keys, in the order they are written. Newer util-linux still
 # emits these as ``Key: value`` lines.
@@ -89,6 +93,117 @@ def write_context(results: Path, command: str, method: str) -> Path:
     return out
 
 
+def _quartile_gap(samples: list[float]) -> float:
+    ordered = sorted(samples)
+    count = len(ordered)
+    if count == 0:
+        return 0.0
+
+    def at(fraction: float) -> float:
+        if count == 1:
+            return ordered[0]
+        position = (count - 1) * fraction
+        low = int(position)
+        high = min(low + 1, count - 1)
+        weight = position - low
+        return ordered[low] * (1.0 - weight) + ordered[high] * weight
+
+    return at(0.75) - at(0.25)
+
+
+def _atoms_for(benchmark: str) -> int | None:
+    if "Select" in benchmark:
+        return 218
+    if "Tiny" in benchmark:
+        return 4
+    if "Cuh2" in benchmark or "Chemfiles" in benchmark:
+        return 218
+    return None
+
+
+def _file_bytes(benchmark: str, frames: int, repo: Path) -> int:
+    if "Chemfiles" in benchmark:
+        return _xyz_bytes(repo, frames)
+    if "Tiny" in benchmark:
+        return (repo / "resources" / "test" / "tiny_cuh2.con").stat().st_size * frames
+    if "Select" in benchmark:
+        return (repo / "resources" / "test" / "cuh2.con").stat().st_size
+    return (repo / "resources" / "test" / "cuh2.con").stat().st_size * frames
+
+
+def _xyz_bytes(repo: Path, frames: int) -> int:
+    """Byte size of the XYZ file the chemfiles row writes. Not a CON file."""
+    import tempfile
+
+    import readcon
+    from ase.io import write
+
+    frame = readcon.read_first_frame(str(repo / "resources" / "test" / "cuh2.con"))
+    atoms = frame.to_ase()
+    fd, path = tempfile.mkstemp(suffix=".xyz")
+    os.close(fd)
+    try:
+        write(path, [atoms] * frames, format="xyz")
+        return os.path.getsize(path)
+    finally:
+        os.unlink(path)
+
+
+def write_peaks(result_json: Path, dest: Path, repo: Path) -> None:
+    data = json.loads(result_json.read_text(encoding="utf-8"))
+    columns = data["result_columns"]
+    rows = []
+    for benchmark, entry in data["results"].items():
+        record = dict(zip(columns, entry))
+        params = record.get("params") or [[]]
+        frame_params = params[0] if params and params[0] else [""]
+        samples = record.get("samples") or []
+        medians = record.get("result") or []
+        if not isinstance(medians, list):
+            medians = [medians]
+            samples = [samples]
+            frame_params = [""]
+        for index, frames_text in enumerate(frame_params):
+            frames = int(frames_text) if str(frames_text).strip() else 1
+            sample_row = samples[index] if index < len(samples) else []
+            if not isinstance(sample_row, list):
+                sample_row = []
+            median = float(medians[index])
+            atoms = _atoms_for(benchmark)
+            minimal = atoms * frames * MIN_ATOM_BYTES if atoms else ""
+            ratio = f"{median / minimal:.6f}" if minimal else ""
+            same_con = "0" if "Chemfiles" in benchmark else "1"
+            rows.append(
+                {
+                    "benchmark": benchmark,
+                    "frames": frames if frames_text != "" else "",
+                    "file_bytes": _file_bytes(benchmark, frames, repo),
+                    "peak_median": f"{median:.1f}",
+                    "n": len(sample_row),
+                    "iqr": f"{_quartile_gap([float(item) for item in sample_row]):.1f}",
+                    "minimal_bytes": minimal,
+                    "peak_over_minimal": ratio,
+                    "same_con": same_con,
+                }
+            )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "benchmark",
+        "frames",
+        "file_bytes",
+        "peak_median",
+        "n",
+        "iqr",
+        "minimal_bytes",
+        "peak_over_minimal",
+        "same_con",
+    ]
+    with dest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -113,10 +228,33 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="tracking method; default is MEMORY_TRACKING_METHOD from the suite",
     )
+    parser.add_argument(
+        "--peaks-json",
+        type=Path,
+        default=None,
+        help="one asv result file to turn into the peaks CSV",
+    )
+    parser.add_argument(
+        "--peaks-out",
+        type=Path,
+        default=None,
+        help="where to write the peaks CSV",
+    )
+    parser.add_argument(
+        "--repo",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent,
+        help="repository root, for fixture sizes",
+    )
     args = parser.parse_args(argv)
     method = args.method.strip() or _tracking_method(args.suite)
     out = write_context(args.results, args.command, method)
     print(out)
+    if args.peaks_json is not None:
+        if args.peaks_out is None:
+            raise SystemExit("--peaks-out is required with --peaks-json")
+        write_peaks(args.peaks_json, args.peaks_out, args.repo)
+        print(args.peaks_out)
     return 0
 
 

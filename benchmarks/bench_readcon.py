@@ -9,12 +9,12 @@ about ``sample_time`` seconds. That target is asv_runner's default of
 parse, and the memray peak is the median of ``repeat`` of those.
 ``track_python_heap_*`` is tracemalloc of the Python heap, not that peak.
 
-The asv build passes ``--cfg asan_run``. That cfg leaves mimalloc out of
-the global allocator, so the parser allocates with the system allocator
-and memray's malloc hook sees the parse. It is not an address-sanitizer
-build. Native traces are not required: they report the same total and
-also split out a mapped file. A child ``ru_maxrss`` delta stays at zero
-because importing the extension already sets the high-water mark.
+Timing rows use ``asv.conf.json`` and the shipped mimalloc build.
+Memory rows use ``asv.mem.conf.json`` and the ``system-alloc`` feature,
+which drops mimalloc so memray's malloc hook sees the parser. That
+feature is not an address-sanitizer build. Native traces are not
+required. A child ``ru_maxrss`` delta stays at zero because importing
+the extension already sets the high-water mark.
 """
 
 from __future__ import annotations
@@ -44,9 +44,17 @@ CUH2_FRAMES = (50, 100)
 # Cited with the results by benchmarks/memory_context.py.
 MEMORY_TRACKING_METHOD = (
     "memray Tracker peak_memory, median of 6 repeats after one untracked "
-    "warmup; RUSTFLAGS --cfg asan_run selects the system allocator "
-    "(not an address-sanitizer build); track_python_heap_* is tracemalloc"
+    "warmup; asv.mem.conf.json enables the system-alloc feature so the "
+    "parser uses the system allocator (not an address-sanitizer build); "
+    "track_python_heap_* is tracemalloc; timing rows stay on mimalloc"
 )
+# Smallest plain record of one atom: 3 float64 coordinates, the three
+# fixed flags packed in one byte, a uint64 id, and a float64 mass.
+MIN_ATOM_BYTES = 3 * 8 + 1 + 8 + 8
+
+
+def minimal_output_bytes(n_atoms: int, n_frames: int) -> int:
+    return int(n_atoms) * int(n_frames) * MIN_ATOM_BYTES
 
 
 def _ladder_con(src: Path, n_frames: int) -> str:
@@ -369,7 +377,12 @@ class TimeChemfilesXyz:
 
 
 class RayChemfilesXyz:
-    """Memray peak for read_chemfiles. One call per sample."""
+    """Memray peak for read_chemfiles on an XYZ file.
+
+    The atoms come from the first cuh2 frame, written as XYZ. This is
+    not a CON head-to-head: the file and the parser are different from
+    the ``read_con`` and ASE eOn rows.
+    """
 
     timeout = 180
     number = 1
@@ -398,7 +411,7 @@ class RayChemfilesXyz:
         except OSError:
             pass
 
-    def ray_read_chemfiles(self, n_frames: int) -> None:
+    def ray_read_chemfiles_xyz(self, n_frames: int) -> None:
         import readcon
 
         _hold_parsed(readcon.read_chemfiles(self._path), self._n)
@@ -439,6 +452,71 @@ class RaySelectAtoms:
 
     def ray_select_name_Cu(self) -> None:
         _select_name_cu(self._frame)
+
+
+def _ase_eon(path: str, n_frames: int, n_atoms: int):
+    from ase.io import read
+
+    images = read(path, index=":", format="eon")
+    if len(images) != n_frames:
+        raise AssertionError(len(images))
+    if len(images[0]) != n_atoms:
+        raise AssertionError(len(images[0]))
+    return images
+
+
+class RayAseEonTiny:
+    """ASE ``format='eon'`` on the same tiny CON files as ``read_con``."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = list(TINY_FRAMES)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        text = _ladder_con(FIXTURE_TINY, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        _ase_eon(self._path, self._n, 4)
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_ase_eon(self, n_frames: int) -> None:
+        _ase_eon(self._path, self._n, 4)
+
+
+class RayAseEonCuh2:
+    """ASE ``format='eon'`` on the same 218-atom CON files as ``read_con``."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = list(CUH2_FRAMES)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        text = _ladder_con(FIXTURE_CUH2, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        _ase_eon(self._path, self._n, 218)
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_ase_eon(self, n_frames: int) -> None:
+        _ase_eon(self._path, self._n, 218)
 
 
 def _ray_repeats(bench) -> int:

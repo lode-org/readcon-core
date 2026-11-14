@@ -49,6 +49,10 @@ rpc = [
 # bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
 python = ["dep:pyo3", "dep:numpy", "parallel"]
+# Memory benchmarks only. Drops mimalloc from the global allocator so a
+# malloc tracer sees parser allocations. Not an address-sanitizer build,
+# and not used by the timing benchmarks or the shipped library.
+system-alloc = []
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.

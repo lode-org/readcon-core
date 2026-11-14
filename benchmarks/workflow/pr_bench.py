@@ -1270,6 +1270,16 @@ def regression_exit_code(rows: list[dict]) -> int:
 def cmd_derive_conf(args: argparse.Namespace) -> None:
     cfg = json.loads(Path(args.src).read_text())
     cfg["results_dir"] = args.results_dir
+    if args.system_alloc:
+        # Memory rows only. Timing keeps the shipped mimalloc build.
+        cfg["env_dir"] = ".asv/env-mem"
+        cfg["html_dir"] = ".asv/html-mem"
+        needle = "--features python,chemfiles-from-sources"
+        extra = "--features python,chemfiles-from-sources,system-alloc"
+        cfg["build_command"] = [
+            command.replace(needle, extra) if needle in command else command
+            for command in cfg["build_command"]
+        ]
     dest = Path(args.dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(cfg, indent=4) + "\n")
@@ -1454,6 +1464,11 @@ def build_parser() -> argparse.ArgumentParser:
     derive.add_argument("src")
     derive.add_argument("dest")
     derive.add_argument("results_dir")
+    derive.add_argument(
+        "--system-alloc",
+        action="store_true",
+        help="build the memory rows without mimalloc",
+    )
     derive.set_defaults(func=cmd_derive_conf)
 
     copy = sub.add_parser("copy-result")

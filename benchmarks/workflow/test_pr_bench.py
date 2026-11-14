@@ -26,6 +26,20 @@ bench = _load("bench_readcon", ROOT / "benchmarks" / "bench_readcon.py")
 
 
 class SplitAndLayout(unittest.TestCase):
+    def test_timing_keeps_mimalloc_and_memory_uses_system_alloc(self) -> None:
+        import json
+
+        timing = json.loads((ROOT / "asv.conf.json").read_text(encoding="utf-8"))
+        memory = json.loads((ROOT / "asv.mem.conf.json").read_text(encoding="utf-8"))
+        timing_build = " ".join(timing["build_command"])
+        memory_build = " ".join(memory["build_command"])
+        self.assertNotIn("asan_run", timing_build)
+        self.assertNotIn("system-alloc", timing_build)
+        self.assertNotIn("asan_run", memory_build)
+        self.assertIn("system-alloc", memory_build)
+        self.assertNotEqual(timing["results_dir"], memory["results_dir"])
+        self.assertNotEqual(timing["env_dir"], memory["env_dir"])
+
     def test_time_sides_match_comparison(self) -> None:
         self.assertEqual(pr_bench.TIME_SAMPLES_PER_SIDE, 36)
         self.assertEqual(
@@ -65,6 +79,8 @@ class SplitAndLayout(unittest.TestCase):
             bench.RayReadConCuh2,
             bench.RayChemfilesXyz,
             bench.RaySelectAtoms,
+            bench.RayAseEonTiny,
+            bench.RayAseEonCuh2,
         )
         for cls in timing:
             self.assertNotIn("number", cls.__dict__, cls.__name__)
@@ -98,6 +114,11 @@ class SplitAndLayout(unittest.TestCase):
         self.assertFalse(hasattr(bench.RayReadConCuh2, "track_read_con_path"))
         self.assertNotIn("copy=True", inspect.getsource(bench._hold_parsed))
         self.assertIn("system allocator", bench.MEMORY_TRACKING_METHOD)
+        self.assertIn("system-alloc", bench.MEMORY_TRACKING_METHOD)
+        self.assertNotIn("asan_run", bench.MEMORY_TRACKING_METHOD)
+        self.assertEqual(bench.minimal_output_bytes(4, 50), 4 * 50 * 41)
+        self.assertIn('format="eon"', inspect.getsource(bench._ase_eon))
+        self.assertIn("not a CON", bench.RayChemfilesXyz.__doc__)
         path = bench._write_temp("one frame\n")
         try:
             written = Path(path)

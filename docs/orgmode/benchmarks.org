@@ -58,9 +58,10 @@ benchmarks.
 1. asv virtualenv builds *base* and *head* with
    =maturin build --features python,chemfiles-from-sources --release=
    (pinned in =asv.conf.json= and =benchmarks/workflow/requirements.txt=).
-   =RUSTFLAGS= includes =--cfg asan_run=, which selects the system
-   allocator so memray can see the parser. That build is not an
-   address-sanitizer run.
+   That is the shipped mimalloc build, and it is what the timing rows measure.
+   Memory rows use =asv.mem.conf.json=, which adds the =system-alloc=
+   feature so mimalloc is not the global allocator and memray can see the
+   parser. =system-alloc= is not an address-sanitizer build.
    =ci_benchmark.yml= pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
    Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
 2. Fifteen main-vs-main repetitions of the base commit, on that runner, set a

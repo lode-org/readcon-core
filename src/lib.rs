@@ -4,8 +4,11 @@
 // `asan_run` is set only for `-Zsanitizer=address`. mimalloc's `mi_free`
 // ignores the size Rust passes, so that run uses the system allocator.
 // Miri cannot execute mimalloc either, so it uses the system allocator too.
+// The `system-alloc` feature is the memory-benchmark switch. It drops
+// mimalloc so a malloc tracer can see the parser. Timing builds and the
+// shipped library do not enable it, and it is not an address-sanitizer run.
 #![allow(unexpected_cfgs)]
-#[cfg(not(any(asan_run, miri)))]
+#[cfg(all(not(any(asan_run, miri)), not(feature = "system-alloc")))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -17,7 +20,7 @@ mod allocator_link_tests {
 
     /// Rust, C, and Python builds all link this crate, so they all use
     /// this allocator. `mi_usable_size` is only meaningful for mimalloc.
-    #[cfg(not(any(asan_run, miri)))]
+    #[cfg(all(not(any(asan_run, miri)), not(feature = "system-alloc")))]
     #[test]
     fn the_shipped_allocator_is_mimalloc() {
         let boxed = Box::new([0u8; 32]);

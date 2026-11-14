@@ -22,7 +22,7 @@
     "branches": ["HEAD"],
     "build_command": [
         "python -m pip install maturin==1.16.0",
-        "CC=gcc CXX=g++ CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR={conf_dir}/.asv/cargo-target RUSTFLAGS='-Clink-arg=-fuse-ld=bfd --cfg asan_run' maturin build --release --features python,chemfiles-from-sources --interpreter python --out {build_cache_dir}"
+        "CC=gcc CXX=g++ CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR={conf_dir}/.asv/cargo-target RUSTFLAGS=-Clink-arg=-fuse-ld=bfd maturin build --release --features python,chemfiles-from-sources --interpreter python --out {build_cache_dir}"
     ],
     "install_command": [
         "in-dir={env_dir} python -m pip install --force-reinstall --no-deps {wheel_file}"

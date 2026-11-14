@@ -70,7 +70,7 @@ rule derive_conf:
         """
         python benchmarks/workflow/pr_bench.py derive-conf {input} {output.aa} .asv/results-aa
         python benchmarks/workflow/pr_bench.py derive-conf {input} {output.cmp} .asv/results-cmp
-        python benchmarks/workflow/pr_bench.py derive-conf {input} {output.mem} .asv/results-mem
+        python benchmarks/workflow/pr_bench.py derive-conf {input} {output.mem} .asv/results-mem --system-alloc
         """
 
 
