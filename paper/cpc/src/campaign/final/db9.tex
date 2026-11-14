@@ -1,0 +1,30 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{db9 single-transaction comparison.
+Both tools use one write transaction and one commit fsync.
+A cold read drops the page cache outside the clock and times the query.
+A cold-open read times the open and the query together.
+The summary is the type-7 median and the interquartile range.
+Peak RSS is \texttt{VmHWM} divided by $10^{6}$.
+The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md}.
+Record \texttt{bench/db9} at \texttt{89105ce4e26ca8d2f633e1af8b472fec6bba1631}.
+Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}
+\label{tab:db9}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllrllr@{}}
+\toprule
+Workload & Op & Tool & Median (s) & IQR (s) & $n$ & RSS (MB) \\
+\midrule
+10000 frames & insert & readcon-db & 0.2826 & 0.001086 & 6 & 189 \\
+10000 frames & insert & ASE database & 2.524 & 0.04038 & 6 & 194.4 \\
+$10^{6}$ atoms & insert & readcon-db & 0.1893 & 0.003745 & 6 & 601.7 \\
+$10^{6}$ atoms & insert & ASE database & 0.2283 & 0.001173 & 6 & 1102 \\
+100 frames & cold full read & readcon-db & 0.0002745 & $8.728\times 10^{-5}$ & 12 & 96.03 \\
+100 frames & cold full read & ASE database & 0.00895 & 0.0001047 & 6 & 94.78 \\
+100 frames & cold-open full read & readcon-db & 0.0005109 & 0.0001496 & 12 & 96.1 \\
+100 frames & cold-open full read & ASE database & 0.009248 & $4.823\times 10^{-5}$ & 6 & 94.81 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

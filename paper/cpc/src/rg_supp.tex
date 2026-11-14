@@ -1311,7 +1311,11 @@ The mapped binary file reads the frames in \SI{0.0076}{\second}.
 \input{figures/generated/host_table}
 
 The 40-frame ingest comparison is \todoPending.
-On 10000 frames of 8 atoms, readcon-db inserts in 0.241~s and the ASE database in 2.83~s, and the fidelity check is exact.
+On 10000 frames of 8 atoms, readcon-db inserts in 0.2826~s and the ASE database in 2.524~s.
+On one million atoms the insert is 0.1893~s and 0.2283~s.
+The frames-100 cold full read has median 0.0002745~s and interquartile range $8.728\times 10^{-5}$~s for readcon-db, and median 0.00895~s and interquartile range 0.0001047~s for the ASE database.
+The cold-open full read has median 0.0005109~s and interquartile range 0.0001496~s for readcon-db, and median 0.009248~s and interquartile range $4.823\times 10^{-5}$~s for the ASE database.
+The fidelity check on these rows is exact.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
 Figures~\ref{fig:db-throughput}, \ref{fig:db-bandwidth}, \ref{fig:db-query}, \ref{fig:db-disk} and~\ref{fig:db-dedup} are the database campaigns on the Intel Xeon processor.

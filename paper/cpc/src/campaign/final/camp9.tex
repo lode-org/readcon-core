@@ -1,0 +1,39 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp9 weak reads on tmpfs. Each median is seconds. Efficiency is the recorded $T(1)/T(8)$. Twelve samples. Record \texttt{bench/h2h/scaling/camp9/weak.json} at \texttt{20a7ff137cfc2ea61fbb4f815230888e37cc3f2f}. The file's commit field is \texttt{1557d41a4ce43bab8afff0410feb71a6ecd17914}. Host from the weak record: Intel Xeon Processor, 8 CPUs.}
+\label{tab:camp9-weak-read}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Kind & Format & 1 & 8 & 8-way \\
+\midrule
+threads & con & 0.1077 & 0.1233 & 0.8736 \\
+threads & convel & 0.1816 & 0.1979 & 0.9173 \\
+MPI & con & 0.02854 & 0.02932 & 0.9734 \\
+MPI & convel & 0.04258 & 0.04329 & 0.9835 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp9 eight-worker write split. Format, copy and the write are the recorded medians in seconds. Residual is the recorded sum overhead, the write minus format minus copy. The store is the one the summary marks as matched. Record \texttt{bench/h2h/scaling/camp9/summary.json} at \texttt{20a7ff137cfc2ea61fbb4f815230888e37cc3f2f}. Host from the weak record: Intel Xeon Processor, 8 CPUs.}
+\label{tab:camp9-write-split}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllrrrr@{}}
+\toprule
+Filesystem & Kind & Store & Format & Copy & End & Residual \\
+\midrule
+tmpfs & MPI & mmap & 0.0391 & 0.01941 & 0.05888 & 0.0003685 \\
+tmpfs & threads & mmap & 0.1292 & 0.07839 & 0.1835 & -0.02412 \\
+thp & MPI & hugepage & 0.0391 & 0.00625 & 0.04746 & 0.002103 \\
+thp & threads & hugepage & 0.1292 & 0.01297 & 0.1329 & -0.009266 \\
+ext4 & MPI & pwrite & 0.0391 & 0.04242 & 0.0817 & 0.0001779 \\
+ext4 & threads & pwrite & 0.1292 & 0.1401 & 0.2387 & -0.03069 \\
+ext4-fsync & MPI & pwrite & 0.0391 & 0.1022 & 0.1262 & -0.01512 \\
+ext4-fsync & threads & pwrite & 0.1292 & 0.3168 & 0.4149 & -0.03114 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
