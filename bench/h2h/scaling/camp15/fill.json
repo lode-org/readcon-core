@@ -1,0 +1,70 @@
+{
+  "byte_identical": true,
+  "winner": "direct",
+  "note": "Each worker spelled into a reused 2 MiB buffer, this core's L2, then copied into the mapping. Plain and non-temporal copies were slower than spelling into the fresh pages. The writer keeps the direct fill.",
+  "rows": [
+    {
+      "fill": "direct",
+      "workers": 8,
+      "bytes_per_worker": 63408000,
+      "l2_bytes": 2097152,
+      "samples_s": [
+        0.212836,
+        0.213865,
+        0.212577,
+        0.212535,
+        0.213882,
+        0.209989,
+        0.211981,
+        0.213673,
+        0.215052,
+        0.210141,
+        0.214627,
+        0.211865
+      ],
+      "median_s": 0.2127065
+    },
+    {
+      "fill": "buf",
+      "workers": 8,
+      "bytes_per_worker": 63408000,
+      "l2_bytes": 2097152,
+      "samples_s": [
+        0.273985,
+        0.273837,
+        0.26439,
+        0.264159,
+        0.265973,
+        0.268129,
+        0.262065,
+        0.262946,
+        0.265417,
+        0.265863,
+        0.262511,
+        0.270038
+      ],
+      "median_s": 0.26564
+    },
+    {
+      "fill": "nt",
+      "workers": 8,
+      "bytes_per_worker": 63408000,
+      "l2_bytes": 2097152,
+      "samples_s": [
+        0.267754,
+        0.263772,
+        0.264885,
+        0.256667,
+        0.258891,
+        0.266685,
+        0.263238,
+        0.254058,
+        0.257186,
+        0.253919,
+        0.262812,
+        0.262449
+      ],
+      "median_s": 0.2626305
+    }
+  ]
+}
