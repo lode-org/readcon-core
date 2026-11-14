@@ -84,6 +84,9 @@ All notable changes to this project will be documented in this file. See [conven
 - A gzip or zstd read drops the inflated text after the frames own their
   coordinates. A piped member parse that falls back to the full parser frees
   the spare atom buffer instead of leaving it resident next to the frames.
+  A one-thread read inflates on that thread. Leaving the decoder budget
+  unset started one thread per gzip member, and a million-atom file has
+  32 of those.
 
 - A path write publishes only after every byte is stored. On Linux the store
   is an unnamed file, and `linkat` plus `rename` run in a helper that outlives

@@ -2816,9 +2816,11 @@ fn read_all_frames(
 /// Read frames from a .con or .convel file path.
 ///
 /// `n_threads` is `None`, `0`, or `1` for the calling thread, and
-/// `n >= 2` for a Rayon pool of that size. A plain file of 64 KiB or
-/// more stays mapped. `.gz` and `.zst` are chosen from the extension
-/// and from the magic bytes. A pipe, including `/dev/stdin`, is read
+/// `n >= 2` for a Rayon pool of that size. A one-thread read inflates
+/// a multi-member gzip or zstd file on that same thread unless
+/// `decode_threads` says otherwise. A plain file of 64 KiB or more
+/// stays mapped. `.gz` and `.zst` are chosen from the extension and
+/// from the magic bytes. A pipe, including `/dev/stdin`, is read
 /// through the same open: it is not mapped.
 ///
 /// With `comm` (an mpi4py communicator, needs the `mpi` build feature)
@@ -2843,15 +2845,26 @@ fn read_con(
     // `decode_threads=1` inflates a multi-member file on this thread.
     // A larger count inflates that many members at once and, when it
     // exceeds `n_threads`, parses the wide frame on the same workers.
+    // Omitting `decode_threads` on a one-thread read does the same.
+    // The unset budget is one decoder per member, and a million-atom
+    // gzip file has 32 members. Each decoder thread keeps an allocator
+    // arena, which was the gap between that read's peak and a plain read.
     let parse_threads = match (n_threads, decode_threads) {
         (Some(parse), Some(decode)) if decode >= 2 => Some(parse.max(decode)),
         (parse, _) => parse,
     };
+    let serial_decode = match decode_threads {
+        Some(1) => true,
+        None => matches!(n_threads, Some(0) | Some(1)),
+        _ => false,
+    };
     let run = || read_con_lazy(py, path, parse_threads);
-    match decode_threads {
-        Some(1) => crate::compression::with_serial_decode(run),
-        Some(threads) if threads >= 2 => crate::compression::with_decode_threads(threads, run),
-        _ => run(),
+    if serial_decode {
+        crate::compression::with_serial_decode(run)
+    } else if let Some(threads) = decode_threads.filter(|threads| *threads >= 2) {
+        crate::compression::with_decode_threads(threads, run)
+    } else {
+        run()
     }
 }
 
