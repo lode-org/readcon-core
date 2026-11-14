@@ -94,6 +94,10 @@ class TimeWeakThreads:
             }
         return cached
 
+    def teardown_cache(self, cache: dict) -> None:
+        for item in cache.values():
+            Path(item["path"]).unlink(missing_ok=True)
+
     def time_weak_threads(self, cache: dict, workers: int) -> None:
         import readcon
 

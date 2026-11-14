@@ -160,6 +160,10 @@ class TimeReadConTiny:
     def setup_cache(self) -> dict[int, tuple[str, str]]:
         return _tiny_files()
 
+    def teardown_cache(self, cache: dict[int, tuple[str, str]]) -> None:
+        for _text, path in cache.values():
+            Path(path).unlink(missing_ok=True)
+
     def time_read_con_string(self, cache: dict, n_frames: int) -> None:
         text, _path = cache[int(n_frames)]
         _read_con_string(text, int(n_frames))
@@ -218,6 +222,10 @@ class TimeReadConCuh2:
 
     def setup_cache(self) -> dict[int, str]:
         return _cuh2_files()
+
+    def teardown_cache(self, cache: dict[int, str]) -> None:
+        for path in cache.values():
+            Path(path).unlink(missing_ok=True)
 
     def time_read_con_path(self, cache: dict, n_frames: int) -> None:
         _read_con_path(cache[int(n_frames)], int(n_frames), n_atoms=218)
