@@ -2925,44 +2925,206 @@ pub fn write_frames_to_vec_with_threads(
 /// Each worker formats a contiguous run. A prefix sum of those lengths
 /// is the file offset, and each run is written with `pwrite` at that
 /// offset. The bytes match [`write_frame_refs_with_threads`].
-fn temporary_sibling(path: &Path) -> io::Result<(std::path::PathBuf, File)> {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let dir = match path.parent() {
+///
+/// The destination is replaced only after every byte is stored. On Linux
+/// the store is an unnamed file (`O_TMPFILE`), so a killed writer leaves
+/// neither a partial destination nor a scratch name. A named
+/// `.readcon-write-*.tmp` is used only where `O_TMPFILE` is unavailable,
+/// and that name is removed if the write fails.
+fn destination_dir(path: &Path) -> std::path::PathBuf {
+    match path.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
         _ => std::path::PathBuf::from("."),
-    };
-    let tmp = dir.join(format!(
+    }
+}
+
+fn scratch_name(dir: &Path) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    dir.join(format!(
         ".readcon-write-{}-{}.tmp",
         std::process::id(),
         NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&tmp)?;
-    Ok((tmp, file))
+    ))
 }
 
-fn commit_temporary(
-    tmp: &Path,
+/// A file that is not the destination until [`Unpublished::commit`].
+struct Unpublished {
+    file: File,
+    scratch: Option<std::path::PathBuf>,
+    committed: bool,
+}
+
+impl Drop for Unpublished {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if let Some(path) = self.scratch.take() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+impl Unpublished {
+    fn create(dest: &Path) -> io::Result<Self> {
+        let dir = destination_dir(dest);
+        if let Some(file) = open_unnamed(&dir) {
+            return Ok(Self {
+                file,
+                scratch: None,
+                committed: false,
+            });
+        }
+        let scratch = scratch_name(&dir);
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&scratch)?;
+        Ok(Self {
+            file,
+            scratch: Some(scratch),
+            committed: false,
+        })
+    }
+
+    fn duplicate(&self) -> io::Result<File> {
+        self.file.try_clone()
+    }
+
+    fn commit(mut self, dest: &Path) -> io::Result<()> {
+        if let Some(scratch) = self.scratch.take() {
+            match std::fs::rename(&scratch, dest) {
+                Ok(()) => {
+                    self.committed = true;
+                    Ok(())
+                }
+                Err(err) => {
+                    let _ = std::fs::remove_file(&scratch);
+                    Err(err)
+                }
+            }
+        } else {
+            // Link and rename in a child. A kill of this process does not
+            // stop that child, so the scratch name does not outlive the publish.
+            publish_unnamed(&self.file, dest)?;
+            self.committed = true;
+            Ok(())
+        }
+    }
+}
+
+fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        let scratch = scratch_name(&destination_dir(dest));
+        let proc = std::ffi::CString::new(format!("/proc/self/fd/{}", file.as_raw_fd()))
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "proc fd"))?;
+        let scratch_c = std::ffi::CString::new(scratch.as_os_str().as_encoded_bytes())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "scratch"))?;
+        let dest_c = std::ffi::CString::new(dest.as_os_str().as_encoded_bytes())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dest"))?;
+        let pid = unsafe { libc::fork() };
+        if pid < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if pid == 0 {
+            let linked = unsafe {
+                libc::linkat(
+                    libc::AT_FDCWD,
+                    proc.as_ptr(),
+                    libc::AT_FDCWD,
+                    scratch_c.as_ptr(),
+                    libc::AT_SYMLINK_FOLLOW,
+                )
+            };
+            if linked != 0 {
+                unsafe { libc::_exit(1) };
+            }
+            let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
+            unsafe { libc::_exit(if renamed == 0 { 0 } else { 1 }) };
+        }
+        let mut status = 0;
+        loop {
+            let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+            if waited >= 0 {
+                break;
+            }
+            let err = io::Error::last_os_error();
+            if err.kind() != io::ErrorKind::Interrupted {
+                return Err(err);
+            }
+        }
+        // The child has finished, so a leftover scratch is this publish's
+        // name and not a concurrent writer's.
+        let published = libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0;
+        if !published {
+            if scratch.exists() {
+                let _ = std::fs::remove_file(&scratch);
+            }
+            return Err(io::Error::other("publish did not replace the destination"));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (file, dest);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "unnamed publish",
+        ))
+    }
+}
+
+fn open_unnamed(dir: &Path) -> Option<File> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::FromRawFd;
+        let bytes = dir.as_os_str().as_encoded_bytes();
+        let c_dir = std::ffi::CString::new(bytes).ok()?;
+        let fd = unsafe { libc::open(c_dir.as_ptr(), libc::O_TMPFILE | libc::O_RDWR, 0o600) };
+        if fd < 0 {
+            return None;
+        }
+        Some(unsafe { File::from_raw_fd(fd) })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = dir;
+        None
+    }
+}
+
+fn begin_unpublished(path: &Path) -> Result<(Unpublished, File), WriteError> {
+    let staged = Unpublished::create(path).map_err(WriteError::Io)?;
+    let file = staged.duplicate().map_err(WriteError::Io)?;
+    Ok((staged, file))
+}
+
+fn finish_unpublished(
+    staged: Unpublished,
     dest: &Path,
     result: Result<(), WriteError>,
 ) -> Result<(), WriteError> {
     match result {
-        Ok(()) => match std::fs::rename(tmp, dest) {
-            Ok(()) => Ok(()),
-            Err(err) => {
-                let _ = std::fs::remove_file(tmp);
-                Err(WriteError::Io(err))
-            }
-        },
-        Err(err) => {
-            let _ = std::fs::remove_file(tmp);
-            Err(err)
-        }
+        Ok(()) => staged.commit(dest).map_err(WriteError::Io),
+        Err(err) => Err(err),
     }
+}
+
+/// Replace `dest` with the bytes `write` stores, or leave `dest` untouched.
+pub(crate) fn publish_new<E>(
+    dest: &Path,
+    map_io: impl Fn(io::Error) -> E,
+    write: impl FnOnce(&mut File) -> Result<(), E>,
+) -> Result<(), E> {
+    let staged = Unpublished::create(dest).map_err(&map_io)?;
+    let mut file = staged.duplicate().map_err(&map_io)?;
+    write(&mut file)?;
+    drop(file);
+    staged.commit(dest).map_err(map_io)
 }
 
 /// Write `frames` to `path`, replacing that path only after the bytes are complete.
@@ -2997,7 +3159,7 @@ pub fn write_frame_refs_to_path(
         .parallel_atoms(workers);
         // Replace the destination only after the frame is complete. Opening
         // it first destroyed a file the serial writer would have left alone.
-        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        let (staged, file) = begin_unpublished(path)?;
         writer.stream_file = Some(file);
         let result = if bind {
             writer.write_frame_bound(frames[0])
@@ -3005,17 +3167,20 @@ pub fn write_frame_refs_to_path(
             writer.write_frame(frames[0])
         };
         drop(writer);
-        return commit_temporary(&tmp, path, result);
+        return finish_unpublished(staged, path, result);
     }
     let parts = formatted_parts(frames, workers, precision, canonical, bind)?;
-    if parts.len() == 1 {
+    let (staged, mut file) = begin_unpublished(path)?;
+    let result = if parts.len() == 1 {
         // One wide frame is already formatted in parallel row runs and
         // joined. A single write matches the disk; slicing it into pwrite
         // calls spent the gain on a second pass over the file.
-        std::fs::write(path, &parts[0]).map_err(WriteError::Io)
+        file.write_all(&parts[0]).map_err(WriteError::Io)
     } else {
-        pwrite_parts(path, &parts).map_err(WriteError::Io)
-    }
+        let slices: Vec<&[u8]> = parts.iter().map(|part| part.as_slice()).collect();
+        pwrite_borrowed(&file, &slices).map_err(WriteError::Io)
+    };
+    finish_unpublished(staged, path, result)
 }
 
 fn rewrite_names(path: &Path) -> io::Result<(std::path::PathBuf, std::path::PathBuf)> {
@@ -4037,7 +4202,7 @@ fn write_serial_frames(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
-    let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+    let (staged, file) = begin_unpublished(path)?;
     let mut writer = match precision {
         Some(precision) => ConFrameWriter::with_precision(file, precision),
         None => ConFrameWriter::new(file),
@@ -4046,7 +4211,7 @@ fn write_serial_frames(
     let result =
         write_group(&mut writer, frames, bind).and_then(|_| writer.flush().map_err(WriteError::Io));
     drop(writer);
-    commit_temporary(&tmp, path, result)
+    finish_unpublished(staged, path, result)
 }
 
 fn pipeline_frame_groups(
@@ -4082,9 +4247,9 @@ fn pipeline_frame_groups(
         for part in parts {
             formatted.push(part?);
         }
-        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        let (staged, file) = begin_unpublished(path)?;
         let result = store_disjoint_parts(&file, &formatted).map_err(WriteError::Io);
-        return commit_temporary(&tmp, path, result);
+        return finish_unpublished(staged, path, result);
     }
     // Eight workers fill the machine, so a repeat write formats straight
     // into the file. Fewer workers keep the overlapped copy: pricing
@@ -4096,9 +4261,9 @@ fn pipeline_frame_groups(
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
-        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        let (staged, file) = begin_unpublished(path)?;
         let result = place_packed(&file, frames, &lengths, workers, precision, canonical, bind);
-        return commit_temporary(&tmp, path, result);
+        return finish_unpublished(staged, path, result);
     }
     // Several groups per worker so the first one finishes early and the
     // copy overlaps the rest. Uniform frames skip the weight scan;
@@ -4114,7 +4279,7 @@ fn pipeline_frame_groups(
     // every group finish first and the copy becomes a second pass.
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
-    let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+    let (staged, file) = begin_unpublished(path)?;
     let result = std::thread::scope(|scope| {
         for _ in 0..format_threads {
             let tx = tx.clone();
@@ -4150,7 +4315,7 @@ fn pipeline_frame_groups(
         file.flush().map_err(WriteError::Io)?;
         Ok(())
     });
-    commit_temporary(&tmp, path, result)
+    finish_unpublished(staged, path, result)
 }
 
 struct PackedCache {
@@ -4403,23 +4568,13 @@ fn formatted_parts(
     }
 }
 
-fn pwrite_parts(path: &std::path::Path, parts: &[Vec<u8>]) -> io::Result<()> {
-    let slices: Vec<&[u8]> = parts.iter().map(|part| part.as_slice()).collect();
-    pwrite_borrowed(path, &slices)
-}
-
-fn pwrite_borrowed(path: &std::path::Path, parts: &[&[u8]]) -> io::Result<()> {
+fn pwrite_borrowed(file: &File, parts: &[&[u8]]) -> io::Result<()> {
     let mut offset = 0u64;
     let mut offsets = Vec::with_capacity(parts.len());
     for part in parts {
         offsets.push(offset);
         offset += part.len() as u64;
     }
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path)?;
     file.set_len(offset)?;
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
@@ -5622,7 +5777,12 @@ mod parallel_write_bytes {
         let path =
             std::env::temp_dir().join(format!("readcon-pwrite-scan-{}.bin", std::process::id()));
         let parts: [&[u8]; 4] = [b"abc", b"", b"def\n", b"g"];
-        super::pwrite_borrowed(&path, &parts).unwrap();
+        super::publish_new(
+            &path,
+            |err| err,
+            |file| super::pwrite_borrowed(file, &parts),
+        )
+        .unwrap();
         let got = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(got, b"abcdef\ng");

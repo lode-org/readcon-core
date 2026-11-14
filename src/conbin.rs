@@ -1609,11 +1609,23 @@ pub fn write_from_con(
 ) -> Result<ConBinHeader, ParseError> {
     let text = std::fs::read_to_string(con_path)
         .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    let mut file =
-        File::create(out_path).map_err(|err| ParseError::ValidationError(err.to_string()))?;
     let page = page_size()?;
+    crate::writer::publish_new(
+        out_path,
+        |err| ParseError::ValidationError(err.to_string()),
+        |file| write_conbin_body(file, &text, binary32, page),
+    )?;
+    read_header(out_path)
+}
+
+fn write_conbin_body(
+    file: &mut File,
+    text: &str,
+    binary32: bool,
+    page: usize,
+) -> Result<(), ParseError> {
     write_header_page(
-        &mut file,
+        file,
         &ConBinHeader {
             n_frames: 0,
             n_atoms: 0,
@@ -1627,7 +1639,7 @@ pub fn write_from_con(
     let mut n_atoms = 0u64;
     let mut positions: Vec<f64> = Vec::new();
     let mut velocities: Vec<f64> = Vec::new();
-    for frame in ConFrameIterator::new(&text) {
+    for frame in ConFrameIterator::new(text) {
         let frame = frame?;
         let n = frame.atom_data.len();
         if n_frames == 0 {
@@ -1646,11 +1658,11 @@ pub fn write_from_con(
     if binary32 {
         let pos32: Vec<f32> = positions.iter().map(|v| *v as f32).collect();
         let vel32: Vec<f32> = velocities.iter().map(|v| *v as f32).collect();
-        write_values(&mut file, &pos32)?;
-        write_values(&mut file, &vel32)?;
+        write_values(file, &pos32)?;
+        write_values(file, &vel32)?;
     } else {
-        write_values(&mut file, &positions)?;
-        write_values(&mut file, &velocities)?;
+        write_values(file, &positions)?;
+        write_values(file, &velocities)?;
     }
     let header = ConBinHeader {
         n_frames,
@@ -1660,8 +1672,8 @@ pub fn write_from_con(
     };
     file.seek(SeekFrom::Start(0))
         .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    write_header_page(&mut file, &header, page)?;
-    Ok(header)
+    write_header_page(file, &header, page)?;
+    Ok(())
 }
 
 #[cfg(test)]
