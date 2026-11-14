@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Write version macros from each measurement's own record.
+"""Write version macros from committed records.
 
-``\\readconCargoVersion`` stays the version of this checkout. A timed arm
-and a drift wheel keep the version their record names. The latest release
-tag is the newest ``vX.Y.Z`` tag in this repository, which is not the
-checkout version until that tag exists.
+``\\readconCargoVersion`` stays the version of this checkout. The timed
+release arm is the ``readcon_v*`` summary in ``logs/reader-exchange.log``.
+The drift wheel is the last reader in ``data/spec/version_drift.json``.
+The latest tag is ``logs/latest_release.json``. None of these reads git.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -19,38 +18,34 @@ CPC = Path(__file__).resolve().parents[1]
 REPO = CPC.parents[1]
 OUT = CPC / "src" / "measured_versions.tex"
 LOG = CPC / "logs" / "reader-exchange.log"
+LATEST = CPC / "logs" / "latest_release.json"
 DRIFT = "paper/cpc/data/spec/version_drift.json"
-TAG = re.compile(r"^v(\d+\.\d+\.\d+)$")
+ARM = re.compile(r"^readcon_v(\d)(\d{2})(\d+)$")
+VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-def git(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(REPO), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def tag_version(commit: str) -> str | None:
-    listed = git("tag", "--points-at", commit)
-    found = [TAG.fullmatch(line) for line in listed.stdout.splitlines()]
-    versions = [match.group(1) for match in found if match]
-    if len(versions) == 1:
-        return versions[0]
-    return None
+def _arm_version(name: str) -> str | None:
+    match = ARM.fullmatch(name)
+    if match is None:
+        return None
+    return f"{int(match.group(1))}.{int(match.group(2))}.{int(match.group(3))}"
 
 
 def release_version() -> str:
-    """The tag of ``release_commit`` in the reader-exchange log."""
-    commit = None
+    """The version named by the log's ``readcon_v*`` summary arm."""
+    found: set[str] = set()
     for line in LOG.read_text(encoding="utf-8").splitlines():
-        if line.startswith("release_commit "):
-            commit = line.split()[1]
-            break
-    if commit is None:
-        return "unknown"
-    return tag_version(commit) or "unknown"
+        if not line.startswith("summary "):
+            continue
+        for part in line.split():
+            if not part.startswith("arm="):
+                continue
+            version = _arm_version(part.split("=", 1)[1])
+            if version is not None:
+                found.add(version)
+    if len(found) == 1:
+        return found.pop()
+    return "unknown"
 
 
 def drift_record() -> dict:
@@ -61,30 +56,26 @@ def drift_record() -> dict:
 def drift_fourth() -> str:
     """The last wheel ``version_drift.json`` measured, or unknown."""
     data = drift_record()
-    if not data:
-        return "unknown"
     readers = data.get("readers") or []
     reported = data.get("reported_versions") or {}
     if not readers:
         return "unknown"
-    label = readers[-1]
-    version = reported.get(label)
-    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    version = reported.get(readers[-1])
+    if not isinstance(version, str) or VERSION.fullmatch(version) is None:
         return "unknown"
     return version
 
 
 def latest_tag() -> tuple[str, str]:
-    """Newest ``vX.Y.Z`` tag and the commit it names."""
-    listed = git("tag", "-l", "v[0-9]*", "--sort=-v:refname")
-    for line in listed.stdout.splitlines():
-        match = TAG.fullmatch(line.strip())
-        if not match:
-            continue
-        commit = git("rev-parse", f"{line.strip()}^{{}}")
-        if commit.returncode == 0 and commit.stdout.strip():
-            return match.group(1), commit.stdout.strip()
-    return "unknown", "unknown"
+    """The tag and commit recorded in ``logs/latest_release.json``."""
+    data = json.loads(LATEST.read_text(encoding="utf-8"))
+    version = data.get("version")
+    commit = data.get("commit")
+    if not isinstance(version, str) or VERSION.fullmatch(version) is None:
+        return "unknown", "unknown"
+    if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        return "unknown", "unknown"
+    return version, commit
 
 
 def render() -> str:

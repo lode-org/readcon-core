@@ -144,3 +144,22 @@ jobs:
       - name: pytest tests/python
         run: |
           python -m pytest tests/python/ -q --tb=short
+
+  paper-tags:
+    name: paper tags
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Tags and commits named by the paper
+        run: python -m pytest tests/python/test_paper_revisions.py -q --tb=short
