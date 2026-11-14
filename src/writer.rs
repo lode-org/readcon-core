@@ -3589,6 +3589,15 @@ fn small_int_text(n: u32) -> &'static [u8] {
 }
 
 fn push_column_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, slot: &mut FmtSlot, value: f64) {
+    // `-0.0` compares equal to `0.0`, and ryu keeps the sign.
+    if value == 0.0 {
+        buf.extend_from_slice(if value.is_sign_negative() {
+            b"-0.0"
+        } else {
+            b"0.0"
+        });
+        return;
+    }
     if (0.0..10_000.0).contains(&value) {
         let n = value as u32;
         if n as f64 == value {
