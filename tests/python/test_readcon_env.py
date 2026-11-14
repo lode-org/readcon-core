@@ -17,11 +17,27 @@ SRC = ROOT / "src"
 # READCON_RANKED_WRITE: public store override, documented on the writer.
 # READCON_MPI_TEST_CHUNK: documented on ``chunk`` for the multi-round path.
 # READCON_WRITE_TRACE: optional timing lines in the compressed writer.
+# READCON_GIT_COMMIT, READCON_GIT_TREE, READCON_SOURCE_DIGEST: build identity
+# baked by build.rs. A re-stamp that does not change src/ or Cargo.lock keeps
+# the source digest.
 DOCUMENTED = {
     "READCON_RANKED_WRITE",
     "READCON_MPI_TEST_CHUNK",
     "READCON_WRITE_TRACE",
+    "READCON_GIT_COMMIT",
+    "READCON_GIT_TREE",
+    "READCON_SOURCE_DIGEST",
 }
+_LITERAL = re.compile(r'"((?:\\.|[^"\\])*)"')
+_LET = re.compile(
+    r"""(?:let|const|static)\s+(?:mut\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*&str\s*)?=\s*"((?:\\.|[^"\\])*)"\s*;""",
+    re.S,
+)
+_ALIAS = re.compile(
+    r"use\s+(?:std::)?env::var(?:_os)?\s+as\s+([A-Za-z_][A-Za-z0-9_]*)"
+)
+_FORMAT = re.compile(r'format!\s*\(\s*"(READCON_\{[^"]*)"')
+_VARS = re.compile(r"env::vars\s*\(")
 
 _CONST = re.compile(
     r"""(?:const|static)\s+([A-Za-z0-9_]+)\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"\s*;""",
@@ -112,7 +128,9 @@ def _concat_at(text: str, index: int) -> tuple[str, int] | None:
 
 
 def _bindings(text: str) -> dict[str, str]:
-    return {name: value for name, value in _CONST.findall(text)}
+    found = {name: value for name, value in _CONST.findall(text)}
+    found.update({name: value for name, value in _LET.findall(text)})
+    return found
 
 
 def _argument(
@@ -132,22 +150,41 @@ def _argument(
     return None
 
 
-def readcon_reads(text: str) -> list[tuple[int, str]]:
-    """``READCON_*`` names passed to ``env::var`` or ``env::var_os``.
+def _calls(text: str) -> list[re.Match[str]]:
+    found = list(_CALL.finditer(text))
+    for alias in _ALIAS.findall(text):
+        found.extend(re.finditer(rf"\b{alias}\s*\(", text))
+    return found
 
-    A name may be a string, a ``concat!`` of strings, or a ``const`` / ``static``
-    ``&str``, and the call may break across lines.
+
+def readcon_reads(text: str) -> list[tuple[int, str]]:
+    """Every ``READCON_*`` string in production code, and the dynamic forms.
+
+    A name may be a string literal, a ``let`` / ``const`` / ``static`` binding,
+    a ``concat!``, or a renamed ``env::var``. ``format!("READCON_{{}")`` and
+    ``env::vars`` filtering are reported too.
     """
     masked = _mask_comments(text)
     bindings = _bindings(masked)
-    found = []
-    for match in _CALL.finditer(masked):
+    found: list[tuple[int, str]] = []
+    for match in _LITERAL.finditer(masked):
+        value = match.group(1)
+        named = re.match(r"READCON_[A-Z0-9_]*[A-Z0-9]", value)
+        if named:
+            found.append((_line_of(masked, match.start()), named.group(0)))
+    for match in _calls(masked):
         parsed = _argument(masked, match.end(), bindings)
         if parsed is None:
             continue
         name, _ = parsed
         if name.startswith("READCON_"):
             found.append((_line_of(masked, match.start()), name))
+    for match in _FORMAT.finditer(masked):
+        found.append((_line_of(masked, match.start()), "READCON_{}"))
+    for match in _VARS.finditer(masked):
+        window = masked[match.start() : match.start() + 400]
+        if "READCON_" in window:
+            found.append((_line_of(masked, match.start()), "READCON_"))
     return found
 
 
@@ -204,6 +241,24 @@ def test_a_planted_debug_knob_is_rejected() -> None:
     planted = 'if std::env::var_os("READCON_DEFER_UNLINK").is_some() {'
     names = {name for _line, name in readcon_reads(planted)}
     assert names == {"READCON_DEFER_UNLINK"}
+
+
+def test_let_vars_format_and_renamed_imports_are_seen() -> None:
+    planted = """
+    let n = "READCON_BOUND";
+    use std::env::var as read_env;
+    fn look() {
+        let _ = read_env(n);
+        for (key, _) in std::env::vars() {
+            let _ = key.starts_with("READCON_");
+        }
+        let _ = format!("READCON_{}", "TAIL");
+    }
+    """
+    names = {name for _line, name in readcon_reads(planted)}
+    assert "READCON_BOUND" in names
+    assert "READCON_" in names
+    assert "READCON_{}" in names
 
 
 def test_split_const_and_concat_reads_are_seen() -> None:
