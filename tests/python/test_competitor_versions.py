@@ -18,15 +18,27 @@ def _pixi() -> tuple[str, str]:
     return mda.group(1), ovito.group(1)
 
 
-def _requirements(path: Path) -> tuple[str, str]:
+def _pin(path: Path, name: str) -> str:
     text = path.read_text(encoding="utf-8")
+    found = re.search(rf"(?m)^{name}==(\S+)\s*$", text)
+    assert found, f"{path} has no {name} pin"
+    return found.group(1)
 
-    def pin(name: str) -> str:
-        found = re.search(rf"(?m)^{name}==(\S+)\s*$", text)
-        assert found, f"{path} has no {name} pin"
-        return found.group(1)
 
-    return pin("MDAnalysis"), pin("ovito")
+def _requirements(path: Path) -> tuple[str, str]:
+    return _pin(path, "MDAnalysis"), _pin(path, "ovito")
+
+
+def _lock_has(name: str, version: str) -> bool:
+    text = (ROOT / "paper/cpc/pixi.lock").read_text(encoding="utf-8")
+    return f"{name}-{version}-" in text or f"{name}-{version}." in text
+
+
+def _conda_has(package: str, version: str) -> bool:
+    text = (ROOT / "paper/cpc/environment/conda-linux-64.txt").read_text(
+        encoding="utf-8"
+    )
+    return f"/{package}-{version}-" in text
 
 
 def _library_versions() -> tuple[str, str]:
@@ -51,9 +63,6 @@ def _ci_python() -> str:
 def test_competitor_versions_are_one_set() -> None:
     found = {
         "paper/cpc/pixi.toml": _pixi(),
-        "paper/cpc/environment/requirements.txt": _requirements(
-            ROOT / "paper/cpc/environment/requirements.txt"
-        ),
         "bench/h2h/requirements.txt": _requirements(
             ROOT / "bench/h2h/requirements.txt"
         ),
@@ -62,3 +71,8 @@ def test_competitor_versions_are_one_set() -> None:
     for name, pair in found.items():
         assert pair == (MDA, OVITO), (name, pair)
     assert _ci_python() == MDA
+    paper_req = ROOT / "paper/cpc/environment/requirements.txt"
+    assert _pin(paper_req, "ovito") == OVITO
+    assert _lock_has("mdanalysis", MDA)
+    assert _lock_has("ovito", OVITO)
+    assert _conda_has("mdanalysis", MDA)
