@@ -28,9 +28,12 @@ if python3 -c 'import readcon' >/dev/null 2>&1; then
     py=(python3)
 else
     python3 -m venv "$work/venv"
-    "$work/venv/bin/pip" install --disable-pip-version-check maturin
-    "$work/venv/bin/maturin" develop --release --features python
-    py=("$work/venv/bin/python")
+    # maturin develop looks up VIRTUAL_ENV. The venv's bin directory is not enough.
+    export VIRTUAL_ENV="$work/venv"
+    export PATH="$VIRTUAL_ENV/bin:$PATH"
+    pip install --disable-pip-version-check maturin
+    maturin develop --release --features python
+    py=("$VIRTUAL_ENV/bin/python")
 fi
 for src in "$ROOT"/tests/doc_examples/*.py; do
     "${py[@]}" "$src"
