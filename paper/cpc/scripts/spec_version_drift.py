@@ -141,6 +141,12 @@ def ensure_published_clean(root: Path) -> str:
     return str(measured_commit.measurement(root)["commit"])
 
 
+def require_installed_module(module: Path | None) -> Path:
+    if module is None:
+        raise SystemExit("the readcon module was not found; rebuild it")
+    return module
+
+
 def refuse_stale_module(newer: list[str]) -> None:
     """A module older than a library file was not built from this tree."""
     if newer:
@@ -210,8 +216,8 @@ def main() -> int:
 
     import provenance
 
-    module = provenance.readcon_module()
-    stale = provenance.newer_sources(module) if module else []
+    module = require_installed_module(provenance.readcon_module())
+    stale = provenance.newer_sources(module)
     refuse_stale_module(stale)
     payload = {
         "readers": labels,

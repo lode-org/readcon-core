@@ -26,7 +26,7 @@ sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
-from measured_commit import measurement  # noqa: E402
+from measured_commit import refuse_stale_build  # noqa: E402
 from sample_protocol import core_list, host_snapshot, pin_cores  # noqa: E402
 
 REPEATS = 12
@@ -151,7 +151,7 @@ def prepare() -> tuple[dict[str, Path], dict]:
 
 
 def main() -> None:
-    ident = measurement(ROOT)
+    ident = refuse_stale_build(ROOT)
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "bench/h2h/million3"
     out.mkdir(parents=True, exist_ok=True)
     cross_format.serial_threads()

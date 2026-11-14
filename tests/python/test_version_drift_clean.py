@@ -36,6 +36,11 @@ def test_a_dirty_checkout_is_refused(tmp_path: Path) -> None:
         _module().ensure_published_clean(tmp_path)
 
 
+def test_a_missing_module_is_refused() -> None:
+    with pytest.raises(SystemExit, match="not found"):
+        _module().require_installed_module(None)
+
+
 def test_a_stale_module_is_refused() -> None:
     with pytest.raises(SystemExit, match="older than"):
         _module().refuse_stale_module(["src/writer.rs", "src/python.rs"])

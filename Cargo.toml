@@ -53,6 +53,8 @@ rpc = [
 # This is the stable switch (libmimalloc-sys `local_dynamic_tls`). Static
 # bins and `cargo test` leave it off, so they keep initial-exec.
 local_dynamic_tls = ["mimalloc/local_dynamic_tls"]
+# Counters for the borrowed-frame writer. Off in a release module.
+borrow-path-counts = []
 python = ["dep:pyo3", "dep:numpy", "parallel", "local_dynamic_tls"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an

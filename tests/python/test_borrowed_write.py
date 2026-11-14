@@ -21,7 +21,10 @@ MULTI = ROOT / "resources" / "test" / "tiny_multi_cuh2.con"
 
 
 def _counts() -> tuple[int, int]:
-    frame, listed = readcon.borrow_path_counts()
+    counts = getattr(readcon, "borrow_path_counts", None)
+    if counts is None:
+        pytest.skip("readcon was built without the borrow-path-counts feature")
+    frame, listed = counts()
     return int(frame), int(listed)
 
 
