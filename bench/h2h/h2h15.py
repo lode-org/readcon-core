@@ -9,8 +9,9 @@ chemfiles 0.12.0-dev is the shared library built at fc1e930, loaded by
 pointer, and is never the 0.10.4 module.
 
 Measurement goes through ``measured_commit.measurement``: a clean tree
-whose ``HEAD`` ``git branch -r --contains`` already lists. The record
-stores that commit, its tree, and the empty diff digest from that helper.
+whose ``HEAD`` ``git ls-remote`` lists on the remote, and an installed
+readcon module built from that commit or tree. The record stores that
+commit, its tree, and the empty diff digest from that helper.
 Paths in the record are relative to the repository.
 
 ``cross_format.run`` writes every row of the cross-format table, including
@@ -38,7 +39,7 @@ sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
-from measured_commit import measurement, record_path  # noqa: E402
+from measured_commit import measurement, record_path, require_built_from  # noqa: E402
 from sample_protocol import (  # noqa: E402
     peak_rss_bytes,
     pin_cores,
@@ -599,15 +600,22 @@ def run(out: Path, repeats: int = 12) -> None:
 
     ``cross_format.run`` is the table. The XTC and chemfiles 0.12 rows are
     measured after it and stored in those same files. ``measurement``
-    refuses unless the tree is clean and a remote branch contains HEAD.
+    refuses unless the tree is clean and ``git ls-remote`` lists HEAD.
+    The installed readcon module must record that same commit or tree.
     """
     if repeats < 12:
         raise SystemExit("h2h15 takes at least 12 samples")
     ident = measurement(ROOT)
     head = ident["commit"]
-    pin_mdcompress()
     import readcon
 
+    require_built_from(
+        head,
+        ident["tree"],
+        str(getattr(readcon, "__commit__", "")),
+        str(getattr(readcon, "__tree__", "")),
+    )
+    pin_mdcompress()
     version = readcon.__version__
     out.mkdir(parents=True, exist_ok=True)
     cross_format.run(out, repeats)

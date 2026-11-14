@@ -138,9 +138,17 @@ def _run(bench: str) -> None:
 
 def main() -> None:
     sys.path.insert(0, str(BENCH))
-    from measured_commit import measurement
+    from measured_commit import measurement, require_built_from
 
-    measurement(ROOT)
+    ident = measurement(ROOT)
+    import readcon
+
+    require_built_from(
+        ident["commit"],
+        ident["tree"],
+        str(getattr(readcon, "__commit__", "")),
+        str(getattr(readcon, "__tree__", "")),
+    )
     out = Path(sys.argv[1]) if len(sys.argv) == 2 else RECORD
     if out.resolve() != RECORD.resolve():
         raise SystemExit("h2h15 asv copies into bench/h2h/scaling/h2h15")

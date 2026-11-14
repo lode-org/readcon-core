@@ -563,6 +563,7 @@ rule h2h15_measure:
         f"{H2H15}/cross-format.log",
         f"{H2H15}/provenance.json",
         f"{H2H15}/identity.txt",
+        f"{H2H15}/host.json",
     shell:
         """
         set -euo pipefail
@@ -601,5 +602,6 @@ rule h2h15:
         f"{H2H15}/cross-format.log",
         f"{H2H15}/provenance.json",
         f"{H2H15}/identity.txt",
+        f"{H2H15}/host.json",
         f"{H2H15}/asv.json",
         f"{H2H15}/asv-machine.json",

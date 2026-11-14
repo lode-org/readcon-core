@@ -1,7 +1,9 @@
-"""Measure only a clean ``HEAD`` that a remote branch already contains.
+"""Measure only a clean ``HEAD`` that the remote already has.
 
 Pushes re-stamp commits, so a local SHA never exists upstream. The guard
-is ``git branch -r --contains HEAD`` plus a clean index and worktree.
+asks the remote with ``git ls-remote`` and refuses a readcon module that
+was not built from that same commit or tree. Local ``origin/*`` refs are
+not the check.
 """
 
 from __future__ import annotations
@@ -29,18 +31,57 @@ def require_clean(porcelain: str) -> None:
         )
 
 
-def require_published(head: str, remote_contains: str) -> list[str]:
-    """Branches from ``git branch -r --contains HEAD``. Empty means refuse."""
-    branches = [
-        line.strip()
-        for line in remote_contains.splitlines()
-        if line.strip().startswith("origin/")
-    ]
-    if not branches:
+def remote_heads(ls_remote: str) -> list[tuple[str, str]]:
+    """``git ls-remote --heads`` lines as ``(sha, refs/heads/...)``."""
+    found = []
+    for line in ls_remote.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        sha, ref = parts[0], parts[1]
+        if len(sha) == 40 and ref.startswith("refs/heads/"):
+            found.append((sha, ref))
+    return found
+
+
+def require_published(
+    head: str,
+    ls_remote: str,
+    is_ancestor=None,
+) -> list[str]:
+    """Refs from ``git ls-remote`` whose tip is ``head`` or a descendant.
+
+    ``is_ancestor(head, tip)`` is optional. Without it, only an exact tip
+    match counts, so a local commit that is merely in the stale
+    remote-tracking ref is refused.
+    """
+    refs = []
+    for sha, ref in remote_heads(ls_remote):
+        if sha == head or (is_ancestor is not None and is_ancestor(head, sha)):
+            refs.append(ref)
+    if not refs:
         raise SystemExit(
-            f"{head} is not on a remote branch; git branch -r --contains HEAD is empty"
+            f"{head} is not on a remote branch; git ls-remote did not list it"
         )
-    return branches
+    return refs
+
+
+def require_built_from(
+    head: str, tree: str, built_commit: str, built_tree: str
+) -> None:
+    """Refuse an installed module that was not built from ``HEAD``."""
+    commit = (built_commit or "").strip()
+    built = (built_tree or "").strip()
+    blank = {"", "unknown"}
+    if (commit not in blank and commit == head) or (
+        built not in blank and built == tree
+    ):
+        return
+    raise SystemExit(
+        "installed readcon was not built from HEAD "
+        f"{head} (module commit {commit or 'missing'}, "
+        f"tree {built or 'missing'})"
+    )
 
 
 def _git(root: Path, *args: str, binary: bool = False) -> str | bytes:
@@ -56,16 +97,32 @@ def _git(root: Path, *args: str, binary: bool = False) -> str | bytes:
     return completed.stdout.decode()
 
 
+def _ancestor(root: Path, head: str, tip: str) -> bool:
+    if head == tip:
+        return True
+    completed = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "--is-ancestor", head, tip],
+        check=False,
+        capture_output=True,
+    )
+    return completed.returncode == 0
+
+
 def measurement(root: Path) -> dict[str, str]:
-    """HEAD when a remote branch contains it and the tree is clean."""
+    """HEAD when ``git ls-remote`` shows it on the remote and the tree is clean."""
     porcelain = _git(root, "status", "--porcelain", "--untracked-files=no")
     require_clean(str(porcelain))
     head = str(_git(root, "rev-parse", "HEAD")).strip()
-    listed = _git(root, "branch", "-r", "--contains", head)
-    branches = require_published(head, str(listed))
+    tree = str(_git(root, "rev-parse", f"{head}^{{tree}}")).strip()
+    listed = _git(root, "ls-remote", "--heads", "origin")
+    branches = require_published(
+        head,
+        str(listed),
+        is_ancestor=lambda commit, tip: _ancestor(root, commit, tip),
+    )
     return {
         "commit": head,
-        "tree": str(_git(root, "rev-parse", f"{head}^{{tree}}")).strip(),
+        "tree": tree,
         "diff_sha256": hashlib.sha256(b"").hexdigest(),
         "remote": branches[0],
     }
