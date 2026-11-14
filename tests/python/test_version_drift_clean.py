@@ -34,3 +34,8 @@ def test_a_dirty_checkout_is_refused(tmp_path: Path) -> None:
     (tmp_path / "note.txt").write_text("two\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="dirty"):
         _module().ensure_published_clean(tmp_path)
+
+
+def test_a_stale_module_is_refused() -> None:
+    with pytest.raises(SystemExit, match="older than"):
+        _module().refuse_stale_module(["src/writer.rs", "src/python.rs"])

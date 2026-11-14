@@ -141,6 +141,14 @@ def ensure_published_clean(root: Path) -> str:
     return str(measured_commit.measurement(root)["commit"])
 
 
+def refuse_stale_module(newer: list[str]) -> None:
+    """A module older than a library file was not built from this tree."""
+    if newer:
+        raise SystemExit(
+            f"the readcon module is older than {', '.join(newer[:3])}; rebuild it"
+        )
+
+
 def main() -> int:
     ensure_published_clean(ROOT.parents[1])
     ap = argparse.ArgumentParser()
@@ -202,6 +210,9 @@ def main() -> int:
 
     import provenance
 
+    module = provenance.readcon_module()
+    stale = provenance.newer_sources(module) if module else []
+    refuse_stale_module(stale)
     payload = {
         "readers": labels,
         "reported_versions": {label: results[label]["__version__"] for label in labels},
