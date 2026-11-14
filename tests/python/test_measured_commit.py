@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 from pathlib import Path
 
@@ -31,30 +30,19 @@ def test_untracked_files_are_not_a_dirty_tree() -> None:
     module.require_clean("?? bench/h2h/camp16_run.py\n")
 
 
-def test_an_unpublished_head_cites_the_origin_ancestor_and_the_diff() -> None:
+def test_an_unpublished_head_is_refused() -> None:
     module = _load()
-    diff = b"diff --git a/src/writer.rs b/src/writer.rs\n"
-    info = module.cite_from(
-        "local-head",
-        "d305d3d498fab2a515d270c68635ecffc5aa209a",
-        lambda rev: rev.startswith("d305d3d4"),
-        diff,
+    with pytest.raises(SystemExit, match="not on a remote branch"):
+        module.require_published("local-head", "")
+
+
+def test_a_published_head_is_the_measured_commit() -> None:
+    module = _load()
+    branches = module.require_published(
+        "0b62d689367cf69797107ca505778fde1017990d",
+        "  origin/feat/release-0.23.0\n",
     )
-    assert info["commit"] == "d305d3d498fab2a515d270c68635ecffc5aa209a"
-    assert info["diff_sha256"] == hashlib.sha256(diff).hexdigest()
-
-
-def test_a_published_head_records_an_empty_diff() -> None:
-    module = _load()
-    info = module.cite_from("d305d3d4", "d305d3d4", lambda _rev: True, b"ignored")
-    assert info["commit"] == "d305d3d4"
-    assert info["diff_sha256"] == hashlib.sha256(b"").hexdigest()
-
-
-def test_a_base_that_origin_lacks_is_refused() -> None:
-    module = _load()
-    with pytest.raises(SystemExit, match="not on"):
-        module.cite_from("local", "deadbeef", lambda _rev: False, b"")
+    assert branches == ["origin/feat/release-0.23.0"]
 
 
 def _needles() -> tuple[str, ...]:
