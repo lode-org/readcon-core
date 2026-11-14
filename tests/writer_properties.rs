@@ -332,7 +332,7 @@ fn mpi_rank_child() {
     let range = block_range(frames.len(), comm.size(), comm.rank());
     let mine = &frames[range];
     let out = std::path::PathBuf::from(std::env::var("READCON_RANK_OUT").expect("out"));
-    write_block(&comm, &out, mine, WriteMode::MpiIo, None).expect("write");
+    write_block(&comm, &out, mine, WriteMode::MpiIo, None, false, false).expect("write");
     if let Ok(second) = std::env::var("READCON_RANK_SECOND") {
         let text = std::fs::read_to_string(&second).expect("second");
         let frames = ConFrameIterator::new(&text)
@@ -347,7 +347,7 @@ fn mpi_rank_child() {
             expected.len(),
             "the second write must keep the file length"
         );
-        write_block(&comm, &out, mine, WriteMode::MpiIo, None).expect("rewrite");
+        write_block(&comm, &out, mine, WriteMode::MpiIo, None, false, false).expect("rewrite");
         comm.raw().barrier();
         if comm.rank() == 0 {
             let got = std::fs::read(&out).expect("rewritten");

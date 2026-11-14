@@ -3799,6 +3799,9 @@ fn try_fused_members(
 /// while it is kept. `keep_spare=False` deletes it after the rename, so the
 /// next rewrite allocates fresh pages. The published path stays the previous
 /// complete file until the rename, including if the process is killed.
+/// With `comm=`, the default write is a fresh file and leaves no spare.
+/// `rewrite=True` is the same spare for that collective file. `append` and
+/// compression are refused.
 /// `write_con_string` serializes the same default bytes without a file.
 #[pyfunction]
 #[pyo3(signature = (path, frames, precision=None, compression=None, *, canonical=false, comm=None, mode="auto", append=false, n_threads=None, compression_members=None, rewrite=false, keep_spare=true))]
@@ -3818,9 +3821,9 @@ fn write_con(
     rewrite: bool,
     keep_spare: bool,
 ) -> PyResult<()> {
-    if rewrite && (append || comm.is_some()) {
+    if rewrite && append {
         return Err(pyo3::exceptions::PyValueError::new_err(
-            "rewrite replaces one file and does not take append or comm",
+            "rewrite replaces one file and does not take append",
         ));
     }
     if append && comm.is_some() {
@@ -3848,7 +3851,16 @@ fn write_con(
         } else {
             py_frames_to_rust(py, frames)?
         };
-        return write_con_mpi(py, path, &rust_frames, precision, comm, mode);
+        return write_con_mpi(
+            py,
+            path,
+            &rust_frames,
+            precision,
+            comm,
+            mode,
+            rewrite,
+            keep_spare,
+        );
     }
     if append && !matches!(codec, OutputCodec::Plain) {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -4092,6 +4104,8 @@ fn write_con_mpi(
     precision: Option<usize>,
     comm: &Bound<'_, PyAny>,
     mode: &str,
+    rewrite: bool,
+    keep_spare: bool,
 ) -> PyResult<()> {
     use crate::distrib_write::WriteMode;
     let mode = match mode {
@@ -4106,9 +4120,17 @@ fn write_con_mpi(
     };
     let c = comm_from_py(comm)?;
     let _ = py;
-    crate::distrib_write::write_block(&c, Path::new(path), frames, mode, precision)
-        .map(|_| ())
-        .map_err(|e| PyIOError::new_err(e.to_string()))
+    crate::distrib_write::write_block(
+        &c,
+        Path::new(path),
+        frames,
+        mode,
+        precision,
+        rewrite,
+        keep_spare,
+    )
+    .map(|_| ())
+    .map_err(|e| PyIOError::new_err(e.to_string()))
 }
 
 #[cfg(not(feature = "mpi"))]
@@ -4119,6 +4141,8 @@ fn write_con_mpi(
     _precision: Option<usize>,
     _comm: &Bound<'_, PyAny>,
     _mode: &str,
+    _rewrite: bool,
+    _keep_spare: bool,
 ) -> PyResult<()> {
     Err(pyo3::exceptions::PyNotImplementedError::new_err(
         "comm= needs readcon built with the mpi feature",

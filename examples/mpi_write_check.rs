@@ -37,7 +37,16 @@ fn main() {
     }
     world.barrier();
     let t0 = Instant::now();
-    let total = write_block(&comm, Path::new(&out_mpi), &rf.frames, mode, None).unwrap();
+    let total = write_block(
+        &comm,
+        Path::new(&out_mpi),
+        &rf.frames,
+        mode,
+        None,
+        false,
+        false,
+    )
+    .unwrap();
     let dt = t0.elapsed().as_secs_f64() * 1e3;
 
     if comm.rank() == 0 {

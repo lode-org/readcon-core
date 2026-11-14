@@ -11,9 +11,10 @@
 //!
 //! Modes:
 //!
-//! - [`WriteMode::MpiIo`]: rank 0 creates the file and sets its length to
-//!   the exclusive-scan total. Every rank then `pwrite`s its own bytes at
-//!   that offset. Rewriting a longer file leaves no tail.
+//! - [`WriteMode::MpiIo`]: rank 0 allocates a fresh file with
+//!   [`crate::writer::begin_shared_store`] and every rank writes its slice.
+//!   [`crate::writer::commit_shared_store`] publishes it. No spare is left
+//!   behind. `rewrite` instead fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
 //!   collects every block (`MPI_Gatherv` up to 2 GiB in total,
 //!   point-to-point chunks above that) and writes the file itself.
@@ -123,21 +124,35 @@ fn mpi_rc(rc: i32, call: &str) -> Result<(), BoxErr> {
 /// Write the frames of every rank, in rank order, to `path`.
 ///
 /// Collective over `comm`. Returns the total file size in bytes.
+/// `rewrite == false` publishes a fresh file and leaves no `.rewrite`
+/// sibling. `rewrite == true` is the spare described on [`write_ranked_bytes`].
 pub fn write_block(
     comm: &Comm,
     path: &Path,
     frames: &[ConFrame],
     mode: WriteMode,
     precision: Option<usize>,
+    rewrite: bool,
+    keep_spare: bool,
 ) -> Result<u64, BoxErr> {
     let refs: Vec<&ConFrame> = frames.iter().collect();
-    write_block_refs(comm, path, &refs, mode, precision)
+    write_block_refs(comm, path, &refs, mode, precision, rewrite, keep_spare)
 }
 
 /// [`write_block`] over borrowed frames (used by the C ABI).
 /// Write each rank's bytes in rank order. Rank 0's buffer is the start
 /// of the file. Used when one frame's atom lines are split across ranks.
-pub fn write_ranked_bytes(comm: &Comm, path: &Path, bytes: &[u8]) -> Result<u64, BoxErr> {
+/// The default (`rewrite == false`) is a fresh file published by
+/// [`crate::writer::commit_shared_store`]. `rewrite == true` fills
+/// `path` + `.rewrite` and renames that over `path`. `keep_spare` parks
+/// the previous inode there, a second copy of the file.
+pub fn write_ranked_bytes(
+    comm: &Comm,
+    path: &Path,
+    bytes: &[u8],
+    rewrite: bool,
+    keep_spare: bool,
+) -> Result<u64, BoxErr> {
     let len = bytes.len() as u64;
     let world = comm.raw();
     let mut offset = 0u64;
@@ -147,7 +162,7 @@ pub fn write_ranked_bytes(comm: &Comm, path: &Path, bytes: &[u8]) -> Result<u64,
     }
     let mut total = 0u64;
     world.all_reduce_into(&len, &mut total, ::mpi::collective::SystemOperation::sum());
-    write_pwrite(comm, path, bytes, offset, total)?;
+    write_pwrite(comm, path, bytes, offset, total, rewrite, keep_spare)?;
     world.barrier();
     Ok(total)
 }
@@ -160,68 +175,125 @@ fn write_pwrite(
     bytes: &[u8],
     offset: u64,
     total: u64,
+    rewrite: bool,
+    keep_spare: bool,
 ) -> Result<(), BoxErr> {
-    // A new temporary file, sized up front, then one `pwrite` per rank.
-    // Filling one shared mapping faults those pages under the mapping
-    // lock, so eight ranks serialize the first touch. `pwrite` allocates
-    // each rank's own range. Rank 0 renames the temporary onto `path`
-    // only after every byte is stored.
-    let created = if comm.rank() == 0 {
-        fresh_ranked_file(path, total)
+    if rewrite {
+        return write_pwrite_spare(comm, path, bytes, offset, total, keep_spare);
+    }
+    // Rank 0's file is the same unpublished inode `commit_shared_store`
+    // renames onto `path`. A hole filled by eight `pwrite`s serializes on
+    // the extent lock, so the helper allocates the blocks first.
+    let mut held = None;
+    let mut create_err = None;
+    let encoded = if comm.rank() == 0 {
+        match crate::writer::begin_shared_store(path, total) {
+            Ok(store) => {
+                let encoded = store.path().as_os_str().as_encoded_bytes().to_vec();
+                held = Some(store);
+                encoded
+            }
+            Err(err) => {
+                create_err = Some(err.to_string());
+                Vec::new()
+            }
+        }
     } else {
-        Ok(std::path::PathBuf::new())
-    };
-    // The broadcast is the only create barrier. Rank 0 has finished
-    // `set_len` before it enters, so the name other ranks receive is a
-    // file that already has its length. An empty name is a create error.
-    let encoded = match &created {
-        Ok(tmp) if comm.rank() == 0 => tmp.as_os_str().as_encoded_bytes().to_vec(),
-        _ => Vec::new(),
+        Vec::new()
     };
     let raw = bcast_short(comm, &encoded);
     if raw.is_empty() {
-        let err = match created {
-            Err(err) => format!("rank {}: create: {err}", comm.rank()),
-            Ok(_) => "create failed on rank 0".to_string(),
-        };
-        return Err(err.into());
+        return Err(create_err
+            .unwrap_or_else(|| "create failed on rank 0".to_string())
+            .into());
     }
-    // SAFETY: `raw` is the encoded form of the path rank 0 just created.
+    // SAFETY: `raw` is the path rank 0 just exposed for this inode.
     let tmp =
         std::path::PathBuf::from(unsafe { std::ffi::OsString::from_encoded_bytes_unchecked(raw) });
-    // Open, store, and drop the fd before the agree, so the agree itself
-    // is the point where every rank has closed the file.
     let wrote = (|| -> std::io::Result<()> {
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .open(&tmp)?;
-        // On tmpfs a shared mapping is faster than `pwrite` or `MAP_POPULATE`.
-        // Those still allocate the pages, and a fresh file's first touch is
-        // what eight ranks wait on. Off tmpfs, `pwrite` is the store.
-        if !bytes.is_empty() && crate::writer::file_is_tmpfs(&file) {
-            copy_mapped(&file, bytes, offset)?;
-        } else {
-            pwrite_all(&file, bytes, offset)?;
-        }
-        Ok(())
+        store_ranked_slice(&file, bytes, offset)
     })();
     if let Err(err) = collective(comm, wrote.map_err(BoxErr::from), "pwrite") {
-        if comm.rank() == 0 {
-            let _ = std::fs::remove_file(&tmp);
-        }
+        drop(held);
         return Err(err);
     }
-    let published = if comm.rank() == 0 {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        std::fs::rename(&tmp, path).map_err(BoxErr::from)
+    let published = if let Some(store) = held {
+        crate::writer::commit_shared_store(store, path).map_err(BoxErr::from)
     } else {
         Ok(())
     };
     collective(comm, published, "publish")?;
     Ok(())
+}
+
+fn write_pwrite_spare(
+    comm: &Comm,
+    path: &Path,
+    bytes: &[u8],
+    offset: u64,
+    total: u64,
+    keep_spare: bool,
+) -> Result<(), BoxErr> {
+    let spare = crate::writer::rewrite_names(path)
+        .map(|(spare, _hold)| spare)
+        .map_err(BoxErr::from);
+    let spare = collective(comm, spare, "spare")?;
+    let prepared = if comm.rank() == 0 {
+        if let Some(parent) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        open_ranked_spare(path, total).map(|_| ())
+    } else {
+        Ok(())
+    };
+    if let Err(err) = collective(comm, prepared.map_err(BoxErr::from), "create") {
+        return Err(err);
+    }
+    let wrote = (|| -> std::io::Result<()> {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&spare)?;
+        store_ranked_slice(&file, bytes, offset)
+    })();
+    if let Err(err) = collective(comm, wrote.map_err(BoxErr::from), "pwrite") {
+        return Err(err);
+    }
+    let published = if comm.rank() == 0 {
+        crate::writer::publish_rewrite(&spare, path, keep_spare).map_err(BoxErr::from)
+    } else {
+        Ok(())
+    };
+    collective(comm, published, "publish")?;
+    Ok(())
+}
+
+fn store_ranked_slice(file: &std::fs::File, bytes: &[u8], offset: u64) -> std::io::Result<()> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    if crate::writer::file_is_tmpfs(file) {
+        copy_mapped(file, bytes, offset)
+    } else {
+        pwrite_all(file, bytes, offset)
+    }
+}
+
+fn open_ranked_spare(path: &Path, total: u64) -> std::io::Result<std::path::PathBuf> {
+    let spare = crate::writer::prepare_rewrite_spare(path)?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&spare)?;
+    if file.metadata()?.len() != total {
+        file.set_len(total)?;
+    }
+    Ok(spare)
 }
 
 /// One broadcast of a short blob. `0xffff` in the length slot means the
@@ -244,30 +316,6 @@ fn bcast_short(comm: &Comm, data: &[u8]) -> Vec<u8> {
         return comm.bcast_bytes(0, if comm.rank() == 0 { data } else { &[] });
     }
     buf[2..2 + n].to_vec()
-}
-
-/// Create a new sibling of `path` and set its length. The pages are not
-/// touched here; each rank's `pwrite` allocates its own range.
-fn fresh_ranked_file(path: &Path, total: u64) -> std::io::Result<std::path::PathBuf> {
-    let dir = match path.parent() {
-        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
-        _ => std::path::PathBuf::from("."),
-    };
-    let tmp = dir.join(format!(
-        ".readcon-write-{}-{}.tmp",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|dur| dur.as_nanos())
-            .unwrap_or(0),
-    ));
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&tmp)?;
-    file.set_len(total)?;
-    Ok(tmp)
 }
 
 /// Create `path` at `total` bytes, or leave it when it is already that long.
@@ -344,6 +392,8 @@ pub fn write_block_refs(
     frames: &[&ConFrame],
     mode: WriteMode,
     precision: Option<usize>,
+    rewrite: bool,
+    keep_spare: bool,
 ) -> Result<u64, BoxErr> {
     // One allgather replaces the exclusive scan, the length reduction,
     // and the format agree. `u64::MAX` is a format error; a real block
@@ -378,7 +428,7 @@ pub fn write_block_refs(
             // pass after the file is published.
             let ready = std::thread::scope(|scope| {
                 let job = scope.spawn(|| local_ready(offset, &bytes, total));
-                let stored = write_pwrite(comm, path, &bytes, offset, total);
+                let stored = write_pwrite(comm, path, &bytes, offset, total, rewrite, keep_spare);
                 let ready = job.join().unwrap_or_else(|_| LocalReady {
                     hashes: Vec::new(),
                     tail: None,
@@ -975,6 +1025,63 @@ pub unsafe extern "C" fn rkr_mpi_write_block_f(
     precision: i32,
     total_bytes: *mut u64,
 ) -> i32 {
+    unsafe {
+        mpi_write_block(
+            comm_f,
+            path_c,
+            frames,
+            num_frames,
+            mode,
+            precision,
+            total_bytes,
+            false,
+            false,
+        )
+    }
+}
+
+/// Spare form of [`rkr_mpi_write_block_f`]. `keep_spare != 0` parks the
+/// previous inode at `path` + `.rewrite`.
+///
+/// # Safety
+/// Same as [`rkr_mpi_write_block_f`]. Every rank must call this.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_mpi_rewrite_block_f(
+    comm_f: ffi::RSMPI_Fint,
+    path_c: *const std::ffi::c_char,
+    frames: *const *const crate::ffi::RKRConFrame,
+    num_frames: usize,
+    mode: i32,
+    precision: i32,
+    keep_spare: u8,
+    total_bytes: *mut u64,
+) -> i32 {
+    unsafe {
+        mpi_write_block(
+            comm_f,
+            path_c,
+            frames,
+            num_frames,
+            mode,
+            precision,
+            total_bytes,
+            true,
+            keep_spare != 0,
+        )
+    }
+}
+
+unsafe fn mpi_write_block(
+    comm_f: ffi::RSMPI_Fint,
+    path_c: *const std::ffi::c_char,
+    frames: *const *const crate::ffi::RKRConFrame,
+    num_frames: usize,
+    mode: i32,
+    precision: i32,
+    total_bytes: *mut u64,
+    rewrite: bool,
+    keep_spare: bool,
+) -> i32 {
     let comm = match unsafe { Comm::dup_fint(comm_f) } {
         Ok(c) => c,
         Err(_) => return -1,
@@ -996,7 +1103,15 @@ pub unsafe extern "C" fn rkr_mpi_write_block_f(
     }
     let refs = refs.unwrap();
     let prec = (precision >= 0).then_some(precision as usize);
-    match write_block_refs(&comm, Path::new(path), &refs, mode, prec) {
+    match write_block_refs(
+        &comm,
+        Path::new(path),
+        &refs,
+        mode,
+        prec,
+        rewrite,
+        keep_spare,
+    ) {
         Ok(t) => {
             unsafe { *total_bytes = t };
             0
@@ -1140,6 +1255,97 @@ mod ranked_sink_tests {
         drop(file);
         let got = std::fs::read(path).unwrap();
         assert_eq!(got, expect, "stale bytes after a same-length rewrite");
+    }
+
+    /// The default store is the shared publisher. It leaves no `.rewrite` file.
+    #[test]
+    fn a_fresh_ranked_file_leaves_no_rewrite_sibling() {
+        let path =
+            std::env::temp_dir().join(format!("readcon-fresh-rank-{}.con", std::process::id()));
+        let spare = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&spare);
+        let bytes = vec![4u8; 8192];
+        let store = crate::writer::begin_shared_store(&path, bytes.len() as u64).unwrap();
+        let exposed = store.path().to_path_buf();
+        assert!(
+            !exposed
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with(".rewrite"),
+            "the fresh store is not the spare"
+        );
+        {
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&exposed)
+                .unwrap();
+            super::pwrite_all(&file, &bytes, 0).unwrap();
+        }
+        crate::writer::commit_shared_store(store, &path).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert!(!exposed.exists(), "the scratch name is not left behind");
+        assert!(
+            !spare.exists(),
+            "a default ranked write leaves no .rewrite file"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Opt-in spare: the published file stays whole until rename, and the
+    /// third same-length store fills the first inode.
+    #[test]
+    fn a_ranked_spare_reuses_the_inode_and_leaves_the_published_file() {
+        use std::os::unix::fs::MetadataExt;
+        let path =
+            std::env::temp_dir().join(format!("readcon-rank-spare-{}.con", std::process::id()));
+        let spare_name = path.with_file_name(format!(
+            "{}.rewrite",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        let hold_name = path.with_file_name(format!(
+            "{}.rewrite-hold",
+            path.file_name().unwrap().to_string_lossy()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&spare_name);
+        let _ = std::fs::remove_file(&hold_name);
+        let store = |bytes: &[u8]| {
+            let spare = super::open_ranked_spare(&path, bytes.len() as u64).unwrap();
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&spare)
+                .unwrap();
+            super::pwrite_all(&file, bytes, 0).unwrap();
+            spare
+        };
+        let first = vec![1u8; 8192];
+        let spare = store(&first);
+        assert!(!path.exists());
+        crate::writer::publish_rewrite(&spare, &path, true).unwrap();
+        let first_ino = std::fs::metadata(&path).unwrap().ino();
+        assert_eq!(std::fs::read(&path).unwrap(), first);
+        let second = vec![2u8; 8192];
+        let spare = store(&second);
+        assert_eq!(std::fs::read(&path).unwrap(), first);
+        crate::writer::publish_rewrite(&spare, &path, true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), second);
+        let third = vec![3u8; 8192];
+        let spare = store(&third);
+        assert_eq!(std::fs::metadata(&spare).unwrap().ino(), first_ino);
+        assert_eq!(std::fs::read(&path).unwrap(), second);
+        crate::writer::publish_rewrite(&spare, &path, true).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().ino(), first_ino);
+        assert_eq!(std::fs::read(&path).unwrap(), third);
+        let _ = store(&vec![9u8; 8192]);
+        assert_eq!(std::fs::read(&path).unwrap(), third);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&spare_name);
+        let _ = std::fs::remove_file(&hold_name);
     }
 }
 

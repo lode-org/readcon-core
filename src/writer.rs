@@ -2993,6 +2993,19 @@ impl Unpublished {
         self.file.try_clone()
     }
 
+    /// Give other processes a name for this inode. [`Self::commit`] publishes
+    /// that name, so a ranked write does not grow a second publisher.
+    #[cfg(feature = "mpi")]
+    fn expose(&mut self, dest: &Path) -> io::Result<std::path::PathBuf> {
+        if let Some(path) = &self.scratch {
+            return Ok(path.clone());
+        }
+        let scratch = scratch_name(&destination_dir(dest));
+        link_fd(&self.file, &scratch)?;
+        self.scratch = Some(scratch.clone());
+        Ok(scratch)
+    }
+
     fn commit(mut self, dest: &Path) -> io::Result<()> {
         if let Some(scratch) = self.scratch.take() {
             match std::fs::rename(&scratch, dest) {
@@ -3012,6 +3025,82 @@ impl Unpublished {
             self.committed = true;
             Ok(())
         }
+    }
+}
+
+#[cfg(feature = "mpi")]
+fn link_fd(file: &File, scratch: &Path) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let proc = std::ffi::CString::new(format!("/proc/self/fd/{}", file.as_raw_fd()))
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "proc fd"))?;
+    let scratch_c = std::ffi::CString::new(scratch.as_os_str().as_encoded_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "scratch"))?;
+    let linked = unsafe {
+        libc::linkat(
+            libc::AT_FDCWD,
+            proc.as_ptr(),
+            libc::AT_FDCWD,
+            scratch_c.as_ptr(),
+            libc::AT_SYMLINK_FOLLOW,
+        )
+    };
+    if linked == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+/// A file other ranks can open, published by [`Unpublished::commit`].
+#[cfg(feature = "mpi")]
+pub(crate) struct SharedStore {
+    staged: Unpublished,
+    path: std::path::PathBuf,
+}
+
+/// Allocate one fresh file of `len` bytes in `dest`'s directory.
+///
+/// Rank 0 calls this. The returned path is the inode the other ranks open.
+/// [`commit_shared_store`] is the only publish.
+#[cfg(feature = "mpi")]
+pub(crate) fn begin_shared_store(dest: &Path, len: u64) -> io::Result<SharedStore> {
+    if let Some(parent) = dest.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut staged = Unpublished::create(dest)?;
+    allocate_len(&staged.file, len)?;
+    let path = staged.expose(dest)?;
+    Ok(SharedStore { staged, path })
+}
+
+#[cfg(feature = "mpi")]
+pub(crate) fn commit_shared_store(store: SharedStore, dest: &Path) -> io::Result<()> {
+    store.staged.commit(dest)
+}
+
+#[cfg(feature = "mpi")]
+impl SharedStore {
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+#[cfg(feature = "mpi")]
+fn allocate_len(file: &File, total: u64) -> io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    if total == 0 {
+        return Ok(());
+    }
+    let rc = unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, total as libc::off_t) };
+    if rc == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    match err.raw_os_error() {
+        Some(code) if code == libc::EOPNOTSUPP || code == libc::ENOSYS || code == libc::EINVAL => {
+            file.set_len(total)
+        }
+        _ => Err(err),
     }
 }
 
@@ -3538,7 +3627,7 @@ pub fn write_frame_refs_to_path(
     finish_unpublished(staged, path, result)
 }
 
-fn rewrite_names(path: &Path) -> io::Result<(std::path::PathBuf, std::path::PathBuf)> {
+pub(crate) fn rewrite_names(path: &Path) -> io::Result<(std::path::PathBuf, std::path::PathBuf)> {
     let name = path.file_name().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, "rewrite path has no file name")
     })?;
@@ -3556,7 +3645,7 @@ fn rewrite_names(path: &Path) -> io::Result<(std::path::PathBuf, std::path::Path
 /// The spare is the inode the next rewrite overwrites. A crash during the
 /// name swap leaves that inode under the hold name; adopt it so the pages
 /// are not thrown away.
-fn prepare_rewrite_spare(path: &Path) -> io::Result<std::path::PathBuf> {
+pub(crate) fn prepare_rewrite_spare(path: &Path) -> io::Result<std::path::PathBuf> {
     let (spare, hold) = rewrite_names(path)?;
     if !spare.exists() && hold.exists() {
         std::fs::rename(&hold, &spare)?;
@@ -3574,7 +3663,7 @@ fn prepare_rewrite_spare(path: &Path) -> io::Result<std::path::PathBuf> {
 /// copy of the trajectory on disk. `keep_spare == false` drops it after the
 /// rename, so the steady state is one file and the next rewrite allocates
 /// again. A partial spare is never given the published name.
-fn publish_rewrite(spare: &Path, path: &Path, keep_spare: bool) -> io::Result<()> {
+pub(crate) fn publish_rewrite(spare: &Path, path: &Path, keep_spare: bool) -> io::Result<()> {
     let (_, hold) = rewrite_names(path)?;
     if !keep_spare {
         if hold.exists() {

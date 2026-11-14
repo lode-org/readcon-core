@@ -146,7 +146,7 @@ fn rank_child() {
     let range = block_range(frames.len(), comm.size(), comm.rank());
     let mine = &frames[range];
     let out = PathBuf::from(std::env::var("READCON_RANK_OUT").expect("out"));
-    write_block(&comm, &out, mine, WriteMode::MpiIo, None).expect("write");
+    write_block(&comm, &out, mine, WriteMode::MpiIo, None, false, false).expect("write");
     comm.raw().barrier();
     if comm.rank() == 0 {
         let got = fs::read(&out).expect("written");
@@ -165,7 +165,7 @@ fn rank_child() {
     }
     // Same length as the file just written. Rank 0 must not truncate
     // it; the bytes are the serial writer again.
-    write_block(&comm, &out, mine, WriteMode::MpiIo, None).expect("rewrite");
+    write_block(&comm, &out, mine, WriteMode::MpiIo, None, false, false).expect("rewrite");
     comm.raw().barrier();
     if comm.rank() == 0 {
         let rewritten = fs::read(&out).expect("rewritten");
@@ -174,6 +174,14 @@ fn rank_child() {
             serial,
             "same-length rewrite ranks {}",
             comm.size()
+        );
+        let spare = out.with_file_name(format!(
+            "{}.rewrite",
+            out.file_name().unwrap().to_string_lossy()
+        ));
+        assert!(
+            !spare.exists(),
+            "the default ranked write leaves no .rewrite file"
         );
         let _ = fs::remove_file(&out);
         let _ = fs::remove_file(readcon_core::frame_index::sidecar_path(&out));
