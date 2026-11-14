@@ -17,12 +17,13 @@ the Drops column. A round trip that moves a coordinate records precision
 in Drops.
 
 Each arm is converted once, outside the clock. Samples are fresh processes
-pinned to the same CPU set, one warmup, six serial samples, rotated order.
-A row whose IQR/median exceeds 5% takes six more samples. The log keeps
-every sample, the type-7 median and IQR, peak RSS, file size, and the
-fields the format did not round-trip. A timed write is kept only when the
-file is non-empty, inside that format's size range, and reads back at the
-full atom count.
+pinned to the same CPU set, one warmup, serial samples, rotated order.
+``--repeats`` is that sample count. The historical paper runs used 6. The
+million-atom rerun passes 12. A row whose IQR/median exceeds 5% takes
+that many samples again. The log keeps every sample, the type-7 median
+and IQR, peak RSS, file size, and the fields the format did not
+round-trip. A timed write is kept only when the file is non-empty,
+inside that format's size range, and reads back at the full atom count.
 """
 
 from __future__ import annotations
