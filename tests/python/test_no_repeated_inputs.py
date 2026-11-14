@@ -26,7 +26,21 @@ PATTERNS = (
     re.compile(r"vec!\s*\[[^\]]*\b(?:x|frame)\.clone\(\)"),
     re.compile(r"vec!\s*\[\s*&frame\s*;"),
     re.compile(r"::repeat\s*\("),
-    re.compile(r"\[\s*\w+\s*;\s*\w+\s*\]\s*\.concat\s*\("),
+    re.compile(r"\[\s*\w+\s*;\s*\w+\s*\]\s*\.(?:concat|join)\s*\("),
+    re.compile(
+        rf"vec!\s*\[\s*&?(?:{_LISTED}|x|t)(?:\.(?:clone|to_vec|to_owned|to_string)\(\))?\s*;"
+    ),
+    re.compile(r"(?<![\w.])repeat(?:_n|_with)?\s*\("),
+    re.compile(r"(?<![\w.])cycle\s*\("),
+    re.compile(rf"\b\w+\s*\*\s*{_COPIED}\b(?!\s*[\[(.])"),
+    re.compile(
+        rf"[\[(]\s*(?:{_LISTED}|t)(?:\.(?:copy|clone)\(\))?\s+for\s+(?!(?:{_LISTED}|t)\b)\w+\s+in\s+range\s*\("
+    ),
+    re.compile(
+        r"\b(?:copy\.deepcopy\(\s*\w+\s*\)|\w+\.copy\(\))\s+for\s+_\w*\s+in\s+range\s*\("
+    ),
+    re.compile(rf"\bnp\.repeat\s*\(\s*{_NAMED}\s*\[[^\]]*\]\s*,"),
+    re.compile(r"\bnp\.broadcast_to\s*\("),
     re.compile(r"\brepeat_text\b"),
     re.compile(r"(?<!p)\.repeat\("),
 )
@@ -47,6 +61,10 @@ ALLOW = {
     # The formatter is timed on one frame. It does not parse a tiled file.
     ("examples/format_profile.rs", 40),
     ("examples/format_profile.rs", 48),
+    # Each copy takes the positions of its own frame on the next line.
+    ("benches/h5md_vs_con.py", 164),
+    # A checksum of the cell over the frames. It writes no input.
+    ("paper/cpc/bench/make_payloads.py", 441),
 }
 
 
@@ -115,6 +133,45 @@ def test_iter_repeat_take_is_a_repeated_input() -> None:
 
 def test_array_concat_is_a_repeated_input() -> None:
     assert repeated_hits("let frames = [t;8].concat();")
+
+
+def test_vec_macro_of_one_value_is_a_repeated_input() -> None:
+    assert repeated_hits("let v = vec![x;8];")
+    assert repeated_hits("let v = vec![text.clone(); n];")
+    assert repeated_hits("let v = vec![one; n_frames];")
+    assert not repeated_hits("let v = vec![0u8; n];")
+
+
+def test_repeat_n_and_bare_repeat_are_repeated_inputs() -> None:
+    assert repeated_hits("let v = std::iter::repeat_n(frame, 8).collect();")
+    assert repeated_hits("let v = repeat(frame).take(8);")
+    assert not repeated_hits("let v = frames.iter().take(8);")
+
+
+def test_bare_cycle_is_a_repeated_input() -> None:
+    assert repeated_hits("stream = cycle(frames)")
+
+
+def test_count_times_copy_is_a_repeated_input() -> None:
+    assert repeated_hits("body = 8*text")
+    assert repeated_hits("body = n_frames * content")
+
+
+def test_comprehension_with_any_unused_name_is_a_repeated_input() -> None:
+    assert repeated_hits("frames = [frame for i in range(n)]")
+    assert repeated_hits("frames = [text for _i in range(n)]")
+    assert repeated_hits("fh.writelines(text for _ in range(8))")
+    assert repeated_hits("frames = [copy.deepcopy(atoms) for _ in range(8)]")
+    assert not repeated_hits("frames = [perturb(text, i) for i in range(n)]")
+
+
+def test_np_repeat_of_an_indexed_frame_is_a_repeated_input() -> None:
+    assert repeated_hits("pos = np.repeat(pos0[None], 8, axis=0)")
+    assert repeated_hits("pos = np.broadcast_to(arr, (8,) + arr.shape)")
+
+
+def test_array_join_is_a_repeated_input() -> None:
+    assert repeated_hits('let s = [t;8].join("");')
 
 
 def test_drivers_do_not_tile_one_frame() -> None:
