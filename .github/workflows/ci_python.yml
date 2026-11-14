@@ -162,4 +162,6 @@ jobs:
         run: python -m pip install pytest
 
       - name: Tags and commits named by the paper
-        run: python -m pytest tests/python/test_paper_revisions.py -q --tb=short
+        run: |
+          python paper/cpc/scripts/gen_release.py --check
+          python -m pytest tests/python/test_paper_revisions.py -q --tb=short

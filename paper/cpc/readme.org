@@ -1,7 +1,7 @@
 #+TITLE: CPC manuscript (readcon-core)
 
 The paper is =src/rg_main.tex= and its supplement =src/rg_supp.tex=.
-Both =\input= =src/commit.tex=, whose one macro =\readconcommit= is commit =8c2d9984c40aedfb2e0084fedefaa02e930957f2= (readcon-core 0.23.2, tag v0.23.2), and =src/release.tex=, which names that commit, calls it a release commit, and sets =\readconversion= to 0.23.2. Cargo.toml of this working tree is a later unreleased version.
+Both =\input= =src/commit.tex=, whose one macro =\readconcommit= is the candidate commit =5e1430ddf6da5d2b0d4652f47dce889e7895598f= (readcon-core 0.17.3, not a release tag), and =src/release.tex=, which =scripts/gen_release.py= writes from that commit.
 The latest release tag is v0.23.2. The section Release of =REPRO-ARCHIVE.md= lists what a later tag rewrites.
 This directory is the supplementary material of the article, =paper-cpc.tar.gz=, which =scripts/pack_paper.py= writes.
 The git bundle =readcon-core.bundle= beside it holds that commit with its whole history; the commit holds no =paper= directory, and this directory unpacks into a checkout of it.

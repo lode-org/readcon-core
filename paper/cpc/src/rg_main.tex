@@ -825,9 +825,9 @@ A format that defines no place for the mask cannot return that field.
 Unlike a format whose meaning lives in the code of one reader, CON 3.1 lets any program test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
-The public commit on the main branch is \begin{center} \texttt{\readconcommit} \end{center} and the latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
-Tag v\readconversion{} names that commit.
-The deposited timing records name the same release commit \texttt{\readconcommit}.
+The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
+The deposited timing records name the candidate commit \texttt{\readconcommit}.
+That candidate is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 The git bundle readcon-core.bundle of the supplementary material holds that commit with its whole history, together with the directory paper/cpc.
 Rebuild the library from the public commit with \texttt{cargo build -{}-release}.
 The concept record of readcon-core \cite{goswamiReadconcoreConConvel2026} is \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING

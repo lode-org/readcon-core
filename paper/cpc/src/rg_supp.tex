@@ -128,7 +128,7 @@ We build the library from the public commit named in the manuscript.
 We run one cell at a time on one host.
 We keep the machine line to the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}) at git blob \texttt{\rcReleaseSpecBlob}.
+\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} at git blob \texttt{\rcMeasuredSpecBlob}.
 \texttt{scripts/\allowbreak gen\_spec\_supp.py -{}-as-is} typesets that file, and its \texttt{-{}-check} fails unless the typeset text matches the file.
 That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
 The library test \texttt{tests/\allowbreak ci\_gates.rs} runs \texttt{scripts/\allowbreak check\_spec\_text.sh}, which fails when the two differ.
