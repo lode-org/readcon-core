@@ -72,7 +72,9 @@ def main() -> None:
                 "copy_growth_s": b_growth,
                 "end_growth_s": c_growth,
                 "residual_s": residual,
-                "residual_pct_of_c8": 100.0 * residual / row8["end_s"] if row8["end_s"] else None,
+                "residual_pct_of_c8": 100.0 * residual / row8["end_s"]
+                if row8["end_s"]
+                else None,
                 "readcon_Bps": total_bytes / row8["end_s"] if row8["end_s"] else None,
                 "copy_Bps": total_bytes / row8["copy_s"] if row8["copy_s"] else None,
                 "c8_s": row8["end_s"],
@@ -83,7 +85,9 @@ def main() -> None:
     (OUT / "summary.json").write_text(
         json.dumps({"rows": rows, "growth": growth}, indent=2) + "\n"
     )
-    print(f"{'fs':12} {'mode':7} {'store':16} {'match':5} {'a8':7} {'b8':7} {'c8':7} {'c-max':7} {'%c':6} {'resid':7} {'%c8':6}")
+    print(
+        f"{'fs':12} {'mode':7} {'store':16} {'match':5} {'a8':7} {'b8':7} {'c8':7} {'c-max':7} {'%c':6} {'resid':7} {'%c8':6}"
+    )
     for g in growth:
         r8 = next(
             r

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.23.2 - 2026-11-14
+
+### Bugfixes
+
+- A one-thread position read no longer reserves the declared atom count before
+  it counts coordinate rows. The reservation is the smaller of that count and
+  the rows the remaining bytes can hold, so a header of 50 million atoms over
+  one row does not ask for about 1.2 GiB.
+- The Release host step attaches the cargo-dist archives when wheels, the cxx
+  upload, or the clib upload already created the GitHub Release. It creates the
+  release only when the tag has none, then uploads with `--clobber` and edits
+  the notes. A second run does the same work.
+- The prebuilt C ABI tarball ships `include/readcon-core-version.h`.
+  `readcon-core.h` includes that header, and a compile against the previous
+  tarball failed because the file was absent.
+
+
 ## v0.23.1 - 2026-11-14
 
 ### Bugfixes
@@ -1509,6 +1526,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.23.2]: https://github.com/lode-org/readcon-core/compare/v0.23.1...v0.23.2
 [v0.23.1]: https://github.com/lode-org/readcon-core/compare/v0.23.0...v0.23.1
 [v0.23.0]: https://github.com/lode-org/readcon-core/compare/v0.22.0...v0.23.0
 [v0.22.0]: https://github.com/lode-org/readcon-core/compare/v0.21.0...v0.22.0

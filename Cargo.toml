@@ -1,7 +1,7 @@
 [package]
 name = "readcon-core"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
-version = "0.23.1"
+version = "0.23.2"
 # [[[end]]]
 edition = "2024"
 rust-version = "1.88"

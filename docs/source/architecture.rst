@@ -295,6 +295,8 @@ produces:
     +--------------------------+----------------------------------------+--------------------------------------------------+
 
 The header is shipped pre-generated at ``include/readcon-core.h``.
+That header includes ``readcon-core-version.h``, and the prebuilt C ABI
+tarball ships both files.
 CMake (``FetchContent`` / ``find_package``), Meson (wrap / ``pkg.generate``
 ``filebase: readcon-core``), and cargo-c (``generation = false``) all
 install that file. They MUST NOT run cbindgen. The cxx source tarball
@@ -367,7 +369,7 @@ What is frozen in 0.14.x \*\*
 What is not a 1.0 freeze \*\*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The crate, wheels, and Fortran package are 0.23.1. PyPI still reports
+The crate, wheels, and Fortran package are 0.23.2. PyPI still reports
 ``Development Status :: 4 - Beta``. A ``1.0.0`` cut is the production
 classifier and the SONAME/semver major bump. Until that tag:
 

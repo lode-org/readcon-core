@@ -10,5 +10,5 @@
   "eon": "579738a9387e8d0ea55496f45dd057812cfab892",
   "eon_readcon": "694e808080c49979ee3099afcfa18e5420c40433",
   "eon_cxx": "-O3 -std=c++20 -DNDEBUG",
-  "readcon": "0.23.1"
+  "readcon": "0.23.2"
 }

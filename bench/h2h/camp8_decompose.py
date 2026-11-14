@@ -74,7 +74,9 @@ def run(cmd: list[str], env: dict | None, log: Path) -> str:
         stderr=subprocess.STDOUT,
         check=False,
     )
-    log_append(log, "$ " + " ".join(cmd) + "\n" + proc.stdout + f"exit {proc.returncode}\n")
+    log_append(
+        log, "$ " + " ".join(cmd) + "\n" + proc.stdout + f"exit {proc.returncode}\n"
+    )
     if proc.returncode != 0:
         raise SystemExit(proc.stdout[-800:])
     return proc.stdout
@@ -137,7 +139,10 @@ def main() -> None:
             str(shm / "camp8-fpw-2000.con"),
             "1",
         ],
-        {"READCON_PROBE_OUT": "/dev/shm/camp8-bytes-2000.con", "READCON_PROBE_REPEATS": "1"},
+        {
+            "READCON_PROBE_OUT": "/dev/shm/camp8-bytes-2000.con",
+            "READCON_PROBE_REPEATS": "1",
+        },
         log,
     )
     run(
@@ -150,7 +155,10 @@ def main() -> None:
             str(shm / "camp8-fpw-8000.con"),
             "1",
         ],
-        {"READCON_PROBE_OUT": "/dev/shm/camp8-bytes-8000.con", "READCON_PROBE_REPEATS": "1"},
+        {
+            "READCON_PROBE_OUT": "/dev/shm/camp8-bytes-8000.con",
+            "READCON_PROBE_REPEATS": "1",
+        },
         log,
     )
     exact = {
@@ -160,7 +168,9 @@ def main() -> None:
     padded = {key: page_up(value) for key, value in exact.items()}
     print("bytes", exact, "padded", padded, flush=True)
 
-    def timed_probe(kind: str, path: Path, workers: int, repeats: int, env: dict) -> list[float]:
+    def timed_probe(
+        kind: str, path: Path, workers: int, repeats: int, env: dict
+    ) -> list[float]:
         env = dict(env)
         env["READCON_PROBE_REPEATS"] = str(repeats)
         # fmt ignores the repeat env and always takes 6. Pool two runs if asked for 12.
@@ -191,7 +201,9 @@ def main() -> None:
                 samples = timed_probe("fmt", workers_file(workers), workers, 6, {})
                 samples = maybe12(
                     samples,
-                    lambda w=workers, p=workers_file(workers): timed_probe("fmt", p, w, 12, {}),
+                    lambda w=workers, p=workers_file(workers): timed_probe(
+                        "fmt", p, w, 12, {}
+                    ),
                 )
             else:
                 text = run(
@@ -251,7 +263,10 @@ def main() -> None:
     # (b) pure copy.
     copy_rows = []
     for fs_name, directory, fsync in FILESYSTEMS:
-        for mode, nbytes in (("procs", padded["procs"]), ("threads", padded["threads"])):
+        for mode, nbytes in (
+            ("procs", padded["procs"]),
+            ("threads", padded["threads"]),
+        ):
             for store in STORES:
                 for workers in WIDTHS:
                     try:
@@ -273,7 +288,10 @@ def main() -> None:
                             log,
                         )
                     except SystemExit as exc:
-                        print(f"skip copy {fs_name} {mode} {store} {workers}: {exc}", flush=True)
+                        print(
+                            f"skip copy {fs_name} {mode} {store} {workers}: {exc}",
+                            flush=True,
+                        )
                         continue
                     samples = parse_samples(text)[0]
                     if noisy(samples):

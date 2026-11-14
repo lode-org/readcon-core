@@ -293,6 +293,8 @@ cat > "$DEST/README.clib.md" <<EOF
 
 Shared library plus shipped headers and pkg-config. **cbindgen is not
 required** and must not be invoked to consume this tarball.
+\`include/readcon-core.h\` includes \`include/readcon-core-version.h\`.
+Both files are in this archive.
 
 This archive is the Julia / Fortran / C consumer path. CMake FetchContent
 and Meson wrap still use the *source* tarball \`readcon-core-cxx-${VERSION}.tar.gz\`.

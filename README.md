@@ -21,7 +21,7 @@
 # About
 
 `readcon-core` is the reference implementation of versioned `.con` / `.convel`.
-This tree is package version 0.23.1.
+This tree is package version 0.23.2.
 Rare-event codes already checkpoint on CON. This library is the spec and
 the hourglass API so the rest of the atomistic stack reads the same file
 everywhere:

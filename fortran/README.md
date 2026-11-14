@@ -45,7 +45,7 @@ CI: **Fortran (fpm)** workflow runs both lean and metatensor-enabled jobs via th
 Release tarball instead of `target/release`:
 
 ```bash
-VER=0.23.1
+VER=0.23.2
 TARGET=x86_64-unknown-linux-gnu
 curl -fsSL -O "https://github.com/lode-org/readcon-core/releases/download/v${VER}/readcon-core-clib-${VER}-${TARGET}.tar.gz"
 tar -xzf "readcon-core-clib-${VER}-${TARGET}.tar.gz"

@@ -134,6 +134,7 @@ fn assert_frames(got: &[ConFrame], expect: &[ConFrame]) {
     }
 }
 
+#[cfg(feature = "zstd")]
 #[test]
 fn zstd_drop_reads_back_one_frame() {
     for n in [1usize, 4, 8, 16] {

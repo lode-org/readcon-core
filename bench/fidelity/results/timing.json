@@ -2,7 +2,7 @@
   "hardware": "Intel(R) Xeon(R) Processor x86_64 nproc 8 memory_kib 49342816",
   "protocol": "serial, warmup 1, samples 6, percentile type 7",
   "versions": {
-    "readcon": "0.23.1",
+    "readcon": "0.23.2",
     "ase": "3.29.0",
     "chemfiles": "0.10.4",
     "chemfiles_formats": [
