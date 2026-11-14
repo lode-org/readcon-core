@@ -24,6 +24,7 @@ jobs:
           - chemfiles-from-sources,zstd,metatensor
           - grammar
           - chemfiles-from-sources,grammar
+          - parallel
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -35,3 +36,6 @@ jobs:
       - name: Lib tests for this feature set
         # shellcheck disable=SC2086
         run: cargo test --release --features ${{ matrix.features }} --lib
+      - name: Parallel library tests
+        if: matrix.features == 'parallel'
+        run: cargo test --lib --features parallel
