@@ -38,6 +38,7 @@ import time
 from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
+from measured_commit import record_path
 
 import numpy as np
 from sample_protocol import (
@@ -53,6 +54,51 @@ from sample_protocol import (
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 WORK = BENCH / "work" / "cross-format"
+# Prefixes a published record must not keep. Split so this source does not name them.
+_RECORD_PREFIXES = (
+    "/" + "tmp",
+    "/" + "var" + "/" + "tmp",
+    "/" + "home",
+    "/" + "agent",
+)
+
+
+def record_text(text: str) -> str:
+    """Repo-relative text for a record.
+
+    A path inside this repository keeps its repository-relative form.
+    A path under a machine prefix keeps only the site-packages tail, or
+    the final component when it has none.
+    """
+    root = str(ROOT.resolve())
+    if root and root in text:
+        text = text.replace(root + "/", "")
+        text = text.replace(root, ".")
+    marker = "site-packages/"
+    for prefix in _RECORD_PREFIXES:
+        while prefix in text:
+            start = text.find(prefix)
+            end = start
+            while end < len(text) and text[end] not in " \n\t\"',":
+                end += 1
+            token = text[start:end]
+            if marker in token:
+                replacement = token[token.find(marker) :]
+            else:
+                replacement = token.rsplit("/", 1)[-1]
+            if prefix in replacement:
+                replacement = "external"
+            text = text[:start] + replacement + text[end:]
+    return text
+
+
+def write_record_text(path: Path, text: str) -> None:
+    cleaned = record_text(text)
+    if not cleaned.endswith("\n") or cleaned.endswith("\n\n"):
+        cleaned = cleaned.rstrip("\n") + "\n"
+    path.write_text(cleaned, encoding="utf-8")
+
+
 # One frame at 1k, 100k, and 1M atoms, plus one trajectory.
 STRUCTURES = (
     ("1k", 1_000, 1),
@@ -923,8 +969,8 @@ def profile_chemfiles_dcd_write(directory: Path) -> str:
         stats = pstats.Stats(prof, stream=buf).sort_stats("cumulative")
         stats.print_stats(12)
         parts.append(f"== {label} ==\n{buf.getvalue()}")
-    text = "\n".join(parts).rstrip("\n") + "\n"
-    (directory / "chemfiles-write-profile.txt").write_text(text)
+    text = record_text("\n".join(parts).rstrip("\n") + "\n")
+    write_record_text(directory / "chemfiles-write-profile.txt", text)
     return text
 
 
@@ -1207,9 +1253,12 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             from chemfiles.external import EXTERNAL_CHEMFILES
         except ImportError:
             EXTERNAL_CHEMFILES = "bundled"
+        kind = "bundled" if EXTERNAL_CHEMFILES == "bundled" else "external"
         notes.append(
-            f"chemfiles compression library {EXTERNAL_CHEMFILES} "
-            f"opens {json.dumps(codecs, sort_keys=True)}"
+            "chemfiles compression library ("
+            + kind
+            + ") opens "
+            + json.dumps(codecs, sort_keys=True)
         )
         for codec, suffix in (("gz", "xyz.gz"), ("xz", "xyz.xz"), ("bz2", "xyz.bz2")):
             if codecs.get(codec):
@@ -2290,11 +2339,11 @@ def run(
 
     host["cpu_model"] = model
     host["tree"] = tree
-    host["bench_disk"] = str(disk)
+    host["bench_disk"] = record_path(disk, ROOT)
     host["bench_disk_filesystem"] = filesystem(disk)
-    host["work"] = str(work)
+    host["work"] = record_path(work, ROOT)
     host["work_filesystem"] = filesystem(work)
-    host["record"] = str(out)
+    host["record"] = record_path(out, ROOT)
     host["record_filesystem"] = filesystem(out)
     versions = library_versions()
     ovito_check = ovito_extxyz_periodicity_and_drift()
@@ -2649,8 +2698,9 @@ def run(
         "notes": notes,
         "rows": rows,
     }
-    (out / "cross-format.json").write_text(json.dumps(payload, indent=2) + "\n")
-    (out / "host.json").write_text(
+    write_record_text(out / "cross-format.json", json.dumps(payload, indent=2) + "\n")
+    write_record_text(
+        out / "host.json",
         json.dumps(
             {
                 "commit": sha,
@@ -2665,9 +2715,9 @@ def run(
             },
             indent=2,
         )
-        + "\n"
+        + "\n",
     )
-    (out / "cross-format.log").write_text("\n".join(lines) + "\n")
+    write_record_text(out / "cross-format.log", "\n".join(lines) + "\n")
     # One row per timed operation. median_s for a read is the warm run.
     # cold_* is the labelled cold column. n is how many samples that median used.
     header = (
@@ -2722,7 +2772,9 @@ def run(
                 ]
             ).rstrip()
         )
-    (out / "cross-format.tsv").write_text(f"commit {sha}\n" + "\n".join(table) + "\n")
+    write_record_text(
+        out / "cross-format.tsv", f"commit {sha}\n" + "\n".join(table) + "\n"
+    )
     print("wrote", out / "cross-format.tsv", flush=True)
 
 

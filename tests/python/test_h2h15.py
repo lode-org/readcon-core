@@ -34,20 +34,30 @@ def test_readcon_keeps_velocities_and_mdcompress_drops_them():
         assert "interval unit" not in h2h15.DROPS[arm]
 
 
-def test_parent_and_tool_pins_are_full_commits():
-    assert h2h15.PARENT == "0b62d689367cf69797107ca505778fde1017990d"
+def test_tool_pins_are_full_commits():
     assert h2h15.MDC_COMMIT == "41b600313c1a8265dbaa639651ed0124610d1bbb"
     assert h2h15.MDC_TAG == "v2.0.5"
     assert h2h15.CF012_COMMIT == "fc1e93096b797ff4848dae57c03b7c9ef287cccd"
     assert h2h15.CF012_VERSION == "0.12.0-dev"
-    assert len(h2h15.diff_sha256()) == 64
 
 
-def test_a_dirty_index_is_refused():
-    with pytest.raises(SystemExit, match="dirty"):
-        h2h15.refuse_if_dirty(" M bench/h2h/h2h15.py")
-    h2h15.refuse_if_dirty("")
-    h2h15.refuse_if_dirty("   \n")
+def test_the_runner_uses_the_shared_measurement_guard():
+    from measured_commit import measurement, record_path
+
+    assert h2h15.measurement is measurement
+    assert h2h15.record_path is record_path
+
+
+def test_record_text_drops_a_machine_prefix():
+    import cross_format
+
+    prefix = "/" + "tmp"
+    raw = f"build {prefix}/venv/lib/python3.12/site-packages/chemfiles/frame.py:26(f)\n"
+    cleaned = cross_format.record_text(raw)
+    assert prefix not in cleaned
+    assert "site-packages/chemfiles/frame.py:26(f)" in cleaned
+    library = f"library {prefix}/chemfiles-install/lib/libchemfiles.so"
+    assert prefix not in cross_format.record_text(library)
 
 
 def test_a_record_with_a_machine_path_is_refused():
@@ -56,12 +66,11 @@ def test_a_record_with_a_machine_path_is_refused():
     h2h15.assert_repo_relative_record('{"record": "bench/h2h/scaling/h2h15"}')
 
 
-def test_repo_relative_drops_the_repository_root():
-    assert h2h15.repo_relative(h2h15.ROOT / "bench" / "h2h" / "h2h15.py") == (
+def test_record_path_drops_the_repository_root():
+    assert h2h15.record_path(h2h15.ROOT / "bench" / "h2h" / "h2h15.py", h2h15.ROOT) == (
         "bench/h2h/h2h15.py"
     )
-    with pytest.raises(SystemExit, match="outside"):
-        h2h15.repo_relative(Path("/usr"))
+    assert h2h15.record_path(Path("/usr"), h2h15.ROOT) == "usr"
 
 
 def test_dcd_delta_reads_the_header_float():

@@ -8,19 +8,24 @@ CON, CON.gz, CON.zst and CON-bin. chemfiles 0.10.4 DCD stays its own row.
 chemfiles 0.12.0-dev is the shared library built at fc1e930, loaded by
 pointer, and is never the 0.10.4 module.
 
-The record names the pushed parent commit and the sha256 of ``git diff``
-from that parent to HEAD. A dirty tree is refused. Paths in the record
-are relative to the repository.
+Measurement goes through ``measured_commit.measurement``: a clean tree
+whose ``HEAD`` ``git branch -r --contains`` already lists. The record
+stores that commit, its tree, and the empty diff digest from that helper.
+Paths in the record are relative to the repository.
+
+``cross_format.run`` writes every row of the cross-format table, including
+host.json and the chemfiles write profile. This script then measures the
+two rows that table does not have, MDCompress on XTC and chemfiles DCD at
+fc1e930, and writes them into the same files. Nothing is copied from an
+older campaign.
 """
 
 from __future__ import annotations
 
 import ctypes
-import hashlib
 import json
 import os
 import struct
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -33,9 +38,8 @@ sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
+from measured_commit import measurement, record_path  # noqa: E402
 from sample_protocol import (  # noqa: E402
-    core_list,
-    host_snapshot,
     peak_rss_bytes,
     pin_cores,
     result_line,
@@ -43,7 +47,6 @@ from sample_protocol import (  # noqa: E402
     spawn_worker,
 )
 
-PARENT = "0b62d689367cf69797107ca505778fde1017990d"
 MDC_TAG = "v2.0.5"
 MDC_COMMIT = "41b600313c1a8265dbaa639651ed0124610d1bbb"
 CF012_COMMIT = "fc1e93096b797ff4848dae57c03b7c9ef287cccd"
@@ -81,53 +84,6 @@ READCON_ARMS = (
 )
 
 
-def git(*args: str, check: bool = True) -> str:
-    done = subprocess.run(
-        ["git", "-C", str(ROOT), *args],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if check and done.returncode != 0:
-        raise SystemExit(done.stderr.strip() or f"git {' '.join(args)} failed")
-    return done.stdout
-
-
-def require_clean_tree() -> str:
-    """HEAD must contain the pushed parent, and the index must be clean."""
-    head = git("rev-parse", "HEAD").strip()
-    if len(head) != 40:
-        raise SystemExit(f"HEAD is not a commit sha: {head!r}")
-    if git("merge-base", "--is-ancestor", PARENT, "HEAD", check=False).strip():
-        raise SystemExit("merge-base should be silent")
-    ancestor = subprocess.run(
-        ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", PARENT, "HEAD"],
-        check=False,
-    )
-    if ancestor.returncode != 0:
-        raise SystemExit(f"{PARENT} is not an ancestor of {head}")
-    refuse_if_dirty(git("status", "--porcelain", "--untracked-files=no"))
-    return head
-
-
-def diff_sha256(parent: str = PARENT) -> str:
-    blob = git("diff", parent, "HEAD")
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
-
-
-def repo_relative(path: Path) -> str:
-    """A path inside the repository, with forward slashes and no root prefix."""
-    resolved = path.resolve()
-    try:
-        relative = resolved.relative_to(ROOT.resolve())
-    except ValueError as exc:
-        raise SystemExit(f"path is outside the repository: {path}") from exc
-    text = relative.as_posix()
-    if text.startswith("/") or text.startswith("../"):
-        raise SystemExit(f"path is not repo-relative: {text}")
-    return text
-
-
 # Prefixes the record must not contain. Split so the source does not name them.
 _MACHINE = ("/" + "tmp", "/" + "home/", "/" + "agent")
 
@@ -136,11 +92,6 @@ def assert_repo_relative_record(text: str) -> None:
     root = str(ROOT.resolve())
     if root in text or any(token in text for token in _MACHINE):
         raise SystemExit("record contains a machine path")
-
-
-def refuse_if_dirty(text: str) -> None:
-    if text.strip():
-        raise SystemExit(f"refusing a dirty tree:\n{text.strip()}")
 
 
 def mdcompress_prefix() -> Path:
@@ -466,85 +417,36 @@ def _median(values: list[float]) -> tuple[float, float]:
     return cross_format.type7(values)
 
 
-def run(out: Path, repeats: int = 12) -> None:
-    if repeats < 12:
-        raise SystemExit("h2h15 takes at least 12 samples")
-    head = require_clean_tree()
-    digest = diff_sha256()
-    import readcon
+def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list[str]]:
+    """MDCompress on XTC, and chemfiles DCD at fc1e930.
 
-    version = readcon.__version__
-    out.mkdir(parents=True, exist_ok=True)
-    work = BENCH / "work" / "h2h15"
-    work.mkdir(parents=True, exist_ok=True)
-    host = host_snapshot()
-    rows: list[dict] = []
-    lines = [
-        f"parent {PARENT}",
-        f"diff_sha256 {digest}",
-        f"measured_commit {head}",
-        f"readcon {version}",
-        f"mdcompress {MDC_TAG} {MDC_COMMIT}",
-        "chemfiles_0104 0.10.4",
-        f"chemfiles_012 {CF012_VERSION} {CF012_COMMIT}",
-        f"warmup 1 samples {repeats} percentile type7 serial 1",
-        f"fresh process per sample, taskset -c {core_list()}",
-    ]
+    The cross-format table already times MDCompress on DCD as
+    ``mdcompress-mdc`` and chemfiles 0.10.4 DCD as ``chemfiles-dcd``.
+    These two rows are measured here, in the same run, and stored in the
+    same files.
+    """
     library = chemfiles_012_library()
     if library is None:
         raise SystemExit("chemfiles fc1e930 is not installed under the bench disk")
-    pin_mdcompress()
-    found = cross_format._mdcompress_tools()
-    if found is None or found[2] != "2.0.5":
-        raise SystemExit("MDCompress 2.0.5 is not the binary under the bench disk")
-    script = Path(__file__).resolve()
+    rows: list[dict] = []
+    lines: list[str] = []
+    work = BENCH / "work" / "h2h15"
     for label, n_atoms, n_frames in cross_format.STRUCTURES:
         directory = work / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = cross_format.make_spec(n_atoms, n_frames)
         spec_path = directory / "spec.npz"
         cross_format.save_spec(spec_path, spec)
-        plain = directory / "readcon.con"
-        if not plain.is_file():
-            cross_format.write_readcon(plain, spec, None)
-        inputs = {
-            "readcon-con": plain,
-            "readcon-con-gz": directory / "readcon.con.gz",
-            "readcon-con-zst": directory / "readcon.con.zst",
-            "readcon-conbin": directory / "readcon.conbin",
-            "chemfiles-dcd": directory / "chemfiles.dcd",
-            "chemfiles-dcd-012": directory / "chemfiles012.dcd",
-            "mdcompress-dcd": directory / "mdcompress.dcd.mdc",
-            "mdcompress-xtc": directory / "mdcompress.xtc.mdc",
-        }
-        if not inputs["readcon-con-gz"].is_file():
-            cross_format.write_readcon(inputs["readcon-con-gz"], spec, "gzip")
-        if not inputs["readcon-con-zst"].is_file():
-            cross_format.write_readcon(inputs["readcon-con-zst"], spec, "zstd")
-        if not inputs["readcon-conbin"].is_file():
-            import readcon as rc
-
-            rc.write_conbin_columns(
-                os.fspath(inputs["readcon-conbin"]),
-                spec["positions"],
-                spec["velocities"],
-                spec["masses"],
-                spec["cell"],
-                spec["fixed"],
-            )
-        if not inputs["chemfiles-dcd"].is_file():
-            cross_format.write_chemfiles(inputs["chemfiles-dcd"], spec, "DCD")
         desc = directory / "mdcompress.desc"
         desc.write_text(f"MOL\tmetal\t{n_atoms}\n", encoding="utf-8")
-        dcd_src = source_for("mdcompress-dcd", spec, directory)
         xtc_src = source_for("mdcompress-xtc", spec, directory)
-        if n_frames >= 2:
-            if not inputs["mdcompress-dcd"].is_file():
-                cross_format.write_mdcompress(inputs["mdcompress-dcd"], dcd_src, desc)
-            if not inputs["mdcompress-xtc"].is_file():
-                cross_format.write_mdcompress(inputs["mdcompress-xtc"], xtc_src, desc)
+        inputs = {
+            "mdcompress-xtc": directory / "mdcompress.xtc.mdc",
+            "chemfiles-dcd-012": directory / "chemfiles012.dcd",
+        }
+        if n_frames >= 2 and not inputs["mdcompress-xtc"].is_file():
+            cross_format.write_mdcompress(inputs["mdcompress-xtc"], xtc_src, desc)
         if not inputs["chemfiles-dcd-012"].is_file():
-            # A fresh process, so this library is not the 0.10.4 module.
             spawn_worker(
                 script,
                 {
@@ -554,37 +456,42 @@ def run(out: Path, repeats: int = 12) -> None:
                     "library": os.fspath(library),
                 },
             )
-        arms = list(DROPS)
+        arms = ["chemfiles-dcd-012"]
         if n_frames < 2:
-            for arm in ("mdcompress-dcd", "mdcompress-xtc"):
-                rows.append(_unsupported(label, n_atoms, n_frames, arm, "read"))
-                rows.append(_unsupported(label, n_atoms, n_frames, arm, "write"))
-                lines.append(f"unsupported {label} {arm}")
-            arms = [arm for arm in arms if not arm.startswith("mdcompress-")]
+            rows.append(
+                _unsupported(label, n_atoms, n_frames, "mdcompress-xtc", "read")
+            )
+            rows.append(
+                _unsupported(label, n_atoms, n_frames, "mdcompress-xtc", "write")
+            )
+            lines.append(f"unsupported {label} mdcompress-xtc")
+        else:
+            arms = ["mdcompress-xtc", "chemfiles-dcd-012"]
         timed: dict[str, dict] = {}
         for cache in ("warm", "cold"):
-            found = {arm: [] for arm in arms}
+            samples = {arm: [] for arm in arms}
             rss = {arm: [] for arm in arms}
             for sample in range(repeats):
                 order = rotate(list(arms), sample)
-                lines.append(f"order read-{cache} {label} {sample} " + " ".join(order))
+                lines.append(f"order read-{cache} {label} " + " ".join(order))
                 for arm in order:
-                    job = {
-                        "op": "read",
-                        "arm": arm,
-                        "path": os.fspath(inputs[arm]),
-                        "cache": cache,
-                        "library": os.fspath(library),
-                    }
-                    result = spawn_worker(script, job)
-                    found[arm].append(float(result["wall_s"]))
+                    result = spawn_worker(
+                        script,
+                        {
+                            "op": "read",
+                            "arm": arm,
+                            "path": os.fspath(inputs[arm]),
+                            "cache": cache,
+                            "library": os.fspath(library),
+                        },
+                    )
+                    samples[arm].append(float(result["wall_s"]))
                     rss[arm].append(int(result["rss_bytes"]))
-                    lines.append(f"    {arm} {result['wall_s']:.4f}")
-            timed[cache] = {"samples": found, "rss": rss}
+            timed[cache] = {"samples": samples, "rss": rss}
         for arm in arms:
-            samples = timed["warm"]["samples"][arm]
+            warm = timed["warm"]["samples"][arm]
             cold = timed["cold"]["samples"][arm]
-            median, iqr = _median(samples)
+            median, iqr = _median(warm)
             cold_median, cold_iqr = _median(cold)
             path = inputs[arm]
             rows.append(
@@ -594,13 +501,14 @@ def run(out: Path, repeats: int = 12) -> None:
                     "frames": n_frames,
                     "arm": arm,
                     "tool": arm.split("-", 1)[0],
+                    "format": "xtc" if arm.endswith("xtc") else "dcd",
                     "op": "read",
                     "cache": "warm",
                     "median_s": median,
                     "iqr_s": iqr,
-                    "n": len(samples),
+                    "n": len(warm),
                     "rss_bytes": int(np.median(timed["warm"]["rss"][arm])),
-                    "file_bytes": path.stat().st_size if path.is_file() else None,
+                    "file_bytes": path.stat().st_size,
                     "loses": DROPS[arm],
                     "cold_median_s": cold_median,
                     "cold_iqr_s": cold_iqr,
@@ -612,38 +520,29 @@ def run(out: Path, repeats: int = 12) -> None:
         timed_dir = directory / "timed"
         timed_dir.mkdir(parents=True, exist_ok=True)
         for sample in range(repeats):
-            order = rotate(list(arms), sample)
-            lines.append(f"order write {label} {sample} " + " ".join(order))
-            for arm in order:
+            for arm in rotate(list(arms), sample):
                 dest = timed_dir / Path(inputs[arm]).name
-                job = {
-                    "op": "write",
-                    "arm": arm,
-                    "spec": os.fspath(spec_path),
-                    "dest": os.fspath(dest),
-                    "plain": os.fspath(plain),
-                    "library": os.fspath(library),
-                    "source": os.fspath(
-                        dcd_src if arm != "mdcompress-xtc" else xtc_src
-                    ),
-                    "desc": os.fspath(desc),
-                }
-                result = spawn_worker(script, job)
+                result = spawn_worker(
+                    script,
+                    {
+                        "op": "write",
+                        "arm": arm,
+                        "spec": os.fspath(spec_path),
+                        "dest": os.fspath(dest),
+                        "library": os.fspath(library),
+                        "source": os.fspath(xtc_src),
+                        "desc": os.fspath(desc),
+                    },
+                )
                 write_found[arm].append(float(result["wall_s"]))
                 write_rss[arm].append(int(result["rss_bytes"]))
-                lines.append(f"    {arm} {result['wall_s']:.4f}")
         for arm in arms:
             samples = write_found[arm]
             median, iqr = _median(samples)
             dest = timed_dir / Path(inputs[arm]).name
             loses = DROPS[arm]
-            if (
-                arm in ("chemfiles-dcd", "chemfiles-dcd-012")
-                and dest.is_file()
-                and n_frames >= 2
-            ):
-                delta = dcd_delta(dest)
-                loses = f"{loses}; header DELTA {delta:.6g}"
+            if arm == "chemfiles-dcd-012" and dest.is_file() and n_frames >= 2:
+                loses = f"{loses}; header DELTA {dcd_delta(dest):.6g}"
             rows.append(
                 {
                     "structure": label,
@@ -651,6 +550,7 @@ def run(out: Path, repeats: int = 12) -> None:
                     "frames": n_frames,
                     "arm": arm,
                     "tool": arm.split("-", 1)[0],
+                    "format": "xtc" if arm.endswith("xtc") else "dcd",
                     "op": "write",
                     "cache": "create",
                     "median_s": median,
@@ -661,72 +561,133 @@ def run(out: Path, repeats: int = 12) -> None:
                     "loses": loses,
                 }
             )
-    payload = {
-        "parent": PARENT,
-        "diff_sha256": digest,
-        "measured_commit": head,
-        "readcon_version": version,
-        "mdcompress_tag": MDC_TAG,
-        "mdcompress_commit": MDC_COMMIT,
-        "chemfiles_0104": "0.10.4",
-        "chemfiles_012_version": CF012_VERSION,
-        "chemfiles_012_commit": CF012_COMMIT,
-        "warmup": 1,
-        "repeats": repeats,
-        "percentile": "type7",
-        "serial": True,
-        "affinity": f"taskset -c {core_list()}",
-        "clock": (
-            "Each sample is a fresh process. The read clock is one untimed "
-            "call, then the timed call. A warm read touches one byte before "
-            "that warmup. A cold read drops the page cache after the warmup. "
-            "The write clock is the write itself: frames, source files and "
-            "the MDCompress description already exist. MDCompress writes with "
-            "compress -t 1 --preset archive. gzip and zstd load frames before "
-            "the clock. Peak RSS is VmHWM, and for MDCompress the compressor "
-            "child when that is higher."
-        ),
-        "mdcompress_build": (
-            "tag v2.0.5 commit 41b600313c1a8265dbaa639651ed0124610d1bbb. "
-            "gcc 13 needs the libxdrfile objects built as C11 with "
-            "_GNU_SOURCE and without -fabi-version=6. Those edits stay in "
-            "the build tree."
-        ),
-        "host": {
-            "cpu_model": next(
-                (
-                    line.split(":", 1)[1].strip()
-                    for line in (host.get("lscpu") or "").splitlines()
-                    if line.startswith("Model name:")
-                ),
-                "",
-            ),
-            "record": repo_relative(out),
-        },
-        "rows": rows,
-    }
+    return rows, lines
+
+
+def _annotate_interval(rows: list[dict]) -> None:
+    """Name the DCD interval unit on the 0.10.4 rows this run just wrote."""
+    for row in rows:
+        if row.get("arm") != "chemfiles-dcd":
+            continue
+        loses = str(row.get("loses") or "")
+        if "interval unit:" not in loses:
+            suffix = "interval unit: AKMA"
+            row["loses"] = suffix if loses in ("", "none") else f"{loses}; {suffix}"
+        if row.get("op") == "write" and int(row.get("frames") or 1) >= 2:
+            path = cross_format.WORK / str(row["structure"]) / "timed" / "chemfiles.dcd"
+            if path.is_file() and "header DELTA" not in row["loses"]:
+                row["loses"] = f"{row['loses']}; header DELTA {dcd_delta(path):.6g}"
+
+
+def _scrub_record(out: Path) -> None:
+    for path in sorted(out.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.suffix not in {".json", ".txt", ".log", ".tsv", ".md"}:
+            continue
+        text = cross_format.record_text(path.read_text(encoding="utf-8"))
+        if not text.endswith("\n") or text.endswith("\n\n"):
+            text = text.rstrip("\n") + "\n"
+        for prefix in cross_format._RECORD_PREFIXES:
+            if prefix in text:
+                raise SystemExit(f"record still names a machine path ({path.name})")
+        path.write_text(text, encoding="utf-8")
+
+
+def run(out: Path, repeats: int = 12) -> None:
+    """One invocation writes every row of bench/h2h/scaling/h2h15.
+
+    ``cross_format.run`` is the table. The XTC and chemfiles 0.12 rows are
+    measured after it and stored in those same files. ``measurement``
+    refuses unless the tree is clean and a remote branch contains HEAD.
+    """
+    if repeats < 12:
+        raise SystemExit("h2h15 takes at least 12 samples")
+    ident = measurement(ROOT)
+    head = ident["commit"]
+    pin_mdcompress()
+    import readcon
+
+    version = readcon.__version__
+    out.mkdir(parents=True, exist_ok=True)
+    cross_format.run(out, repeats)
+    extra_rows, extra_lines = _extra_rows(out, repeats, Path(__file__).resolve())
+    payload = json.loads((out / "cross-format.json").read_text(encoding="utf-8"))
+    _annotate_interval(payload["rows"])
+    payload["rows"].extend(extra_rows)
+    payload["commit"] = head
+    payload["tree"] = ident["tree"]
+    payload["diff_sha256"] = ident["diff_sha256"]
+    payload["remote"] = ident["remote"]
+    payload["measured_commit"] = head
+    payload["readcon_version"] = version
+    payload["mdcompress_tag"] = MDC_TAG
+    payload["mdcompress_commit"] = MDC_COMMIT
+    payload["chemfiles_012_version"] = CF012_VERSION
+    payload["chemfiles_012_commit"] = CF012_COMMIT
+    notes = list(payload.get("notes") or [])
+    notes.append(
+        "Every row in this directory was measured by bench/h2h/h2h15.py "
+        f"on {head}. No row is copied from another commit."
+    )
+    payload["notes"] = notes
     text = json.dumps(payload, indent=2) + "\n"
     assert_repo_relative_record(text)
-    (out / "cross-format.json").write_text(text, encoding="utf-8")
-    (out / "cross-format.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (out / "identity.txt").write_text(
-        f"parent {PARENT}\ndiff_sha256 {digest}\nmeasured_commit {head}\n",
-        encoding="utf-8",
+    cross_format.write_record_text(out / "cross-format.json", text)
+    log_path = out / "cross-format.log"
+    prior = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
+    cross_format.write_record_text(
+        log_path, prior + "\n".join(extra_lines) + ("\n" if extra_lines else "")
     )
-    (out / "provenance.json").write_text(
+    host_path = out / "host.json"
+    host = json.loads(host_path.read_text(encoding="utf-8"))
+    host["commit"] = head
+    host["tree"] = ident["tree"]
+    host["diff_sha256"] = ident["diff_sha256"]
+    host["remote"] = ident["remote"]
+    host["measured_commit"] = head
+    host["record"] = record_path(out, ROOT)
+    cross_format.write_record_text(host_path, json.dumps(host, indent=2) + "\n")
+    cross_format.write_record_text(
+        out / "identity.txt",
+        f"commit {head}\ntree {ident['tree']}\n"
+        f"diff_sha256 {ident['diff_sha256']}\nremote {ident['remote']}\n",
+    )
+    cross_format.write_record_text(
+        out / "provenance.json",
         json.dumps(
             {
-                "parent": PARENT,
-                "diff_sha256": digest,
-                "measured_commit": head,
+                "commit": head,
+                "tree": ident["tree"],
+                "diff_sha256": ident["diff_sha256"],
+                "remote": ident["remote"],
                 "readcon_version": version,
+                "writer": "bench/h2h/h2h15.py",
             },
             indent=2,
         )
         + "\n",
-        encoding="utf-8",
     )
-    print(f"wrote {repo_relative(out / 'cross-format.json')}", flush=True)
+    cross_format.write_record_text(
+        out / "NOTES.txt",
+        "\n".join(
+            [
+                "h2h15",
+                f"commit {head}",
+                f"tree {ident['tree']}",
+                f"diff_sha256 {ident['diff_sha256']}",
+                f"remote {ident['remote']}",
+                "writer bench/h2h/h2h15.py",
+                "Every row comes from this run. host.json is written with the table.",
+                "MDCompress 2.0.5 times DCD as mdcompress-mdc and XTC as mdcompress-xtc.",
+                "chemfiles-dcd is 0.10.4. chemfiles-dcd-012 is 0.12.0-dev at fc1e930.",
+                "The Drops column names the DCD interval unit.",
+                "",
+            ]
+        ),
+    )
+    _scrub_record(out)
+    print(f"wrote {record_path(out / 'cross-format.json', ROOT)}", flush=True)
 
 
 def main() -> None:

@@ -390,6 +390,36 @@ def test_each_scratch_command_is_reported() -> None:
     assert offenders("cmake/planted.cmake", ["set(dir $ENV{TMP}/work)"])
 
 
+def machine_path_in_record(text: str) -> str | None:
+    """A bench record may not name a machine prefix. Historical campaigns stay put."""
+    for prefix in (PATHS[0], PATHS[3]):
+        if prefix in text:
+            return prefix
+    return None
+
+
+def test_bench_records_have_no_machine_paths() -> None:
+    """h2h15 records are scanned. Earlier campaigns are not rewritten."""
+    planted = "profile " + PATHS[0] + "/venv/site-packages/chemfiles/frame.py"
+    assert machine_path_in_record(planted) == PATHS[0]
+    assert machine_path_in_record("bench/h2h/scaling/h2h15/host.json") is None
+    listed = subprocess.check_output(
+        ["git", "ls-files", "-z", "bench/h2h/scaling/h2h15"],
+        cwd=ROOT,
+    )
+    bad: list[str] = []
+    for raw in listed.split(b"\0"):
+        if not raw:
+            continue
+        rel = raw.decode()
+        if not rel.endswith((".json", ".txt", ".log", ".tsv", ".md")):
+            continue
+        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        if machine_path_in_record(text):
+            bad.append(rel)
+    assert not bad, "machine path in a bench record:\n" + "\n".join(bad)
+
+
 def test_tracked_sources_have_no_machine_paths() -> None:
     found: list[str] = []
     for path in tracked_sources():
