@@ -5,8 +5,16 @@ classes. asv-runner 0.3.2 forces ``number = 1`` when a timing class defines
 ``setup`` (``asv_runner/benchmarks/time.py``), so the timing classes have no
 ``setup`` and no ``number``. asv calibrates ``number`` until each sample takes
 about ``sample_time`` seconds. That target is asv_runner's default of
-0.01 s. Memory classes set ``number = 1`` so
-memray records one call. The workflow passes ``repeat`` and ``rounds``.
+0.01 s. Memory classes set ``number = 1``. Each ``ray_*`` sample is one
+parse, and the memray peak is the median of ``repeat`` of those.
+``track_python_heap_*`` is tracemalloc of the Python heap, not that peak.
+
+The asv build passes ``--cfg asan_run``. That cfg leaves mimalloc out of
+the global allocator, so the parser allocates with the system allocator
+and memray's malloc hook sees the parse. It is not an address-sanitizer
+build. Native traces are not required: they report the same total and
+also split out a mapped file. A child ``ru_maxrss`` delta stays at zero
+because importing the extension already sets the high-water mark.
 """
 
 from __future__ import annotations
@@ -22,7 +30,7 @@ FIXTURE_CUH2 = REPO / "resources" / "test" / "cuh2.con"
 # Comparison is six rounds of six repeats (36 samples). Main-vs-main timing
 # uses twelve rounds and splits them into two 36-sample sides. Memory uses
 # the same six repeats, one call each (number = 1). A round's peak is the
-# median of those six.
+# median of those six memray samples.
 # Smallest even repeat whose median is the mean of the two central samples
 # with two samples strictly below that pair and two strictly above it.
 REPEAT = 6
@@ -33,13 +41,26 @@ SAMPLE_TIME = ASV_DEFAULT_SAMPLE_TIME
 TINY_FRAMES = (50, 100, 200)
 CUH2_FRAMES = (50, 100)
 
+# Cited with the results by benchmarks/memory_context.py.
+MEMORY_TRACKING_METHOD = (
+    "memray Tracker peak_memory, median of 6 repeats after one untracked "
+    "warmup; RUSTFLAGS --cfg asan_run selects the system allocator "
+    "(not an address-sanitizer build); track_python_heap_* is tracemalloc"
+)
+
 
 def _ladder_con(src: Path, n_frames: int) -> str:
     return src.read_text() * n_frames
 
 
+def _bench_dir() -> Path:
+    path = REPO / "build" / "bench"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def _write_temp(text: str, suffix: str = ".con") -> str:
-    fd, path = tempfile.mkstemp(suffix=suffix)
+    fd, path = tempfile.mkstemp(suffix=suffix, dir=_bench_dir())
     os.close(fd)
     Path(path).write_text(text)
     return path
@@ -82,49 +103,33 @@ def _select_name_cu(frame) -> None:
     assert len(idx) > 0
 
 
-def _retain_frames(frames, n_frames: int, n_atoms: int | None = None):
-    """Keep every frame and a coordinate copy alive for this sample.
+def _hold_parsed(frames, n_frames: int, n_atoms: int | None = None):
+    """Keep the object ``read_con`` returned until the sample ends.
 
-    memray records libc malloc and mmap. The parser's heap is mimalloc, so
-    those bytes never enter the peak. ``len`` builds no frame, and the one
-    object from the first frame is reused from the allocator cache on the
-    next parameter, which leaves a few hundred bytes however long the file
-    is. A file of 64 KiB or more is mapped, and that map was the whole peak
-    when it was larger than the frames. Indexing every frame and copying
-    the coordinates makes the recorded peak follow the frame count. The
-    copy is the shared slab when the frames have one, and one array per
-    frame otherwise.
+    The coordinates stay the arrays the parser built. A NumPy copy would
+    add test-side bytes on top of that parse. ``len`` of the first frame
+    checks the atom count; it does not allocate another coordinate buffer.
     """
-    import numpy as np
-
-    if isinstance(frames, list):
-        got = frames
-    else:
-        got = [frames[i] for i in range(len(frames))]
-    if len(got) != n_frames:
-        raise AssertionError(len(got))
+    n = len(frames)
+    if n != n_frames:
+        raise AssertionError(n)
     if n_frames == 0:
         raise AssertionError("no frames")
-    n0 = len(got[0])
+    n0 = len(frames[0])
     if n_atoms is not None and n0 != n_atoms:
         raise AssertionError(n0)
     if n0 <= 0:
         raise AssertionError(n0)
-    base = getattr(got[0].xyz, "base", None)
-    shape = getattr(base, "shape", None)
-    if shape is not None and len(shape) == 3 and shape[0] == n_frames:
-        coords = np.array(base, copy=True)
-    else:
-        coords = [np.array(frame.xyz, copy=True) for frame in got]
-    return got, coords
+    return frames
 
 
 def _tracemalloc_peak(action) -> int:
-    """Peak Python bytes of ``action``.
+    """Peak Python-heap bytes of ``action``.
 
-    The resident set does not move once the allocator cache is warm, so
-    a resident-set delta of the same parse is zero. tracemalloc still
-    counts the frames built for the sample.
+    This is not the parser peak. The resident set of a fresh process does
+    not move once import has reserved the high-water mark, so a
+    ``ru_maxrss`` delta of the same parse is zero. tracemalloc counts
+    the Python objects built for the sample.
     """
     import tracemalloc
 
@@ -228,8 +233,9 @@ class TimeReadConTiny:
 class RayReadConTiny:
     """Memray peak for the tiny CON reads. One call per sample.
 
-    Path samples parse the text loaded in setup. Mapping that file inside
-    the sample would report the file once it is larger than the frames.
+    Path samples call ``read_con`` on the file. String samples call
+    ``read_con_string``. Setup parses once, untracked, so the recorded
+    peak is the parse and not the first-call reserve.
     """
 
     timeout = 180
@@ -241,10 +247,15 @@ class RayReadConTiny:
     param_names = ["n_frames"]
 
     def setup(self, n_frames: int) -> None:
+        import readcon
+
         text = _ladder_con(FIXTURE_TINY, n_frames)
         self._text = text
         self._path = _write_temp(text)
         self._n = n_frames
+        _hold_parsed(readcon.read_con(self._path), self._n)
+        _hold_parsed(readcon.read_con_string(self._text), self._n)
+        _hold_parsed(list(readcon.iter_con(self._path)), self._n)
 
     def teardown(self, n_frames: int) -> None:
         try:
@@ -255,24 +266,24 @@ class RayReadConTiny:
     def ray_read_con_string(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_con_string(self._text), self._n)
+        _hold_parsed(readcon.read_con_string(self._text), self._n)
 
     def ray_read_con_path(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_con_string(self._text), self._n)
+        _hold_parsed(readcon.read_con(self._path), self._n)
 
-    def track_read_con_path(self, n_frames: int) -> dict:
+    def track_python_heap_read_con_path(self, n_frames: int) -> dict:
         import readcon
 
         return _peak_samples(
-            lambda: _retain_frames(readcon.read_con_string(self._text), self._n)
+            lambda: _hold_parsed(readcon.read_con(self._path), self._n)
         )
 
     def ray_iter_con_materialize(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(list(readcon.iter_con(self._path)), self._n)
+        _hold_parsed(list(readcon.iter_con(self._path)), self._n)
 
 
 class TimeReadConCuh2:
@@ -296,9 +307,9 @@ class TimeReadConCuh2:
 class RayReadConCuh2:
     """Memray peak for the 218-atom CON read. One call per sample.
 
-    The sample parses the text loaded in setup and holds the frames.
-    ``read_con`` on this path maps the file, and that map is larger than
-    the frames, so it is not what the peak reports.
+    The sample calls ``read_con`` on the file and holds the frames the
+    parser returned. A mapped file is part of that peak when the map is
+    still live; the frames make the peak larger than the file.
     """
 
     timeout = 180
@@ -310,10 +321,12 @@ class RayReadConCuh2:
     param_names = ["n_frames"]
 
     def setup(self, n_frames: int) -> None:
+        import readcon
+
         text = _ladder_con(FIXTURE_CUH2, n_frames)
-        self._text = text
         self._path = _write_temp(text)
         self._n = n_frames
+        _hold_parsed(readcon.read_con(self._path), self._n, n_atoms=218)
 
     def teardown(self, n_frames: int) -> None:
         try:
@@ -324,14 +337,14 @@ class RayReadConCuh2:
     def ray_read_con_path(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_con_string(self._text), self._n, n_atoms=218)
+        _hold_parsed(readcon.read_con(self._path), self._n, n_atoms=218)
 
-    def track_read_con_path(self, n_frames: int) -> dict:
+    def track_python_heap_read_con_path(self, n_frames: int) -> dict:
         import readcon
 
         return _peak_samples(
-            lambda: _retain_frames(
-                readcon.read_con_string(self._text), self._n, n_atoms=218
+            lambda: _hold_parsed(
+                readcon.read_con(self._path), self._n, n_atoms=218
             )
         )
 
@@ -377,6 +390,7 @@ class RayChemfilesXyz:
         self._path = _write_temp("", suffix=".xyz")
         write(self._path, [atoms] * n_frames, format="xyz")
         self._n = n_frames
+        _hold_parsed(readcon.read_chemfiles(self._path), self._n)
 
     def teardown(self, n_frames: int) -> None:
         try:
@@ -387,7 +401,7 @@ class RayChemfilesXyz:
     def ray_read_chemfiles(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_chemfiles(self._path), self._n)
+        _hold_parsed(readcon.read_chemfiles(self._path), self._n)
 
 
 class TimeSelectAtoms:
@@ -421,6 +435,63 @@ class RaySelectAtoms:
         if not readcon.has_chemfiles_support():
             raise NotImplementedError("chemfiles not linked")
         self._frame = readcon.read_first_frame(str(FIXTURE_CUH2))
+        _select_name_cu(self._frame)
 
     def ray_select_name_Cu(self) -> None:
         _select_name_cu(self._frame)
+
+
+def _ray_repeats(bench) -> int:
+    """``repeat`` from the benchmark class, or an ``-a repeat=`` override."""
+    for source in getattr(bench, "_attr_sources", ()):
+        try:
+            value = getattr(source, "repeat")
+        except Exception:
+            continue
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int) and value > 0:
+            return value
+    return REPEAT
+
+
+def _install_memray_repeats() -> None:
+    """Record ``repeat`` memray peaks for each ``ray_*`` call.
+
+    asv_bench_memray 0.1.2 tracks the call once and returns that single
+    peak. The memory classes set ``repeat`` so the stored value is the
+    median of that many peaks. Each repeat is its own tracker. One
+    tracker around every repeat would keep the frames live together.
+    """
+    try:
+        from asv_bench_memray.benchmarks.raymem import RayMemBenchmark
+    except Exception:
+        return
+    if getattr(RayMemBenchmark, "_readcon_repeats", False):
+        return
+
+    def run(self, *param):
+        import memray
+
+        peaks = []
+        for _ in range(_ray_repeats(self)):
+            fd, name = tempfile.mkstemp(suffix=".bin", dir=_bench_dir())
+            os.close(fd)
+            capture = Path(name)
+            try:
+                with memray.Tracker(
+                    destination=memray.FileDestination(capture, overwrite=True)
+                ):
+                    self.func(*param)
+                peaks.append(
+                    int(memray.FileReader(str(capture)).metadata.peak_memory)
+                )
+            finally:
+                capture.unlink(missing_ok=True)
+        return {"samples": peaks, "number": 1}
+
+    RayMemBenchmark.run = run
+    RayMemBenchmark._readcon_repeats = True
+
+
+_install_memray_repeats()

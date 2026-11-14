@@ -75,6 +75,9 @@ benchmarks.
 1. asv virtualenv builds **base** and **head** with
    ``maturin build --features python,chemfiles-from-sources --release``
    (pinned in ``asv.conf.json`` and ``benchmarks/workflow/requirements.txt``).
+   ``RUSTFLAGS`` includes ``--cfg asan_run``, which selects the system
+   allocator so memray can see the parser. That build is not an
+   address-sanitizer run.
    ``ci_benchmark.yml`` pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
    Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
 
@@ -158,6 +161,7 @@ Suite (calls shipped ``readcon`` only):
 Timing and memory are separate classes (``Time*`` and ``Ray*``) so ``number = 1``
 stays on ``ray_*`` only. Each ``time_*`` method has a matching ``ray_*`` method.
 That peak is memray (``asv_bench_memray``), not asv's ``peakmem_`` / ``mem_``.
+``track_python_heap_*`` is the Python heap from tracemalloc, not that peak.
 
 Local (same entry point as the PR job):
 

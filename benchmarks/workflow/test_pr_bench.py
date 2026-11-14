@@ -81,6 +81,31 @@ class SplitAndLayout(unittest.TestCase):
             self.assertTrue(names, cls.__name__)
             self.assertFalse(any(name.startswith("time_") for name in cls.__dict__))
 
+    def test_path_rows_call_read_con_and_temps_stay_in_build(self) -> None:
+        import inspect
+
+        path_methods = (
+            bench.RayReadConTiny.ray_read_con_path,
+            bench.RayReadConCuh2.ray_read_con_path,
+            bench.RayReadConTiny.track_python_heap_read_con_path,
+            bench.RayReadConCuh2.track_python_heap_read_con_path,
+        )
+        for method in path_methods:
+            source = inspect.getsource(method)
+            self.assertIn("read_con(", source)
+            self.assertNotIn("read_con_string", source)
+        self.assertFalse(hasattr(bench.RayReadConTiny, "track_read_con_path"))
+        self.assertFalse(hasattr(bench.RayReadConCuh2, "track_read_con_path"))
+        self.assertNotIn("copy=True", inspect.getsource(bench._hold_parsed))
+        self.assertIn("system allocator", bench.MEMORY_TRACKING_METHOD)
+        path = bench._write_temp("one frame\n")
+        try:
+            written = Path(path)
+            self.assertEqual(written.parent, bench.REPO / "build" / "bench")
+            self.assertTrue(written.is_file())
+        finally:
+            Path(path).unlink(missing_ok=True)
+
 
 class Boundary(unittest.TestCase):
     def test_ratio_just_over_bound_stays_above_serialized_threshold(self) -> None:
