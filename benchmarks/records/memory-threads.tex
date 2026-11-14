@@ -1,0 +1,45 @@
+% Requires \usepackage{booktabs,siunitx}
+
+\noindent
+\textbf{Benchmarks that have improved:}
+
+\begin{tabular}{llrrrc}
+\toprule
+Benchmark & Params & Before [\texttt{a1af753e2577f20f7885c702d196547d33c5f2e4}] & After [\texttt{e660eafc30473bac93d0f3745c8f00096ba16175}] & Ratio & Mark \\
+\midrule
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 100, 2 & \qty{3.55}{\mega\byte} & \qty{945}{\kilo\byte} & \num{0.27} & - \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 100, 4 & \qty{3.55}{\mega\byte} & \qty{959}{\kilo\byte} & \num{0.27} & - \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 100, 8 & \qty{3.55}{\mega\byte} & \qty{988}{\kilo\byte} & \num{0.28} & - \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 50, 2 & \qty{1.77}{\mega\byte} & \qty{490}{\kilo\byte} & \num{0.28} & - \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 50, 4 & \qty{1.77}{\mega\byte} & \qty{504}{\kilo\byte} & \num{0.28} & - \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 50, 8 & \qty{1.78}{\mega\byte} & \qty{533}{\kilo\byte} & \num{0.30} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 100, 1 & \qty{224}{\kilo\byte} & \qty{102}{\kilo\byte} & \num{0.46} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 100, 2 & \qty{263}{\kilo\byte} & \qty{134}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 100, 4 & \qty{263}{\kilo\byte} & \qty{135}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 100, 8 & \qty{264}{\kilo\byte} & \qty{135}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 200, 1 & \qty{447}{\kilo\byte} & \qty{186}{\kilo\byte} & \num{0.42} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 200, 2 & \qty{525}{\kilo\byte} & \qty{267}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 200, 4 & \qty{525}{\kilo\byte} & \qty{267}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadConvelThreads.ray\_read\_con\_threads & 200, 8 & \qty{526}{\kilo\byte} & \qty{268}{\kilo\byte} & \num{0.51} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 100, 1 & \qty{245}{\kilo\byte} & \qty{102}{\kilo\byte} & \num{0.42} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 100, 2 & \qty{283}{\kilo\byte} & \qty{134}{\kilo\byte} & \num{0.47} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 100, 4 & \qty{283}{\kilo\byte} & \qty{135}{\kilo\byte} & \num{0.48} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 100, 8 & \qty{284}{\kilo\byte} & \qty{136}{\kilo\byte} & \num{0.48} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 200, 1 & \qty{489}{\kilo\byte} & \qty{185}{\kilo\byte} & \num{0.38} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 200, 2 & \qty{566}{\kilo\byte} & \qty{267}{\kilo\byte} & \num{0.47} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 200, 4 & \qty{566}{\kilo\byte} & \qty{267}{\kilo\byte} & \num{0.47} & - \\
+bench\_readcon.RayReadForcesThreads.ray\_read\_con\_threads & 200, 8 & \qty{567}{\kilo\byte} & \qty{268}{\kilo\byte} & \num{0.47} & - \\
+\bottomrule
+\end{tabular}
+
+\noindent
+\textbf{Benchmarks that have stayed the same:}
+
+\begin{tabular}{llrrrc}
+\toprule
+Benchmark & Params & Before [\texttt{a1af753e2577f20f7885c702d196547d33c5f2e4}] & After [\texttt{e660eafc30473bac93d0f3745c8f00096ba16175}] & Ratio & Mark \\
+\midrule
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 100, 1 & \qty{859}{\kilo\byte} & \qty{900}{\kilo\byte} & \num{1.05} &  \\
+bench\_readcon.RayReadConCuh2Threads.ray\_read\_con\_threads & 50, 1 & \qty{455}{\kilo\byte} & \qty{468}{\kilo\byte} & \num{1.03} &  \\
+\bottomrule
+\end{tabular}

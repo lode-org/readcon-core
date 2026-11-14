@@ -59,17 +59,25 @@ def _load(path: Path) -> tuple[str, dict[str, dict]]:
     return data["commit_hash"], rows
 
 
-def _cell(row: dict) -> str:
+def _cell(row: dict, unit: str) -> str:
     from asv.util import human_value
     from asv_runner.statistics import get_err
 
     err = get_err(row["median"], {"q_25": row["q_25"], "q_75": row["q_75"]})
-    return human_value(row["median"], "seconds", err=err)
+    return human_value(row["median"], unit, err=err)
 
 
-def _table(before_sha: str, after_sha: str, before: dict, after: dict, select) -> str:
+def _table(
+    before_sha: str,
+    after_sha: str,
+    before: dict,
+    after: dict,
+    select,
+    aa: dict | None = None,
+    unit: str = "seconds",
+) -> str:
     import tabulate
-    from asv._stats import bootstrap_median_ratio_ci, format_ratio_ci
+    from asv._stats import bootstrap_median_ratio_ci, format_ratio_ci, interleaved_ratio_decision
 
     improved = []
     same = []
@@ -81,28 +89,53 @@ def _table(before_sha: str, after_sha: str, before: dict, after: dict, select) -
         right = after[label]
         if left["median"] in (None, ) or right["median"] in (None, ):
             continue
-        ci = bootstrap_median_ratio_ci(left["samples"], right["samples"], seed=1)
-        if ci is None:
-            raise SystemExit(f"{label} has no ratio interval")
-        ratio = format_ratio_ci(ci)
-        # Same factor asv compare uses: a change inside 1.1x stays unchanged.
-        if ci[0] < 1 / 1.1 and ci[2] < 1:
-            mark = "-"
-            bucket = improved
-        elif ci[0] > 1.1 and ci[1] > 1:
-            mark = "+"
-            bucket = worse
+        band = ""
+        if aa is not None and label in aa:
+            ci, mark = interleaved_ratio_decision(
+                left["samples"], right["samples"], aa[label]["samples"], seed=1
+            )
+            if ci is None:
+                raise SystemExit(f"{label} has no ratio interval")
+            aa_ci = bootstrap_median_ratio_ci(left["samples"], aa[label]["samples"], seed=2)
+            if aa_ci is None:
+                raise SystemExit(f"{label} has no A/A band")
+            band = format_ratio_ci(aa_ci)
+            if mark == "-":
+                bucket = improved
+            elif mark == "+":
+                bucket = worse
+            else:
+                mark = " "
+                bucket = same
         else:
-            mark = " "
-            bucket = same
-        bucket.append([mark, _cell(left), _cell(right), ratio, label])
+            ci = bootstrap_median_ratio_ci(left["samples"], right["samples"], seed=1)
+            if ci is None:
+                raise SystemExit(f"{label} has no ratio interval")
+            # Same factor asv compare uses: a change inside 1.1x stays unchanged.
+            if ci[0] < 1 / 1.1 and ci[2] < 1:
+                mark = "-"
+                bucket = improved
+            elif ci[0] > 1.1 and ci[1] > 1:
+                mark = "+"
+                bucket = worse
+            else:
+                mark = " "
+                bucket = same
+        ratio = format_ratio_ci(ci)
+        row = [mark, _cell(left, unit), _cell(right, unit), ratio]
+        if aa is not None:
+            row.append(band)
+        row.append(label)
+        bucket.append(row)
     headers = [
         "Change",
         f"Before [{before_sha}]",
         f"After [{after_sha}]",
         "Ratio",
-        "Benchmark (Parameter)",
     ]
+    if aa is not None:
+        headers.append("A/A")
+    headers.append("Benchmark (Parameter)")
     sections = []
     titles = (
         (improved, "Benchmarks that have improved:"),
@@ -160,10 +193,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before-json", type=Path, required=True)
     parser.add_argument("--after-json", type=Path, required=True)
+    parser.add_argument(
+        "--aa-json",
+        type=Path,
+        default=None,
+        help="second copy of the base commit; its samples are the A/A band",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--context", type=Path, required=True)
     parser.add_argument("--command", required=True, help="the asv command that produced the JSON")
     parser.add_argument("--n-threads", default="1")
+    parser.add_argument(
+        "--unit",
+        default="seconds",
+        help="display unit for the median; seconds for timing, bytes for a peak",
+    )
     parser.add_argument(
         "--include",
         default="",
@@ -177,6 +221,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     before_sha, before = _load(args.before_json)
     after_sha, after = _load(args.after_json)
+    aa = None
+    if args.aa_json is not None:
+        aa_sha, aa = _load(args.aa_json)
+        if aa_sha != before_sha:
+            raise SystemExit("the A/A file is not the base commit")
     root = Path(__file__).resolve().parents[1]
     before_sha = require_published(before_sha, root)
     after_sha = require_published(after_sha, root)
@@ -190,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             return False
         return True
 
-    table = _table(before_sha, after_sha, before, after, select)
+    table = _table(before_sha, after_sha, before, after, select, aa, args.unit)
     if not table.strip():
         raise SystemExit("no shared benchmarks")
     args.output.parent.mkdir(parents=True, exist_ok=True)
