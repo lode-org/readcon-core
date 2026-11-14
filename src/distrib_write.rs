@@ -23,7 +23,8 @@
 //!   Lustre, GPFS, BeeGFS, and PanFS use `MPI_File_write_at_all` into
 //!   that scratch, where collective MPI-IO is the per-rank store.
 //!   `READCON_RANKED_WRITE=sequential`, read on rank 0, is the ordered
-//!   gather. `parallel` forces the pwrite. `rewrite` fills `path` + `.rewrite`.
+//!   gather. `parallel` forces the pwrite. `mpiio` forces
+//!   `MPI_File_write_at_all`. `rewrite` fills `path` + `.rewrite`.
 //! - [`WriteMode::Gather`]: for file systems without MPI-IO. Rank 0
 //!   collects every block (`MPI_Gatherv` up to 2 GiB in total,
 //!   point-to-point chunks above that) and writes the file itself.
@@ -244,7 +245,7 @@ fn write_pwrite(
 }
 
 /// One sequential pwrite of the whole file. Slices arrive in rank order,
-/// so the write starts at offset 0. Used on ext2, ext3, ext4, XFS, and btrfs.
+/// so the write starts at offset 0. Selected by `READCON_RANKED_WRITE=sequential`.
 fn write_ranked_sequential(
     comm: &Comm,
     tmp: &Path,
@@ -303,10 +304,13 @@ fn write_spelled(
         starts.push(at);
         at += *len as u64;
     }
+    let staging = std::time::Instant::now();
     let (mut held, tmp) = stage_store(comm, path, total)?;
+    trace(comm, "stage", staging);
     let page = 4096u64;
     let aligned = offset & !(page - 1);
     let delta = (offset - aligned) as usize;
+    let formatting = std::time::Instant::now();
     let mapped = (|| -> Result<Option<memmap2::MmapMut>, BoxErr> {
         if local == 0 {
             return Ok(None);
@@ -330,6 +334,7 @@ fn write_spelled(
             .map_err(|err| err.to_string())?;
         Ok(Some(map))
     })();
+    trace(comm, "format-into-map", formatting);
     let map = match collective(comm, mapped, "spell") {
         Ok(map) => map,
         Err(err) => {
@@ -341,13 +346,16 @@ fn write_spelled(
         .as_ref()
         .map(|mapped| &mapped[delta..delta + local])
         .unwrap_or(&[]);
+    let indexing = std::time::Instant::now();
     let ready = local_ready(offset, bytes, total);
+    trace(comm, "hash", indexing);
     let published = if let Some(store) = held.take() {
         crate::writer::commit_shared_store(store, path).map_err(BoxErr::from)
     } else {
         Ok(())
     };
     collective(comm, published, "publish")?;
+    let sidecar = std::time::Instant::now();
     publish_index(
         comm,
         path,
@@ -359,6 +367,7 @@ fn write_spelled(
         total,
         ready,
     )?;
+    trace(comm, "index", sidecar);
     Ok(total)
 }
 
@@ -398,6 +407,15 @@ fn stage_store(
     Ok((held, tmp))
 }
 
+fn trace(comm: &Comm, phase: &str, started: std::time::Instant) {
+    if comm.rank() == 0 && std::env::var_os("READCON_WRITE_TRACE").is_some() {
+        eprintln!(
+            "readcon-trace {phase} {:.6}",
+            started.elapsed().as_secs_f64()
+        );
+    }
+}
+
 fn pwrite_frames(
     file: &std::fs::File,
     bytes: &[u8],
@@ -407,27 +425,19 @@ fn pwrite_frames(
     if bytes.is_empty() {
         return Ok(());
     }
-    if frame_starts.is_empty() {
-        return store_ranked_slice(file, bytes, offset);
-    }
-    for (index, &start) in frame_starts.iter().enumerate() {
-        let end = frame_starts
-            .get(index + 1)
-            .copied()
-            .unwrap_or(bytes.len() as u64);
-        let lo = usize::try_from(start).unwrap_or(usize::MAX);
-        let hi = usize::try_from(end).unwrap_or(usize::MAX);
-        if lo > bytes.len() || hi > bytes.len() || hi < lo {
+    // The layout pass packs this rank's frames with no gaps, so one
+    // pwrite holds the inode lock once. A pwrite per frame re-takes it.
+    let mut cursor = 0u64;
+    for &start in frame_starts {
+        if start < cursor {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "frame offset is outside the rank buffer",
+                "frame offsets are not in order",
             ));
         }
-        if hi > lo {
-            pwrite_all(file, &bytes[lo..hi], offset + start)?;
-        }
+        cursor = start;
     }
-    Ok(())
+    store_ranked_slice(file, bytes, offset)
 }
 
 fn write_pwrite_spare(
@@ -621,6 +631,7 @@ pub fn write_block_refs(
     rewrite: bool,
     keep_spare: bool,
 ) -> Result<u64, BoxErr> {
+    let marked = std::time::Instant::now();
     // Every rank takes the same branch. An empty rank can join a priced
     // group; a rank whose frames do not price falls the whole group back
     // to format-then-store.
@@ -631,12 +642,23 @@ pub fn write_block_refs(
     } else {
         None
     };
-    if can_spell && agree(comm, priced.is_some() || frames.is_empty()) {
-        return write_spelled(comm, path, frames, &priced.unwrap_or_default());
+    trace(comm, "layout", marked);
+    // `sequential` and `mpiio` must not take the mapped spell: that path
+    // ignores the override and always writes each rank's range itself.
+    let forced = std::env::var("READCON_RANKED_WRITE").ok();
+    let spell = can_spell
+        && agree(comm, priced.is_some() || frames.is_empty())
+        && !matches!(forced.as_deref(), Some("sequential") | Some("mpiio"));
+    if spell {
+        let spelled = std::time::Instant::now();
+        let wrote = write_spelled(comm, path, frames, &priced.unwrap_or_default());
+        trace(comm, "spell", spelled);
+        return wrote;
     }
     // One allgather replaces the exclusive scan, the length reduction,
     // and the format agree. `u64::MAX` is a format error; a real block
     // cannot be that long.
+    let formatting = std::time::Instant::now();
     let formatted = format_frames(frames, precision);
     let share = match &formatted {
         Ok((bytes, starts)) => [bytes.len() as u64, starts.len() as u64],
@@ -651,6 +673,7 @@ pub fn write_block_refs(
         });
     }
     let (bytes, starts) = formatted?;
+    trace(comm, "format", formatting);
     let mut offset = 0u64;
     for rank in 0..comm.rank() {
         offset += gathered[rank * 2];
@@ -665,18 +688,13 @@ pub fn write_block_refs(
             // MPI, so it runs beside the store. Page faults leave the
             // core idle; the hash uses that time instead of adding a
             // pass after the file is published.
+            let storing = std::time::Instant::now();
             let ready = std::thread::scope(|scope| {
                 let job = scope.spawn(|| local_ready(offset, &bytes, total));
                 let stored = write_pwrite(
-                    comm,
-                    path,
-                    &bytes,
-                    offset,
-                    total,
-                    &starts,
-                    rewrite,
-                    keep_spare,
+                    comm, path, &bytes, offset, total, &starts, rewrite, keep_spare,
                 );
+                trace(comm, "store", storing);
                 let ready = job.join().unwrap_or_else(|_| LocalReady {
                     hashes: Vec::new(),
                     tail: None,
@@ -1372,6 +1390,17 @@ mod ranked_store_tests {
     use crate::writer::{RankedStore, ranked_store_for_magic, ranked_store_override};
 
     #[test]
+    fn filesystem_choice_does_not_read_the_environment() {
+        // Sequential is the ordered gather. Reaching it here does not set
+        // READCON_RANKED_WRITE; the magic table is the fallback, and a
+        // local block filesystem no longer selects that gather.
+        assert_eq!(ranked_store_for_magic(0xEF53), RankedStore::Parallel);
+        assert_eq!(ranked_store_for_magic(0x5846_5342), RankedStore::Parallel);
+        assert_eq!(ranked_store_for_magic(0x9123_683E), RankedStore::Parallel);
+        assert_ne!(ranked_store_for_magic(0xEF53), RankedStore::Sequential);
+    }
+
+    #[test]
     fn local_block_magics_pwrite_each_rank() {
         for magic in [0xEF53_i64, 0x5846_5342, 0x9123_683E, 0x0102_1994, 0x6969] {
             assert_eq!(
@@ -1408,7 +1437,7 @@ mod ranked_store_tests {
     }
 
     #[test]
-    fn the_env_override_names_the_two_paths() {
+    fn the_env_override_names_the_store() {
         assert_eq!(
             ranked_store_override("parallel").unwrap(),
             RankedStore::Parallel
@@ -1417,6 +1446,7 @@ mod ranked_store_tests {
             ranked_store_override("sequential").unwrap(),
             RankedStore::Sequential
         );
+        assert_eq!(ranked_store_override("mpiio").unwrap(), RankedStore::MpiIo);
         assert!(ranked_store_override("ext4").is_err());
         assert!(ranked_store_override("").is_err());
     }
@@ -1800,7 +1830,7 @@ mod wide_rank_sha {
         let exe = std::env::current_exe().expect("test binary");
         let mut digest = None;
         for ranks in [1u32, 2, 4, 8] {
-            for mode in ["sequential", "parallel"] {
+            for mode in ["sequential", "parallel", "mpiio"] {
                 let out = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("build")
                     .join("test")

@@ -470,10 +470,10 @@ printf("Library version: %s\n", rkr_library_version());
 
 Include =readcon-core.h= and link against =libreadcon_core=.
 
-A ranked write (=rkr_mpi_write_block=) stores a fresh file. On ext2, ext3,
-ext4, XFS, and btrfs, rank 0 writes every slice in order. Every other
-filesystem keeps one write per rank. =READCON_RANKED_WRITE=parallel= or
-=sequential=, read on rank 0, overrides that choice. Leave it unset.
+A ranked write (=rkr_mpi_write_block=) stores a fresh file. Each rank
+pwrites its own range; Lustre, GPFS, BeeGFS, and PanFS use collective
+MPI-IO. =READCON_RANKED_WRITE=parallel=, =sequential=, or =mpiio=, read
+on rank 0, overrides that choice. Leave it unset.
 =READCON_WRITE_TRACE=, when set, prints timing lines from the compressed
 writer. Leave it unset.
 

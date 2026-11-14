@@ -64,15 +64,18 @@ The default store is a fresh file, not a spare reused in place.
 Rank 0 renames it onto the path only after every byte is stored, so the
 published path is the previous complete file or the finished new one.
 Until that rename the new bytes are a second copy.
-On ext2, ext3, ext4, XFS, and btrfs, rank 0 then writes every slice in
-order. Concurrent writes of one fresh local inode contend in the page
-cache. In =bench/h2h/scaling/camp21/strong-mpi.json= that million-atom
-frame on disk takes 0.0401 s at one rank and 0.0119 s at eight ranks,
-3.4 times as fast.
-Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
-keeps one write per rank.
-=READCON_RANKED_WRITE=parallel= or =sequential=, read on rank 0, overrides
-that choice. Leave it unset. The benchmark does.
+Each rank pwrites its own byte range into that fresh file. One pwrite
+holds the inode lock once; a pwrite per frame re-takes it and loses to
+the ordered gather. On an ext4 file of 64 frames (41.6 MB of output),
+eight ranks, twelve samples, that one-pwrite path has median 0.0335 s
+and the ordered gather 0.0424 s. A plain copy of the same bytes is
+0.0106 s. The gap is formatting into the mapping (about 0.022 s); stage,
+hash, and the index sidecar are each under 0.002 s, and the write does
+not fsync. The length walk is about 0.45 s and is outside the timed
+samples once the process has warmed up.
+Lustre, GPFS, BeeGFS, and PanFS use collective MPI-IO into the same
+scratch. =READCON_RANKED_WRITE=parallel=, =sequential=, or =mpiio=, read
+on rank 0, overrides the filesystem choice. Leave it unset.
 =READCON_MPI_TEST_CHUNK=<bytes>= lowers the gather chunk and the Gatherv
 limit so a test can take the multi-round path. Leave it unset.
 One gather of the offsets and block hashes then writes the =.rcidx=

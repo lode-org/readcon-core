@@ -3246,13 +3246,15 @@ pub(crate) fn ranked_store_for_magic(magic: i64) -> RankedStore {
     }
 }
 
-/// `READCON_RANKED_WRITE=parallel` or `sequential`. Anything else is an error.
+/// `READCON_RANKED_WRITE=parallel`, `sequential`, or `mpiio`.
+/// Anything else is an error.
 pub(crate) fn ranked_store_override(value: &str) -> Result<RankedStore, String> {
     match value {
         "parallel" => Ok(RankedStore::Parallel),
         "sequential" => Ok(RankedStore::Sequential),
+        "mpiio" => Ok(RankedStore::MpiIo),
         _ => Err(format!(
-            "READCON_RANKED_WRITE={value} is not parallel or sequential"
+            "READCON_RANKED_WRITE={value} is not parallel, sequential, or mpiio"
         )),
     }
 }
