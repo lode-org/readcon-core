@@ -209,6 +209,19 @@ The ASE trajectory keeps every field in a layout that the Python code of ASE def
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
 Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
+OVITO 3.17.0 states that its XYZ file writer now always outputs the periodic boundary conditions (\texttt{pbc}) of the simulation cell \cite{ovitoChangelog3172026}.
+The XYZ reader accepts whitespace around the equal sign, escape sequences in quoted strings, and array values \texttt{[1, 2, 3]} and \texttt{[[1, 2], [3, 4]]}.
+Array-valued parameters are imported as list-valued global attributes, tuples in Python, and logical parameters as Boolean attributes.
+Text columns of data format \texttt{S} and of arbitrary name are loaded as particle properties with data type string instead of being skipped.
+The manual that records this note is OVITO 3.17.2.
+The periodicity cell of the OVITO writer in Table~\ref{tab:compare}, the drift paths in Table~\ref{tab:drift} and the memory figure (Figure~\ref{fig:memory}) stay the OVITO 3.16.1 measurement.
+MDAnalysis 2.11.0 reads single-frame mmCIF/PDBx files, including \path{.cif.gz}, with the optional gemmi library \cite{alibayMdanalysisRelease21102026}.
+The changelog of that release adds an ASV benchmark for XYZ trajectory reading and an ASV benchmark for PDB trajectory reading \cite{gowersMdanalysismdanalysisRelease21102026}.
+The single-precision H5MD row of Table~\ref{tab:compare} stays the MDAnalysis 2.10.0 reader.
+extxyz-ng 0.0.2 is a Rust parser of extended XYZ \cite{yuExtxyzNgV0022026}.
+It accepts an info line that is not a key-value pair, and parses that input as unextended XYZ with the default \texttt{Properties} shape.
+In an array, an Int promotes to a Float, and the release states no other promotion rule.
+The release reports parse time and memory against the legacy C implementation in libAtoms/extxyz.
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.
 Particle physics fixed the files that pass between independent event generators in published texts: the Les Houches event file \cite{Alwall2007LHEF}, the second Les Houches Accord for supersymmetric spectra \cite{Allanach2009SLHA2} and the HepMC3 library for generator events \cite{Buckley2021HepMC3}.
