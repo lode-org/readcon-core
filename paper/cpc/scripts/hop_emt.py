@@ -95,7 +95,8 @@ def sig(value: float, digits: int = 4) -> str:
 def imaginary_mode(atoms) -> float:
     """Magnitude of the imaginary frequency, in cm-1."""
     free = [i for i in range(len(atoms)) if i not in set(HELD)]
-    vib = Vibrations(atoms, indices=free, delta=0.01, name="/tmp/hop-emt-vib")
+    scratch = Path(__file__).resolve().parents[3] / "build" / "hop-emt-vib"
+    vib = Vibrations(atoms, indices=free, delta=0.01, name=str(scratch))
     vib.run()
     frequencies = [complex(freq) for freq in vib.get_frequencies()]
     vib.clean()

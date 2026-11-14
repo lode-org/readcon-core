@@ -94,7 +94,7 @@ con-1e6 & 0.06178 (0.0003908, $n{=}12$) & 0.02031 (0.0004595, $n{=}12$) & 0.0104
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Ranked fresh-file writes onto ext4. Time is the type-7 median in seconds, the interquartile range, and $n$. Copy is a plain copy of the formatted bytes. Each cell is the time that measurement recorded. 8 CPUs. /tmp is ext4 and /dev/shm is tmpfs. }
+\caption{Ranked fresh-file writes onto ext4. Time is the type-7 median in seconds, the interquartile range, and $n$. Copy is a plain copy of the formatted bytes. Each cell is the time that measurement recorded. Intel(R) Xeon(R) Processor, 8 CPUs. Files are written to the root ext4 filesystem and to tmpfs (/dev/shm). }
 \label{tab:camp16b-mpi-write-disk}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
@@ -113,7 +113,7 @@ con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01652
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Ranked fresh-file writes onto tmpfs. Time is the type-7 median in seconds, the interquartile range, and $n$. Copy is a plain copy of the formatted bytes. Each cell is the time that measurement recorded. 8 CPUs. /tmp is ext4 and /dev/shm is tmpfs. }
+\caption{Ranked fresh-file writes onto tmpfs. Time is the type-7 median in seconds, the interquartile range, and $n$. Copy is a plain copy of the formatted bytes. Each cell is the time that measurement recorded. Intel(R) Xeon(R) Processor, 8 CPUs. Files are written to the root ext4 filesystem and to tmpfs (/dev/shm). }
 \label{tab:camp16b-mpi-write-memory}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}

@@ -16,7 +16,17 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
-READCON_DB = Path(os.environ.get("READCON_DB", "/tmp/readcon-db"))
+def readcon_db() -> Path:
+    """Checkout of lode-org/readcon-db. Set READCON_DB, or clone it at build/readcon-db."""
+    raw = os.environ.get("READCON_DB")
+    path = Path(raw) if raw else REPO / "build" / "readcon-db"
+    if not (path / ".git").is_dir():
+        raise SystemExit(
+            f"readcon-db checkout not found at {path}. "
+            "Set READCON_DB to a checkout of lode-org/readcon-db that contains the pinned commits, "
+            "or clone that repository at build/readcon-db."
+        )
+    return path
 
 CAMP16B = "e3d33a13f77b7cd52b719ad114d5f419d969f81d"
 CAMP17 = "a350668818694095c7f9a10250a32aa1911e7001"
@@ -48,6 +58,30 @@ def git_show(repo: Path, commit: str, path: str) -> str:
 
 def load(repo: Path, commit: str, path: str):
     return json.loads(git_show(repo, commit, path))
+
+
+def cpu_sentence(host: dict) -> str:
+    """CPU count, model name when lscpu records one, and where files are written."""
+    nproc = host.get("nproc")
+    count = f"{int(nproc)} CPUs. " if nproc else ""
+    model = None
+    lscpu = host.get("lscpu")
+    if isinstance(lscpu, str):
+        fields = {}
+        for line in lscpu.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            fields[key.strip()] = value.strip()
+        model = fields.get("Model name") or None
+    if model:
+        cpu = f"{model}, {count}"
+    else:
+        cpu = count + "The host record gives the CPU count without a model name. "
+    return (
+        cpu
+        + "Files are written to the root ext4 filesystem and to tmpfs (/dev/shm). "
+    )
 
 
 def host_line(lscpu: str) -> str:
@@ -333,7 +367,7 @@ def camp16b_tex() -> str:
     copy_rows = load(REPO, CAMP19, f"{root}/camp19/copy.json")["rows"]
     copy_for = {(row["file"], row["sink"]): row for row in copy_rows}
     ranked = index_rows(load(REPO, CAMP19, f"{root}/camp19/ranked.json")["rows"])
-    mount = "8 CPUs. /tmp is ext4 and /dev/shm is tmpfs. "
+    mount = cpu_sentence(load(REPO, CAMP16B, f"{root}/camp16b/host.json"))
     chunks.append(
         _scaling_table(
             "Ranked fresh-file writes onto ext4. "
@@ -511,9 +545,8 @@ def camp20_tex() -> str:
         "The earlier fresh-file column is the previous fresh-file measurement of the same cells. "
         "The warm-overwrite column is a warm-inode overwrite, a different operation from the fresh-file write. "
         "Plain copy is a copy of the same formatted bytes. "
-        f"{int(host['nproc'])} CPUs. "
-        "/tmp is the root ext4 filesystem. /dev/shm is tmpfs. "
-        "Each ranked sample writes a fresh file."
+        + cpu_sentence(host)
+        + "Each ranked sample writes a fresh file."
     )
     return table(
         caption,
@@ -525,8 +558,8 @@ def camp20_tex() -> str:
 
 
 def db15_tex() -> str:
-    times = load(READCON_DB, DB15, "bench/db15/campaign.json")["fair"]
-    sizes = load(READCON_DB, DB16, "bench/db16/campaign.json")["fair"]
+    times = load(readcon_db(), DB15, "bench/db15/campaign.json")["fair"]
+    sizes = load(readcon_db(), DB16, "bench/db16/campaign.json")["fair"]
     disk = {
         (row["workload"], row["tool"]): int(row["disk_bytes"])
         for row in sizes
@@ -586,13 +619,13 @@ def db15_tex() -> str:
 
 
 def pinned_macros() -> str:
-    sizes = load(READCON_DB, DB16, "bench/db16/campaign.json")["fair"]
+    sizes = load(readcon_db(), DB16, "bench/db16/campaign.json")["fair"]
     disk = {
         (row["workload"], row["tool"]): int(row["disk_bytes"])
         for row in sizes
         if row["op"] == "insert"
     }
-    ab = load(READCON_DB, DB16, "bench/db17/ab.json")
+    ab = load(readcon_db(), DB16, "bench/db17/ab.json")
     ranked = {
         (row["file"], int(row["workers"]), row["sink"]): row
         for row in load(REPO, CAMP20, "bench/h2h/scaling/camp20/ranked.json")["rows"]
