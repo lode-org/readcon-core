@@ -1,7 +1,7 @@
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use readcon_core::iterators::ConFrameIterator;
 use std::fs;
 use std::hint::black_box;
