@@ -34,6 +34,9 @@ targets = [
 github-releases = true
 # Create GitHub releases from the tag; PR mode only plans.
 create-release = true
+# zlib-ng is built by cmake against the DLL CRT. The static CRT then
+# fails the Windows link on __imp__wassert. The zip uses the dynamic CRT.
+msvc-crt-static = false
 
 # cargo-dist 0.28.0 defaults are ubuntu-20.04 (global and Linux), macos-13,
 # and windows-2019. GitHub retired those images, so every job and target is

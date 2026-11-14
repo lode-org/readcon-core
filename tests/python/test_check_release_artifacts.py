@@ -173,6 +173,10 @@ class ReleaseArtifactGuard(unittest.TestCase):
         self.assertNotIn("twine", yml)
         self.assertNotIn("git tag", yml)
         self.assertNotIn("softprops/action-gh-release", yml)
+        self.assertIn("msvc-crt-static = false", yml)
+        self.assertEqual(yml.count("msvc-crt-static = false"), 3)
+        workspace = (ROOT / "dist-workspace.toml").read_text(encoding="utf-8")
+        self.assertIn("msvc-crt-static = false", workspace)
 
     def test_dist_binary_passes_when_manifest_version_matches(self) -> None:
         name = "readcon-core-x86_64-unknown-linux-gnu.tar.xz"
