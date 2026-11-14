@@ -3097,12 +3097,81 @@ fn allocate_len(file: &File, total: u64) -> io::Result<()> {
     }
 }
 
+/// How a fresh ranked file is filled after it has been allocated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RankedStore {
+    /// Each slice is stored at its own offset.
+    Parallel,
+    /// The slices are stored in order as one pass from offset 0.
+    Sequential,
+}
+
+const EXT_SUPER_MAGIC: u32 = 0xEF53;
+const XFS_SUPER_MAGIC: u32 = 0x5846_5342;
+const BTRFS_SUPER_MAGIC: u32 = 0x9123_683E;
+
+/// Sequential store for ext2, ext3, ext4, XFS, and btrfs. A sign-extended
+/// 32-bit `statfs` word still matches on the low 32 bits.
+pub(crate) fn ranked_store_for_magic(magic: i64) -> RankedStore {
+    match magic as u32 {
+        EXT_SUPER_MAGIC | XFS_SUPER_MAGIC | BTRFS_SUPER_MAGIC => RankedStore::Sequential,
+        _ => RankedStore::Parallel,
+    }
+}
+
+/// `READCON_RANKED_WRITE=parallel` or `sequential`. Anything else is an error.
+pub(crate) fn ranked_store_override(value: &str) -> Result<RankedStore, String> {
+    match value {
+        "parallel" => Ok(RankedStore::Parallel),
+        "sequential" => Ok(RankedStore::Sequential),
+        _ => Err(format!(
+            "READCON_RANKED_WRITE={value} is not parallel or sequential"
+        )),
+    }
+}
+
+fn filesystem_magic(file: &File) -> Option<i64> {
+    #[cfg(all(target_os = "linux", not(miri)))]
+    {
+        use std::os::fd::AsRawFd;
+        let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
+        let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
+        if rc == 0 {
+            // `__fsword_t` is `long`: already `i64` on LP64, `i32` on 32-bit.
+            #[cfg(target_pointer_width = "64")]
+            {
+                return Some(stat.f_type);
+            }
+            #[cfg(target_pointer_width = "32")]
+            {
+                return Some(stat.f_type as i64);
+            }
+        }
+        None
+    }
+    #[cfg(any(not(target_os = "linux"), miri))]
+    {
+        let _ = file;
+        None
+    }
+}
+
+pub(crate) fn choose_ranked_store(file: &File) -> Result<RankedStore, String> {
+    if let Ok(value) = std::env::var("READCON_RANKED_WRITE") {
+        return ranked_store_override(&value);
+    }
+    Ok(ranked_store_for_magic(filesystem_magic(file).unwrap_or(0)))
+}
+
 /// In-process form of a ranked write.
 ///
 /// `slices` are the rank-ordered byte ranges. `rewrite == false` is the
 /// default: one fresh file, published by [`commit_shared_store`], and no
-/// `.rewrite` sibling. `rewrite == true` fills `path.rewrite` and renames
-/// it over `path`. `keep_spare` parks the previous inode at that name.
+/// `.rewrite` sibling. The same `statfs` choice as the ranked MPI store
+/// applies, and `READCON_RANKED_WRITE` overrides it. One process already
+/// holds every slice, so both choices pwrite those slices at their offsets.
+/// `rewrite == true` fills `path.rewrite` and renames it over `path`.
+/// `keep_spare` parks the previous inode at that name.
 pub fn publish_ranked_slices(
     path: &Path,
     slices: &[&[u8]],
@@ -3132,7 +3201,11 @@ pub fn publish_ranked_slices(
             .read(true)
             .write(true)
             .open(store.path())?;
-        write_slices_at(&file, slices)?;
+        match choose_ranked_store(&file)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?
+        {
+            RankedStore::Parallel | RankedStore::Sequential => write_slices_at(&file, slices)?,
+        }
     }
     commit_shared_store(store, path)
 }
