@@ -1518,7 +1518,7 @@ def host() -> None:
             {
                 "commit": _capture(["git", "rev-parse", "HEAD"]),
                 "tree": _capture(["git", "rev-parse", "HEAD^{tree}"]),
-                "base": "c40a7d99d6bb51dc947c7a5dcb8391d4041212a9",
+                "base": "c057482663bc2571c76d5143fb706a98022289d7",
                 "cpu_model": model,
                 "lscpu": lscpu,
                 "disk": str(disk),
