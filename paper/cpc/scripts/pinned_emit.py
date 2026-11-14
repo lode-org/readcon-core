@@ -552,7 +552,6 @@ def _strong_table(rows: list[dict], op: str, kind: str, sink: str, caption: str,
 
 def camp22_tex() -> str:
     threads = _camp22("strong-threads.json")["rows"]
-    mpi = _camp22("strong-mpi.json")["rows"]
     record = _camp22("host.json")
     host = (
         host_line(record["lscpu"])
@@ -592,35 +591,6 @@ def camp22_tex() -> str:
                 + strong
                 + host,
                 f"tab:camp22-threads-write-{sink}",
-            )
-        )
-        chunks.append(
-            _strong_table(
-                mpi,
-                "read",
-                "mpi",
-                sink,
-                "Strong scaling of the ranked read on "
-                + mount
-                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-                + strong
-                + host,
-                f"tab:camp22-mpi-read-{sink}",
-            )
-        )
-        chunks.append(
-            _strong_table(
-                mpi,
-                "write",
-                "mpi",
-                sink,
-                "Strong scaling of the fresh-file ranked write on "
-                + mount
-                + ". Each entry is the type-7 median in seconds, the interquartile range, and $n$. "
-                + fresh
-                + strong
-                + host,
-                f"tab:camp22-mpi-write-{sink}",
             )
         )
     weak_rows = []
@@ -667,7 +637,6 @@ def camp22_tex() -> str:
     )
     chunks.append(_compressed_tex(host))
     chunks.append(_conbin_tex(host))
-    chunks.append(_ranked_tex(host, record["disk_filesystem"]))
     return "\n".join(chunks)
 
 
@@ -759,48 +728,8 @@ def _conbin_tex(host: str) -> str:
     ) + "\\FloatBarrier\n"
 
 
-def _ranked_tex(host: str, disk_name: str) -> str:
-    rows = _camp22("ranked.json")["rows"]
-    mounts = {"disk": disk_name, "memory": "tmpfs"}
-    body = []
-    for strategy in ("default", "sequential", "parallel"):
-        for name in FILES:
-            for sink in ("disk", "memory"):
-                for workers in (8, 4):
-                    row = next(
-                        (
-                            item
-                            for item in rows
-                            if item["strategy"] == strategy
-                            and item["file"] == name
-                            and item["sink"] == sink
-                            and int(item["workers"]) == workers
-                        ),
-                        None,
-                    )
-                    if row is None:
-                        continue
-                    copied = sig(row["cp_s"]) if row.get("cp_s") else ""
-                    body.append(
-                        f"{name} & {workers} & {mounts[sink]} & {strategy} & {cell(row)} & {copied} \\\\"
-                    )
-    return table(
-        "Ranked fresh-file writes. "
-        "Time is the type-7 median in seconds, the interquartile range, and $n$. "
-        "Default follows the filesystem: one rank writes the slices in order on a local block filesystem, and each rank writes its own file on tmpfs. "
-        "Sequential and parallel are the two READCON\\_RANKED\\_WRITE settings. "
-        "Fresh-name copy is a copy of the same bytes to a new name, a different operation from the ranked write. "
-        + host,
-        "tab:camp22-ranked",
-        "@{}ll ll r r@{}",
-        "File & Ranks & Mount & Strategy & Time (IQR, $n$) & Fresh-name copy (s)",
-        body,
-    )
-
-
 def _camp22_macros() -> dict[str, str]:
     threads = _camp22("strong-threads.json")["rows"]
-    mpi = _camp22("strong-mpi.json")["rows"]
     read_mem = {
         workers: _one(threads, op="read", file="con-100k", kind="threads", sink="memory", workers=workers)
         for workers in (1, 8)
@@ -809,11 +738,6 @@ def _camp22_macros() -> dict[str, str]:
         workers: _one(threads, op="read", file="con-100k", kind="threads", sink="disk", workers=workers)
         for workers in (1, 8)
     }
-    four = {
-        workers: _one(mpi, op="write", file="con-1e6", kind="mpi", sink="disk", workers=workers)
-        for workers in (1, 4)
-    }
-    eight = _one(mpi, op="write", file="con-1e6", kind="mpi", sink="disk", workers=8)
     weak = {int(point["workers"]): point for point in _camp22("weak-threads.json")["points"]}
     def strong(rows: dict[int, dict], workers: int) -> str:
         return sig(float(rows[1]["median_s"]) / (workers * float(rows[workers]["median_s"])))
@@ -824,18 +748,7 @@ def _camp22_macros() -> dict[str, str]:
         "conHundredKExtFourOne": sig(read_disk[1]["median_s"]),
         "conHundredKExtFourEight": sig(read_disk[8]["median_s"]),
         "conHundredKExtFourEff": strong(read_disk, 8),
-        "fourRankExtFourMillion": sig(four[4]["median_s"]),
-        "fourRankExtFourMillionEff": strong(four, 4),
-        "eightRankExtFourMillion": sig(eight["median_s"]),
-        "freshNameCopy": sig(
-            _one(
-                _camp22("copy.json")["rows"],
-                op="cp",
-                file="con-1e6",
-                sink="disk",
-                payload="con",
-            )["median_s"]
-        ),
+        "campTwoThree": "pending",
         "campTwoTwoCommit": _camp22("host.json")["commit"][:8],
         "weakThreadEight": sig(weak[8]["median_s"]),
         "weakThreadEff": sig(float(weak[1]["median_s"]) / float(weak[8]["median_s"])),

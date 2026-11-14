@@ -39,44 +39,6 @@ con-1e6 & 0.04592 (0.002115, $n{=}12$) & 0.02316 (0.0005729, $n{=}12$) & 0.01621
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Strong scaling of the ranked read on ext2/ext3. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
-\label{tab:camp22-mpi-read-disk}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
-\midrule
-con-100k & 0.3584 (0.05743, $n{=}12$) & 0.2043 (0.02333, $n{=}12$) & 0.09359 (0.008081, $n{=}12$) & 0.047 (0.002645, $n{=}12$) & 0.9533 \\
-convel & 0.5528 (0.04964, $n{=}12$) & 0.2646 (0.0267, $n{=}12$) & 0.1525 (0.02642, $n{=}12$) & 0.07398 (0.02996, $n{=}12$) & 0.9341 \\
-con-1e6 & 0.06828 (0.003285, $n{=}12$) & 0.02421 (0.000719, $n{=}12$) & 0.01288 (0.0003067, $n{=}12$) & 0.006348 (0.0002775, $n{=}12$) & 1.344 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-\FloatBarrier
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{Strong scaling of the fresh-file ranked write on ext2/ext3. Each entry is the type-7 median in seconds, the interquartile range, and $n$. Each write unlinks the destination before the clock, so the row is a fresh file. The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
-\label{tab:camp22-mpi-write-disk}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
-\midrule
-con-100k & 0.5563 (0.04109, $n{=}12$) & 0.3107 (0.02083, $n{=}12$) & 0.157 (0.03899, $n{=}12$) & 0.09373 (0.009382, $n{=}12$) & 0.7418 \\
-convel & 0.8308 (0.02936, $n{=}12$) & 0.3967 (0.01611, $n{=}12$) & 0.237 (0.0156, $n{=}12$) & 0.1511 (0.007238, $n{=}12$) & 0.6875 \\
-con-1e6 & 0.05137 (0.00123, $n{=}12$) & 0.02422 (0.001138, $n{=}12$) & 0.01957 (0.00297, $n{=}12$) & 0.01511 (0.0008525, $n{=}12$) & 0.4248 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-\FloatBarrier
-
-\begin{table}[tbp]
-\centering
-\scriptsize
 \caption{Strong scaling of the thread read on tmpfs. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
 \label{tab:camp22-threads-read-memory}
 \resizebox{\textwidth}{!}{%
@@ -106,44 +68,6 @@ File & 1 & 2 & 4 & 8 & 8-way \\
 con-100k & 0.599 (0.1112, $n{=}12$) & 0.3527 (0.08504, $n{=}12$) & 0.1714 (0.0156, $n{=}12$) & 0.08746 (0.01604, $n{=}12$) & 0.8562 \\
 convel & 0.7457 (0.05558, $n{=}12$) & 0.394 (0.01525, $n{=}12$) & 0.2042 (0.005579, $n{=}12$) & 0.1335 (0.01227, $n{=}12$) & 0.6983 \\
 con-1e6 & 0.04373 (0.0009939, $n{=}12$) & 0.02136 (0.0007043, $n{=}12$) & 0.01267 (0.0006483, $n{=}12$) & 0.007274 (0.0007196, $n{=}12$) & 0.7514 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-\FloatBarrier
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{Strong scaling of the ranked read on tmpfs. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
-\label{tab:camp22-mpi-read-memory}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
-\midrule
-con-100k & 0.38 (0.02798, $n{=}12$) & 0.1963 (0.009539, $n{=}12$) & 0.09072 (0.00801, $n{=}12$) & 0.04664 (0.004812, $n{=}12$) & 1.018 \\
-convel & 0.5907 (0.03674, $n{=}12$) & 0.2557 (0.005202, $n{=}12$) & 0.1469 (0.02281, $n{=}12$) & 0.1152 (0.009489, $n{=}12$) & 0.6407 \\
-con-1e6 & 0.07847 (0.001493, $n{=}12$) & 0.02407 (0.000428, $n{=}12$) & 0.01257 (0.0003528, $n{=}12$) & 0.007184 (0.002307, $n{=}12$) & 1.365 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-\FloatBarrier
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{Strong scaling of the fresh-file ranked write on tmpfs. Each entry is the type-7 median in seconds, the interquartile range, and $n$. Each write unlinks the destination before the clock, so the row is a fresh file. The 8-way column is $(t(1)/t(8))/8$ when this record has worker counts 1, 2, 4 and 8. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
-\label{tab:camp22-mpi-write-memory}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
-\midrule
-con-100k & 0.5179 (0.02485, $n{=}12$) & 0.2857 (0.01822, $n{=}12$) & 0.1613 (0.02528, $n{=}12$) & 0.09074 (0.02198, $n{=}12$) & 0.7134 \\
-convel & 0.7816 (0.09603, $n{=}12$) & 0.3726 (0.004923, $n{=}12$) & 0.2226 (0.01093, $n{=}12$) & 0.1236 (0.007482, $n{=}12$) & 0.7905 \\
-con-1e6 & 0.04711 (0.0006753, $n{=}12$) & 0.02202 (0.0005462, $n{=}12$) & 0.01287 (0.001265, $n{=}12$) & 0.01197 (0.0003168, $n{=}12$) & 0.492 \\
 \bottomrule
 \end{tabular}
 }
@@ -224,42 +148,3 @@ read & tmpfs & 0.002497 (0.0001473, $n{=}12$) & 0.002738 (0.0001824, $n{=}12$) &
 }
 \end{table}
 \FloatBarrier
-
-\begin{table}[tbp]
-\centering
-\scriptsize
-\caption{Ranked fresh-file writes. Time is the type-7 median in seconds, the interquartile range, and $n$. Default follows the filesystem: one rank writes the slices in order on a local block filesystem, and each rank writes its own file on tmpfs. Sequential and parallel are the two READCON\_RANKED\_WRITE settings. Fresh-name copy is a copy of the same bytes to a new name, a different operation from the ranked write. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs. Disk rows use ext2/ext3. Memory rows use tmpfs (/dev/shm). }
-\label{tab:camp22-ranked}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}ll ll r r@{}}
-\toprule
-File & Ranks & Mount & Strategy & Time (IQR, $n$) & Fresh-name copy (s) \\
-\midrule
-con-100k & 8 & ext2/ext3 & default & 0.08129 (0.009162, $n{=}12$) & 0.03068 \\
-con-100k & 8 & tmpfs & default & 0.07219 (0.00535, $n{=}12$) & 0.02479 \\
-convel & 8 & ext2/ext3 & default & 0.1712 (0.02385, $n{=}12$) & 0.07053 \\
-convel & 8 & tmpfs & default & 0.1442 (0.02897, $n{=}12$) & 0.05633 \\
-con-1e6 & 8 & ext2/ext3 & default & 0.01417 (0.0002133, $n{=}12$) & 0.008706 \\
-con-1e6 & 4 & ext2/ext3 & default & 0.01965 (0.0005573, $n{=}12$) & 0.008706 \\
-con-1e6 & 8 & tmpfs & default & 0.008132 (0.000651, $n{=}12$) & 0.008182 \\
-con-1e6 & 4 & tmpfs & default & 0.01473 (0.001089, $n{=}12$) & 0.008182 \\
-con-100k & 8 & ext2/ext3 & sequential & 0.08053 (0.002347, $n{=}12$) &  \\
-con-100k & 8 & tmpfs & sequential & 0.0757 (0.002482, $n{=}12$) &  \\
-convel & 8 & ext2/ext3 & sequential & 0.1535 (0.01716, $n{=}12$) &  \\
-convel & 8 & tmpfs & sequential & 0.1225 (0.007202, $n{=}12$) &  \\
-con-1e6 & 8 & ext2/ext3 & sequential & 0.01465 (0.002099, $n{=}12$) &  \\
-con-1e6 & 4 & ext2/ext3 & sequential & 0.01818 (0.001089, $n{=}12$) &  \\
-con-1e6 & 8 & tmpfs & sequential & 0.01502 (0.001252, $n{=}12$) &  \\
-con-1e6 & 4 & tmpfs & sequential & 0.02127 (0.0005705, $n{=}12$) &  \\
-con-100k & 8 & ext2/ext3 & parallel & 0.07899 (0.001734, $n{=}12$) &  \\
-con-100k & 8 & tmpfs & parallel & 0.08444 (0.005108, $n{=}12$) &  \\
-convel & 8 & ext2/ext3 & parallel & 0.147 (0.006936, $n{=}12$) &  \\
-convel & 8 & tmpfs & parallel & 0.1379 (0.005942, $n{=}12$) &  \\
-con-1e6 & 8 & ext2/ext3 & parallel & 0.01634 (0.006004, $n{=}12$) &  \\
-con-1e6 & 4 & ext2/ext3 & parallel & 0.02842 (0.004237, $n{=}12$) &  \\
-con-1e6 & 8 & tmpfs & parallel & 0.01153 (0.0007127, $n{=}12$) &  \\
-con-1e6 & 4 & tmpfs & parallel & 0.0209 (0.00572, $n{=}12$) &  \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
