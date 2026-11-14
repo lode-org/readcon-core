@@ -94,13 +94,14 @@ fn compile_chemfiles_atom_view() {
 ///
 /// Cargo used to name that directory `chemfiles-sys-<hash>`. A target
 /// build now uses `chemfiles-sys/<hash>`. Both layouts are accepted.
+#[cfg(any(feature = "chemfiles", test))]
 fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
     let exports = |dir: &Path| {
         let include = dir.join("out/include");
         include
             .join("chemfiles/exports.h")
             .is_file()
-            .then(|| include)
+            .then_some(include)
     };
     let entries = fs::read_dir(build_dir).ok()?;
     for entry in entries.flatten() {
@@ -131,6 +132,7 @@ fn chemfiles_exports_include(build_dir: &Path) -> Option<PathBuf> {
 /// dependency is built under `target/<triple>/<profile>/build` even when
 /// the triple is the host. The package directory is either
 /// `<crate>-<hash>` or `<crate>/<hash>`.
+#[cfg(any(feature = "chemfiles", test))]
 fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     let Some(hash_or_pkg) = out_dir.parent() else {
@@ -148,16 +150,14 @@ fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
         }
     };
     dirs.push(build.clone());
-    if let Ok(target) = env::var("TARGET") {
-        if let Some(profile) = build.parent() {
-            if let Some(target_root) = profile.parent() {
-                if let Some(profile_name) = profile.file_name() {
-                    let triple = target_root.join(target).join(profile_name).join("build");
-                    if triple != build {
-                        dirs.push(triple);
-                    }
-                }
-            }
+    if let Ok(target) = env::var("TARGET")
+        && let Some(profile) = build.parent()
+        && let Some(target_root) = profile.parent()
+        && let Some(profile_name) = profile.file_name()
+    {
+        let triple = target_root.join(target).join(profile_name).join("build");
+        if triple != build {
+            dirs.push(triple);
         }
     }
     dirs
