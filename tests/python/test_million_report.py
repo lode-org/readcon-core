@@ -114,6 +114,47 @@ def test_notes_name_the_fields_con_keeps(tmp_path: Path):
     assert (tmp_path / "lscpu.txt").read_text().startswith("Model name")
 
 
+def test_session_record_keeps_the_version_and_the_rows() -> None:
+    import importlib
+
+    driver = importlib.import_module("million_ab")
+    rows = [
+        {
+            "build": "head",
+            "format": "con",
+            "op": "read",
+            "median_s": 0.2,
+            "iqr_s": 0.01,
+            "n": 12,
+            "samples_s": [0.2] * 12,
+            "checks": [1.0] * 12,
+        },
+        {
+            "build": "v0.23.2",
+            "format": "con",
+            "op": "read",
+            "median_s": 0.1,
+            "iqr_s": 0.01,
+            "n": 12,
+            "samples_s": [0.1] * 12,
+            "checks": [1.0] * 12,
+            "head_over_this": 2.0,
+        },
+    ]
+    doc = driver.session_record(
+        "8c2d9984c40aedfb2e0084fedefaa02e930957f2",
+        "0.23.2",
+        {"cpu_mhz": 2400.0},
+        rows,
+        ["host_mhz 2400.0"],
+    )
+    assert doc["readcon_version"] == "0.23.2"
+    assert doc["head"] == "8c2d9984c40aedfb2e0084fedefaa02e930957f2"
+    assert doc["rows"][0]["samples_s"] == [0.2] * 12
+    assert doc["rows"][1]["head_over_this"] == 2.0
+    assert doc["lines"] == ["host_mhz 2400.0"]
+
+
 def test_library_commit_matches_the_sources_at_head():
     import subprocess
 
