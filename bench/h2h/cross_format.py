@@ -263,10 +263,10 @@ def read_readcon_conbin(path: str) -> dict:
     }
 
 
-def read_readcon(path: str) -> dict:
+def read_readcon(path: str, n_threads: int | None = 1) -> dict:
     import readcon
 
-    cols = readcon.read_con(path, n_threads=1).columns()
+    cols = readcon.read_con(path, n_threads=n_threads).columns()
     return {
         "positions": np.asarray(cols["positions"], dtype=np.float64),
         "cell": np.asarray(cols["cell"], dtype=np.float64),
@@ -798,8 +798,8 @@ def read_mda_xyz(path: str) -> dict:
     }
 
 
-def write_mdtraj(path: Path, spec: dict) -> None:
-    """MDTraj's trajectory object is in nanometres. The file units differ by format."""
+def mdtraj_trajectory(spec: dict):
+    """Build the MDTraj object. The atom loop is not the file writer."""
     import mdtraj as md
 
     topology = md.Topology()
@@ -814,8 +814,13 @@ def write_mdtraj(path: Path, spec: dict) -> None:
         np.asarray(spec["cell"][:, :3], dtype=np.float32) / 10.0
     )
     trajectory.unitcell_angles = np.asarray(spec["cell"][:, 3:], dtype=np.float32)
+    return trajectory
+
+
+def write_mdtraj(path: Path, spec: dict) -> None:
+    """MDTraj's trajectory object is in nanometres. The file units differ by format."""
     path.unlink(missing_ok=True)
-    trajectory.save(os.fspath(path))
+    mdtraj_trajectory(spec).save(os.fspath(path))
 
 
 def read_mdtraj(path: str) -> dict:
@@ -1695,8 +1700,11 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
     raise SystemExit(f"unknown arm {arm_id}")
 
 
-def read_arm(arm_id: str, path: str) -> dict:
-    got = _dispatch_read(arm_id, path)
+def read_arm(arm_id: str, path: str, n_threads: int | None = 1) -> dict:
+    if arm_id in ("readcon-con", "readcon-con-gz", "readcon-con-zst"):
+        got = read_readcon(path, n_threads=n_threads)
+    else:
+        got = _dispatch_read(arm_id, path)
     if got.get("cell") is None:
         positions = np.array(got["positions"], dtype=np.float64, copy=True, order="C")
         if positions.size == 0 or not np.isfinite(np.sum(positions)):
@@ -1954,8 +1962,10 @@ def worker_main() -> None:
         arm = job["arm"]
         cache = job.get("cache", "warm")
 
-        def once(path=path, arm=arm):
-            got = read_arm(arm, path)
+        threads = job.get("n_threads", 1)
+
+        def once(path=path, arm=arm, threads=threads):
+            got = read_arm(arm, path, n_threads=threads)
             if "n_atoms" in job:
                 expect_full_read(got, int(job["n_atoms"]), int(job["n_frames"]), arm)
             return float(got["checksum"])
@@ -1995,6 +2005,7 @@ def worker_main() -> None:
             chem_fmt = CHEMFILES_FILE_FORMAT[arm]
             chem_frames = build_chemfiles_frames(spec, chem_fmt, dest)
         child_rss = [0]
+        md_trajectory = mdtraj_trajectory(spec) if arm.startswith("mdtraj-") else None
 
         def once(
             spec=spec,
@@ -2004,9 +2015,13 @@ def worker_main() -> None:
             compression=compression,
             chem_frames=chem_frames,
             chem_fmt=chem_fmt,
+            md_trajectory=md_trajectory,
         ):
             if chem_frames is not None:
                 write_built_chemfiles(dest, chem_fmt, chem_frames)
+            elif md_trajectory is not None:
+                dest.unlink(missing_ok=True)
+                md_trajectory.save(os.fspath(dest))
             elif arm == "mdcompress-mdc":
                 child_rss[0] = write_mdcompress(
                     dest, Path(job["mdc_src"]), Path(job["mdc_desc"])
@@ -2076,7 +2091,8 @@ def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> d
     for index in range(repeats):
         take(rotate(arms, index), str(index))
     noisy = [arm for arm in arms if _spread(found[arm["id"]]) > 0.05]
-    if noisy:
+    # n=12 is already the full sample. A shorter run still grows to 12 when noisy.
+    if repeats < 12 and noisy:
         detail = " ".join(
             f"{arm['id']}={_spread(found[arm['id']]):.3f}" for arm in noisy
         )
@@ -2103,8 +2119,24 @@ def _spread(samples: list[float]) -> float:
     return iqr / abs(median)
 
 
-def con_writer_samples() -> tuple[list[float], list[float]]:
-    """Back-to-back 1M CON writes: one warmup, then six samples.
+def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
+    """Median of fresh-process reads. ``None`` is the default thread count."""
+    script = Path(__file__).resolve()
+    job = {
+        "op": "read",
+        "arm": "readcon-con",
+        "path": os.fspath(path),
+        "cache": "warm",
+        "n_threads": n_threads,
+    }
+    spawn_worker(script, job)
+    samples = [float(spawn_worker(script, job)["wall_s"]) for _ in range(repeats)]
+    median, _iqr = type7(samples)
+    return median
+
+
+def con_writer_samples(repeats: int) -> tuple[list[float], list[float]]:
+    """Back-to-back 1M CON writes: one warmup, then ``repeats`` samples.
 
     The interleaved campaign write follows other formats, so its median
     is not this measurement. The published readcon-con write row uses
@@ -2174,7 +2206,7 @@ def run(
         "that format's size range, and reads back at the full atom count. "
         "That check runs after the clock stops."
     )
-    serial_con, default_con = con_writer_samples()
+    serial_con, default_con = con_writer_samples(repeats)
     serial_med, _serial_iqr = type7(serial_con)
     default_med, _default_iqr = type7(default_con)
     notes.append(
@@ -2305,6 +2337,18 @@ def run(
             arm["audit"] = checked
             arm["checksum"] = float(got["checksum"])
             usable.append(arm)
+        if label == "1M" and any(arm["id"] == "readcon-con" for arm in usable):
+            plain = directory / "readcon.con"
+            default_read = _fresh_reads(plain, None, repeats)
+            serial_note = _fresh_reads(plain, 1, repeats)
+            notes.append(
+                "1M readcon-con serial fresh-process read "
+                f"{serial_note:.4f} s, default threads {default_read:.4f} s. "
+                "The table row is the interleaved serial measurement. "
+                "Default threads is one worker per core, same warmup and "
+                f"sample count ({repeats})."
+            )
+            lines.append(f"note {notes[-1]}")
         write_jobs = []
         for arm in usable:
             if arm.get("no_writer"):
