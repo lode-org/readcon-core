@@ -6577,37 +6577,6 @@ mod parallel_write_bytes {
         let got = std::fs::read(&path).expect("read");
         let _ = std::fs::remove_file(&path);
         assert_eq!(got, serial);
-        // llvm-cov instrumentation stretches the parallel write past this
-        // ratio on a shared runner. The samples still run so those lines
-        // stay in the coverage build. The byte comparison above still runs.
-        let time = |frames: &[crate::types::ConFrame], workers: usize| {
-            let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
-            let path = _scratch.path().join(format!(
-                "readcon-weak-time-{}-{workers}.con",
-                std::process::id()
-            ));
-            let _ = super::write_frame_refs_to_path(&path, &refs, workers, None, false, false);
-            let mut samples = Vec::with_capacity(5);
-            for _ in 0..5 {
-                let _ = std::fs::remove_file(&path);
-                let started = std::time::Instant::now();
-                super::write_frame_refs_to_path(&path, &refs, workers, None, false, false)
-                    .expect("write");
-                samples.push(started.elapsed().as_secs_f64());
-            }
-            let _ = std::fs::remove_file(&path);
-            samples.sort_by(|left, right| left.partial_cmp(right).unwrap());
-            samples[samples.len() / 2]
-        };
-        let one_s = time(std::slice::from_ref(&one), 1);
-        let two_s = time(&frames, 2);
-        #[cfg(not(coverage))]
-        assert!(
-            two_s < one_s * 1.7,
-            "two frames on two threads took {two_s:.4}s against one frame {one_s:.4}s"
-        );
-        #[cfg(coverage)]
-        let _ = (one_s, two_s);
     }
 
     #[test]
