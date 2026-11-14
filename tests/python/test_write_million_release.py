@@ -1,3 +1,4 @@
+# Copyright (c) readcon-core developers
 """The release million files are parsed from a log, not copied."""
 
 from __future__ import annotations

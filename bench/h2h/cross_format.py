@@ -860,7 +860,7 @@ def write_built_mda(path: Path, spec: dict, universe, velocities: bool = False) 
     """Write a Universe whose topology already exists.
 
     MDAnalysis keeps one timestep. Copying that frame's coordinates onto
-    it is the serialise, and it stays inside the clock. Building the
+    it is the serialize, and it stays inside the clock. Building the
     topology is not.
     """
     _guard_spec(spec)
@@ -2704,7 +2704,7 @@ def worker_main() -> None:
         child_rss = [0]
         md_trajectory = mdtraj_trajectory(spec) if arm.startswith("mdtraj-") else None
         # Topology, Atoms, and particle properties are the in-memory
-        # structure. The clock below only serialises and stores them.
+        # structure. The clock below only serializes and stores them.
         ase_images = (
             _ase_images(spec) if arm in ("ase-extxyz", "ase-extxyz-gz") else None
         )
@@ -2926,7 +2926,7 @@ def run(
         "Every write sample, including 1M readcon-con, is the interleaved "
         "fresh-process measurement from this session. The sample count is "
         "12 at 1k, 100k and traj, and 6 at 1M, for every tool. The clock is "
-        "serialise and store of a structure that already exists: see each "
+        "serialize and store of a structure that already exists: see each "
         "row's Clock note. Chemfiles has no CON writer, so its write cell "
         "is 'no writer'."
     )

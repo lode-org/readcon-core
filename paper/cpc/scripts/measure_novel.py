@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Measure the supplementary novel records from this tip's evidence files.
 
 Restart movies, the velocity fixture, the conformance corpus and a

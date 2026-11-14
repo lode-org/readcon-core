@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Writers for stored paper records.
 
 regen_paper.py does not run these. Each function writes one committed

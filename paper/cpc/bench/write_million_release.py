@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Write million_hold.json and peers_n1e6.json from one cross-format log.
 
 The log is the raw record of the run (one summary line, then one

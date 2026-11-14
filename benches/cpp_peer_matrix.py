@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Build one C++ head-to-head cell.
 
 The cell links this checkout's ``libreadcon_core`` and one chemfiles 0.10.4
-build. ``CELLS`` is the compiler and the optimisation level, in the order
+build. ``CELLS`` is the compiler and the optimization level, in the order
 ``h2h.py`` interleaves.
 """
 
@@ -16,7 +17,7 @@ REPO = HERE.parent
 SOURCE = REPO / "paper" / "cpc" / "bench" / "native" / "cpp_ratio.cpp"
 INCLUDE = REPO / "include"
 
-# compiler name, optimisation flag, chemfiles build directory
+# compiler name, optimization flag, chemfiles build directory
 CELLS = (
     ("gcc", "-O2", "build-gcc-o2"),
     ("gcc", "-O3", "build-gcc-o3"),

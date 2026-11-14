@@ -1,3 +1,4 @@
+# Copyright (c) readcon-core developers
 """Where this release's million-atom records live.
 
 ``bench/results/r0174/million`` is superseded. Readers use this directory.

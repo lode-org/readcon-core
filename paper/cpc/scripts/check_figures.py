@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Fail unless every figure the manuscript includes is a PDF on disk.
 
 regen_paper.py writes them. A clean clone runs this after ``cpc-regen``.

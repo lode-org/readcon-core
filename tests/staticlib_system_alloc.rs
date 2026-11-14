@@ -1,3 +1,4 @@
+// Copyright (c) readcon-core developers
 //! The static archive is linked into C++ hosts beside other Rust
 //! staticlibs. It must not install mimalloc; the cdylib keeps it.
 
