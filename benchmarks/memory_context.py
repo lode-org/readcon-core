@@ -198,13 +198,16 @@ def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = 
     for benchmark, entry in data["results"].items():
         record = dict(zip(columns, entry))
         params = record.get("params") or [[]]
-        frame_params = params[0] if params and params[0] else [""]
         samples = record.get("samples") or []
         medians = record.get("result") or []
         if not isinstance(medians, list):
             medians = [medians]
             samples = [samples]
-            frame_params = [""]
+            params = []
+        # One axis is the frame count. Two axes are frame count then thread count.
+        if len(params) > 1:
+            continue
+        frame_params = params[0] if params and params[0] else [""]
         repeats = record.get("stats_repeat") or []
         q25 = record.get("stats_q_25") or []
         q75 = record.get("stats_q_75") or []
@@ -265,6 +268,77 @@ def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = 
         writer.writerows(rows)
 
 
+def write_thread_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = None) -> None:
+    """Rows whose benchmark crosses frame count with thread count."""
+    import itertools
+
+    data = json.loads(result_json.read_text(encoding="utf-8"))
+    columns = data["result_columns"]
+    per_atom = _min_atom_bytes(suite or Path(__file__).with_name("bench_readcon.py"))
+    rows = []
+    for benchmark, entry in data["results"].items():
+        record = dict(zip(columns, entry))
+        params = record.get("params") or []
+        if len(params) != 2:
+            continue
+        medians = record.get("result") or []
+        samples = record.get("samples") or []
+        q25 = record.get("stats_q_25") or []
+        q75 = record.get("stats_q_75") or []
+        pairs = list(itertools.product(*params))
+        if len(pairs) != len(medians):
+            raise SystemExit(f"{benchmark} has {len(medians)} results for {len(pairs)} parameters")
+        for index, (frames_text, threads_text) in enumerate(pairs):
+            frames = int(frames_text)
+            if index >= len(q25) or index >= len(q75):
+                raise SystemExit(f"{benchmark} parameter {frames_text} is missing stats_q_25/stats_q_75")
+            sample_row = samples[index] if index < len(samples) else []
+            if not isinstance(sample_row, list):
+                sample_row = []
+            median = float(medians[index])
+            if sample_row:
+                count = len(sample_row)
+                spread = _quartile_gap([float(item) for item in sample_row])
+            else:
+                raise SystemExit(f"{benchmark} parameter {frames_text},{threads_text} is missing samples")
+            atoms = _atoms_for(benchmark, repo)
+            minimal = atoms * frames * (per_atom + _extra_atom_bytes(benchmark))
+            ratio = median / minimal if minimal else 0.0
+            if ratio < 1.0:
+                raise SystemExit(f"{benchmark} peak {median} is below the stored minimum {minimal}")
+            rows.append(
+                {
+                    "benchmark": benchmark,
+                    "frames": frames,
+                    "n_threads": int(threads_text),
+                    "file_bytes": _file_bytes(benchmark, frames, repo),
+                    "peak_median": f"{median:.1f}",
+                    "n": count,
+                    "iqr": f"{spread:.1f}",
+                    "minimal_bytes": minimal,
+                    "peak_over_minimal": f"{ratio:.6f}",
+                    "same_con": "0" if "Chemfiles" in benchmark else "1",
+                }
+            )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "benchmark",
+        "frames",
+        "n_threads",
+        "file_bytes",
+        "peak_median",
+        "n",
+        "iqr",
+        "minimal_bytes",
+        "peak_over_minimal",
+        "same_con",
+    ]
+    with dest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -302,6 +376,12 @@ def main(argv: list[str] | None = None) -> int:
         help="where to write the peaks CSV",
     )
     parser.add_argument(
+        "--thread-peaks-out",
+        type=Path,
+        default=None,
+        help="where to write rows that cross frame count and thread count",
+    )
+    parser.add_argument(
         "--repo",
         type=Path,
         default=Path(__file__).resolve().parent.parent,
@@ -316,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("--peaks-out is required with --peaks-json")
         write_peaks(args.peaks_json, args.peaks_out, args.repo)
         print(args.peaks_out)
+        if args.thread_peaks_out is not None:
+            write_thread_peaks(args.peaks_json, args.thread_peaks_out, args.repo)
+            print(args.thread_peaks_out)
     return 0
 
 

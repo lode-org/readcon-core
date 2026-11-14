@@ -1,0 +1,9 @@
+{
+    "arch": "x86_64",
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "machine": "pr-bench",
+    "num_cpu": "8",
+    "os": "linux",
+    "ram": "47GB",
+    "version": 1
+}

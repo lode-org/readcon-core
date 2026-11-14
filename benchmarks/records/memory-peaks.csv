@@ -16,9 +16,9 @@ bench_readcon.RayReadConTiny.ray_iter_con_materialize,200,99800,38489.0,6,0.0,19
 bench_readcon.RayReadConTiny.ray_read_con_path,50,24950,23489.0,6,0.0,4800,4.893542,1
 bench_readcon.RayReadConTiny.ray_read_con_path,100,49900,28489.0,6,0.0,9600,2.967604,1
 bench_readcon.RayReadConTiny.ray_read_con_path,200,99800,38489.0,6,0.0,19200,2.004635,1
-bench_readcon.RayReadConTiny.ray_read_con_string,50,24950,48342.0,6,0.0,4800,10.071250,1
-bench_readcon.RayReadConTiny.ray_read_con_string,100,49900,78292.0,6,0.0,9600,8.155417,1
-bench_readcon.RayReadConTiny.ray_read_con_string,200,99800,138192.0,6,0.0,19200,7.197500,1
+bench_readcon.RayReadConTiny.ray_read_con_string,50,24950,23392.0,6,0.0,4800,4.873333,1
+bench_readcon.RayReadConTiny.ray_read_con_string,100,49900,28392.0,6,0.0,9600,2.957500,1
+bench_readcon.RayReadConTiny.ray_read_con_string,200,99800,38392.0,6,0.0,19200,1.999583,1
 bench_readcon.RayReadConTiny.track_python_heap_read_con_path,50,24950,5752.0,6,0.0,4800,1.198333,1
 bench_readcon.RayReadConTiny.track_python_heap_read_con_path,100,49900,10552.0,6,0.0,9600,1.099167,1
 bench_readcon.RayReadConTiny.track_python_heap_read_con_path,200,99800,20152.0,6,0.0,19200,1.049583,1
