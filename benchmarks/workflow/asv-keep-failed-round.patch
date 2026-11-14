@@ -1,0 +1,29 @@
+diff --git a/asv/results.py b/asv/results.py
+index 0afccb1..1ea8f94 100644
+--- a/asv/results.py
++++ b/asv/results.py
+@@ -486,6 +486,14 @@ class Results:
+         incoming_failed = bool(new_result) and all(r is None for r in new_result)
+         previous = self._results.get(benchmark_name)
+         previous_ok = isinstance(previous, list) and any(r is not None for r in previous)
++        # A failed round stays None. A later successful sample must not fill
++        # that hole, or the file shows six samples for a round that failed.
++        if (
++            round_number is not None
++            and not incoming_failed
++            and round_number in (self._failed_rounds.get(benchmark_name) or [])
++        ):
++            return
+         if round_number is not None and incoming_failed and same_version and previous_ok:
+             self._set_round_samples(benchmark_name, round_number, None)
+             self._note_failed_round(benchmark_name, round_number, result.stderr, result.errcode)
+@@ -658,6 +666,9 @@ class Results:
+         rounds = self._round_samples.setdefault(name, [])
+         while len(rounds) < round_number:
+             rounds.append(None)
++        failed = self._failed_rounds.get(name) or []
++        if rounds[round_number - 1] is None and round_number in failed:
++            return
+         rounds[round_number - 1] = samples
+ 
+     def _note_failed_round(self, name, round_number, stderr, errcode):

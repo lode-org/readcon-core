@@ -69,7 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--asv", default=shutil.which("asv") or "asv")
     args = parser.parse_args(argv)
-    staged = Path(tempfile.mkdtemp(prefix="mem-compare-"))
+    stage_root = Path("build") / "bench"
+    stage_root.mkdir(parents=True, exist_ok=True)
+    staged = Path(tempfile.mkdtemp(prefix="mem-compare-", dir=stage_root))
     try:
         _stage(staged, args.machine, args.before_json, args.after_json, args.benchmarks, args.machine_json)
         conf = json.loads(Path(args.config).read_text(encoding="utf-8"))

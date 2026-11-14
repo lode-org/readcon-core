@@ -79,7 +79,7 @@ def _table(before_sha: str, after_sha: str, before: dict, after: dict, select) -
         right = after[label]
         if left["median"] in (None, ) or right["median"] in (None, ):
             continue
-        ci = bootstrap_median_ratio_ci(left["samples"], right["samples"])
+        ci = bootstrap_median_ratio_ci(left["samples"], right["samples"], seed=1)
         if ci is None:
             raise SystemExit(f"{label} has no ratio interval")
         ratio = format_ratio_ci(ci)
@@ -118,10 +118,70 @@ def _table(before_sha: str, after_sha: str, before: dict, after: dict, select) -
     return text
 
 
+def _first_line(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return text.splitlines()[0].strip() if text else ""
+
+
+def _host_runtime() -> dict[str, str]:
+    """Virtual machine, pinning, governor, and turbo. No host name."""
+    flags = ""
+    try:
+        cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        cpuinfo = ""
+    for line in cpuinfo.splitlines():
+        if line.lower().startswith("flags"):
+            flags = line.split(":", 1)[-1]
+            break
+    virtual = "yes" if "hypervisor" in flags.split() else "no"
+    governor = _first_line(Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"))
+    if not governor:
+        governor = "unavailable"
+    no_turbo = _first_line(Path("/sys/devices/system/cpu/intel_pstate/no_turbo"))
+    boost = _first_line(Path("/sys/devices/system/cpu/cpufreq/boost"))
+    if no_turbo == "1":
+        turbo = "off"
+    elif no_turbo == "0":
+        turbo = "on"
+    elif boost == "1":
+        turbo = "on"
+    elif boost == "0":
+        turbo = "off"
+    else:
+        turbo = "unavailable"
+    allowed = ""
+    try:
+        status = Path("/proc/self/status").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        status = ""
+    for line in status.splitlines():
+        if line.startswith("Cpus_allowed_list:"):
+            allowed = line.split(":", 1)[-1].strip()
+            break
+    online = _first_line(Path("/sys/devices/system/cpu/online"))
+    if allowed and online and allowed == online:
+        pinning = "process affinity is every online cpu; workers pin to one core each"
+    elif allowed:
+        pinning = "process affinity is restricted; workers pin to one core each"
+    else:
+        pinning = "workers pin to one core each"
+    return {
+        "virtual_machine": virtual,
+        "core_pinning": pinning,
+        "cpu_governor": governor,
+        "turbo": turbo,
+    }
+
+
 def _write_context(path: Path, command: str, n_threads: str) -> None:
     if not command.strip():
         raise SystemExit("the asv command is empty")
     row = _lscpu_summary()
+    row.update(_host_runtime())
     row["asv_command"] = command.strip()
     row["n_threads"] = n_threads
     fieldnames = [
@@ -136,6 +196,10 @@ def _write_context(path: Path, command: str, n_threads: str) -> None:
         "l1i_cache",
         "l2_cache",
         "l3_cache",
+        "virtual_machine",
+        "core_pinning",
+        "cpu_governor",
+        "turbo",
         "asv_command",
         "n_threads",
     ]

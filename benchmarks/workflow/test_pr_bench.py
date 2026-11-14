@@ -431,5 +431,64 @@ class CommentShowsRowBound(unittest.TestCase):
         self.assertIn(pr_bench.format_lossless(slowed["upper"]), sleep_line)
 
 
+class AsvPinAndFailedRounds(unittest.TestCase):
+    def test_requirements_pin_the_asv_commit_that_writes_interleaved_rounds(self) -> None:
+        text = (ROOT / "benchmarks" / "workflow" / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn(
+            "asv @ git+https://github.com/HaoZeke/asv.git@15e9a444b424aae46c08dafa8fe80f2bdb4fca18",
+            text,
+        )
+        self.assertNotIn("asv==0.6.6", text)
+        patch = (ROOT / "benchmarks" / "workflow" / "asv-keep-failed-round.patch").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("A failed round stays None", patch)
+        timing = (ROOT / "benchmarks" / "generate_timing_compare.py").read_text(encoding="utf-8")
+        self.assertIn("bootstrap_median_ratio_ci(left[\"samples\"], right[\"samples\"], seed=1)", timing)
+        memory = (ROOT / "benchmarks" / "generate_memory_compare.py").read_text(encoding="utf-8")
+        self.assertIn('Path("build") / "bench"', memory)
+        self.assertIn("dir=stage_root", memory)
+
+    def test_a_failed_round_stays_empty(self) -> None:
+        from asv.results import Results
+        from asv.runner import BenchmarkResult
+
+        benchmark = {
+            "name": "bench.time_threads",
+            "version": "1",
+            "params": [],
+        }
+        params = {"machine": "pr-bench"}
+        result = Results(params, {}, "a" * 40, 1, "3.12", "py3", {})
+        failed = BenchmarkResult(
+            result=[None],
+            samples=[None],
+            number=[None],
+            errcode=1,
+            stderr="round failed",
+            profile=None,
+        )
+        result.add_result(benchmark, failed, record_samples=True, round_number=1)
+        self.assertEqual(result.failed_rounds["bench.time_threads"], [1])
+        self.assertIsNone(result.round_samples["bench.time_threads"][0])
+        later = BenchmarkResult(
+            result=[1.0],
+            samples=[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]],
+            number=[6],
+            errcode=0,
+            stderr="",
+            profile=None,
+        )
+        result.add_result(
+            benchmark,
+            later,
+            record_samples=True,
+            append_samples=True,
+            round_number=1,
+        )
+        self.assertIsNone(result.round_samples["bench.time_threads"][0])
+        self.assertEqual(result.failed_rounds["bench.time_threads"], [1])
+
+
 if __name__ == "__main__":
     unittest.main()
