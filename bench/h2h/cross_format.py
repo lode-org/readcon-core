@@ -4,10 +4,13 @@
 readcon reads and writes CON (plain, gzip, zstd). ASE, chemfiles,
 MDAnalysis, and OVITO read and write the same atoms, cell, and frames in
 the format each library does best from this set: extended XYZ, XYZ, PDB,
-DCD, XTC, Amber NetCDF, and TRR, plus a compressed variant when that
+DCD, XTC, Amber NetCDF, TRR, and H5MD, plus a compressed variant when that
 library writes one. Chemfiles also writes DCD, XTC, PDB and Amber NetCDF
-(with velocities). MDAnalysis writes TRR with velocities. OVITO's XYZ
-keeps mass and velocity, and the gzip row compresses that text.
+(with velocities). MDAnalysis writes TRR with velocities and H5MD with
+``convert_units`` false. Its mmCIF reader is the first model only, and
+MDAnalysis has no mmCIF writer. OVITO's XYZ keeps mass and velocity, and
+the gzip row compresses that text. extxyz-ng 0.0.2, when its wheel is in
+its own prefix, reads the same extended XYZ.
 Chemfiles reads CON by taking the frames readcon parsed and copying
 positions and the cell out of a chemfiles Frame. That row exists only
 when ``has_chemfiles_support()`` is true. Compressed XYZ rows exist when
@@ -133,6 +136,8 @@ PRECISION = {
     "gro": 1e-2,
     # CON-bin stores little-endian float64.
     "conbin": 1e-12,
+    # H5MD positions and the cell come back as float32.
+    "h5md": 1e-5,
 }
 FIELD_TOL = 1e-4
 # Smaller than a text CON digit, larger than a float64 round trip.
@@ -669,6 +674,183 @@ def _mda_write(path: Path, spec: dict, velocities: bool = False) -> None:
     write_built_mda(path, spec, _mda_universe(spec), velocities)
 
 
+def write_built_mda_h5md(path: Path, spec: dict, universe) -> None:
+    """H5MDWriter with unit conversion off.
+
+    The default ``convert_units=True`` refuses a Universe that has no
+    units. Off leaves the angstrom columns as they are. Positions and the
+    cell are stored as float32.
+    """
+    from MDAnalysis.coordinates.H5MD import H5MDWriter
+
+    _guard_spec(spec)
+    path.unlink(missing_ok=True)
+    with H5MDWriter(os.fspath(path), spec["n_atoms"], convert_units=False) as writer:
+        for frame_index in range(spec["n_frames"]):
+            universe.atoms.positions = spec["positions"][frame_index]
+            lengths = spec["cell"][frame_index, :3]
+            universe.dimensions = np.array(
+                [lengths[0], lengths[1], lengths[2], 90.0, 90.0, 90.0],
+                dtype=np.float64,
+            )
+            writer.write(universe.atoms)
+
+
+def read_mda_h5md(path: str) -> dict:
+    from MDAnalysis.coordinates.H5MD import H5MDReader
+
+    return _mda_read_reader(
+        path, lambda filename: H5MDReader(filename, convert_units=False)
+    )
+
+
+def write_mmcif_text(path: Path, spec: dict) -> None:
+    """mmCIF of one frame. MDAnalysis 2.11.0 has no mmCIF writer.
+
+    The reader keeps the first model, so a multi-frame file is refused
+    here instead of being timed as a one-frame read.
+    """
+    _guard_spec(spec)
+    if int(spec["n_frames"]) != 1:
+        raise SystemExit("MDAnalysis MMCIFReader reads the first model only")
+    lengths = spec["cell"][0, :3]
+    angles = spec["cell"][0, 3:]
+    lines = [
+        "data_readcon",
+        f"_cell.length_a {float(lengths[0]):.8f}",
+        f"_cell.length_b {float(lengths[1]):.8f}",
+        f"_cell.length_c {float(lengths[2]):.8f}",
+        f"_cell.angle_alpha {float(angles[0]):.8f}",
+        f"_cell.angle_beta {float(angles[1]):.8f}",
+        f"_cell.angle_gamma {float(angles[2]):.8f}",
+        "loop_",
+        "_atom_site.group_PDB",
+        "_atom_site.id",
+        "_atom_site.type_symbol",
+        "_atom_site.label_atom_id",
+        "_atom_site.label_alt_id",
+        "_atom_site.label_comp_id",
+        "_atom_site.label_asym_id",
+        "_atom_site.label_entity_id",
+        "_atom_site.label_seq_id",
+        "_atom_site.pdbx_PDB_ins_code",
+        "_atom_site.Cartn_x",
+        "_atom_site.Cartn_y",
+        "_atom_site.Cartn_z",
+        "_atom_site.occupancy",
+        "_atom_site.B_iso_or_equiv",
+        "_atom_site.pdbx_formal_charge",
+        "_atom_site.auth_seq_id",
+        "_atom_site.auth_comp_id",
+        "_atom_site.auth_asym_id",
+        "_atom_site.auth_atom_id",
+        "_atom_site.pdbx_PDB_model_num",
+    ]
+    positions = spec["positions"][0]
+    for index, symbol in enumerate(spec["symbols"]):
+        xyz = positions[index]
+        lines.append(
+            f"ATOM {index + 1} {symbol} {symbol} . CU A 1 {index + 1} ? "
+            f"{float(xyz[0]):.8f} {float(xyz[1]):.8f} {float(xyz[2]):.8f} "
+            f"1.00 0.00 ? {index + 1} CU A {symbol} 1"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def read_mda_mmcif(path: str) -> dict:
+    from MDAnalysis.coordinates.MMCIF import MMCIFReader
+
+    reader = MMCIFReader(path)
+    coords = np.array(reader.ts.positions, dtype=np.float64, copy=True)
+    dim = np.asarray(reader.ts.dimensions, dtype=np.float64).reshape(-1)
+    if dim.size != 6 or not np.all(np.isfinite(dim)):
+        cell = None
+    else:
+        cell = dim.reshape(1, 6)
+    return {
+        "positions": coords.reshape(1, -1, 3),
+        "cell": cell,
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
+def _extxyz_ng():
+    """extxyz-ng 0.0.2 from its own prefix, or None.
+
+    The wheel's import name is ``extxyz``. Installing it on the default
+    path replaces extxyz 0.4.6, which this process still imports. The
+    prefix keeps both.
+    """
+    cached = getattr(_extxyz_ng, "found", None)
+    if cached is not None:
+        return cached or None
+    root = bench_disk() / "extxyz-ng-0.0.2"
+    init = root / "extxyz" / "__init__.py"
+    version = ""
+    metas = sorted(root.glob("extxyz_ng-*.dist-info/METADATA"))
+    if metas:
+        for line in metas[0].read_text(encoding="utf-8").splitlines():
+            if line.startswith("Version:"):
+                version = line.split(":", 1)[1].strip()
+                break
+    if not init.is_file() or version != "0.0.2":
+        _extxyz_ng.found = False
+        return None
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "extxyz_ng",
+        init,
+        submodule_search_locations=[str(init.parent)],
+    )
+    if spec is None or spec.loader is None:
+        _extxyz_ng.found = False
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["extxyz_ng"] = module
+    spec.loader.exec_module(module)
+    _extxyz_ng.found = (version, module)
+    return _extxyz_ng.found
+
+
+def read_extxyz_ng(path: str) -> dict:
+    found = _extxyz_ng()
+    if found is None:
+        raise SystemExit(
+            "extxyz-ng 0.0.2 is not in its prefix; the default install "
+            "replaces extxyz 0.4.6 and was not used"
+        )
+    _version, module = found
+    positions = []
+    cells = []
+    for frame in module.read_frames_from_file(path):
+        positions.append(np.array(frame.arrs["pos"], dtype=np.float64, copy=True))
+        lattice = np.asarray(frame.info.get("Lattice"), dtype=np.float64)
+        if lattice.shape != (3, 3):
+            cells.append(None)
+            continue
+        lengths = np.linalg.norm(lattice, axis=1)
+        cells.append(
+            np.array(
+                [lengths[0], lengths[1], lengths[2], 90.0, 90.0, 90.0],
+                dtype=np.float64,
+            )
+        )
+    if cells and all(block is not None for block in cells):
+        cell = np.stack(cells)
+    else:
+        cell = None
+    return {
+        "positions": np.stack(positions),
+        "cell": cell,
+        "masses": None,
+        "velocities": None,
+        "fixed": None,
+    }
+
+
 def _mda_read_reader(path: str, reader_cls, velocities: bool = False) -> dict:
     positions = []
     cells = []
@@ -1010,10 +1192,11 @@ def library_versions() -> dict:
     """Versions pinned for this table. A mismatch aborts the run."""
     import ase
     import chemfiles
+    import extxyz
+    import MDAnalysis
     import mdtraj
     import ovito
     import readcon
-    import MDAnalysis
 
     versions = {
         "ase": ase.__version__,
@@ -1023,12 +1206,28 @@ def library_versions() -> dict:
         "numpy": np.__version__,
         "ovito": ".".join(str(part) for part in ovito.version),
         "readcon": readcon.__version__,
+        "extxyz": str(getattr(extxyz, "__version__", "") or ""),
     }
+    for name in ("h5py", "gemmi"):
+        try:
+            versions[name] = str(__import__(name).__version__)
+        except ImportError:
+            versions[name] = "not installed"
+    ng = _extxyz_ng()
+    if ng is None:
+        versions["extxyz-ng"] = (
+            "not installed: 0.0.2 replaces the extxyz 0.4.6 import; extxyz 0.4.6 kept"
+        )
+    else:
+        versions["extxyz-ng"] = ng[0]
+    found = _mdcompress_tools()
+    versions["mdcompress"] = found[2] if found else "not installed"
     required = {
         "chemfiles": "0.10.4",
         "MDAnalysis": "2.11.0",
         "mdtraj": "1.11.2",
         "ovito": "3.17.2",
+        "extxyz": "0.4.6",
     }
     mismatches = [
         f"{name} {versions[name]} != {want}"
@@ -1112,6 +1311,26 @@ def expect_file_bytes(arm_id: str, n_atoms: int, n_frames: int, size: int) -> No
         low = max(32, n // 5)
     elif "xtc" in arm_id:
         low = max(64, n)
+    elif "mmcif" in arm_id:
+        # The mmCIF header is fixed. A one-atom file is still more than n*400.
+        low = max(64, n * 4)
+        high = n * 400 + 8192
+        if not low <= size <= high:
+            raise SystemExit(
+                f"{arm_id} file is {size} bytes for {n_atoms} atoms x "
+                f"{n_frames} frames; expected {low}..{high}"
+            )
+        return
+    elif "h5md" in arm_id:
+        # The HDF5 container is tens of kilobytes before the first coordinate.
+        low = max(4096, n * 4)
+        high = n * 400 + 1_048_576
+        if not low <= size <= high:
+            raise SystemExit(
+                f"{arm_id} file is {size} bytes for {n_atoms} atoms x "
+                f"{n_frames} frames; expected {low}..{high}"
+            )
+        return
     elif any(token in arm_id for token in ("dcd", "ncdf", "trr", "conbin")):
         low = n * 8
     elif "mdc" in arm_id:
@@ -1158,7 +1377,7 @@ def expect_written_roundtrip(
 
 def write_clock(arm_id: str) -> str:
     """What the write sample times, after the in-memory structure exists."""
-    if arm_id == "chemfiles-con":
+    if arm_id in ("chemfiles-con", "mda-mmcif", "extxyz-ng"):
         return "no writer"
     if arm_id == "readcon-con":
         return "write_columns of the numpy columns already in the spec, one thread"
@@ -1371,7 +1590,7 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
     except ImportError:
         notes.append("ASE is not installed.")
     try:
-        import MDAnalysis  # noqa: F401
+        import MDAnalysis
 
         pdb = {
             "id": "mda-pdb",
@@ -1439,11 +1658,67 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                 "precision": PRECISION["trr"],
             }
         )
+        try:
+            import h5py
+        except ImportError:
+            notes.append(
+                "mda-h5md omitted; MDAnalysis 2.11.0 H5MDReader needs h5py, "
+                "which is not installed."
+            )
+        else:
+            arms.append(
+                {
+                    "id": "mda-h5md",
+                    "tool": "mdanalysis",
+                    "format": "h5md",
+                    "precision": PRECISION["h5md"],
+                    "notes": (
+                        f"MDAnalysis {MDAnalysis.__version__} H5MDReader and "
+                        f"H5MDWriter, h5py {h5py.__version__}. convert_units "
+                        "is false, so the angstrom columns are stored as they "
+                        "are. Positions and the cell are float32"
+                    ),
+                }
+            )
+        try:
+            import gemmi
+        except ImportError:
+            notes.append(
+                "mda-mmcif omitted; MDAnalysis 2.11.0 MMCIFReader needs gemmi, "
+                "which is not installed."
+            )
+        else:
+            if not hasattr(gemmi, "FlatStructure"):
+                notes.append(
+                    f"mda-mmcif omitted; gemmi {gemmi.__version__} has no "
+                    "FlatStructure, and MDAnalysis 2.11.0 MMCIFReader calls "
+                    "gemmi.FlatStructure. gemmi 0.7.3 does not; gemmi 0.7.5 "
+                    "does. No older reader was substituted."
+                )
+            else:
+                arms.append(
+                    {
+                        "id": "mda-mmcif",
+                        "tool": "mdanalysis",
+                        "format": "mmcif",
+                        "precision": PRECISION["pdb"],
+                        "one_model": True,
+                        "no_writer": True,
+                        "notes": (
+                            f"MDAnalysis {MDAnalysis.__version__} MMCIFReader "
+                            f"via gemmi {gemmi.__version__}. MDAnalysis has no "
+                            "mmCIF writer. The file is mmCIF text of the same "
+                            "columns, written before the read. The reader "
+                            "keeps the first model only"
+                        ),
+                    }
+                )
         notes.append(
             "MDAnalysis "
-            + __import__("MDAnalysis").__version__
-            + " on DCD, XTC, NetCDF, TRR, XYZ and PDB. "
-            "Cells are orthogonal, so the 2.11 triclinic wrap does not apply."
+            + MDAnalysis.__version__
+            + " on DCD, XTC, NetCDF, TRR, XYZ, PDB, H5MD and mmCIF where "
+            "those readers import. Cells are orthogonal, so the 2.11 "
+            "triclinic wrap does not apply."
         )
     except ImportError:
         notes.append("MDAnalysis is not installed.")
@@ -1492,6 +1767,33 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
         )
     except ImportError:
         notes.append("OVITO is not installed.")
+    ng = _extxyz_ng()
+    if ng is None:
+        notes.append(
+            "extxyz-ng 0.0.2 was not added. Installing that wheel on the "
+            "default path replaces the extxyz 0.4.6 module (same import "
+            "name, no read_dicts). extxyz 0.4.6 stays. The side prefix "
+            "build/bench/extxyz-ng-0.0.2 was not present, so there is no "
+            "read arm."
+        )
+    else:
+        arms.append(
+            {
+                "id": "extxyz-ng",
+                "tool": "extxyz-ng",
+                "format": "extxyz",
+                "precision": PRECISION["extxyz"],
+                "no_writer": True,
+                "notes": (
+                    f"extxyz-ng {ng[0]} (Rust). The default install replaces "
+                    "the extxyz 0.4.6 import, so this arm loads the 0.0.2 "
+                    "wheel from its own prefix and leaves extxyz 0.4.6 "
+                    "installed. The timed operation is read_frames_from_file "
+                    "of the ASE extended XYZ of the same frames. The module "
+                    "publishes no __version__; the version is the wheel version"
+                ),
+            }
+        )
     found = _mdcompress_tools()
     if found is None:
         notes.append(
@@ -1811,6 +2113,18 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         path = directory / "mda.trr"
         _mda_write(path, spec, velocities=True)
         return path
+    if arm_id == "mda-h5md":
+        path = directory / "mda.h5md"
+        write_built_mda_h5md(path, spec, _mda_universe(spec))
+        return path
+    if arm_id == "mda-mmcif":
+        path = directory / "mda.cif"
+        write_mmcif_text(path, spec)
+        return path
+    if arm_id == "extxyz-ng":
+        path = directory / "extxyz-ng.extxyz"
+        write_ase(path, spec)
+        return path
     if arm_id == "ovito-xyz":
         path = directory / "ovito.xyz"
         write_ovito(path, spec)
@@ -1921,6 +2235,12 @@ def _dispatch_read(arm_id: str, path: str) -> dict:
         from MDAnalysis.coordinates.TRR import TRRReader
 
         return _mda_read_reader(path, TRRReader, velocities=True)
+    if arm_id == "mda-h5md":
+        return read_mda_h5md(path)
+    if arm_id == "mda-mmcif":
+        return read_mda_mmcif(path)
+    if arm_id == "extxyz-ng":
+        return read_extxyz_ng(path)
     if arm_id in ("ovito-xyz", "ovito-xyz-gz"):
         return read_ovito(path)
     if arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
@@ -1985,6 +2305,12 @@ def roundtrip_report(
     kept = []
     rows = []
     for arm in arms:
+        if arm.get("one_model") and n_frames != 1:
+            notes.append(
+                f"{arm['id']} skipped: MDAnalysis 2.11.0 MMCIFReader reads "
+                "the first model only"
+            )
+            continue
         if arm["id"] == "readcon-con-zst" and not _try_zstd(spec, directory):
             notes.append("readcon-con-zst skipped; this build has no zstd feature.")
             continue
@@ -2086,6 +2412,12 @@ def _timed_write(arm_id: str, spec: dict, dest: Path) -> None:
         _mda_write(dest, spec, velocities=True)
     elif arm_id == "mda-trr":
         _mda_write(dest, spec, velocities=True)
+    elif arm_id == "mda-h5md":
+        write_built_mda_h5md(dest, spec, _mda_universe(spec))
+    elif arm_id == "mda-mmcif":
+        raise SystemExit("MDAnalysis has no mmCIF writer")
+    elif arm_id == "extxyz-ng":
+        raise SystemExit("extxyz-ng 0.0.2 is a read arm")
     elif arm_id in ("ovito-xyz", "ovito-xyz-gz"):
         write_ovito(dest, spec)
     elif arm_id in ("mdtraj-ncdf", "mdtraj-dcd", "mdtraj-xtc"):
@@ -2155,9 +2487,19 @@ def worker_main() -> None:
             _ase_images(spec) if arm in ("ase-extxyz", "ase-extxyz-gz") else None
         )
         mda_universe = None
+        mda_h5md = False
         mda_velocities = arm in ("mda-ncdf", "mda-trr")
-        if arm in ("mda-pdb", "mda-dcd", "mda-xtc", "mda-xyz", "mda-ncdf", "mda-trr"):
+        if arm in (
+            "mda-pdb",
+            "mda-dcd",
+            "mda-xtc",
+            "mda-xyz",
+            "mda-ncdf",
+            "mda-trr",
+            "mda-h5md",
+        ):
             mda_universe = _mda_universe(spec)
+            mda_h5md = arm == "mda-h5md"
         ovito_pipes = (
             ovito_sources(spec) if arm in ("ovito-xyz", "ovito-xyz-gz") else None
         )
@@ -2174,6 +2516,7 @@ def worker_main() -> None:
             ase_images=ase_images,
             mda_universe=mda_universe,
             mda_velocities=mda_velocities,
+            mda_h5md=mda_h5md,
             ovito_pipes=ovito_pipes,
         ):
             if chem_frames is not None:
@@ -2183,6 +2526,8 @@ def worker_main() -> None:
                 md_trajectory.save(os.fspath(dest))
             elif ase_images is not None:
                 write_built_ase(dest, ase_images)
+            elif mda_h5md:
+                write_built_mda_h5md(dest, spec, mda_universe)
             elif mda_universe is not None:
                 write_built_mda(dest, spec, mda_universe, mda_velocities)
             elif ovito_pipes is not None:
@@ -2463,6 +2808,13 @@ def run(
                 lines.append(f"note {note}")
         usable = []
         for arm in arms:
+            if arm.get("one_model") and n_frames != 1:
+                arm = dict(arm)
+                arm["unsupported"] = True
+                arm["drops"] = (
+                    "unsupported: MDAnalysis 2.11.0 MMCIFReader reads the "
+                    "first model only"
+                )
             if arm["id"] == "mdcompress-mdc" and n_frames < 2:
                 arm = dict(arm)
                 arm["unsupported"] = True
