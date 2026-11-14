@@ -222,10 +222,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.check_only:
         work = args.work
         if work is None:
-            import tempfile
+            from work_dir import work_dir
 
-            with tempfile.TemporaryDirectory() as tmp:
-                install_published(args.root, Path(tmp))
+            with work_dir("install") as tmp:
+                install_published(args.root, tmp)
         else:
             install_published(args.root, work)
     return 0

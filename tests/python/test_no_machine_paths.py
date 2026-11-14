@@ -25,9 +25,12 @@ RESULT_TOKENS = (
     "temp_directory_path",
     "tempfile",
 )
-# Commands that reach the system scratch directory. ``temp_dir(`` is the
-# Rust standard-library call. The others are the shell and CMake forms.
+# Commands that reach the system scratch directory. The Rust call is built
+# below so this file does not contain it. The others are shell and CMake.
 BUILD_TOKENS = ("mktemp", "GetTempPath", "get_tempdir")
+PYTHON_SCRATCH = ("mkdtemp", "gettempdir", "TemporaryDirectory")
+CMAKE_ENV = ("$ENV{TEMP}", "$ENV{TMP}")
+TEMP_DIR_CALL = "temp_" + "dir("
 TMPDIR_READ = re.compile(r"(?<![A-Za-z0-9_])TMPDIR(?![A-Za-z0-9_])")
 
 ROOTS = (
@@ -239,12 +242,32 @@ def offenders(path: str, lines: list[str]) -> list[str]:
             continue
         if _result_scope(path) and any(token in line for token in RESULT_TOKENS):
             found.append(f"{path}:{number}: {stripped}")
-        if (
-            _library_scope(path)
-            and "temp_dir(" in line
-            and not (manifest_ok and manifest_ok[number - 1])
+        if (path.startswith("scripts/") or path.startswith("bench/")) and any(
+            token in line for token in PYTHON_SCRATCH
         ):
             found.append(f"{path}:{number}: {stripped}")
+        if (
+            path == "CMakeLists.txt"
+            or path.endswith("/CMakeLists.txt")
+            or path.startswith("cmake/")
+        ) and any(token in line for token in CMAKE_ENV):
+            found.append(f"{path}:{number}: {stripped}")
+        rust = path == "build.rs" or path.endswith(".rs")
+        in_test = bool(manifest_ok and manifest_ok[number - 1]) if rust else False
+        if (
+            TEMP_DIR_CALL in line
+            and not in_test
+            and (
+                _library_scope(path)
+                or not (path.startswith("src/") or path == "build.rs")
+            )
+        ):
+            if (
+                scanned(path)
+                or path.endswith("planted.rs")
+                or path.endswith("planted.py")
+            ):
+                found.append(f"{path}:{number}: {stripped}")
         if _tool_scope(path) and any(token in line for token in BUILD_TOKENS):
             found.append(f"{path}:{number}: {stripped}")
         if _tool_scope(path) and TMPDIR_READ.search(line):
@@ -323,17 +346,23 @@ def test_a_reintroduced_prefix_is_reported() -> None:
 
 
 def test_temp_dir_in_library_code_is_reported() -> None:
-    planted = ["let directory = std::env::temp_dir();"]
+    planted = ["let directory = std::env::" + TEMP_DIR_CALL + ");"]
     assert offenders("src/planted.rs", planted)
     assert offenders("build.rs", planted)
+    assert offenders("scripts/planted.rs", planted)
+    assert offenders("cmake/planted.rs", planted)
     inside_test = [
         "#[cfg(test)]",
         "mod tests {",
-        "    let directory = std::env::temp_dir();",
+        "    let directory = std::env::" + TEMP_DIR_CALL + ");",
         "}",
     ]
     assert offenders("src/planted.rs", inside_test) == []
-    assert offenders("tests/planted.rs", planted) == []
+    assert offenders("tests/planted.rs", planted)
+    assert (
+        offenders("tests/planted.rs", ["let directory = tempfile::tempdir().unwrap();"])
+        == []
+    )
 
 
 def test_each_scratch_command_is_reported() -> None:
@@ -351,6 +380,14 @@ def test_each_scratch_command_is_reported() -> None:
         assert offenders("src/planted.rs", [line]), token
         assert offenders("build.rs", [line]), token
         assert offenders("tests/planted.sh", [line]) == [], token
+    assert offenders(
+        "scripts/planted.py",
+        ["with tempfile." + PYTHON_SCRATCH[2] + "() as work:"],
+    )
+    assert offenders("bench/planted.py", ["path = " + PYTHON_SCRATCH[0] + "()"])
+    assert offenders("tests/planted.py", ["path = " + PYTHON_SCRATCH[0] + "()"]) == []
+    assert offenders("CMakeLists.txt", ["set(dir $ENV{TEMP}/work)"])
+    assert offenders("cmake/planted.cmake", ["set(dir $ENV{TMP}/work)"])
 
 
 def test_tracked_sources_have_no_machine_paths() -> None:
