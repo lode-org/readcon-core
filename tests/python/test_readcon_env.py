@@ -148,14 +148,84 @@ def _argument(
     joined = _concat_at(text, index)
     if joined is not None:
         return joined
+    computed = _computed_argument(text, index)
+    if computed is not None:
+        return computed
     ident = re.match(r"[A-Za-z_][A-Za-z0-9_]*", text[index:])
     if ident and ident.group(0) in bindings:
         return bindings[ident.group(0)], index + ident.end()
+    if index < len(text) and text[index] not in ")\n":
+        return "DYNAMIC", index
+    return None
+
+
+def _computed_argument(text: str, index: int) -> tuple[str, int] | None:
+    """A name built at the call, not a literal or a const."""
+    rest = text[index:]
+    matched = re.match(
+        r"""\[\s*((?:"(?:\\.|[^"\\])*"\s*,?\s*)+)\]\s*\.concat\(\s*\)""",
+        rest,
+    )
+    if matched:
+        parts = re.findall(r'"((?:\\.|[^"\\])*)"', matched.group(1))
+        return "".join(parts), index + matched.end()
+    matched = re.match(
+        r"""\[\s*"((?:\\.|[^"\\])*)"\s*,\s*"((?:\\.|[^"\\])*)"\s*\]\s*\.join\(\s*"((?:\\.|[^"\\])*)"\s*\)""",
+        rest,
+    )
+    if matched:
+        return (
+            matched.group(3).join((matched.group(1), matched.group(2))),
+            index + matched.end(),
+        )
+    matched = re.match(
+        r""""((?:\\.|[^"\\])*)"\s*\.join\(\s*\[\s*"((?:\\.|[^"\\])*)"\s*,\s*"((?:\\.|[^"\\])*)"\s*\]\s*\)""",
+        rest,
+    )
+    if matched:
+        return (
+            matched.group(1).join((matched.group(2), matched.group(3))),
+            index + matched.end(),
+        )
+    matched = re.match(
+        r"""format!\s*\(\s*"((?:\\.|[^"\\])*)"((?:\s*,\s*(?:"(?:\\.|[^"\\])*"|[A-Za-z_][A-Za-z0-9_]*))*)\s*\)""",
+        rest,
+    )
+    if matched:
+        pieces = re.findall(r'"((?:\\.|[^"\\])*)"', matched.group(2))
+        fmt = matched.group(1)
+        if re.search(r"\{[A-Za-z_]", fmt) or fmt.count("{}") != len(pieces):
+            return "DYNAMIC", index + matched.end()
+        out = []
+        cursor = 0
+        used = 0
+        while cursor < len(fmt):
+            if fmt.startswith("{}", cursor):
+                out.append(pieces[used])
+                used += 1
+                cursor += 2
+            else:
+                out.append(fmt[cursor])
+                cursor += 1
+        return "".join(out), index + matched.end()
+    matched = re.match(
+        r"""String::from\(\s*"((?:\\.|[^"\\])*)"\s*\)\s*\+\s*"((?:\\.|[^"\\])*)\"""",
+        rest,
+    )
+    if matched:
+        return matched.group(1) + matched.group(2), index + matched.end()
+    matched = re.match(
+        r"""os\.environ(?:\.get)?\s*[\[(]\s*([^"'\s)\]]+)""",
+        rest,
+    )
+    if matched and not matched.group(1).startswith(("'", '"')):
+        return "DYNAMIC", index + matched.end()
     return None
 
 
 def _calls(text: str) -> list[re.Match[str]]:
     found = list(_CALL.finditer(text))
+    found.extend(re.finditer(r"\bos\.environ(?:\.get)?\s*[\[(]", text))
     for alias in _ALIAS.findall(text):
         found.extend(re.finditer(rf"\b{alias}\s*\(", text))
     return found
@@ -182,7 +252,7 @@ def readcon_reads(text: str) -> list[tuple[int, str]]:
         if parsed is None:
             continue
         name, _ = parsed
-        if name.startswith("READCON_"):
+        if name == "DYNAMIC" or name.startswith("READCON_"):
             found.append((_line_of(masked, match.start()), name))
     for match in _FORMAT.finditer(masked):
         found.append((_line_of(masked, match.start()), "READCON_{}"))
@@ -274,6 +344,21 @@ def test_let_vars_format_and_renamed_imports_are_seen() -> None:
     assert "READCON_BOUND" in names
     assert "READCON_" in names
     assert "READCON_{}" in names
+
+
+def test_a_computed_argument_is_rejected() -> None:
+    samples = [
+        'std::env::var(["READCON_", "J"].concat())',
+        'std::env::var(format!("{}_{}", "READCON", "J"))',
+        'std::env::var(String::from("READCON") + "_K")',
+        'std::env::var(format!("{p}_L"))',
+        "os.environ[name]",
+    ]
+    for planted in samples:
+        names = {name for _line, name in readcon_reads(planted)}
+        assert names, planted
+        assert names <= {"READCON_J", "READCON_K", "DYNAMIC"} or "DYNAMIC" in names
+        assert all(name == "DYNAMIC" or name not in DOCUMENTED for name in names)
 
 
 def test_a_joined_name_is_seen() -> None:
