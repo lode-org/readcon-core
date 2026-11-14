@@ -48,6 +48,20 @@ fn record_cpu() -> String {
     }
 }
 
+fn recorded_path(path: &std::path::Path) -> String {
+    if let Ok(cwd) = std::env::current_dir()
+        && let Ok(rel) = path.strip_prefix(&cwd)
+    {
+        return rel.display().to_string();
+    }
+    let text = path.display().to_string();
+    let memory = std::path::Path::new("/dev/shm");
+    if let Ok(rel) = path.strip_prefix(memory) {
+        return format!("shm/{}", rel.display());
+    }
+    text
+}
+
 fn json_escape(text: &str) -> String {
     let mut out = String::new();
     for ch in text.chars() {
@@ -412,7 +426,7 @@ fn run_weak_writes(
     let host = json_escape(&record_cpu());
     let body = format!(
         "{{\n  \"kind\": \"ranks\",\n  \"op\": \"write\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"frames_per_worker\": {frames_per_worker},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"warmup_s\": {warmup_s:.9},\n  \"warmup_on\": {warmup_on},\n  \"clock\": \"unlink-collective-write\",\n  \"dest\": \"{}\",\n  \"host\": \"{host}\"\n}}\n",
-        json_escape(&dest.display().to_string()),
+        json_escape(&recorded_path(&dest)),
     );
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
