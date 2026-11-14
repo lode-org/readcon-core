@@ -1773,7 +1773,8 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
             "default path replaces the extxyz 0.4.6 module (same import "
             "name, no read_dicts). extxyz 0.4.6 stays. The side prefix "
             "build/bench/extxyz-ng-0.0.2 was not present, so there is no "
-            "read arm."
+            "read arm. bench/h2h/install_extxyz_ng.sh installs the hashed "
+            "wheel there."
         )
     else:
         arms.append(

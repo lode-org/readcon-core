@@ -1,0 +1,5 @@
+# extxyz-ng 0.0.2 wheels from PyPI. install_extxyz_ng.sh installs one into its own prefix.
+extxyz-ng==0.0.2 \
+    --hash=sha256:b70526fc1c83931882ceecd4b5fc3531e84245d004c0d039bd44f1dcd167a0f7 \
+    --hash=sha256:f0585e9a609548a48f7b348e455e7b5bdd2cfa6f673f3fc330f1243ccd0a99fb \
+    --hash=sha256:ab5a303861345e46775078542f784ee6cdf0b798eca940e0b4ef47ea28d6bf6b
