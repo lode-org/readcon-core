@@ -51,16 +51,100 @@ ROOTS = (
 NAMED = {"CMakeLists.txt", "build.rs"}
 
 
+# Saved records that already name a machine path. Exact paths only.
+# New records are scanned and must stay clean.
+SAVED_MACHINE_RECORDS = frozenset(
+    {
+        "bench/h2h/logs/mem-r1/massif.out",
+        "bench/h2h/logs/mem-r1/time-v.log",
+        "bench/h2h/reader-exchange/perf21/reader-exchange.json",
+        "bench/h2h/reader-exchange/perf21/reader-exchange.log",
+        "bench/h2h/results/serial-c-walker.log",
+        "bench/h2h/results/serial-column.log",
+        "bench/h2h/scaling/camp12/cachegrind.txt",
+        "bench/h2h/scaling/camp12/logs/camp12.log",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-1.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-2.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-4.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-con-write-8.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-1.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-2.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-4.json",
+        "bench/h2h/scaling/camp12/weak-ext4-ranks-convel-write-8.json",
+        "bench/h2h/scaling/camp16b/host.json",
+        "bench/h2h/scaling/camp16b/reconcile.json",
+        "bench/h2h/scaling/camp17/host.json",
+        "bench/h2h/scaling/camp18/host.json",
+        "bench/h2h/scaling/camp19/host.json",
+        "bench/h2h/scaling/camp20/host.json",
+        "bench/h2h/scaling/camp21/host.json",
+        "bench/h2h/scaling/camp21/weak-mpi-write-1-disk.json",
+        "bench/h2h/scaling/camp21/weak-mpi-write-2-disk.json",
+        "bench/h2h/scaling/camp21/weak-mpi-write-4-disk.json",
+        "bench/h2h/scaling/camp21/weak-mpi-write-8-disk.json",
+        "bench/h2h/scaling/camp22/host.json",
+        "bench/h2h/scaling/camp22/weak-mpi-write-1-disk.json",
+        "bench/h2h/scaling/camp22/weak-mpi-write-2-disk.json",
+        "bench/h2h/scaling/camp22/weak-mpi-write-4-disk.json",
+        "bench/h2h/scaling/camp22/weak-mpi-write-8-disk.json",
+        "bench/h2h/scaling/camp23/host.json",
+        "bench/h2h/scaling/camp23/weak-mpi-write-1-disk.json",
+        "bench/h2h/scaling/camp23/weak-mpi-write-2-disk.json",
+        "bench/h2h/scaling/camp23/weak-mpi-write-4-disk.json",
+        "bench/h2h/scaling/camp23/weak-mpi-write-8-disk.json",
+        "bench/h2h/scaling/h2h10/chemfiles-write-profile.txt",
+        "bench/h2h/scaling/h2h10/cross-format.json",
+        "bench/h2h/scaling/h2h10/cross-format.log",
+        "bench/h2h/scaling/h2h11/chemfiles-write-profile.txt",
+        "bench/h2h/scaling/h2h11/cross-format.json",
+        "bench/h2h/scaling/h2h11/cross-format.log",
+        "bench/h2h/scaling/h2h12/chemfiles-write-profile.txt",
+        "bench/h2h/scaling/h2h12/cross-format.json",
+        "bench/h2h/scaling/h2h12/cross-format.log",
+        "bench/h2h/scaling/h2h13/chemfiles-write-profile.txt",
+        "bench/h2h/scaling/h2h13/cross-format.json",
+        "bench/h2h/scaling/h2h13/cross-format.log",
+        "bench/h2h/scaling/h2h4/run1/con-h2h.json",
+        "bench/h2h/scaling/h2h4/run1/con-h2h.log",
+        "bench/h2h/scaling/h2h4/run1/h2h.json",
+        "bench/h2h/scaling/h2h4/run1/h2h.log",
+        "bench/h2h/scaling/h2h4/run2/con-h2h.json",
+        "bench/h2h/scaling/h2h4/run2/con-h2h.log",
+        "bench/h2h/scaling/h2h4/run2/h2h.json",
+        "bench/h2h/scaling/h2h4/run2/h2h.log",
+        "bench/h2h/scaling/h2h6/cross-format.json",
+        "bench/h2h/scaling/h2h7/cross-format.json",
+        "bench/h2h/scaling/h2h7/cross-format.log",
+        "bench/h2h/scaling/h2h8/cross-format.json",
+        "bench/h2h/scaling/h2h8/cross-format.log",
+        "bench/h2h/scaling/h2h9/chemfiles-write-profile.txt",
+        "bench/h2h/scaling/h2h9/cross-format.json",
+        "bench/h2h/scaling/h2h9/cross-format.log",
+        "bench/h2h/scaling/perf17/NOTES.txt",
+        "bench/h2h/scaling/perf17/sink-ceiling.json",
+        "bench/h2h/scaling/rel1/c.time",
+        "bench/h2h/scaling/rel1/con-h2h.json",
+        "bench/h2h/scaling/rel1/con-h2h.log",
+        "bench/h2h/scaling/rel1/cpp.time",
+        "bench/h2h/scaling/rel1/cross-format.json",
+        "bench/h2h/scaling/rel1/cross-format.log",
+        "bench/h2h/scaling/rel1/fidelity.log",
+        "bench/h2h/scaling/rel1/fortran.time",
+        "bench/h2h/scaling/rel1/h2h.json",
+        "bench/h2h/scaling/rel1/h2h.log",
+        "bench/h2h/scaling/rel1/perf2-samples.json",
+        "bench/h2h/scaling/rel1/perf3-samples.json",
+        "bench/h2h/scaling/rel1/perf5-samples.json",
+        "bench/h2h/scaling/rel1/python.time",
+        "bench/h2h/scaling/rel1/rust-gzip.time",
+        "bench/h2h/scaling/rel1/rust-path.time",
+    }
+)
+
+
 def scanned(path: str) -> bool:
-    """Source, scripts, and build files. Recorded JSON and raw logs stay out."""
-    if path.endswith((".json", ".jsonl", ".log")) or "/raw/" in path:
-        return False
-    if path.startswith("bench/"):
-        name = path.rsplit("/", 1)[-1]
-        return name.endswith(".py") or name == "Snakefile" or name.endswith(".smk")
-    if path in NAMED or path.endswith("/CMakeLists.txt"):
-        return True
-    return path.startswith(ROOTS)
+    """Every tracked file. Saved records that already name a machine stay listed."""
+    return path not in SAVED_MACHINE_RECORDS
 
 
 def _manifest_is_test_code(lines: list[str]) -> list[bool]:
@@ -305,7 +389,7 @@ def test_allowlist_matches_the_lines_it_names() -> None:
 def test_recorded_results_are_not_scanned() -> None:
     assert not scanned("bench/h2h/scaling/camp17/host.json")
     assert not scanned("bench/h2h/scaling/rel1/cross-format.json")
-    assert not scanned("bench/h2h/scaling/rel1/raw/run.log")
+    assert scanned("bench/h2h/scaling/rel1/raw/run.log")
     assert scanned("bench/h2h/camp7_ceiling.py")
     assert scanned("bench/h2h/Snakefile")
     assert scanned("src/conbin.rs")
@@ -314,6 +398,9 @@ def test_recorded_results_are_not_scanned() -> None:
     assert scanned("build.rs")
     assert scanned("CMakeLists.txt")
     assert scanned(".github/workflows/ci_cxx.yml")
+    for path in SAVED_MACHINE_RECORDS:
+        text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
+        assert any(prefix in text for prefix in PATHS), path
 
 
 def test_a_reintroduced_prefix_is_reported() -> None:
@@ -414,8 +501,8 @@ def test_bench_records_have_no_machine_paths() -> None:
         rel = raw.decode()
         if not rel.endswith((".json", ".txt", ".log", ".tsv", ".md")):
             continue
-        text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
-        if machine_path_in_record(text):
+        body = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        if machine_path_in_record(body):
             bad.append(rel)
     assert not bad, "machine path in a bench record:\n" + "\n".join(bad)
 
