@@ -24,8 +24,14 @@ BODY = "".join(
 FRAME = HEADER + BODY + "\n"
 
 
+def _bench_dir() -> Path:
+    path = Path(__file__).resolve().parent.parent / "build" / "bench"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def _path(n_frames: int) -> str:
-    fd, name = tempfile.mkstemp(suffix=".con")
+    fd, name = tempfile.mkstemp(suffix=".con", dir=_bench_dir())
     os.close(fd)
     path = Path(name)
     path.write_text("\n" + FRAME * n_frames)

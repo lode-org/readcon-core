@@ -11,8 +11,8 @@ parse, and the memray peak is the median of ``repeat`` of those.
 
 Timing rows use ``asv.conf.json`` and the shipped mimalloc build.
 Memory rows use ``asv.mem.conf.json`` and the ``system-alloc`` feature,
-which drops mimalloc so memray's malloc hook sees the parser. That
-feature is not an address-sanitizer build. Native traces are not
+which drops mimalloc so memray's malloc hook sees the parser.
+Timing rows and the shipped library keep mimalloc. Native traces are not
 required. A child ``ru_maxrss`` delta stays at zero because importing
 the extension already sets the high-water mark.
 """
@@ -45,16 +45,18 @@ CUH2_FRAMES = (50, 100)
 MEMORY_TRACKING_METHOD = (
     "memray Tracker peak_memory, median of 6 repeats after one untracked "
     "warmup; asv.mem.conf.json enables the system-alloc feature so the "
-    "parser uses the system allocator (not an address-sanitizer build); "
-    "track_python_heap_* is tracemalloc; timing rows stay on mimalloc"
+    "parser uses the system allocator; track_python_heap_* is tracemalloc; "
+    "timing rows stay on mimalloc"
 )
-# Smallest plain record of one atom: 3 float64 coordinates, the three
-# fixed flags packed in one byte, a uint64 id, and a float64 mass.
-MIN_ATOM_BYTES = 3 * 8 + 1 + 8 + 8
+# Bytes of the coordinate slab for one atom in one frame. Masses stay on
+# the shared header. Ids, fixed flags, and the symbol index are stored
+# once when they do not change by frame, so they are not part of this
+# per-atom-frame floor. A velocity or force slab adds 24 bytes.
+MIN_ATOM_BYTES = 3 * 8
 
 
-def minimal_output_bytes(n_atoms: int, n_frames: int) -> int:
-    return int(n_atoms) * int(n_frames) * MIN_ATOM_BYTES
+def minimal_output_bytes(n_atoms: int, n_frames: int, extra_atom_bytes: int = 0) -> int:
+    return int(n_atoms) * int(n_frames) * (MIN_ATOM_BYTES + int(extra_atom_bytes))
 
 
 def _ladder_con(src: Path, n_frames: int) -> str:
@@ -517,6 +519,117 @@ class RayAseEonCuh2:
 
     def ray_read_ase_eon(self, n_frames: int) -> None:
         _ase_eon(self._path, self._n, 218)
+
+
+class TimeAseEonTiny:
+    """Time ASE ``format='eon'`` on the same tiny CON files as ``read_con``."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = list(TINY_FRAMES)
+    param_names = ["n_frames"]
+
+    def setup_cache(self) -> dict[int, tuple[str, str]]:
+        return _tiny_files()
+
+    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
+        _text, path = cache[int(n_frames)]
+        _ase_eon(path, int(n_frames), 4)
+
+
+class TimeAseEonCuh2:
+    """Time ASE ``format='eon'`` on the same 218-atom CON files as ``read_con``."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = list(CUH2_FRAMES)
+    param_names = ["n_frames"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return _cuh2_files()
+
+    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
+        _ase_eon(cache[int(n_frames)], int(n_frames), 218)
+
+
+FIXTURE_CONVEL = REPO / "resources" / "test" / "tiny_cuh2.convel"
+FIXTURE_FORCES = REPO / "resources" / "test" / "tiny_cuh2_forces.con"
+
+
+class RayReadConvelTiny:
+    """Memray peak for a velocity CON on the column path."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = list(TINY_FRAMES)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        import readcon
+
+        text = _ladder_con(FIXTURE_CONVEL, n_frames)
+        self._path = _write_temp(text, suffix=".convel")
+        self._n = n_frames
+        frames = readcon.read_con(self._path)
+        _hold_parsed(frames, self._n, n_atoms=4)
+        assert frames[0].has_velocities
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_con_path(self, n_frames: int) -> None:
+        import readcon
+
+        frames = readcon.read_con(self._path)
+        _hold_parsed(frames, self._n, n_atoms=4)
+        assert frames[0].has_velocities
+
+
+class RayReadForcesTiny:
+    """Memray peak for a force CON on the column path."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = (50, 100)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        import readcon
+
+        text = _ladder_con(FIXTURE_FORCES, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        frames = readcon.read_con(self._path)
+        _hold_parsed(frames, self._n, n_atoms=4)
+        assert frames[0].has_forces
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_con_path(self, n_frames: int) -> None:
+        import readcon
+
+        frames = readcon.read_con(self._path)
+        _hold_parsed(frames, self._n, n_atoms=4)
+        assert frames[0].has_forces
 
 
 def _ray_repeats(bench) -> int:

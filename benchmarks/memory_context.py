@@ -16,9 +16,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# 3 float64 coordinates, one byte of fixed flags, one uint64 id, one float64 mass.
-MIN_ATOM_BYTES = 3 * 8 + 1 + 8 + 8
-
 # ``lscpu`` keys, in the order they are written. Newer util-linux still
 # emits these as ``Key: value`` lines.
 _LSCPU_FIELDS = (
@@ -84,8 +81,9 @@ def write_context(results: Path, command: str, method: str) -> Path:
     row = _lscpu_summary()
     row["asv_command"] = command.strip()
     row["memory_tracking_method"] = method
+    row["n_threads"] = "1"
     fieldnames = [column for _key, column in _LSCPU_FIELDS]
-    fieldnames.extend(("asv_command", "memory_tracking_method"))
+    fieldnames.extend(("asv_command", "memory_tracking_method", "n_threads"))
     with out.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -111,19 +109,55 @@ def _quartile_gap(samples: list[float]) -> float:
     return at(0.75) - at(0.25)
 
 
-def _atoms_for(benchmark: str) -> int | None:
-    if "Select" in benchmark:
-        return 218
+def _fixture_name(benchmark: str) -> str:
+    if "Convel" in benchmark:
+        return "tiny_cuh2.convel"
+    if "Force" in benchmark:
+        return "tiny_cuh2_forces.con"
     if "Tiny" in benchmark:
-        return 4
-    if "Cuh2" in benchmark or "Chemfiles" in benchmark:
-        return 218
-    return None
+        return "tiny_cuh2.con"
+    return "cuh2.con"
+
+
+def _atoms_for(benchmark: str, repo: Path) -> int:
+    """Atom count of the fixture the row reads, not a hard-coded size."""
+    import readcon
+
+    path = repo / "resources" / "test" / _fixture_name(benchmark)
+    return len(readcon.read_first_frame(str(path)))
+
+
+def _extra_atom_bytes(benchmark: str) -> int:
+    """Velocity and force slabs are 3 float64s on top of the coordinates."""
+    extra = 0
+    if "Convel" in benchmark:
+        extra += 3 * 8
+    if "Force" in benchmark:
+        extra += 3 * 8
+    return extra
+
+
+def _min_atom_bytes(suite: Path) -> int:
+    tree = ast.parse(suite.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "MIN_ATOM_BYTES":
+                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
+                    return int(node.value.value)
+                if isinstance(node.value, ast.BinOp):
+                    return int(ast.literal_eval(node.value))
+    raise SystemExit(f"{suite} does not set MIN_ATOM_BYTES")
 
 
 def _file_bytes(benchmark: str, frames: int, repo: Path) -> int:
     if "Chemfiles" in benchmark:
         return _xyz_bytes(repo, frames)
+    if "Convel" in benchmark:
+        return (repo / "resources" / "test" / "tiny_cuh2.convel").stat().st_size * frames
+    if "Force" in benchmark:
+        return (repo / "resources" / "test" / "tiny_cuh2_forces.con").stat().st_size * frames
     if "Tiny" in benchmark:
         return (repo / "resources" / "test" / "tiny_cuh2.con").stat().st_size * frames
     if "Select" in benchmark:
@@ -140,7 +174,9 @@ def _xyz_bytes(repo: Path, frames: int) -> int:
 
     frame = readcon.read_first_frame(str(repo / "resources" / "test" / "cuh2.con"))
     atoms = frame.to_ase()
-    fd, path = tempfile.mkstemp(suffix=".xyz")
+    bench_dir = repo / "build" / "bench"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".xyz", dir=bench_dir)
     os.close(fd)
     try:
         write(path, [atoms] * frames, format="xyz")
@@ -149,9 +185,10 @@ def _xyz_bytes(repo: Path, frames: int) -> int:
         os.unlink(path)
 
 
-def write_peaks(result_json: Path, dest: Path, repo: Path) -> None:
+def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = None) -> None:
     data = json.loads(result_json.read_text(encoding="utf-8"))
     columns = data["result_columns"]
+    per_atom = _min_atom_bytes(suite or Path(__file__).with_name("bench_readcon.py"))
     rows = []
     for benchmark, entry in data["results"].items():
         record = dict(zip(columns, entry))
@@ -172,17 +209,25 @@ def write_peaks(result_json: Path, dest: Path, repo: Path) -> None:
             if not isinstance(sample_row, list):
                 sample_row = []
             median = float(medians[index])
+            if index >= len(q25) or index >= len(q75):
+                raise SystemExit(
+                    f"{benchmark} parameter {frames_text} is missing stats_q_25/stats_q_75"
+                )
             if sample_row:
                 count = len(sample_row)
                 spread = _quartile_gap([float(item) for item in sample_row])
             else:
-                count = int(repeats[index]) if index < len(repeats) else 0
-                low = float(q25[index]) if index < len(q25) else median
-                high = float(q75[index]) if index < len(q75) else median
-                spread = high - low
-            atoms = _atoms_for(benchmark)
-            minimal = atoms * frames * MIN_ATOM_BYTES if atoms else ""
+                if index >= len(repeats):
+                    raise SystemExit(f"{benchmark} is missing stats_repeat")
+                count = int(repeats[index])
+                spread = float(q75[index]) - float(q25[index])
+            atoms = _atoms_for(benchmark, repo)
+            minimal = atoms * frames * (per_atom + _extra_atom_bytes(benchmark))
             ratio = f"{median / minimal:.6f}" if minimal else ""
+            if ratio and float(ratio) < 1.0:
+                raise SystemExit(
+                    f"{benchmark} peak {median} is below the stored minimum {minimal}"
+                )
             same_con = "0" if "Chemfiles" in benchmark else "1"
             rows.append(
                 {

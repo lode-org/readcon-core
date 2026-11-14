@@ -77,8 +77,8 @@ benchmarks.
    (pinned in ``asv.conf.json`` and ``benchmarks/workflow/requirements.txt``).
    That is the shipped mimalloc build, and it is what the timing rows measure.
    Memory rows use ``asv.mem.conf.json``, which adds the ``system-alloc``
-   feature so mimalloc is not the global allocator and memray can see the
-   parser. ``system-alloc`` is not an address-sanitizer build.
+   feature. That feature selects the system allocator so memray can see
+   parser allocations. Timing rows and the shipped library keep mimalloc.
    ``ci_benchmark.yml`` pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
    Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
 

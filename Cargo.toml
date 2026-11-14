@@ -50,8 +50,8 @@ rpc = [
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
 python = ["dep:pyo3", "dep:numpy", "parallel"]
 # Memory benchmarks only. Drops mimalloc from the global allocator so a
-# malloc tracer sees parser allocations. Not an address-sanitizer build,
-# and not used by the timing benchmarks or the shipped library.
+# malloc tracer sees parser allocations. Timing benchmarks and the shipped
+# library keep mimalloc.
 system-alloc = []
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an

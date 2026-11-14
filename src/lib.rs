@@ -6,7 +6,7 @@
 // Miri cannot execute mimalloc either, so it uses the system allocator too.
 // The `system-alloc` feature is the memory-benchmark switch. It drops
 // mimalloc so a malloc tracer can see the parser. Timing builds and the
-// shipped library do not enable it, and it is not an address-sanitizer run.
+// shipped library keep mimalloc.
 #![allow(unexpected_cfgs)]
 #[cfg(all(not(any(asan_run, miri)), not(feature = "system-alloc")))]
 #[global_allocator]

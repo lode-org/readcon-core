@@ -73,6 +73,8 @@ class SplitAndLayout(unittest.TestCase):
             bench.TimeReadConCuh2,
             bench.TimeChemfilesXyz,
             bench.TimeSelectAtoms,
+            bench.TimeAseEonTiny,
+            bench.TimeAseEonCuh2,
         )
         memory = (
             bench.RayReadConTiny,
@@ -81,6 +83,8 @@ class SplitAndLayout(unittest.TestCase):
             bench.RaySelectAtoms,
             bench.RayAseEonTiny,
             bench.RayAseEonCuh2,
+            bench.RayReadConvelTiny,
+            bench.RayReadForcesTiny,
         )
         for cls in timing:
             self.assertNotIn("number", cls.__dict__, cls.__name__)
@@ -116,7 +120,9 @@ class SplitAndLayout(unittest.TestCase):
         self.assertIn("system allocator", bench.MEMORY_TRACKING_METHOD)
         self.assertIn("system-alloc", bench.MEMORY_TRACKING_METHOD)
         self.assertNotIn("asan_run", bench.MEMORY_TRACKING_METHOD)
-        self.assertEqual(bench.minimal_output_bytes(4, 50), 4 * 50 * 41)
+        self.assertEqual(bench.MIN_ATOM_BYTES, 24)
+        self.assertEqual(bench.minimal_output_bytes(4, 50), 4 * 50 * 24)
+        self.assertEqual(bench.minimal_output_bytes(4, 50, extra_atom_bytes=24), 4 * 50 * 48)
         self.assertIn('format="eon"', inspect.getsource(bench._ase_eon))
         self.assertIn("not a CON", bench.RayChemfilesXyz.__doc__)
         path = bench._write_temp("one frame\n")
