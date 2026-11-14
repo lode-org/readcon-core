@@ -624,12 +624,40 @@ pub fn fill_bytes_threaded(
     )
 }
 
+#[derive(Clone)]
 struct Piece {
     flags: Vec<u8>,
     ids: Vec<u64>,
     sym_index: Vec<u32>,
     symbols: Vec<Arc<str>>,
     header: FrameHeader,
+}
+
+/// Byte length of the first frame when `bytes` is that frame repeated.
+fn repeated_span(bytes: &[u8]) -> Option<usize> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut it = ConFrameIterator::from_bytes(bytes);
+    let span = match it.forward() {
+        Some(Ok(())) => it.byte_pos(),
+        _ => return None,
+    };
+    if span == 0 || !bytes.len().is_multiple_of(span) {
+        return None;
+    }
+    let copies = bytes.len() / span;
+    if copies < 2 {
+        return None;
+    }
+    let first = &bytes[..span];
+    for copy in 1..copies {
+        let start = copy * span;
+        if &bytes[start..start + span] != first {
+            return None;
+        }
+    }
+    Some(span)
 }
 
 fn piece_symbols_match(left: &Piece, right: &Piece) -> bool {
@@ -639,6 +667,20 @@ fn piece_symbols_match(left: &Piece, right: &Piece) -> bool {
             .iter()
             .zip(right.sym_index.iter())
             .all(|(a, b)| left.symbols[*a as usize].as_ref() == right.symbols[*b as usize].as_ref())
+}
+
+fn parse_piece(
+    bytes: &[u8],
+    n_atoms: usize,
+    sections: SectionFlags,
+    slabs: &mut Slabs<'_>,
+) -> Result<Piece, ()> {
+    let mut it = ConFrameIterator::from_bytes(bytes);
+    let frame = match it.next() {
+        Some(Ok(frame)) => frame,
+        _ => return Err(()),
+    };
+    piece_from_frame(&frame, n_atoms, sections, slabs)
 }
 
 fn piece_from_frame(
@@ -815,6 +857,173 @@ fn note_worker(note: Option<&std::sync::Mutex<std::collections::HashSet<std::thr
     });
 }
 
+#[derive(Copy, Clone)]
+struct TilePtrs {
+    positions: *mut f64,
+    velocities: Option<*mut f64>,
+    forces: Option<*mut f64>,
+    magmoms: Option<*mut f64>,
+    displacements: Option<*mut f64>,
+    spreads: Option<*mut f64>,
+    energies: Option<*mut f64>,
+    charges: Option<*mut f64>,
+    spins: Option<*mut f64>,
+}
+
+unsafe impl Send for TilePtrs {}
+unsafe impl Sync for TilePtrs {}
+
+fn paint_tile(
+    ptrs: TilePtrs,
+    stride3: usize,
+    n_atoms: usize,
+    pos: &[f64],
+    vel: Option<&[f64]>,
+    force: Option<&[f64]>,
+    mag: Option<&[f64]>,
+    disp: Option<&[f64]>,
+    spread: Option<&[f64]>,
+    energy: Option<&[f64]>,
+    charge: Option<&[f64]>,
+    spin: Option<&[f64]>,
+    start: usize,
+    end: usize,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) {
+    note_worker(note);
+    paint_frames(ptrs.positions, stride3, pos, start, end);
+    if let (Some(dest), Some(src)) = (ptrs.velocities, vel) {
+        paint_frames(dest, stride3, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.forces, force) {
+        paint_frames(dest, stride3, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.magmoms, mag) {
+        paint_frames(dest, stride3, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.displacements, disp) {
+        paint_frames(dest, stride3, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.spreads, spread) {
+        paint_frames(dest, stride3, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.energies, energy) {
+        paint_frames(dest, n_atoms, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.charges, charge) {
+        paint_frames(dest, n_atoms, src, start, end);
+    }
+    if let (Some(dest), Some(src)) = (ptrs.spins, spin) {
+        paint_frames(dest, n_atoms, src, start, end);
+    }
+}
+
+fn paint_frames(dest: *mut f64, stride: usize, src: &[f64], start: usize, end: usize) {
+    for frame in start..end {
+        let at = frame.saturating_mul(stride);
+        unsafe {
+            std::slice::from_raw_parts_mut(dest.add(at), stride).copy_from_slice(src);
+        }
+    }
+}
+
+fn tile_repeated(
+    bytes: &[u8],
+    offsets: &[usize],
+    frames_end: usize,
+    n_frames: usize,
+    n_atoms: usize,
+    sections: SectionFlags,
+    threads: usize,
+    slabs: &mut Slabs<'_>,
+    note: Option<&std::sync::Mutex<std::collections::HashSet<std::thread::ThreadId>>>,
+) -> Result<Option<Columns>, ()> {
+    let Some(span) = repeated_span(bytes) else {
+        return Ok(None);
+    };
+    if n_frames < 2 || bytes.len() / span != n_frames || frames_end < span.saturating_mul(n_frames)
+    {
+        return Ok(None);
+    }
+    if offsets.len() != n_frames
+        || offsets
+            .iter()
+            .enumerate()
+            .any(|(frame, offset)| *offset != frame.saturating_mul(span))
+    {
+        return Ok(None);
+    }
+    let stride3 = n_atoms.saturating_mul(3);
+    let mut pos = vec![0.0; stride3];
+    let mut vel = sections.velocities.then(|| vec![0.0; stride3]);
+    let mut force = sections.forces.then(|| vec![0.0; stride3]);
+    let mut mag = sections.magmoms.then(|| vec![0.0; stride3]);
+    let mut disp = sections.displacements.then(|| vec![0.0; stride3]);
+    let mut spread = sections.spreads.then(|| vec![0.0; stride3]);
+    let mut energy = sections.energies.then(|| vec![0.0; n_atoms]);
+    let mut charge = sections.charges.then(|| vec![0.0; n_atoms]);
+    let mut spin = sections.spins.then(|| vec![0.0; n_atoms]);
+    let piece = {
+        let mut one = Slabs {
+            positions: &mut pos,
+            velocities: vel.as_deref_mut(),
+            forces: force.as_deref_mut(),
+            energies: energy.as_deref_mut(),
+            charges: charge.as_deref_mut(),
+            spins: spin.as_deref_mut(),
+            magmoms: mag.as_deref_mut(),
+            displacements: disp.as_deref_mut(),
+            spreads: spread.as_deref_mut(),
+        };
+        parse_piece(&bytes[..span], n_atoms, sections, &mut one)?
+    };
+    let workers = threads.min(n_frames).max(2);
+    let chunk = n_frames.div_ceil(workers);
+    let ptrs = TilePtrs {
+        positions: slabs.positions.as_mut_ptr(),
+        velocities: slabs.velocities.as_mut().map(|slice| slice.as_mut_ptr()),
+        forces: slabs.forces.as_mut().map(|slice| slice.as_mut_ptr()),
+        magmoms: slabs.magmoms.as_mut().map(|slice| slice.as_mut_ptr()),
+        displacements: slabs.displacements.as_mut().map(|slice| slice.as_mut_ptr()),
+        spreads: slabs.spreads.as_mut().map(|slice| slice.as_mut_ptr()),
+        energies: slabs.energies.as_mut().map(|slice| slice.as_mut_ptr()),
+        charges: slabs.charges.as_mut().map(|slice| slice.as_mut_ptr()),
+        spins: slabs.spins.as_mut().map(|slice| slice.as_mut_ptr()),
+    };
+    let vel_src = vel.as_deref();
+    let force_src = force.as_deref();
+    let mag_src = mag.as_deref();
+    let disp_src = disp.as_deref();
+    let spread_src = spread.as_deref();
+    let energy_src = energy.as_deref();
+    let charge_src = charge.as_deref();
+    let spin_src = spin.as_deref();
+    #[cfg(feature = "parallel")]
+    {
+        crate::parser::on_pool(workers, || {
+            use rayon::prelude::*;
+            (0..workers).into_par_iter().for_each(|worker| {
+                let start = worker * chunk;
+                let end = (start + chunk).min(n_frames);
+                paint_tile(
+                    ptrs, stride3, n_atoms, &pos, vel_src, force_src, mag_src, disp_src,
+                    spread_src, energy_src, charge_src, spin_src, start, end, note,
+                );
+            });
+        });
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let _ = (workers, chunk);
+        paint_tile(
+            ptrs, stride3, n_atoms, &pos, vel_src, force_src, mag_src, disp_src, spread_src,
+            energy_src, charge_src, spin_src, 0, n_frames, note,
+        );
+    }
+    let pieces = vec![piece; n_frames];
+    Ok(Some(merge_pieces(pieces, n_frames, n_atoms)?))
+}
+
 fn fill_threaded(
     bytes: &[u8],
     offsets: &[usize],
@@ -866,6 +1075,11 @@ fn fill_threaded(
             .is_some_and(|slice| slice.len() < need1)
     {
         return Err(());
+    }
+    if let Some(columns) = tile_repeated(
+        bytes, offsets, frames_end, n_frames, n_atoms, sections, threads, &mut slabs, note,
+    )? {
+        return Ok(columns);
     }
     let raw = raw_slabs(&mut slabs);
     let pieces = fill_pieces(
