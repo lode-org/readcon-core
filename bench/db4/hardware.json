@@ -1,0 +1,17 @@
+{
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "kernel": "Linux 6.12.113+",
+  "rustc": "rustc 1.88.0 (6b00bc388 2025-06-23)",
+  "readcon_core": "0.23.0",
+  "readcon_core_rev": "f3ee0f471234e112209e6ad7623b2b6e5ce8a673",
+  "published_pin": "=0.21.0",
+  "ncpu": 8,
+  "python": "3.12.3",
+  "protocol": {
+    "serial": true,
+    "warmup": 1,
+    "samples": 6,
+    "quantile": "type-7",
+    "cold": "mincore 0, full and selected paired"
+  }
+}
