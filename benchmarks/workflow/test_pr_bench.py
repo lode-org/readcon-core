@@ -76,6 +76,7 @@ class SplitAndLayout(unittest.TestCase):
             self.assertFalse(any(name.startswith("ray_") for name in cls.__dict__))
         for cls in memory:
             self.assertEqual(cls.number, 1, cls.__name__)
+            self.assertEqual(cls.repeat, bench.REPEAT, cls.__name__)
             names = [name for name in cls.__dict__ if name.startswith("ray_")]
             self.assertTrue(names, cls.__name__)
             self.assertFalse(any(name.startswith("time_") for name in cls.__dict__))

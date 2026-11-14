@@ -107,9 +107,10 @@ benchmarks.
    Timing classes do not set
    ``number``. asv\_runner's default sample time is 0.01 s.
    Each sample targets that default.
-   Memory classes are separate and set ``number = 1``. Memory uses successive
-   one-round ``asv run`` calls, because a memray ``ray_*`` result is one peak and
-   asv does not keep that scalar in ``samples`` across rounds. Odd rounds vs
+   Memory classes are separate and set ``number = 1`` and ``repeat = 6``.
+   Each sample is one call. The six peaks stay in ``samples``, and a round's
+   peak is their median. Memory uses successive one-round ``asv run`` calls,
+   because asv does not append those samples across rounds. Odd rounds vs
    even rounds, six peaks a side. The memory upper bound is the within-run
    bound widened by one allocator granule over the median base peak. The
    granule is the usable size of a one-byte malloc. A one-byte peak change

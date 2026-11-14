@@ -20,8 +20,9 @@ FIXTURE_TINY = REPO / "resources" / "test" / "tiny_cuh2.con"
 FIXTURE_CUH2 = REPO / "resources" / "test" / "cuh2.con"
 
 # Comparison is six rounds of six repeats (36 samples). Main-vs-main timing
-# uses twelve rounds and splits them into two 36-sample sides. Memory stays
-# one peak per asv invocation (number = 1).
+# uses twelve rounds and splits them into two 36-sample sides. Memory uses
+# the same six repeats, one call each (number = 1). A round's peak is the
+# median of those six.
 # Smallest even repeat whose median is the mean of the two central samples
 # with two samples strictly below that pair and two strictly above it.
 REPEAT = 6
@@ -79,6 +80,42 @@ def _read_chemfiles(path: str, n_frames: int) -> None:
 def _select_name_cu(frame) -> None:
     idx = frame.select_atoms("name Cu")
     assert len(idx) > 0
+
+
+def _retain_frames(frames, n_frames: int, n_atoms: int | None = None):
+    """Keep every frame and a coordinate copy alive for this sample.
+
+    memray records libc malloc and mmap. The parser's heap is mimalloc, so
+    those bytes never enter the peak. ``len`` builds no frame, and the one
+    object from the first frame is reused from the allocator cache on the
+    next parameter, which leaves a few hundred bytes however long the file
+    is. A file of 64 KiB or more is mapped, and that map was the whole peak.
+    Indexing every frame and copying the coordinates makes the recorded
+    peak follow the frame count. The copy is the shared slab when the
+    frames have one, and one array per frame otherwise.
+    """
+    import numpy as np
+
+    if isinstance(frames, list):
+        got = frames
+    else:
+        got = [frames[i] for i in range(len(frames))]
+    if len(got) != n_frames:
+        raise AssertionError(len(got))
+    if n_frames == 0:
+        raise AssertionError("no frames")
+    n0 = len(got[0])
+    if n_atoms is not None and n0 != n_atoms:
+        raise AssertionError(n0)
+    if n0 <= 0:
+        raise AssertionError(n0)
+    base = getattr(got[0].xyz, "base", None)
+    shape = getattr(base, "shape", None)
+    if shape is not None and len(shape) == 3 and shape[0] == n_frames:
+        coords = np.array(base, copy=True)
+    else:
+        coords = [np.array(frame.xyz, copy=True) for frame in got]
+    return got, coords
 
 
 def _optional_select_frame():
@@ -169,7 +206,7 @@ class RayReadConTiny:
 
     timeout = 180
     number = 1
-    repeat = 1
+    repeat = REPEAT
     rounds = 1
     params = list(TINY_FRAMES)
     param_names = ["n_frames"]
@@ -187,13 +224,19 @@ class RayReadConTiny:
             pass
 
     def ray_read_con_string(self, n_frames: int) -> None:
-        _read_con_string(self._text, self._n)
+        import readcon
+
+        _retain_frames(readcon.read_con_string(self._text), self._n)
 
     def ray_read_con_path(self, n_frames: int) -> None:
-        _read_con_path(self._path, self._n)
+        import readcon
+
+        _retain_frames(readcon.read_con(self._path), self._n)
 
     def ray_iter_con_materialize(self, n_frames: int) -> None:
-        _iter_con_path(self._path, self._n)
+        import readcon
+
+        _retain_frames(list(readcon.iter_con(self._path)), self._n)
 
 
 class TimeReadConCuh2:
@@ -219,7 +262,7 @@ class RayReadConCuh2:
 
     timeout = 180
     number = 1
-    repeat = 1
+    repeat = REPEAT
     rounds = 1
     params = list(CUH2_FRAMES)
     param_names = ["n_frames"]
@@ -235,7 +278,9 @@ class RayReadConCuh2:
             pass
 
     def ray_read_con_path(self, n_frames: int) -> None:
-        _read_con_path(self._path, self._n, n_atoms=218)
+        import readcon
+
+        _retain_frames(readcon.read_con(self._path), self._n, n_atoms=218)
 
 
 class TimeChemfilesXyz:
@@ -262,7 +307,7 @@ class RayChemfilesXyz:
 
     timeout = 180
     number = 1
-    repeat = 1
+    repeat = REPEAT
     rounds = 1
     params = list(CUH2_FRAMES)
     param_names = ["n_frames"]
@@ -287,7 +332,9 @@ class RayChemfilesXyz:
             pass
 
     def ray_read_chemfiles(self, n_frames: int) -> None:
-        _read_chemfiles(self._path, self._n)
+        import readcon
+
+        _retain_frames(readcon.read_chemfiles(self._path), self._n)
 
 
 class TimeSelectAtoms:
@@ -312,7 +359,7 @@ class RaySelectAtoms:
 
     timeout = 120
     number = 1
-    repeat = 1
+    repeat = REPEAT
     rounds = 1
 
     def setup(self) -> None:

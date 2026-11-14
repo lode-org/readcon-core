@@ -11,9 +11,10 @@ Threshold, fixed before looking at a given run:
   are one side and even rounds the other (36 and 36). The comparison records
   that same count with ``COMPARE_ROUNDS`` rounds of ``TIME_REPEAT``, one
   round of the base commit and then one round of the head commit.
-* Memory benchmarks are one memray peak per ``asv run`` (asv does not keep
-  that scalar in ``samples`` across rounds). ``MEM_AA_ROUNDS`` successive
-  runs are split into odd and even rounds, ``MEM_AA_ROUNDS // 2`` peaks a side.
+* Memory benchmarks record six peaks per ``asv run`` (``number = 1``). The
+  round's value is their median. asv does not append those samples across
+  rounds. ``MEM_AA_ROUNDS`` successive runs are split into odd and even
+  rounds, ``MEM_AA_ROUNDS // 2`` peaks a side.
 * From those within-run ratios: linear percentile p01 and p99, median, and
   median absolute deviation.
 * Within-run upper bound = max(p99, median + 3*median absolute deviation).
@@ -625,11 +626,7 @@ def peaks_by_label(path: Path, kind: str) -> dict[str, float]:
             label = benchmark_label(name, combo)
             cleaned = finite_samples(samples) if samples is not None else []
             if cleaned:
-                if len(cleaned) != 1:
-                    raise SystemExit(
-                        f"{path} {label}: expected one peak in a memory round, got {len(cleaned)} samples"
-                    )
-                found[label] = cleaned[0]
+                found[label] = median(cleaned)
                 continue
             if result is None:
                 continue
@@ -816,9 +813,10 @@ def _noise_document(n_time: int, benchmarks: dict, alpha: float | None) -> dict:
             "memory repetitions. "
             "Memory: successive one-round asv runs, odd rounds vs even rounds, then "
             "widened by one allocator granule over the median base peak. The granule "
-            "is malloc_usable_size of a one-byte malloc. Memray returns one peak per "
-            "invocation and asv does not store that scalar in samples across rounds, "
-            "so memory rounds are separate asv runs. Timing does not use the granule."
+            "is malloc_usable_size of a one-byte malloc. Each memory invocation records "
+            "six peaks and the round uses their median. asv does not append those "
+            "samples across rounds, so memory rounds are separate asv runs. "
+            "Timing does not use the granule."
         ),
         "benchmarks": benchmarks,
     }
