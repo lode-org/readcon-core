@@ -3220,21 +3220,28 @@ fn allocate_len(file: &File, total: u64) -> io::Result<()> {
 /// How a fresh ranked file is filled after it has been allocated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RankedStore {
-    /// Each slice is stored at its own offset.
+    /// Each rank pwrites its frames at the offsets from the layout pass.
     Parallel,
-    /// The slices are stored in order as one pass from offset 0.
+    /// Rank 0 receives every slice and pwrites them in order.
     Sequential,
+    /// Each rank calls `MPI_File_write_at_all` on the preallocated scratch.
+    MpiIo,
 }
 
-const EXT_SUPER_MAGIC: u32 = 0xEF53;
-const XFS_SUPER_MAGIC: u32 = 0x5846_5342;
-const BTRFS_SUPER_MAGIC: u32 = 0x9123_683E;
+const LUSTRE_SUPER_MAGIC: u32 = 0x0BD0_0BD0;
+const GPFS_SUPER_MAGIC: u32 = 0x4750_4653;
+const BEEGFS_SUPER_MAGIC: u32 = 0x1983_0326;
+const PANFS_SUPER_MAGIC: u32 = 0xAAD7_AAEA;
 
-/// Sequential store for ext2, ext3, ext4, XFS, and btrfs. A sign-extended
-/// 32-bit `statfs` word still matches on the low 32 bits.
+/// Per-rank `pwrite` on a local filesystem. Lustre, GPFS, BeeGFS, and
+/// PanFS use collective MPI-IO into the same preallocated scratch.
+/// A sign-extended 32-bit `statfs` word still matches on the low 32 bits.
+/// `READCON_RANKED_WRITE=sequential` is the rank-0 gather.
 pub(crate) fn ranked_store_for_magic(magic: i64) -> RankedStore {
     match magic as u32 {
-        EXT_SUPER_MAGIC | XFS_SUPER_MAGIC | BTRFS_SUPER_MAGIC => RankedStore::Sequential,
+        LUSTRE_SUPER_MAGIC | GPFS_SUPER_MAGIC | BEEGFS_SUPER_MAGIC | PANFS_SUPER_MAGIC => {
+            RankedStore::MpiIo
+        }
         _ => RankedStore::Parallel,
     }
 }
@@ -3324,7 +3331,9 @@ pub fn publish_ranked_slices(
         match choose_ranked_store(&file)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?
         {
-            RankedStore::Parallel | RankedStore::Sequential => write_slices_at(&file, slices)?,
+            RankedStore::Parallel | RankedStore::Sequential | RankedStore::MpiIo => {
+                write_slices_at(&file, slices)?
+            }
         }
     }
     commit_shared_store(store, path)
