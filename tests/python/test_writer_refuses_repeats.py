@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "benches"))
 sys.path.insert(0, str(ROOT / "paper" / "cpc" / "bench"))
 
 import bench_parallel_frames
+import camp24_run
 import cross_format
 import db_v2
 import frames_guard
@@ -22,6 +23,7 @@ import h5md_vs_con
 import make_payloads
 import run_h2h
 import run_mpi_v2
+import scale_r6
 
 
 def _zeros(n_atoms: int, frame: int = 0, seed: int = 1):
@@ -71,6 +73,25 @@ def test_each_writer_refuses_repeated_frames(tmp_path: Path, monkeypatch) -> Non
         cross_format.write_mdtraj(tmp_path / "m.xyz", spec)
     with pytest.raises(SystemExit, match="byte-identical"):
         cross_format.write_built_mda(tmp_path / "d.xyz", spec, None)
+
+
+def test_scale_r6_and_camp24_refuse_repeated_frames(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(frames_guard, "perturb_frame", lambda text, frame, seed=1: text)
+
+    def _same_frame(_frame: int, _base) -> str:
+        return "same\n"
+
+    monkeypatch.setattr(scale_r6, "_md_frame_text", _same_frame)
+    with pytest.raises(SystemExit, match="byte-identical"):
+        scale_r6.write_md_extxyz(tmp_path / "water.extxyz", n_frames=2)
+    one = (ROOT / "resources" / "test" / "cuh2.con").read_text(encoding="utf-8")
+    cached = tmp_path / "cached.con"
+    cached.write_text(one if one.endswith("\n") else one + "\n", encoding="utf-8")
+    cached.write_text(cached.read_text(encoding="utf-8") * 2, encoding="utf-8")
+    with pytest.raises(SystemExit, match="byte-identical"):
+        camp24_run.repeat_fixture(cached, 2)
 
 
 def test_payload_series_refuses_repeated_positions() -> None:
