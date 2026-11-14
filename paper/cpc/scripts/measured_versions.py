@@ -45,7 +45,9 @@ def release_version() -> str:
                 found.add(version)
     if len(found) == 1:
         return found.pop()
-    return "unknown"
+    raise SystemExit(
+        "reader-exchange.log has no single readcon_v summary arm to name a version"
+    )
 
 
 def drift_record() -> dict:
@@ -54,15 +56,15 @@ def drift_record() -> dict:
 
 
 def drift_fourth() -> str:
-    """The last wheel ``version_drift.json`` measured, or unknown."""
+    """The last wheel ``version_drift.json`` measured."""
     data = drift_record()
     readers = data.get("readers") or []
     reported = data.get("reported_versions") or {}
     if not readers:
-        return "unknown"
+        raise SystemExit("version_drift.json names no readers")
     version = reported.get(readers[-1])
     if not isinstance(version, str) or VERSION.fullmatch(version) is None:
-        return "unknown"
+        raise SystemExit("version_drift.json has no version for its last reader")
     return version
 
 
@@ -72,9 +74,9 @@ def latest_tag() -> tuple[str, str]:
     version = data.get("version")
     commit = data.get("commit")
     if not isinstance(version, str) or VERSION.fullmatch(version) is None:
-        return "unknown", "unknown"
+        raise SystemExit("latest_release.json has no version")
     if not isinstance(commit, str) or re.fullmatch(r"[0-9a-f]{40}", commit) is None:
-        return "unknown", "unknown"
+        raise SystemExit("latest_release.json has no 40-digit commit")
     return version, commit
 
 
