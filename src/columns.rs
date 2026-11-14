@@ -820,11 +820,17 @@ fn parse_one_frame(
         // One allocation for the whole frame. Growing by three floats at a
         // time copied the slab on every power of two, which is what made a
         // one-thread million-atom read slower than the plain walker.
-        out.positions.reserve(total.saturating_mul(3));
-        out.masses.reserve(total);
+        // The declared count is not a size: the unread bytes hold at most
+        // one atom per `MIN_COORD_ROW_BYTES`, and the symbol and label
+        // lines only make that bound smaller.
+        let rest = bytes.len().saturating_sub(*pos);
+        let fit = rest / crate::parser::MIN_COORD_ROW_BYTES;
+        let reserve_atoms = total.min(fit);
+        out.positions.reserve(reserve_atoms.saturating_mul(3));
+        out.masses.reserve(reserve_atoms);
         if rich {
-            out.ids.reserve(total);
-            out.flags.reserve(total);
+            out.ids.reserve(reserve_atoms);
+            out.flags.reserve(reserve_atoms);
         }
     }
     for (count, mass) in counts.iter().zip(&masses) {

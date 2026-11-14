@@ -6,8 +6,8 @@
 //! `u32::MAX` gives a reservation of tens of GiB, more than most hosts can
 //! map.
 
-use readcon_core::error::ParseError;
-use readcon_core::iterators::ConFrameIterator;
+use readcon_core::error::{LocatedParseError, ParseError};
+use readcon_core::iterators::{ConFrameIterator, read_positions_with_threads};
 use readcon_core::parser::{parse_line_of_n_f64, parse_single_frame};
 use readcon_core::storage_dtype::ElementKind;
 use readcon_core::stream::ConFrameReader;
@@ -298,6 +298,41 @@ fn conbin_huge_column_does_not_allocate() {
         assert!(
             matches!(err, ParseError::IncompleteFrame),
             "t{threads}: {err:?}"
+        );
+        assert!(
+            after < before.saturating_add(8 << 20),
+            "t{threads} resident {before} -> {after}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn column_walker_does_not_reserve_a_declared_atom_count() {
+    // One coordinate row and a header that says 50_000_000 atoms. The
+    // column walker used to reserve that count before it counted rows.
+    let text = frame_declaring_atoms(50_000_000);
+    let dir = std::env::temp_dir().join(format!(
+        "column-huge-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("huge.con");
+    std::fs::write(&path, text.as_bytes()).unwrap();
+    for threads in [1usize, 2] {
+        let before = resident_bytes();
+        let err = read_positions_with_threads(&path, Some(threads)).unwrap_err();
+        let after = resident_bytes();
+        let located = err
+            .downcast_ref::<LocatedParseError>()
+            .expect("located parse error");
+        assert!(
+            matches!(located.error, ParseError::IncompleteFrame),
+            "t{threads}: {located:?}"
         );
         assert!(
             after < before.saturating_add(8 << 20),
