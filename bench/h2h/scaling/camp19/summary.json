@@ -1,0 +1,86 @@
+{
+  "question": "Fresh-file ranked ext4 writes versus camp5c, with the same fresh file, published only when complete, and no spare left behind.",
+  "result": "Multi-frame writes beat camp5c and camp17 on ext4 and tmpfs. The wide frame on ext4 does not beat camp5c: a plain cp of the same 23,589,039 bytes is already slower than camp5c, which overwrote a warm inode. Spelling that wide frame into the mapping, and overlapping two halves, were both slower than format-then-pwrite, so that path is unchanged.",
+  "rows": [
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "disk",
+      "camp19_s": 0.013722,
+      "camp17_s": 0.0132835,
+      "camp5c_s": 0.0074655,
+      "cp_s": 0.009349306506919675,
+      "beats_camp5c": false
+    },
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "memory",
+      "camp19_s": 0.007274,
+      "camp17_s": null,
+      "camp5c_s": 0.008964,
+      "cp_s": 0.007697967492276803,
+      "beats_camp5c": true
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "disk",
+      "camp19_s": 0.016524,
+      "camp17_s": 0.0166845,
+      "camp5c_s": 0.0119925,
+      "cp_s": 0.009349306506919675,
+      "beats_camp5c": false
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "memory",
+      "camp19_s": 0.0116765,
+      "camp17_s": null,
+      "camp5c_s": 0.013707,
+      "cp_s": 0.007697967492276803,
+      "beats_camp5c": true
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "disk",
+      "camp19_s": 0.07453599999999999,
+      "camp17_s": 0.12756699999999999,
+      "camp5c_s": 0.1014355,
+      "cp_s": 0.027727797998522874,
+      "beats_camp5c": true
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "memory",
+      "camp19_s": 0.06787499999999999,
+      "camp17_s": null,
+      "camp5c_s": 0.083347,
+      "cp_s": 0.02474273399275262,
+      "beats_camp5c": true
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "disk",
+      "camp19_s": 0.123451,
+      "camp17_s": 0.225018,
+      "camp5c_s": 0.1776405,
+      "cp_s": 0.05617015600728337,
+      "beats_camp5c": true
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "memory",
+      "camp19_s": 0.1046925,
+      "camp17_s": null,
+      "camp5c_s": 0.138315,
+      "cp_s": 0.043741508496168535,
+      "beats_camp5c": true
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "fresh_file_each_sample": true,
+  "kept": "Multi-frame ranked writes spell into the fresh mapping after one fallocate of the exact size. A wide frame stays on format-then-pwrite. publish_ranked_slices remains the in-process ranked publish; the MPI path uses the same begin_shared_store and commit_shared_store.",
+  "rejected": [
+    {
+      "what": "Spell the wide million-atom frame into the shared mapping",
+      "sink": "disk",
+      "repeats": 12,
+      "con-1e6_w8_median_s": 0.013072,
+      "con-1e6_w4_median_s": 0.018705,
+      "why": "8 ranks tied the pwrite path. 4 ranks were slower (0.0187 s against the shipped 0.0165 s)."
+    },
+    {
+      "what": "Format the wide frame in two halves and pwrite the first while spelling the second",
+      "sink": "disk",
+      "repeats": 8,
+      "con-1e6_w8_median_s": 0.015013,
+      "con-1e6_w4_median_s": 0.019902,
+      "why": "Slower than one format followed by one pwrite at both rank counts."
+    },
+    {
+      "what": "fallocate the O_TMPFILE before linkat versus after",
+      "why": "Eight threads writing a fresh 24 MB file took about 9 ms either way, and an 87 MB file about 33 ms either way. The order is not the gap."
+    }
+  ]
+}

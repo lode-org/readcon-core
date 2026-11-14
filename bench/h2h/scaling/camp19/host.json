@@ -1,0 +1,10 @@
+{
+  "commit": "fc52776812ee6f9078d55e1e154314207c5712fc",
+  "base": "e76f3a1f2431e2bec8072208fd7cc0b64ae8c3be",
+  "nproc": 8,
+  "repeats": 12,
+  "warmup": 1,
+  "pinned": "taskset -c 0-7",
+  "mpi": "mpirun --bind-to core",
+  "note": "/tmp is the root ext4 filesystem. /dev/shm is tmpfs. Each sample writes a fresh file."
+}
