@@ -87,6 +87,14 @@ The default store is a fresh file, not a spare reused in place.
 Rank 0 renames it onto the path only after every byte is stored, so the
 published path is the previous complete file or the finished new one.
 Until that rename the new bytes are a second copy.
+On ext2, ext3, ext4, XFS, and btrfs, rank 0 then writes every slice in
+order. Concurrent writes of one fresh local inode contend in the page
+cache. That path is still slower than overwriting a warm file, and slower
+than a plain copy of the same million-atom frame.
+Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
+keeps one write per rank.
+``READCON_RANKED_WRITE=parallel`` or ``sequential``, read on rank 0, overrides
+that choice. Leave it unset. The benchmark does.
 One gather of the offsets and block hashes then writes the ``.rcidx``
 sidecar, so the next read skips the scan.
 Output is uncompressed.
