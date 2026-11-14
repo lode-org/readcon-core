@@ -229,6 +229,9 @@ frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0))
 # Write frames (with optional precision)
 readcon.write_con("output.con", frames)
 readcon.write_con("precise.con", frames, precision=17)
+# rewrite=True writes path.rewrite, then renames it over path. The spare
+# doubles disk until keep_spare=False. A crash leaves path complete.
+readcon.write_con("output.con", frames, rewrite=True, keep_spare=False)
 output_str = readcon.write_con_string(frames)
 
 # ASE conversion (v0.4.0+, requires ase)

@@ -1020,6 +1020,26 @@ enum RKRStatus rkr_write_frames_to_string(const struct RKRConFrame *const *frame
                                           uintptr_t *out_len);
 
 /**
+ * Rewrite `path` from these frames.
+ *
+ * The new bytes go to a spare named `path` + `.rewrite`. That spare is a
+ * second copy of the trajectory while `keep_spare` is non-zero. The rename
+ * that publishes it runs only after the write finishes, so killing the
+ * process leaves `path` as the previous complete file. `keep_spare == 0`
+ * deletes the spare after the rename, and the next rewrite allocates again.
+ * `n_threads == 0` uses one thread.
+ *
+ * # Safety
+ * path must be a valid NUL-terminated string. Each frame handle must be
+ * valid when num_frames > 0.
+ */
+enum RKRStatus rkr_rewrite_path(const char *path,
+                                const struct RKRConFrame *const *frame_handles,
+                                uintptr_t num_frames,
+                                uintptr_t n_threads,
+                                uint8_t keep_spare);
+
+/**
  * Write frames with the binding metadata stamp and the caller's atoms.
  * The stamp is restored before return. Atoms are not copied.
  */
