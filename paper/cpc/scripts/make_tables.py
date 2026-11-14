@@ -25,6 +25,9 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
 REL1 = "bench/h2h/scaling/rel1"
+# The printed cross-format table is this file. Later rel1 TSVs remeasured
+# some million-atom rows and do not match. Model 173 records do not either.
+CROSS_COMMIT = "beb158ad7cb9d9e8fbc38c860c85b0b5f343a196"
 
 
 def git_show(commit: str, path: str) -> str:
@@ -500,8 +503,14 @@ def con_writer_cell(row: dict) -> tuple[str, str, str] | None:
 
 
 def cross_format(store: Store, host: str) -> str:
-    """1M-atom frame and trajectory from cross-format.tsv. The n column is required."""
-    raw = store.text(f"{REL1}/cross-format.tsv")
+    """1M-atom frame and trajectory from the pinned rel1 cross-format.tsv.
+
+    ``store`` and ``host`` are not the source. The cells and the host
+    sentence come from CROSS_COMMIT, family 6 model 207.
+    """
+    del store, host
+    raw = git_show(CROSS_COMMIT, f"{REL1}/cross-format.tsv")
+    host = host_line(json.loads(git_show(CROSS_COMMIT, f"{REL1}/hardware.json"))["lscpu"])
     rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
     if not rows or "n" not in rows[0]:
         raise SystemExit("cross-format.tsv has no n column")
@@ -563,7 +572,9 @@ def cross_format(store: Store, host: str) -> str:
 
 
 def cross_rows(store: Store) -> list[dict]:
-    raw = store.text(f"{REL1}/cross-format.tsv")
+    """Same pinned record as ``cross_format``. A later rel1 TSV must not feed the macros."""
+    del store
+    raw = git_show(CROSS_COMMIT, f"{REL1}/cross-format.tsv")
     rows = list(csv.DictReader(io.StringIO(raw), delimiter="\t"))
     if not rows or "n" not in rows[0]:
         raise SystemExit("cross-format.tsv has no n column")
@@ -908,7 +919,11 @@ def h2h9_million_tex(tsv: Path, host: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", default="")
-    parser.add_argument("--cross-commit", default="")
+    parser.add_argument(
+        "--cross-commit",
+        default=CROSS_COMMIT,
+        help="Must be CROSS_COMMIT. The cross-format table does not follow --commit.",
+    )
     parser.add_argument("--scaling", type=Path)
     parser.add_argument("--fidelity", type=Path)
     parser.add_argument("--db", type=Path)
@@ -916,7 +931,9 @@ def main() -> None:
     args = parser.parse_args()
     store = Store(args.commit or None, args.scaling, args.fidelity, args.db)
     host = host_line(store.json(f"{REL1}/hardware.json")["lscpu"])
-    cross = Store(args.cross_commit or args.commit or None, args.scaling, None, None)
+    if args.cross_commit != CROSS_COMMIT:
+        raise SystemExit(f"--cross-commit must be {CROSS_COMMIT}")
+    cross = Store(CROSS_COMMIT, None, None, None)
     cross_host = host_line(cross.json(f"{REL1}/hardware.json")["lscpu"])
     out = args.out if args.out.is_absolute() else REPO / "paper" / "cpc" / args.out
     out.mkdir(parents=True, exist_ok=True)
