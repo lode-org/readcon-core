@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import json
 import platform
+import subprocess
 import sys
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parent
+ROOT = BENCH.parents[1]
 BASELINE = BENCH / "scaling" / "h2h9" / "cross-format.json"
 RELATIVE = 1.25
 STRUCTURE = "1M"
@@ -40,6 +42,32 @@ def type7(values: list[float], quantile: float) -> float:
 
 def type7_median(values: list[float]) -> float:
     return type7(values, 0.5)
+
+
+def library_commit(root: Path = ROOT) -> str:
+    """The newest commit of this checkout that changed the library sources.
+
+    Bench-only commits are not that commit. The campaign records it beside
+    the HEAD it was run from.
+    """
+    found = subprocess.check_output(
+        [
+            "git",
+            "log",
+            "-1",
+            "--format=%H",
+            "HEAD",
+            "--",
+            "src",
+            "Cargo.toml",
+            "packaging",
+        ],
+        cwd=root,
+        text=True,
+    ).strip()
+    if len(found) != 40:
+        raise SystemExit(f"library commit is not a sha: {found!r}")
+    return found
 
 
 def fresh_output(out: Path, baseline: Path = BASELINE) -> None:
@@ -216,11 +244,12 @@ def render_notes(
     return "\n".join(lines)
 
 
-def write_record(out: Path, doc: dict, notes: str) -> None:
+def write_record(out: Path, doc: dict, notes: str, library: str | None = None) -> None:
     fresh_output(out)
     host = doc["host"]
     payload = {
         "commit": doc["commit"],
+        "library_commit": library,
         "warmup": doc["warmup"],
         "repeats": doc["repeats"],
         "percentile": doc["percentile"],
@@ -237,6 +266,8 @@ def write_record(out: Path, doc: dict, notes: str) -> None:
     (out / "host.json").write_text(text, encoding="utf-8")
     (out / "lscpu.txt").write_text(host.get("lscpu") or "", encoding="utf-8")
     (out / "NOTES.txt").write_text(notes, encoding="utf-8")
+    if library:
+        (out / "library-commit.txt").write_text(library + "\n", encoding="utf-8")
 
 
 def build_notes(doc: dict, baseline_doc: dict) -> tuple[str, list[str]]:
@@ -271,7 +302,9 @@ def main() -> None:
             f"campaign protocol is not warmup 1 n=12: {doc.get('repeats')}"
         )
     notes, flags = build_notes(doc, baseline_doc)
-    write_record(args.out, doc, notes)
+    library = library_commit(ROOT)
+    notes = f"library_commit {library}\n" + notes
+    write_record(args.out, doc, notes, library)
     print(notes, end="")
     if flags:
         print(f"regressions {len(flags)}", file=sys.stderr)
