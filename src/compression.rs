@@ -953,9 +953,13 @@ pub fn with_serial_decode<T>(body: impl FnOnce() -> T) -> T {
 }
 
 fn gunzip_member(bytes: &[u8]) -> io::Result<Vec<u8>> {
-    let mut decoder = flate2::read::GzDecoder::new(bytes);
-    let mut out = Vec::new();
-    decoder.read_to_end(&mut out)?;
+    let (out, exact) = gzip_one_member(bytes)?;
+    if !exact {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "gzip member does not fill its index slice",
+        ));
+    }
     Ok(out)
 }
 
@@ -1022,16 +1026,25 @@ fn par_ranges(jobs: usize, threads: usize, work: impl Fn(usize, usize) + Sync + 
     }
 }
 
+fn gzip_one_member(src: &[u8]) -> io::Result<(Vec<u8>, bool)> {
+    // `read::GzDecoder` wraps a `BufReader` and may pull bytes past the
+    // member. The bufread decoder on a cursor reports the member's end.
+    let mut decoder = flate2::bufread::GzDecoder::new(std::io::Cursor::new(src));
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    let consumed = decoder.get_ref().position() as usize;
+    Ok((out, consumed == src.len()))
+}
+
 fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
-    let mut decoder = flate2::read::GzDecoder::new(src);
-    decoder.read_exact(dst)?;
-    let mut extra = [0u8; 1];
-    if decoder.read(&mut extra)? != 0 {
+    let (out, exact) = gzip_one_member(src)?;
+    if out.len() != dst.len() || !exact {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "gzip member is longer than the index",
+            "gzip member does not fill its index slice",
         ));
     }
+    dst.copy_from_slice(&out);
     Ok(())
 }
 
@@ -1040,17 +1053,29 @@ fn inflate_gzip(bytes: &[u8], out: &mut Vec<u8>) -> io::Result<()> {
         if let Some(plan) = gzip_member_starts(bytes) {
             if plan.starts.len() > 1 {
                 let threads = worker_limit_from_budget(plan.starts.len());
-                if let Some(plain) = plan.plain.as_deref() {
+                let indexed = if let Some(plain) = plan.plain.as_deref() {
                     if plain.len() == plan.starts.len() {
-                        return inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out);
+                        inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out)
+                    } else {
+                        Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "gzip index has no plain length for every member",
+                        ))
                     }
+                } else {
+                    let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
+                    out.clear();
+                    for part in parts {
+                        out.extend_from_slice(&part);
+                    }
+                    Ok(())
+                };
+                if indexed.is_ok() {
+                    return indexed;
                 }
-                let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
+                // A stale or partial index must not hide a later member.
+                // The serial decoder is what a file without our index uses.
                 out.clear();
-                for part in parts {
-                    out.extend_from_slice(&part);
-                }
-                return Ok(());
             }
         }
     }
@@ -1461,6 +1486,15 @@ fn zstd_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
                 "zstd frame length does not match the index",
             ));
         }
+        let frame = zstd::zstd_safe::find_frame_compressed_size(src).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "zstd frame size is not known")
+        })?;
+        if frame != src.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "zstd frame does not fill its index slice",
+            ));
+        }
         Ok(())
     })
 }
@@ -1478,19 +1512,30 @@ fn inflate_zstd(bytes: &[u8], out: &mut Vec<u8>) -> io::Result<()> {
         if let Some(plan) = zstd_frame_starts(bytes) {
             if plan.starts.len() > 1 {
                 let threads = worker_limit_from_budget(plan.starts.len());
-                if let Some(plain) = plan.plain.as_deref() {
+                let indexed = if let Some(plain) = plan.plain.as_deref() {
                     if plain.len() == plan.starts.len() {
-                        return inflate_sized(bytes, &plan.starts, plain, threads, zstd_into, out);
+                        inflate_sized(bytes, &plan.starts, plain, threads, zstd_into, out)
+                    } else {
+                        Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "zstd index has no plain length for every frame",
+                        ))
                     }
+                } else {
+                    let parts = inflate_unknown(bytes, &plan.starts, threads, |part| {
+                        zstd::stream::decode_all(part)
+                            .map_err(|err| io::Error::other(err.to_string()))
+                    })?;
+                    out.clear();
+                    for part in parts {
+                        out.extend_from_slice(&part);
+                    }
+                    Ok(())
+                };
+                if indexed.is_ok() {
+                    return indexed;
                 }
-                let parts = inflate_unknown(bytes, &plan.starts, threads, |part| {
-                    zstd::stream::decode_all(part).map_err(|err| io::Error::other(err.to_string()))
-                })?;
                 out.clear();
-                for part in parts {
-                    out.extend_from_slice(&part);
-                }
-                return Ok(());
             }
         }
     }
@@ -1690,6 +1735,72 @@ mod tests {
         }
         let raw = b"not a compressed buffer";
         assert_eq!(codec_inflate(raw, 1).unwrap(), raw);
+    }
+
+    /// A member concatenated after an indexed stream is part of the file.
+    /// The parallel reader used to stop at the index and drop it.
+    #[test]
+    fn a_trailing_member_is_not_dropped() {
+        let plain = b"frame-one\n".repeat(40);
+        let extra = b"frame-two\n".repeat(20);
+        let mut expect = plain.clone();
+        expect.extend_from_slice(&extra);
+
+        let indexed = codec_deflate(&plain, 2, 2, true).unwrap();
+        let extra_gzip = {
+            let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            enc.write_all(&extra).unwrap();
+            enc.finish().unwrap()
+        };
+        assert_eq!(
+            with_serial_decode(|| codec_inflate(&extra_gzip, 1)).unwrap(),
+            extra
+        );
+        let mut gzip = indexed.clone();
+        gzip.extend_from_slice(&extra_gzip);
+        let serial = with_serial_decode(|| codec_inflate(&gzip, 1)).unwrap();
+        let markers = |bytes: &[u8]| bytes.windows(2).filter(|w| *w == b"\x1f\x8b").count();
+        assert_eq!(
+            (
+                markers(&indexed),
+                markers(&gzip),
+                serial.len(),
+                plain.len(),
+                extra.len()
+            ),
+            (2, 3, expect.len(), plain.len(), extra.len()),
+            "member scan"
+        );
+        assert!(
+            serial.starts_with(&plain) && serial.ends_with(&extra),
+            "len {} plain {} extra {} tail {}",
+            serial.len(),
+            plain.len(),
+            extra.len(),
+            String::from_utf8_lossy(&serial[serial.len().saturating_sub(24)..])
+        );
+        assert_eq!(codec_inflate(&gzip, 4).unwrap(), expect);
+        let mut truncated = indexed;
+        truncated.extend_from_slice(&extra_gzip[..8]);
+        assert!(with_serial_decode(|| codec_inflate(&truncated, 1)).is_err());
+        assert!(codec_inflate(&truncated, 4).is_err());
+
+        #[cfg(feature = "zstd")]
+        {
+            let indexed = codec_deflate(&plain, 2, 2, false).unwrap();
+            let extra_zstd = zstd::stream::encode_all(extra.as_slice(), 3).unwrap();
+            let mut zstd_bytes = indexed.clone();
+            zstd_bytes.extend_from_slice(&extra_zstd);
+            assert_eq!(
+                with_serial_decode(|| codec_inflate(&zstd_bytes, 1)).unwrap(),
+                expect
+            );
+            assert_eq!(codec_inflate(&zstd_bytes, 4).unwrap(), expect);
+            let mut truncated = indexed;
+            truncated.extend_from_slice(&extra_zstd[..8]);
+            assert!(with_serial_decode(|| codec_inflate(&truncated, 1)).is_err());
+            assert!(codec_inflate(&truncated, 4).is_err());
+        }
     }
 
     fn mapped_text(path: &Path) -> Result<String, String> {

@@ -35,6 +35,9 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- An indexed gzip or zstd read keeps a member concatenated after the index.
+  The parallel reader used to stop at the indexed slices and drop the rest,
+  so it disagreed with the serial decoder. A truncated tail is still rejected.
 - A path write publishes only after every byte is stored. On Linux the store
   is an unnamed file, and `linkat` plus `rename` run in a helper that outlives
   the writer. The published path is either the previous complete file or the
