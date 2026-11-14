@@ -4449,8 +4449,10 @@ fn write_stamped_frame<W: std::io::Write>(
     writer: &mut ConFrameWriter<W>,
     frame: &ConFrame,
 ) -> Result<(), crate::writer::WriteError> {
-    let mut stamped = frame.clone();
-    writer.write_frame_binding(&mut stamped)
+    // The binding stamp is applied for the write. The frame is not cloned,
+    // and its text is flushed before the function returns.
+    writer.write_frame_bound(frame)?;
+    writer.finish_frame().map_err(crate::writer::WriteError::Io)
 }
 
 /// One column frame for a write.
@@ -4637,11 +4639,106 @@ fn write_bound_frames<W: std::io::Write>(
             return Ok(());
         }
     }
-    stream_frames(py, frames, |frame| {
+    write_python_iterable(py, frames, writer)
+}
+
+fn write_python_iterable<W: std::io::Write>(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    writer: &mut ConFrameWriter<W>,
+) -> PyResult<()> {
+    for item in PyIterator::from_object(frames)? {
+        let item = item?;
+        let frame = item.extract::<PyRef<'_, PyConFrame>>().map_err(|_| {
+            PyTypeError::new_err("frames must be an iterable of readcon.ConFrame objects")
+        })?;
+        if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+            && let Some(inner) = frame.inner.as_deref()
+            && inner.positions.nrows() > 0
+        {
+            writer
+                .write_frame_bound(inner)
+                .map_err(|err| write_err_to_py(py, err))?;
+            continue;
+        }
+        if try_write_coord_frame(py, &frame, writer)? {
+            continue;
+        }
+        let rust_frame = frame.to_con_frame(py)?;
         writer
-            .write_frame_bound(frame)
-            .map_err(|err| write_err_to_py(py, err))
-    })
+            .write_frame_bound(&rust_frame)
+            .map_err(|err| write_err_to_py(py, err))?;
+    }
+    Ok(())
+}
+
+fn try_write_coord_frame<W: std::io::Write>(
+    py: Python<'_>,
+    frame: &PyRef<'_, PyConFrame>,
+    writer: &mut ConFrameWriter<W>,
+) -> PyResult<bool> {
+    let atoms = frame.atoms.bind(py);
+    if atoms.is_empty() {
+        return Ok(false);
+    }
+    let mut groups: Vec<crate::writer::CoordGroup> = Vec::new();
+    let mut index_of: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for item in atoms.iter() {
+        let atom = item.extract::<PyAtomDatum>().map_err(|_| {
+            PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+        })?;
+        if atom.has_velocity()
+            || atom.has_forces()
+            || atom.energy.is_some()
+            || atom.charge.is_some()
+            || atom.spin.is_some()
+            || atom.mx.is_some()
+            || atom.my.is_some()
+            || atom.mz.is_some()
+            || atom.has_displacement()
+            || atom.has_spread()
+        {
+            return Ok(false);
+        }
+        let mass = atom.mass.unwrap_or(0.0);
+        if let Some(&index) = index_of.get(&atom.symbol) {
+            let group = &groups[index];
+            if (group.mass - mass).abs() > crate::types::ConFrameBuilder::TYPE_MASS_ABS_TOL {
+                return Err(PyValueError::new_err(format!(
+                    "mass mismatch for {}: {} vs {}",
+                    atom.symbol, group.mass, mass
+                )));
+            }
+            let group = &mut groups[index];
+            group.xyz.extend_from_slice(&[atom.x, atom.y, atom.z]);
+            group.fixed.push(atom.fixed);
+            group.ids.push(atom.atom_id);
+        } else {
+            index_of.insert(atom.symbol.clone(), groups.len());
+            groups.push(crate::writer::CoordGroup {
+                symbol: atom.symbol,
+                mass,
+                xyz: vec![atom.x, atom.y, atom.z],
+                fixed: vec![atom.fixed],
+                ids: vec![atom.atom_id],
+            });
+        }
+    }
+    let prebox = frame.prebox_header();
+    let postbox = frame.postbox_header();
+    let meta = frame.metadata_map(py)?;
+    writer
+        .write_coord_groups(
+            &prebox[0],
+            &postbox,
+            frame.cell,
+            frame.angles,
+            meta,
+            frame.spec_version,
+            &groups,
+        )
+        .map_err(|err| write_err_to_py(py, err))?;
+    Ok(true)
 }
 
 fn plain_binding_bytes(
@@ -5026,9 +5123,7 @@ fn write_con(
                         })?
                     }
                     .canonical(canonical);
-                    stream_frames(py, frames, |frame| {
-                        write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
-                    })?;
+                    write_python_iterable(py, frames, &mut writer)?;
                     flush_writer(&mut writer)?;
                 }
                 return Ok(());

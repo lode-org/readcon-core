@@ -810,6 +810,168 @@ class RayReadForcesThreads:
         _read_con_threads(self._path, self._n, 4, self._threads)
 
 
+def _built_cuh2(n_frames: int):
+    """Constructed frames, not a column-backed read of a repeated file."""
+    import readcon
+
+    source = readcon.read_first_frame(str(FIXTURE_CUH2))
+    atoms = [
+        readcon.Atom(
+            symbol=atom.symbol,
+            x=atom.x,
+            y=atom.y,
+            z=atom.z,
+            fixed=list(atom.fixed),
+            atom_id=atom.atom_id,
+            mass=atom.mass,
+        )
+        for atom in source.atoms
+    ]
+    frame = readcon.ConFrame(
+        cell=list(source.cell),
+        angles=list(source.angles),
+        atoms=atoms,
+    )
+    return [frame for _ in range(int(n_frames))]
+
+
+_PYTHON_WRITE_FRAMES: dict[int, list] = {}
+_ASE_WRITE_FRAMES: dict[int, list] = {}
+
+
+def _python_write_frames(n_frames: int):
+    n = int(n_frames)
+    cached = _PYTHON_WRITE_FRAMES.get(n)
+    if cached is None:
+        cached = _built_cuh2(n)
+        _PYTHON_WRITE_FRAMES[n] = cached
+    return cached
+
+
+def _ase_write_frames(n_frames: int):
+    """ASE atoms for the same constructed geometry ``write_con`` receives."""
+    import readcon
+    from ase.io import read
+
+    n = int(n_frames)
+    cached = _ASE_WRITE_FRAMES.get(n)
+    if cached is None:
+        built = _built_cuh2(1)[0]
+        scratch = _write_temp("")
+        readcon.write_con(scratch, [built])
+        atoms = read(scratch, format="eon")
+        os.unlink(scratch)
+        cached = [atoms] * n
+        _ASE_WRITE_FRAMES[n] = cached
+    return cached
+
+
+def _write_target(name: str) -> str:
+    return str(_bench_dir() / name)
+
+
+class TimeWritePythonCuh2:
+    """``write_con`` of constructed cuh2 frames.
+
+    The frames are built once. The sample is the write.
+    """
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = [50]
+    param_names = ["n_frames"]
+
+    def time_write_python_frames(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(_write_target("write-python.con"), _python_write_frames(n_frames))
+
+
+class TimeWriteAseCuh2:
+    """ASE ``format='eon'`` of the same constructed cuh2 geometry."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = [50]
+    param_names = ["n_frames"]
+
+    def time_write_ase_eon(self, n_frames: int) -> None:
+        from ase.io import write
+
+        write(_write_target("write-ase.con"), _ase_write_frames(n_frames), format="eon")
+
+
+class RayWritePythonCuh2:
+    """Memray peak of ``write_con`` for constructed frames.
+
+    The frames are built in ``setup``. The sample is only the write.
+    """
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = [50]
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        self._frames = _built_cuh2(n_frames)
+        self._path = _write_target("ray-write-python.con")
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_write_python_frames(self, n_frames: int) -> None:
+        import readcon
+
+        readcon.write_con(self._path, self._frames)
+
+
+class RayWriteAseCuh2:
+    """Memray peak of ASE ``format='eon'`` on the same constructed geometry."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = [50]
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        import readcon
+        from ase.io import read
+
+        built = _built_cuh2(1)[0]
+        scratch = _write_temp("")
+        readcon.write_con(scratch, [built])
+        atoms = read(scratch, format="eon")
+        os.unlink(scratch)
+        self._frames = [atoms] * int(n_frames)
+        self._path = _write_target("ray-write-ase.con")
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_write_ase_eon(self, n_frames: int) -> None:
+        from ase.io import write
+
+        write(self._path, self._frames, format="eon")
+
+
 def _ray_repeats(bench) -> int:
     """``repeat`` from the benchmark class, or an ``-a repeat=`` override."""
     for source in getattr(bench, "_attr_sources", ()):

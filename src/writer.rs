@@ -276,6 +276,14 @@ impl Drop for StreamOut {
 }
 
 // General implementation for any type that implements `Write`.
+pub(crate) struct CoordGroup {
+    pub symbol: String,
+    pub mass: f64,
+    pub xyz: Vec<f64>,
+    pub fixed: Vec<[bool; 3]>,
+    pub ids: Vec<u64>,
+}
+
 impl<W: Write> ConFrameWriter<W> {
     /// Creates a new `ConFrameWriter` that wraps a given writer.
     ///
@@ -546,6 +554,144 @@ impl<W: Write> ConFrameWriter<W> {
         }
         self.keep_bound = self.exact_scratch;
         self.write_frame(frame)
+    }
+
+    /// Write one coordinates-only frame from grouped rows and flush it.
+    ///
+    /// The bytes match [`Self::write_frame_bound`] for a frame the builder
+    /// would group the same way. The rows are the only geometry kept, and
+    /// the formatted text is handed to the sink before this returns.
+    pub(crate) fn write_coord_groups(
+        &mut self,
+        user: &str,
+        postbox: &[String; 2],
+        cell: [f64; 3],
+        angles: [f64; 3],
+        mut meta: BTreeMap<String, Value>,
+        spec_version: u32,
+        groups: &[CoordGroup],
+    ) -> Result<(), WriteError> {
+        if groups.is_empty() || groups.iter().any(|group| group.ids.is_empty()) {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                "each per-type count must be >= 1".into(),
+            )));
+        }
+        let n: usize = groups.iter().map(|group| group.ids.len()).sum();
+        {
+            let mut seen = std::collections::HashSet::with_capacity(n);
+            for group in groups {
+                for &id in &group.ids {
+                    if !seen.insert(id) {
+                        return Err(WriteError::Format(
+                            crate::error::ParseError::ValidationError(format!(
+                                "atom id {id} is repeated in the frame"
+                            )),
+                        ));
+                    }
+                }
+            }
+        }
+        meta.remove(meta::CON_SPEC_VERSION);
+        meta.remove(meta::SECTIONS);
+        stamp_legacy_velocity_time(&mut meta, spec_version, false);
+        if !meta.contains_key(meta::UNITS) {
+            meta.insert(
+                meta::UNITS.to_string(),
+                crate::units::default_v3_units_json(),
+            );
+        }
+        if !meta.contains_key(meta::CON_SPEC_MINOR) {
+            meta.insert(meta::CON_SPEC_MINOR.to_string(), Value::from(1u64));
+        }
+        let spec = spec_version.max(crate::CON_SPEC_VERSION);
+        self.refresh_metadata_cache(
+            spec, &meta, false, false, false, false, false, false, false, false,
+        )?;
+        self.scratch.clear();
+        push_str_line(&mut self.scratch, user);
+        let line = self
+            .metadata_cache
+            .as_ref()
+            .expect("metadata cache")
+            .serialized
+            .as_bytes();
+        self.scratch.extend_from_slice(line);
+        self.scratch.push(b'\n');
+        {
+            let buf = &mut self.scratch;
+            let ryu = &mut self.ryu;
+            let slots = &mut self.fmt_slot;
+            let prec = self.float_format;
+            push_f64(buf, ryu, cell[0], prec);
+            buf.push(b' ');
+            push_f64(buf, ryu, cell[1], prec);
+            buf.push(b' ');
+            push_f64(buf, ryu, cell[2], prec);
+            buf.push(b'\n');
+            push_f64(buf, ryu, angles[0], prec);
+            buf.push(b' ');
+            push_f64(buf, ryu, angles[1], prec);
+            buf.push(b' ');
+            push_f64(buf, ryu, angles[2], prec);
+            buf.push(b'\n');
+            push_str_line(buf, &postbox[0]);
+            push_str_line(buf, &postbox[1]);
+            push_u64(buf, groups.len() as u64);
+            buf.push(b'\n');
+            for (index, group) in groups.iter().enumerate() {
+                if index > 0 {
+                    buf.push(b' ');
+                }
+                push_u64(buf, group.ids.len() as u64);
+            }
+            buf.push(b'\n');
+            for (index, group) in groups.iter().enumerate() {
+                if index > 0 {
+                    buf.push(b' ');
+                }
+                push_f64(buf, ryu, group.mass, prec);
+            }
+            buf.push(b'\n');
+            for (index, group) in groups.iter().enumerate() {
+                push_str_line(buf, &group.symbol);
+                push_component_line(buf, "Coordinates of Component", index);
+                for row in 0..group.ids.len() {
+                    let at = row * 3;
+                    push_xyz_line(
+                        buf,
+                        ryu,
+                        slots,
+                        [group.xyz[at], group.xyz[at + 1], group.xyz[at + 2]],
+                        prec,
+                        written_fixed_flag(group.fixed[row], spec),
+                        group.ids[row],
+                    );
+                }
+            }
+        }
+        self.emit_scratch()?;
+        self.scratch.clear();
+        Ok(())
+    }
+
+    /// Drop this frame's text and push any buffered bytes to the sink.
+    pub fn finish_frame(&mut self) -> io::Result<()> {
+        self.scratch.clear();
+        self.writer.flush()
+    }
+
+    fn emit_scratch(&mut self) -> Result<(), WriteError> {
+        if self.scratch.is_empty() {
+            return Ok(());
+        }
+        if self.scratch.len() >= 64 * 1024 {
+            self.writer.flush()?;
+            self.writer.get_mut().write_all(&self.scratch)?;
+        } else {
+            self.writer.write_all(&self.scratch)?;
+        }
+        self.writer.flush()?;
+        Ok(())
     }
 
     /// Writes a single `ConFrame` to the output stream.
@@ -5125,5 +5271,62 @@ Coordinates of Component 1
                 });
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod coord_group_bytes {
+    use super::{ConFrameWriter, CoordGroup};
+    use crate::types::ConFrameBuilder;
+
+    #[test]
+    fn grouped_coordinates_match_the_binding_writer() {
+        let mut builder = ConFrameBuilder::new([15.3456, 21.702, 100.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.6394, 0.9045, 6.9753, [true, true, true], 0, 63.546);
+        builder.add_atom("Cu", 3.197, 0.9045, 0.0, [true, true, true], 1, 63.546);
+        builder.add_atom("H", 1.0, 2.0, 3.0, [false, false, false], 2, 1.00793);
+        let frame = builder.build().expect("frame");
+        let mut bound = Vec::new();
+        {
+            let mut writer = ConFrameWriter::new(&mut bound);
+            writer.write_frame_bound(&frame).unwrap();
+            writer.flush().unwrap();
+        }
+        let groups = vec![
+            CoordGroup {
+                symbol: "Cu".into(),
+                mass: 63.546,
+                xyz: vec![0.6394, 0.9045, 6.9753, 3.197, 0.9045, 0.0],
+                fixed: vec![[true, true, true], [true, true, true]],
+                ids: vec![0, 1],
+            },
+            CoordGroup {
+                symbol: "H".into(),
+                mass: 1.00793,
+                xyz: vec![1.0, 2.0, 3.0],
+                fixed: vec![[false, false, false]],
+                ids: vec![2],
+            },
+        ];
+        let mut plain = Vec::new();
+        {
+            let mut writer = ConFrameWriter::new(&mut plain);
+            writer
+                .write_coord_groups(
+                    "",
+                    &[String::new(), String::new()],
+                    [15.3456, 21.702, 100.0],
+                    [90.0, 90.0, 90.0],
+                    std::collections::BTreeMap::new(),
+                    crate::CON_SPEC_VERSION,
+                    &groups,
+                )
+                .unwrap();
+            writer.flush().unwrap();
+        }
+        assert_eq!(
+            String::from_utf8_lossy(&plain),
+            String::from_utf8_lossy(&bound)
+        );
     }
 }
