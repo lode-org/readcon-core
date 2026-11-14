@@ -257,3 +257,24 @@ path = "fuzz_targets/writer_decimal.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "compressed-reader"
+path = "fuzz_targets/compressed_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "conbin-columns"
+path = "fuzz_targets/conbin_columns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "reader-diff"
+path = "fuzz_targets/reader_diff.rs"
+test = false
+doc = false
+bench = false
