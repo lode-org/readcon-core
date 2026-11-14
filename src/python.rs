@@ -4897,7 +4897,7 @@ fn write_con(
                         })?;
                         flush_writer(&mut writer)?;
                     }
-                } else {
+                } else if workers >= 2 {
                     let rust_frames = py_frames_to_rust(py, frames)?;
                     let refs: Vec<&ConFrame> = rust_frames.iter().collect();
                     crate::writer::write_frame_refs_to_path(
@@ -4909,6 +4909,22 @@ fn write_con(
                         true,
                     )
                     .map_err(|err| write_err_to_py(py, err))?;
+                } else {
+                    let mut writer = if let Some(precision) = precision {
+                        crate::writer::ConFrameWriter::from_path_with_precision(path, precision)
+                            .map_err(|e| {
+                                PyIOError::new_err(format!("failed to create writer: {e}"))
+                            })?
+                    } else {
+                        crate::writer::ConFrameWriter::from_path(path).map_err(|e| {
+                            PyIOError::new_err(format!("failed to create writer: {e}"))
+                        })?
+                    }
+                    .canonical(canonical);
+                    stream_frames(py, frames, |frame| {
+                        write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
+                    })?;
+                    flush_writer(&mut writer)?;
                 }
                 return Ok(());
             }
