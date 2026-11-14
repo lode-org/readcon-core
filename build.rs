@@ -150,16 +150,14 @@ fn chemfiles_build_dirs(out_dir: &Path) -> Vec<PathBuf> {
         }
     };
     dirs.push(build.clone());
-    if let Ok(target) = env::var("TARGET") {
-        if let Some(profile) = build.parent() {
-            if let Some(target_root) = profile.parent() {
-                if let Some(profile_name) = profile.file_name() {
-                    let triple = target_root.join(target).join(profile_name).join("build");
-                    if triple != build {
-                        dirs.push(triple);
-                    }
-                }
-            }
+    if let Ok(target) = env::var("TARGET")
+        && let Some(profile) = build.parent()
+        && let Some(target_root) = profile.parent()
+        && let Some(profile_name) = profile.file_name()
+    {
+        let triple = target_root.join(target).join(profile_name).join("build");
+        if triple != build {
+            dirs.push(triple);
         }
     }
     dirs

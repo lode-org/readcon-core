@@ -1,0 +1,94 @@
+==============
+CON-bin layout
+==============
+
+
+CON-bin stores the positions and velocities of a trajectory as two runs of fixed-width numbers.
+``write_from_con`` and ``write_uniform`` in ``readcon_core::conbin`` write it.
+``read_header``, ``map_file``, ``read_into``, ``read_into_f32`` and ``read_owned_f64`` read it.
+Python calls the writer through ``write_conbin`` and the mapped reader through ``read_conbin``.
+CON-bin drops every other field of a :doc:`text frame <spec>`, such as the cell, the symbols and the masses.
+
+Header
+------
+
+The file begins with one header block of the host page size.
+The six little-endian fields occupy the first 40 bytes.
+The writer fills the rest of the block with zeros and stores that page size as the payload offset.
+
+.. table::
+    :name: header-fields
+
+    +------------+---------+----------------+------------------------------------------+
+    | Bytes      | Type    | Field          | Value                                    |
+    +============+=========+================+==========================================+
+    | ``0..8``   | bytes   | magic          | ``CONBIN01``                             |
+    +------------+---------+----------------+------------------------------------------+
+    | ``8..12``  | ``u32`` | version        | ``1``                                    |
+    +------------+---------+----------------+------------------------------------------+
+    | ``12..16`` | ``u32`` | flags          | bit 0 for binary32, bit 1 for velocities |
+    +------------+---------+----------------+------------------------------------------+
+    | ``16..24`` | ``u64`` | frame count    | frames in the file                       |
+    +------------+---------+----------------+------------------------------------------+
+    | ``24..32`` | ``u64`` | atom count     | atoms in each frame                      |
+    +------------+---------+----------------+------------------------------------------+
+    | ``32..40`` | ``u64`` | payload offset | bytes from the start of the file         |
+    +------------+---------+----------------+------------------------------------------+
+
+The readers reject a file whose magic or version differs.
+They ignore the other bytes of the header block, and flag bits above bit 1.
+The payload offset has to be at least 40, at most the file length, and a multiple of 8.
+A stored offset of 0 fails that check.
+A file written on a 4 KiB host still opens on a 16 KiB or 64 KiB host, because the stored offset is the one the writer wrote.
+
+Payload
+-------
+
+The payload starts at the payload offset.
+The positions of every frame come first, as one run.
+The velocities follow right after it, as a second run of the same length, when flag bit 1 is set.
+Each run has the frame count times the atom count times 3 values.
+They go frame by frame, atom by atom, in the order x, y, z.
+A value is little-endian binary64, or little-endian binary32 when flag bit 0 is set.
+
+``write_from_con`` needs the same atom count in every frame.
+It writes a velocity run and sets flag bit 1.
+A text frame with no velocities contributes zeros.
+With binary32 it rounds each value to binary32.
+``write_uniform`` writes one binary64 file with both runs, and the values come from the seed.
+
+Readers
+-------
+
+``read_header`` reads the six fields.
+``map_file`` and the copy path share the payload-offset check above.
+``map_file`` maps the file ``MAP_PRIVATE``.
+A store copies the page and does not modify the file.
+When ``mmap`` fails, the file is read into a private mapping and the accessors return those bytes.
+The default prefetch asks for ``MADV_POPULATE_READ``.
+A failed hint leaves the mapping in place, and one byte of each page is read before the function returns.
+
+The accessors ``positions_f64``, ``velocities_f64``, ``positions_f32`` and ``velocities_f32`` return the runs in place on a little-endian host.
+A big-endian host gets an error from those accessors, because they return the file bytes in place.
+A run that does not fit in the file fails, and so does a run that is not aligned for its type.
+``read_conbin`` calls the binary64 accessors.
+It returns one position array and one velocity array.
+A binary32 file and a file with flag bit 1 clear are errors.
+``map_file`` keeps the mapping for as long as those arrays live.
+A truncation of the file during that time can raise ``SIGBUS``.
+
+``read_into`` and ``read_into_f32`` copy the runs with ``pread`` into slices that the caller owns.
+Each value is decoded as little-endian, so a big-endian host receives the same numbers.
+Each fails when the file uses the other value width, or when a slice has the wrong length.
+The read also fails when a run passes the end of the file.
+Each fills the velocity slice only when flag bit 1 is set.
+When that bit is set and the caller passes no velocity slice, the read fails.
+``read_owned_f64`` reserves both binary64 columns only after it has checked that the file holds them.
+A count the file cannot hold is an incomplete frame.
+
+The ``conbin-reader`` fuzz target writes each input as a file and also as a header, zeros out to 4096, and the rest of the input.
+An input longer than 64 KiB is skipped.
+The target reads the file with ``read_header``, ``read_owned_f64``, ``sum_mapped``, ``map_file`` and the copy functions ``read_into_threads`` and ``read_into_f32_threads``.
+The copy runs with one worker and then with two.
+A copy of the other value width returns an error.
+When a mapped read and a copied read both succeed, the target checks that they return the same bits.

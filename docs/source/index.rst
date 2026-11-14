@@ -120,6 +120,7 @@ Site map
    :caption: Reference
 
    spec
+   conbin-binary-spec
    implementation-notes
    bindings
    python-api
