@@ -550,3 +550,56 @@ rule million:
         f"{MILLION}/lscpu.txt",
         f"{MILLION}/NOTES.txt",
         f"{MILLION}/library-commit.txt",
+
+
+# h2h15 is a new record. The million rule keeps refusing every other
+# path under bench/h2h/scaling.
+H2H15 = "bench/h2h/scaling/h2h15"
+
+
+rule h2h15_measure:
+    output:
+        f"{H2H15}/cross-format.json",
+        f"{H2H15}/cross-format.log",
+        f"{H2H15}/provenance.json",
+        f"{H2H15}/identity.txt",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+        export VECLIB_MAXIMUM_THREADS=1
+        export RAYON_NUM_THREADS=1
+        python3 bench/h2h/h2h15.py --out bench/h2h/scaling/h2h15 --repeats 12
+        """
+
+
+rule h2h15_asv:
+    input:
+        f"{H2H15}/cross-format.json",
+    output:
+        f"{H2H15}/asv.json",
+        f"{H2H15}/asv-machine.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+        export VECLIB_MAXIMUM_THREADS=1
+        export RAYON_NUM_THREADS=1
+        python3 bench/h2h/h2h15_asv.py bench/h2h/scaling/h2h15
+        """
+
+
+rule h2h15:
+    input:
+        f"{H2H15}/cross-format.json",
+        f"{H2H15}/cross-format.log",
+        f"{H2H15}/provenance.json",
+        f"{H2H15}/identity.txt",
+        f"{H2H15}/asv.json",
+        f"{H2H15}/asv-machine.json",
