@@ -1310,15 +1310,13 @@ The mapped binary file reads the frames in \SI{0.0076}{\second}.
 
 \input{figures/generated/host_table}
 
-readcon-db ingests 40 frames in \SI{\dbReadconMedian}{\second} and the ASE database in \SI{\dbAseMedian}{\second}.
-Both stores keep all 40 frames.
+The 40-frame ingest comparison is \todoPending.
+On 10000 frames of 8 atoms, readcon-db inserts in 0.241~s and the ASE database in 2.83~s, and the fidelity check is exact.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}
 Figures~\ref{fig:db-throughput}, \ref{fig:db-bandwidth}, \ref{fig:db-query}, \ref{fig:db-disk} and~\ref{fig:db-dedup} are the database campaigns on the Intel Xeon processor.
-On 1000 frames, readcon-db ingests at \(3.04\times 10^{4}\) frames/s and 33.1~MB/s.
-ASE's database ingests at 199 frames/s and 0.216~MB/s, and the same database inside one transaction at \(1.55\times 10^{3}\) frames/s and 1.68~MB/s.
-A separate 40-frame ingest takes \dbReadconMedian~s in readcon-db and \dbAseMedian~s in the ASE database.
-The composition query on 1000 frames has cold medians of 0.00131~s for readcon-db, 0.0417~s for the ASE database and 0.0212~s for a directory of CON files, and warm medians of \(2.32\times 10^{-5}\)~s, 0.0321~s and 0.0139~s.
+The 1000-frame ingest rates are \todoPending.
+The composition-query times are \todoPending.
 The deduplication record stores 24000 frames and 7 unique frame hashes.
 One CON frame is 3826 bytes: preamble 280, coordinates 1429, mask 112, identifier 92, velocity header 30, velocity numbers 1860 and time unit 23.
 Of the four fidelity fields, CON 3.1 keeps the mask, the identifier and the binary64 coordinates exact and carries no time unit; the velocity file keeps all four exact; six decimals and extended XYZ keep the mask and the identifier and approximate the coordinates; the ASE trajectory and JSON keep the mask and the coordinates and lose the identifier; POSCAR, XYZ and CIF lose the mask and the identifier and approximate the coordinates.
@@ -1594,9 +1592,8 @@ readcon-db commits every 64 frames.
 It appends the same trajectory in \SI{6.25}{\second}, with a resident set of \SI{34.7}{\mebi\byte} and a heap of \SI{5.2}{\mebi\byte}.
 One thousand random-frame reads take \SI{0.0242}{\second}, with a resident set of \SI{58.9}{\mebi\byte} and a heap of \SI{7.19}{\mebi\byte}.
 The coordinates match.
-ASE's database takes \SI{0.297}{\second} and the ASE trajectory takes \SI{0.047}{\second} on those reads.
+The ASE comparison on those reads is \todoPending.
 
-\input{campaign/final/db}
 
 \begin{figure*}[tbp]
 \centering

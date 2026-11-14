@@ -154,7 +154,7 @@ atom correspondence \sep adaptive kinetic Monte Carlo
 \item On the CON peer table, readcon reads a million-atom frame in \conReadconMedian~s and ASE takes \conAseMedian~s.
 \item On the extended XYZ peer table, readcon is faster than OVITO, chemfiles and ASE.
 \item In the h2h9 record, CON.zst is the smallest million-atom file that drops nothing.
-\item In the db4 record, readcon-db's ingest is faster than the ASE database on every paired row.
+\item On 10000 frames of 8 atoms, readcon-db inserts in 0.241~s and the ASE database in 2.83~s, and the fidelity check is exact.
 \item On the CON peer table, eOn takes longer than readcon on the million-atom frame.
 \end{highlights}
 
@@ -574,7 +574,8 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 The peer tables in this section were timed on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
 The h2h9 and camp4 records are a separate session on a Xeon of family 6, model 173.
-The db4 record is readcon-db at \path{a86d62e1218c77fffcd97b1ae3cd094b7ebf2996}.
+The supported readcon-db insert is the db5 row of 10000 frames of 8 atoms.
+Large-structure reads are \todoPending\ until db6.
 The reads use readcon-core \benchReadcon\ and Python 3.12.3.
 The libraries beside those reads are NumPy \benchNumpy\ \cite{harrisArrayProgrammingNumpy2020}, ASE \benchAse\ \cite{larsenAtomicSimulationEnvironmenta2017}, extxyz \benchExtxyz\ \cite{kermodeLibatomsExtxyzV0462026}, chemfiles \benchChemfiles\ \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \benchMda\ \cite{gowersMdanalysis21102026} and OVITO \benchOvito\ \cite{stukowskiVisualizationAnalysisAtomistic2010}, and eOn at commit \texttt{\benchEon}, after the \eOneEonTag\ release \cite{rohitgoswamiTheochemuieonV3602026}.
 Each was run with one thread where that library was timed.
@@ -599,11 +600,10 @@ On one thread the \num{100000}-frame CON read takes \conHundredKOne~s, and at ei
 The mixed-alloy extended XYZ read takes \alloyOne~s and \alloyEight~s at those two thread counts, and the extxyz-md trajectory takes \mdOne~s and \mdEight~s.
 At two threads that trajectory has efficiency \mdTwoEfficiency.
 The convel read at one thread has median \convelOne~s and interquartile range \convelOneIqr~s ($n{=}6$).
-db4 times an insert, a full read and a selected frame.
-readcon-db is faster than the ASE database on every paired row.
-Table~\ref{tab:db4} is the 40-frame insert.
-The record has no composition query and no directory of files.
-\input{campaign/final/db4}
+On 10000 frames of 8 atoms, readcon-db inserts in 0.241~s and the ASE database in 2.83~s (Table~\ref{tab:db5}).
+The fidelity check is exact.
+Large-structure reads are \todoPending\ until db6.
+\input{campaign/final/db5}
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
@@ -675,7 +675,8 @@ The one-core timings of Section~\ref{sec:performance} and the fidelity compariso
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h9} at \path{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
 Write scaling is \path{bench/h2h/scaling/camp4} at that tip.
-readcon-db is \path{bench/db4} of \path{lode-org/readcon-db} at \path{a86d62e1218c77fffcd97b1ae3cd094b7ebf2996}.
+The supported readcon-db insert is the db5 row of 10000 frames of 8 atoms on \path{lode-org/readcon-db}.
+Large-structure reads are \todoPending\ until db6.
 The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 One input is \path{frames-32x100000.con}.
