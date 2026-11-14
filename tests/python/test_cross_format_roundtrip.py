@@ -116,6 +116,14 @@ def test_a_fresh_process_finds_the_mdcompress_reader(tmp_path: Path) -> None:
     subprocess.run([sys.executable, "-c", code], check=True, env=env, cwd=root)
 
 
+def test_every_arm_names_the_write_clock() -> None:
+    arms, _notes = cross_format.arm_table(1000)
+    assert arms
+    for arm in arms:
+        assert arm["notes"].startswith("Clock: ") or " Clock: " in f" {arm['notes']}"
+        assert cross_format.write_clock(arm["id"]) in arm["notes"]
+
+
 def test_pdb_above_serial_is_reported() -> None:
     arms, _notes = cross_format.arm_table(100_000)
     pdb = [arm for arm in arms if arm["id"] == "mda-pdb"]
