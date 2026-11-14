@@ -2573,6 +2573,11 @@ pub fn write_frame_refs_to_path(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    // One writer streams each frame to the file. Building the whole text
+    // and copying it was a second pass the parallel paths do not pay.
+    if workers < 2 {
+        return write_serial_frames(path, frames, precision, canonical, bind);
+    }
     if workers >= 2 && frames.len() >= 2 {
         return pipeline_frame_groups(path, frames, workers, precision, canonical, bind);
     }
@@ -2794,6 +2799,13 @@ pub(crate) fn pack_frames_by_weight(weights: &[usize], workers: usize) -> Vec<(u
 /// own offset, so the caller does not copy the file on one thread.
 pub(crate) fn pipeline_format_threads(workers: usize) -> usize {
     workers.max(1)
+}
+
+/// Eight workers on a long trajectory format into the file itself.
+/// One writer stays on the serial formatter. Two and four keep the
+/// overlapped copy, which is the faster of the two at those widths.
+pub(crate) fn direct_slice_write(workers: usize, total_weight: usize) -> bool {
+    workers >= 8 && total_weight >= 3_000_000
 }
 
 /// Box numbers the writer emits. Lattice vectors are converted first.
@@ -3180,6 +3192,25 @@ fn place_packed(
 /// Format frame groups on [`pipeline_format_threads`] threads, then
 /// place each group at its file offset. There is no ordered `write_all`
 /// of the whole text.
+fn write_serial_frames(
+    path: &std::path::Path,
+    frames: &[&ConFrame],
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+    let mut writer = match precision {
+        Some(precision) => ConFrameWriter::with_precision(file, precision),
+        None => ConFrameWriter::new(file),
+    }
+    .canonical(canonical);
+    let result =
+        write_group(&mut writer, frames, bind).and_then(|_| writer.flush().map_err(WriteError::Io));
+    drop(writer);
+    commit_temporary(&tmp, path, result)
+}
+
 fn pipeline_frame_groups(
     path: &std::path::Path,
     frames: &[&ConFrame],
@@ -3217,12 +3248,13 @@ fn pipeline_frame_groups(
         let result = store_disjoint_parts(&file, &formatted).map_err(WriteError::Io);
         return commit_temporary(&tmp, path, result);
     }
-    // A velocity file's copy does not fit behind the formatters. The
-    // first call prices every frame; a repeat write of the same frames
-    // formats straight into the file and does not copy.
-    // Coordinate and velocity trajectories both price once and then
-    // format into the file. A short test file stays on the overlapped copy.
-    let heavy = frame_byte_weight(frames[0]).saturating_mul(frames.len()) >= 3_000_000;
+    // Eight workers fill the machine, so a repeat write formats straight
+    // into the file. Fewer workers keep the overlapped copy: pricing
+    // and a direct store are slower there, and one worker never prices.
+    let heavy = direct_slice_write(
+        workers,
+        frame_byte_weight(frames[0]).saturating_mul(frames.len()),
+    );
     if heavy
         && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
     {
@@ -3930,7 +3962,9 @@ mod weight_partition {
 
 #[cfg(all(test, feature = "parallel"))]
 mod parallel_write_tests {
-    use super::{frame_byte_weight, pack_frames_by_weight, pipeline_format_threads};
+    use super::{
+        direct_slice_write, frame_byte_weight, pack_frames_by_weight, pipeline_format_threads,
+    };
 
     /// Two workers used to format on one thread. The caller only writes
     /// a group it has already received, so both workers have to format.
@@ -3939,6 +3973,18 @@ mod parallel_write_tests {
         assert_eq!(pipeline_format_threads(1), 1);
         assert_eq!(pipeline_format_threads(2), 2);
         assert_eq!(pipeline_format_threads(8), 8);
+    }
+
+    /// One writer never prices the file. Two and four keep the overlapped
+    /// copy. Only eight workers on a long trajectory format into the file.
+    #[test]
+    fn serial_and_narrow_writes_skip_the_direct_slice() {
+        let long = 3_000_000;
+        assert!(!direct_slice_write(1, long));
+        assert!(!direct_slice_write(2, long));
+        assert!(!direct_slice_write(4, long));
+        assert!(direct_slice_write(8, long));
+        assert!(!direct_slice_write(8, long - 1));
     }
 
     /// Equal frame counts would split `[1, 1, 1, 100]` into two and two,
