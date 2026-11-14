@@ -1,0 +1,17 @@
+{
+  "fresh_file_each_sample": true,
+  "kept": "On ext4, rank 0 pwrites every rank's slice in order after one fallocate. tmpfs still maps each rank's range. publish_ranked_slices is unchanged and is still the in-process publish.",
+  "profile_ext4_8rank": {
+    "fallocate_s": 0.0001,
+    "linkat_s": 0.0001,
+    "format_rank0_s": 0.0035,
+    "rank0_pwrite_s": 0.001,
+    "wait_for_other_pwrites_s": 0.015,
+    "rename_s": 0.0027
+  },
+  "rejected": [
+    "A token passed from rank to rank, each rank pwriting its own slice, was slower (8-rank median about 0.0142 s) than rank 0 writing the slices.",
+    "Formatting the wide frame in 16 Ki-atom chunks and overlapping those chunks with the write was slower (about 0.016 s). The extra messages cost more than the overlap saved.",
+    "Spelling the wide frame into a shared mapping, measured in camp19, tied 8 ranks and lost at 4 ranks."
+  ]
+}
