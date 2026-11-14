@@ -248,10 +248,11 @@ for raw in listed.split(b"\0"):
     except (UnicodeDecodeError, OSError):
         continue
     # A comparison pin such as ``trio>=0.22.0`` is not this package.
+    # A conda build string such as ``libpsl-0.23.1-hd9e3e90_1`` is not either.
     # A conda upper bound can contain these digits followed by a letter.
     # Require a version token boundary so that pin is not this package.
     if re.search(
-        rf"(?<![0-9A-Za-z.>=<~^]){re.escape(version)}(?![0-9A-Za-z.])",
+        rf"(?<![0-9A-Za-z.>=<~^-]){re.escape(version)}(?![0-9A-Za-z.-])",
         data,
     ):
         bad.append(rel)

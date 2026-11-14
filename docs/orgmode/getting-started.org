@@ -82,7 +82,7 @@ include(FetchContent)
 FetchContent_Declare(
   readcon-core
   URL https://github.com/lode-org/readcon-core/releases/download/v@READCON_VERSION@/readcon-core-cxx-@READCON_VERSION@.tar.gz
-  URL_HASH SHA256=afad2c45dc04abdca7518a0b22b7d824d2929b69837e32002a4279a71319372c
+  URL_HASH SHA256=db7f1a49a1c67df10c79ae196c72e935778d5854c893fcfa6d8a96074c122f15
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(app PRIVATE readcon-core::shared)
@@ -118,6 +118,23 @@ Prebuilt C ABI (no local cargo): unpack
 =export READCON_CORE_LIB= / =PKG_CONFIG_PATH=. Attach assets to an
 already-published tag with Actions → *C ABI library tarball* →
 =tag=vX.Y.Z=. Windows + chemfiles is not a clib asset.
+
+** ASE
+
+=ase-readcon= registers =readcon-con= and =readcon-convel= on the
+=ase.ioformats= entry point. =ase.io.read= and =ase.io.write= load that
+group when the format name is one of those two.
+
+#+begin_src toml
+[project.entry-points."ase.ioformats"]
+readcon-con = "ase_readcon.io:readcon_con_format"
+readcon-convel = "ase_readcon.io:readcon_convel_format"
+#+end_src
+
+#+begin_src shell
+pip install 'readcon==@READCON_VERSION@' ase
+pip install -e ase-readcon
+#+end_src
 
 * Smoke test
 

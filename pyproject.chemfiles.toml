@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "readcon-chemfiles"
 # [[[cog exec(open("scripts/cog_inline.py").read()); emit(cog, 'version = "{v}"')]]]
-version = "0.23.0"
+version = "0.23.1"
 # [[[end]]]
 description = "Python bindings for readcon-core with chemfiles import/selection (libchemfiles linked)"
 requires-python = ">=3.10"

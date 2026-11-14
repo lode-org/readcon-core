@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## v0.23.1 - 2026-11-14
+
+### Bugfixes
+
+- A CON-bin column the file cannot hold is rejected. The reader used to reserve
+  both binary64 columns from the header first, so a 40-byte header declaring
+  50000000 atoms asked for 1.2 GiB.
+- The perf23 CON-bin bench records one read. The warm clock still loops, and
+  the sample is that sum divided by the loop count, instead of the sum itself.
+- This release publishes the cargo-dist archives. The v0.23.0 Windows link
+  failed, so those archives were not uploaded, and that tag stays as published.
+- Windows builds use flate2's pure-Rust backend, so the cargo-dist Windows
+  asset links. cargo-dist 0.28 keeps the static CRT, and zlib-ng's cmake
+  objects import `__imp__wassert`. Other targets stay on zlib-ng.
+
+### Misc
+
+- Rust sources match rustfmt 1.88, and Python sources match ruff 0.15.2.
+
+
 ## v0.23.0 - 2026-11-12
 
 ### Features
@@ -1489,6 +1509,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.23.1]: https://github.com/lode-org/readcon-core/compare/v0.23.0...v0.23.1
 [v0.23.0]: https://github.com/lode-org/readcon-core/compare/v0.22.0...v0.23.0
 [v0.22.0]: https://github.com/lode-org/readcon-core/compare/v0.21.0...v0.22.0
 [v0.21.0]: https://github.com/lode-org/readcon-core/compare/v0.20.0...v0.21.0

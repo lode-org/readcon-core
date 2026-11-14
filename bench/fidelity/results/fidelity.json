@@ -106,7 +106,7 @@
     ]
   },
   "versions": {
-    "readcon": "0.23.0",
+    "readcon": "0.23.1",
     "ase": "3.29.0",
     "chemfiles": "0.10.4",
     "chemfiles_formats": [
@@ -2846,5 +2846,5 @@
       "fixture": "v30_fs_label.convel"
     }
   ],
-  "readcon": "0.23.0"
+  "readcon": "0.23.1"
 }

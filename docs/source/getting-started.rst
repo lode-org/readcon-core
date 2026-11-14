@@ -11,20 +11,20 @@ Getting started
 Install
 -------
 
-Pick **one** language. Version pins match this tree (``0.23.0``).
+Pick **one** language. Version pins match this tree (``0.23.1``).
 
 .. table::
 
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
     | Package            | Install                                                                             | Destination                                                                                                                     |
     +====================+=====================================================================================+=================================================================================================================================+
-    | Python CON I/O     | ``pip install 'readcon==0.23.0'``                                                   | `readcon on PyPI <https://pypi.org/project/readcon/>`_                                                                          |
+    | Python CON I/O     | ``pip install 'readcon==0.23.1'``                                                   | `readcon on PyPI <https://pypi.org/project/readcon/>`_                                                                          |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.23.0'``                                         | `readcon-chemfiles on PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)  |
+    | Python + chemfiles | ``pip install 'readcon-chemfiles==0.23.1'``                                         | `readcon-chemfiles on PyPI <https://pypi.org/project/readcon-chemfiles/>`_ (do not mix with lean ``readcon`` in the same venv)  |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | Rust CON I/O       | ``cargo add readcon-core@0.23.0``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                       |
+    | Rust CON I/O       | ``cargo add readcon-core@0.23.1``                                                   | `docs.rs <https://docs.rs/readcon-core>`_                                                                                       |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
-    | Rust + chemfiles   | ``cargo add readcon-core@0.23.0 --features chemfiles``                              | same crate                                                                                                                      |
+    | Rust + chemfiles   | ``cargo add readcon-core@0.23.1 --features chemfiles``                              | same crate                                                                                                                      |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
     | readcon-db         | ``cargo add readcon-db`` / ``pip install readcon-db``                               | `readcon-db docs <https://lode-org.github.io/readcon-db/docs/>`_ · `readcon-db on PyPI <https://pypi.org/project/readcon-db/>`_ |
     +--------------------+-------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
@@ -40,14 +40,14 @@ Python: CON I/O
 
 .. code:: shell
 
-    pip install 'readcon==0.23.0'
+    pip install 'readcon==0.23.1'
 
 Python: CON I/O plus format conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.23.0'
+    pip install 'readcon-chemfiles==0.23.1'
     # do not also install lean readcon in the same venv
 
 Rust: CON I/O
@@ -55,14 +55,14 @@ Rust: CON I/O
 
 .. code:: shell
 
-    cargo add readcon-core@0.23.0
+    cargo add readcon-core@0.23.1
 
 Rust: with conversion
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: shell
 
-    cargo add readcon-core@0.23.0 --features chemfiles
+    cargo add readcon-core@0.23.1 --features chemfiles
 
 readcon-db
 ~~~~~~~~~~
@@ -100,14 +100,14 @@ after a prefix install. The cxx tarball on the GitHub Release is
     include(FetchContent)
     FetchContent_Declare(
       readcon-core
-      URL https://github.com/lode-org/readcon-core/releases/download/v0.23.0/readcon-core-cxx-0.23.0.tar.gz
-      URL_HASH SHA256=afad2c45dc04abdca7518a0b22b7d824d2929b69837e32002a4279a71319372c
+      URL https://github.com/lode-org/readcon-core/releases/download/v0.23.1/readcon-core-cxx-0.23.1.tar.gz
+      URL_HASH SHA256=db7f1a49a1c67df10c79ae196c72e935778d5854c893fcfa6d8a96074c122f15
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(app PRIVATE readcon-core::shared)
 
-The slim cxx tarball on the ``v0.23.0`` GitHub Release is the FetchContent
-URL. A vendor tarball (``readcon-core-cxx-0.23.0-vendor.tar.gz``) ships
+The slim cxx tarball on the ``v0.23.1`` GitHub Release is the FetchContent
+URL. A vendor tarball (``readcon-core-cxx-0.23.1-vendor.tar.gz``) ships
 crates for offline builds. The Meson wrap file is
 ``packaging/wrapdb/readcon-core.wrap`` on that same release.
 
@@ -136,6 +136,24 @@ Prebuilt C ABI (no local cargo): unpack
 ``export READCON_CORE_LIB`` / ``PKG_CONFIG_PATH``. Attach assets to an
 already-published tag with Actions → **C ABI library tarball** →
 ``tag=vX.Y.Z``. Windows + chemfiles is not a clib asset.
+
+ASE
+~~~
+
+``ase-readcon`` registers ``readcon-con`` and ``readcon-convel`` on the
+``ase.ioformats`` entry point. ``ase.io.read`` and ``ase.io.write`` load that
+group when the format name is one of those two.
+
+.. code:: toml
+
+    [project.entry-points."ase.ioformats"]
+    readcon-con = "ase_readcon.io:readcon_con_format"
+    readcon-convel = "ase_readcon.io:readcon_convel_format"
+
+.. code:: shell
+
+    pip install 'readcon==0.23.1' ase
+    pip install -e ase-readcon
 
 Smoke test
 ----------

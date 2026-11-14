@@ -5,10 +5,10 @@
  * https://cog.readthedocs.io/en/latest/
  */
 /* [[[cog exec(open("scripts/cog_inline.py").read()); emit_c_version(cog)]]] */
-#define READCON_CORE_VERSION "0.23.0"
+#define READCON_CORE_VERSION "0.23.1"
 #define READCON_CORE_VERSION_MAJOR 0
 #define READCON_CORE_VERSION_MINOR 23
-#define READCON_CORE_VERSION_PATCH 0
+#define READCON_CORE_VERSION_PATCH 1
 /* [[[end]]] */
 
 #endif
