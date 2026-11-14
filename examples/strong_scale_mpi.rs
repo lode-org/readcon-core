@@ -12,8 +12,7 @@
 use mpi::traits::*;
 use readcon_core::distrib::Comm;
 use readcon_core::distrib_read::{
-    ReadMode, frame_coord_span, parse_coord_lines, rank_line_range, rank_line_range_share,
-    read_block,
+    ReadMode, frame_coord_span, parse_coord_lines, rank_line_range, read_block,
 };
 use readcon_core::distrib_write::{WriteMode, write_block, write_ranked_bytes};
 use std::time::Instant;
@@ -68,18 +67,15 @@ fn write_rank(comm: &Comm, out: &std::path::Path, body: &[u8]) {
     maybe_sync(comm, out);
 }
 
-fn line_range(
-    bytes: &[u8],
-    start: usize,
-    end: usize,
-    rank: usize,
-    size: usize,
-) -> std::ops::Range<usize> {
-    match std::env::var("READCON_RANK0_SHARE").ok().as_deref() {
-        Some("0") => rank_line_range_share(bytes, start, end, rank, size, 0, 4),
-        Some("0.25") => rank_line_range_share(bytes, start, end, rank, size, 1, 4),
-        _ => rank_line_range(bytes, start, end, rank, size),
+fn window_is_steady(samples: &[f64]) -> bool {
+    if samples.len() < 4 {
+        return false;
     }
+    let w = &samples[samples.len() - 3..];
+    let mut ordered = [w[0], w[1], w[2]];
+    ordered.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    let median = ordered[1];
+    median > 0.0 && ordered[2] - ordered[0] <= median * 0.10
 }
 
 fn maybe_sync(comm: &Comm, out: &std::path::Path) {
@@ -121,7 +117,7 @@ fn main() {
     let split = held.n_total == 1 && comm.size() > 1;
     let prepared = if split {
         let (start, end) = frame_coord_span(&file_bytes).expect("coordinates");
-        let range = line_range(&file_bytes, start, end, comm.rank(), comm.size());
+        let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
         let symbol = component_symbol(&file_bytes);
         let rows = atoms_from_lines(&file_bytes[range], &symbol);
         // The one-rank path writes this frame with `write_frame_bound`,
@@ -138,9 +134,25 @@ fn main() {
         None
     };
     let floor = op == "floor-fresh" || op == "floor-replace";
-    world.barrier();
-    if op == "write" || floor {
-        if let Some((header, rows, _, _)) = &prepared {
+    // One pass is not enough: the first writes of a fresh inode are slower
+    // than the later ones. Keep going until the last three agree within 10%,
+    // after at least four passes, or twelve passes, and only then collect
+    // the timed samples.
+    let mut warm_times = Vec::new();
+    let mut warmups = 0usize;
+    loop {
+        world.barrier();
+        let started = Instant::now();
+        if op == "read" {
+            if let Some((_, _, start, end)) = &prepared {
+                let range = rank_line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
+                let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
+                std::hint::black_box(coords.len());
+            } else {
+                let got = read_block(&comm, path, mode, Some(1)).expect("warmup read");
+                std::hint::black_box(got.n_total);
+            }
+        } else if let Some((header, rows, _, _)) = &prepared {
             let mut body = header.clone();
             body.extend(
                 readcon_core::writer::format_coordinate_lines(&rows.atoms).expect("format"),
@@ -160,13 +172,21 @@ fn main() {
             .expect("warmup write");
             maybe_sync(&comm, out);
         }
-    } else if let Some((_, rows, _, _)) = &prepared {
-        std::hint::black_box(rows.atoms.len());
-    } else {
-        let _ = read_block(&comm, path, mode, Some(1)).expect("warmup read");
+        world.barrier();
+        warmups += 1;
+        let mut stop = [0u8];
+        if comm.rank() == 0 {
+            warm_times.push(started.elapsed().as_secs_f64());
+            if warmups >= 12 || window_is_steady(&warm_times) {
+                stop[0] = 1;
+            }
+        }
+        world.process_at_rank(0).broadcast_into(&mut stop);
+        if stop[0] == 1 {
+            break;
+        }
     }
-    world.barrier();
-    // The floor copies the file the warmup write just published. The read
+    // The floor copies the file the warmup writes just published. The read
     // of that file is outside the clock, the same way atom preparation is
     // outside the write clock. Fresh unlinks the destination before the
     // clock. Replace starts with a same-sized file already at the name.
@@ -223,7 +243,7 @@ fn main() {
                 maybe_sync(&comm, out);
             }
         } else if let Some((_, _, start, end)) = &prepared {
-            let range = line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
+            let range = rank_line_range(&file_bytes, *start, *end, comm.rank(), comm.size());
             let coords = parse_coord_lines(&file_bytes[range]).expect("coords");
             std::hint::black_box(coords.len());
         } else {
@@ -239,10 +259,14 @@ fn main() {
             .map(|sample| format!("{sample:.6}"))
             .collect::<Vec<_>>()
             .join(",");
+        let nbytes = std::fs::metadata(out).map(|meta| meta.len()).unwrap_or(0);
+        let low = samples.iter().copied().fold(f64::MAX, f64::min);
+        let high = samples.iter().copied().fold(0.0_f64, f64::max);
         println!(
-            "op={op} ranks={} frames={} samples={text}",
+            "op={op} ranks={} frames={} warmup={warmups} bytes={nbytes} range={:.6} samples={text}",
             comm.size(),
-            held.n_total
+            held.n_total,
+            high - low
         );
     }
 }
