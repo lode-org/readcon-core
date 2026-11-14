@@ -1,10 +1,11 @@
-//! Coordinate-only trajectories as columns, one frame at a time.
+//! Rectangular trajectories as columns.
 //!
-//! A parallel read keeps every `ConFrame`. That holds the file, a per-atom
-//! record, and a second copy of the coordinates at once. A serial read of a
-//! file with no velocity or force section streams instead: the source buffer
-//! stays near one frame, and the retained bytes are the coordinate slab plus
-//! the id, flag, and symbol columns.
+//! One streaming pass counts frames and reads the section shape, skipping
+//! atom bodies after the first frame. A second pass is the only full parse:
+//! it writes coordinates and any per-atom section into caller-owned slabs.
+//! Ids, fixed flags, and the symbol index are stored once when every frame
+//! has the same atoms, and per frame when they change. The source window
+//! stays near one frame, so the file is not retained next to the slabs.
 
 use crate::iterators::ConFrameIterator;
 use crate::stream::settled;
@@ -19,10 +20,27 @@ const READ_CHUNK: usize = 8 * 1024;
 /// Keep the window from retaining the rest of the file.
 const WINDOW_CAP: usize = 48 * 1024;
 
-/// Columns for a rectangular, coordinate-only trajectory.
+/// Which per-atom sections the first frame carried.
 ///
-/// Positions are written into a caller-owned buffer so they are not also
-/// kept in a `Vec` that is later copied.
+/// A later frame with a different shape makes the fill fail, and the caller
+/// uses the frame parser.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SectionFlags {
+    pub velocities: bool,
+    pub forces: bool,
+    pub energies: bool,
+    pub charges: bool,
+    pub spins: bool,
+    pub magmoms: bool,
+    pub displacements: bool,
+    pub spreads: bool,
+}
+
+/// Columns for a rectangular trajectory.
+///
+/// Numeric sections are written into caller-owned buffers. `flags`, `ids`,
+/// and `sym_index` hold one frame when `identity_shared` is set, and one
+/// entry per frame otherwise.
 pub struct Columns {
     pub n_frames: usize,
     pub n_atoms: usize,
@@ -30,6 +48,7 @@ pub struct Columns {
     pub ids: Vec<u64>,
     pub sym_index: Vec<u32>,
     pub symbols: Vec<Arc<str>>,
+    pub identity_shared: bool,
     /// Distinct headers. Repeated frames share one entry.
     pub headers: Vec<FrameHeader>,
     pub header_index: Vec<u32>,
@@ -39,28 +58,35 @@ pub struct Layout {
     pub n_frames: usize,
     pub n_atoms: usize,
     pub n_bytes: u64,
+    pub sections: SectionFlags,
 }
 
-fn coords_only(frame: &ConFrame) -> bool {
-    !frame.atom_data.is_empty()
-        && frame.velocities.nrows() == 0
-        && frame.forces.nrows() == 0
-        && frame.atom_energies.len() == 0
-        && frame.charges.len() == 0
-        && frame.spins.len() == 0
-        && frame.magmoms.nrows() == 0
-        && frame.displacements.nrows() == 0
-        && frame.spreads.nrows() == 0
+/// Caller-owned section slabs. Absent sections are `None`.
+pub struct Slabs<'a> {
+    pub positions: &'a mut [f64],
+    pub velocities: Option<&'a mut [f64]>,
+    pub forces: Option<&'a mut [f64]>,
+    pub energies: Option<&'a mut [f64]>,
+    pub charges: Option<&'a mut [f64]>,
+    pub spins: Option<&'a mut [f64]>,
+    pub magmoms: Option<&'a mut [f64]>,
+    pub displacements: Option<&'a mut [f64]>,
+    pub spreads: Option<&'a mut [f64]>,
+}
+
+fn whole_text(buf: &[u8], eof: bool) -> Option<&[u8]> {
+    if eof {
+        return Some(buf);
+    }
+    match memchr::memrchr(b'\n', buf) {
+        Some(i) => Some(&buf[..=i]),
+        None => None,
+    }
 }
 
 fn take_frame(buf: &[u8], eof: bool) -> Result<Option<(ConFrame, usize)>, ()> {
-    let text = if eof {
-        buf
-    } else {
-        match memchr::memrchr(b'\n', buf) {
-            Some(i) => &buf[..=i],
-            None => return Ok(None),
-        }
+    let Some(text) = whole_text(buf, eof) else {
+        return Ok(None);
     };
     if text.is_empty() {
         return Ok(None);
@@ -75,6 +101,82 @@ fn take_frame(buf: &[u8], eof: bool) -> Result<Option<(ConFrame, usize)>, ()> {
     }
 }
 
+fn skip_frame(buf: &[u8], eof: bool) -> Result<Option<usize>, ()> {
+    let Some(text) = whole_text(buf, eof) else {
+        return Ok(None);
+    };
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let mut it = ConFrameIterator::from_bytes(text);
+    match it.forward() {
+        Some(Ok(())) => {
+            let end = it.byte_pos();
+            if eof || settled(text, end) {
+                Ok(Some(end))
+            } else {
+                Ok(None)
+            }
+        }
+        Some(Err(_)) if eof => Err(()),
+        Some(Err(_)) => Ok(None),
+        None => Ok(None),
+    }
+}
+
+fn read_more(src: &mut impl Read, buf: &mut Vec<u8>, eof: &mut bool) -> Result<(), ()> {
+    let start = buf.len();
+    buf.resize(start + READ_CHUNK, 0);
+    match src.read(&mut buf[start..]) {
+        Ok(0) => {
+            buf.truncate(start);
+            *eof = true;
+            Ok(())
+        }
+        Ok(n) => {
+            buf.truncate(start + n);
+            Ok(())
+        }
+        Err(_) => Err(()),
+    }
+}
+
+fn shrink(buf: &mut Vec<u8>) {
+    if buf.capacity() > WINDOW_CAP {
+        buf.shrink_to(READ_CHUNK * 2);
+    }
+}
+
+fn present(rows: usize, atoms: usize) -> Result<bool, ()> {
+    if rows == 0 {
+        Ok(false)
+    } else if rows == atoms {
+        Ok(true)
+    } else {
+        Err(())
+    }
+}
+
+fn sections_of(frame: &ConFrame) -> Result<(usize, SectionFlags), ()> {
+    let atoms = frame.atom_data.len();
+    if atoms == 0 {
+        return Err(());
+    }
+    Ok((
+        atoms,
+        SectionFlags {
+            velocities: present(frame.velocities.nrows(), atoms)?,
+            forces: present(frame.forces.nrows(), atoms)?,
+            energies: present(frame.atom_energies.len(), atoms)?,
+            charges: present(frame.charges.len(), atoms)?,
+            spins: present(frame.spins.len(), atoms)?,
+            magmoms: present(frame.magmoms.nrows(), atoms)?,
+            displacements: present(frame.displacements.nrows(), atoms)?,
+            spreads: present(frame.spreads.nrows(), atoms)?,
+        },
+    ))
+}
+
 fn for_each_frame<R: Read>(
     mut src: R,
     mut on_frame: impl FnMut(ConFrame) -> Result<(), ()>,
@@ -86,50 +188,55 @@ fn for_each_frame<R: Read>(
             Some((frame, end)) => {
                 on_frame(frame)?;
                 buf.drain(..end);
-                if buf.capacity() > WINDOW_CAP {
-                    buf.shrink_to(READ_CHUNK * 2);
-                }
+                shrink(&mut buf);
             }
             None if eof => break,
-            None => {
-                let start = buf.len();
-                buf.resize(start + READ_CHUNK, 0);
-                match src.read(&mut buf[start..]) {
-                    Ok(0) => {
-                        buf.truncate(start);
-                        eof = true;
-                    }
-                    Ok(n) => buf.truncate(start + n),
-                    Err(_) => return Err(()),
-                }
-            }
+            None => read_more(&mut src, &mut buf, &mut eof)?,
         }
     }
     Ok(())
 }
 
 fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
+    let mut src = src;
+    let mut buf = Vec::with_capacity(READ_CHUNK * 2);
+    let mut eof = false;
     let mut n_frames = 0usize;
-    let mut n_atoms = None;
-    for_each_frame(src, |frame| {
-        if !coords_only(&frame) {
-            return Err(());
-        }
-        let atoms = frame.atom_data.len();
-        if let Some(expected) = n_atoms {
-            if atoms != expected {
-                return Err(());
+    let mut n_atoms = 0usize;
+    let mut sections = SectionFlags::default();
+    let mut shaped = false;
+    loop {
+        if !shaped {
+            match take_frame(&buf, eof)? {
+                Some((frame, end)) => {
+                    let (atoms, flags) = sections_of(&frame)?;
+                    n_atoms = atoms;
+                    sections = flags;
+                    n_frames = 1;
+                    shaped = true;
+                    buf.drain(..end);
+                    shrink(&mut buf);
+                }
+                None if eof => break,
+                None => read_more(&mut src, &mut buf, &mut eof)?,
             }
         } else {
-            n_atoms = Some(atoms);
+            match skip_frame(&buf, eof)? {
+                Some(end) => {
+                    n_frames += 1;
+                    buf.drain(..end);
+                    shrink(&mut buf);
+                }
+                None if eof => break,
+                None => read_more(&mut src, &mut buf, &mut eof)?,
+            }
         }
-        n_frames += 1;
-        Ok(())
-    })?;
+    }
     Ok(Layout {
         n_frames,
-        n_atoms: n_atoms.unwrap_or(0),
+        n_atoms,
         n_bytes,
+        sections,
     })
 }
 
@@ -158,30 +265,193 @@ fn intern(table: &mut Vec<Arc<str>>, map: &mut HashMap<Arc<str>, u32>, symbol: &
     index
 }
 
-fn push_frame(
-    frame: &ConFrame,
+fn write_values(
+    dest: &mut [f64],
+    src: Option<&[f64]>,
+    n: usize,
+    mut one: impl FnMut(usize) -> f64,
+) -> Result<(), ()> {
+    let dest = dest.get_mut(..n).ok_or(())?;
+    if let Some(src) = src {
+        if src.len() < n {
+            return Err(());
+        }
+        dest.copy_from_slice(&src[..n]);
+        return Ok(());
+    }
+    for (slot, value) in dest.iter_mut().enumerate() {
+        *value = one(slot);
+    }
+    Ok(())
+}
+
+fn write_vec3(
     frame_index: usize,
     n_atoms: usize,
-    positions: &mut [f64],
+    dest: &mut [f64],
+    src: Option<&[f64]>,
+    mut row: impl FnMut(usize) -> [f64; 3],
+) -> Result<(), ()> {
+    let stride = n_atoms.saturating_mul(3);
+    let start = frame_index.saturating_mul(stride);
+    let dest = dest.get_mut(start..start + stride).ok_or(())?;
+    write_values(dest, src, stride, |slot| {
+        let atom = slot / 3;
+        let axis = slot % 3;
+        row(atom)[axis]
+    })
+}
+
+fn write_vec1(
+    frame_index: usize,
+    n_atoms: usize,
+    dest: &mut [f64],
+    src: Option<&[f64]>,
+    mut one: impl FnMut(usize) -> f64,
+) -> Result<(), ()> {
+    let start = frame_index.saturating_mul(n_atoms);
+    let dest = dest.get_mut(start..start + n_atoms).ok_or(())?;
+    write_values(dest, src, n_atoms, |slot| one(slot))
+}
+
+fn same_identity(frame: &ConFrame, columns: &Columns) -> bool {
+    frame.atom_data.len() == columns.n_atoms
+        && frame.atom_data.iter().enumerate().all(|(atom, item)| {
+            item.atom_id == columns.ids[atom]
+                && flag_mask(item) == columns.flags[atom]
+                && item.symbol.as_ref() == columns.symbol_at(0, atom)
+        })
+}
+
+fn expand_identity(columns: &mut Columns, already: usize) {
+    let mut flags = Vec::with_capacity(already.saturating_add(1).saturating_mul(columns.n_atoms));
+    let mut ids = Vec::with_capacity(flags.capacity());
+    let mut symbols = Vec::with_capacity(flags.capacity());
+    for _ in 0..already {
+        flags.extend_from_slice(&columns.flags);
+        ids.extend_from_slice(&columns.ids);
+        symbols.extend_from_slice(&columns.sym_index);
+    }
+    columns.flags = flags;
+    columns.ids = ids;
+    columns.sym_index = symbols;
+    columns.identity_shared = false;
+}
+
+fn push_identity(
+    frame: &ConFrame,
+    frame_index: usize,
     columns: &mut Columns,
     symbols: &mut HashMap<Arc<str>, u32>,
 ) -> Result<(), ()> {
-    if frame.atom_data.len() != n_atoms || !coords_only(frame) {
+    if frame.atom_data.len() != columns.n_atoms {
         return Err(());
     }
-    let stride = n_atoms.saturating_mul(3);
-    let start = frame_index.saturating_mul(stride);
-    let dest = positions.get_mut(start..start + stride).ok_or(())?;
-    for (atom_index, atom) in frame.atom_data.iter().enumerate() {
-        let at = atom_index.saturating_mul(3);
-        dest[at] = atom.x();
-        dest[at + 1] = atom.y();
-        dest[at + 2] = atom.z();
+    if frame_index > 0 && columns.identity_shared && same_identity(frame, columns) {
+        return Ok(());
+    }
+    if frame_index > 0 && columns.identity_shared {
+        expand_identity(columns, frame_index);
+    }
+    for atom in &frame.atom_data {
         columns.flags.push(flag_mask(atom));
         columns.ids.push(atom.atom_id);
         let index = intern(&mut columns.symbols, symbols, &atom.symbol);
         columns.sym_index.push(index);
     }
+    Ok(())
+}
+
+fn push_frame(
+    frame: &ConFrame,
+    frame_index: usize,
+    sections: SectionFlags,
+    slabs: &mut Slabs<'_>,
+    columns: &mut Columns,
+    symbols: &mut HashMap<Arc<str>, u32>,
+) -> Result<(), ()> {
+    let (atoms, got) = sections_of(frame)?;
+    if atoms != columns.n_atoms || got != sections {
+        return Err(());
+    }
+    let n = columns.n_atoms;
+    write_vec3(frame_index, n, slabs.positions, None, |atom| {
+        let item = &frame.atom_data[atom];
+        [item.x(), item.y(), item.z()]
+    })?;
+    if let Some(dest) = slabs.velocities.as_deref_mut() {
+        write_vec3(
+            frame_index,
+            n,
+            dest,
+            frame.velocities.f64_slice(),
+            |atom| frame.velocities.as_f64_row(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.forces.as_deref_mut() {
+        write_vec3(
+            frame_index,
+            n,
+            dest,
+            frame.forces.f64_slice(),
+            |atom| frame.forces.as_f64_row(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.magmoms.as_deref_mut() {
+        write_vec3(
+            frame_index,
+            n,
+            dest,
+            frame.magmoms.f64_slice(),
+            |atom| frame.magmoms.as_f64_row(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.displacements.as_deref_mut() {
+        write_vec3(
+            frame_index,
+            n,
+            dest,
+            frame.displacements.f64_slice(),
+            |atom| frame.displacements.as_f64_row(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.spreads.as_deref_mut() {
+        write_vec3(
+            frame_index,
+            n,
+            dest,
+            frame.spreads.f64_slice(),
+            |atom| frame.spreads.as_f64_row(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.energies.as_deref_mut() {
+        write_vec1(
+            frame_index,
+            n,
+            dest,
+            frame.atom_energies.f64_slice(),
+            |atom| frame.atom_energies.get_f64(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.charges.as_deref_mut() {
+        write_vec1(
+            frame_index,
+            n,
+            dest,
+            frame.charges.f64_slice(),
+            |atom| frame.charges.get_f64(atom),
+        )?;
+    }
+    if let Some(dest) = slabs.spins.as_deref_mut() {
+        write_vec1(
+            frame_index,
+            n,
+            dest,
+            frame.spins.f64_slice(),
+            |atom| frame.spins.get_f64(atom),
+        )?;
+    }
+    push_identity(frame, frame_index, columns, symbols)?;
     let header_at = if columns
         .headers
         .last()
@@ -200,16 +470,17 @@ fn fill_reader<R: Read>(
     src: R,
     n_frames: usize,
     n_atoms: usize,
-    positions: &mut [f64],
+    sections: SectionFlags,
+    mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
-    let atoms = n_frames.saturating_mul(n_atoms);
     let mut columns = Columns {
         n_frames,
         n_atoms,
-        flags: Vec::with_capacity(atoms),
-        ids: Vec::with_capacity(atoms),
-        sym_index: Vec::with_capacity(atoms),
+        flags: Vec::with_capacity(n_atoms),
+        ids: Vec::with_capacity(n_atoms),
+        sym_index: Vec::with_capacity(n_atoms),
         symbols: Vec::new(),
+        identity_shared: true,
         headers: Vec::new(),
         header_index: Vec::with_capacity(n_frames),
     };
@@ -219,8 +490,8 @@ fn fill_reader<R: Read>(
         push_frame(
             &frame,
             frame_index,
-            n_atoms,
-            positions,
+            sections,
+            &mut slabs,
             &mut columns,
             &mut symbols,
         )?;
@@ -237,30 +508,50 @@ pub fn fill_path(
     path: &Path,
     n_frames: usize,
     n_atoms: usize,
-    positions: &mut [f64],
+    sections: SectionFlags,
+    slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
     let src = crate::compression::open_decoded(path).map_err(|_| ())?;
-    fill_reader(src, n_frames, n_atoms, positions)
+    fill_reader(src, n_frames, n_atoms, sections, slabs)
 }
 
 pub fn fill_bytes(
     bytes: &[u8],
     n_frames: usize,
     n_atoms: usize,
-    positions: &mut [f64],
+    sections: SectionFlags,
+    slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
-    fill_reader(std::io::Cursor::new(bytes), n_frames, n_atoms, positions)
+    fill_reader(
+        std::io::Cursor::new(bytes),
+        n_frames,
+        n_atoms,
+        sections,
+        slabs,
+    )
 }
 
 impl Columns {
+    fn slot(&self, frame: usize, atom: usize) -> usize {
+        if self.identity_shared {
+            atom
+        } else {
+            frame * self.n_atoms + atom
+        }
+    }
+
     pub fn symbol_at(&self, frame: usize, atom: usize) -> &str {
-        let index = self.sym_index[frame * self.n_atoms + atom] as usize;
+        let index = self.sym_index[self.slot(frame, atom)] as usize;
         self.symbols[index].as_ref()
     }
 
     pub fn flag_at(&self, frame: usize, atom: usize) -> [bool; 3] {
-        let mask = self.flags[frame * self.n_atoms + atom];
+        let mask = self.flags[self.slot(frame, atom)];
         [mask & 1 != 0, mask & 2 != 0, mask & 4 != 0]
+    }
+
+    pub fn id_at(&self, frame: usize, atom: usize) -> u64 {
+        self.ids[self.slot(frame, atom)]
     }
 
     /// Same word as [`crate::iterators::hash_touch_frame`] over every frame.
@@ -289,14 +580,38 @@ mod tests {
     use crate::iterators::read_all_frames;
     use std::path::Path;
 
+    fn empty_slabs(positions: &mut [f64]) -> Slabs<'_> {
+        Slabs {
+            positions,
+            velocities: None,
+            forces: None,
+            energies: None,
+            charges: None,
+            spins: None,
+            magmoms: None,
+            displacements: None,
+            spreads: None,
+        }
+    }
+
     #[test]
     fn plain_con_columns_match_the_frame_reader() {
         let path = Path::new("resources/test/tiny_multi_cuh2.con");
         let layout = layout_path(path).expect("layout");
         assert_eq!(layout.n_frames, 2);
         assert_eq!(layout.n_atoms, 4);
+        assert!(!layout.sections.velocities);
         let mut positions = vec![0.0; layout.n_frames * layout.n_atoms * 3];
-        let columns = fill_path(path, layout.n_frames, layout.n_atoms, &mut positions).unwrap();
+        let columns = fill_path(
+            path,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            empty_slabs(&mut positions),
+        )
+        .unwrap();
+        assert!(columns.identity_shared);
+        assert_eq!(columns.ids.len(), layout.n_atoms);
         let frames = read_all_frames(path).unwrap();
         assert_eq!(frames.len(), columns.n_frames);
         for (index, frame) in frames.iter().enumerate() {
@@ -305,7 +620,7 @@ mod tests {
             for (atom_index, atom) in frame.atom_data.iter().enumerate() {
                 assert_eq!(atom.symbol.as_ref(), columns.symbol_at(index, atom_index));
                 assert_eq!(atom.fixed(), columns.flag_at(index, atom_index));
-                assert_eq!(atom.atom_id, columns.ids[index * columns.n_atoms + atom_index]);
+                assert_eq!(atom.atom_id, columns.id_at(index, atom_index));
                 let at = (index * columns.n_atoms + atom_index) * 3;
                 assert_eq!(positions[at], atom.x());
                 assert_eq!(positions[at + 1], atom.y());
@@ -372,13 +687,74 @@ mod tests {
         assert_eq!(layout.n_frames, 50, "frames");
         assert_eq!(layout.n_atoms, 4);
         let mut positions = vec![0.0; layout.n_frames * layout.n_atoms * 3];
-        let columns = fill_bytes(&bytes, layout.n_frames, layout.n_atoms, &mut positions).unwrap();
+        let columns = fill_bytes(
+            &bytes,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            empty_slabs(&mut positions),
+        )
+        .unwrap();
         assert_eq!(columns.headers.len(), 1, "distinct headers");
+        assert!(columns.identity_shared);
+        assert_eq!(columns.flags.len(), 4);
     }
 
     #[test]
-    fn a_velocity_file_is_not_columnar() {
-        let path = Path::new("resources/test/tiny_cuh2.convel");
-        assert!(layout_path(path).is_err());
+    fn a_velocity_file_fills_the_velocity_slab() {
+        let path = Path::new("resources/test/tiny_multi_cuh2.convel");
+        let layout = layout_path(path).expect("layout");
+        assert!(layout.sections.velocities);
+        assert!(!layout.sections.forces);
+        let n = layout.n_frames * layout.n_atoms * 3;
+        let mut positions = vec![0.0; n];
+        let mut velocities = vec![0.0; n];
+        let mut slabs = empty_slabs(&mut positions);
+        slabs.velocities = Some(&mut velocities);
+        let columns = fill_path(
+            path,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            slabs,
+        )
+        .unwrap();
+        let frames = read_all_frames(path).unwrap();
+        for (index, frame) in frames.iter().enumerate() {
+            for (atom_index, atom) in frame.atom_data.iter().enumerate() {
+                let at = (index * columns.n_atoms + atom_index) * 3;
+                let vel = atom.velocity().expect("velocity");
+                assert_eq!(velocities[at], vel[0]);
+                assert_eq!(velocities[at + 1], vel[1]);
+                assert_eq!(velocities[at + 2], vel[2]);
+            }
+        }
+    }
+
+    #[test]
+    fn a_force_file_fills_the_force_slab() {
+        let path = Path::new("resources/test/tiny_cuh2_forces.con");
+        let layout = layout_path(path).expect("layout");
+        assert!(layout.sections.forces);
+        assert!(!layout.sections.velocities);
+        let n = layout.n_frames * layout.n_atoms * 3;
+        let mut positions = vec![0.0; n];
+        let mut forces = vec![0.0; n];
+        let mut slabs = empty_slabs(&mut positions);
+        slabs.forces = Some(&mut forces);
+        fill_path(
+            path,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            slabs,
+        )
+        .unwrap();
+        let frames = read_all_frames(path).unwrap();
+        let atom = &frames[0].atom_data[0];
+        let force = atom.force().expect("force");
+        assert_eq!(forces[0], force[0]);
+        assert_eq!(forces[1], force[1]);
+        assert_eq!(forces[2], force[2]);
     }
 }

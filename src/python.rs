@@ -357,6 +357,79 @@ fn py_atoms_to_list(py: Python<'_>, atoms: Vec<PyAtomDatum>) -> PyResult<Py<PyLi
     Ok(list.unbind())
 }
 
+/// Per-atom sections other than coordinates. Each array is `[frames, atoms, …]`
+/// and is shared by the frames of one read.
+#[derive(Default)]
+struct SectionStore {
+    velocities: Option<Py<PyArray3<f64>>>,
+    forces: Option<Py<PyArray3<f64>>>,
+    magmoms: Option<Py<PyArray3<f64>>>,
+    displacements: Option<Py<PyArray3<f64>>>,
+    spreads: Option<Py<PyArray3<f64>>>,
+    energies: Option<Py<PyArray2<f64>>>,
+    charges: Option<Py<PyArray2<f64>>>,
+    spins: Option<Py<PyArray2<f64>>>,
+}
+
+fn copied_frame_row<'py>(
+    py: Python<'py>,
+    slab: Option<&Py<PyArray3<f64>>>,
+    index: usize,
+    n_atoms: usize,
+) -> PyResult<Option<ndarray::Array2<f64>>> {
+    let Some(slab) = slab else {
+        return Ok(None);
+    };
+    let bound = slab.bind(py);
+    let values = bound.readonly();
+    let slice = values.as_slice()?;
+    let width = n_atoms.saturating_mul(3);
+    let start = index.saturating_mul(width);
+    let row = slice
+        .get(start..start + width)
+        .ok_or_else(|| PyIOError::new_err("section slab is short"))?
+        .to_vec();
+    let array = Array2::from_shape_vec((n_atoms, 3), row)
+        .map_err(|err| PyValueError::new_err(format!("section shape error: {err}")))?;
+    Ok(Some(array))
+}
+
+fn copied_scalar_row(
+    py: Python<'_>,
+    slab: Option<&Py<PyArray2<f64>>>,
+    index: usize,
+    n_atoms: usize,
+) -> PyResult<Option<Vec<f64>>> {
+    let Some(slab) = slab else {
+        return Ok(None);
+    };
+    let bound = slab.bind(py);
+    let values = bound.readonly();
+    let slice = values.as_slice()?;
+    let start = index.saturating_mul(n_atoms);
+    Ok(Some(
+        slice
+            .get(start..start + n_atoms)
+            .ok_or_else(|| PyIOError::new_err("section slab is short"))?
+            .to_vec(),
+    ))
+}
+
+impl SectionStore {
+    fn clone_ref(&self, py: Python<'_>) -> Self {
+        Self {
+            velocities: self.velocities.as_ref().map(|item| item.clone_ref(py)),
+            forces: self.forces.as_ref().map(|item| item.clone_ref(py)),
+            magmoms: self.magmoms.as_ref().map(|item| item.clone_ref(py)),
+            displacements: self.displacements.as_ref().map(|item| item.clone_ref(py)),
+            spreads: self.spreads.as_ref().map(|item| item.clone_ref(py)),
+            energies: self.energies.as_ref().map(|item| item.clone_ref(py)),
+            charges: self.charges.as_ref().map(|item| item.clone_ref(py)),
+            spins: self.spins.as_ref().map(|item| item.clone_ref(py)),
+        }
+    }
+}
+
 /// Python-visible simulation frame.
 #[pyclass(name = "ConFrame")]
 pub struct PyConFrame {
@@ -386,6 +459,9 @@ pub struct PyConFrame {
     xyz_owned: Option<Py<PyArray2<f64>>>,
     /// Column store and frame index. Atom records are built on first use.
     columns_index: Option<(std::sync::Arc<crate::column_read::Columns>, usize)>,
+    sections: SectionStore,
+    /// Set when a metadata writer has replaced the column header's map.
+    metadata_local: bool,
 }
 
 #[pymethods]
@@ -421,6 +497,8 @@ impl PyConFrame {
             slab_index: 0,
             xyz_owned: None,
             columns_index: None,
+            sections: SectionStore::default(),
+            metadata_local: false,
         })
     }
 
@@ -453,7 +531,9 @@ impl PyConFrame {
 
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        if let Some((columns, index)) = &self.columns_index {
+        if !self.metadata_local
+            && let Some((columns, index)) = &self.columns_index
+        {
             let header = &columns.headers[columns.header_index[*index] as usize];
             return json_map_to_py_dict(py, &header.metadata.to_map());
         }
@@ -463,27 +543,32 @@ impl PyConFrame {
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
         self.metadata = json_map_to_py_dict(py, &py_metadata_to_json_map(metadata)?)?;
+        self.metadata_local = true;
         Ok(())
     }
 
     #[getter]
     fn has_velocities(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_velocity))
+        self.section_present(py, self.sections.velocities.is_some(), PyAtomDatum::has_velocity)
     }
 
     #[getter]
     fn has_forces(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_forces))
+        self.section_present(py, self.sections.forces.is_some(), PyAtomDatum::has_forces)
     }
 
     #[getter]
     fn has_displacements(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_displacement))
+        self.section_present(
+            py,
+            self.sections.displacements.is_some(),
+            PyAtomDatum::has_displacement,
+        )
     }
 
     #[getter]
     fn has_spreads(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.py_atoms(py)?.iter().any(PyAtomDatum::has_spread))
+        self.section_present(py, self.sections.spreads.is_some(), PyAtomDatum::has_spread)
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -550,6 +635,25 @@ impl PyConFrame {
     /// This does not build the Python atom list.
     #[getter]
     fn mass_column<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        if let Some((columns, index)) = &self.columns_index {
+            let header = &columns.headers[columns.header_index[*index] as usize];
+            let n = self.n_atoms;
+            let mut masses = Vec::with_capacity(n);
+            let mut filled = 0usize;
+            for (type_index, &count) in header.natms_per_type.iter().enumerate() {
+                let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+                let take = count.min(n.saturating_sub(filled));
+                masses.extend(std::iter::repeat_n(mass, take));
+                filled += take;
+            }
+            if masses.len() < n {
+                masses.resize(n, 0.0);
+            }
+            if masses.is_empty() {
+                return Ok(None);
+            }
+            return Ok(Some(Array1::from_vec(masses).into_pyarray(py)));
+        }
         let Some(frame) = self.inner.as_deref() else {
             return Ok(None);
         };
@@ -564,6 +668,15 @@ impl PyConFrame {
 
     #[getter]
     fn vel<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            return self.velocities_array(py);
+        }
+        if let Some(values) = copied_frame_row(py, self.sections.velocities.as_ref(), self.slab_index, self.n_atoms)? {
+            return Ok(Some(values.into_pyarray(py)));
+        }
+        if self.columns_index.is_some() {
+            return Ok(None);
+        }
         if let Some(frame) = self.inner.as_deref() {
             let n = frame.velocities.nrows();
             if n == 0 {
@@ -586,6 +699,15 @@ impl PyConFrame {
 
     #[getter]
     fn frc<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            return self.forces_array(py);
+        }
+        if let Some(values) = copied_frame_row(py, self.sections.forces.as_ref(), self.slab_index, self.n_atoms)? {
+            return Ok(Some(values.into_pyarray(py)));
+        }
+        if self.columns_index.is_some() {
+            return Ok(None);
+        }
         if let Some(frame) = self.inner.as_deref() {
             let n = frame.forces.nrows();
             if n == 0 {
@@ -1016,11 +1138,13 @@ impl PyConFrame {
             metadata.insert(key, value);
         }
         self.metadata = json_map_to_py_dict(py, &metadata)?;
+        self.metadata_local = true;
         Ok(())
     }
 
     /// Set a numeric metadata key.
     fn set_scalar_metadata(&mut self, py: Python<'_>, key: &str, value: f64) -> PyResult<()> {
+        self.materialize_metadata(py)?;
         let number = Number::from_f64(value)
             .ok_or_else(|| PyValueError::new_err("metadata floats must be finite"))?;
         self.metadata
@@ -1031,6 +1155,7 @@ impl PyConFrame {
 
     /// Set a string metadata key.
     fn set_string_metadata(&mut self, py: Python<'_>, key: &str, value: &str) -> PyResult<()> {
+        self.materialize_metadata(py)?;
         self.metadata.bind(py).set_item(key, value)?;
         Ok(())
     }
@@ -1042,6 +1167,7 @@ impl PyConFrame {
 
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, py: Python<'_>, idx: u64) -> PyResult<()> {
+        self.materialize_metadata(py)?;
         self.metadata.bind(py).set_item(meta::FRAME_INDEX, idx)?;
         Ok(())
     }
@@ -1058,12 +1184,14 @@ impl PyConFrame {
 
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, py: Python<'_>, bead: u64) -> PyResult<()> {
+        self.materialize_metadata(py)?;
         self.metadata.bind(py).set_item(meta::NEB_BEAD, bead)?;
         Ok(())
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, py: Python<'_>, band: u64) -> PyResult<()> {
+        self.materialize_metadata(py)?;
         self.metadata.bind(py).set_item(meta::NEB_BAND, band)?;
         Ok(())
     }
@@ -1196,6 +1324,8 @@ impl PyConFrame {
             slab_index: 0,
             xyz_owned,
             columns_index: None,
+            sections: SectionStore::default(),
+            metadata_local: false,
         })
     }
 
@@ -1247,6 +1377,8 @@ impl PyConFrame {
             slab_index: index,
             xyz_owned: None,
             columns_index: None,
+            sections: SectionStore::default(),
+            metadata_local: false,
         })
     }
 
@@ -1280,36 +1412,50 @@ impl PyConFrame {
             if masses.len() < n {
                 masses.resize(n, 0.0);
             }
+            let flat = |array: ndarray::Array2<f64>| array.into_iter().collect::<Vec<_>>();
+            let velocity =
+                copied_frame_row(py, self.sections.velocities.as_ref(), *index, n)?.map(flat);
+            let force = copied_frame_row(py, self.sections.forces.as_ref(), *index, n)?.map(flat);
+            let magmom = copied_frame_row(py, self.sections.magmoms.as_ref(), *index, n)?.map(flat);
+            let displacement =
+                copied_frame_row(py, self.sections.displacements.as_ref(), *index, n)?.map(flat);
+            let spread = copied_frame_row(py, self.sections.spreads.as_ref(), *index, n)?.map(flat);
+            let energy = copied_scalar_row(py, self.sections.energies.as_ref(), *index, n)?;
+            let charge = copied_scalar_row(py, self.sections.charges.as_ref(), *index, n)?;
+            let spin = copied_scalar_row(py, self.sections.spins.as_ref(), *index, n)?;
             let list = self.atoms.bind(py);
             for atom in 0..n {
                 let at = atom.saturating_mul(3);
                 let symbol = columns.symbol_at(*index, atom).to_string();
+                let tri = |row: &Option<Vec<f64>>, axis: usize| {
+                    row.as_ref().and_then(|values| values.get(at + axis).copied())
+                };
                 list.append(PyAtomDatum {
                     symbol,
                     x: coords[at],
                     y: coords[at + 1],
                     z: coords[at + 2],
                     fixed: columns.flag_at(*index, atom),
-                    atom_id: columns.ids[index * n + atom],
+                    atom_id: columns.id_at(*index, atom),
                     mass: Some(masses[atom]),
-                    vx: None,
-                    vy: None,
-                    vz: None,
-                    fx: None,
-                    fy: None,
-                    fz: None,
-                    energy: None,
-                    charge: None,
-                    spin: None,
-                    mx: None,
-                    my: None,
-                    mz: None,
-                    dx: None,
-                    dy: None,
-                    dz: None,
-                    sx: None,
-                    sy: None,
-                    sz: None,
+                    vx: tri(&velocity, 0),
+                    vy: tri(&velocity, 1),
+                    vz: tri(&velocity, 2),
+                    fx: tri(&force, 0),
+                    fy: tri(&force, 1),
+                    fz: tri(&force, 2),
+                    energy: energy.as_ref().and_then(|values| values.get(atom).copied()),
+                    charge: charge.as_ref().and_then(|values| values.get(atom).copied()),
+                    spin: spin.as_ref().and_then(|values| values.get(atom).copied()),
+                    mx: tri(&magmom, 0),
+                    my: tri(&magmom, 1),
+                    mz: tri(&magmom, 2),
+                    dx: tri(&displacement, 0),
+                    dy: tri(&displacement, 1),
+                    dz: tri(&displacement, 2),
+                    sx: tri(&spread, 0),
+                    sy: tri(&spread, 1),
+                    sz: tri(&spread, 2),
                 })?;
             }
             self.atoms_ready
@@ -1356,13 +1502,49 @@ impl PyConFrame {
             .collect()
     }
 
+    fn section_present(
+        &self,
+        py: Python<'_>,
+        stored: bool,
+        atom_has: impl Fn(&PyAtomDatum) -> bool,
+    ) -> PyResult<bool> {
+        if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            return Ok(self.py_atoms(py)?.iter().any(atom_has));
+        }
+        if stored {
+            return Ok(true);
+        }
+        if self.columns_index.is_some() {
+            return Ok(false);
+        }
+        Ok(self.py_atoms(py)?.iter().any(atom_has))
+    }
+
+    fn materialize_metadata(&mut self, py: Python<'_>) -> PyResult<()> {
+        if self.metadata_local {
+            return Ok(());
+        }
+        if let Some((columns, index)) = &self.columns_index {
+            let header = &columns.headers[columns.header_index[*index] as usize];
+            self.metadata = json_map_to_py_dict(py, &header.metadata.to_map())?;
+        }
+        self.metadata_local = true;
+        Ok(())
+    }
+
     fn column_meta(&self, key: &str) -> Option<Value> {
+        if self.metadata_local {
+            return None;
+        }
         let (columns, index) = self.columns_index.as_ref()?;
         let header = &columns.headers[columns.header_index[*index] as usize];
         header.metadata.to_map().remove(key)
     }
 
     fn metadata_map(&self, py: Python<'_>) -> PyResult<BTreeMap<String, Value>> {
+        if self.metadata_local || self.columns_index.is_none() {
+            return py_metadata_to_json_map(self.metadata.bind(py).as_any());
+        }
         if let Some((columns, index)) = &self.columns_index {
             let header = &columns.headers[columns.header_index[*index] as usize];
             return Ok(header.metadata.to_map());
@@ -2263,9 +2445,9 @@ struct ConFrameList {
     frames: std::sync::Mutex<Vec<Option<ConFrame>>>,
     cache: std::sync::Mutex<Vec<Option<Py<PyConFrame>>>>,
     slab: Option<Py<PyArray3<f64>>>,
-    /// Set for a serial coordinate-only read. Frame shells are built on
-    /// index from these columns, so the read does not keep a `ConFrame`
-    /// per step.
+    sections: SectionStore,
+    /// Set when the read kept columns instead of a `ConFrame` per step.
+    /// Frame shells are built on index from these columns.
     columns: Option<std::sync::Arc<crate::column_read::Columns>>,
     n_atoms: usize,
     workers: usize,
@@ -2286,6 +2468,80 @@ impl ConFrameList {
             return columns.n_frames;
         }
         self.frames.lock().expect("frames").len()
+    }
+
+    fn frame_from_store(&self, py: Python<'_>, index: usize) -> PyResult<ConFrame> {
+        let columns = self
+            .columns
+            .as_ref()
+            .ok_or_else(|| PyIOError::new_err("column store is missing"))?;
+        let n = columns.n_atoms;
+        let header = columns.headers[columns.header_index[index] as usize].clone();
+        let coords =
+            slice_row3(py, self.slab.as_ref(), index, n)?.unwrap_or_else(|| vec![0.0; n * 3]);
+        let velocity = slice_row3(py, self.sections.velocities.as_ref(), index, n)?;
+        let force = slice_row3(py, self.sections.forces.as_ref(), index, n)?;
+        let magmom = slice_row3(py, self.sections.magmoms.as_ref(), index, n)?;
+        let displacement = slice_row3(py, self.sections.displacements.as_ref(), index, n)?;
+        let spread = slice_row3(py, self.sections.spreads.as_ref(), index, n)?;
+        let energy = slice_row1(py, self.sections.energies.as_ref(), index, n)?;
+        let charge = slice_row1(py, self.sections.charges.as_ref(), index, n)?;
+        let spin = slice_row1(py, self.sections.spins.as_ref(), index, n)?;
+        let mut masses = Vec::with_capacity(n);
+        let mut filled = 0usize;
+        for (type_index, &count) in header.natms_per_type.iter().enumerate() {
+            let mass = header.masses_per_type.get(type_index).copied().unwrap_or(0.0);
+            let take = count.min(n.saturating_sub(filled));
+            masses.extend(std::iter::repeat_n(mass, take));
+            filled += take;
+        }
+        if masses.len() < n {
+            masses.resize(n, 0.0);
+        }
+        let mut builder = ConFrameBuilder::new(header.boxl, header.angles);
+        builder
+            .prebox_header(header.prebox_header.user.clone())
+            .postbox_header(header.postbox_header.clone())
+            .metadata(header.metadata.to_map());
+        for atom in 0..n {
+            let at = atom.saturating_mul(3);
+            builder.add_atom(
+                columns.symbol_at(index, atom),
+                coords[at],
+                coords[at + 1],
+                coords[at + 2],
+                columns.flag_at(index, atom),
+                columns.id_at(index, atom),
+                masses[atom],
+            );
+            if let Some(values) = &velocity {
+                builder.with_velocity([values[at], values[at + 1], values[at + 2]]);
+            }
+            if let Some(values) = &force {
+                builder.with_force([values[at], values[at + 1], values[at + 2]]);
+            }
+            if let Some(values) = &energy {
+                builder.with_energy(values[atom]);
+            }
+            if let Some(values) = &charge {
+                builder.with_charge(values[atom]);
+            }
+            if let Some(values) = &spin {
+                builder.with_spin(values[atom]);
+            }
+            if let Some(values) = &magmom {
+                builder.with_magmom([values[at], values[at + 1], values[at + 2]]);
+            }
+            if let Some(values) = &displacement {
+                builder.with_displacement([values[at], values[at + 1], values[at + 2]]);
+            }
+            if let Some(values) = &spread {
+                builder.with_spread([values[at], values[at + 1], values[at + 2]]);
+            }
+        }
+        builder
+            .build()
+            .map_err(|err| PyIOError::new_err(err.to_string()))
     }
 
     fn frame_obj(&self, py: Python<'_>, index: usize) -> PyResult<Py<PyConFrame>> {
@@ -2347,6 +2603,8 @@ impl ConFrameList {
             slab_index: index,
             xyz_owned: None,
             columns_index: Some((columns, index)),
+            sections: self.sections.clone_ref(py),
+            metadata_local: false,
         })
     }
 
@@ -2403,8 +2661,28 @@ impl ConFrameList {
         dict.set_item("cell", cell_arr.into_pyarray(py))?;
         dict.set_item("n_frames", n_frames)?;
         dict.set_item("n_atoms", n_atoms)?;
-        dict.set_item("velocities", py.None())?;
-        dict.set_item("forces", py.None())?;
+        let put3 = |name: &str, slab: &Option<Py<PyArray3<f64>>>| -> PyResult<()> {
+            match slab {
+                Some(array) => dict.set_item(name, array.clone_ref(py))?,
+                None => dict.set_item(name, py.None())?,
+            }
+            Ok(())
+        };
+        let put2 = |name: &str, slab: &Option<Py<PyArray2<f64>>>| -> PyResult<()> {
+            match slab {
+                Some(array) => dict.set_item(name, array.clone_ref(py))?,
+                None => dict.set_item(name, py.None())?,
+            }
+            Ok(())
+        };
+        put3("velocities", &self.sections.velocities)?;
+        put3("forces", &self.sections.forces)?;
+        put3("magmoms", &self.sections.magmoms)?;
+        put3("displacements", &self.sections.displacements)?;
+        put3("spreads", &self.sections.spreads)?;
+        put2("energies", &self.sections.energies)?;
+        put2("charges", &self.sections.charges)?;
+        put2("spins", &self.sections.spins)?;
         Ok(dict.unbind())
     }
 }
@@ -2858,6 +3136,7 @@ fn con_frame_list(
             frames: std::sync::Mutex::new(stored),
             cache: std::sync::Mutex::new(cache),
             slab,
+            sections: SectionStore::default(),
             columns: None,
             n_atoms,
             workers,
@@ -2934,6 +3213,7 @@ fn list_from_columns(
     py: Python<'_>,
     columns: crate::column_read::Columns,
     slab: Option<Py<PyArray3<f64>>>,
+    sections: SectionStore,
     n_bytes: u64,
 ) -> PyResult<Py<ConFrameList>> {
     let n_frames = columns.n_frames;
@@ -2955,6 +3235,7 @@ fn list_from_columns(
             frames: std::sync::Mutex::new(slots),
             cache: std::sync::Mutex::new(cache),
             slab,
+            sections,
             columns: Some(std::sync::Arc::new(columns)),
             n_atoms,
             workers: 1,
@@ -2964,85 +3245,190 @@ fn list_from_columns(
     )?)
 }
 
+fn empty_columns(n_frames: usize, n_atoms: usize) -> crate::column_read::Columns {
+    crate::column_read::Columns {
+        n_frames,
+        n_atoms,
+        flags: Vec::new(),
+        ids: Vec::new(),
+        sym_index: Vec::new(),
+        symbols: Vec::new(),
+        identity_shared: true,
+        headers: Vec::new(),
+        header_index: Vec::new(),
+    }
+}
+
+struct RawF64 {
+    ptr: *mut f64,
+    len: usize,
+}
+
+unsafe impl Send for RawF64 {}
+
+fn raw_f64_mut(slice: &mut [f64]) -> RawF64 {
+    RawF64 {
+        ptr: slice.as_mut_ptr(),
+        len: slice.len(),
+    }
+}
+
+fn slab_mut(raw: RawF64) -> &'static mut [f64] {
+    unsafe { std::slice::from_raw_parts_mut(raw.ptr, raw.len) }
+}
+
+fn zeros3<'py>(
+    py: Python<'py>,
+    n_frames: usize,
+    n_atoms: usize,
+) -> Bound<'py, PyArray3<f64>> {
+    numpy::PyArray3::<f64>::zeros(py, [n_frames, n_atoms, 3], false)
+}
+
+fn zeros2<'py>(
+    py: Python<'py>,
+    n_frames: usize,
+    n_atoms: usize,
+) -> Bound<'py, PyArray2<f64>> {
+    numpy::PyArray2::<f64>::zeros(py, [n_frames, n_atoms], false)
+}
+
 fn read_con_columnar(py: Python<'_>, path: &Path) -> PyResult<Option<Py<ConFrameList>>> {
-    let layout = match crate::column_read::layout_path(path) {
+    let path_owned = path.to_owned();
+    let layout = match py.detach(|| crate::column_read::layout_path(Path::new(&path_owned))) {
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
-    if layout.n_frames == 0 || layout.n_atoms == 0 {
-        return list_from_columns(
-            py,
-            crate::column_read::Columns {
-                n_frames: layout.n_frames,
-                n_atoms: layout.n_atoms,
-                flags: Vec::new(),
-                ids: Vec::new(),
-                sym_index: Vec::new(),
-                symbols: Vec::new(),
-                headers: Vec::new(),
-                header_index: Vec::new(),
-            },
-            None,
-            layout.n_bytes,
+    materialize_columns(py, layout, move |layout, slabs| {
+        crate::column_read::fill_path(
+            Path::new(&path_owned),
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            slabs,
         )
-        .map(Some);
-    }
-    let mut array = numpy::PyArray3::<f64>::zeros(
-        py,
-        [layout.n_frames, layout.n_atoms, 3],
-        false,
-    );
-    let columns = {
-        let slice = unsafe { array.as_slice_mut() }.map_err(|err| {
-            PyValueError::new_err(format!("coordinate slab is not contiguous: {err}"))
-        })?;
-        match crate::column_read::fill_path(path, layout.n_frames, layout.n_atoms, slice) {
-            Ok(columns) => columns,
-            Err(()) => return Ok(None),
-        }
-    };
-    list_from_columns(py, columns, Some(array.unbind()), layout.n_bytes).map(Some)
+    })
 }
 
 fn read_string_columnar(py: Python<'_>, contents: &str) -> PyResult<Option<Py<ConFrameList>>> {
-    let bytes = contents.as_bytes();
-    let layout = match crate::column_read::layout_bytes(bytes) {
+    let owned = contents.as_bytes().to_vec();
+    let layout = match py.detach(|| crate::column_read::layout_bytes(&owned)) {
         Ok(layout) => layout,
         Err(()) => return Ok(None),
     };
+    materialize_columns(py, layout, move |layout, slabs| {
+        crate::column_read::fill_bytes(
+            &owned,
+            layout.n_frames,
+            layout.n_atoms,
+            layout.sections,
+            slabs,
+        )
+    })
+}
+
+fn materialize_columns(
+    py: Python<'_>,
+    layout: crate::column_read::Layout,
+    fill: impl FnOnce(
+            crate::column_read::Layout,
+            crate::column_read::Slabs<'_>,
+        ) -> Result<crate::column_read::Columns, ()>
+        + Send,
+) -> PyResult<Option<Py<ConFrameList>>> {
     if layout.n_frames == 0 || layout.n_atoms == 0 {
         return list_from_columns(
             py,
-            crate::column_read::Columns {
-                n_frames: layout.n_frames,
-                n_atoms: layout.n_atoms,
-                flags: Vec::new(),
-                ids: Vec::new(),
-                sym_index: Vec::new(),
-                symbols: Vec::new(),
-                headers: Vec::new(),
-                header_index: Vec::new(),
-            },
+            empty_columns(layout.n_frames, layout.n_atoms),
             None,
+            SectionStore::default(),
             layout.n_bytes,
         )
         .map(Some);
     }
-    let mut array = numpy::PyArray3::<f64>::zeros(
-        py,
-        [layout.n_frames, layout.n_atoms, 3],
-        false,
-    );
-    let columns = {
+    let n_frames = layout.n_frames;
+    let n_atoms = layout.n_atoms;
+    let n_bytes = layout.n_bytes;
+    let mut positions = zeros3(py, n_frames, n_atoms);
+    let mut velocities = layout.sections.velocities.then(|| zeros3(py, n_frames, n_atoms));
+    let mut forces = layout.sections.forces.then(|| zeros3(py, n_frames, n_atoms));
+    let mut magmoms = layout.sections.magmoms.then(|| zeros3(py, n_frames, n_atoms));
+    let mut displacements = layout
+        .sections
+        .displacements
+        .then(|| zeros3(py, n_frames, n_atoms));
+    let mut spreads = layout.sections.spreads.then(|| zeros3(py, n_frames, n_atoms));
+    let mut energies = layout.sections.energies.then(|| zeros2(py, n_frames, n_atoms));
+    let mut charges = layout.sections.charges.then(|| zeros2(py, n_frames, n_atoms));
+    let mut spins = layout.sections.spins.then(|| zeros2(py, n_frames, n_atoms));
+    let raw = |array: &mut Bound<'_, PyArray3<f64>>| -> PyResult<RawF64> {
         let slice = unsafe { array.as_slice_mut() }.map_err(|err| {
-            PyValueError::new_err(format!("coordinate slab is not contiguous: {err}"))
+            PyValueError::new_err(format!("section slab is not contiguous: {err}"))
         })?;
-        match crate::column_read::fill_bytes(bytes, layout.n_frames, layout.n_atoms, slice) {
-            Ok(columns) => columns,
-            Err(()) => return Ok(None),
-        }
+        Ok(raw_f64_mut(slice))
     };
-    list_from_columns(py, columns, Some(array.unbind()), layout.n_bytes).map(Some)
+    let raw2 = |array: &mut Bound<'_, PyArray2<f64>>| -> PyResult<RawF64> {
+        let slice = unsafe { array.as_slice_mut() }.map_err(|err| {
+            PyValueError::new_err(format!("section slab is not contiguous: {err}"))
+        })?;
+        Ok(raw_f64_mut(slice))
+    };
+    let positions_raw = raw(&mut positions)?;
+    let velocities_raw = velocities.as_mut().map(&raw).transpose()?;
+    let forces_raw = forces.as_mut().map(&raw).transpose()?;
+    let magmoms_raw = magmoms.as_mut().map(&raw).transpose()?;
+    let displacements_raw = displacements.as_mut().map(&raw).transpose()?;
+    let spreads_raw = spreads.as_mut().map(&raw).transpose()?;
+    let energies_raw = energies.as_mut().map(&raw2).transpose()?;
+    let charges_raw = charges.as_mut().map(&raw2).transpose()?;
+    let spins_raw = spins.as_mut().map(&raw2).transpose()?;
+    let columns = py
+        .detach(move || {
+            let mut velocities = velocities_raw.map(slab_mut);
+            let mut forces = forces_raw.map(slab_mut);
+            let mut magmoms = magmoms_raw.map(slab_mut);
+            let mut displacements = displacements_raw.map(slab_mut);
+            let mut spreads = spreads_raw.map(slab_mut);
+            let mut energies = energies_raw.map(slab_mut);
+            let mut charges = charges_raw.map(slab_mut);
+            let mut spins = spins_raw.map(slab_mut);
+            fill(
+                layout,
+                crate::column_read::Slabs {
+                    positions: slab_mut(positions_raw),
+                    velocities: velocities.as_deref_mut(),
+                    forces: forces.as_deref_mut(),
+                    energies: energies.as_deref_mut(),
+                    charges: charges.as_deref_mut(),
+                    spins: spins.as_deref_mut(),
+                    magmoms: magmoms.as_deref_mut(),
+                    displacements: displacements.as_deref_mut(),
+                    spreads: spreads.as_deref_mut(),
+                },
+            )
+        })
+        .ok();
+    let Some(columns) = columns else {
+        return Ok(None);
+    };
+    let sections = SectionStore {
+        velocities: velocities.map(|array| array.unbind()),
+        forces: forces.map(|array| array.unbind()),
+        magmoms: magmoms.map(|array| array.unbind()),
+        displacements: displacements.map(|array| array.unbind()),
+        spreads: spreads.map(|array| array.unbind()),
+        energies: energies.map(|array| array.unbind()),
+        charges: charges.map(|array| array.unbind()),
+        spins: spins.map(|array| array.unbind()),
+    };
+    list_from_columns(
+        py,
+        columns,
+        Some(positions.unbind()),
+        sections,
+        n_bytes,
+    )
+    .map(Some)
 }
 
 fn read_con_lazy(
@@ -3050,10 +3436,8 @@ fn read_con_lazy(
     path: &str,
     n_threads: Option<usize>,
 ) -> PyResult<Py<ConFrameList>> {
-    if n_threads.unwrap_or(0) < 2 {
-        if let Some(list) = read_con_columnar(py, Path::new(path))? {
-            return Ok(list);
-        }
+    if let Some(list) = read_con_columnar(py, Path::new(path))? {
+        return Ok(list);
     }
     let (
         frames,
@@ -3374,10 +3758,8 @@ fn read_con_string(
 ) -> PyResult<Py<ConFrameList>> {
     // A coordinate-only string stays borrowed. The full clone is only the
     // path that keeps every frame, which also releases the GIL.
-    if n_threads.unwrap_or(0) < 2 {
-        if let Some(list) = read_string_columnar(py, contents)? {
-            return Ok(list);
-        }
+    if let Some(list) = read_string_columnar(py, contents)? {
+        return Ok(list);
     }
     // Clone so parsing can release the GIL (contents may be a borrowed Py str).
     let t_open = std::time::Instant::now();
@@ -4041,12 +4423,78 @@ fn chunk_wide_frame(frames: &Bound<'_, PyAny>, compression_members: Option<usize
     atoms >= 4096 || compression_members.is_some_and(|count| count > 1)
 }
 
+fn slice_row3(
+    py: Python<'_>,
+    slab: Option<&Py<PyArray3<f64>>>,
+    index: usize,
+    n_atoms: usize,
+) -> PyResult<Option<Vec<f64>>> {
+    let Some(slab) = slab else {
+        return Ok(None);
+    };
+    let bound = slab.bind(py);
+    let values = bound.readonly();
+    let slice = values.as_slice()?;
+    let width = n_atoms.saturating_mul(3);
+    let start = index.saturating_mul(width);
+    Ok(Some(
+        slice
+            .get(start..start + width)
+            .ok_or_else(|| PyIOError::new_err("section slab is short"))?
+            .to_vec(),
+    ))
+}
+
+fn slice_row1(
+    py: Python<'_>,
+    slab: Option<&Py<PyArray2<f64>>>,
+    index: usize,
+    n_atoms: usize,
+) -> PyResult<Option<Vec<f64>>> {
+    let Some(slab) = slab else {
+        return Ok(None);
+    };
+    let bound = slab.bind(py);
+    let values = bound.readonly();
+    let slice = values.as_slice()?;
+    let start = index.saturating_mul(n_atoms);
+    Ok(Some(
+        slice
+            .get(start..start + n_atoms)
+            .ok_or_else(|| PyIOError::new_err("section slab is short"))?
+            .to_vec(),
+    ))
+}
+
 fn write_bound_frames<W: std::io::Write>(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
     writer: &mut ConFrameWriter<W>,
 ) -> PyResult<()> {
     if let Ok(list) = frames.cast::<ConFrameList>() {
+        if list.borrow().columns.is_some() {
+            let n = list.borrow().len_frames();
+            for index in 0..n {
+                let cached = {
+                    let borrowed = list.borrow();
+                    borrowed
+                        .cache
+                        .lock()
+                        .expect("cache")
+                        .get(index)
+                        .and_then(|slot| slot.as_ref().map(|obj| obj.clone_ref(py)))
+                };
+                let frame = if let Some(obj) = cached {
+                    obj.borrow(py).to_con_frame(py)?
+                } else {
+                    list.borrow().frame_from_store(py, index)?
+                };
+                writer
+                    .write_frame_bound(&frame)
+                    .map_err(|err| write_err_to_py(py, err))?;
+            }
+            return Ok(());
+        }
         let all_stored = {
             let borrowed = list.borrow();
             let slots = borrowed.frames.lock().expect("frames");
@@ -4997,6 +5445,8 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         slab_index: 0,
         xyz_owned: None,
         columns_index: None,
+        sections: SectionStore::default(),
+        metadata_local: false,
     })
 }
 

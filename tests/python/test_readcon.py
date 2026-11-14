@@ -70,6 +70,35 @@ class TestReadCon:
         written = readcon.read_con_string(readcon.write_con_string(auto))
         assert np.array_equal(np.asarray(written.columns()["positions"]), positions)
 
+    def test_column_metadata_edits_survive_a_write(self, tmp_path):
+        with open(_resource("tiny_cuh2.con"), encoding="utf-8") as handle:
+            text = handle.read()
+        path = tmp_path / "meta.con"
+        path.write_text(text + text)
+        frames = readcon.read_con(str(path))
+        frames[0].metadata = {"generator": "edited", "energy": -1.5}
+        frames[1].set_metadata_json('{"generator":"json","frame_index":9}')
+        restored = readcon.read_con_string(readcon.write_con_string(frames))
+        assert restored[0].metadata["generator"] == "edited"
+        assert restored[0].energy == pytest.approx(-1.5)
+        assert restored[1].metadata["generator"] == "json"
+        assert restored[1].frame_index == 9
+        assert restored[0].metadata.get("generator") != restored[1].metadata.get("generator")
+
+    def test_mass_column_comes_from_the_header(self):
+        import numpy as np
+
+        frames = readcon.read_con(_resource("tiny_cuh2.con"))
+        masses = np.asarray(frames[0].mass_column)
+        assert masses.dtype == np.float64
+        assert masses.flags.c_contiguous
+        assert masses.shape == (4,)
+        assert masses[0] == pytest.approx(63.546)
+        assert masses[2] == pytest.approx(1.00793)
+        again = np.asarray(frames[0].mass_column)
+        again[0] = 0.0
+        assert np.asarray(frames[0].mass_column)[0] == pytest.approx(63.546)
+
     def test_lazy_list_matches_serial_positions(self):
         import numpy as np
 
