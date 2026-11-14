@@ -2995,7 +2995,6 @@ impl Unpublished {
 
     /// Give other processes a name for this inode. [`Self::commit`] publishes
     /// that name, so a ranked write does not grow a second publisher.
-    #[cfg(feature = "mpi")]
     fn expose(&mut self, dest: &Path) -> io::Result<std::path::PathBuf> {
         if let Some(path) = &self.scratch {
             return Ok(path.clone());
@@ -3028,7 +3027,6 @@ impl Unpublished {
     }
 }
 
-#[cfg(feature = "mpi")]
 fn link_fd(file: &File, scratch: &Path) -> io::Result<()> {
     use std::os::fd::AsRawFd;
     let proc = std::ffi::CString::new(format!("/proc/self/fd/{}", file.as_raw_fd()))
@@ -3052,7 +3050,6 @@ fn link_fd(file: &File, scratch: &Path) -> io::Result<()> {
 }
 
 /// A file other ranks can open, published by [`Unpublished::commit`].
-#[cfg(feature = "mpi")]
 pub(crate) struct SharedStore {
     staged: Unpublished,
     path: std::path::PathBuf,
@@ -3062,7 +3059,6 @@ pub(crate) struct SharedStore {
 ///
 /// Rank 0 calls this. The returned path is the inode the other ranks open.
 /// [`commit_shared_store`] is the only publish.
-#[cfg(feature = "mpi")]
 pub(crate) fn begin_shared_store(dest: &Path, len: u64) -> io::Result<SharedStore> {
     if let Some(parent) = dest.parent().filter(|dir| !dir.as_os_str().is_empty()) {
         let _ = std::fs::create_dir_all(parent);
@@ -3073,12 +3069,10 @@ pub(crate) fn begin_shared_store(dest: &Path, len: u64) -> io::Result<SharedStor
     Ok(SharedStore { staged, path })
 }
 
-#[cfg(feature = "mpi")]
 pub(crate) fn commit_shared_store(store: SharedStore, dest: &Path) -> io::Result<()> {
     store.staged.commit(dest)
 }
 
-#[cfg(feature = "mpi")]
 impl SharedStore {
     pub(crate) fn path(&self) -> &Path {
         &self.path
@@ -3101,6 +3095,79 @@ fn allocate_len(file: &File, total: u64) -> io::Result<()> {
         }
         _ => Err(err),
     }
+}
+
+/// In-process form of a ranked write.
+///
+/// `slices` are the rank-ordered byte ranges. `rewrite == false` is the
+/// default: one fresh file, published by [`commit_shared_store`], and no
+/// `.rewrite` sibling. `rewrite == true` fills `path.rewrite` and renames
+/// it over `path`. `keep_spare` parks the previous inode at that name.
+pub fn publish_ranked_slices(
+    path: &Path,
+    slices: &[&[u8]],
+    rewrite: bool,
+    keep_spare: bool,
+) -> io::Result<()> {
+    let total: u64 = slices.iter().map(|slice| slice.len() as u64).sum();
+    if rewrite {
+        let spare = prepare_rewrite_spare(path)?;
+        {
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&spare)?;
+            if file.metadata()?.len() != total {
+                file.set_len(total)?;
+            }
+            write_slices_at(&file, slices)?;
+        }
+        return publish_rewrite(&spare, path, keep_spare);
+    }
+    let store = begin_shared_store(path, total)?;
+    {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(store.path())?;
+        write_slices_at(&file, slices)?;
+    }
+    commit_shared_store(store, path)
+}
+
+fn write_slices_at(file: &File, slices: &[&[u8]]) -> io::Result<()> {
+    let mut offset = 0u64;
+    for slice in slices {
+        if !slice.is_empty() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::FileExt;
+                let mut at = 0usize;
+                while at < slice.len() {
+                    let n = file.write_at(&slice[at..], offset + at as u64)?;
+                    if n == 0 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::WriteZero,
+                            "ranked slice wrote no bytes",
+                        ));
+                    }
+                    at += n;
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = (file, slice, offset);
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "ranked slices require pwrite",
+                ));
+            }
+        }
+        offset += slice.len() as u64;
+    }
+    Ok(())
 }
 
 fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {

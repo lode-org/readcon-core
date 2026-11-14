@@ -1235,6 +1235,42 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel)
     }
 
+    #[test]
+    fn push_xyz_grows_a_short_reserve_and_keeps_the_bits() {
+        for spare in [0usize, 1, 2] {
+            let mut dst = Vec::with_capacity(spare);
+            push_xyz(&mut dst, [1.0, -0.0, 0.5]);
+            assert_eq!(dst.len(), 3);
+            assert!(dst.capacity() >= 3);
+            assert_eq!(dst[0].to_bits(), 1.0f64.to_bits());
+            assert_eq!(dst[1].to_bits(), (-0.0f64).to_bits());
+            assert_eq!(dst[2].to_bits(), 0.5f64.to_bits());
+        }
+        let mut exact = Vec::with_capacity(3);
+        push_xyz(&mut exact, [1.0, 2.0, 3.0]);
+        assert_eq!(exact, [1.0, 2.0, 3.0]);
+    }
+
+    fn coord_file(declared: usize, rows: &str) -> Vec<u8> {
+        format!(
+            "\n{{\"con_spec_version\":2}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n{declared}\n63.546\nCu\nCoordinates of Component 1\n{rows}"
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn a_lying_or_truncated_row_is_not_a_full_column() {
+        let one = coord_file(1, "0.0 0.0 1.0 0 0\n");
+        let got = positions_from_con_bytes(&one).unwrap();
+        assert_eq!(got.positions, [0.0, 0.0, 1.0]);
+        assert!(positions_from_con_bytes(&coord_file(100_000, "0.0 0.0 1.0 0 0\n")).is_err());
+        assert!(positions_from_con_bytes(&coord_file(1, "0.0 0.")).is_err());
+        assert!(positions_from_con_bytes(&coord_file(3, "")).is_err());
+        let mut mismatch = coord_file(1, "0.0 0.0 1.0 0 0\n");
+        mismatch.extend(coord_file(4, "1.0 2.0 3.0 0 1\n"));
+        assert!(positions_from_con_bytes(&mismatch).is_err());
+    }
+
     fn bits_match_iterator(rel: &str) {
         let bytes = std::fs::read(manifest(rel)).unwrap();
         let got = positions_from_con_bytes(&bytes).unwrap();

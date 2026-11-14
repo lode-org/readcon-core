@@ -3,7 +3,9 @@
 
 use readcon_core::iterators::frames_from_text;
 use readcon_core::types::ConFrameBuilder;
-use readcon_core::writer::{rewrite_frame_refs_to_path, write_frame_refs_to_path};
+use readcon_core::writer::{
+    publish_ranked_slices, rewrite_frame_refs_to_path, write_frame_refs_to_path,
+};
 use std::path::Path;
 
 fn wide_frame(n: usize) -> readcon_core::types::ConFrame {
@@ -118,4 +120,28 @@ fn a_killed_rewrite_leaves_the_published_file_whole() {
         "published rewrite is neither complete file ({} bytes)",
         got.len()
     );
+}
+
+#[test]
+fn ranked_default_leaves_no_spare_and_opt_in_keeps_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("out.con");
+    let frame = wide_frame(8);
+    write_frame_refs_to_path(&path, &[&frame], 1, None, false, false).unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let mid = bytes.len() / 2;
+    let slices: [&[u8]; 2] = [&bytes[..mid], &bytes[mid..]];
+    let spare = path.with_file_name(format!(
+        "{}.rewrite",
+        path.file_name().unwrap().to_string_lossy()
+    ));
+    publish_ranked_slices(&path, &slices, false, false).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    assert!(!spare.exists());
+    publish_ranked_slices(&path, &slices, true, true).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    assert!(spare.exists());
+    publish_ranked_slices(&path, &slices, true, false).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    assert!(!spare.exists());
 }

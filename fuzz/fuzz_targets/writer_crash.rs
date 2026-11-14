@@ -8,7 +8,9 @@
 use libfuzzer_sys::fuzz_target;
 use readcon_core::iterators::frames_from_text;
 use readcon_core::types::ConFrameBuilder;
-use readcon_core::writer::{rewrite_frame_refs_to_path, write_frame_refs_to_path};
+use readcon_core::writer::{
+    publish_ranked_slices, rewrite_frame_refs_to_path, write_frame_refs_to_path,
+};
 
 fn frame(atoms: usize, scale: f64) -> readcon_core::types::ConFrame {
     let mut builder = ConFrameBuilder::new([8.0, 8.0, 8.0], [90.0, 90.0, 90.0]);
@@ -102,6 +104,53 @@ fuzz_target!(|data: &[u8]| {
     let left = scratches(dir.path());
     assert!(left.is_empty(), "scratch left behind: {left:?}");
 
+    // Two frames on one worker are spelled into the fresh file with
+    // fallocate, not copied out of a second buffer.
+    let serial = [frame(atoms, 0.01), frame(atoms.min(64), 0.04)];
+    let serial_refs = [&serial[0], &serial[1]];
+    let serial_complete = dir.path().join("serial-complete.con");
+    if write_frame_refs_to_path(&serial_complete, &serial_refs, 1, None, false, false).is_err() {
+        return;
+    }
+    let serial_bytes = std::fs::read(&serial_complete).expect("serial bytes");
+    let serial_path = dir.path().join("serial.con");
+    if std::fs::write(&serial_path, &old).is_err() {
+        return;
+    }
+    let serial_path_bytes = serial_path.clone();
+    let pid = unsafe { libc::fork() };
+    if pid < 0 {
+        return;
+    }
+    if pid == 0 {
+        let serial = [frame(atoms, 0.01), frame(atoms.min(64), 0.04)];
+        loop {
+            let _ = write_frame_refs_to_path(
+                &serial_path_bytes,
+                &[&serial[0], &serial[1]],
+                1,
+                None,
+                false,
+                false,
+            );
+        }
+    }
+    kill_child(pid, pause);
+    for _ in 0..20 {
+        if scratches(dir.path()).is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let got = std::fs::read(&serial_path).expect("serial dest");
+    if got != old && got != serial_bytes {
+        panic!("serial fresh-file publish is partial ({} bytes)", got.len());
+    }
+    assert!(
+        scratches(dir.path()).is_empty(),
+        "serial fresh-file publish left a scratch"
+    );
+
     // A kill while rewriting must leave `path` as one complete file: the
     // bytes already published, or the finished replacement. `keep_spare`
     // false drops the parked inode after that rename; a kill before the
@@ -156,4 +205,55 @@ fuzz_target!(|data: &[u8]| {
     kill_child(pid, pause);
     let got = std::fs::read(&path).expect("rewritten dest");
     whole_file(&got, &previous_bytes, &published, new_atoms);
+
+    // Default ranked publish is a fresh file and leaves no `.rewrite`.
+    // Spare reuse is opt-in: `rewrite` plus `keep_spare`. A separate path
+    // so a spare left by the rewrite above is not this publish's.
+    let rewrite = data.get(8).copied().unwrap_or(0) % 3 != 0;
+    let ranked_keep = data.get(9).copied().unwrap_or(1) % 2 == 0;
+    let ranks = 2 + usize::from(data.get(10).copied().unwrap_or(0) % 3);
+    let path = dir.path().join("ranked.con");
+    if std::fs::write(&path, &previous_bytes).is_err() {
+        return;
+    }
+    let path_bytes = path.clone();
+    let owned = published.clone();
+    let pid = unsafe { libc::fork() };
+    if pid < 0 {
+        return;
+    }
+    if pid == 0 {
+        loop {
+            let mut slices = Vec::new();
+            let mut at = 0usize;
+            for rank in 0..ranks {
+                let end = if rank + 1 == ranks {
+                    owned.len()
+                } else {
+                    (rank + 1) * owned.len() / ranks
+                };
+                slices.push(owned[at..end].to_vec());
+                at = end;
+            }
+            let refs: Vec<&[u8]> = slices.iter().map(|slice| slice.as_slice()).collect();
+            let _ = publish_ranked_slices(&path_bytes, &refs, rewrite, ranked_keep);
+        }
+    }
+    kill_child(pid, pause);
+    let got = std::fs::read(&path).expect("ranked dest");
+    whole_file(&got, &previous_bytes, &published, new_atoms);
+    let spare = path.with_file_name(format!(
+        "{}.rewrite",
+        path.file_name().unwrap().to_string_lossy()
+    ));
+    if got == published {
+        if !rewrite || !ranked_keep {
+            assert!(
+                !spare.exists(),
+                "ranked publish left a spare (rewrite={rewrite} keep={ranked_keep})"
+            );
+        } else {
+            assert!(spare.exists(), "opt-in ranked spare was dropped");
+        }
+    }
 });
