@@ -119,6 +119,14 @@ def h2h9_table(host: str) -> str:
     for row in rows:
         if row["structure"] != "1M" or row["format"] == "conbin":
             continue
+        if (row["tool"], row["format"], row["op"]) in {
+            ("chemfiles", "con", "write"),
+            ("readcon", "chemfiles.Frame", "write"),
+        }:
+            body.append(r"chemfiles & con & write & no writer &  &  \\")
+            continue
+        if (row["tool"], row["format"], row["op"]) == ("chemfiles", "con", "read"):
+            row = {**row, "tool": "readcon", "format": "chemfiles.Frame"}
         loses = row["loses"]
         if loses.startswith("unsupported") or not row["median_s"].strip():
             timing = "unsupported"
@@ -148,6 +156,8 @@ def h2h9_table(host: str) -> str:
         "Time is the type-7 median in seconds of six samples. "
         "Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. "
         "Drops names the fields that format does not keep. "
+        "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
+        "chemfiles has no CON writer. "
         r"Threaded rows are pending camp5. CON-bin rows are pending h2h10. "
         f"Record \\texttt{{bench/h2h/scaling/h2h9/cross-format.tsv}} at \\texttt{{{TIP}}}. "
         f"The file's commit line is \\texttt{{{record}}}. "

@@ -1,6 +1,6 @@
 {\scriptsize\setlength{\tabcolsep}{3pt}
 \begin{longtable}{@{}lllrr p{0.30\textwidth}@{}}
-\caption{One frame of \(10^{6}\) atoms from h2h9. Time is the type-7 median in seconds of six samples. Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Threaded rows are pending camp5. CON-bin rows are pending h2h10. Record \texttt{bench/h2h/scaling/h2h9/cross-format.tsv} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit line is \texttt{83a34ca49de4a1e4f1d19b89aa3f222d0d290df6}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}\label{tab:h2h9-1m}\\
+\caption{One frame of \(10^{6}\) atoms from h2h9. Time is the type-7 median in seconds of six samples. Size is the file in mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. chemfiles has no CON writer. Threaded rows are pending camp5. CON-bin rows are pending h2h10. Record \texttt{bench/h2h/scaling/h2h9/cross-format.tsv} at \texttt{c8ee7096539fc06ff3db0bc3242238f64b1170fc}. The file's commit line is \texttt{83a34ca49de4a1e4f1d19b89aa3f222d0d290df6}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}\label{tab:h2h9-1m}\\
 \toprule
 Tool & Format & Op & Time (s) & Size & Drops \\
 \midrule
@@ -20,7 +20,7 @@ readcon & con.zst & write & 0.1439 & 1.349 & none \\
 readcon & xyz & read & 0.2184 & 11.16 & velocities, constraints \\
 readcon & xyz & write & 0.5833 & 11.16 & velocities, constraints \\
 readcon & chemfiles.Frame & read & 0.1706 & 43.28 & masses, velocities, constraints \\
-readcon & chemfiles.Frame & write & 0.08745 & 43.28 & masses, velocities, constraints \\
+chemfiles & con & write & no writer &  &  \\
 chemfiles & xyz & read & 0.1967 & 11.16 & masses, velocities, constraints \\
 chemfiles & xyz & write & 0.2836 & 11.16 & masses, velocities, constraints \\
 chemfiles & xyz.gz & read & 0.2178 & 1.598 & masses, velocities, constraints \\

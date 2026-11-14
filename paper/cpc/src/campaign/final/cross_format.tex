@@ -1,7 +1,7 @@
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{One frame of \(10^{6}\) atoms. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\caption{One frame of \(10^{6}\) atoms. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. chemfiles has no CON writer. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
 \label{tab:cross-1m}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lllccrrl@{}}
@@ -16,7 +16,7 @@ readcon & con.gz & write & 0.4484 (0.002753, $n{=}6$) &  & 425.3 & 5.169 & none 
 readcon & con.zst & read & 0.09823 (0.004344, $n{=}6$) & 0.1015 (0.002581, $n{=}6$) & 304.6 & 1.349 & none \\
 readcon & con.zst & write & 0.1297 (0.002608, $n{=}6$) &  & 424.3 & 1.349 & none \\
 readcon & chemfiles.Frame & read & 0.1638 (0.002437, $n{=}6$) & 0.1864 (0.01064, $n{=}6$) & 366.6 & 43.28 & masses, velocities, constraints \\
-readcon & chemfiles.Frame & write & 0.08262 (0.001886, $n{=}6$) &  & 330.6 & 43.28 & masses, velocities, constraints \\
+chemfiles & con & write & no writer &  &  &  &  \\
 readcon & xyz & read & 1.241 (0.01081, $n{=}6$) & 1.294 (0.04281, $n{=}6$) & 1073 & 36.91 & velocities, constraints \\
 readcon & xyz & write & 1.648 (0.01149, $n{=}6$) &  & 1760 & 36.91 & velocities, constraints \\
 chemfiles & xyz & read & 0.187 (0.006147, $n{=}6$) & 0.2019 (0.004489, $n{=}6$) & 223.3 & 11.16 & masses, velocities, constraints \\
@@ -49,7 +49,7 @@ ovito & xyz & write & 0.2127 (0.003937, $n{=}6$) &  & 272.8 & 16.88 & masses, ve
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{The trajectory. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
+\caption{The trajectory. The structure is an orthogonal copper grid with integer coordinates. The cell edges are side, side$+$0.5 and side$+$1. Compressed sizes depend on that regularity. Each tool uses the format in its row. Warm is the main read or write: the median in seconds, the interquartile range, and $n$. Cold is the cold-cache read, with its own median, interquartile range, and $n$. RSS and the file size are mebibytes, the recorded byte count divided by $2^{20}$. Drops names the fields that format does not keep. The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. chemfiles has no CON writer. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 207, 8 CPUs.}
 \label{tab:cross-traj}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lllccrrl@{}}
@@ -63,7 +63,7 @@ readcon & con.gz & write & 0.005658 (4.186e-05, $n{=}6$) &  & 47.87 & 0.04213 & 
 readcon & con.zst & read & 0.001358 (0.0007824, $n{=}6$) & 0.002523 (0.0007194, $n{=}6$) & 50.55 & 0.009314 & none \\
 readcon & con.zst & write & 0.001335 (2.396e-05, $n{=}6$) &  & 47.22 & 0.009314 & none \\
 readcon & chemfiles.Frame & read & 0.001214 (1.599e-05, $n{=}6$) & 0.003221 (0.001104, $n{=}6$) & 42.59 & 0.2886 & masses, velocities, constraints \\
-readcon & chemfiles.Frame & write & 0.0006098 (0.0003274, $n{=}6$) &  & 33.85 & 0.2886 & masses, velocities, constraints \\
+chemfiles & con & write & no writer &  &  &  &  \\
 readcon & xyz & read & 0.007009 (9.772e-05, $n{=}6$) & 0.008955 (0.001058, $n{=}6$) & 46.56 & 0.2752 & velocities, constraints \\
 readcon & xyz & write & 0.0128 (9.608e-05, $n{=}6$) &  & 62.32 & 0.2752 & velocities, constraints \\
 chemfiles & xyz & read & 0.001203 (4.461e-05, $n{=}6$) & 0.002379 (0.0008291, $n{=}6$) & 33.27 & 0.08922 & masses, velocities, constraints \\
