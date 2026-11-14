@@ -113,21 +113,83 @@ def _is_commit_or_tree(value: str) -> bool:
     return kind.returncode == 0 and kind.stdout.strip() in {"commit", "tree"}
 
 
+# These records name the build that was measured, not this release.
+# cpp_coords.json, cpp_vel.json and cachegrind_results.json name that
+# build's commit, ae4131ff. The others name readcon 0.17.4. settle.json
+# and timings.json also name its commit, b65aa63d. versions.json records
+# the specification's tags. The two eOn restart records also name eOn 3.6.0.
+# cloud-runs-2/05/host.json names the commits of that measurement's build.
+MEASUREMENT_RECORDS = frozenset(
+    {
+        "paper/cpc/bench/results/hcn_loss.json",
+        "paper/cpc/bench/results/r0174/cachegrind/cachegrind_results.json",
+        "paper/cpc/bench/results/r0174/h2h/cpp_coords.json",
+        "paper/cpc/bench/results/r0174/h2h/cpp_vel.json",
+        "paper/cpc/bench/results/r0174/binary_formats/build.json",
+        "paper/cpc/bench/results/r0174/binary_formats/checks.json",
+        "paper/cpc/bench/results/r0174/binary_formats/payloads.json",
+        "paper/cpc/bench/results/r0174/binary_formats/settle.json",
+        "paper/cpc/bench/results/r0174/binary_formats/timings.json",
+        "paper/cpc/bench/results/r0174/h2h/payloads.json",
+        "paper/cpc/bench/results/r0174/h2h/python_coords.json",
+        "paper/cpc/bench/results/r0174/h2h/python_vel.json",
+        "paper/cpc/bench/results/r0174/memray.json",
+        "paper/cpc/bench/results/r0174/payloads.json",
+        "paper/cpc/bench/results/r0174/provenance.json",
+        "paper/cpc/bench/results/r0174/reads.json",
+        "paper/cpc/bench/results/velocity_case.json",
+        "paper/cpc/data/cloud-runs-2/05/host.json",
+        "paper/cpc/data/corpus31-results.json",
+        "paper/cpc/data/corpus_crosscheck.json",
+        "paper/cpc/data/corpus_paths.json",
+        "paper/cpc/data/every_path.json",
+        "paper/cpc/data/failure/con_openers.json",
+        "paper/cpc/data/failure/drift_con.json",
+        "paper/cpc/data/failure/drift_extxyz.json",
+        "paper/cpc/data/failure/matrix.json",
+        "paper/cpc/data/failure/restart_bands.json",
+        "paper/cpc/data/failure/restart_formats.json",
+        "paper/cpc/data/failure/restart_kernels/cooperlake.json",
+        "paper/cpc/data/failure/restart_kernels/haswell.json",
+        "paper/cpc/data/failure/restart_kernels/nehalem.json",
+        "paper/cpc/data/failure/restart_kernels/skylakex.json",
+        "paper/cpc/data/failure/version_safety.json",
+        "paper/cpc/data/referee_probes.json",
+        "paper/cpc/data/sizes.json",
+        "paper/cpc/data/restart_walls/restart_walls.json",
+        "paper/cpc/data/spec/corpus_recount.json",
+        "paper/cpc/data/spec/mutant_differential.json",
+        "paper/cpc/data/spec/versions.json",
+        "paper/cpc/data/survey_frame.json",
+        "paper/cpc/data/worked_example.json",
+        "paper/cpc/evidence/results/e1_restart.json",
+        "paper/cpc/evidence/results/e1_restart_lbfgs_control.json",
+        "paper/cpc/evidence/results/e5_prefactor.json",
+        # Names the library that wrote each row, including the measured 0.17.4 builds.
+        "paper/cpc/src/figures/generated/version_map.tex",
+    }
+)
+
+
 def _paper_sources() -> list[tuple[Path, str]]:
     root = ROOT / "paper" / "cpc"
     listings = root / "evidence" / "listings"
     suffixes = {".md", ".py", ".tex", ".json", ".log", ".org", ".bib", ".toml"}
     found: list[tuple[Path, str]] = []
-    skipped = {
-        root / "data",
-        root / "bench" / "results",
-        root / "evidence" / "results",
-        root / "src" / "figures" / "generated",
-    }
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if any(parent in skipped for parent in path.parents):
+        # paper/cpc/.pixi is the gitignored pixi environment. Generated
+        # figures are gitignored too; regen writes them.
+        if any(part.startswith(".") for part in path.relative_to(root).parts):
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        if _git("check-ignore", "-q", "--", rel).returncode == 0:
+            continue
+        if rel in MEASUREMENT_RECORDS:
+            continue
+        # A TeX log is a build product. Package versions in it are not tags.
+        if path.suffix == ".log" and path.parent == root / "src":
             continue
         if path.suffix in suffixes or listings in path.parents:
             found.append((path, path.read_text(encoding="utf-8", errors="replace")))
