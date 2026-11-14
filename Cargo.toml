@@ -223,6 +223,11 @@ harness = false
 name = "wide_write"
 harness = false
 
+[[bench]]
+name = "speed_checks"
+harness = false
+required-features = ["parallel"]
+
 # Match release so the 10k-frame numbers are the ones a user binary gets.
 [profile.bench]
 inherits = "release"
