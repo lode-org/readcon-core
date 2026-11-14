@@ -425,23 +425,18 @@
     "build": {
       "readcon_version": "0.23.3",
       "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
-      "readcon_module_sha256": "d6643eb8e4681196d84686c01aa23a889f854464a76257181dcf3f880f42a7c9",
+      "readcon_module_sha256": "7ce8a2ccde6d2d3164523ed1842efa8b1e9f496bc12b9506db66a234c9633f8c",
       "rustc": "1.88.0 (6b00bc388 2025-06-23)",
       "newer_sources": [
-        "Cargo.toml",
-        "src/columns.rs",
-        "src/compression.rs",
-        "src/distrib_read.rs",
+        "src/conbin.rs",
         "src/distrib_write.rs",
-        "src/index_proj.rs",
-        "src/iterators.rs",
         "src/python.rs",
         "src/writer.rs"
       ],
-      "library_digest": "3d3612d39c7767ee4fadcd9c5480a6a1caa3bc8f5f8f792dc72730c2dde52e72",
+      "library_digest": "1961a395fc2d54a7cd2b4cd5cab1eda960a9277abb4ee1a5296c541496f145a8",
       "source_files": 52,
       "source_tag": null,
-      "source_commit": "753312d61d8f6ea23890193eefb82255ef5cfe99"
+      "source_commit": "068fed27806dfa75fe3c1b1a285c135a7302d5ba"
     },
     "host": {
       "kernel": "6.12.113+",

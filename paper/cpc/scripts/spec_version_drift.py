@@ -132,7 +132,17 @@ def landed(results: dict, labels: list[str], name: str) -> list[dict]:
     ]
 
 
+def ensure_published_clean(root: Path) -> str:
+    """The HEAD a remote branch contains. A dirty checkout is refused."""
+    repo = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(repo / "bench" / "h2h"))
+    import measured_commit
+
+    return str(measured_commit.measurement(root)["commit"])
+
+
 def main() -> int:
+    ensure_published_clean(ROOT.parents[1])
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--reader",
