@@ -67,19 +67,19 @@ def main() -> None:
         )
 
     frames = list(readcon.iter_con(str(args.fixture)))
-    atoms0 = frames[0].to_ase()
-    atoms_list = [atoms0.copy() for _ in range(args.frames)]
     work = bench_dir("ase-vs-cf")
     try:
         xyz = work / "traj.xyz"
         con = work / "traj.con"
-        ase_write(str(xyz), atoms_list, format="xyz")
         import sys
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
         from frames_guard import write_distinct_copies
 
+        # The XYZ arms read the same distinct frames as the CON file.
         write_distinct_copies(con, args.fixture.read_text(), args.frames)
+        atoms_list = [frame.to_ase() for frame in readcon.iter_con(str(con))]
+        ase_write(str(xyz), atoms_list, format="xyz")
 
         def ase_xyz() -> int:
             return len(ase_read(str(xyz), index=":", format="xyz"))
