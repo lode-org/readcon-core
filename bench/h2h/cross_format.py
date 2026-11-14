@@ -1448,6 +1448,10 @@ def _mdc_box_to_cell(frame) -> np.ndarray:
 
 
 def read_mdcompress(path: str) -> dict:
+    # A timed read is a fresh process. The parent put the module on its own
+    # path; this process has to find the extension itself.
+    if _mdcompress_tools() is None:
+        raise SystemExit("mdcompress reader is not available")
     import mdc
 
     reader = mdc.Reader(path)
