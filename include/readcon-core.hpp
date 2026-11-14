@@ -1480,6 +1480,88 @@ inline void ConFrame::cache_data() const {
         return;
     }
 
+    // A coordinates-only frame is the eOn trajectory. Filling atoms from
+    // the position slab avoids building and freeing a CAtom record per
+    // atom. Anything with sections or a non-sequential id uses the
+    // general export below, so the atom vector stays the same.
+    {
+        uint64_t atomic_numbers[16];
+        double species_mass[16];
+        uint64_t species_count[16];
+        uintptr_t n_types = 16;
+        double cell[3];
+        double angles[3];
+        if (rkr_frame_plain_geometry(frame_handle_.get(), atomic_numbers,
+                                     species_mass, species_count, &n_types,
+                                     cell, angles) == 1) {
+            uintptr_t n_atoms = 0;
+            const double *xyz = rkr_frame_xyz_f64(frame_handle_.get(), &n_atoms);
+            if (xyz != nullptr && n_atoms > 0) {
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+                atoms_cache_.clear();
+                atoms_cache_.reserve(static_cast<size_t>(n_atoms));
+                size_t at = 0;
+                for (uintptr_t species = 0; species < n_types && at < n_atoms; ++species) {
+                    for (uint64_t k = 0; k < species_count[species] && at < n_atoms; ++k, ++at) {
+                        atoms_cache_.emplace_back(Atom{
+                            atomic_numbers[species],
+                            xyz[at * 3],
+                            xyz[at * 3 + 1],
+                            xyz[at * 3 + 2],
+                            static_cast<uint64_t>(at),
+                            species_mass[species],
+                            false,
+                            false,
+                            false,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            false,
+                            0.0,
+                            0.0,
+                            0.0,
+                            false,
+                            0.0,
+                            false});
+                    }
+                }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+                if (at != static_cast<size_t>(n_atoms)) {
+                    atoms_cache_.clear();
+                } else {
+                cell_cache_ = {cell[0], cell[1], cell[2]};
+                angles_cache_ = {angles[0], angles[1], angles[2]};
+                has_velocities_cache_ = false;
+                has_forces_cache_ = false;
+                has_energies_cache_ = false;
+                auto get_and_free_string = [frame_handle = frame_handle_.get()](
+                                               bool is_prebox, size_t index) {
+                    char *c_str = rkr_frame_get_header_line_cpp(
+                        frame_handle, is_prebox, index);
+                    if (!c_str) {
+                        return std::string();
+                    }
+                    std::string result(c_str);
+                    rkr_free_string(c_str);
+                    return result;
+                };
+                prebox_header_cache_[0] = get_and_free_string(true, 0);
+                prebox_header_cache_[1] = get_and_free_string(true, 1);
+                postbox_header_cache_[0] = get_and_free_string(false, 0);
+                postbox_header_cache_[1] = get_and_free_string(false, 1);
+                is_cached_ = true;
+                return;
+            }
+        }
+    }
+    }
+
     // Extract the C-struct once for numeric data.
     CFrame *c_frame = rkr_frame_to_c_frame(frame_handle_.get());
     if (!c_frame) {

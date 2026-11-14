@@ -979,6 +979,7 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             // One flat fill per section that was actually parsed. The full
             // sync walks every absent section and writes each row through
             // ArcArray uniqueness checks.
+            frame.sequential_plain = false;
             frame.install_declared_section_soa();
         }
         self.frame_index = self.frame_index.saturating_add(1);

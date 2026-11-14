@@ -2298,6 +2298,20 @@ const double *rkr_frame_xyz_f64(const struct RKRConFrame *frame_handle,
                                 uintptr_t *n);
 
 /**
+ * Plain coordinate frame for a bulk atom fill.
+ *
+ * `*n_types` is the capacity of `atomic_numbers`, `masses`, and `counts`
+ * on entry. On success it is the species count and the function returns 1.
+ * `cell` and `angles` each receive three values. Returns 0 when the frame
+ * has a fixed atom, a non-sequential id, or a velocity, force, or energy
+ * section; the caller then uses `rkr_frame_to_c_frame`.
+ */
+int rkr_frame_plain_geometry(const struct RKRConFrame *frame_handle,
+                             uint64_t *atomic_numbers, double *masses,
+                             uint64_t *counts, uintptr_t *n_types,
+                             double *cell, double *angles);
+
+/**
  * Row-major f64 velocities pointer, or NULL if absent / not float64.
  */
 const double *rkr_frame_velocities_f64(const struct RKRConFrame *frame_handle,

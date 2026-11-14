@@ -2087,7 +2087,7 @@ pub fn parse_frame_header<'a>(
         validate_header_geometry(&boxl_vec, &angles_vec)?;
         validate_masses(&masses_per_type)?;
     }
-    let shared_line: std::sync::Arc<str> = std::sync::Arc::from(prebox2);
+    let shared_line = intern_repeated_line(&prebox2);
     let metadata = crate::types::FrameMeta::from_shared(std::sync::Arc::clone(&shared_line));
     Ok(FrameHeader {
         prebox_header: PreboxHeader {
@@ -2113,6 +2113,45 @@ pub fn parse_frame_header<'a>(
 /// Returns the major version when the object is exactly that shape and, for
 /// version 3 or newer, `length` and `energy` are valid units. Anything else
 /// is `None` so the general JSON parser can accept or reject it.
+/// Reuse the allocation when the next frame repeats a header line.
+///
+/// A trajectory stamps the same metadata line on every frame. A fresh
+/// `Arc` per frame showed up in the all-frames read.
+thread_local! {
+    static SEQUENTIAL_PLAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+pub(crate) fn reset_sequential_plain() {
+    SEQUENTIAL_PLAIN.with(|flag| flag.set(true));
+}
+
+pub(crate) fn note_not_sequential_plain() {
+    SEQUENTIAL_PLAIN.with(|flag| flag.set(false));
+}
+
+pub(crate) fn take_sequential_plain() -> bool {
+    SEQUENTIAL_PLAIN.with(|flag| flag.get())
+}
+
+fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
+    thread_local! {
+        static RECENT: std::cell::RefCell<Vec<std::sync::Arc<str>>> =
+            std::cell::RefCell::new(Vec::new());
+    }
+    RECENT.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some(found) = slot.iter().find(|item| item.as_ref() == line) {
+            return std::sync::Arc::clone(found);
+        }
+        let fresh: std::sync::Arc<str> = std::sync::Arc::from(line);
+        if slot.len() == 8 {
+            slot.remove(0);
+        }
+        slot.push(std::sync::Arc::clone(&fresh));
+        fresh
+    })
+}
+
 fn simple_metadata_version(line: &str) -> Option<u32> {
     let bytes = line.as_bytes();
     let mut i = 0usize;
@@ -2421,6 +2460,7 @@ pub(crate) fn parse_single_frame_ls<'a, L>(
 where
     L: LineStream<'a> + Iterator<Item = &'a str>,
 {
+    reset_sequential_plain();
     let header = parse_frame_header(lines)?;
     // A count the unread input can hold stays in this function, on the same
     // reservation and `Arc` bump as before the bound existed. A count that
@@ -2432,6 +2472,9 @@ where
     use crate::storage_dtype::{ElementKind, FloatArray2};
     let dt = header.metadata.dtypes();
     let f64_positions = dt.positions == ElementKind::Float64;
+    if !f64_positions {
+        note_not_sequential_plain();
+    }
     let shell = take_coord_shell(total_atoms);
     let (mut pos_flat, mut ids, mut atom_data) = match shell {
         Some(shell) => (shell.coords, shell.ids, shell.atoms),
@@ -2660,6 +2703,9 @@ where
     let mut shares = symbol_shares(symbol, n);
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
+        if fixed != [false, false, false] || atom_id != global_atom_idx {
+            note_not_sequential_plain();
+        }
         let sym = shares.take();
         let index = pos_flat.len() / 3;
         pos_flat.extend_from_slice(&xyz);

@@ -412,6 +412,18 @@ impl FrameMeta {
         self.ensure().iter()
     }
 
+    /// The parsed line, when the map has not been edited.
+    ///
+    /// A keyed edit materialises the map and the line is no longer the
+    /// source of the metadata JSON.
+    pub(crate) fn unedited_line(&self) -> Option<&std::sync::Arc<str>> {
+        if self.map.get().is_some() {
+            None
+        } else {
+            Some(&self.raw)
+        }
+    }
+
     /// In-memory dtypes. A line with no `storage_dtypes` key does not parse.
     pub(crate) fn dtypes(&self) -> crate::storage_dtype::StorageDtypes {
         if let Some(map) = self.map.get() {
@@ -1878,6 +1890,11 @@ pub struct ConFrame {
     pub masses: crate::storage_dtype::FloatArray1,
     /// Per-atom ids `(N,)` u64 (always).
     pub atom_ids: ndarray::ArcArray1<u64>,
+    /// Coordinates only, ids are `0..n`, and no atom is fixed.
+    ///
+    /// Set while the frame is parsed. The eOn atom fill trusts it and does
+    /// not walk the atoms again.
+    pub(crate) sequential_plain: bool,
 }
 
 impl PartialEq for ConFrame {
@@ -4150,6 +4167,7 @@ impl ConFrameBuilder {
                 header,
                 atom_data,
                 column_tails: Vec::new(),
+                sequential_plain: false,
                 positions: pos,
                 velocities: vel.into(),
                 forces: frc.into(),
@@ -4302,6 +4320,7 @@ pub(crate) fn con_frame_coords_only_with_ids(
         header,
         atom_data,
         column_tails: Vec::new(),
+        sequential_plain: crate::parser::take_sequential_plain(),
         positions,
         velocities: FloatArray2::zeros(dt.velocities, 0, 3).into(),
         forces: FloatArray2::zeros(dt.forces, 0, 3).into(),
@@ -4397,6 +4416,7 @@ pub fn con_frame_from_atom_data_with_positions(
         header,
         atom_data,
         column_tails: Vec::new(),
+        sequential_plain: false,
         positions: pos,
         velocities: vel.into(),
         forces: frc.into(),

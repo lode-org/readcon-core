@@ -348,15 +348,7 @@ pub unsafe extern "C" fn rkr_frame_metadata_json(frame_handle: *const RKRConFram
         Some(f) => f,
         None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
-    let mut obj = serde_json::Map::new();
-    obj.insert(
-        meta::CON_SPEC_VERSION.into(),
-        serde_json::Value::from(frame.header.spec_version),
-    );
-    for (k, v) in &frame.header.metadata {
-        obj.insert(k.clone(), v.clone());
-    }
-    let json_str = serde_json::Value::Object(obj).to_string();
+    let json_str = metadata_json_text(frame);
     match CString::new(json_str) {
         Ok(cs) => cs.into_raw(),
         Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
@@ -1492,6 +1484,209 @@ pub unsafe extern "C" fn free_con_frame_iterator(iterator: *mut CConFrameIterato
 //=============================================================================
 // Data Accessors (The "Getter" API)
 //=============================================================================
+/// One periodic-table lookup per species run, then a tight fill.
+///
+/// `symbol_to_atomic_number` walks the element table. Doing that once
+/// per atom was most of the cost of handing a long trajectory to eOn,
+/// which asks for every atom's atomic number. Atoms of one species are
+/// stored together, so the lookup is once per run.
+fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
+    let atoms = &frame.atom_data;
+    let mut out = Vec::with_capacity(atoms.len());
+    let has_vel = frame.has_velocities();
+    let has_force = frame.has_forces();
+    let mut mass_slot = 0usize;
+    let mut mass_left = 0usize;
+    let mut mass = 0.0f64;
+    let mut last_symbol: *const u8 = std::ptr::null();
+    let mut z = 0u64;
+    let mut i = 0usize;
+    while i < atoms.len() {
+        if mass_left == 0 {
+            if mass_slot >= frame.header.natms_per_type.len() {
+                break;
+            }
+            mass_left = frame.header.natms_per_type[mass_slot];
+            mass = frame
+                .header
+                .masses_per_type
+                .get(mass_slot)
+                .copied()
+                .unwrap_or(0.0);
+            mass_slot += 1;
+            if mass_left == 0 {
+                continue;
+            }
+        }
+        let symbol = atoms[i].symbol.as_ptr();
+        if symbol != last_symbol {
+            z = symbol_to_atomic_number(atoms[i].symbol.as_ref());
+            last_symbol = symbol;
+        }
+        out.push(catom_from_datum(&atoms[i], z, mass, has_vel, has_force));
+        i += 1;
+        mass_left -= 1;
+    }
+    out
+}
+
+fn catom_from_datum(
+    atom: &crate::types::AtomDatum,
+    atomic_number: u64,
+    mass: f64,
+    has_vel: bool,
+    has_force: bool,
+) -> CAtom {
+    let [vx, vy, vz] = if has_vel {
+        atom.velocity().unwrap_or([0.0; 3])
+    } else {
+        [0.0; 3]
+    };
+    let [fx, fy, fz] = if has_force {
+        atom.force().unwrap_or([0.0; 3])
+    } else {
+        [0.0; 3]
+    };
+    let fixed = atom.fixed();
+    CAtom {
+        atomic_number,
+        x: atom.x(),
+        y: atom.y(),
+        z: atom.z(),
+        is_fixed: atom.is_fixed(),
+        fixed_x: fixed[0],
+        fixed_y: fixed[1],
+        fixed_z: fixed[2],
+        atom_id: atom.atom_id,
+        mass,
+        vx,
+        vy,
+        vz,
+        has_velocity: atom.has_velocity(),
+        fx,
+        fy,
+        fz,
+        has_forces: atom.has_forces(),
+        energy: atom.energy().unwrap_or(0.0),
+        has_energy: atom.has_energy(),
+    }
+}
+
+/// JSON metadata in the same shape as rebuilding the map.
+///
+/// eOn asks for this string on every frame. The line is shared by a
+/// repeated header, so the serde rebuild runs once per distinct line
+/// and the rest copy that text.
+fn metadata_json_text(frame: &ConFrame) -> String {
+    if let Some(raw) = frame.header.metadata.unedited_line() {
+        thread_local! {
+            static LAST: RefCell<(std::sync::Arc<str>, String)> =
+                RefCell::new((std::sync::Arc::from(""), String::new()));
+        }
+        return LAST.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if !slot.1.is_empty() && std::sync::Arc::ptr_eq(&slot.0, raw) {
+                return slot.1.clone();
+            }
+            if slot.0.as_ref() == raw.as_ref() && !slot.1.is_empty() {
+                return slot.1.clone();
+            }
+            let json = metadata_json_rebuilt(frame);
+            slot.0 = std::sync::Arc::clone(raw);
+            slot.1.clone_from(&json);
+            json
+        });
+    }
+    metadata_json_rebuilt(frame)
+}
+
+fn metadata_json_rebuilt(frame: &ConFrame) -> String {
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        meta::CON_SPEC_VERSION.into(),
+        serde_json::Value::from(frame.header.spec_version),
+    );
+    for (k, v) in &frame.header.metadata {
+        obj.insert(k.clone(), v.clone());
+    }
+    serde_json::Value::Object(obj).to_string()
+}
+
+/// Plain geometry for the eOn cache: coordinates, sequential ids, no sections.
+///
+/// `*n_types` is the capacity of the three species arrays on entry and the
+/// number of species written on success. Returns 1 when `cache_data` can
+/// fill atoms from `rkr_frame_xyz_f64` without a per-atom record. Returns 0
+/// when any atom is fixed, an id is not its index, or a section is present.
+///
+/// # Safety
+/// `frame_handle` must be valid. The species pointers must hold `*n_types`
+/// slots. `cell` and `angles` must hold three slots each.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rkr_frame_plain_geometry(
+    frame_handle: *const RKRConFrame,
+    atomic_numbers: *mut u64,
+    masses: *mut f64,
+    counts: *mut u64,
+    n_types: *mut usize,
+    cell: *mut f64,
+    angles: *mut f64,
+) -> i32 {
+    let frame = match unsafe { (frame_handle as *const ConFrame).as_ref() } {
+        Some(frame) => frame,
+        None => return 0,
+    };
+    if !frame.sequential_plain
+        || frame.has_velocities()
+        || frame.has_forces()
+        || frame.has_energies()
+    {
+        return 0;
+    }
+    let xyz = match frame.positions.f64_slice() {
+        Some(xyz) => xyz,
+        None => return 0,
+    };
+    let atoms = &frame.atom_data;
+    if xyz.len() != atoms.len().saturating_mul(3) {
+        return 0;
+    }
+    let cap = unsafe { *n_types };
+    let n_species = frame.header.natms_per_type.len();
+    if n_species > cap
+        || n_species != frame.header.masses_per_type.len()
+        || atomic_numbers.is_null()
+        || masses.is_null()
+        || counts.is_null()
+        || cell.is_null()
+        || angles.is_null()
+    {
+        return 0;
+    }
+    let mut cursor = 0usize;
+    for (slot, count) in frame.header.natms_per_type.iter().copied().enumerate() {
+        if count == 0 || cursor >= atoms.len() {
+            return 0;
+        }
+        let z = symbol_to_atomic_number(atoms[cursor].symbol.as_ref());
+        unsafe {
+            *atomic_numbers.add(slot) = z;
+            *masses.add(slot) = frame.header.masses_per_type[slot];
+            *counts.add(slot) = count as u64;
+        }
+        cursor += count;
+    }
+    if cursor != atoms.len() {
+        return 0;
+    }
+    unsafe {
+        *n_types = n_species;
+        std::ptr::copy_nonoverlapping(frame.header.boxl.as_ptr(), cell, 3);
+        std::ptr::copy_nonoverlapping(frame.header.angles.as_ptr(), angles, 3);
+    }
+    1
+}
+
 /// Extracts the core atomic data into a transparent `CFrame` struct.
 /// The caller OWNS the returned pointer and MUST call `free_c_frame` on it.
 ///
@@ -1503,44 +1698,8 @@ pub unsafe extern "C" fn rkr_frame_to_c_frame(frame_handle: *const RKRConFrame) 
         Some(f) => f,
         None => return null_err::<_>(RKRStatus::RKR_STATUS_INTERNAL_ERROR),
     };
-    let masses_iter = frame
-        .header
-        .natms_per_type
-        .iter()
-        .zip(frame.header.masses_per_type.iter())
-        .flat_map(|(num_atoms, mass)| std::iter::repeat_n(*mass, *num_atoms));
+    let c_atoms = export_catoms(frame);
     let has_velocities = frame.has_velocities();
-    let c_atoms: Vec<CAtom> = frame
-        .atom_data
-        .iter()
-        .zip(masses_iter)
-        .map(|(atom_datum, mass)| {
-            let [vx, vy, vz] = atom_datum.velocity().unwrap_or([0.0; 3]);
-            let [fx, fy, fz] = atom_datum.force().unwrap_or([0.0; 3]);
-            CAtom {
-                atomic_number: symbol_to_atomic_number(&atom_datum.symbol),
-                x: atom_datum.x(),
-                y: atom_datum.y(),
-                z: atom_datum.z(),
-                is_fixed: atom_datum.is_fixed(),
-                fixed_x: atom_datum.fixed()[0],
-                fixed_y: atom_datum.fixed()[1],
-                fixed_z: atom_datum.fixed()[2],
-                atom_id: atom_datum.atom_id,
-                mass,
-                vx,
-                vy,
-                vz,
-                has_velocity: atom_datum.has_velocity(),
-                fx,
-                fy,
-                fz,
-                has_forces: atom_datum.has_forces(),
-                energy: atom_datum.energy().unwrap_or(0.0),
-                has_energy: atom_datum.has_energy(),
-            }
-        })
-        .collect();
     // `into_boxed_slice` owns an allocation whose size is the length.
     // Freeing that pointer with `Vec`'s capacity guessed as `num_atoms`
     // is wrong whenever the `Vec` grew past its length.
@@ -6402,6 +6561,85 @@ pub unsafe extern "C" fn rkr_unpack_rcso_forces(
 mod tests {
     use super::*;
     use std::ffi::{CStr, CString};
+    #[test]
+    fn eon_export_matches_the_frame_and_reuses_metadata_json() {
+        let text = "\
+v3
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10 10 10
+90 90 90
+
+
+2
+1 1
+63.546 1.0
+Cu
+Coordinates of Component 1
+1.50000000 2.50000000 3.50000000 0 0
+H
+Coordinates of Component 2
+0.25000000 0.50000000 0.75000000 0 1
+v3
+{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}
+10 10 10
+90 90 90
+
+
+2
+1 1
+63.546 1.0
+Cu
+Coordinates of Component 1
+4.00000000 5.00000000 6.00000000 0 0
+H
+Coordinates of Component 2
+7.00000000 8.00000000 9.00000000 0 1
+";
+        let frames = crate::iterators::frames_from_text(text, Some(1)).expect("parse");
+        assert_eq!(frames.len(), 2);
+        let json0 = metadata_json_text(&frames[0]);
+        let json1 = metadata_json_text(&frames[1]);
+        assert_eq!(json0, metadata_json_rebuilt(&frames[0]));
+        assert_eq!(json0, json1);
+        assert!(json0.contains("\"con_spec_version\":3"));
+        let raw = &frames[0] as *const ConFrame as *const RKRConFrame;
+        let c = unsafe { rkr_frame_to_c_frame(raw) };
+        assert!(!c.is_null());
+        let view = unsafe { &*c };
+        assert_eq!(view.num_atoms, 2);
+        let atoms = unsafe { std::slice::from_raw_parts(view.atoms, view.num_atoms) };
+        assert_eq!(atoms[0].atomic_number, 29);
+        assert_eq!(atoms[0].mass, 63.546);
+        assert!((atoms[0].x - 1.5).abs() < 1e-12);
+        assert!((atoms[0].y - 2.5).abs() < 1e-12);
+        assert!((atoms[0].z - 3.5).abs() < 1e-12);
+        assert_eq!(atoms[1].atomic_number, 1);
+        assert_eq!(atoms[1].mass, 1.0);
+        assert!((atoms[1].x - 0.25).abs() < 1e-12);
+        unsafe { free_c_frame(c) };
+        let mut n_types = 16usize;
+        let mut atomic_numbers = [0u64; 16];
+        let mut species_mass = [0.0f64; 16];
+        let mut species_count = [0u64; 16];
+        let mut cell = [0.0f64; 3];
+        let mut angles = [0.0f64; 3];
+        let plain = unsafe {
+            rkr_frame_plain_geometry(
+                raw,
+                atomic_numbers.as_mut_ptr(),
+                species_mass.as_mut_ptr(),
+                species_count.as_mut_ptr(),
+                &mut n_types,
+                cell.as_mut_ptr(),
+                angles.as_mut_ptr(),
+            )
+        };
+        assert_eq!(plain, 1, "stock frame should use the plain geometry fill");
+        assert_eq!(n_types, 2);
+        assert_eq!(atomic_numbers[0], 29);
+        assert_eq!(species_count[0], 1);
+        assert_eq!(atomic_numbers[1], 1);
+    }
     #[test]
     fn frame_copy_positions_without_cframe() {
         let handle = test_frame_handle();

@@ -1411,6 +1411,7 @@ fn frame_from_arrays(
         },
         atom_data,
         column_tails: Vec::new(),
+        sequential_plain: false,
         positions: crate::storage_dtype::Array2Storage::zeros(
             crate::storage_dtype::ElementKind::Float64,
             0,
@@ -1912,6 +1913,7 @@ fn frame_from_column_slice(
         },
         atom_data,
         column_tails: Vec::new(),
+        sequential_plain: false,
         positions: pos_storage,
         velocities: velocities_storage.into(),
         forces: forces_storage.into(),
