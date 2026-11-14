@@ -261,8 +261,12 @@ use std::fs::File;
 use readcon_core::writer::ConFrameWriter;
 
 // Default text round-trips every finite binary64 value.
+// An exact decimal of at most six places is spelled directly. A tie
+// takes the even last digit, the same side ryu prints.
 // NaN and infinity are spelled and rejected on read (CON-num.1),
 // so a file that contains them is not a round trip.
+// A path write publishes only after every byte is stored. The published
+// path is the previous complete file or the finished new one.
 let file = File::create("output.con").unwrap();
 let mut writer = ConFrameWriter::new(file);
 
@@ -1110,15 +1114,17 @@ println(length(frames), " frames")
 
 * CON-bin
 
-CON-bin is a binary column file. The header is one host page. Positions
-of every frame follow as one little-endian run, then velocities the same
-way. Every frame must have the same atom count. =write_conbin= streams a
-CON text file into that layout. =read_conbin= returns a writable view of
-the position run, the velocity run, and the atom count. The arrays are
-shaped =(frames, atoms * 3)=. A frame with no velocity section is stored
-as zeros. The cell, element symbols, masses, atom ids, and fixed flags are
-not stored. binary32 stores each binary64 value as binary32, so those bits
-are not kept. A binary32 file is =read_conbin_f32=.
+CON-bin is a binary column file. The header is one host page. Version 2,
+which =write_conbin= writes, stores positions, then velocities, forces
+when any frame has them, masses, the cell, atom ids, and a per-axis fixed
+mask. A frame with no velocity section is stored as zeros. Element symbols
+are not stored. Version 1 files still open and hold positions and
+velocities only. Every frame must have the same atom count. =read_conbin=
+returns a writable view of the position run, the velocity run, and the
+atom count. The arrays are shaped =(frames, atoms * 3)=. binary32 stores
+each binary64 value as binary32, so those bits are not kept. A binary32
+file is =read_conbin_f32=. The file is published only after every byte is
+stored, so the path is the previous complete file or the finished new one.
 
 #+begin_src python
 import readcon

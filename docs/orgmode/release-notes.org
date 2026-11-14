@@ -1,0 +1,97 @@
+#+title: Notes after the tagged release
+#+options: toc:nil num:nil ^:nil
+
+These calls are in the tree and not yet in a numbered release.
+
+* Short decimals
+
+A round-trip coordinate that is an exact decimal of at most six places is
+spelled directly. Two spellings that are equally close take the even last
+digit, the same side ryu prints, and a place is dropped when the shorter
+spelling still round-trips. Any other finite value uses ryu. The file still
+reads back as the same binary64 value.
+
+#+INCLUDE: "../../tests/doc_examples/formatter.py" src python
+#+INCLUDE: "../../tests/doc_release_notes.rs" src rust
+#+INCLUDE: "../../tests/doc_examples/formatter.c" src c
+
+* Publishing a path
+
+A path write stores the new bytes before it publishes them. On Linux the
+store is an unnamed file. =linkat= and =rename= run in a helper that
+outlives the writer, so a kill does not leave a partial destination or a
+scratch name. Where that unnamed file is unavailable, a
+=.readcon-write-*.tmp= is removed if the write fails. The published path
+is either the previous complete file or the finished new one. CON-bin uses
+the same publish. The new inode is a second copy until the rename.
+
+* Rewrite
+
+=rewrite_frame_refs_to_path=, =write_con= with =rewrite=True=, and
+=rkr_rewrite_path= fill a spare named =path= plus =.rewrite= and rename it
+over the path. =keep_spare=True= parks the previous inode at that spare, so
+the trajectory occupies two copies. =keep_spare=False= deletes the spare
+after the rename, and the next rewrite allocates again. A partial spare is
+never given the published name. A crash leaves the published path as the
+previous complete file, or as the finished new one once the rename has run.
+
+#+INCLUDE: "../../tests/doc_examples/rewrite.py" src python
+#+INCLUDE: "../../tests/doc_examples/rewrite.c" src c
+
+* Ranked writes
+
+One =MPI_Allgather= shares each rank's byte length and frame count.
+The default store is a fresh file, not a spare reused in place. Rank 0
+renames that file onto the path only after every byte is stored. One
+gather of the frame offsets and block hashes then writes the =.rcidx=
+sidecar. Until the rename the new bytes are a second copy, and the
+published path is still the previous complete file. After the rename it
+is the finished new one.
+
+#+INCLUDE: "../../tests/doc_examples/ranked.py" src python
+#+INCLUDE: "../../tests/doc_examples/ranked.c" src c
+
+The collective call is =rkr_mpi_write_block= in C and =write_con= with
+=comm== in Python. Rust calls =distrib_write::write_block_refs=.
+=tests/doc_release_notes.rs= runs the fresh-file publish.
+
+* Serial CON text
+
+The serial writer formats from the column arrays. The bytes match a
+binding rewrite. It does not build a heap tail for each atom.
+
+* Gzip members
+
+A =.gz= write still splits a wide frame into independent members, so a
+read can inflate them together. Formatting uses the caller's thread count.
+Deflate uses one worker per core when the caller did not ask for two or
+more threads, instead of one deflate thread for every member. One member
+stays one thread.
+
+#+begin_src python
+import readcon
+readcon.write_con("frame.con.gz", frames, n_threads=1)
+#+end_src
+
+* What a round trip keeps
+
+A text round trip keeps the cell, symbols, coordinates, masses, atom ids,
+fixed flags, and velocities when they were present. NaN and infinity are
+spelled and rejected on read, so a file that contains them is not a round
+trip. CON-bin version 2 stores positions, velocities (a missing section as
+zeros), forces when any frame has them, masses, the cell, atom ids, and
+the per-axis fixed flags. It does not store symbols. Version 1 files still
+open and hold positions and velocities only. binary32 does not keep
+binary64 bits. See the CON-bin section of the how-to.
+
+* The cxx wrap pin
+
+=scripts/check_cxx_wrap_pin.sh= rebuilds the slim cxx archive with the
+saved source-date-epoch and fails when that digest is not the wrap pin.
+A push that changes only =bench/**= does not run the job. A stale pin
+is reported before a tag is cut. The upload still refuses a different
+digest.
+
+#+begin_src shell
+bash scripts/check_cxx_wrap_pin.sh
+#+end_src

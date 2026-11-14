@@ -19,6 +19,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  examples:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Run the documented Python and C examples
+        env:
+          CC: gcc
+          CXX: g++
+          LIBRARY_PATH: /usr/lib/gcc/x86_64-linux-gnu/13
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: bash scripts/run_doc_examples.sh
+
   build:
     runs-on: ubuntu-latest
     steps:

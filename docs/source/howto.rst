@@ -11,7 +11,7 @@ How-to — CON I/O by language
 These pages answer **how do I …** once you already know the shape of a CON file
 from the :doc:\`tutorial\`. Pick a language section and copy the block that matches
 your task. For XYZ/PDB/GRO ingress use the chemfiles how-to, not this page.
-Pairing atoms across frames by column 5 is :doc:`atom-correspondence`.
+Pairing atoms across frames by column 5 is :doc:\`atom-correspondence\`.
 
 Requirement words
 -----------------
@@ -40,7 +40,7 @@ Rust
     use readcon_core::{CON_SPEC_VERSION, VERSION};
 
     // Library version
-    assert_eq!(CON_SPEC_VERSION, 3);
+        assert_eq!(CON_SPEC_VERSION, 3);
     println!("readcon-core {} (spec v{})", VERSION, CON_SPEC_VERSION);
 
     // Per-frame version (from parsed file)
@@ -278,8 +278,12 @@ Control the number of decimal places in output coordinates:
     use readcon_core::writer::ConFrameWriter;
 
     // Default text round-trips every finite binary64 value.
+    // An exact decimal of at most six places is spelled directly. A tie
+    // takes the even last digit, the same side ryu prints.
     // NaN and infinity are spelled and rejected on read (CON-num.1),
     // so a file that contains them is not a round trip.
+    // A path write publishes only after every byte is stored. The published
+    // path is the previous complete file or the finished new one.
     let file = File::create("output.con").unwrap();
     let mut writer = ConFrameWriter::new(file);
 
@@ -503,6 +507,10 @@ previous frame is that same tuple when the frame is under 4096 atoms.
 ``arrays["pos"]`` is ``positions``.
 ``write_extxyz`` writes that dict back. A caller that unpacked a tuple
 from an older ``read_extxyz`` should index the dict.
+``n_threads`` of 2 or more splits frames, or the atoms of one wide frame.
+A file whose symbols differ, or whose header changes from frame to frame,
+uses the general scan. The uniform scan is only for one species and one
+column layout repeated in every frame.
 
 ASE plugin
 ~~~~~~~~~~
@@ -1152,7 +1160,7 @@ Compressed input
 decodes ``.gz``, and ``.zst`` when the shared library was built with ``zstd``.
 ``write_con`` always writes plain CON text. It does not look at the suffix.
 Gzip and zstd output is ``create_writer_gzip_c`` / ``create_writer_zstd_c``
-in that same library, or ``write_con`` in Python with ``compression="gzip"``
+in that same library, or ``write_con`` in Python with ``compression``"gzip"=
 or ``"zstd"``.
 
 .. code:: julia
@@ -1165,15 +1173,17 @@ or ``"zstd"``.
 CON-bin
 -------
 
-CON-bin is a binary column file. The header is one host page. Positions
-of every frame follow as one little-endian run, then velocities the same
-way. Every frame must have the same atom count. ``write_conbin`` streams a
-CON text file into that layout. ``read_conbin`` returns a writable view of
-the position run, the velocity run, and the atom count. The arrays are
-shaped ``(frames, atoms * 3)``. A frame with no velocity section is stored
-as zeros. The cell, element symbols, masses, atom ids, and fixed flags are
-not stored. binary32 stores each binary64 value as binary32, so those bits
-are not kept. A binary32 file is ``read_conbin_f32``.
+CON-bin is a binary column file. The header is one host page. Version 2,
+which ``write_conbin`` writes, stores positions, then velocities, forces
+when any frame has them, masses, the cell, atom ids, and a per-axis fixed
+mask. A frame with no velocity section is stored as zeros. Element symbols
+are not stored. Version 1 files still open and hold positions and
+velocities only. Every frame must have the same atom count. ``read_conbin``
+returns a writable view of the position run, the velocity run, and the
+atom count. The arrays are shaped ``(frames, atoms * 3)``. binary32 stores
+each binary64 value as binary32, so those bits are not kept. A binary32
+file is ``read_conbin_f32``. The file is published only after every byte is
+stored, so the path is the previous complete file or the finished new one.
 
 .. code:: python
 
@@ -1255,13 +1265,14 @@ Chemfiles — convert other formats into CON
 
 Foreign formats are a separate how-to track:
 
-- Tutorial: :doc:`chemfiles-tutorial`
+- Tutorial: `chemfiles-tutorial.org <chemfiles-tutorial.rst>`_
 
-- How-to: :doc:`chemfiles-howto`
+- How-to: `chemfiles-howto.org <chemfiles-howto.rst>`_
 
-- Explanation: :doc:`chemfiles-explain`
+- Explanation: `chemfiles-explain.org <chemfiles-explain.rst>`_
 
-- Reference: :doc:`chemfiles-reference`
+- Reference: `chemfiles-reference.org <chemfiles-reference.rst>`_
+
 
 Exact numeric CON output from C
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

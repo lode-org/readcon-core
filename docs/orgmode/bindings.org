@@ -230,7 +230,8 @@ frame.atoms.append(readcon.Atom(symbol="H", x=1.0, y=0.0, z=0.0))
 readcon.write_con("output.con", frames)
 readcon.write_con("precise.con", frames, precision=17)
 # rewrite=True writes path.rewrite, then renames it over path. The spare
-# doubles disk until keep_spare=False. A crash leaves path complete.
+# doubles disk until keep_spare=False. The published path is the previous
+# complete file or the finished new one.
 readcon.write_con("output.con", frames, rewrite=True, keep_spare=False)
 output_str = readcon.write_con_string(frames)
 
@@ -681,7 +682,7 @@ include(FetchContent)
 FetchContent_Declare(
   readcon-core
   URL https://github.com/lode-org/readcon-core/releases/download/v@READCON_VERSION@/readcon-core-cxx-@READCON_VERSION@.tar.gz
-  URL_HASH SHA256=3adae93efaf0ed1ea9c8a89eb0cfc2dac771b83a997286ccd229a503ef768381
+  URL_HASH SHA256=37c8bd5c764a416318489f61649978515a1f71675a8b4cf2fa7aeca63fa2385a
 )
 FetchContent_MakeAvailable(readcon-core)
 target_link_libraries(my_app PRIVATE readcon-core::shared)

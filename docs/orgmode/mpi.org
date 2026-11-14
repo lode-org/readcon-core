@@ -54,13 +54,18 @@ One frame is split by atom lines, so a million-atom frame uses every rank.
 
 | Mode | When | Path |
 |------+------+------|
-| =mpiio= | the default collective write | =MPI_Exscan= of the formatted lengths, then each rank calls =pwrite= at that offset |
+| =mpiio= | the default collective write | one =MPI_Allgather= of each rank's byte length and frame count, then each rank stores into a fresh file |
 | =gather= | no MPI-IO | rank 0 collects the blocks (=MPI_Gatherv=, point-to-point above 2 GiB) and writes |
 | =auto= | default | =mpiio= |
 
 Every rank formats its frames with the same writer as a serial file.
 A one-frame file formats that rank's atom range.
-Rank 0 also writes the =.rcidx= sidecar, so the next read skips the scan.
+The default store is a fresh file, not a spare reused in place.
+Rank 0 renames it onto the path only after every byte is stored, so the
+published path is the previous complete file or the finished new one.
+Until that rename the new bytes are a second copy.
+One gather of the offsets and block hashes then writes the =.rcidx=
+sidecar, so the next read skips the scan.
 Output is uncompressed.
 
 * Errors
