@@ -65,7 +65,7 @@ orgbld = "emacs --batch -l docs/export.el"
 fix-doc-links = { cmd = "python docs/scripts/fix_doc_links.py", depends-on = [
   "orgbld",
 ], description = "Rewrite .rst hyperlinks to :doc: roles" }
-docbld = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = [
+docbld = { cmd = "bash docs/scripts/build_docs.sh", depends-on = [
   "fix-doc-links",
 ] }
 linkcheck = { cmd = "lychee --config lychee.toml 'docs/build/**/*.html'", depends-on = [

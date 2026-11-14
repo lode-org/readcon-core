@@ -81,9 +81,13 @@ def fix_text(t: str) -> str:
         stem = Path(m.group(2)).stem
         return f":doc:`{stem}`"
 
-    # Relative targets only: absolute URLs (https://.../foo.org) are real links
+    # Relative targets only: absolute URLs (https://.../foo.org) are real links.
+    # Newlines and '<' stay out of both classes so a backtick in a code block
+    # cannot swallow the following section up to the next .rst link.
     t = re.sub(
-        r"`([^\`<>]+)\s+<((?![a-z][a-z0-9+.-]*:)[^>]+?\.(?:rst|org))>`_", repl, t
+        r"`([^`<>\n]+)\s+<((?![a-z][a-z0-9+.-]*:)[^>\n<]+?\.(?:rst|org))>`_",
+        repl,
+        t,
     )
     t = re.sub(r"(\S)\./(\s|$)", r"\1.\2", t)
     return pad_grid_tables(t)
