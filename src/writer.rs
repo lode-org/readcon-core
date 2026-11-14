@@ -2827,6 +2827,191 @@ pub fn write_frame_refs_with_threads(
     Ok(out)
 }
 
+/// Format `frames` the way [`write_frame_refs_to_path`] does, and stop
+/// before the file exists.
+///
+/// The pieces are the writer's groups, not one buffer for the whole
+/// trajectory. Eight workers on a long run get one buffer per worker,
+/// the same bytes that worker would format into its mapping. Two and
+/// four workers get the pipeline's groups. One worker gets the serial
+/// formatter's buffer. Concatenating the pieces matches the file.
+pub fn format_frame_refs_unstored(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<Vec<u8>>, WriteError> {
+    if frames.is_empty() {
+        return Ok(Vec::new());
+    }
+    if workers < 2 || frames.len() < 2 {
+        return Ok(vec![format_group_bytes(
+            frames,
+            workers.max(1),
+            precision,
+            canonical,
+            bind,
+        )?]);
+    }
+    if (2..=workers).contains(&frames.len()) {
+        return format_frames_apart(frames, precision, canonical, bind);
+    }
+    let heavy = direct_slice_write(
+        workers,
+        frame_byte_weight(frames[0]).saturating_mul(frames.len()),
+    );
+    if heavy
+        && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
+    {
+        return format_packed_buffers(frames, &lengths, workers, precision, canonical, bind);
+    }
+    format_pipeline_groups(frames, workers, precision, canonical, bind)
+}
+
+/// One buffer per frame, the same split the file writer uses when there
+/// is a worker for every frame.
+fn format_frames_apart(
+    frames: &[&ConFrame],
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<Vec<u8>>, WriteError> {
+    let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
+    std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(frames.len());
+        for (index, frame) in frames.iter().enumerate() {
+            guards.push(scope.spawn(move || {
+                #[cfg(feature = "parallel")]
+                crate::parser::pin_worker(index);
+                format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
+            }));
+        }
+        for guard in guards {
+            parts.push(match guard.join() {
+                Ok(part) => part,
+                Err(_) => Err(WriteError::Io(io::Error::other("frame formatter panicked"))),
+            });
+        }
+    });
+    parts.into_iter().collect()
+}
+
+/// One exact-sized buffer per worker. The span is the mapping that
+/// worker would fill, and the bytes are formatted in place.
+fn format_packed_buffers(
+    frames: &[&ConFrame],
+    lengths: &[usize],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<Vec<u8>>, WriteError> {
+    let ranges = pack_frames_by_weight(lengths, workers);
+    let mut prefix = vec![0usize; lengths.len() + 1];
+    for (index, len) in lengths.iter().enumerate() {
+        prefix[index + 1] = prefix[index] + len;
+    }
+    if cfg!(miri) {
+        let mut parts = Vec::with_capacity(ranges.len());
+        for &(start, end) in &ranges {
+            parts.push(format_group_bytes(
+                &frames[start..end],
+                1,
+                precision,
+                canonical,
+                bind,
+            )?);
+        }
+        return Ok(parts);
+    }
+    let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(ranges.len());
+    std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(ranges.len());
+        for (thread, &(start, end)) in ranges.iter().enumerate() {
+            let span = prefix[end] - prefix[start];
+            let piece = &frames[start..end];
+            guards.push(scope.spawn(move || -> Result<Vec<u8>, WriteError> {
+                #[cfg(feature = "parallel")]
+                crate::parser::pin_worker(thread);
+                if span == 0 {
+                    return Ok(Vec::new());
+                }
+                let mut buf = vec![0u8; span];
+                format_group_into(piece, &mut buf, precision, canonical, bind)?;
+                Ok(buf)
+            }));
+        }
+        for guard in guards {
+            parts.push(match guard.join() {
+                Ok(part) => part,
+                Err(_) => Err(WriteError::Io(io::Error::other("frame formatter panicked"))),
+            });
+        }
+    });
+    parts.into_iter().collect()
+}
+
+/// The pipeline's groups, formatted and not written.
+fn format_pipeline_groups(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<Vec<Vec<u8>>, WriteError> {
+    let groups = workers.saturating_mul(4).max(workers);
+    let ranges = group_frame_ranges(frames, groups);
+    let pieces: Vec<&[&ConFrame]> = ranges
+        .iter()
+        .map(|&(start, end)| &frames[start..end])
+        .collect();
+    let format_threads = pipeline_format_threads(workers).min(pieces.len().max(1));
+    let next_job = std::sync::atomic::AtomicUsize::new(0);
+    let mut slots: Vec<Option<Result<Vec<u8>, WriteError>>> =
+        (0..pieces.len()).map(|_| None).collect();
+    std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(format_threads);
+        for _ in 0..format_threads {
+            let pieces = &pieces;
+            let next_job = &next_job;
+            guards.push(scope.spawn(move || {
+                let mut local = Vec::new();
+                loop {
+                    let index = next_job.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if index >= pieces.len() {
+                        break;
+                    }
+                    local.push((
+                        index,
+                        format_group_bytes(pieces[index], 1, precision, canonical, bind),
+                    ));
+                }
+                local
+            }));
+        }
+        for guard in guards {
+            let local = match guard.join() {
+                Ok(local) => local,
+                Err(_) => {
+                    return;
+                }
+            };
+            for (index, part) in local {
+                slots[index] = Some(part);
+            }
+        }
+    });
+    let mut out = Vec::with_capacity(slots.len());
+    for slot in slots {
+        let Some(part) = slot else {
+            return Err(WriteError::Io(io::Error::other("frame formatter panicked")));
+        };
+        out.push(part?);
+    }
+    Ok(out)
+}
+
 /// Byte weight of one frame: atom lines, counting each extra section.
 ///
 /// A velocity frame is about twice a coordinate frame of the same

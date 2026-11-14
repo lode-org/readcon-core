@@ -289,6 +289,12 @@ impl BlockCursor {
                 self.pending_len = 0;
             }
         }
+        if data.is_empty() {
+            // A short feed only filled `pending`. Falling through would
+            // reset `pending_len` from an empty remainder and drop those
+            // bytes on the next rank.
+            return;
+        }
         let (strides, rest) = data.as_chunks::<64>();
         for stride in strides {
             Self::mix(&mut self.lanes, stride, K);
@@ -603,6 +609,20 @@ mod tests {
             cursor.feed(&data[..split]);
             cursor.feed(&data[split..]);
             assert_eq!(cursor.finish(), block_hash(&data), "split {split}");
+            let mut cursor = BlockCursor::new();
+            cursor.feed(&data[..split]);
+            let saved = cursor.to_bytes();
+            let mut cursor = BlockCursor::from_bytes(&saved);
+            let mid = split + (data.len() - split) / 3;
+            cursor.feed(&data[split..mid.max(split)]);
+            let saved = cursor.to_bytes();
+            let mut cursor = BlockCursor::from_bytes(&saved);
+            cursor.feed(&data[mid.max(split)..]);
+            assert_eq!(
+                cursor.finish(),
+                block_hash(&data),
+                "serialized split {split}"
+            );
         }
     }
 
