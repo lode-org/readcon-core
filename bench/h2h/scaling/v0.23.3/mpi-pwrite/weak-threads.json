@@ -10,7 +10,7 @@
   "physical_cores": 8,
   "mpi": "absent",
   "gpu": "absent",
-  "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
+  "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b",
   "date_utc": "2026-11-15T00:50Z",
   "complete": true,
   "points": [

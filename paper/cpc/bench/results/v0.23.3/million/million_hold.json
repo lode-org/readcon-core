@@ -27,7 +27,7 @@
     "bytes": 48378118,
     "rss_bytes": 297426944,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-con",
@@ -57,7 +57,7 @@
     "bytes": 48378118,
     "rss_bytes": 435537920,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-con-gz",
@@ -87,7 +87,7 @@
     "bytes": 8733663,
     "rss_bytes": 294244352,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-con-gz",
@@ -117,7 +117,7 @@
     "bytes": 8733663,
     "rss_bytes": 633036800,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-con-zst",
@@ -147,7 +147,7 @@
     "bytes": 6662723,
     "rss_bytes": 296015872,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-con-zst",
@@ -177,7 +177,7 @@
     "bytes": 6662723,
     "rss_bytes": 612448256,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-conbin",
@@ -207,7 +207,7 @@
     "bytes": 65004144,
     "rss_bytes": 159934464,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   },
   {
     "arm": "readcon-conbin",
@@ -237,6 +237,6 @@
     "bytes": 65004144,
     "rss_bytes": 309049344,
     "loses": "none",
-    "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2"
+    "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b"
   }
 ]

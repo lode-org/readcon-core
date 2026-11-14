@@ -1,7 +1,7 @@
 note OVITO 3.17.2 reads extended XYZ periodicity and an out-of-cell second frame without wrapping or repeating frame 0.
 note A timed write is rejected unless its file is non-empty, inside that format's size range, and reads back at the full atom count. That check runs after the clock stops.
 note Every write sample except the 1M readcon-con row is the interleaved fresh-process measurement from this session. The clock is serialise and store of a structure that already exists: see each row's Clock note. The 1M readcon-con write is the back-to-back serial measurement, 0.1701 s. Default threads are 0.0577 s. Chemfiles has no CON writer, so its write cell is 'no writer'.
-commit 3d2118afa8265d8bf4395fb25deca2d5b27430e2
+commit acbb1d100bc192971f6c57c3fd204616f2b41a5b
 versions {"MDAnalysis": "2.11.0", "ase": "3.29.0", "chemfiles": "0.10.4", "extxyz": "0.4.6", "extxyz-ng": "not installed: 0.0.2 replaces the extxyz 0.4.6 import; extxyz 0.4.6 kept", "gemmi": "not installed", "h5py": "not installed", "mdcompress": "not installed", "mdtraj": "1.11.2", "numpy": "2.5.4", "ovito": "3.17.2", "readcon": "0.23.3"}
 ovito-extxyz {"drift_max_abs": 0.0, "file_frame1": [1.2, 6.4, -0.3], "file_pbc": [true, true, false], "frames": 2, "ovito": "3.17.2", "pbc_matches": true, "read_frame1": [1.2, 6.4, -0.3], "read_pbc": [[true, true, false], [true, true, false]], "stuck_on_frame0": false, "wrapped_into_cell": false}
 warmup 1 samples 12 percentile type7 serial 1

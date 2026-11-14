@@ -1,6 +1,6 @@
 {
-  "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
-  "measured_commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
+  "commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b",
+  "measured_commit": "acbb1d100bc192971f6c57c3fd204616f2b41a5b",
   "tree": "02569ffe41a51da8bfc812f3bdd5f964da752eca",
   "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "remote": "refs/heads/feat/release-0.23.0",

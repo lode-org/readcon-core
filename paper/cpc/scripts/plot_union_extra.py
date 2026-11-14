@@ -20,14 +20,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from chemparseplot.plot.theme import RUHI_COLORS
+from chemparseplot.plot.theme import RUHI_COLORS, build_cmap
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
 import plot_figures as pf
 
-# 1.11.0 keeps the Ruhi colours on the theme module and registers this
-# colormap from them. It has no chemparseplot.plot.palette.
-RUHI_SEQUENTIAL = "ruhi_diverging"
+# 1.11.0 has no chemparseplot.plot.palette. ruhi_diverging is not a
+# sequential map. This one runs from dark teal through sky to sunshine.
+build_cmap(
+    [RUHI_COLORS["teal"], RUHI_COLORS["sky"], RUHI_COLORS["sunshine"]],
+    "ruhi_sequential",
+)
+RUHI_SEQUENTIAL = "ruhi_sequential"
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
