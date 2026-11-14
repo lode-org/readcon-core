@@ -91,16 +91,16 @@ con-1e6 & 0.06178 (0.0003908, $n{=}12$) & 0.02031 (0.0004595, $n{=}12$) & 0.0104
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across ranks, write onto disk. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is $T(1)/(8T(8))$ of the times in the row. Each write unlinks the destination before the clock, so the row is a fresh file. camp17 replaces con-100k at 8 ranks, convel at 8 ranks, and con-1e6 at 4 and 8 ranks. Those cells are \texttt{bench/h2h/scaling/camp17/ranked.json} at \texttt{a3506688}, a fresh file on each sample. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
+\caption{Ranked writes onto ext4. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The 8-way column is $T(1)/(8T(8))$ of the times in the row. Copy is a plain copy of the formatted bytes. camp19 replaces con-1e6 at 4 and 8 ranks and con-100k and convel at 8 ranks. Those cells and the copy column are \texttt{bench/h2h/scaling/camp19} at \texttt{87beea40ae3c6f21bb7d24cbc7f879b9ed9312ff}. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-mpi-write-disk}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccccc@{}}
 \toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
+File & 1 & 2 & 4 & 8 & 8-way & Copy \\
 \midrule
-con-100k & 0.7151 (0.01058, $n{=}12$) & 0.3828 (0.004275, $n{=}12$) & 0.2092 (0.002924, $n{=}12$) & 0.1276 (0.006448, $n{=}12$) & 0.7007 \\
-convel & 1.18 (0.01319, $n{=}12$) & 0.6237 (0.008657, $n{=}12$) & 0.3529 (0.002861, $n{=}12$) & 0.225 (0.006982, $n{=}12$) & 0.6557 \\
-con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01668 (0.0009477, $n{=}12$) & 0.01328 (0.001501, $n{=}12$) & 0.3656 \\
+con-100k & 0.7151 (0.01058, $n{=}12$) & 0.3828 (0.004275, $n{=}12$) & 0.2092 (0.002924, $n{=}12$) & 0.07454 (0.0007132, $n{=}12$) & 1.199 & 0.02773 (0.003399, $n{=}12$) \\
+convel & 1.18 (0.01319, $n{=}12$) & 0.6237 (0.008657, $n{=}12$) & 0.3529 (0.002861, $n{=}12$) & 0.1235 (0.002406, $n{=}12$) & 1.195 & 0.05617 (0.001579, $n{=}12$) \\
+con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01652 (0.0008655, $n{=}12$) & 0.01372 (0.001071, $n{=}12$) & 0.3539 & 0.009349 (0.0009334, $n{=}12$) \\
 \bottomrule
 \end{tabular}
 }
@@ -109,16 +109,16 @@ con-1e6 & 0.03885 (0.0008203, $n{=}12$) & 0.0236 (0.0008695, $n{=}12$) & 0.01668
 \begin{table}[tbp]
 \centering
 \scriptsize
-\caption{Camp16b strong scaling across ranks, write into memory. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Each write unlinks the destination before the clock, so the row is a fresh file. Record \texttt{bench/h2h/scaling/camp16b} at \texttt{e3d33a13f77b7cd52b719ad114d5f419d969f81d}. The host record's commit is \texttt{d654635d5620fa75727aa74b418c55a0db0de8c6}. The summary base is \texttt{8cd3812dfb0fab0c9a9ee7858435534fa5e9be30}. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs, KVM.}
+\caption{Ranked writes onto tmpfs. Each entry is the type-7 median in seconds, the interquartile range, and $n$. The 8-way column is $T(1)/(8T(8))$ of the times in the row. Copy is a plain copy of the formatted bytes. camp19 replaces con-1e6 at 4 and 8 ranks and con-100k and convel at 8 ranks. Those cells and the copy column are \texttt{bench/h2h/scaling/camp19} at \texttt{87beea40}. The other times are camp16b, on the host in Table~\ref{tab:camp16b-threads-read-memory}.}
 \label{tab:camp16b-mpi-write-memory}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccccc@{}}
 \toprule
-File & 1 & 2 & 4 & 8 & 8-way \\
+File & 1 & 2 & 4 & 8 & 8-way & Copy \\
 \midrule
-con-100k & 0.7232 (0.004865, $n{=}12$) & 0.3685 (0.005509, $n{=}12$) & 0.1882 (0.002787, $n{=}12$) & 0.1019 (0.002683, $n{=}12$) & 0.8874 \\
-convel & 1.178 (0.01848, $n{=}12$) & 0.6038 (0.009655, $n{=}12$) & 0.3083 (0.002638, $n{=}12$) & 0.1689 (0.004321, $n{=}12$) & 0.8717 \\
-con-1e6 & 0.04014 (0.000827, $n{=}12$) & 0.02067 (0.0006917, $n{=}12$) & 0.01201 (0.0002637, $n{=}12$) & 0.007269 (0.0002458, $n{=}12$) & 0.6902 \\
+con-100k & 0.7232 (0.004865, $n{=}12$) & 0.3685 (0.005509, $n{=}12$) & 0.1882 (0.002787, $n{=}12$) & 0.06787 (0.00109, $n{=}12$) & 1.332 & 0.02474 (0.00294, $n{=}12$) \\
+convel & 1.178 (0.01848, $n{=}12$) & 0.6038 (0.009655, $n{=}12$) & 0.3083 (0.002638, $n{=}12$) & 0.1047 (0.000735, $n{=}12$) & 1.406 & 0.04374 (0.002905, $n{=}12$) \\
+con-1e6 & 0.04014 (0.000827, $n{=}12$) & 0.02067 (0.0006917, $n{=}12$) & 0.01168 (0.0003457, $n{=}12$) & 0.007274 (0.0005413, $n{=}12$) & 0.6898 & 0.007698 (0.0007759, $n{=}12$) \\
 \bottomrule
 \end{tabular}
 }

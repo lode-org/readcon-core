@@ -715,11 +715,12 @@ The one-thread disk write is 0.4678~s for con-100k and 0.03544~s for the million
 The eight-thread disk write of that frame is 0.01132~s.
 Those three times sit under the rel1 medians, 0.4688~s, 0.04132~s and 0.01203~s.
 The serial path fallocates the fresh file and spells into a shared mapping once the frame lengths are priced.
-Ranked ext4 writes publish a fresh file on each sample, so they are slower than camp5c, which rewrote a warm inode.
-The million-atom frame at 8 ranks takes 0.01328~s.
-camp5c recorded 0.007466~s for that cell.
-An opt-in rewrite path writes over a spare.
-On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.7845 for threaded convel, 0.8874 for MPI con-100k and 0.8717 for MPI convel.
+camp19 replaces the ranked writes named in the ext4 and tmpfs captions.
+The record is \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
+The million-atom frame at 8 ranks on ext4 takes 0.01372~s.
+camp5c's warm-inode overwrite of that cell is 0.007465~s.
+A plain copy of the same bytes takes 0.009349~s.
+On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.7845 for threaded convel.
 The weak parses are Table~\ref{tab:camp16b-weak}.
 Eight threads keep the time at 0.1225~s, and \(T(1)/T(8)\) is 0.884.
 Eight ranks keep the time at 0.02963~s, and \(T(1)/T(8)\) is 0.9858.
@@ -765,6 +766,7 @@ The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\
 The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a124}.
 Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
 The con-100k and con-1e6 reads are \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
+The ranked writes and the plain-copy column are \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
 The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
