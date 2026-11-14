@@ -130,7 +130,10 @@ def test_mmcif_reader_is_one_model(tmp_path: Path) -> None:
     arms, notes = cross_format.arm_table(4)
     row = next((arm for arm in arms if arm["id"] == "mda-mmcif"), None)
     if row is None:
-        assert any("mda-mmcif omitted" in note for note in notes)
+        assert any(
+            "mda-mmcif omitted" in note or "MDAnalysis is not installed" in note
+            for note in notes
+        )
         return
     assert row["one_model"] is True
     assert row["no_writer"] is True
