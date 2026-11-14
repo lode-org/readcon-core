@@ -210,14 +210,10 @@ The ASE trajectory keeps every field in a layout that the Python code of ASE def
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
 Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
-OVITO 3.17.2 writes the periodic boundary conditions of the simulation cell into every extended XYZ file \cite{ovitoChangelog3172026}.
-The reader accepts whitespace around an equals sign, escape sequences inside quoted strings, and the array values \texttt{[1, 2, 3]} and \texttt{[[1, 2], [3, 4]]}.
-An array-valued parameter is a list-valued global attribute, a tuple in Python, and a logical parameter is a Boolean attribute.
-A text column of data format \texttt{S}, of any name, is a particle property of type string.
-MDAnalysis 2.11.0 reads one frame of an mmCIF/PDBx file, including a gzipped \texttt{.cif.gz}, through the optional gemmi library \cite{alibayMdanalysisRelease21102026}.
-extxyz-ng 0.0.2 parses extended XYZ in Rust \cite{yuExtxyzNgV0022026}.
-An info line that is not a key-value pair is unextended XYZ with the default \texttt{Properties} shape.
-An integer in an array is promoted to a float, and no other promotion is defined.
+OVITO can write the periodicity of the simulation cell into an extended XYZ file, and that file has no place for a per-component constraint or a velocity unit.
+MDAnalysis can read one model of an mmCIF/PDBx file, with positions and a cell, and it has no element for that mask.
+extxyz-ng reads extended XYZ \cite{yuExtxyzNgV0022026}.
+An info line that is not a key-value pair is plain XYZ, which carries neither the cell nor the mask.
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.
 Particle physics fixed the files that pass between independent event generators in published texts: the Les Houches event file \cite{Alwall2007LHEF}, the second Les Houches Accord for supersymmetric spectra \cite{Allanach2009SLHA2} and the HepMC3 library for generator events \cite{Buckley2021HepMC3}.
@@ -576,8 +572,6 @@ They agree on \(\mutantSame\) of them, with the same frame count or error class.
 The other \(\mutantDiffer\) fall in \(\mutantGroups\) cases that no clause decides: a count line that breaks two clauses at once, a number in the header past the binary64 range, and a carriage return as the last byte of the input.
 A variant of the independent reader that follows readcon-core on each of those cases returns its verdict on all of them.
 
-The release runs 19,545 differential cases mutated from its test files and its conformance corpus.
-Every case is read from a string, from bytes, from a plain and a gzip file at one to sixteen threads, through the column readers and through the stream reader, and each read returns the frame count, coordinates and section presence of the one-thread string read or stops with its error at the same line.
 Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library, and the other \(\clauseUncovered\) state no duty of a reader, such as the rules for revising the specification.
 
 One name must mean one language for every reader that carries it.
@@ -882,4 +876,5 @@ Chatbots were used to refine certain turns of phrase and to speed through some i
 
 \bibliographystyle{elsarticle-num}
 
-\bibliography{rg_main} \end{document}
+\bibliography{rg_main}
+\end{document}
