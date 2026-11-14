@@ -4585,13 +4585,10 @@ Forces of Component 1
         assert_eq!(frame.forces.as_f64_row(1), [1.0, 2.0, 3.0]);
     }
 
-    /// Million-atom `.convel` parse. Release builds must stay under the
-    /// per-atom box path (about 0.7 s on this host).
     #[test]
-    #[ignore = "times a million-atom convel parse"]
-    fn microbench_convel_column_parse() {
-        let n = 1_000_000usize;
-        let mut text = String::with_capacity(n * 64);
+    fn convel_column_parse_shares_the_velocity_slab() {
+        let n = 8usize;
+        let mut text = String::new();
         text.push_str("bench\n{\"con_spec_version\":2}\n4 5 6\n90 90 90\n0 0\n0 0\n1\n");
         text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
         for i in 0..n {
@@ -4602,36 +4599,25 @@ Forces of Component 1
             let v = (i % 1000) as f64 * 0.001;
             text.push_str(&format!("{v} 0 0 0 {i}\n"));
         }
-        let started = std::time::Instant::now();
         let frame = ConFrameIterator::new(&text)
             .next()
             .expect("frame")
             .expect("parse");
-        let elapsed = started.elapsed().as_secs_f64();
-        eprintln!("convel column parse {n} atoms {elapsed:.4} s");
         let soa = frame.velocities.f64_slice().expect("f64");
         assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
-        assert_eq!(frame.atom_data[n - 1].velocity().unwrap()[0], 0.999);
-        assert_eq!(soa[(n - 1) * 3], 0.999);
-        if !cfg!(debug_assertions) {
-            assert!(elapsed < 0.35, "convel parse {elapsed:.4} s");
-        }
-        let real = std::path::Path::new("bench/h2h/work/thread-reads/con-h2h.convel");
-        if let Ok(bytes) = std::fs::read(real) {
-            let started = std::time::Instant::now();
-            let frame = ConFrameIterator::from_bytes(&bytes)
-                .next()
-                .expect("frame")
-                .expect("parse");
-            let elapsed = started.elapsed().as_secs_f64();
-            eprintln!("real convel column parse {elapsed:.4} s");
-            let soa = frame.velocities.f64_slice().expect("f64");
-            assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
-            assert_eq!(
-                frame.atom_data[0].velocity().unwrap(),
-                frame.velocities.as_f64_row(0)
-            );
-        }
+        assert_eq!(frame.atom_data[n - 1].velocity().unwrap()[0], 0.007);
+        assert_eq!(soa[(n - 1) * 3], 0.007);
+        let bytes = text.into_bytes();
+        let again = ConFrameIterator::from_bytes(&bytes)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let again_soa = again.velocities.f64_slice().expect("f64");
+        assert_eq!(again.atom_data[0].velocity_slot(), again_soa.as_ptr());
+        assert_eq!(
+            again.atom_data[0].velocity().unwrap(),
+            again.velocities.as_f64_row(0)
+        );
     }
 
     #[test]

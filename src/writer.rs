@@ -3964,6 +3964,7 @@ mod float_format_tests {
         }
     }
 
+    #[test]
     fn round_trip_spelling_matches_ryu_on_repeated_and_unique_rows() {
         use crate::iterators::ConFrameIterator;
         use crate::writer::ConFrameWriter;

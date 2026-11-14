@@ -1685,6 +1685,29 @@ mod tests {
         write_values(&mut file, &vel).unwrap();
     }
 
+    #[test]
+    fn every_prefetch_reads_the_same_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wide.conbin");
+        write_known(&path, 2, 64);
+        let span = map_file_with(&path, 2, Prefetch::Span).unwrap();
+        let expect_pos = span.positions_f64().unwrap().to_vec();
+        let expect_vel = span.velocities_f64().unwrap().to_vec();
+        assert_eq!(expect_pos.len(), 2 * 64 * 3);
+        for mode in [
+            Prefetch::ChunkPopulate,
+            Prefetch::ChunkWillneed,
+            Prefetch::Hybrid,
+        ] {
+            let mapped = map_file_with(&path, 2, mode).unwrap();
+            assert_eq!(mapped.positions_f64().unwrap(), expect_pos.as_slice());
+            assert_eq!(mapped.velocities_f64().unwrap(), expect_vel.as_slice());
+        }
+        let expect = expect_pos.iter().sum::<f64>() + expect_vel.iter().sum::<f64>();
+        assert_eq!(sum_split_streams(&path, 2).unwrap(), expect);
+        assert_eq!(sum_mapped(&path, 2).unwrap(), expect);
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn worker_span_shares_the_queue() {
