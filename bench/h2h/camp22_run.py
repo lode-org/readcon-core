@@ -590,6 +590,10 @@ def compressed() -> None:
     for sink, root in sinks:
         for codec in ("gzip", "zstd"):
             for members, threads in ((1, 1), (8, 1), (8, 2), (8, 4), (8, 8)):
+                path = (
+                    root
+                    / f"million-{codec}-{members}.con.{'gz' if codec == 'gzip' else 'zst'}"
+                )
                 for op in ("write", "read"):
                     if have(
                         rows,
@@ -601,61 +605,62 @@ def compressed() -> None:
                         file="con-1e6",
                     ):
                         continue
-                    path = (
-                        root
-                        / f"million-{codec}-{members}.con.{'gz' if codec == 'gzip' else 'zst'}"
-                    )
 
-                def write() -> None:
-                    path.unlink(missing_ok=True)
-                    readcon.write_con(
-                        os.fspath(path),
-                        frames,
-                        compression=codec,
-                        n_threads=threads,
-                        compression_members=members,
-                    )
+                    def write(
+                        path: Path = path,
+                        codec: str = codec,
+                        threads: int = threads,
+                        members: int = members,
+                    ) -> None:
+                        path.unlink(missing_ok=True)
+                        readcon.write_con(
+                            os.fspath(path),
+                            frames,
+                            compression=codec,
+                            n_threads=threads,
+                            compression_members=members,
+                        )
 
-                def read() -> None:
-                    readcon.read_con(os.fspath(path), n_threads=threads)
+                    def read(path: Path = path, threads: int = threads) -> None:
+                        readcon.read_con(os.fspath(path), n_threads=threads)
 
-                write()
-                go = write if op == "write" else read
-                samples = []
-                for _ in range(REPEATS):
-                    started = time.perf_counter()
-                    go()
-                    samples.append(time.perf_counter() - started)
-                med, iqr = stats(samples)
-                row = {
-                    "op": op,
-                    "codec": codec,
-                    "file": "con-1e6",
-                    "sink": sink,
-                    "members": members,
-                    "threads": threads,
-                    "kind": "threads",
-                    "median_s": med,
-                    "iqr_s": iqr,
-                    "samples_s": samples,
-                    "bytes": path.stat().st_size,
-                }
-                if op == "write":
-                    copied = append_cp(
-                        path,
-                        file="con-1e6",
-                        sink=sink,
-                        codec=codec,
-                        members=members,
-                        payload="compressed",
+                    write()
+                    go = write if op == "write" else read
+                    samples = []
+                    for _ in range(REPEATS):
+                        started = time.perf_counter()
+                        go()
+                        samples.append(time.perf_counter() - started)
+                    med, iqr = stats(samples)
+                    row = {
+                        "op": op,
+                        "codec": codec,
+                        "file": "con-1e6",
+                        "sink": sink,
+                        "members": members,
+                        "threads": threads,
+                        "kind": "threads",
+                        "median_s": med,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "bytes": path.stat().st_size,
+                    }
+                    if op == "write":
+                        copied = append_cp(
+                            path,
+                            file="con-1e6",
+                            sink=sink,
+                            codec=codec,
+                            members=members,
+                            payload="compressed",
+                        )
+                        row["cp_s"] = copied["median_s"]
+                    rows.append(row)
+                    print(
+                        f"{codec} {op} {sink} members={members} threads={threads} {med:.4f}",
+                        flush=True,
                     )
-                    row["cp_s"] = copied["median_s"]
-                rows.append(row)
-                print(
-                    f"{codec} {op} {sink} members={members} threads={threads} {med:.4f}",
-                    flush=True,
-                )
-                save_rows(dest, rows, repeats=REPEATS, warmup=1)
+                    save_rows(dest, rows, repeats=REPEATS, warmup=1)
     groups: dict[tuple, float] = {}
     for row in rows:
         if row.get("threads") == 1 and row.get("members") == 8:
