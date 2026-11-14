@@ -1843,6 +1843,23 @@ pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteErr
     Ok(buf)
 }
 
+/// Binding header plus the first species label, and no coordinate row.
+///
+/// [`format_coordinate_lines`] of every atom in a one-component frame
+/// continues these bytes and matches [`ConFrameWriter::write_frame_bound`].
+pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
+    let mut header = binding_header_bytes(frame)?;
+    if frame.atom_data.is_empty() {
+        return Ok(header);
+    }
+    let with_one = format_coord_range(frame, 0, 1);
+    let one = format_coordinate_lines(&frame.atom_data[..1])?;
+    if let Some(species) = with_one.strip_suffix(one.as_slice()) {
+        header.extend_from_slice(species);
+    }
+    Ok(header)
+}
+
 /// Coordinate lines for atoms `begin..end`, including a species header when
 /// the range contains the first atom of that species.
 pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
@@ -6560,6 +6577,31 @@ mod parallel_write_bytes {
             );
         }
         builder.build().expect("frame")
+    }
+
+    #[test]
+    fn a_binding_header_plus_coordinate_lines_match_the_bound_writer() {
+        let frame = copper_frame(4, "Cu", 63.546, |i| i as u64);
+        let header = super::wide_frame_header(&frame).expect("header");
+        let coords = super::format_coordinate_lines(&frame.atom_data).expect("coords");
+        let mut full = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut full);
+            writer.write_frame_bound(&frame).expect("bound");
+            writer.flush().expect("flush");
+        }
+        let mut got = header.clone();
+        got.extend(coords);
+        assert_eq!(got, full);
+        // Two ranks each format their own atom slice. The file is the same
+        // bytes as the one-rank binding write.
+        let mid = frame.atom_data.len() / 2;
+        let left = super::format_coordinate_lines(&frame.atom_data[..mid]).expect("left");
+        let right = super::format_coordinate_lines(&frame.atom_data[mid..]).expect("right");
+        let mut split = header;
+        split.extend(left);
+        split.extend(right);
+        assert_eq!(split, full);
     }
 
     #[test]

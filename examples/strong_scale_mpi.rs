@@ -109,8 +109,12 @@ fn main() {
         let range = rank_line_range(&file_bytes, start, end, comm.rank(), comm.size());
         let symbol = component_symbol(&file_bytes);
         let rows = atoms_from_lines(&file_bytes[range], &symbol);
+        // The one-rank path writes this frame with `write_frame_bound`,
+        // which stamps the binding header. Copying the file's own header
+        // left that stamp off every wider run (43 bytes on the million-atom
+        // file). The coordinate lines already match.
         let header = if comm.rank() == 0 {
-            file_bytes[..start].to_vec()
+            readcon_core::writer::wide_frame_header(&held.frames[0]).expect("header")
         } else {
             Vec::new()
         };
