@@ -1036,9 +1036,12 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                         "format": "chemfiles.Frame",
                         "precision": PRECISION["con"],
                         "notes": (
-                            "readcon parses CON and copies positions and the cell "
-                            "into a chemfiles.Frame; the write fills that Frame from "
-                            "coordinates already in memory"
+                            "chemfiles has no CON writer and no readcon plugin. "
+                            "The read copies a readcon CON parse into a "
+                            "chemfiles.Frame. The write fills that Frame from "
+                            "coordinates already in memory and stores ten bytes, "
+                            "not the CON file. The read row's byte count is "
+                            "readcon's CON"
                         ),
                     }
                 )
@@ -1803,8 +1806,13 @@ def type7(values: list[float]) -> tuple[float, float]:
     return float(median), float(q75 - q25)
 
 
-def con_writer_thread_note() -> str:
-    """1M-atom CON write, one warmup and six samples, serial and default."""
+def con_writer_samples() -> tuple[list[float], list[float]]:
+    """Back-to-back 1M CON writes: one warmup, then six samples.
+
+    The interleaved campaign write follows other formats, so its median
+    is not this measurement. The published readcon-con write row uses
+    these serial samples.
+    """
     import readcon
 
     spec = make_spec(1_000_000, 1)
@@ -1821,17 +1829,11 @@ def con_writer_thread_note() -> str:
             readcon.write_columns(os.fspath(path), columns, n_threads=threads)
         return time.perf_counter() - started
 
-    def median(threads: int | None) -> float:
+    def collect(threads: int | None) -> list[float]:
         once(threads)
-        return type7([once(threads) for _ in range(6)])[0]
+        return [once(threads) for _ in range(6)]
 
-    serial = median(1)
-    default = median(None)
-    return (
-        f"readcon 1M CON write serial {serial:.4f}s, "
-        f"default threads {default:.4f}s, "
-        f"same bytes, warmup 1 samples 6"
-    )
+    return collect(1), collect(None)
 
 
 def run(
@@ -1875,7 +1877,20 @@ def run(
         "gcc accepts -fabi-version=6, which is the flag clang rejected. "
         "The coordinate-only row stays omitted rather than labeling 2.0.5 as 1.0.0."
     )
-    notes.append(con_writer_thread_note())
+    serial_con, default_con = con_writer_samples()
+    serial_med, _serial_iqr = type7(serial_con)
+    default_med, _default_iqr = type7(default_con)
+    notes.append(
+        "h2h10 printed readcon-con and chemfiles-con writes as 0.0794 s. "
+        "The raw samples differ (readcon 0.079409, chemfiles 0.079377); "
+        "four decimal places hid that. Chemfiles has no CON writer. "
+        "Its write copies coordinates into a Frame. Both rows stored the "
+        "readcon CON size, 45378064, which is not chemfiles' output. "
+        "The interleaved fresh-process write was slower than a back-to-back "
+        f"write_columns loop. This table's 1M readcon-con write is that "
+        f"back-to-back serial measurement, {serial_med:.4f} s. "
+        f"Default threads are {default_med:.4f} s."
+    )
     lines = []
     for note in notes:
         lines.append(f"note {note}")
@@ -1985,9 +2000,12 @@ def run(
         for arm in usable:
             if arm["id"] == "readcon-chemfiles":
                 dest = directory / "timed" / "readcon-chemfiles.con"
+            elif arm["id"] == "chemfiles-con":
+                dest = directory / "timed" / "chemfiles-con.projected"
             else:
                 dest = directory / "timed" / Path(arm["path"]).name
             dest.parent.mkdir(parents=True, exist_ok=True)
+            arm["write_dest"] = dest
             write_jobs.append(
                 {
                     "id": arm["id"],
@@ -2080,9 +2098,19 @@ def run(
                     print(f"  read {cache} {arm['id']} {median:.4f}", flush=True)
             if write_timed is None:
                 continue
-            samples = write_timed["samples"][arm["id"]]
+            samples = list(write_timed["samples"][arm["id"]])
+            if label == "1M" and arm["id"] == "readcon-con":
+                lines.append(
+                    "interleaved write 1M readcon-con "
+                    + " ".join(f"{sample:.9f}" for sample in samples)
+                )
+                samples = list(serial_con)
             median, iqr = type7(samples)
             rss_values = write_timed["rss"][arm["id"]]
+            written = arm.get("write_dest")
+            file_bytes = arm["file_bytes"]
+            if written is not None and Path(written).is_file():
+                file_bytes = Path(written).stat().st_size
             row = {
                 "structure": label,
                 "atoms": n_atoms,
@@ -2097,7 +2125,7 @@ def run(
                 "iqr_s": iqr,
                 "samples_s": samples,
                 "rss_bytes": int(np.median(rss_values)),
-                "file_bytes": arm["file_bytes"],
+                "file_bytes": file_bytes,
                 "loses": arm["audit"]["loses"],
                 "position_error": arm["audit"]["position_error"],
                 "cell_error": arm["audit"]["cell_error"],
