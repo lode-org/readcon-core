@@ -2242,50 +2242,6 @@ fn accumulate_frames(text: &str) -> Result<FrameColumns, ParseError> {
     })
 }
 
-fn accumulate_text(text: &str, threads: usize) -> Result<FrameColumns, ParseError> {
-    let Some(span) = equal_frame_span(text) else {
-        return accumulate_frames(text);
-    };
-    let n = text.len() / span;
-    let threads = threads.max(1).min(n);
-    if threads < 2 {
-        return accumulate_frames(text);
-    }
-    let mut parts = Vec::with_capacity(threads);
-    std::thread::scope(|scope| {
-        let mut jobs = Vec::with_capacity(threads);
-        for thread in 0..threads {
-            let start = n * thread / threads;
-            let end = n * (thread + 1) / threads;
-            let chunk = &text[start * span..end * span];
-            jobs.push(scope.spawn(move || accumulate_frames(chunk)));
-        }
-        for job in jobs {
-            parts.push(job.join().expect("frame parse"));
-        }
-    });
-    let mut merged = parts.remove(0)?;
-    for part in parts {
-        let part = part?;
-        if part.n_atoms != merged.n_atoms {
-            return Err(ParseError::InvalidCount(
-                "CON-bin requires the same atom count in every frame".into(),
-            ));
-        }
-        merged.n_frames += part.n_frames;
-        merged.any_force |= part.any_force;
-        merged.any_velocity |= part.any_velocity;
-        merged.positions.extend(part.positions);
-        merged.velocities.extend(part.velocities);
-        merged.forces.extend(part.forces);
-        merged.masses.extend(part.masses);
-        merged.fixed.extend(part.fixed);
-        merged.cells.extend(part.cells);
-        merged.ids.extend(part.ids);
-    }
-    Ok(merged)
-}
-
 fn equal_parts(text: &str, threads: usize) -> Result<Option<Vec<(u64, FrameColumns)>>, ParseError> {
     let Some(span) = equal_frame_span(text) else {
         return Ok(None);
@@ -2496,7 +2452,7 @@ fn write_conbin_body(
     }
     write_header_page(file, &ConBinHeader::version1(0, 0, binary32, true), page)?;
 
-    let built = accumulate_text(text, threads)?;
+    let built = accumulate_frames(text)?;
     let n_frames = built.n_frames;
     let n_atoms = built.n_atoms;
     let positions = built.positions;
@@ -2583,14 +2539,70 @@ mod tests {
         assert_eq!(vel[1], -0.5);
     }
 
+    /// Four atoms per frame, one shared header line, coordinates that move.
+    ///
+    /// Fixed widths keep `equal_frame_span` able to split the file. A test
+    /// that repeats one frame still passes if the chunks are written backwards.
+    fn distinct_frames(n: usize) -> String {
+        let mut text = String::new();
+        for frame in 0..n {
+            text.push_str(
+                "distinct\n{\"con_spec_version\":2}\n10.0 10.0 10.0\n90.0 90.0 90.0\n0 0\n0 0\n1\n4\n63.546\nCu\nCoordinates of Component 1\n",
+            );
+            for atom in 0..4 {
+                text.push_str(&format!(
+                    "{:10.4} {:10.4} {:10.4} 0 {:3}\n",
+                    frame as f64 + atom as f64 * 0.25,
+                    0.5,
+                    1.5,
+                    atom
+                ));
+            }
+        }
+        text
+    }
+
+    fn positions_in_part_order(text: &str, threads: usize) -> Vec<f64> {
+        let parts = equal_parts(text, threads).unwrap().unwrap();
+        let mut out = Vec::new();
+        for (_, columns) in parts {
+            out.extend(columns.positions);
+        }
+        out
+    }
+
+    /// The bug the identical-copy test missed: later chunks labeled as earlier frames.
+    fn positions_if_chunks_are_reversed(text: &str, threads: usize) -> Vec<f64> {
+        let span = equal_frame_span(text).unwrap();
+        let n = text.len() / span;
+        let threads = threads.max(1).min(n);
+        let mut chunks = Vec::with_capacity(threads);
+        for thread in 0..threads {
+            let start = n * thread / threads;
+            let end = n * (thread + 1) / threads;
+            chunks.push(accumulate_frames(&text[start * span..end * span]).unwrap());
+        }
+        chunks.reverse();
+        let mut out = Vec::new();
+        for columns in chunks {
+            out.extend(columns.positions);
+        }
+        out
+    }
+
     #[test]
     fn repeated_frames_on_several_threads_match_one_thread() {
-        let src =
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/test/cuh2.con");
-        let frame = std::fs::read_to_string(&src).unwrap();
+        let text = distinct_frames(8);
+        let serial_positions = accumulate_frames(&text).unwrap().positions;
+        assert_eq!(positions_in_part_order(&text, 4), serial_positions);
+        assert_ne!(
+            positions_if_chunks_are_reversed(&text, 4),
+            serial_positions,
+            "reversed chunks of identical frames would still match"
+        );
         let dir = tempfile::tempdir().unwrap();
         let input = dir.path().join("in.con");
-        std::fs::write(&input, frame.repeat(4)).unwrap();
+        std::fs::write(&input, &text).unwrap();
         for binary32 in [false, true] {
             let one = dir.path().join(format!("one-{binary32}.conbin"));
             write_from_con_with_threads(&input, &one, binary32, 1).unwrap();
