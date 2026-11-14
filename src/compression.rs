@@ -1051,7 +1051,8 @@ fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
                 "gzip member does not fill its index slice",
             ));
         }
-        Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {}
+        // A trailer cut by 1–8 bytes surfaces here. Treating that as a
+        // finished member skipped the CRC and size checks.
         Err(err) => return Err(err),
     }
     let consumed = decoder.get_ref().position() as usize;
@@ -2181,6 +2182,41 @@ mod tests {
         assert_eq!(gunzip_all(&bytes).unwrap(), data);
         bytes.truncate(bytes.len().saturating_sub(8).max(1));
         assert!(gunzip_all(&bytes).is_err());
+    }
+
+    #[test]
+    fn a_gzip_trailer_cut_by_one_to_eight_bytes_fails_both_decoders() {
+        let data = b"Cu 1.0 2.0 3.0 0 1\n".repeat(64);
+        let member = gzip_member(&data).unwrap();
+        assert_eq!(gunzip_member(&member).unwrap(), data);
+        for cut in 1..=8 {
+            let short = &member[..member.len() - cut];
+            assert!(
+                gunzip_member(short).is_err(),
+                "one member cut by {cut} bytes"
+            );
+            let one = with_serial_decode(|| codec_inflate(short, 1));
+            assert!(one.is_err(), "one-thread cut by {cut} bytes: {one:?}");
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("indexed.con.gz");
+        assert!(write_gzip_members_n(&path, &data, 4).unwrap() > 1);
+        let indexed = std::fs::read(&path).unwrap();
+        assert_eq!(codec_inflate(&indexed, 4).unwrap(), data);
+        assert_eq!(
+            with_serial_decode(|| codec_inflate(&indexed, 1)).unwrap(),
+            data
+        );
+        for cut in 1..=8 {
+            let short = &indexed[..indexed.len() - cut];
+            let parallel = codec_inflate(short, 4);
+            assert!(
+                parallel.is_err(),
+                "indexed slice cut by {cut} bytes: {parallel:?}"
+            );
+            let one = with_serial_decode(|| codec_inflate(short, 1));
+            assert!(one.is_err(), "one-thread file cut by {cut} bytes: {one:?}");
+        }
     }
 
     #[test]
