@@ -4349,11 +4349,11 @@ fn write_stamped_frame<W: std::io::Write>(
     writer.write_frame_binding(&mut stamped)
 }
 
-/// Stored frames from a `read_con` result, in order.
+/// One column frame for a write.
 ///
-/// A slot that is still held is cloned. A slot already moved into a Python
-/// frame is rebuilt from that frame. Collective and serial writes of the
-/// same result then start from the same frames.
+/// The cache holds a Python frame after that index has been accessed.
+/// An access is enough: the frame does not have to have been edited.
+/// An index that is still only in the slabs is written from the store.
 fn column_frame_for_write(
     py: Python<'_>,
     list: &Bound<'_, ConFrameList>,
@@ -4857,8 +4857,8 @@ fn write_con(
                         .map_err(|err| write_err_to_py(py, err))?;
                     } else if list.borrow().columns.is_some() {
                         // The slabs already hold the trajectory. Walk them
-                        // one frame at a time, and use a cached Python frame
-                        // only when that index was edited.
+                        // one frame at a time. Use the cached Python frame
+                        // when that index has already been accessed.
                         let mut writer = if let Some(precision) = precision {
                             crate::writer::ConFrameWriter::from_path_with_precision(path, precision)
                                 .map_err(|e| {
