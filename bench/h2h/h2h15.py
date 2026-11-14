@@ -39,7 +39,7 @@ sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
-from measured_commit import measurement, record_path, require_built_from  # noqa: E402
+from measured_commit import measurement, record_path, refuse_stale_build  # noqa: E402, F401
 from sample_protocol import (  # noqa: E402
     peak_rss_bytes,
     pin_cores,
@@ -605,16 +605,9 @@ def run(out: Path, repeats: int = 12) -> None:
     """
     if repeats < 12:
         raise SystemExit("h2h15 takes at least 12 samples")
-    ident = measurement(ROOT)
+    ident = refuse_stale_build(ROOT)
     head = ident["commit"]
     import readcon
-
-    require_built_from(
-        head,
-        ident["tree"],
-        str(getattr(readcon, "__commit__", "")),
-        str(getattr(readcon, "__tree__", "")),
-    )
     pin_mdcompress()
     version = readcon.__version__
     out.mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from bench_disk import bench_disk
-from measured_commit import measurement, record_path
+from measured_commit import measurement, record_path, refuse_stale_build
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
@@ -1314,6 +1314,7 @@ def weak_compressed() -> None:
 
 
 def conbin_writes() -> None:
+    refuse_stale_build(ROOT)
     use_harness("python time.perf_counter in-process")
     import readcon
 
@@ -1482,7 +1483,7 @@ def _capture(cmd: list[str]) -> str:
 
 
 def host() -> None:
-    ident = measurement(ROOT)
+    ident = refuse_stale_build(ROOT)
     disk = bench_disk()
     lscpu = subprocess.run(["lscpu"], text=True, capture_output=True, check=True).stdout
     model = ""

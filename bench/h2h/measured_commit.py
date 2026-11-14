@@ -66,13 +66,48 @@ def require_published(
     return refs
 
 
+def source_digest(root: Path) -> str:
+    """SHA-256 of ``src/`` plus ``Cargo.lock``, in the order ``build.rs`` uses.
+
+    A new commit that does not change those files is the same build. A module
+    whose baked digest differs was not compiled from this tree.
+    """
+    paths = [path for path in (root / "src").rglob("*") if path.is_file()]
+    lock = root / "Cargo.lock"
+    if lock.is_file():
+        paths.append(lock)
+    paths.sort(key=lambda path: path.relative_to(root).as_posix())
+    digest = hashlib.sha256()
+    for path in paths:
+        rel = path.relative_to(root).as_posix().encode()
+        digest.update(rel)
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def require_built_from(
-    head: str, tree: str, built_commit: str, built_tree: str
+    head: str,
+    tree: str,
+    built_commit: str,
+    built_tree: str,
+    built_digest: str = "",
+    source_digest: str = "",
 ) -> None:
-    """Refuse an installed module that was not built from ``HEAD``."""
+    """Refuse an installed module that was not built from this tree.
+
+    The source digest matches when ``src/`` and ``Cargo.lock`` match, even
+    after a re-stamp that only moves ``HEAD``. The git commit and tree are
+    the fallback for a module that has no digest.
+    """
+    baked = (built_digest or "").strip()
+    current = (source_digest or "").strip()
+    blank = {"", "unknown"}
+    if baked not in blank and current not in blank and baked == current:
+        return
     commit = (built_commit or "").strip()
     built = (built_tree or "").strip()
-    blank = {"", "unknown"}
     if (commit not in blank and commit == head) or (
         built not in blank and built == tree
     ):
@@ -82,6 +117,22 @@ def require_built_from(
         f"{head} (module commit {commit or 'missing'}, "
         f"tree {built or 'missing'})"
     )
+
+
+def refuse_stale_build(root: Path) -> dict[str, str]:
+    """``measurement`` plus ``require_built_from`` for the imported module."""
+    ident = measurement(root)
+    import readcon
+
+    require_built_from(
+        ident["commit"],
+        ident["tree"],
+        str(getattr(readcon, "__commit__", "")),
+        str(getattr(readcon, "__tree__", "")),
+        str(getattr(readcon, "__source_digest__", "")),
+        source_digest(root),
+    )
+    return ident
 
 
 def _git(root: Path, *args: str, binary: bool = False) -> str | bytes:

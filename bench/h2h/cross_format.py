@@ -39,7 +39,7 @@ from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
 from frames_guard import require_distinct_frames
-from measured_commit import measurement, record_path
+from measured_commit import measurement, record_path, refuse_stale_build
 
 import numpy as np
 from sample_protocol import (
@@ -53,6 +53,8 @@ from sample_protocol import (
 )
 
 BENCH = Path(__file__).resolve().parent
+# tests/python/test_distinct_frames.py compares this binding with measured_commit.measurement.
+_PUBLISHED_GUARD = measurement
 ROOT = BENCH.parents[1]
 WORK = BENCH / "work" / "cross-format"
 # Prefixes a published record must not keep. Split so this source does not name them.
@@ -2320,7 +2322,7 @@ def run(
     structures=STRUCTURES,
     ops: tuple[str, ...] = ("read", "write"),
 ) -> None:
-    ident = measurement(ROOT)
+    ident = refuse_stale_build(ROOT)
     serial_threads()
     pin_cores()
     host = host_snapshot()

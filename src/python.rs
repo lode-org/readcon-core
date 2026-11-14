@@ -2,19 +2,19 @@ use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
 };
-use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyTypeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyIterator, PyList, PySequence, PySlice, PyString, PyTuple};
+use pyo3::IntoPyObjectExt;
 use serde_json::{Number, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::error::ParseError;
 use crate::iterators::ConFrameIterator;
-use crate::types::{AtomDatum, ConFrame, ConFrameBuilder, meta};
+use crate::types::{meta, AtomDatum, ConFrame, ConFrameBuilder};
 use crate::writer::ConFrameWriter;
 
 /// Python-visible atom data.
@@ -3542,6 +3542,7 @@ fn write_python_frame(
         && let Some(inner) = frame.inner.as_ref()
         && !inner.atom_data.is_empty()
     {
+        #[cfg(any(test, feature = "borrow-path-counts"))]
         BORROW_FRAME_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         write(inner)?;
         return Ok(());
@@ -4252,11 +4253,14 @@ fn borrow_unmodified_frames<'py>(
     if held.is_empty() {
         return Ok(None);
     }
+    #[cfg(any(test, feature = "borrow-path-counts"))]
     BORROW_LIST_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     Ok(Some(BorrowedFrames { held }))
 }
 
+#[cfg(any(test, feature = "borrow-path-counts"))]
 static BORROW_FRAME_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(any(test, feature = "borrow-path-counts"))]
 static BORROW_LIST_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// How many times the unmodified-frame writer borrowed a stored frame.
@@ -4265,6 +4269,7 @@ static BORROW_LIST_HITS: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomi
 /// are not built. The second is ``borrow_unmodified_frames`` handing the
 /// stored frames to the path writer. Tests use the pair to see that those
 /// branches ran.
+#[cfg(any(test, feature = "borrow-path-counts"))]
 #[pyfunction]
 fn borrow_path_counts() -> (u64, u64) {
     (
@@ -5362,7 +5367,7 @@ fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
 
 #[cfg(test)]
 mod batch_location_tests {
-    use super::{CountFail, box_to_count_fail};
+    use super::{box_to_count_fail, CountFail};
 
     fn later_frame_path() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -5565,6 +5570,10 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
         option_env!("READCON_GIT_COMMIT").unwrap_or(""),
     )?;
     m.add("__tree__", option_env!("READCON_GIT_TREE").unwrap_or(""))?;
+    m.add(
+        "__source_digest__",
+        option_env!("READCON_SOURCE_DIGEST").unwrap_or(""),
+    )?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;
@@ -5593,6 +5602,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_nth_frame, m)?)?;
     m.add_function(wrap_pyfunction!(read_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(write_con, m)?)?;
+    #[cfg(any(test, feature = "borrow-path-counts"))]
     m.add_function(wrap_pyfunction!(borrow_path_counts, m)?)?;
     m.add_function(wrap_pyfunction!(write_con_string, m)?)?;
     m.add_function(wrap_pyfunction!(convert_to_con, m)?)?;
