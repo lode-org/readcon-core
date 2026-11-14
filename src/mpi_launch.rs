@@ -1,15 +1,16 @@
 //! How tests start `mpirun`.
 //!
-//! Open MPI refuses extra ranks unless `--oversubscribe` is present.
-//! MPICH rejects that flag, so it is added only when `mpirun --help`
-//! documents it. A live job's rank variables are removed so a nested
-//! launch is not told it is already rank 0 of another world.
+//! `mpirun --help` does not mention `--oversubscribe`, so Open MPI is
+//! recognized from the version line and only then gets that flag. A test
+//! in this process may already have called `MPI_Init`, which exports
+//! `OMPI_MCA_ess=singleton`. A nested `mpirun` then exits 1 and writes
+//! nothing. Every `OMPI_`, `PMIX_`, and `PMI_` variable is removed first.
+//! `--bind-to` and a BTL are not added. The CI job sets `UCX_TLS=tcp`,
+//! and `mpiexec --oversubscribe -n` is enough for its 1-to-4-rank steps.
 
 use std::process::{Command, Output};
 
 fn open_mpi() -> bool {
-    // `mpirun --help` is a one-screen summary and does not mention
-    // `--oversubscribe`. The version line does name Open MPI.
     Command::new("mpirun")
         .arg("--version")
         .output()
@@ -21,29 +22,15 @@ fn open_mpi() -> bool {
         })
 }
 
-/// `mpirun`, plus the Open MPI flags a GitHub runner needs.
+/// `mpirun`, plus `--oversubscribe` when the launcher is Open MPI.
 ///
-/// Ubuntu runners expose a verbs device UCX cannot use, and their cgroup
-/// rejects the default bind. `--bind-to none` and the `tcp,self` BTL keep
-/// `MPI_Init` from exiting 1. MPICH does not get these flags.
+/// MPICH rejects that flag. A two- or four-core runner cannot place the
+/// eight-rank file test without it, and the short `--help` text never
+/// names it.
 pub(crate) fn mpi_launcher() -> Vec<String> {
     let mut argv = vec!["mpirun".to_string()];
     if open_mpi() {
-        argv.extend(
-            [
-                "--oversubscribe",
-                "--bind-to",
-                "none",
-                "--mca",
-                "pml",
-                "ob1",
-                "--mca",
-                "btl",
-                "tcp,self",
-            ]
-            .into_iter()
-            .map(str::to_string),
-        );
+        argv.push("--oversubscribe".to_string());
     }
     argv
 }
@@ -54,6 +41,9 @@ pub(crate) fn mpi_command() -> Command {
     for arg in mpi_launcher().into_iter().skip(1) {
         cmd.arg(arg);
     }
+    // `MPI_Init` in this process exports `OMPI_MCA_ess=singleton`. The
+    // named rank variables are not that one, and leaving it set makes
+    // `mpirun` exit 1 with empty stdout and stderr.
     for (key, _) in std::env::vars() {
         if key.starts_with("OMPI_") || key.starts_with("PMIX_") || key.starts_with("PMI_") {
             cmd.env_remove(key);
@@ -62,7 +52,10 @@ pub(crate) fn mpi_command() -> Command {
     cmd
 }
 
-/// Panic with the child's stdout and stderr. Open MPI prints the slot error on stdout.
+/// Panic with the child's stdout and stderr.
+///
+/// A missing slot is reported on stderr. `OMPI_MCA_ess=singleton` exits 1
+/// and prints neither stream, so an empty capture is itself the diagnosis.
 pub(crate) fn assert_success(output: &Output, label: &str) {
     assert!(
         output.status.success(),

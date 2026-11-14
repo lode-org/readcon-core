@@ -162,17 +162,7 @@ fn mpi_command() -> std::process::Command {
         text.contains("Open MPI") || err.contains("Open MPI")
     });
     if open_mpi {
-        cmd.args([
-            "--oversubscribe",
-            "--bind-to",
-            "none",
-            "--mca",
-            "pml",
-            "ob1",
-            "--mca",
-            "btl",
-            "tcp,self",
-        ]);
+        cmd.arg("--oversubscribe");
     }
     for (key, _) in std::env::vars() {
         if key.starts_with("OMPI_") || key.starts_with("PMIX_") || key.starts_with("PMI_") {
