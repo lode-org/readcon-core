@@ -7321,38 +7321,41 @@ Coordinates of Component 1
         );
         #[cfg(feature = "cuda")]
         {
-            assert_eq!(
-                unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) },
-                note(RKRStatus::RKR_STATUS_SUCCESS)
-            );
-            assert!(!junk.is_null());
-            let dl = unsafe { &(*junk).dl_tensor };
-            assert_eq!(dl.device.device_type, dlpk::sys::DLDeviceType::kDLCUDA);
-            assert!(!dl.data.is_null());
-            unsafe { rkr_dlpack_delete(junk) };
-            // Also rkr_frame_positions_as_dlpack with CUDA
-            let mut as_cuda: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
-            assert_eq!(
-                unsafe {
-                    rkr_frame_positions_as_dlpack(
-                        built,
-                        rkr_dl_device_type::RKR_DL_CUDA,
-                        0,
-                        0,
-                        1,
-                        0,
-                        &mut as_cuda,
-                    )
-                },
-                note(RKRStatus::RKR_STATUS_SUCCESS)
-            );
-            assert!(!as_cuda.is_null());
-            unsafe {
+            let cuda_ok = crate::cuda_array::cuda_device_count().is_ok();
+            let st = unsafe { rkr_frame_positions_dlpack_ex(built, &cuda_dev, &mut junk) };
+            if cuda_ok {
+                assert_eq!(st, note(RKRStatus::RKR_STATUS_SUCCESS));
+                assert!(!junk.is_null());
+                let dl = unsafe { &(*junk).dl_tensor };
+                assert_eq!(dl.device.device_type, dlpk::sys::DLDeviceType::kDLCUDA);
+                assert!(!dl.data.is_null());
+                unsafe { rkr_dlpack_delete(junk) };
+                let mut as_cuda: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();
                 assert_eq!(
-                    (*as_cuda).dl_tensor.device.device_type,
-                    dlpk::sys::DLDeviceType::kDLCUDA
+                    unsafe {
+                        rkr_frame_positions_as_dlpack(
+                            built,
+                            rkr_dl_device_type::RKR_DL_CUDA,
+                            0,
+                            0,
+                            1,
+                            0,
+                            &mut as_cuda,
+                        )
+                    },
+                    note(RKRStatus::RKR_STATUS_SUCCESS)
                 );
-                rkr_dlpack_delete(as_cuda);
+                assert!(!as_cuda.is_null());
+                unsafe {
+                    assert_eq!(
+                        (*as_cuda).dl_tensor.device.device_type,
+                        dlpk::sys::DLDeviceType::kDLCUDA
+                    );
+                    rkr_dlpack_delete(as_cuda);
+                }
+            } else {
+                assert_ne!(st, note(RKRStatus::RKR_STATUS_SUCCESS));
+                assert!(junk.is_null());
             }
         }
         // Unsupported dtype bits on CPU

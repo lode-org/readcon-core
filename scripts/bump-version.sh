@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Release version bump.
 # 1. Write VERSION.
-# 2. towncrier writes the release heading (the only writer of those headings).
+# 2. The release heading comes from towncrier when changelog.d has fragments.
+#    Otherwise the written ## Unreleased section is retitled. Towncrier
+#    would insert "No significant changes" and leave those notes unreleased.
 # 3. python -m cogapp stamps copies, including compare links, which need that heading.
 # https://towncrier.readthedocs.io/en/stable/
 # https://cog.readthedocs.io/en/latest/
@@ -17,7 +19,36 @@ OLD="$(python3 -c 'import sys; sys.path.insert(0, "scripts"); from version_sot i
 
 printf '%s\n' "$VER" > VERSION
 python3 -c 'import sys; sys.path.insert(0, "scripts"); from version_sot import refresh_rendered_pins; refresh_rendered_pins(sys.argv[1], sys.argv[2])' "$OLD" "$VER"
-python3 -m towncrier build --yes --version "$VER"
+fragments=()
+if [[ -d changelog.d ]]; then
+    while IFS= read -r -d '' fragment; do
+        fragments+=("$fragment")
+    done < <(find changelog.d -type f \( -name '*.rst' -o -name '*.md' \) ! -name 'README*' -print0)
+fi
+if [[ ${#fragments[@]} -gt 0 ]]; then
+    if grep -q '^## Unreleased$' CHANGELOG.md; then
+        echo "bump-version: changelog.d fragments and a written ## Unreleased section would both become the release" >&2
+        exit 1
+    fi
+    python3 -m towncrier build --yes --version "$VER"
+else
+    python3 - "$VER" <<'PY'
+import datetime
+import pathlib
+import sys
+
+version = sys.argv[1]
+path = pathlib.Path("CHANGELOG.md")
+text = path.read_text(encoding="utf-8")
+heading = "## Unreleased\n"
+if heading not in text:
+    raise SystemExit(
+        "CHANGELOG.md has no ## Unreleased section and changelog.d has no fragments"
+    )
+replacement = f"## v{version} - {datetime.date.today().isoformat()}\n"
+path.write_text(text.replace(heading, replacement, 1), encoding="utf-8")
+PY
+fi
 # stamp-version does not retarget packaging/wrapdb/readcon-core.wrap.
 # That URL stays on the previous archive until record-cxx-wrap.sh has a digest.
 bash "$ROOT/scripts/stamp-version.sh"
