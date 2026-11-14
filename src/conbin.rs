@@ -2020,7 +2020,7 @@ fn write_conbin_body(
         }
         if mass_at < n {
             let fill = frame.header.masses_per_type.last().copied().unwrap_or(0.0);
-            masses.extend(std::iter::repeat(fill).take(n - mass_at));
+            masses.extend(std::iter::repeat_n(fill, n - mass_at));
         } else if mass_at > n {
             masses.truncate(masses.len() - (mass_at - n));
         }
