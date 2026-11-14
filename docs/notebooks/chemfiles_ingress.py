@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
+import sys
 from pathlib import Path
+
+import readcon
 
 work_dir = Path(os.environ.get("READCON_NB_WORK", "docs/notebooks/out/work"))
 work_dir.mkdir(parents=True, exist_ok=True)
@@ -10,11 +14,6 @@ con_path = work_dir / "water_from_xyz.con"
 bonded_path = work_dir / "water_with_bonds.con"
 require_chemfiles = True
 print("work_dir =", work_dir.resolve())
-
-import json
-import sys
-
-import readcon
 
 print("readcon", getattr(readcon, "__version__", "?"))
 ok = readcon.has_chemfiles_support()
@@ -38,10 +37,7 @@ print("wrote", xyz_path.resolve())
 frame = readcon.read_chemfiles_first(str(xyz_path))
 print("atoms", len(frame.atoms), "has_bonds", frame.has_bonds)
 for i, a in enumerate(frame.atoms):
-    print(
-        f"  [{i}] {a.symbol} id={a.atom_id} "
-        f"({a.x:.3f}, {a.y:.3f}, {a.z:.3f})"
-    )
+    print(f"  [{i}] {a.symbol} id={a.atom_id} ({a.x:.3f}, {a.y:.3f}, {a.z:.3f})")
 
 frame.write_con(str(con_path))
 assert con_path.is_file()
