@@ -12,6 +12,8 @@ import os
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 BENCH = Path(__file__).resolve().parent
@@ -94,7 +96,7 @@ def main() -> None:
             elif sink == "disk_sync":
                 dest = BENCH / "work" / "thread-reads" / "camp17" / f"{name}.con"
             else:
-                dest = Path("/tmp") / f"camp17-{name}.con"
+                dest = bench_disk() / f"camp17-{name}.con"
             dest.parent.mkdir(parents=True, exist_ok=True)
             frames = held[name]
 

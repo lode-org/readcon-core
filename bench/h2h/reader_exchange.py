@@ -26,6 +26,8 @@ import sys
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 from campaign_protocol import head_sha, stamp_file
@@ -58,7 +60,7 @@ def ensure_pinned(commit: str, dest: Path) -> str | None:
         return None
     if dest.exists():
         shutil.rmtree(dest)
-    checkout = Path(f"/tmp/readcon-pin-{commit[:12]}")
+    checkout = bench_disk() / f"readcon-pin-{commit[:12]}"
     subprocess.run(
         ["git", "worktree", "remove", "--force", str(checkout)],
         cwd=ROOT,
@@ -317,20 +319,21 @@ def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
     # second. One mmap threshold for every arm keeps the treatment the same.
     env["MALLOC_MMAP_THRESHOLD_"] = "65536"
     if arm == "eon_py":
-        pkg = br.EON_PKG if (br.EON_PKG / "eon").is_dir() else Path("/tmp/eOn")
+        pkg = br.EON_PKG if (br.EON_PKG / "eon").is_dir() else bench_disk() / "eOn"
         env["EON_PKG"] = str(pkg)
         env["PYTHONPATH"] = str(pkg)
     if arm in {"eon_first", "eon_all", "readcon_eon_api", "readcon_eon_api_first"}:
         env["EON_ALLFRAMES"] = str(br.EON_BIN)
+        eon_build = Path(os.environ.get("EON_BUILD", str(bench_disk() / "eon-build")))
         lib_dirs = [
-            "/tmp/eon-build/client",
-            "/tmp/eon-build/client/potentials/SocketNWChem",
-            "/tmp/eon-build/client/potentials/EMT",
-            "/tmp/eon-build/client/potentials/EMT/Asap",
-            "/tmp/eon-build/client/potentials/ExtPot",
-            "/tmp/eon-build/client/potentials/Rgpot",
-            "/tmp/eon-build/client/potentials/LAMMPS",
-            "/tmp/eon-build/subprojects/rgpot/CppCore",
+            str(eon_build / "client"),
+            str(eon_build / "client" / "potentials" / "SocketNWChem"),
+            str(eon_build / "client" / "potentials" / "EMT"),
+            str(eon_build / "client" / "potentials" / "EMT" / "Asap"),
+            str(eon_build / "client" / "potentials" / "ExtPot"),
+            str(eon_build / "client" / "potentials" / "Rgpot"),
+            str(eon_build / "client" / "potentials" / "LAMMPS"),
+            str(eon_build / "subprojects" / "rgpot" / "CppCore"),
             str(br.EON_LIB),
         ]
         env["LD_LIBRARY_PATH"] = os.pathsep.join(

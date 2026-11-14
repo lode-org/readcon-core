@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+from bench_disk import bench_disk
+
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 OUT = BENCH / "scaling" / "camp20"
@@ -135,7 +137,7 @@ def main() -> None:
     rows = []
     produced: dict[tuple[str, str], Path] = {}
     for name, ranks in CELLS:
-        for sink, root in (("disk", Path("/tmp")), ("memory", Path("/dev/shm"))):
+        for sink, root in (("disk", bench_disk()), ("memory", Path("/dev/shm"))):
             dest = root / f"camp20-{name}-{ranks}.con"
             samples = mpi_write(name, ranks, dest)
             med, iqr = stats(samples)
@@ -254,7 +256,7 @@ def main() -> None:
                     ("pos", None),
                     (
                         "write",
-                        (Path("/tmp") if sink == "disk" else shm)
+                        (bench_disk() if sink == "disk" else shm)
                         / f"camp20-thread-{name}-{workers}.con",
                     ),
                 ):

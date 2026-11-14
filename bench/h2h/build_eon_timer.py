@@ -17,10 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
-EON_SRC = Path(os.environ.get("EON_ROOT", "/tmp/eOn"))
-EON_BUILD = Path(os.environ.get("EON_BUILD", "/tmp/eon-build"))
+EON_SRC = Path(os.environ.get("EON_ROOT", str(bench_disk() / "eOn")))
+EON_BUILD = Path(os.environ.get("EON_BUILD", str(bench_disk() / "eon-build")))
 BINARY = BENCH / "work" / "eon_time"
 FLAGS = BENCH / "work" / "eon_time.flags"
 STUB = BENCH / "eon_stub"

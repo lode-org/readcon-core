@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+from bench_disk import bench_disk
+
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 OUT = BENCH / "scaling" / "camp21"
@@ -177,7 +179,7 @@ def strong_threads(paths: dict[tuple[str, str], Path]) -> None:
                     kind="threads",
                     sink=sink,
                 ):
-                    out = (Path("/tmp") if sink == "disk" else Path("/dev/shm")) / (
+                    out = (bench_disk() if sink == "disk" else Path("/dev/shm")) / (
                         f"camp21-thread-{name}-{workers}.con"
                     )
                     text = run(
@@ -272,7 +274,7 @@ def strong_mpi(paths: dict[tuple[str, str], Path]) -> None:
                 if not have(
                     rows, op="write", file=name, workers=ranks, kind="mpi", sink=sink
                 ):
-                    out = (Path("/tmp") if sink == "disk" else Path("/dev/shm")) / (
+                    out = (bench_disk() if sink == "disk" else Path("/dev/shm")) / (
                         f"camp21-mpi-{name}-{ranks}.con"
                     )
                     text = run(
@@ -368,7 +370,7 @@ def weak_thread_writes() -> None:
     dest = OUT / "weak-thread-writes.json"
     rows = load_rows(dest)
     for sink, root in (
-        ("disk", Path("/tmp/camp21-weak")),
+        ("disk", bench_disk() / "camp21-weak"),
         ("memory", Path("/dev/shm/camp21-weak")),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -424,7 +426,7 @@ def weak_mpi() -> None:
     read_rows = load_rows(reads)
     write_rows = load_rows(writes)
     for sink, root in (
-        ("disk", Path("/tmp/camp21-weak")),
+        ("disk", bench_disk() / "camp21-weak"),
         ("memory", Path("/dev/shm/camp21-weak")),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -603,7 +605,7 @@ def conbin() -> None:
     dest = OUT / "conbin.json"
     rows = load_rows(dest)
     shm = Path("/dev/shm/camp21-conbin")
-    disk = Path("/tmp/camp21-conbin")
+    disk = bench_disk() / "camp21-conbin"
     shm.mkdir(parents=True, exist_ok=True)
     disk.mkdir(parents=True, exist_ok=True)
     src = INPUTS["con-1e6"]
@@ -651,30 +653,87 @@ def conbin() -> None:
     save_rows(dest, rows, repeats=REPEATS, warmup=1)
 
 
-def host() -> None:
-    text = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
+def _capture(cmd: list[str]) -> str:
+    return subprocess.run(
+        cmd,
         cwd=ROOT,
         text=True,
         capture_output=True,
         check=True,
     ).stdout.strip()
+
+
+def cpu_model_name() -> str:
+    for line in _capture(["lscpu"]).splitlines():
+        if line.startswith("Model name:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def disk_filesystem(root: Path) -> str:
+    """`stat -f -c %T` of the directory the disk rows actually use."""
+    return subprocess.run(
+        ["stat", "-f", "-c", "%T", str(root)],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+
+
+def summary_view() -> dict:
+    """Ranked comparison for papers. camp5c has no host.json, so that column is dropped."""
+    saved = json.loads((OUT / "summary.json").read_text(encoding="utf-8"))
+    rows = [
+        {key: value for key, value in row.items() if key != "camp5c_s"}
+        for row in saved["ranked_writes"]
+    ]
+    return {
+        "question": saved["question"],
+        "efficiency": saved["efficiency"],
+        "note": (
+            "camp5c_s is omitted. bench/h2h/scaling/camp5c has hardware.json "
+            "and lscpu.txt, not a host.json, so that column is not a "
+            "host-matched comparison. The saved summary.json is unchanged."
+        ),
+        "ranked_writes": rows,
+    }
+
+
+def write_summary_view() -> None:
+    if not (OUT / "summary.json").is_file():
+        return
+    (OUT / "summary-view.json").write_text(
+        json.dumps(summary_view(), indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def host() -> None:
+    disk = bench_disk()
     (OUT / "host.json").write_text(
         json.dumps(
             {
-                "commit": text,
+                "commit": _capture(["git", "rev-parse", "HEAD"]),
+                "tree": _capture(["git", "rev-parse", "HEAD^{tree}"]),
+                "cpu_model": cpu_model_name(),
+                "disk": str(disk),
+                "disk_filesystem": disk_filesystem(disk),
                 "base": "a2fbfce35c826ec75143b07cb7e362bb51d70d48",
                 "nproc": 8,
                 "repeats": REPEATS,
                 "warmup": 1,
                 "pinned": "taskset -c 0-7",
                 "mpi": "mpirun --bind-to core",
-                "note": "/tmp is ext4. /dev/shm is tmpfs. Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n).",
+                "note": (
+                    f"Disk rows use {disk} ({disk_filesystem(disk)}). "
+                    "/dev/shm is tmpfs. Strong efficiency is (t(1)/t(n))/n. "
+                    "Weak efficiency is t(1)/t(n)."
+                ),
             },
             indent=2,
         )
         + "\n"
     )
+    write_summary_view()
 
 
 def main() -> None:

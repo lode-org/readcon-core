@@ -18,13 +18,15 @@ import os
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench" / "h2h" / "scaling" / "camp8"
 PROBE = ROOT / "target/release/examples/scale_probe"
 MPI = ROOT / "target/release/examples/weak_scale_mpi"
-CEIL = Path("/tmp/ceiling_store")
+CEIL = bench_disk() / "ceiling_store"
 WIDTHS = (1, 2, 4, 8)
 STORES = ("mmap", "pwrite", "populate", "huge", "populate_write", "hugepage")
 # Library choice: tmpfs and huge-tmpfs map, everything else pwrites.
@@ -356,14 +358,14 @@ def main() -> None:
                     str(workers),
                     str(MPI),
                     str(shm / f"camp7-con-x{workers}.con"),
-                    f"/tmp/camp8-mpi-{fs_name}-{workers}.json",
+                    str(bench_disk() / f"camp8-mpi-{fs_name}-{workers}.json"),
                     "6",
                 ],
                 env,
                 log,
             )
             # The example writes JSON. Prefer that; fall back to stdout.
-            doc_path = Path(f"/tmp/camp8-mpi-{fs_name}-{workers}.json")
+            doc_path = Path(str(bench_disk() / f"camp8-mpi-{fs_name}-{workers}.json"))
             samples = json.loads(doc_path.read_text())["samples_s"]
             if noisy(samples):
                 run(
@@ -378,7 +380,7 @@ def main() -> None:
                         str(workers),
                         str(MPI),
                         str(shm / f"camp7-con-x{workers}.con"),
-                        f"/tmp/camp8-mpi-{fs_name}-{workers}.json",
+                        str(bench_disk() / f"camp8-mpi-{fs_name}-{workers}.json"),
                         "12",
                     ],
                     env,

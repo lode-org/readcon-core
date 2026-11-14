@@ -12,11 +12,13 @@ import json
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench" / "h2h" / "scaling" / "camp7"
-BIN = Path("/tmp/ceiling_store")
+BIN = bench_disk() / "ceiling_store"
 WIDTHS = (1, 2, 4, 8)
 STORES = ("mmap", "pwrite", "populate", "huge", "populate_write")
 MODES = ("threads", "procs")

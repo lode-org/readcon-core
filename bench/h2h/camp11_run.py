@@ -13,6 +13,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,8 +22,8 @@ OUT = ROOT / "bench" / "h2h" / "scaling" / "camp11"
 PROBE = ROOT / "target/release/examples/scale_probe"
 THREADS = ROOT / "target/release/examples/weak_scale_threads"
 MPI = ROOT / "target/release/examples/weak_scale_mpi"
-STREAM = Path("/tmp/stream_write")
-CEIL = Path("/tmp/ceiling_store")
+STREAM = bench_disk() / "stream_write"
+CEIL = bench_disk() / "ceiling_store"
 WIDTHS = (1, 2, 4, 8)
 REPEATS = 12
 CON = ROOT / "resources/test/cuh2.con"

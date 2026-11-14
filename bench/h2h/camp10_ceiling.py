@@ -12,6 +12,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +21,7 @@ OUT = ROOT / "bench" / "h2h" / "scaling" / "camp10"
 PROBE = ROOT / "target/release/examples/scale_probe"
 THREADS = ROOT / "target/release/examples/weak_scale_threads"
 MPI = ROOT / "target/release/examples/weak_scale_mpi"
-CEIL = Path("/tmp/ceiling_store")
+CEIL = bench_disk() / "ceiling_store"
 WIDTHS = (1, 2, 4, 8)
 EDGE = (1, 8)
 REPEATS = 12
@@ -303,7 +305,7 @@ def main() -> None:
             if fsync:
                 env["READCON_WEAK_FSYNC"] = "1"
             src = shm / f"camp10-con-mpi-x{workers}.con"
-            out = Path(f"/tmp/camp10-mpi-{fs_name}-{workers}.json")
+            out = bench_disk() / f"camp10-mpi-{fs_name}-{workers}.json"
             run(
                 [
                     "taskset",

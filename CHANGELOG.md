@@ -20,8 +20,7 @@ All notable changes to this project will be documented in this file. See [conven
   spare. On ext2, ext3, ext4, XFS, and btrfs, rank 0 writes the slices in
   order. Every other filesystem keeps one write per rank.
   `READCON_RANKED_WRITE=parallel` or `sequential`, read on rank 0, overrides
-  that choice. A million-atom single frame on ext4 is still slower than a
-  warm overwrite and slower than a plain copy of those bytes.
+  that choice.
 - `rewrite_frame_refs_to_path`, `write_con(..., rewrite=True)`, and
   `rkr_rewrite_path` replace a same-length trajectory from a spare named
   `path.rewrite`. `keep_spare=True` parks the previous inode there, which

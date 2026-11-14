@@ -15,6 +15,8 @@ import sys
 import time
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -412,7 +414,7 @@ def hardware(rows: list[dict]) -> None:
     lscpu = subprocess.check_output(["lscpu"], text=True)
     meminfo = Path("/proc/meminfo").read_text().splitlines()
     mem = next(line for line in meminfo if line.startswith("MemTotal"))
-    stream_bin = Path("/tmp/readcon-stream")
+    stream_bin = bench_disk() / "readcon-stream"
     if not stream_bin.exists():
         subprocess.run(
             [

@@ -18,13 +18,15 @@ import os
 import subprocess
 from pathlib import Path
 
+from bench_disk import bench_disk
+
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "bench" / "h2h" / "scaling" / "camp9"
 PROBE = ROOT / "target/release/examples/scale_probe"
 MPI = ROOT / "target/release/examples/weak_scale_mpi"
-CEIL = Path("/tmp/ceiling_store")
+CEIL = bench_disk() / "ceiling_store"
 WIDTHS = (1, 2, 4, 8)
 REPEATS = 12
 STORES = ("mmap", "pwrite", "populate", "huge", "populate_write", "hugepage")
@@ -298,14 +300,16 @@ def main() -> None:
                     str(workers),
                     str(MPI),
                     str(shm / f"camp9-mpi-x{workers}.con"),
-                    f"/tmp/camp9-mpi-{fs_name}-{workers}.json",
+                    str(bench_disk() / f"camp9-mpi-{fs_name}-{workers}.json"),
                     str(REPEATS),
                 ],
                 env,
                 log,
             )
             samples = json.loads(
-                Path(f"/tmp/camp9-mpi-{fs_name}-{workers}.json").read_text()
+                Path(
+                    str(bench_disk() / f"camp9-mpi-{fs_name}-{workers}.json")
+                ).read_text()
             )["samples_s"]
             unlink_out(Path(dest))
             median, iqr = type7(samples)

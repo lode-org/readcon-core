@@ -1,0 +1,79 @@
+{
+  "question": "Full strong and weak rerun on 680e1436, ext4 and tmpfs.",
+  "efficiency": "Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n).",
+  "note": "camp5c_s is omitted. bench/h2h/scaling/camp5c has hardware.json and lscpu.txt, not a host.json, so that column is not a host-matched comparison. The saved summary.json is unchanged.",
+  "ranked_writes": [
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "disk",
+      "camp21_s": 0.0118585,
+      "camp20_s": 0.012453,
+      "camp19_s": 0.013722,
+      "strong_efficiency": 0.4230615170552769
+    },
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "memory",
+      "camp21_s": 0.0071319999999999995,
+      "camp20_s": 0.0075250000000000004,
+      "camp19_s": 0.007274,
+      "strong_efficiency": 0.7181979108244533
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "disk",
+      "camp21_s": 0.019247,
+      "camp20_s": 0.015647,
+      "camp19_s": 0.016524,
+      "strong_efficiency": 0.5213150101314491
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "memory",
+      "camp21_s": 0.012257,
+      "camp20_s": 0.0119995,
+      "camp19_s": 0.0116765,
+      "strong_efficiency": 0.8357979113975686
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "disk",
+      "camp21_s": 0.07564499999999999,
+      "camp20_s": 0.074742,
+      "camp19_s": 0.07453599999999999,
+      "strong_efficiency": 0.794826161676251
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "memory",
+      "camp21_s": 0.06884299999999999,
+      "camp20_s": 0.06884699999999999,
+      "camp19_s": 0.06787499999999999,
+      "strong_efficiency": 0.8575989933617072
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "disk",
+      "camp21_s": 0.123674,
+      "camp20_s": 0.130627,
+      "camp19_s": 0.123451,
+      "strong_efficiency": 0.7831329745944984
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "memory",
+      "camp21_s": 0.1083635,
+      "camp20_s": 0.1070445,
+      "camp19_s": 0.1046925,
+      "strong_efficiency": 0.810209387847384
+    }
+  ]
+}
