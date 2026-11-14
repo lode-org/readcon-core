@@ -2,17 +2,34 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
+import subprocess
 
-from numbers_lib import Rule, jget
+from numbers_lib import REPO, ROOT, Rule, jget
+
+GIT_DRIFT = "paper/cpc/data/spec/version_drift.json"
 
 
-def _cargo_version() -> str:
-    root = Path(__file__).resolve().parents[4]
-    for line in (root / "Cargo.toml").read_text(encoding="utf-8").splitlines():
-        if line.startswith('version = "'):
-            return line.split('"', 2)[1]
-    raise SystemExit("Cargo.toml has no version")
+def _drift() -> dict:
+    disk = ROOT / "data" / "spec" / "version_drift.json"
+    if disk.is_file():
+        return json.loads(disk.read_text(encoding="utf-8"))
+    listed = subprocess.run(
+        ["git", "-C", str(REPO), "log", "--pretty=%H", "--", GIT_DRIFT],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for commit in listed.stdout.split():
+        shown = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{commit}:{GIT_DRIFT}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if shown.returncode == 0 and shown.stdout.strip():
+            return json.loads(shown.stdout)
+    raise SystemExit(f"{DRIFT} is not in the tree or its history")
 
 
 DOC = "rg_main.tex"
@@ -41,9 +58,12 @@ def opener(library: str, peer: str) -> str:
 
 def drift_reader(version: str) -> str:
     """A published wheel that ``spec_version_drift.py`` ran, as the wheel reported its own version."""
-    if version not in jget(DRIFT, "readers"):
+    data = _drift()
+    readers = data.get("readers") or []
+    reported = data.get("reported_versions") or {}
+    if version not in readers and version not in reported:
         raise SystemExit(f"{DRIFT}: {version} is not one of the readers")
-    return jget(DRIFT, "reported_versions")[version]
+    return reported[version]
 
 
 RULES = [
@@ -83,6 +103,6 @@ RULES = [
             f"published wheel {v} the drift probes ran",
             DRIFT_LINE,
         )
-        for v in ("0.17.0", "0.17.1", "0.17.2", _cargo_version())
+        for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
 ]

@@ -12,7 +12,7 @@ GEN = ROOT / "src" / "figures" / "generated"
 
 LABELS = {
     "readcon_tip": "readcon, tip",
-    "readcon_v0173": r"readcon-core \readconCargoVersion{}",
+    "readcon_v0173": r"readcon-core \rcReleaseVersion{}",
     "readcon_base": "readcon, main",
     "ase_eon": r"ASE ase.io (format eon)",
     "eon_py": r"eOn \texttt{loadcons}",
