@@ -120,7 +120,7 @@ def _read_con_threads(path: str, n_frames: int, n_atoms: int, n_threads: int) ->
     _hold_parsed(frames, int(n_frames), n_atoms=int(n_atoms))
 
 
-THREAD_COUNTS = (2, 4, 8)
+THREAD_COUNTS = (1, 2, 4, 8)
 # ASE's eOn reader rejects a velocity or force section, so those files are
 # compared with the previous readcon build only. Plain cuh2 is the ASE peer.
 
@@ -670,7 +670,7 @@ def _thread_params(frame_counts: tuple[int, ...]) -> list[list[int]]:
 
 
 class TimeReadConCuh2Threads:
-    """``read_con`` of cuh2 with 2, 4, and 8 threads."""
+    """``read_con`` of cuh2 at 1, 2, 4, and 8 threads."""
 
     timeout = 300
     repeat = REPEAT
@@ -716,7 +716,7 @@ class RayReadConCuh2Threads:
 
 
 class TimeReadConvelThreads:
-    """Threaded read of the tiny velocity file, repeated."""
+    """Threaded read of the tiny velocity file. Each frame differs."""
 
     timeout = 300
     repeat = REPEAT
@@ -765,7 +765,7 @@ class RayReadConvelThreads:
 
 
 class TimeReadForcesThreads:
-    """Threaded read of the tiny force file, repeated."""
+    """Threaded read of the tiny force file. Each frame differs."""
 
     timeout = 300
     repeat = REPEAT
