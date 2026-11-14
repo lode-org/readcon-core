@@ -3362,7 +3362,7 @@ fn read_con_columnar(
     // its own byte range from that map.
     let prepared = py.detach(move || -> Option<_> {
         let source = crate::compression::read_bytes_owned(Path::new(&path_owned)).ok()?;
-        let layout = crate::column_read::layout_indexed(source.as_slice(), 1).ok()?;
+        let layout = crate::column_read::layout_indexed(source.as_slice(), threads).ok()?;
         Some((source, layout))
     });
     let Some((source, layout)) = prepared else {

@@ -3524,6 +3524,143 @@ pub fn frame_start_offsets(file_contents: &str) -> Vec<usize> {
 ///
 /// The timed work includes the cut setup, the per-chunk scans, the
 /// stitch, and the frame walk that reads the stitched newline index.
+/// One worker's frame starts. `next` is the byte where the following frame
+/// begins, which may lie past this worker's cut when a frame straddles it.
+#[cfg(feature = "parallel")]
+struct RangeStarts {
+    starts: Vec<usize>,
+    next: usize,
+}
+
+/// The line six rows down is `natm_types` when `pos` is a frame start.
+#[cfg(feature = "parallel")]
+fn type_count_at(bytes: &[u8], pos: usize) -> bool {
+    let mut at = pos;
+    for _ in 0..6 {
+        let Some(rel) = memchr::memchr(b'\n', &bytes[at..]) else {
+            return false;
+        };
+        at += rel + 1;
+    }
+    let end = memchr::memchr(b'\n', &bytes[at..])
+        .map(|rel| at + rel)
+        .unwrap_or(bytes.len());
+    let line = std::str::from_utf8(&bytes[at..end]).unwrap_or("").trim();
+    matches!(line.parse::<usize>(), Ok(n) if (1..=64).contains(&n))
+}
+
+/// First byte in `[range_start, range_end)` that begins two valid frames.
+#[cfg(feature = "parallel")]
+fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Option<usize> {
+    if range_start == 0 {
+        return Some(0);
+    }
+    let bytes = text.as_bytes();
+    let mut pos = if range_start > 0 && bytes.get(range_start - 1) == Some(&b'\n') {
+        range_start
+    } else {
+        let rest = bytes.get(range_start..).unwrap_or(&[]);
+        let rel = memchr::memchr(b'\n', rest)?;
+        range_start + rel + 1
+    };
+    while pos < range_end {
+        if type_count_at(bytes, pos) {
+            let mut scanner = ConFrameIterator::starting_at(text, pos);
+            if matches!(scanner.forward_fast(), Some(Ok(()))) {
+                let second = scanner.byte_pos();
+                if second > pos && matches!(scanner.forward_fast(), Some(Ok(()))) {
+                    return Some(pos);
+                }
+            }
+        }
+        let rest = bytes.get(pos..).unwrap_or(&[]);
+        let Some(rel) = memchr::memchr(b'\n', rest) else {
+            break;
+        };
+        pos += rel + 1;
+    }
+    None
+}
+
+#[cfg(feature = "parallel")]
+fn bounds_in_range(text: &str, range_start: usize, range_end: usize) -> Result<RangeStarts, ()> {
+    let Some(origin) = first_aligned_start(text, range_start, range_end) else {
+        return Ok(RangeStarts {
+            starts: Vec::new(),
+            next: range_start,
+        });
+    };
+    let mut scanner = ConFrameIterator::starting_at(text, origin);
+    let mut starts = Vec::new();
+    loop {
+        let start = scanner.byte_pos();
+        if start >= range_end || no_frame_at(scanner.lines.bytes, start) {
+            return Ok(RangeStarts {
+                starts,
+                next: start,
+            });
+        }
+        starts.push(start);
+        match scanner.forward_fast() {
+            Some(Ok(())) => {}
+            _ => return Err(()),
+        }
+    }
+}
+
+/// Keep a start only when it continues the previous range.
+#[cfg(feature = "parallel")]
+fn stitch_ranges(parts: &[RangeStarts]) -> Result<Vec<usize>, ()> {
+    let mut starts = Vec::new();
+    let mut cursor = 0usize;
+    for part in parts {
+        for (offset, &start) in part.starts.iter().enumerate() {
+            if start < cursor {
+                continue;
+            }
+            if start != cursor {
+                return Err(());
+            }
+            starts.push(start);
+            cursor = if offset + 1 < part.starts.len() {
+                part.starts[offset + 1]
+            } else {
+                part.next
+            };
+        }
+    }
+    if starts.is_empty() {
+        Err(())
+    } else {
+        Ok(starts)
+    }
+}
+
+/// Frame starts from the newline index.
+///
+/// Each worker owns a byte range. It finds the first real frame at or after
+/// its cut, walks headers only inside that range, and the seam keeps the
+/// start that continues the previous range. A gap falls back to one walk.
+#[cfg(feature = "parallel")]
+fn frame_start_offsets_ranged(text: &str, threads: usize) -> Vec<usize> {
+    let cuts = equal_cuts(text.len(), threads);
+    let ranges: Vec<(usize, usize)> = cuts
+        .windows(2)
+        .map(|window| (window[0], window[1]))
+        .collect();
+    let parts = crate::parser::on_pool(threads, || {
+        use rayon::prelude::*;
+        ranges
+            .par_iter()
+            .map(|&(start, end)| bounds_in_range(text, start, end))
+            .collect::<Result<Vec<_>, ()>>()
+    });
+    match parts.and_then(|parts| stitch_ranges(&parts)) {
+        Ok(starts) => starts,
+        Err(()) => frame_start_offsets_serial(text),
+    }
+}
+
 pub fn frame_start_offsets_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
@@ -3532,8 +3669,7 @@ pub fn frame_start_offsets_with_threads(
     {
         let threads = scan_thread_count(num_threads, file_contents.len());
         if threads >= 2 {
-            let newlines = newline_positions(file_contents.as_bytes(), threads);
-            return frame_start_offsets_indexed(file_contents, newlines);
+            return frame_start_offsets_ranged(file_contents, threads);
         }
     }
     #[cfg(not(feature = "parallel"))]

@@ -1095,17 +1095,38 @@ fn fill_shared(
         }
     } else {
         let ranges = byte_ranges(offsets, frames_end, workers);
+        // Each worker owns its frames. The list is byte spans, not parsed pieces.
+        let chunks: Vec<Vec<(usize, usize, usize)>> = ranges
+            .iter()
+            .map(|&(start, end)| {
+                (start..end)
+                    .filter(|index| *index != 0)
+                    .map(|index| {
+                        let at = offsets[index];
+                        let stop = end_of(index);
+                        (index, at, stop)
+                    })
+                    .collect()
+            })
+            .collect();
         #[cfg(feature = "parallel")]
         {
-            crate::parser::on_pool(ranges.len().max(2), || {
+            crate::parser::on_pool(chunks.len().max(2), || {
                 use rayon::prelude::*;
-                let result: Result<(), ()> = ranges.par_iter().try_for_each(|&(start, end)| {
+                let result: Result<(), ()> = chunks.into_par_iter().try_for_each(|chunk| {
                     note_worker(note);
-                    for index in start..end {
-                        if index == 0 {
-                            continue;
+                    for (index, at, stop) in chunk {
+                        if at > stop || stop > bytes.len() {
+                            return Err(());
                         }
-                        paint_rest(index)?;
+                        paint_checked(
+                            &bytes[at..stop],
+                            n_atoms,
+                            sections,
+                            frame_dest(raw, index, n_atoms),
+                            &painted,
+                            first,
+                        )?;
                     }
                     Ok(())
                 });
@@ -1114,7 +1135,7 @@ fn fill_shared(
         }
         #[cfg(not(feature = "parallel"))]
         {
-            let _ = (ranges, note);
+            let _ = (ranges, chunks, note);
             for index in 1..n_frames {
                 paint_rest(index)?;
             }
