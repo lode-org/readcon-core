@@ -51,6 +51,22 @@ def test_readcon_chemfiles_roundtrip_without_the_python_package(tmp_path, monkey
     assert row["position_error"] <= row["precision"], row
 
 
+def test_a_stub_file_is_not_a_million_atom_write() -> None:
+    try:
+        cross_format.expect_file_bytes("chemfiles-xyz", 1_000_000, 1, 10)
+    except SystemExit as exc:
+        assert "10 bytes" in str(exc)
+        return
+    raise AssertionError("a 10-byte file was accepted")
+
+
+def test_chemfiles_con_has_no_writer() -> None:
+    arms, _notes = cross_format.arm_table(8)
+    row = next(arm for arm in arms if arm["id"] == "chemfiles-con")
+    assert row["no_writer"] is True
+    assert "no CON format" in row["notes"]
+
+
 def test_pdb_above_serial_is_reported() -> None:
     arms, _notes = cross_format.arm_table(100_000)
     pdb = [arm for arm in arms if arm["id"] == "mda-pdb"]

@@ -971,6 +971,42 @@ Cu 0.2 0.2 0.2
     }
 
 
+def expect_file_bytes(arm_id: str, n_atoms: int, n_frames: int, size: int) -> None:
+    """Fail if a timed file cannot be that format at this atom count.
+
+    The floors sit under the smallest file this campaign has produced and
+    above a stub. A 10-byte stand-in for a million-atom frame fails.
+    """
+    n = n_atoms * n_frames
+    if n <= 0 or size < 0:
+        raise SystemExit(f"{arm_id} has no atoms or a negative file")
+    if "xz" in arm_id:
+        low = max(32, n // 50)
+    elif any(token in arm_id for token in ("-gz", "-zst", "-bz2")):
+        low = max(32, n // 5)
+    elif "xtc" in arm_id:
+        low = max(64, n)
+    elif any(token in arm_id for token in ("dcd", "ncdf", "trr", "conbin")):
+        low = n * 8
+    else:
+        low = n * 4
+    high = n * 400
+    if not low <= size <= high:
+        raise SystemExit(
+            f"{arm_id} file is {size} bytes for {n_atoms} atoms x {n_frames} frames; "
+            f"expected {low}..{high}"
+        )
+
+
+def expect_full_read(got: dict, n_atoms: int, n_frames: int, arm_id: str) -> None:
+    positions = np.asarray(got["positions"])
+    expected = (n_frames, n_atoms, 3)
+    if tuple(positions.shape) != expected:
+        raise SystemExit(
+            f"{arm_id} read shape {tuple(positions.shape)}, expected {expected}"
+        )
+
+
 def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
     """Arms this interpreter can actually run. Nothing is invented."""
     arms = [
@@ -1033,15 +1069,16 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                     {
                         "id": "chemfiles-con",
                         "tool": "readcon",
-                        "format": "chemfiles.Frame",
+                        "format": "readcon parse + chemfiles.Frame",
                         "precision": PRECISION["con"],
+                        "no_writer": True,
                         "notes": (
-                            "chemfiles has no CON writer and no readcon plugin. "
-                            "The read copies a readcon CON parse into a "
-                            "chemfiles.Frame. The write fills that Frame from "
-                            "coordinates already in memory and stores ten bytes, "
-                            "not the CON file. The read row's byte count is "
-                            "readcon's CON"
+                            "chemfiles 0.10.4 formats_list has no CON format "
+                            "and no CON plugin. Trajectory(.con) fails with "
+                            "'can not find a format associated with the .con "
+                            "extension'. The read is readcon.read_con, then a "
+                            "copy of positions and the cell through a "
+                            "chemfiles.Frame. There is no CON write to time"
                         ),
                     }
                 )
@@ -1702,7 +1739,10 @@ def worker_main() -> None:
         cache = job.get("cache", "warm")
 
         def once(path=path, arm=arm):
-            return _timed_read(arm, path)
+            got = read_arm(arm, path)
+            if "n_atoms" in job:
+                expect_full_read(got, int(job["n_atoms"]), int(job["n_frames"]), arm)
+            return float(got["checksum"])
 
         # Warm: one byte read before the clock, then the parser warmup.
         # Cold: warmup first, then drop the page cache, then the timed read.
@@ -1774,6 +1814,10 @@ def worker_main() -> None:
                 )
             else:
                 _timed_write(arm, spec, dest)
+            if "n_atoms" in job:
+                expect_file_bytes(
+                    arm, int(job["n_atoms"]), int(job["n_frames"]), dest.stat().st_size
+                )
 
     once()
     started = time.perf_counter()
@@ -1990,14 +2034,19 @@ def run(
                 notes.append(note)
                 lines.append(f"note {note}")
                 continue
+            expect_full_read(got, n_atoms, n_frames, arm["id"])
+            size = path.stat().st_size
+            expect_file_bytes(arm["id"], n_atoms, n_frames, size)
             arm = dict(arm)
             arm["path"] = path
-            arm["file_bytes"] = path.stat().st_size
+            arm["file_bytes"] = size
             arm["audit"] = checked
             arm["checksum"] = float(got["checksum"])
             usable.append(arm)
         write_jobs = []
         for arm in usable:
+            if arm.get("no_writer"):
+                continue
             if arm["id"] == "readcon-chemfiles":
                 dest = directory / "timed" / "readcon-chemfiles.con"
             elif arm["id"] == "chemfiles-con":
@@ -2016,6 +2065,8 @@ def run(
                         "dest": os.fspath(dest),
                         "plain": os.fspath(directory / "readcon.con"),
                         "xyz": os.fspath(directory / "chemfiles.xyz"),
+                        "n_atoms": n_atoms,
+                        "n_frames": n_frames,
                     },
                 }
             )
@@ -2030,6 +2081,8 @@ def run(
                             "arm": arm["id"],
                             "path": os.fspath(arm["path"]),
                             "cache": cache,
+                            "n_atoms": n_atoms,
+                            "n_frames": n_frames,
                         },
                     }
                     for arm in usable
@@ -2096,6 +2149,33 @@ def run(
                     for sample in samples:
                         lines.append(f"sample {sample:.9f}")
                     print(f"  read {cache} {arm['id']} {median:.4f}", flush=True)
+            if arm.get("no_writer"):
+                row = {
+                    "structure": label,
+                    "atoms": n_atoms,
+                    "frames": n_frames,
+                    "tool": arm["tool"],
+                    "format": arm["format"],
+                    "arm": arm["id"],
+                    "notes": arm.get("notes", ""),
+                    "op": "write",
+                    "cache": "create",
+                    "median_s": "no writer",
+                    "iqr_s": None,
+                    "samples_s": [],
+                    "rss_bytes": None,
+                    "file_bytes": None,
+                    "loses": arm["audit"]["loses"],
+                    "position_error": arm["audit"]["position_error"],
+                    "cell_error": arm["audit"]["cell_error"],
+                    "precision": arm["precision"],
+                    "checksum_ok": None,
+                    "n": 0,
+                }
+                rows.append(row)
+                lines.append(f"write {label} {arm['id']} no writer")
+                print(f"  write {arm['id']} no writer", flush=True)
+                continue
             if write_timed is None:
                 continue
             samples = list(write_timed["samples"][arm["id"]])
