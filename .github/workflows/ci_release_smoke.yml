@@ -17,9 +17,13 @@ on:
         required: true
         type: string
 
+# A smoke is for one release tag. workflow_dispatch names that tag, and a
+# v* push uses the tag name, so both share release-smoke-vX.Y.Z. A push of
+# feat/release-0.23.0 is release-smoke-feat/release-0.23.0 and cannot cancel
+# the tag run. Nothing in this workflow cancels a run that is already going.
 concurrency:
-  group: release-smoke-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: release-smoke-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   published-assets:
