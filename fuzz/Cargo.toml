@@ -17,6 +17,8 @@ readcon-core = { path = "..", features = [
 ] }
 serde_json = "1"
 tempfile = "3"
+libc = "0.2"
+ryu = "1.0"
 
 [[bin]]
 name = "parser-lines"
@@ -224,6 +226,34 @@ bench = false
 [[bin]]
 name = "diff-encodings"
 path = "fuzz_targets/diff_encodings.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-matrix"
+path = "fuzz_targets/writer_matrix.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "index-corrupt"
+path = "fuzz_targets/index_corrupt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-crash"
+path = "fuzz_targets/writer_crash.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer-decimal"
+path = "fuzz_targets/writer_decimal.rs"
 test = false
 doc = false
 bench = false

@@ -319,7 +319,6 @@ impl BlockCursor {
     }
 
     /// Snapshot the lanes so the next rank can continue a partial block.
-    #[cfg(any(test, feature = "mpi"))]
     pub(crate) fn to_bytes(&self) -> [u8; 129] {
         let mut out = [0u8; 129];
         for (index, lane) in self.lanes.iter().enumerate() {
@@ -331,7 +330,6 @@ impl BlockCursor {
     }
 
     /// Restore a snapshot from the previous rank's partial block.
-    #[cfg(any(test, feature = "mpi"))]
     pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         let mut lanes = [0u64; 8];
         for (index, lane) in lanes.iter_mut().enumerate() {
@@ -351,7 +349,7 @@ impl BlockCursor {
 
 /// Hash of every byte: [`block_hash`] per [`HASH_BLOCK`], folded with the
 /// length by FNV-1a. Not cryptographic; it detects edits, not attacks.
-fn content_hash(bytes: &[u8]) -> u64 {
+pub fn content_hash(bytes: &[u8]) -> u64 {
     #[cfg(feature = "parallel")]
     let blocks: Vec<u64> = {
         use rayon::prelude::*;
@@ -367,6 +365,103 @@ fn content_hash(bytes: &[u8]) -> u64 {
 pub(crate) fn fold_block_hashes(total: u64, blocks: &[u64]) -> u64 {
     let seed = fnv1a(FNV_OFFSET, &total.to_le_bytes());
     blocks.iter().fold(seed, |h, b| fnv1a(h, &b.to_le_bytes()))
+}
+
+/// Hashes one rank can finish without a neighbour's cursor.
+pub(crate) struct LocalReady {
+    pub hashes: Vec<(u64, u64)>,
+    pub tail: Option<[u8; 129]>,
+}
+
+pub(crate) enum Lead {
+    Hash((u64, u64)),
+    Forward([u8; 129]),
+}
+
+/// Full blocks owned by the slice at `start`, plus a cursor when a
+/// partial block continues on a later rank.
+pub(crate) fn local_ready(start: u64, bytes: &[u8], total: u64) -> LocalReady {
+    let block = HASH_BLOCK as u64;
+    let end = start + bytes.len() as u64;
+    let mut hashes = Vec::new();
+    let mut pos = if start % block == 0 {
+        start
+    } else {
+        (start / block + 1) * block
+    };
+    if pos > end {
+        pos = end;
+    }
+    let mut local = (pos - start) as usize;
+    while pos < end {
+        let take_end = (pos + block).min(end);
+        let full = take_end - pos == block;
+        let owned_tail = take_end == total;
+        if !(full || owned_tail) {
+            break;
+        }
+        let n = (take_end - pos) as usize;
+        hashes.push((pos / block, block_hash(&bytes[local..local + n])));
+        local += n;
+        pos = take_end;
+    }
+    let tail = if pos < end && pos % block == 0 && pos != total {
+        let mut cursor = BlockCursor::new();
+        cursor.feed(&bytes[(pos - start) as usize..]);
+        Some(cursor.to_bytes())
+    } else {
+        None
+    };
+    LocalReady { hashes, tail }
+}
+
+/// Continue `cursor` across this rank's leading partial block.
+pub(crate) fn finish_lead(start: u64, bytes: &[u8], total: u64, cursor_bytes: [u8; 129]) -> Lead {
+    let block = HASH_BLOCK as u64;
+    let end = start + bytes.len() as u64;
+    let block_end = (start / block + 1) * block;
+    let lead_end = block_end.min(end);
+    let n = (lead_end - start) as usize;
+    let mut cursor = BlockCursor::from_bytes(&cursor_bytes);
+    cursor.feed(&bytes[..n]);
+    if end >= block_end || end == total {
+        Lead::Hash((start / block, cursor.finish()))
+    } else {
+        Lead::Forward(cursor.to_bytes())
+    }
+}
+
+/// Hash of ordered rank slices, including empty ranks and splits inside a
+/// block. This is the gather used by a ranked write, with no MPI. It
+/// matches [`content_hash`] of the concatenation.
+pub fn ranked_content_hash(parts: &[&[u8]]) -> u64 {
+    let total: u64 = parts.iter().map(|part| part.len() as u64).sum();
+    if total == 0 {
+        return fold_block_hashes(0, &[]);
+    }
+    let mut blocks = vec![0u64; total.div_ceil(HASH_BLOCK as u64) as usize];
+    let mut pending: Option<[u8; 129]> = None;
+    let mut offset = 0u64;
+    for part in parts {
+        if part.is_empty() {
+            continue;
+        }
+        let ready = local_ready(offset, part, total);
+        if let Some(cursor) = pending.take() {
+            match finish_lead(offset, part, total, cursor) {
+                Lead::Hash((index, hash)) => blocks[index as usize] = hash,
+                Lead::Forward(next) => pending = Some(next),
+            }
+        }
+        for (index, hash) in ready.hashes {
+            blocks[index as usize] = hash;
+        }
+        if let Some(tail) = ready.tail {
+            pending = Some(tail);
+        }
+        offset += part.len() as u64;
+    }
+    fold_block_hashes(total, &blocks)
 }
 
 /// Block hashes this slice can finish, plus the bytes that share a
