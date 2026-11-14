@@ -75,6 +75,11 @@ class SplitAndLayout(unittest.TestCase):
             bench.TimeSelectAtoms,
             bench.TimeAseEonTiny,
             bench.TimeAseEonCuh2,
+            bench.TimeReadConCuh2Threads,
+            bench.TimeReadConvelThreads,
+            bench.TimeReadForcesThreads,
+            bench.TimeAseConvel,
+            bench.TimeAseForces,
         )
         memory = (
             bench.RayReadConTiny,
@@ -85,6 +90,11 @@ class SplitAndLayout(unittest.TestCase):
             bench.RayAseEonCuh2,
             bench.RayReadConvelTiny,
             bench.RayReadForcesTiny,
+            bench.RayReadConCuh2Threads,
+            bench.RayReadConvelThreads,
+            bench.RayReadForcesThreads,
+            bench.RayAseConvel,
+            bench.RayAseForces,
         )
         for cls in timing:
             self.assertNotIn("number", cls.__dict__, cls.__name__)

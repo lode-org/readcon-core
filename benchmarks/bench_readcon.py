@@ -93,6 +93,16 @@ def _read_con_path(path: str, n_frames: int, n_atoms: int | None = None) -> None
         assert len(frames[0]) == n_atoms
 
 
+def _read_con_threads(path: str, n_frames: int, n_atoms: int, n_threads: int) -> None:
+    import readcon
+
+    frames = readcon.read_con(path, n_threads=int(n_threads))
+    _hold_parsed(frames, int(n_frames), n_atoms=int(n_atoms))
+
+
+THREAD_COUNTS = (2, 4, 8)
+
+
 def _iter_con_path(path: str, n_frames: int) -> None:
     import readcon
 
@@ -630,6 +640,238 @@ class RayReadForcesTiny:
         frames = readcon.read_con(self._path)
         _hold_parsed(frames, self._n, n_atoms=4)
         assert frames[0].has_forces
+
+
+def _thread_params(frame_counts: tuple[int, ...]) -> list[tuple[int, int]]:
+    return [(frames, threads) for frames in frame_counts for threads in THREAD_COUNTS]
+
+
+class TimeReadConCuh2Threads:
+    """``read_con`` of cuh2 with 2, 4, and 8 threads."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params(CUH2_FRAMES)
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return _cuh2_files()
+
+    def time_read_con_threads(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 218, int(n_threads))
+
+
+class RayReadConCuh2Threads:
+    """Memray peak for threaded cuh2 reads."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params(CUH2_FRAMES)
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        text = _ladder_con(FIXTURE_CUH2, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 218, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_con_threads(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 218, self._threads)
+
+
+class TimeReadConvelThreads:
+    """Threaded read of the tiny velocity file, repeated."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _write_temp(_ladder_con(FIXTURE_CONVEL, n), suffix=".convel") for n in (100, 200)}
+
+    def time_read_con_threads(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 4, int(n_threads))
+
+
+class RayReadConvelThreads:
+    """Memray peak for threaded velocity-file reads."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        text = _ladder_con(FIXTURE_CONVEL, n_frames)
+        self._path = _write_temp(text, suffix=".convel")
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_con_threads(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+
+class TimeReadForcesThreads:
+    """Threaded read of the tiny force file, repeated."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _write_temp(_ladder_con(FIXTURE_FORCES, n)) for n in (100, 200)}
+
+    def time_read_con_threads(self, cache: dict, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(cache[int(n_frames)], int(n_frames), 4, int(n_threads))
+
+
+class RayReadForcesThreads:
+    """Memray peak for threaded force-file reads."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = _thread_params((100, 200))
+    param_names = ["n_frames", "n_threads"]
+
+    def setup(self, n_frames: int, n_threads: int) -> None:
+        text = _ladder_con(FIXTURE_FORCES, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        self._threads = n_threads
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+    def teardown(self, n_frames: int, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_con_threads(self, n_frames: int, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, 4, self._threads)
+
+
+class TimeAseConvel:
+    """ASE eOn on the same velocity files as the threaded readcon rows."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = (100, 200)
+    param_names = ["n_frames"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _write_temp(_ladder_con(FIXTURE_CONVEL, n), suffix=".convel") for n in (100, 200)}
+
+    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
+        _ase_eon(cache[int(n_frames)], int(n_frames), 4)
+
+
+class RayAseConvel:
+    """Memray peak for ASE eOn on the velocity files."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = (100, 200)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        text = _ladder_con(FIXTURE_CONVEL, n_frames)
+        self._path = _write_temp(text, suffix=".convel")
+        self._n = n_frames
+        _ase_eon(self._path, self._n, 4)
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_ase_eon(self, n_frames: int) -> None:
+        _ase_eon(self._path, self._n, 4)
+
+
+class TimeAseForces:
+    """ASE eOn on the same force files as the threaded readcon rows."""
+
+    timeout = 300
+    repeat = REPEAT
+    sample_time = SAMPLE_TIME
+    min_run_count = 2
+    warmup_time = 0.1
+    params = (100, 200)
+    param_names = ["n_frames"]
+
+    def setup_cache(self) -> dict[int, str]:
+        return {n: _write_temp(_ladder_con(FIXTURE_FORCES, n)) for n in (100, 200)}
+
+    def time_read_ase_eon(self, cache: dict, n_frames: int) -> None:
+        _ase_eon(cache[int(n_frames)], int(n_frames), 4)
+
+
+class RayAseForces:
+    """Memray peak for ASE eOn on the force files."""
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = (100, 200)
+    param_names = ["n_frames"]
+
+    def setup(self, n_frames: int) -> None:
+        text = _ladder_con(FIXTURE_FORCES, n_frames)
+        self._path = _write_temp(text)
+        self._n = n_frames
+        _ase_eon(self._path, self._n, 4)
+
+    def teardown(self, n_frames: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_ase_eon(self, n_frames: int) -> None:
+        _ase_eon(self._path, self._n, 4)
 
 
 def _ray_repeats(bench) -> int:
