@@ -3549,7 +3549,10 @@ fn type_count_at(bytes: &[u8], pos: usize) -> bool {
     matches!(line.parse::<usize>(), Ok(n) if (1..=64).contains(&n))
 }
 
-/// First byte in `[range_start, range_end)` that begins two valid frames.
+/// First byte in `[range_start, range_end)` that begins a valid frame.
+///
+/// Two successful header walks confirm the alignment when a successor
+/// exists. A last frame is kept when that walk ends with no further frame.
 #[cfg(feature = "parallel")]
 fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Option<usize> {
     if range_start == 0 {
@@ -3569,6 +3572,10 @@ fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Opti
             if matches!(scanner.forward_fast(), Some(Ok(()))) {
                 let second = scanner.byte_pos();
                 if second > pos && matches!(scanner.forward_fast(), Some(Ok(()))) {
+                    return Some(pos);
+                }
+                // The last frame in the file has no successor.
+                if second > pos && no_frame_at(bytes, second) {
                     return Some(pos);
                 }
             }
@@ -3610,7 +3617,7 @@ fn bounds_in_range(text: &str, range_start: usize, range_end: usize) -> Result<R
 
 /// Keep a start only when it continues the previous range.
 #[cfg(feature = "parallel")]
-fn stitch_ranges(parts: &[RangeStarts]) -> Result<Vec<usize>, ()> {
+fn stitch_ranges(parts: &[RangeStarts], bytes: &[u8]) -> Result<Vec<usize>, ()> {
     let mut starts = Vec::new();
     let mut cursor = 0usize;
     for part in parts {
@@ -3629,7 +3636,7 @@ fn stitch_ranges(parts: &[RangeStarts]) -> Result<Vec<usize>, ()> {
             };
         }
     }
-    if starts.is_empty() {
+    if starts.is_empty() || !no_frame_at(bytes, cursor) {
         Err(())
     } else {
         Ok(starts)
@@ -3662,7 +3669,7 @@ fn frame_start_offsets_ranged(text: &str, threads: usize) -> Vec<usize> {
             .map(|&(start, end)| bounds_in_range(text, start, end))
             .collect::<Result<Vec<_>, ()>>()
     });
-    match parts.and_then(|parts| stitch_ranges(&parts)) {
+    match parts.and_then(|parts| stitch_ranges(&parts, text.as_bytes())) {
         Ok(starts) => starts,
         Err(()) => frame_start_offsets_serial(text),
     }
