@@ -1754,6 +1754,31 @@ mod tests {
         assert_eq!(codec_inflate(raw, 1).unwrap(), raw);
     }
 
+    /// A one-thread read stays on the serial decoder. Several decode
+    /// threads inflate each member straight into its output slice. Both
+    /// return the same plain text.
+    #[test]
+    fn a_one_thread_inflate_matches_the_slice_inflate() {
+        let plain = b"0123456789\n".repeat(200);
+        let gzip = codec_deflate(&plain, 4, 4, true).unwrap();
+        let serial = with_serial_decode(|| codec_inflate(&gzip, 1)).unwrap();
+        let sliced = codec_inflate(&gzip, 4).unwrap();
+        assert_eq!(serial, plain);
+        assert_eq!(sliced, plain);
+        assert_eq!(decode_thread_budget(), 0);
+
+        let member = {
+            let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            enc.write_all(&plain).unwrap();
+            enc.finish().unwrap()
+        };
+        let mut exact = vec![0u8; plain.len()];
+        gzip_into(&member, &mut exact).unwrap();
+        assert_eq!(exact, plain);
+        let mut short = vec![0u8; plain.len() - 1];
+        assert!(gzip_into(&member, &mut short).is_err());
+    }
+
     /// A member concatenated after an indexed stream is part of the file.
     /// The parallel reader used to stop at the index and drop it.
     #[test]
