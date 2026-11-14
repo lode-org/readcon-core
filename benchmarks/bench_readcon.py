@@ -89,10 +89,11 @@ def _retain_frames(frames, n_frames: int, n_atoms: int | None = None):
     those bytes never enter the peak. ``len`` builds no frame, and the one
     object from the first frame is reused from the allocator cache on the
     next parameter, which leaves a few hundred bytes however long the file
-    is. A file of 64 KiB or more is mapped, and that map was the whole peak.
-    Indexing every frame and copying the coordinates makes the recorded
-    peak follow the frame count. The copy is the shared slab when the
-    frames have one, and one array per frame otherwise.
+    is. A file of 64 KiB or more is mapped, and that map was the whole peak
+    when it was larger than the frames. Indexing every frame and copying
+    the coordinates makes the recorded peak follow the frame count. The
+    copy is the shared slab when the frames have one, and one array per
+    frame otherwise.
     """
     import numpy as np
 
@@ -116,6 +117,29 @@ def _retain_frames(frames, n_frames: int, n_atoms: int | None = None):
     else:
         coords = [np.array(frame.xyz, copy=True) for frame in got]
     return got, coords
+
+
+def _tracemalloc_peak(action) -> int:
+    """Peak Python bytes of ``action``.
+
+    The resident set does not move once the allocator cache is warm, so
+    a resident-set delta of the same parse is zero. tracemalloc still
+    counts the frames built for the sample.
+    """
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        action()
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    return int(peak)
+
+
+def _peak_samples(action) -> dict:
+    samples = [_tracemalloc_peak(action) for _ in range(REPEAT)]
+    return {"samples": samples, "number": 1}
 
 
 def _optional_select_frame():
@@ -202,12 +226,17 @@ class TimeReadConTiny:
 
 
 class RayReadConTiny:
-    """Memray peak for the tiny CON reads. One call per sample."""
+    """Memray peak for the tiny CON reads. One call per sample.
+
+    Path samples parse the text loaded in setup. Mapping that file inside
+    the sample would report the file once it is larger than the frames.
+    """
 
     timeout = 180
     number = 1
     repeat = REPEAT
     rounds = 1
+    unit = "bytes"
     params = list(TINY_FRAMES)
     param_names = ["n_frames"]
 
@@ -231,7 +260,14 @@ class RayReadConTiny:
     def ray_read_con_path(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_con(self._path), self._n)
+        _retain_frames(readcon.read_con_string(self._text), self._n)
+
+    def track_read_con_path(self, n_frames: int) -> dict:
+        import readcon
+
+        return _peak_samples(
+            lambda: _retain_frames(readcon.read_con_string(self._text), self._n)
+        )
 
     def ray_iter_con_materialize(self, n_frames: int) -> None:
         import readcon
@@ -258,17 +294,25 @@ class TimeReadConCuh2:
 
 
 class RayReadConCuh2:
-    """Memray peak for the 218-atom CON read. One call per sample."""
+    """Memray peak for the 218-atom CON read. One call per sample.
+
+    The sample parses the text loaded in setup and holds the frames.
+    ``read_con`` on this path maps the file, and that map is larger than
+    the frames, so it is not what the peak reports.
+    """
 
     timeout = 180
     number = 1
     repeat = REPEAT
     rounds = 1
+    unit = "bytes"
     params = list(CUH2_FRAMES)
     param_names = ["n_frames"]
 
     def setup(self, n_frames: int) -> None:
-        self._path = _write_temp(_ladder_con(FIXTURE_CUH2, n_frames))
+        text = _ladder_con(FIXTURE_CUH2, n_frames)
+        self._text = text
+        self._path = _write_temp(text)
         self._n = n_frames
 
     def teardown(self, n_frames: int) -> None:
@@ -280,7 +324,16 @@ class RayReadConCuh2:
     def ray_read_con_path(self, n_frames: int) -> None:
         import readcon
 
-        _retain_frames(readcon.read_con(self._path), self._n, n_atoms=218)
+        _retain_frames(readcon.read_con_string(self._text), self._n, n_atoms=218)
+
+    def track_read_con_path(self, n_frames: int) -> dict:
+        import readcon
+
+        return _peak_samples(
+            lambda: _retain_frames(
+                readcon.read_con_string(self._text), self._n, n_atoms=218
+            )
+        )
 
 
 class TimeChemfilesXyz:
