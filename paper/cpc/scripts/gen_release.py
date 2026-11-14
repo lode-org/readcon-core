@@ -173,8 +173,11 @@ def main() -> int:
                 "src/release.tex differs from src/commit.tex and the tree; run scripts/gen_release.py"
             )
             return 1
+        digest = provenance.library_digest_at(commit)
+        if not digest:
+            raise SystemExit(f"commit {commit[:12]} has no library digest")
         print(
-            f"src/release.tex is current for commit {commit[:12]}, library {provenance.library_digest()[:12]}"
+            f"src/release.tex is current for commit {commit[:12]}, library {digest[:12]}"
         )
         return 0
     OUT.write_text(text)
