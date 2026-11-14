@@ -2261,6 +2261,10 @@ def run(
     pin_cores()
     host = host_snapshot()
     out.mkdir(parents=True, exist_ok=True)
+    disk = bench_disk()
+    work = WORK
+    for path in (out, work, disk):
+        path.mkdir(parents=True, exist_ok=True)
     # The profile is the chemfiles Frame build, which the read session already
     # recorded. A write-only rerun must not spend another pass on it.
     if "read" in ops:
@@ -2270,6 +2274,28 @@ def run(
     sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{sha}^{{tree}}"], cwd=ROOT, text=True
+    ).strip()
+    model = ""
+    for line in (host.get("lscpu") or "").splitlines():
+        if line.startswith("Model name:"):
+            model = line.split(":", 1)[1].strip()
+            break
+
+    def filesystem(path: Path) -> str:
+        return subprocess.check_output(
+            ["stat", "-f", "-c", "%T", str(path)], text=True
+        ).strip()
+
+    host["cpu_model"] = model
+    host["tree"] = tree
+    host["bench_disk"] = str(disk)
+    host["bench_disk_filesystem"] = filesystem(disk)
+    host["work"] = str(work)
+    host["work_filesystem"] = filesystem(work)
+    host["record"] = str(out)
+    host["record_filesystem"] = filesystem(out)
     versions = library_versions()
     ovito_check = ovito_extxyz_periodicity_and_drift()
     if (
@@ -2624,6 +2650,23 @@ def run(
         "rows": rows,
     }
     (out / "cross-format.json").write_text(json.dumps(payload, indent=2) + "\n")
+    (out / "host.json").write_text(
+        json.dumps(
+            {
+                "commit": sha,
+                "tree": host["tree"],
+                "cpu_model": host["cpu_model"],
+                "bench_disk": host["bench_disk"],
+                "bench_disk_filesystem": host["bench_disk_filesystem"],
+                "work": host["work"],
+                "work_filesystem": host["work_filesystem"],
+                "record": host["record"],
+                "record_filesystem": host["record_filesystem"],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     (out / "cross-format.log").write_text("\n".join(lines) + "\n")
     # One row per timed operation. median_s for a read is the warm run.
     # cold_* is the labelled cold column. n is how many samples that median used.
