@@ -181,6 +181,9 @@ def test_drivers_do_not_tile_one_frame() -> None:
         for path in base.rglob("*"):
             if path.suffix not in {".py", ".rs"} or not path.is_file():
                 continue
+            # paper/cpc/.pixi is the gitignored pixi environment.
+            if any(part.startswith(".") for part in path.relative_to(base).parts):
+                continue
             rel = path.relative_to(ROOT).as_posix()
             for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), 1
