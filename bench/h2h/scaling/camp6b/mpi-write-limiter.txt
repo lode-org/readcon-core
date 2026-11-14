@@ -1,0 +1,25 @@
+Fresh-file 8-rank CON write, 2000 frames per rank, /dev/shm, taskset 0-7.
+Each sample unlinks the published path first. The library creates a new
+temporary file, set_len, stores, then renames. No scratch inode.
+
+Store comparison, 4 samples, median of the two central samples:
+
+  pwrite          t1 0.0410  t8 0.0868  eff 0.473
+  MAP_POPULATE    t1 0.0429  t8 0.0696  eff 0.616
+  fallocate+mmap  t1 0.0424  t8 0.0652  eff 0.650
+  mmap copy       t1 0.0426  t8 0.0587  eff 0.726
+
+The shipped store is the mmap copy on tmpfs and pwrite off tmpfs.
+pwrite, MAP_POPULATE, and a per-rank fallocate were all slower.
+
+Campaign result with that store: mpi write con t1 0.0424 t8 0.0578 eff 0.734.
+mpi write convel t1 0.0597 t8 0.0843 eff 0.709.
+
+GNU time -v of mpirun, 4 samples plus warmup, whole tree:
+  1 rank   minor faults 23561   wall 0.59 s
+  8 ranks  minor faults 173934  wall 0.81 s
+
+strace -c of the writer ranks does not show that time in write or pwrite.
+The copy into the shared mapping faults in user space, and those faults
+take the file's mapping lock, so eight ranks do not fault in parallel.
+perf is not available for this kernel (6.12.113+); strace and time are the record.

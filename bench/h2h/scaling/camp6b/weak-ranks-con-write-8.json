@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.058994792, 0.056569551, 0.057883268, 0.059576598, 0.058292879, 0.060894255, 0.057726966, 0.059453886, 0.056775559, 0.055964159, 0.056316096, 0.056680410],
+  "warmup_s": 0.063643871,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp6/mpi-write-r8.con",
+  "host": "Intel Xeon Processor"
+}
