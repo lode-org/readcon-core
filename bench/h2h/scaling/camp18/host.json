@@ -1,0 +1,6 @@
+{
+  "commit": "71205041a45416adc10af0a47027b995905faf03",
+  "base": "a350668818694095c7f9a10250a32aa1911e7001",
+  "nproc": 8,
+  "note": "/tmp and the work inputs are ext4. /dev/shm is tmpfs."
+}

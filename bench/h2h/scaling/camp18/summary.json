@@ -1,0 +1,9 @@
+{
+  "base": "a350668818694095c7f9a10250a32aa1911e7001",
+  "cause": "The one-thread column walk copied each 3-float coordinate row with extend_from_slice. That memcpy did not inline, so a million-atom frame paid it once per atom.",
+  "fix": "The three coordinates are stored into the reserved slab directly.",
+  "protocol": "one warmup, n=12, type-7 median and IQR, serial, taskset -c 0-7. disk is the ext4 input. memory is the same file on tmpfs. rel1 and camp17 disk-file reads are their sink=memory rows.",
+  "con-1e6_w1_disk_s": 0.0363,
+  "rel1_s": 0.0393,
+  "camp17_s": 0.0437
+}
