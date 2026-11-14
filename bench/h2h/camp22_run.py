@@ -1251,7 +1251,7 @@ def host() -> None:
         json.dumps(
             {
                 "commit": text,
-                "base": "c40f31fc6664c85d3899d0383739734a02d694d6",
+                "base": "524d878f93539f19e442490c934b53e2d96758db",
                 "nproc": 8,
                 "model_name": model,
                 "lscpu": lscpu,
