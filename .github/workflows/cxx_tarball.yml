@@ -99,6 +99,14 @@ jobs:
           cp "build-cxx/vendor/readcon-core-cxx-${ver}-vendor.tar.gz.sha256" dist-cxx/
           ls -lh dist-cxx build-cxx/slim build-cxx/vendor
 
+      - name: Generate the cxx archive hash
+        run: |
+          set -euo pipefail
+          ver="$(tr -d '[:space:]' < VERSION)"
+          tar="dist-cxx/readcon-core-cxx-${ver}.tar.gz"
+          sha256sum "$tar" | awk '{print $1}' > "${tar}.sha256"
+          echo "generated $(tr -d '[:space:]' < "${tar}.sha256")"
+
       # Tag push: the packed checkout's readcon-core.sha256 is the only pin.
       # workflow_dispatch packs that tag from a newer workflow ref. The
       # script next to the uploader may accept that ref's pin when both

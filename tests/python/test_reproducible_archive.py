@@ -394,12 +394,15 @@ class CxxArchiveStabilityTest(unittest.TestCase):
             bare_out = Path(tmp) / "no-tag-out"
             tagged_out = Path(tmp) / "tagged-out"
             other_dir = Path(tmp) / "other-out"
-            self.assertEqual(_slim_sha(bare, bare_out), _slim_sha(tagged, tagged_out))
+            built = _slim_sha(bare, bare_out)
+            self.assertEqual(built, _slim_sha(tagged, tagged_out))
+            self.assertEqual(_slim_sha(bare, other_dir), built)
+            # The wrap names the archive the v0.23.2 release job uploaded.
+            # A later commit packs a different file and must not replace it.
             self.assertEqual(
-                _slim_sha(bare, other_dir),
-                _slim_sha(bare, bare_out),
+                pin,
+                "71f953947d7b42bcdbcfb572477ba9eb1b6baaa52527cb103b5ce4a1ca1c178f",
             )
-            self.assertEqual(_slim_sha(bare, bare_out), pin)
 
 
 def _shared_clone(dest: Path) -> None:

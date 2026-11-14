@@ -14,6 +14,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+ver="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+tag="v${ver}"
+head="$(git rev-parse HEAD)"
+tagged="$(git rev-parse "${tag}^{commit}" 2>/dev/null || true)"
+if [[ -z "$tagged" || "$tagged" != "$head" ]]; then
+    echo "record-cxx-wrap: HEAD is not ${tag}." >&2
+    echo "The release job hashes the archive it uploads. Do not pin a later tree to that URL." >&2
+    exit 1
+fi
+
 epoch="$(bash "$ROOT/scripts/source-date-epoch.sh" --fresh "$ROOT")"
 printf '%s\n' "$epoch" > "$ROOT/packaging/wrapdb/source-date-epoch"
 export SOURCE_DATE_EPOCH="$epoch"
