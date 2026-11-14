@@ -721,9 +721,15 @@ Those three times sit under the rel1 medians, 0.4688~s, 0.04132~s and 0.01203~s.
 The serial path fallocates the fresh file and spells into a shared mapping once the frame lengths are priced.
 camp19 replaces the ranked writes named in the ext4 and tmpfs captions.
 The record is \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
-The million-atom frame at 8 ranks on ext4 takes 0.01372~s.
-camp5c's warm-inode overwrite of that cell is 0.007465~s.
-A plain copy of the same bytes takes 0.009349~s.
+Table~\ref{tab:camp20} places camp20 next to those camp19 times and the camp5c times.
+The record is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
+The million-atom frame at 8 ranks on ext4 takes 0.01245~s.
+camp19 recorded 0.01372~s for that cell, and camp5c's warm-inode overwrite is 0.007465~s.
+A plain copy of the same bytes takes 0.009467~s.
+The remaining gap is the rename and the fresh inode, against that warm overwrite.
+On ext2, ext3, ext4, XFS and btrfs, rank 0 writes the slices in order.
+Every other filesystem keeps one write per rank.
+\texttt{READCON\_RANKED\_WRITE=parallel} or \texttt{sequential}, read on rank 0, overrides that choice.
 On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.7845 for threaded convel.
 The weak parses are Table~\ref{tab:camp16b-weak}.
 Eight threads keep the time at 0.1225~s, and \(T(1)/T(8)\) is 0.884.
@@ -733,6 +739,7 @@ Gzip of that million-atom frame, one member and one thread, takes 0.3277~s to wr
 zstd at level 3, one member and one thread, takes 0.05996~s and leaves a 0.7552~MB file.
 Eight members at eight threads write gzip in 0.04272~s and zstd in 0.007717~s (Table~\ref{tab:camp16b-compressed}).
 \texttt{write\_conbin} of the million-atom frame takes 0.1526~s, and \texttt{read\_conbin} takes 0.002137~s (Table~\ref{tab:camp16b-conbin}).
+\input{campaign/final/camp20}
 \input{campaign/final/camp16b}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
@@ -771,6 +778,7 @@ The cross-format comparison is \path{bench/h2h/scaling/h2h12} at \texttt{f157a12
 Write scaling is \path{bench/h2h/scaling/camp16b} at \texttt{e3d33a13}, and the remeasured thread writes are \path{bench/h2h/scaling/camp17} at \texttt{a3506688}.
 The con-100k and con-1e6 reads are \path{bench/h2h/scaling/camp18/reads.json} at \texttt{63f1db1f}.
 The ranked writes and the plain-copy column are \path{bench/h2h/scaling/camp19} at \texttt{87beea40}.
+The camp20 column is \path{bench/h2h/scaling/camp20} at \texttt{ef4d6946}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold and cold-open reads are \path{bench/db14} at \texttt{c64e9ce6}.
 The scale comparison is \path{bench/db15} at \texttt{9e568240}.
