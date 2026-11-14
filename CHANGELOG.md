@@ -58,8 +58,10 @@ All notable changes to this project will be documented in this file. See [conven
   The reader used to copy that three-float row once per atom.
 - A path write publishes only after every byte is stored. On Linux the store
   is an unnamed file, and `linkat` plus `rename` run in a helper that outlives
-  the writer. The published path is either the previous complete file or the
-  finished new one. CON-bin uses the same publish.
+  the writer. macOS preallocates with `posix_fallocate` and Windows extends
+  the named scratch with `set_len`; both publish by renaming that scratch.
+  The published path is either the previous complete file or the finished
+  new one. CON-bin uses the same publish.
 - A text round trip keeps the cell, symbols, coordinates, masses, atom ids,
   fixed flags, and velocities when they were present. NaN and infinity are
   spelled and rejected on read. CON-bin version 2 stores positions, velocities

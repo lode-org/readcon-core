@@ -50,6 +50,7 @@ fn a_finished_write_replaces_the_destination_and_leaves_no_scratch() {
     assert!(scratch_names(dir.path()).is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_killed_write_keeps_the_previous_file_or_a_complete_one() {
     let dir = tempfile::tempdir().unwrap();
@@ -88,6 +89,7 @@ fn a_killed_write_keeps_the_previous_file_or_a_complete_one() {
     assert!(left.is_empty(), "scratch left behind: {left:?}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_killed_rewrite_leaves_the_published_file_whole() {
     let dir = tempfile::tempdir().unwrap();
@@ -163,6 +165,7 @@ fn ranked_slices_round_trip_empty_and_one_byte_pieces() {
     assert_eq!(std::fs::read(&path).unwrap(), b"zz");
 }
 
+#[cfg(unix)]
 #[test]
 fn ranked_store_modes_round_trip_and_a_bad_override_keeps_the_file() {
     let dir = tempfile::tempdir().unwrap();

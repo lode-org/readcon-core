@@ -2999,10 +2999,23 @@ impl Unpublished {
         if let Some(path) = &self.scratch {
             return Ok(path.clone());
         }
-        let scratch = scratch_name(&destination_dir(dest));
-        link_fd(&self.file, &scratch)?;
-        self.scratch = Some(scratch.clone());
-        Ok(scratch)
+        // Only Linux `O_TMPFILE` leaves the inode unnamed. macOS and Windows
+        // already stored a scratch path in `create`, and `commit` renames it.
+        #[cfg(target_os = "linux")]
+        {
+            let scratch = scratch_name(&destination_dir(dest));
+            link_fd(&self.file, &scratch)?;
+            self.scratch = Some(scratch.clone());
+            Ok(scratch)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = dest;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "an unnamed store has no directory entry to expose",
+            ))
+        }
     }
 
     fn commit(mut self, dest: &Path) -> io::Result<()> {
@@ -3027,6 +3040,7 @@ impl Unpublished {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn link_fd(file: &File, scratch: &Path) -> io::Result<()> {
     use std::os::fd::AsRawFd;
     let proc = std::ffi::CString::new(format!("/proc/self/fd/{}", file.as_raw_fd()))
@@ -3080,20 +3094,49 @@ impl SharedStore {
 }
 
 fn allocate_len(file: &File, total: u64) -> io::Result<()> {
-    use std::os::unix::io::AsRawFd;
     if total == 0 {
         return Ok(());
     }
-    let rc = unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, total as libc::off_t) };
-    if rc == 0 {
-        return Ok(());
-    }
-    let err = io::Error::last_os_error();
-    match err.raw_os_error() {
-        Some(code) if code == libc::EOPNOTSUPP || code == libc::ENOSYS || code == libc::EINVAL => {
-            file.set_len(total)
+    // `fallocate` is Linux. macOS has `posix_fallocate`. Every other host,
+    // including Windows, extends the named scratch with `set_len`. A
+    // filesystem that rejects the preallocate call uses that same extend.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::io::AsRawFd;
+        let rc = unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, total as libc::off_t) };
+        if rc == 0 {
+            return Ok(());
         }
-        _ => Err(err),
+        let err = io::Error::last_os_error();
+        match err.raw_os_error() {
+            Some(code)
+                if code == libc::EOPNOTSUPP || code == libc::ENOSYS || code == libc::EINVAL =>
+            {
+                file.set_len(total)
+            }
+            _ => Err(err),
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::io::AsRawFd;
+        // libc does not re-export `posix_fallocate` for Apple targets.
+        unsafe extern "C" {
+            fn posix_fallocate(fd: i32, offset: libc::off_t, len: libc::off_t) -> i32;
+        }
+        let rc = unsafe { posix_fallocate(file.as_raw_fd(), 0, total as libc::off_t) };
+        if rc == 0 {
+            return Ok(());
+        }
+        if rc == libc::EOPNOTSUPP || rc == libc::ENOSYS || rc == libc::EINVAL {
+            file.set_len(total)
+        } else {
+            Err(io::Error::from_raw_os_error(rc))
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        file.set_len(total)
     }
 }
 
@@ -3229,7 +3272,22 @@ fn write_slices_at(file: &File, slices: &[&[u8]]) -> io::Result<()> {
                     at += n;
                 }
             }
-            #[cfg(not(unix))]
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::FileExt;
+                let mut at = 0usize;
+                while at < slice.len() {
+                    let n = file.seek_write(&slice[at..], offset + at as u64)?;
+                    if n == 0 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::WriteZero,
+                            "ranked slice wrote no bytes",
+                        ));
+                    }
+                    at += n;
+                }
+            }
+            #[cfg(not(any(unix, windows)))]
             {
                 let _ = (file, slice, offset);
                 return Err(io::Error::new(
@@ -5657,6 +5715,29 @@ mod section_arity_tests {
         let reserved = vec![json!("velocities"), json!("energies")];
         require_minor2_section_arity(2, &reserved, &serde_json::Map::new()).unwrap();
         require_minor2_section_arity(1, &widgets, &serde_json::Map::new()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod publish_on_every_host {
+    use super::publish_ranked_slices;
+
+    /// macOS renames a scratch preallocated with `posix_fallocate`. Windows
+    /// renames a scratch extended with `set_len`. Linux may use an unnamed
+    /// file. The published bytes and the absence of a scratch are the same.
+    #[test]
+    fn ranked_slices_replace_the_destination_and_leave_no_scratch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pieces.bin");
+        std::fs::write(&path, b"previous").unwrap();
+        publish_ranked_slices(&path, &[b"ab", &[], b"cde"], false, false).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"abcde");
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(".readcon-write-") || name.ends_with(".rewrite"))
+            .collect();
+        assert!(names.is_empty(), "scratch left behind: {names:?}");
     }
 }
 

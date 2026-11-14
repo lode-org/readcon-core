@@ -521,35 +521,60 @@ fn copy_mapped(file: &std::fs::File, body: &[u8], offset: u64) -> std::io::Resul
 }
 
 fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Result<()> {
-    use std::os::unix::io::AsRawFd;
     if buf.is_empty() {
         return Ok(());
     }
-    let fd = file.as_raw_fd();
-    let mut written = 0usize;
-    while written < buf.len() {
-        let n = unsafe {
-            libc::pwrite(
-                fd,
-                buf[written..].as_ptr() as *const libc::c_void,
-                buf.len() - written,
-                offset as libc::off_t,
-            )
-        };
-        if n < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.kind() == std::io::ErrorKind::Interrupted {
-                continue;
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let fd = file.as_raw_fd();
+        let mut written = 0usize;
+        while written < buf.len() {
+            let n = unsafe {
+                libc::pwrite(
+                    fd,
+                    buf[written..].as_ptr() as *const libc::c_void,
+                    buf.len() - written,
+                    offset as libc::off_t,
+                )
+            };
+            if n < 0 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(err);
             }
-            return Err(err);
+            if n == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
+            }
+            written += n as usize;
+            offset += n as u64;
         }
-        if n == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
-        }
-        written += n as usize;
-        offset += n as u64;
+        Ok(())
     }
-    Ok(())
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        let mut written = 0usize;
+        while written < buf.len() {
+            let n = file.seek_write(&buf[written..], offset)?;
+            if n == 0 {
+                return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "pwrite"));
+            }
+            written += n;
+            offset += n as u64;
+        }
+        Ok(())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (file, buf, offset);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "ranked pwrite",
+        ))
+    }
 }
 
 pub fn write_block_refs(

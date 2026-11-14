@@ -1,7 +1,5 @@
 //! Behaviour that the line-coverage gate was missing on v0.23.2.
 
-use std::os::fd::AsRawFd;
-
 use readcon_core::conbin::{QueueLimits, sum_mapped, sum_split_streams, write_from_con};
 use readcon_core::distrib::{block_owner, block_range, rkr_block_range};
 use readcon_core::iterators::{ConFrameIterator, release_parsed_frames};
@@ -66,6 +64,7 @@ fn split_streams_match_one_stream_on_a_cold_file() {
     .unwrap();
     let bin = dir.path().join("many.conbin");
     write_from_con(&con, &bin, false).unwrap();
+    use std::os::fd::AsRawFd;
     let file = std::fs::File::open(&bin).unwrap();
     file.sync_all().unwrap();
     let _ = unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) };
