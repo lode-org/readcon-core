@@ -19,6 +19,7 @@ use mpi::traits::*;
 use readcon_core::distrib::Comm;
 use readcon_core::distrib::block_range;
 use readcon_core::distrib_read::{ReadMode, read_block};
+use readcon_core::distrib_write::{WriteMode, write_block};
 use readcon_core::hostlabel::cpu_model;
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::types::ConFrame;
@@ -334,6 +335,78 @@ fn write_refusal(path: &Path, reason: &str) {
     fs::write(path, body).expect("write refusal");
 }
 
+/// Each rank already holds `frames_per_worker` frames. The sample is the
+/// slowest rank's unlink plus collective write. The read that filled
+/// those frames is not in the clock.
+fn run_weak_writes(
+    world: &mpi::topology::SimpleCommunicator,
+    comm: &Comm,
+    path: &Path,
+    out_path: &Path,
+    repeats: usize,
+    warmup_on: bool,
+) {
+    let ranks = comm.size();
+    let _ = fs::metadata(path).expect("weak write input");
+    let mine = read_block(comm, path, ReadMode::Shared, Some(1)).expect("load frames");
+    let frames_per_worker = mine.frames.len();
+    let dest = env::var_os("READCON_WEAK_DEST")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/dev/shm/camp6-weak-write.con"));
+    let once = |mine_frames: &[ConFrame]| {
+        if comm.rank() == 0 {
+            let _ = fs::remove_file(&dest);
+            let _ = fs::remove_file(readcon_core::frame_index::sidecar_path(&dest));
+        }
+        world.barrier();
+        let started = Instant::now();
+        write_block(comm, &dest, mine_frames, WriteMode::Auto, None).expect("collective write");
+        started.elapsed().as_secs_f64()
+    };
+    let warmup_s = if warmup_on { once(&mine.frames) } else { 0.0 };
+    let mut local = Vec::with_capacity(repeats);
+    for _ in 0..repeats {
+        local.push(once(&mine.frames));
+    }
+    let mut gathered = vec![0.0_f64; local.len() * ranks];
+    if local.is_empty() {
+        if comm.rank() == 0 {
+            write_refusal(out_path, "write repeats produced no samples");
+        }
+        return;
+    }
+    world.all_gather_into(&local[..], &mut gathered[..]);
+    if comm.rank() != 0 {
+        return;
+    }
+    let mut samples = Vec::with_capacity(repeats);
+    for sample_index in 0..repeats {
+        let mut slow = 0.0_f64;
+        for rank in 0..ranks {
+            let wall = gathered[rank * repeats + sample_index];
+            if rank == 0 || wall > slow {
+                slow = wall;
+            }
+        }
+        samples.push(slow);
+    }
+    let samples_s = samples
+        .iter()
+        .map(|sample| format!("{sample:.9}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let host = json_escape(&record_cpu());
+    let body = format!(
+        "{{\n  \"kind\": \"ranks\",\n  \"op\": \"write\",\n  \"measured\": true,\n  \"relation\": \"n_frames = frames_per_worker * workers\",\n  \"workers\": {ranks},\n  \"frames_per_worker\": {frames_per_worker},\n  \"repeats\": {repeats},\n  \"samples_s\": [{samples_s}],\n  \"warmup_s\": {warmup_s:.9},\n  \"warmup_on\": {warmup_on},\n  \"clock\": \"unlink-collective-write\",\n  \"dest\": \"{}\",\n  \"host\": \"{host}\"\n}}\n",
+        json_escape(&dest.display().to_string()),
+    );
+    if let Some(parent) = out_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(out_path, &body).expect("write json");
+    print!("{body}");
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
@@ -355,6 +428,10 @@ fn main() {
     let comm = Comm::dup_of(&world);
     let ranks = comm.size();
     let physical = physical_cores();
+    if env::var("READCON_WEAK_OP").ok().as_deref() == Some("write") {
+        run_weak_writes(&world, &comm, path, out_path, repeats, warmup_on);
+        return;
+    }
 
     if comm.rank() == 0 && (repeats < 1 || physical < 1 || ranks > physical || ranks < 1) {
         let reason = if repeats < 1 {

@@ -226,7 +226,18 @@ fn main() {
         std::process::exit(2);
     }
 
-    let one = fs::read_to_string(repo_root().join("resources/test/cuh2.con")).expect("fixture");
+    // `READCON_WEAK_FIXTURE` selects another one-frame file. The default
+    // stays `resources/test/cuh2.con`, and the text is still repeated
+    // `frames_per_worker * workers` times.
+    let fixture = env::var_os("READCON_WEAK_FIXTURE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root().join("resources/test/cuh2.con"));
+    let fixture_label = fixture
+        .strip_prefix(repo_root())
+        .unwrap_or(&fixture)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let one = fs::read_to_string(&fixture).expect("fixture");
     let mut points = String::new();
     for (index, workers) in ladder.iter().copied().enumerate() {
         let n_frames = frames_per_worker * workers;
@@ -264,7 +275,8 @@ fn main() {
     }
 
     let body = format!(
-        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"resources/test/cuh2.con\",\n  \"repeats\": {repeats},\n  \"serial_match\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"physical_cores\": {physical},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
+        "{{\n  \"kind\": \"threads\",\n  \"relation\": \"{RELATION}\",\n  \"frames_per_worker\": {frames_per_worker},\n  \"fixture\": \"{}\",\n  \"repeats\": {repeats},\n  \"serial_match\": true,\n  \"host\": \"{}\",\n  \"ncpus\": {ncpus},\n  \"physical_cores\": {physical},\n  \"mpi\": \"absent\",\n  \"gpu\": \"absent\",\n  \"commit\": \"{}\",\n  \"date_utc\": \"{}\",\n  \"complete\": true,\n  \"points\": [\n{points}\n  ]\n}}\n",
+        json_escape(&fixture_label),
         json_escape(&record_cpu()),
         json_escape(&git_head()),
         json_escape(&date_utc()),

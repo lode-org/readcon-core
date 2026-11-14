@@ -247,25 +247,96 @@ const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 
 /// Bytes per block of [`content_hash`]. Blocks are hashed on their own and
 /// folded in order, so the value does not depend on the thread count.
-const HASH_BLOCK: usize = 1 << 20;
+pub(crate) const HASH_BLOCK: usize = 1 << 20;
 
 /// Eight independent multiply and rotate lanes over 64-byte strides.
 ///
 /// Each step is a bijection of its lane for a fixed word, so changing any
 /// one word of a block always changes that lane.
-fn block_hash(block: &[u8]) -> u64 {
-    const K: u64 = 0x9e37_79b9_7f4a_7c15;
-    let mut lanes: [u64; 8] = std::array::from_fn(|k| FNV_OFFSET ^ k as u64);
-    let (strides, rest) = block.as_chunks::<64>();
-    for stride in strides {
-        for (lane, w) in lanes.iter_mut().zip(stride.as_chunks::<8>().0) {
-            *lane = (*lane ^ u64::from_le_bytes(*w))
-                .wrapping_mul(K)
+pub(crate) fn block_hash(block: &[u8]) -> u64 {
+    let mut cursor = BlockCursor::new();
+    cursor.feed(block);
+    cursor.finish()
+}
+
+/// A [`block_hash`] that can stop at a rank boundary and continue on the
+/// next rank. The finished value matches hashing the concatenated bytes.
+pub(crate) struct BlockCursor {
+    lanes: [u64; 8],
+    pending: [u8; 64],
+    pending_len: usize,
+}
+
+impl BlockCursor {
+    pub(crate) fn new() -> Self {
+        Self {
+            lanes: std::array::from_fn(|k| FNV_OFFSET ^ k as u64),
+            pending: [0; 64],
+            pending_len: 0,
+        }
+    }
+
+    pub(crate) fn feed(&mut self, mut data: &[u8]) {
+        const K: u64 = 0x9e37_79b9_7f4a_7c15;
+        if self.pending_len > 0 {
+            let need = 64 - self.pending_len;
+            let n = need.min(data.len());
+            self.pending[self.pending_len..self.pending_len + n].copy_from_slice(&data[..n]);
+            self.pending_len += n;
+            data = &data[n..];
+            if self.pending_len == 64 {
+                Self::mix(&mut self.lanes, &self.pending, K);
+                self.pending_len = 0;
+            }
+        }
+        let (strides, rest) = data.as_chunks::<64>();
+        for stride in strides {
+            Self::mix(&mut self.lanes, stride, K);
+        }
+        self.pending[..rest.len()].copy_from_slice(rest);
+        self.pending_len = rest.len();
+    }
+
+    fn mix(lanes: &mut [u64; 8], stride: &[u8], k: u64) {
+        for (lane, word) in lanes.iter_mut().zip(stride.as_chunks::<8>().0) {
+            *lane = (*lane ^ u64::from_le_bytes(*word))
+                .wrapping_mul(k)
                 .rotate_left(31);
         }
     }
-    let tail = fnv1a(FNV_OFFSET, rest);
-    lanes.iter().fold(tail, |h, l| fnv1a(h, &l.to_le_bytes()))
+
+    pub(crate) fn finish(&self) -> u64 {
+        let tail = fnv1a(FNV_OFFSET, &self.pending[..self.pending_len]);
+        self.lanes
+            .iter()
+            .fold(tail, |hash, lane| fnv1a(hash, &lane.to_le_bytes()))
+    }
+
+    pub(crate) fn to_bytes(&self) -> [u8; 129] {
+        let mut out = [0u8; 129];
+        for (index, lane) in self.lanes.iter().enumerate() {
+            out[index * 8..index * 8 + 8].copy_from_slice(&lane.to_le_bytes());
+        }
+        out[64..128].copy_from_slice(&self.pending);
+        out[128] = self.pending_len as u8;
+        out
+    }
+
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
+        let mut lanes = [0u64; 8];
+        for (index, lane) in lanes.iter_mut().enumerate() {
+            let mut word = [0u8; 8];
+            word.copy_from_slice(&bytes[index * 8..index * 8 + 8]);
+            *lane = u64::from_le_bytes(word);
+        }
+        let mut pending = [0u8; 64];
+        pending.copy_from_slice(&bytes[64..128]);
+        Self {
+            lanes,
+            pending,
+            pending_len: bytes[128] as usize,
+        }
+    }
 }
 
 /// Hash of every byte: [`block_hash`] per [`HASH_BLOCK`], folded with the
@@ -523,6 +594,17 @@ pub fn load_or_build(path: &Path, text: &str, write_back: bool) -> Result<FrameI
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resumed_block_hash_matches_one_shot() {
+        let data: Vec<u8> = (0..200_000).map(|index| (index % 251) as u8).collect();
+        for split in [0usize, 1, 63, 64, 65, 1000, 199_999] {
+            let mut cursor = BlockCursor::new();
+            cursor.feed(&data[..split]);
+            cursor.feed(&data[split..]);
+            assert_eq!(cursor.finish(), block_hash(&data), "split {split}");
+        }
+    }
 
     fn fixture(n: usize) -> String {
         let one = std::fs::read_to_string(concat!(

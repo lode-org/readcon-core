@@ -160,30 +160,80 @@ fn write_pwrite(
     offset: u64,
     total: u64,
 ) -> Result<(), BoxErr> {
+    // A new temporary file, sized up front, then one `pwrite` per rank.
+    // Filling one shared mapping faults those pages under the mapping
+    // lock, so eight ranks serialize the first touch. `pwrite` allocates
+    // each rank's own range. Rank 0 renames the temporary onto `path`
+    // only after every byte is stored.
     let created = if comm.rank() == 0 {
-        prepare_ranked_file(path, total).map_err(BoxErr::from)
+        fresh_ranked_file(path, total).map_err(BoxErr::from)
     } else {
-        Ok(())
+        Ok(std::path::PathBuf::new())
     };
-    collective(comm, created, "create")?;
+    let tmp = collective(comm, created, "create")?;
+    let raw = comm.bcast_bytes(
+        0,
+        if comm.rank() == 0 {
+            tmp.as_os_str().as_encoded_bytes()
+        } else {
+            &[]
+        },
+    );
+    // SAFETY: `raw` is the encoded form of the path rank 0 just created.
+    let tmp =
+        std::path::PathBuf::from(unsafe { std::ffi::OsString::from_encoded_bytes_unchecked(raw) });
     comm.raw().barrier();
-    // Read is required for the tmpfs shared mapping. A write-only
-    // descriptor returns EACCES from mmap.
     let opened = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(path)
+        .open(&tmp)
         .map_err(BoxErr::from);
     let file = collective(comm, opened, "open")?;
-    // tmpfs page faults dominate a ranked pwrite. A shared mapping of
-    // this rank's slice is the same sink the single-frame path uses.
+    // On tmpfs a shared mapping is faster than `pwrite` or `MAP_POPULATE`.
+    // Those still allocate the pages, and a fresh file's first touch is
+    // what eight ranks wait on. Off tmpfs, `pwrite` is the store.
     let wrote = if !bytes.is_empty() && crate::writer::file_is_tmpfs(&file) {
         copy_mapped(&file, bytes, offset).map_err(BoxErr::from)
     } else {
         pwrite_all(&file, bytes, offset).map_err(BoxErr::from)
     };
     collective(comm, wrote, "pwrite")?;
+    drop(file);
+    comm.raw().barrier();
+    let published = if comm.rank() == 0 {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::rename(&tmp, path).map_err(BoxErr::from)
+    } else {
+        Ok(())
+    };
+    collective(comm, published, "publish")?;
     Ok(())
+}
+
+/// Create a new sibling of `path` and set its length. The pages are not
+/// touched here; each rank's `pwrite` allocates its own range.
+fn fresh_ranked_file(path: &Path, total: u64) -> std::io::Result<std::path::PathBuf> {
+    let dir = match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        _ => std::path::PathBuf::from("."),
+    };
+    let tmp = dir.join(format!(
+        ".readcon-write-{}-{}.tmp",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|dur| dur.as_nanos())
+            .unwrap_or(0),
+    ));
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&tmp)?;
+    file.set_len(total)?;
+    Ok(tmp)
 }
 
 /// Create `path` at `total` bytes, or leave it when it is already that long.
@@ -350,9 +400,80 @@ fn unpack_slice_parts(mut buf: &[u8]) -> Result<frame_index::SliceParts, String>
 /// Content hash of the ranked bytes, matching a hash of the whole file.
 /// Rank 0 returns the hash. Every rank must call this.
 fn ranked_content_hash(comm: &Comm, offset: u64, bytes: &[u8], total: u64) -> u64 {
-    let parts = frame_index::slice_block_parts(offset, bytes);
-    let payload = pack_slice_parts(&parts);
+    // Finish every 1 MiB block on the rank that owns its last byte, and
+    // pass only the 129-byte cursor across a split. Gathering the raw
+    // edge of each rank was a multi-megabyte copy onto rank 0.
+    let block = frame_index::HASH_BLOCK as u64;
     let world = comm.raw();
+    let start = offset;
+    let end = offset + bytes.len() as u64;
+    let mut hashes: Vec<(u64, u64)> = Vec::new();
+    // Full blocks are hashed here, with no message. The split edges are a
+    // 129-byte cursor and happen after this, so a rank is not idle while
+    // it still has its own blocks to hash.
+    let mut pos = if start % block == 0 {
+        start
+    } else {
+        ((start / block) + 1) * block
+    };
+    if pos > end {
+        pos = end;
+    }
+    let mut local = (pos - start) as usize;
+    while pos < end {
+        let take_end = (pos + block).min(end);
+        let full = take_end - pos == block;
+        let owned_tail = take_end == total;
+        if !(full || owned_tail) {
+            break;
+        }
+        let n = (take_end - pos) as usize;
+        hashes.push((
+            pos / block,
+            frame_index::block_hash(&bytes[local..local + n]),
+        ));
+        local += n;
+        pos = take_end;
+    }
+    let lead = if start % block != 0 && start < end {
+        let lead_end = ((start / block + 1) * block).min(end);
+        Some(&bytes[..(lead_end - start) as usize])
+    } else {
+        None
+    };
+    let tail_at = pos;
+    let tail = if tail_at < end && tail_at % block == 0 && tail_at != total {
+        Some(&bytes[(tail_at - start) as usize..])
+    } else {
+        None
+    };
+    if let Some(chunk) = lead {
+        let (buf, _) = world
+            .process_at_rank((comm.rank() - 1) as i32)
+            .receive_vec::<u8>();
+        let mut cursor = frame_index::BlockCursor::from_bytes(&buf);
+        cursor.feed(chunk);
+        let block_end = (start / block + 1) * block;
+        if end >= block_end || end == total {
+            hashes.push((start / block, cursor.finish()));
+        } else {
+            world
+                .process_at_rank((comm.rank() + 1) as i32)
+                .send(&cursor.to_bytes()[..]);
+        }
+    }
+    if let Some(chunk) = tail {
+        let mut cursor = frame_index::BlockCursor::new();
+        cursor.feed(chunk);
+        if end == total {
+            hashes.push((tail_at / block, cursor.finish()));
+        } else {
+            world
+                .process_at_rank((comm.rank() + 1) as i32)
+                .send(&cursor.to_bytes()[..]);
+        }
+    }
+    let payload = pack_block_hashes(&hashes);
     let root = world.process_at_rank(0);
     let len = payload.len() as u64;
     if comm.rank() == 0 {
@@ -361,32 +482,63 @@ fn ranked_content_hash(comm: &Comm, offset: u64, bytes: &[u8], total: u64) -> u6
         let counts: Vec<i32> = lens.iter().map(|&n| n as i32).collect();
         let displs: Vec<i32> = counts
             .iter()
-            .scan(0i32, |acc, &c| {
-                let d = *acc;
-                *acc += c;
-                Some(d)
+            .scan(0i32, |acc, &count| {
+                let at = *acc;
+                *acc += count;
+                Some(at)
             })
             .collect();
-        let sum: usize = counts.iter().map(|&c| c as usize).sum();
+        let sum: usize = counts.iter().map(|&count| count as usize).sum();
         let mut store = vec![0u8; sum.max(1)];
         {
             let mut part = PartitionMut::new(&mut store[..sum], &counts[..], &displs[..]);
             root.gather_varcount_into_root(&payload[..], &mut part);
         }
-        let mut decoded = Vec::with_capacity(comm.size());
+        let mut blocks = vec![0u64; total.div_ceil(block) as usize];
         let mut at = 0usize;
         for &count in &counts {
             let n = count as usize;
-            decoded
-                .push(unpack_slice_parts(&store[at..at + n]).expect("ranked content hash payload"));
+            let mut piece = &store[at..at + n];
+            if piece.len() < 8 {
+                at += n;
+                continue;
+            }
+            let mut count_bytes = [0u8; 8];
+            count_bytes.copy_from_slice(&piece[..8]);
+            let n_hash = u64::from_le_bytes(count_bytes) as usize;
+            piece = &piece[8..];
+            for _ in 0..n_hash {
+                if piece.len() < 16 {
+                    break;
+                }
+                let mut index_bytes = [0u8; 8];
+                let mut hash_bytes = [0u8; 8];
+                index_bytes.copy_from_slice(&piece[..8]);
+                hash_bytes.copy_from_slice(&piece[8..16]);
+                let index = u64::from_le_bytes(index_bytes) as usize;
+                blocks[index] = u64::from_le_bytes(hash_bytes);
+                piece = &piece[16..];
+            }
             at += n;
         }
-        frame_index::fold_slice_parts(total, &decoded)
+        frame_index::fold_block_hashes(total, &blocks)
     } else {
         root.gather_into(&len);
         root.gather_varcount_into(&payload[..]);
         0
     }
+}
+
+fn pack_block_hashes(hashes: &[(u64, u64)]) -> Vec<u8> {
+    // A leading count keeps the gather buffer non-empty. MPI_Gatherv
+    // rejects a zero-length payload from a rank that owns no block.
+    let mut out = Vec::with_capacity(8 + hashes.len() * 16);
+    out.extend_from_slice(&(hashes.len() as u64).to_le_bytes());
+    for &(index, hash) in hashes {
+        out.extend_from_slice(&index.to_le_bytes());
+        out.extend_from_slice(&hash.to_le_bytes());
+    }
+    out
 }
 
 /// Gather variable-length u64 lists to rank 0 in rank order.
