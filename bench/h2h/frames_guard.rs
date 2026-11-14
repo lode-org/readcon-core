@@ -1,7 +1,8 @@
-//! Distinct CON frames. The nudge matches ``bench/h2h/frames_guard.py``.
+//! Distinct CON frames. The displacement matches ``bench/h2h/frames_guard.py``.
 //!
-//! Each frame has its own PCG32 stream. Coordinate fields keep their width,
-//! so a copied cuh2 frame stays 16771 bytes. Identical frames panic.
+//! Each frame has its own PCG32 stream. Every coordinate moves by 0.01–0.05 Å
+//! and the field widths stay put, so a copied cuh2 frame stays 16771 bytes.
+//! Identical frames panic.
 
 use std::collections::HashSet;
 
@@ -99,14 +100,64 @@ fn float_at(bytes: &[u8], start: usize) -> Option<usize> {
     Some(index)
 }
 
+fn apply_hundredths(token: &str, steps: i32) -> Option<String> {
+    if steps == 0 {
+        return None;
+    }
+    let (sign, body) = if let Some(rest) = token.strip_prefix('-') {
+        ("-", rest)
+    } else if let Some(rest) = token.strip_prefix('+') {
+        ("+", rest)
+    } else {
+        ("", token)
+    };
+    let (whole, frac) = body.split_once('.')?;
+    if frac.len() < 2
+        || !whole.bytes().all(|byte| byte.is_ascii_digit())
+        || !frac.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let width = whole.len() + frac.len();
+    let mut value: i128 = format!("{whole}{frac}").parse().ok()?;
+    if sign == "-" {
+        value = -value;
+    }
+    let scale = 10i128.pow((frac.len() - 2) as u32);
+    value += i128::from(steps) * scale;
+    let negative = value < 0;
+    let digits = format!("{:0width$}", value.unsigned_abs(), width = width);
+    if digits.len() != width {
+        return None;
+    }
+    let new_sign = if negative {
+        "-"
+    } else if sign == "+" {
+        "+"
+    } else {
+        ""
+    };
+    if new_sign.len() != sign.len() {
+        return None;
+    }
+    let rebuilt = format!(
+        "{new_sign}{}.{}",
+        &digits[..whole.len()],
+        &digits[whole.len()..]
+    );
+    if rebuilt.len() != token.len() {
+        None
+    } else {
+        Some(rebuilt)
+    }
+}
+
 fn bump_token(token: &str, draw: u32) -> String {
-    let mut chars: Vec<char> = token.chars().collect();
-    let delta = (draw % 9) + 1;
-    for index in (0..chars.len()).rev() {
-        if chars[index].is_ascii_digit() {
-            let digit = chars[index].to_digit(10).unwrap();
-            chars[index] = char::from_digit((digit + delta) % 10, 10).unwrap();
-            return chars.into_iter().collect();
+    let steps = ((draw % 5) + 1) as i32;
+    let sign = if draw & 16 == 0 { 1 } else { -1 };
+    for direction in [sign, -sign] {
+        if let Some(shifted) = apply_hundredths(token, direction * steps) {
+            return shifted;
         }
     }
     token.to_string()

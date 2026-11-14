@@ -129,10 +129,12 @@ def write_grid(path: Path, n_atoms: int, n_frames: int) -> None:
     while side * side * side < n_atoms:
         side += 1
     span = float(side)
+    from frames_guard import thermal_shift
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for frame in range(n_frames):
-            shift = frame * 1e-4
+            delta = thermal_shift(n_atoms, frame)
             handle.write("grid\n")
             handle.write('{"con_spec_version":2}\n')
             handle.write(f"{span:.6f} {span:.6f} {span:.6f}\n")
@@ -150,8 +152,9 @@ def write_grid(path: Path, n_atoms: int, n_frames: int) -> None:
                     for x in range(side):
                         if written >= n_atoms:
                             break
+                        dx, dy, dz = (float(value) for value in delta[written])
                         handle.write(
-                            f" {float(x) + shift:.6f} {float(y):.6f} {float(z):.6f} 0 {written}\n"
+                            f" {float(x) + dx:.6f} {float(y) + dy:.6f} {float(z) + dz:.6f} 0 {written}\n"
                         )
                         written += 1
                     if written >= n_atoms:
@@ -379,8 +382,10 @@ def extract_loaded(code: str, loaded):
     if code == "mdanalysis":
         universe, frames = loaded
         pos = np.stack(frames)
-        mass = np.tile(
-            np.array(universe.atoms.masses, dtype=np.float64), (len(frames), 1)
+        mass = np.repeat(
+            np.array(universe.atoms.masses, dtype=np.float64)[None, :],
+            len(frames),
+            axis=0,
         )
         return pos, mass, None
     if code == "pymatgen":
@@ -410,7 +415,7 @@ def extract_loaded(code: str, loaded):
         angles = np.array(
             [loaded.cell.alpha, loaded.cell.beta, loaded.cell.gamma], dtype=np.float64
         )
-        cell = np.tile(np.concatenate([lengths, angles]), (len(pos), 1))
+        cell = np.repeat(np.concatenate([lengths, angles])[None, :], len(pos), axis=0)
         return (
             np.asarray(pos, dtype=np.float64),
             np.asarray(mass, dtype=np.float64),

@@ -20,8 +20,14 @@ N_ATOMS = 64
 
 
 def write_con(path: Path) -> None:
+    import sys
+
+    sys.path.insert(0, str(ROOT / "bench" / "h2h"))
+    from frames_guard import thermal_shift
+
     lines = [""]
     for frame in range(N_FRAMES):
+        delta = thermal_shift(N_ATOMS, frame)
         lines.append(
             '{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV"}}'
         )
@@ -35,9 +41,10 @@ def write_con(path: Path) -> None:
         lines.append("Cu")
         lines.append("Coordinates of Component 1")
         for atom in range(N_ATOMS):
-            x = (atom % 8) * 1.1 + frame * 0.001
-            y = (atom // 8) * 1.1
-            lines.append(f"{x:.6f} {y:.6f} 0.5 0 {atom}")
+            x = (atom % 8) * 1.1 + float(delta[atom, 0])
+            y = (atom // 8) * 1.1 + float(delta[atom, 1])
+            z = 0.5 + float(delta[atom, 2])
+            lines.append(f"{x:.6f} {y:.6f} {z:.6f} 0 {atom}")
         lines.append("")
     path.write_text("\n".join(lines))
 

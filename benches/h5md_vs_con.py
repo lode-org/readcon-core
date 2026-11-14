@@ -94,9 +94,14 @@ def main() -> None:
     atoms0 = fr0.to_ase()
     n_atoms = len(fr0)
     pos0 = atoms0.get_positions().astype(np.float64)
-    positions = np.tile(pos0[None, :, :], (args.frames, 1, 1))
+    __import__("sys").path.insert(
+        0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h")
+    )
+    from frames_guard import distinct_frames, thermal_shift
+
+    positions = np.empty((args.frames, n_atoms, 3), dtype=np.float64)
     for i in range(args.frames):
-        positions[i, 0, 2] = pos0[0, 2] + i * 1e-6
+        positions[i] = pos0 + thermal_shift(n_atoms, i)
 
     work = bench_dir("h5md-vs-con")
     try:
@@ -117,14 +122,9 @@ def main() -> None:
                 u.atoms.positions = positions[i]
                 W.write(u.atoms)
 
-        # Multi-frame CON: identical text concat is the rare-event checkpoint pattern
-        # (repeated / near-repeated frames). Size rows also report gzip/zstd of that blob.
+        # Multi-frame CON. Each frame is a thermal step of the fixture, not a copy.
+        # Size rows also report gzip/zstd of that blob.
         con = work / "traj.con"
-        import sys
-
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
-        from frames_guard import distinct_frames
-
         con_text = distinct_frames(args.fixture.read_text(), args.frames)
         con.write_text(con_text)
 
@@ -145,9 +145,7 @@ def main() -> None:
         xyz = work / "traj.xyz"
         atoms_list = [atoms0.copy() for _ in range(args.frames)]
         for i, a in enumerate(atoms_list):
-            p = a.get_positions()
-            p[0, 2] += i * 1e-6
-            a.set_positions(p)
+            a.set_positions(pos0 + thermal_shift(n_atoms, i))
         ase_write(str(xyz), atoms_list, format="xyz")
 
         def mda_h5md() -> int:
