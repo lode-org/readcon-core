@@ -590,7 +590,12 @@ The convel file and the million-atom frame differ by less than 1\%.
 On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} \extxyzAseMedian~s, chemfiles \extxyzChemfilesMedian~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
 On the million-atom CON frame, readcon takes \conReadconMedian~s, ASE takes \conAseMedian~s and eOn takes \conEonMedian~s (Table~\ref{tab:conread}).
 On tmpfs the eight-way weak-read efficiency is 0.8736 for threaded CON, 0.9173 for threaded convel, 0.9734 for MPI CON and 0.9835 for MPI convel (Table~\ref{tab:camp9-weak-read}).
-The readcon weak-write efficiencies stay \todoPending.
+Camp14 records the weak writes on one 8-vCPU host (Table~\ref{tab:camp14-weak}).
+Each fresh-file row gives readcon's $t(1)$ and $t(8)$ beside the copy's $t(1)$ and $t(8)$ on the same mount, then the two efficiencies.
+Readcon's weak efficiency sits above the fresh-file copy on every row: tmpfs threads 0.6651 against 0.2675, tmpfs ranks 0.702 against 0.3814, ext4 threads 0.5241 against 0.1669, and ext4 ranks 0.4541 against 0.2005.
+The same-length rewrite is its own row: 0.9484 on tmpfs and 0.8581 on ext4 at 8 threads.
+It overwrites a same-length spare and renames it into place.
+The record is \path{bench/h2h/scaling/camp14/kvm-8} at \texttt{80dde969}.
 Camp13 compares fresh-file stores on the model 173 host (Table~\ref{tab:camp13-store}).
 On tmpfs the fastest store at 8 workers is a plain per-worker mmap.
 \texttt{shmem\_enabled} is never, so a default tmpfs file stays on base pages under \texttt{MADV\_HUGEPAGE}.
@@ -619,6 +624,7 @@ Figure~\ref{fig:memory} is the perf17 plot.
 \input{campaign/final/fig8}
 \input{campaign/final/camp9}
 \input{campaign/final/camp12_write}
+\input{campaign/final/camp14_weak}
 \input{campaign/final/camp13_store}
 
 \input{campaign/final/h2h_extxyz}
@@ -735,6 +741,7 @@ The copy efficiencies are \path{bench/h2h/scaling/camp10} at that commit.
 The stream bandwidth is \path{bench/h2h/scaling/camp11} at that commit.
 The formatter and the million-atom frame write are \path{bench/h2h/scaling/camp12} at \texttt{0c78ce7e}.
 The fresh-file stores are \path{bench/h2h/scaling/camp13} at \texttt{fa51a162}.
+The weak writes are \path{bench/h2h/scaling/camp14/kvm-8} at \texttt{80dde969}.
 The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 One input is \path{frames-32x100000.con}.

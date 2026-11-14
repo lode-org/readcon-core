@@ -1,0 +1,25 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp14 weak writes on one 8-vCPU KVM host.
+The fresh-file rows give readcon and the copy on the same mount: $t(1)$, $t(8)$, then the efficiency $T(1)/T(8)$.
+The same-length rewrite overwrites a spare and renames it into place.
+Record \texttt{bench/h2h/scaling/camp14/kvm-8/summary.json} at \texttt{80dde969650cdfdd736f78328b371a7a98597159}.
+Host from lscpu: Intel Xeon, family 6, model 173, 8 CPUs, KVM.}
+\label{tab:camp14-weak}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+Mount & Row & readcon $t(1)$ & readcon $t(8)$ & copy $t(1)$ & copy $t(8)$ & readcon & copy \\
+\midrule
+tmpfs threads & fresh file & 0.1008 & 0.1515 & 0.02613 & 0.09768 & 0.6651 & 0.2675 \\
+tmpfs ranks & fresh file & 0.0339 & 0.0483 & 0.008959 & 0.02349 & 0.702 & 0.3814 \\
+ext4 threads & fresh file & 0.1079 & 0.206 & 0.03596 & 0.2154 & 0.5241 & 0.1669 \\
+ext4 ranks & fresh file & 0.03676 & 0.08095 & 0.0111 & 0.05536 & 0.4541 & 0.2005 \\
+\midrule
+tmpfs threads & same-length rewrite & 0.09708 & 0.1024 &  &  & 0.9484 &  \\
+ext4 threads & same-length rewrite & 0.09882 & 0.1152 &  &  & 0.8581 &  \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
