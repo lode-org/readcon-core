@@ -425,18 +425,13 @@
     "build": {
       "readcon_version": "0.23.3",
       "readcon_module": "site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
-      "readcon_module_sha256": "7ce8a2ccde6d2d3164523ed1842efa8b1e9f496bc12b9506db66a234c9633f8c",
+      "readcon_module_sha256": "6e5f1c2bcc2f60e74de420a83aa663b51d004ef6b698f983cd08c7f5a3552cbe",
       "rustc": "1.88.0 (6b00bc388 2025-06-23)",
-      "newer_sources": [
-        "src/conbin.rs",
-        "src/distrib_write.rs",
-        "src/python.rs",
-        "src/writer.rs"
-      ],
-      "library_digest": "1961a395fc2d54a7cd2b4cd5cab1eda960a9277abb4ee1a5296c541496f145a8",
-      "source_files": 52,
+      "newer_sources": [],
+      "library_digest": "ddd357a5c3f065525d6a80466418e021806b4bd185dcf826bb3a512b9e84c77e",
+      "source_files": 53,
       "source_tag": null,
-      "source_commit": "068fed27806dfa75fe3c1b1a285c135a7302d5ba"
+      "source_commit": "6d0fbe42b60f5080c68b9a5b2875392125334522"
     },
     "host": {
       "kernel": "6.12.113+",
