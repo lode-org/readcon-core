@@ -917,7 +917,8 @@ def compressed_ranks() -> None:
                         "read",
                         str(path),
                         str(REPEATS),
-                    ]
+                    ],
+                    {"READCON_MPI_READ": "scatter"},
                 )
                 samples = [
                     float(piece)
@@ -1044,7 +1045,6 @@ def weak_compressed() -> None:
                     rows, op="read", codec=codec, workers=workers, sink=sink, kind="mpi"
                 ):
                     continue
-                out = OUT / f"weak-comp-mpi-{codec}-{workers}-{sink}.json"
                 text = run(
                     [
                         "taskset",
@@ -1055,14 +1055,18 @@ def weak_compressed() -> None:
                         "core",
                         "-n",
                         str(workers),
-                        str(WEAK_MPI),
+                        str(MPI),
+                        "read",
                         str(path),
-                        str(out),
                         str(REPEATS),
-                    ]
+                    ],
+                    {"READCON_MPI_READ": "scatter"},
                 )
-                data = json.loads(out.read_text())
-                samples = data["samples_s"]
+                samples = [
+                    float(piece)
+                    for piece in text.strip().split("samples=")[1].split()[0].split(",")
+                    if piece
+                ]
                 med, iqr = stats(samples)
                 rows.append(
                     {
