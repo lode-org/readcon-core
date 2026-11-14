@@ -55,10 +55,12 @@ class SplitAndLayout(unittest.TestCase):
 
     def test_number_one_only_on_ray_classes(self) -> None:
         timing = (
-            bench.TimeReadConTiny,
-            bench.TimeReadConCuh2,
             bench.TimeChemfilesXyz,
             bench.TimeSelectAtoms,
+        )
+        cleaned = (
+            bench.TimeReadConTiny,
+            bench.TimeReadConCuh2,
         )
         memory = (
             bench.RayReadConTiny,
@@ -69,6 +71,15 @@ class SplitAndLayout(unittest.TestCase):
         for cls in timing:
             self.assertNotIn("number", cls.__dict__, cls.__name__)
             self.assertNotIn("setup", cls.__dict__, cls.__name__)
+            self.assertEqual(cls.sample_time, bench.SAMPLE_TIME)
+            names = [name for name in cls.__dict__ if name.startswith("time_")]
+            self.assertTrue(names, cls.__name__)
+            self.assertFalse(any(name.startswith("ray_") for name in cls.__dict__))
+        for cls in cleaned:
+            self.assertNotIn("number", cls.__dict__, cls.__name__)
+            self.assertIn("setup", cls.__dict__, cls.__name__)
+            self.assertIn("teardown", cls.__dict__, cls.__name__)
+            self.assertNotIn("teardown_cache", cls.__dict__, cls.__name__)
             self.assertEqual(cls.sample_time, bench.SAMPLE_TIME)
             self.assertEqual(bench.SAMPLE_TIME, bench.ASV_DEFAULT_SAMPLE_TIME)
             names = [name for name in cls.__dict__ if name.startswith("time_")]

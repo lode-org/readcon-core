@@ -39,7 +39,7 @@ FIXTURE = ROOT / "resources" / "test" / "cuh2.con"
 def serial_match(path: str, workers: int, n_frames: int) -> None:
     """The threaded coordinate array matches the one-thread parse.
 
-    This runs from ``setup_cache``, outside the timed call.
+    This runs from ``setup``, outside the timed call.
     """
     import readcon
 
@@ -78,32 +78,24 @@ class TimeWeakThreads:
     params = list(DEFAULT_LADDER)
     param_names = ["workers"]
 
-    def setup_cache(self) -> dict:
+    def setup(self, workers: int) -> None:
         text = FIXTURE.read_text(encoding="utf-8")
         per_worker = frames_per_worker()
-        cached = {}
-        for workers in DEFAULT_LADDER:
-            n_frames = frames_for_workers(workers, per_worker)
-            path = str(bench_file("weak-threads", ".con"))
-            Path(path).write_text(text * n_frames, encoding="utf-8")
-            serial_match(path, workers, n_frames)
-            cached[workers] = {
-                "path": path,
-                "n_frames": n_frames,
-                "frames_per_worker": per_worker,
-            }
-        return cached
+        n_frames = frames_for_workers(int(workers), per_worker)
+        path = str(bench_file("weak-threads", ".con"))
+        Path(path).write_text(text * n_frames, encoding="utf-8")
+        serial_match(path, int(workers), n_frames)
+        self._path = path
+        self._n_frames = n_frames
 
-    def teardown_cache(self, cache: dict) -> None:
-        for item in cache.values():
-            Path(item["path"]).unlink(missing_ok=True)
+    def teardown(self, workers: int) -> None:
+        Path(self._path).unlink(missing_ok=True)
 
-    def time_weak_threads(self, cache: dict, workers: int) -> None:
+    def time_weak_threads(self, workers: int) -> None:
         import readcon
 
-        item = cache[int(workers)]
-        frames = readcon.read_con(item["path"], n_threads=int(workers))
-        if len(frames) != item["n_frames"]:
+        frames = readcon.read_con(self._path, n_threads=int(workers))
+        if len(frames) != self._n_frames:
             raise AssertionError(
                 "frame count does not follow n_frames = frames_per_worker * workers"
             )
