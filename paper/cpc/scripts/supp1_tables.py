@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Camp4 write-scaling tables and the h2h9 million-atom cross-format table.
+"""Camp5c write-scaling tables and the h2h9 million-atom cross-format table.
 
-The records are bench/h2h/scaling/camp4 and bench/h2h/scaling/h2h9 at
-c8ee7096539fc06ff3db0bc3242238f64b1170fc. Camp4 supersedes camp3.
-Threaded cross-format rows are pending camp5. CON-bin rows are pending h2h10.
+Write scaling is bench/h2h/scaling/camp5c at CAMP5C, on the model 173 host.
+CON-bin rows are pending h2h10. Weak-write efficiencies stay pending.
 """
 
 from __future__ import annotations
@@ -11,20 +10,15 @@ from __future__ import annotations
 import csv
 import io
 import json
+import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-CAMP4 = REPO / "bench" / "h2h" / "scaling" / "camp4"
 H2H9 = REPO / "bench" / "h2h" / "scaling" / "h2h9"
 OUT = REPO / "paper" / "cpc" / "src" / "campaign" / "final"
 TIP = "c8ee7096539fc06ff3db0bc3242238f64b1170fc"
-# Eight-way memory efficiencies T(1)/(8 T(8)) on camp4.
-EXPECT = {
-    ("threads", "con-100k"): 0.838,
-    ("threads", "convel"): 0.762,
-    ("mpi", "con-100k"): 0.955,
-    ("mpi", "convel"): 0.930,
-}
+# Directory commit on feat/release-0.23.0. The JSON commit field is not on the branch.
+CAMP5C = "dc9abaf5a08e92c9a2b78d624b586fccea8928e2"
 
 
 def sig(value: float) -> str:
@@ -60,15 +54,25 @@ def table(caption: str, label: str, spec: str, header: str, rows: list[str]) -> 
     )
 
 
-def efficiency(one: float, eight: float) -> float:
-    return one / (8.0 * eight)
+def git_show(commit: str, path: str) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "show", f"{commit}:{path}"], cwd=REPO, text=True, stderr=subprocess.PIPE
+        )
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(f"missing {commit}:{path}") from exc
+
+
+def efficiency(one: float, count: int, many: float) -> float:
+    return one / (count * many)
 
 
 def write_scaling(host: str) -> str:
     chunks = []
     for kind, filename in (("threads", "strong-threads.json"), ("mpi", "strong-mpi.json")):
-        rows = json.loads((CAMP4 / filename).read_text(encoding="utf-8"))["rows"]
-        record_commit = json.loads((CAMP4 / filename).read_text(encoding="utf-8"))["commit"]
+        path = f"bench/h2h/scaling/camp5c/{filename}"
+        payload = json.loads(git_show(CAMP5C, path))
+        rows = payload["rows"]
         groups: dict[str, dict] = {}
         for row in rows:
             if row.get("op") != "write":
@@ -83,22 +87,19 @@ def write_scaling(host: str) -> str:
                 for workers in (1, 2, 4, 8):
                     row = points[workers]
                     n = len(row["samples_s"])
+                    if n != 12:
+                        raise SystemExit(f"{kind} {name} {workers} has n={n}")
                     cells.append(f"{sig(row['median_s'])} ({sig(row['iqr_s'])}, $n{{=}}{n}$)")
-                eff = efficiency(points[1]["median_s"], points[8]["median_s"])
-                if kind in ("threads", "mpi") and sink == "memory" and name in ("con-100k", "convel"):
-                    expected = EXPECT[(kind, name)]
-                    if abs(eff - expected) > 0.0005:
-                        raise SystemExit(f"{kind} {name} efficiency {eff:.4f} is not {expected}")
-                cells.append(f"{eff:.3f}")
+                eff = efficiency(points[1]["median_s"], 8, points[8]["median_s"])
+                cells.append(sig(eff))
                 body.append(esc(name) + " & " + " & ".join(cells) + r" \\")
-            label = f"tab:camp4-{kind}-write-{sink}".replace("_", "")
+            label = f"tab:camp5c-{kind}-write-{sink}".replace("_", "")
             chunks.append(table(
-                f"Camp4 strong write scaling across {kind_name}, into {esc(sink)}. "
+                f"Camp5c strong write scaling across {kind_name}, into {esc(sink)}. "
                 "Each entry is the type-7 median in seconds, then the interquartile range and $n$. "
-                "The last column is the eight-way efficiency $T(1)/(8T(8))$. "
-                f"Record \\texttt{{bench/h2h/scaling/camp4/{filename}}} at \\texttt{{{TIP}}}. "
-                f"The file's commit field is \\texttt{{{record_commit}}}. "
-                "This record supersedes camp3. It is not the model 207 campaign. "
+                "The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. "
+                f"Record \\texttt{{{path}}} at \\texttt{{{CAMP5C}}}. "
+                "This record supersedes camp4. "
                 f"{host}",
                 label,
                 "@{}lccccc@{}",
@@ -140,12 +141,6 @@ def h2h9_table(host: str) -> str:
             f"& {timing} & {size} & {drops} \\\\"
         )
     body.append(
-        r"readcon & con & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\"
-    )
-    body.append(
-        r"readcon & convel & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\"
-    )
-    body.append(
         r"readcon & conbin & read & \multicolumn{3}{l}{pending h2h10} \\"
     )
     body.append(
@@ -158,7 +153,7 @@ def h2h9_table(host: str) -> str:
         "Drops names the fields that format does not keep. "
         "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
         "chemfiles has no CON writer. "
-        r"Threaded rows are pending camp5. CON-bin rows are pending h2h10. "
+        r"CON-bin rows are pending h2h10. "
         f"Record \\texttt{{bench/h2h/scaling/h2h9/cross-format.tsv}} at \\texttt{{{TIP}}}. "
         f"The file's commit line is \\texttt{{{record}}}. "
         f"{host}"
@@ -180,18 +175,18 @@ def h2h9_table(host: str) -> str:
 
 
 def main() -> None:
-    hardware = json.loads((CAMP4 / "hardware.json").read_text(encoding="utf-8"))
+    hardware = json.loads(git_show(CAMP5C, "bench/h2h/scaling/camp5c/hardware.json"))
     host = host_line(hardware["lscpu"])
     if "model 173" not in host:
-        raise SystemExit(f"camp4 host is not model 173: {host}")
+        raise SystemExit(f"camp5c host is not model 173: {host}")
     h2h9 = json.loads((H2H9 / "cross-format.json").read_text(encoding="utf-8"))
     h2h9_host = host_line(h2h9["host"]["lscpu"])
     if "model 173" not in h2h9_host:
         raise SystemExit(f"h2h9 host is not model 173: {h2h9_host}")
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "camp4_writes.tex").write_text(write_scaling(host), encoding="utf-8")
+    (OUT / "camp5c_writes.tex").write_text(write_scaling(host), encoding="utf-8")
     (OUT / "h2h9_1m.tex").write_text(h2h9_table(h2h9_host), encoding="utf-8")
-    print("wrote camp4_writes.tex and h2h9_1m.tex")
+    print("wrote camp5c_writes.tex and h2h9_1m.tex")
 
 
 if __name__ == "__main__":

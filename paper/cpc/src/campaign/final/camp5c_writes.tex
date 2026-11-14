@@ -1,0 +1,119 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across cores, into disk. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-threads.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-threads-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.4832 (0.001048, $n{=}12$) & 0.2377 (0.006262, $n{=}12$) & 0.1267 (0.001017, $n{=}12$) & 0.06747 (0.001801, $n{=}12$) & 0.8952 \\
+convel & 0.6891 (0.002072, $n{=}12$) & 0.343 (0.007583, $n{=}12$) & 0.1905 (0.003433, $n{=}12$) & 0.1164 (0.003732, $n{=}12$) & 0.74 \\
+con-1e6 & 0.04573 (0.0009642, $n{=}12$) & 0.02471 (0.0004461, $n{=}12$) & 0.01382 (0.0003411, $n{=}12$) & 0.009045 (0.0005109, $n{=}12$) & 0.6321 \\
+extxyz-cu & 0.4343 (0.007911, $n{=}12$) & 0.4082 (0.005913, $n{=}12$) & 0.1709 (0.001966, $n{=}12$) & 0.09029 (0.0009386, $n{=}12$) & 0.6013 \\
+extxyz-alloy & 0.1674 (0.000815, $n{=}12$) & 0.157 (0.001112, $n{=}12$) & 0.06092 (0.0003938, $n{=}12$) & 0.0281 (0.0003004, $n{=}12$) & 0.7446 \\
+extxyz-md & 0.1816 (0.0007629, $n{=}12$) & 0.1743 (0.001263, $n{=}12$) & 0.06896 (0.001035, $n{=}12$) & 0.03256 (0.0006117, $n{=}12$) & 0.6969 \\
+extxyz-same & 0.4239 (0.008689, $n{=}12$) & 0.4035 (0.001664, $n{=}12$) & 0.154 (0.001033, $n{=}12$) & 0.06817 (0.00096, $n{=}12$) & 0.7772 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across cores, into memory. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-threads.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-threads-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.4656 (0.002945, $n{=}12$) & 0.2372 (0.006033, $n{=}12$) & 0.122 (0.001996, $n{=}12$) & 0.05919 (0.001936, $n{=}12$) & 0.9834 \\
+convel & 0.6617 (0.004084, $n{=}12$) & 0.3358 (0.01482, $n{=}12$) & 0.1785 (0.003863, $n{=}12$) & 0.09622 (0.003847, $n{=}12$) & 0.8596 \\
+con-1e6 & 0.04426 (0.0003029, $n{=}12$) & 0.02299 (0.0009077, $n{=}12$) & 0.01264 (0.00111, $n{=}12$) & 0.006811 (0.000536, $n{=}12$) & 0.8123 \\
+extxyz-cu & 0.4313 (0.01608, $n{=}12$) & 0.402 (0.003992, $n{=}12$) & 0.1673 (0.0005655, $n{=}12$) & 0.08736 (0.0009746, $n{=}12$) & 0.6171 \\
+extxyz-alloy & 0.1665 (0.003303, $n{=}12$) & 0.155 (0.0009968, $n{=}12$) & 0.05961 (0.0003031, $n{=}12$) & 0.02681 (0.0003882, $n{=}12$) & 0.7765 \\
+extxyz-md & 0.1806 (0.0009267, $n{=}12$) & 0.173 (0.0003466, $n{=}12$) & 0.06772 (0.0001215, $n{=}12$) & 0.03155 (0.0004086, $n{=}12$) & 0.7157 \\
+extxyz-same & 0.4212 (0.007582, $n{=}12$) & 0.3997 (0.001238, $n{=}12$) & 0.1519 (0.00183, $n{=}12$) & 0.06618 (0.001579, $n{=}12$) & 0.7957 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across cores, into disk\_sync. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-threads.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-threads-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.5348 (0.01181, $n{=}12$) & 0.2949 (0.009759, $n{=}12$) & 0.1814 (0.01023, $n{=}12$) & 0.1263 (0.008759, $n{=}12$) & 0.5292 \\
+convel & 0.8171 (0.01334, $n{=}12$) & 0.4754 (0.008406, $n{=}12$) & 0.3206 (0.01204, $n{=}12$) & 0.2261 (0.0167, $n{=}12$) & 0.4517 \\
+con-1e6 & 0.06072 (0.002136, $n{=}12$) & 0.04093 (0.0009843, $n{=}12$) & 0.02976 (0.00209, $n{=}12$) & 0.02638 (0.003876, $n{=}12$) & 0.2877 \\
+extxyz-cu & 0.4876 (0.006042, $n{=}12$) & 0.468 (0.003645, $n{=}12$) & 0.2327 (0.01677, $n{=}12$) & 0.1479 (0.003604, $n{=}12$) & 0.4122 \\
+extxyz-alloy & 0.1933 (0.002194, $n{=}12$) & 0.1829 (0.005256, $n{=}12$) & 0.08479 (0.002592, $n{=}12$) & 0.05015 (0.002266, $n{=}12$) & 0.4817 \\
+extxyz-md & 0.205 (0.002954, $n{=}12$) & 0.1961 (0.002316, $n{=}12$) & 0.08973 (0.001791, $n{=}12$) & 0.05096 (0.004955, $n{=}12$) & 0.5028 \\
+extxyz-same & 0.4634 (0.006409, $n{=}12$) & 0.4384 (0.006086, $n{=}12$) & 0.1883 (0.002453, $n{=}12$) & 0.1 (0.002376, $n{=}12$) & 0.5791 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across MPI ranks, into disk. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-mpi.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-mpi-write-disk}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.6232 (0.008142, $n{=}12$) & 0.3278 (0.009773, $n{=}12$) & 0.174 (0.003316, $n{=}12$) & 0.1014 (0.002336, $n{=}12$) & 0.768 \\
+convel & 1.043 (0.003873, $n{=}12$) & 0.5485 (0.007875, $n{=}12$) & 0.3013 (0.003579, $n{=}12$) & 0.1776 (0.003472, $n{=}12$) & 0.7343 \\
+con-1e6 & 0.04492 (0.001467, $n{=}12$) & 0.02096 (0.000293, $n{=}12$) & 0.01199 (0.0001355, $n{=}12$) & 0.007465 (0.0004313, $n{=}12$) & 0.7522 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across MPI ranks, into memory. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-mpi.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-mpi-write-memory}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.633 (0.008515, $n{=}12$) & 0.3188 (0.005338, $n{=}12$) & 0.1608 (0.002054, $n{=}12$) & 0.08335 (0.001622, $n{=}12$) & 0.9493 \\
+convel & 1.07 (0.003125, $n{=}12$) & 0.5286 (0.002668, $n{=}12$) & 0.2647 (0.005722, $n{=}12$) & 0.1383 (0.001184, $n{=}12$) & 0.9667 \\
+con-1e6 & 0.04708 (0.0003082, $n{=}12$) & 0.02496 (0.000432, $n{=}12$) & 0.01371 (0.00023, $n{=}12$) & 0.008964 (0.000135, $n{=}12$) & 0.6566 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp5c strong write scaling across MPI ranks, into disk\_sync. Each entry is the type-7 median in seconds, then the interquartile range and $n$. The last column is the eight-way efficiency $T(1)/(8T(8))$ from the same run. Record \texttt{bench/h2h/scaling/camp5c/strong-mpi.json} at \texttt{dc9abaf5a08e92c9a2b78d624b586fccea8928e2}. This record supersedes camp4. Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp5c-mpi-write-disksync}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+File & 1 & 2 & 4 & 8 & 8-way \\
+\midrule
+con-100k & 0.6958 (0.01376, $n{=}12$) & 0.3898 (0.005188, $n{=}12$) & 0.2396 (0.009165, $n{=}12$) & 0.1688 (0.002831, $n{=}12$) & 0.5151 \\
+convel & 1.179 (0.01514, $n{=}12$) & 0.6697 (0.01334, $n{=}12$) & 0.4185 (0.01052, $n{=}12$) & 0.299 (0.006356, $n{=}12$) & 0.4927 \\
+con-1e6 & 0.06584 (0.002724, $n{=}12$) & 0.04177 (0.005894, $n{=}12$) & 0.029 (0.003768, $n{=}12$) & 0.02313 (0.003809, $n{=}12$) & 0.3558 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

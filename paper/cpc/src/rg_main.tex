@@ -222,9 +222,11 @@ A path writer opens the destination and truncates it, then writes the
 frames into that file.
 
 \textit{Additional comments including restrictions and unusual features:}
-The library is readcon-core \benchReadcon.
-readcon-core 0.23.0 is published on crates.io.
-The Python packages readcon 0.23.0 and readcon-chemfiles 0.23.0 are published on PyPI.
+The library is readcon-core 0.23.1.
+readcon-core 0.23.1 is published on crates.io.
+readcon 0.23.1 and readcon-chemfiles 0.23.1 are published on PyPI.
+Both require Python 3.10 or later, and the wheels cover CPython 3.10 through 3.15.
+Version 0.23.1 rejects a CON-bin column the file cannot hold.
 The companion programs are readcon-db \benchReadconDb, under the MIT licence, at
 \url{https://github.com/lode-org/readcon-db}, and readcon-ops \opsVersion,
 under the \opsLicense\ licence, at
@@ -446,7 +448,8 @@ The saddle carries a displacements section with the same fixed-flag column and t
 readcon-ops, under the BSD 3-clause licence, from \url{https://github.com/lode-org/readcon-ops}, is the compare layer of the stack.
 readcon-ops takes a \texttt{ConFrame}: \texttt{identical} matches atoms of one element under the minimum image, \texttt{internal\_motion} removes a rigid motion, \texttt{rotational\_match} aligns by iterative rotations and assignments, and \texttt{wulff\_vertices} returns a Wulff construction.
 The three programs split the work as parse, store and compare (Table~\ref{tab:commands}, Section~\ref{sec:supp-commands}).
-Rust installs with \texttt{cargo add readcon-core@\benchReadcon}, Python with \texttt{pip install readcon==\benchReadcon}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==\benchReadcon}.
+Rust installs with \texttt{cargo add readcon-core@0.23.1}, Python with \texttt{pip install readcon==0.23.1}, and the chemfiles bridge with \texttt{pip install readcon-chemfiles==0.23.1}.
+The ASE plugin installs from the repository directory and registers the \texttt{ase.ioformats} entries \texttt{readcon-con} and \texttt{readcon-convel}.
 Julia, from a checkout of the repository, is \texttt{julia -{}-project=julia/ReadCon -e 'using Pkg; Pkg.instantiate()'}, and C and C++ use the shipped headers, with \texttt{find\_package(readcon-core)} or \texttt{cargo cinstall -{}-release -{}-prefix /usr/local}.
 readcon-db is \texttt{cargo add readcon-db} or \texttt{pip install readcon-db}, and readcon-ops installs with \texttt{pip install .} from a checkout of \url{https://github.com/lode-org/readcon-ops}.
 
@@ -573,7 +576,7 @@ Right: kinetic energy when the file's time unit is kept, and when the same numbe
 \subsection{Computational details}\label{sec:compute}
 The peer tables in this section were timed on one core of an Intel Xeon of family \campaignFamily, model \campaignModel\ (Emerald Rapids), at \campaignGHz~GHz, with eight cores, one thread per core, and \campaignMemGiB~GiB of memory.
 The machine runs Linux 6.12.113+, rustc 1.88.0, g++ 13.3.0 and gfortran 13.3.0, and the files sit on an ext4 volume.
-The h2h9 and camp4 records are a separate session on a Xeon of family 6, model 173.
+The h2h9 and camp5c records are a separate session on a Xeon of family 6, model 173.
 The supported readcon-db insert is the db5 row of 10000 frames of 8 atoms.
 Large-structure reads are \todoPending\ until db6.
 The reads use readcon-core \benchReadcon\ and Python 3.12.3.
@@ -587,7 +590,8 @@ The \num{100000}-frame medians differ by more than 1\%.
 The convel file and the million-atom frame differ by less than 1\%.
 On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} \extxyzAseMedian~s, chemfiles \extxyzChemfilesMedian~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
 On the million-atom CON frame, readcon takes \conReadconMedian~s, ASE takes \conAseMedian~s and eOn takes \conEonMedian~s (Table~\ref{tab:conread}).
-The page-cache and tmpfs weak-write efficiencies are \todoPending\ until perf22.
+The page-cache and tmpfs weak-write efficiencies are \todoPending.
+A decomposition of those writes against a copy ceiling is in progress.
 Figure~\ref{fig:memory} is the perf17 plot of that measurement.
 \input{campaign/final/fig8}
 
@@ -607,7 +611,7 @@ Large-structure reads are \todoPending\ until db6.
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
-Write scaling in this paper is camp4.
+Write scaling in this paper is camp5c.
 
 \subsection{Same structures, each tool in its format}\label{sec:cross-format}
 Tables~\ref{tab:cross-1m} and~\ref{tab:cross-traj} are the model 207 session: one frame of \(10^{6}\) atoms and one trajectory.
@@ -625,7 +629,7 @@ MDAnalysis reads NetCDF, DCD and XTC faster than plain CON.
 OVITO's XYZ read is slower than plain CON.
 ASE's extended XYZ read is \hNineAseOverCon\ times the plain CON read.
 The million-atom PDB read is unsupported: the atom serial is five digits.
-The eight-thread rows are \todoPending\ until camp5, and the CON-bin rows are \todoPending\ until h2h10.
+The CON-bin rows are \todoPending\ until h2h10.
 XTC stores coordinates only, and TRR stores coordinates, velocities and forces \cite{abrahamGromacsHighPerformance2015,krylovLibxtcEfficientLibrary2021,gromacsTrajectoryFormats2026}.
 DCD is the CHARMM coordinate trajectory \cite{brooksCharmmBiomolecular2009}.
 The AMBER NetCDF trajectory stores coordinates and the cell, not a mass or a constraint, and a velocity array is optional \cite{amberNetcdfConvention2026,caseAmberBiomolecularSimulation2005}.
@@ -638,11 +642,14 @@ A file that drops those fields cannot stand in for a CON file.
 The ASE extended XYZ row drops none.
 \input{campaign/final/cross_format}
 
-Tables~\ref{tab:camp4-threads-write-memory} and~\ref{tab:camp4-mpi-write-memory} are the camp4 write-scaling record on the model 173 host, and they supersede camp3.
-On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.838 for threaded con-100k, 0.762 for threaded convel, 0.955 for MPI con-100k and 0.930 for MPI convel.
+Tables~\ref{tab:camp5c-threads-write-memory} and~\ref{tab:camp5c-mpi-write-memory} are the camp5c write-scaling record on the model 173 host, and they supersede camp4.
+The record is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
+Each median is twelve samples.
+On the memory sink the eight-way efficiency \(T(1)/(8T(8))\) is 0.9834 for threaded con-100k, 0.8596 for threaded convel, 0.9493 for MPI con-100k and 0.9667 for MPI convel.
+The convel writer keeps the first header, skips the identifier scan already done while pricing the frame, appends velocity lines to the frame buffer, and releases each worker's mapping on that worker.
 The disk and disk-sync tables are the same record.
 \input{campaign/final/h2h9_1m}
-\input{campaign/final/camp4_writes}
+\input{campaign/final/camp5c_writes}
 
 \FloatBarrier \section{Discussion}\label{sec:discussion}
 CON 3.1, H5MD, extended XYZ and POSCAR keep different parts of a restart.
@@ -666,15 +673,17 @@ The next steps are a declared section for that optimiser state and a patch to AS
 
 
 \FloatBarrier \section*{Data availability}\label{sec:data}
-readcon-core \benchReadcon\ is the release this paper describes, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
-The Zenodo record for readcon-core \benchReadcon\ is \readconZenodoDOI.
-readcon-core 0.23.0 is on crates.io.
-readcon 0.23.0 and readcon-chemfiles 0.23.0 are on PyPI.
+The published release is readcon-core 0.23.1, under the MIT licence, from \url{https://github.com/lode-org/readcon-core}.
+The Zenodo record for readcon-core 0.23.1 is \readconZenodoDOI.
+readcon-core 0.23.1 is on crates.io.
+readcon 0.23.1 and readcon-chemfiles 0.23.1 are on PyPI.
+Both require Python 3.10 or later, and the wheels cover CPython 3.10 through 3.15.
+The ASE plugin installs from the repository directory and registers \texttt{readcon-con} and \texttt{readcon-convel}.
 The DOI above is a placeholder.
 The one-core timings of Section~\ref{sec:performance} and the fidelity comparison use readcon-core \benchReadcon.
 The extended XYZ and CON peer rows are the Snakemake targets \texttt{h2h\_table\_1e6} and \texttt{h2h\_table\_100k} in \texttt{bench/h2h/Snakefile}.
 The cross-format comparison is \path{bench/h2h/scaling/h2h9} at \path{c8ee7096539fc06ff3db0bc3242238f64b1170fc}.
-Write scaling is \path{bench/h2h/scaling/camp4} at that tip.
+Write scaling is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
 The supported readcon-db insert is the db5 row of 10000 frames of 8 atoms on \path{lode-org/readcon-db}.
 Large-structure reads are \todoPending\ until db6.
 The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.

@@ -884,8 +884,6 @@ def h2h9_million_tex(tsv: Path, host: str) -> str:
             f"{esc(tool)} & {esc(fmt)} & {esc(op)} "
             f"& {timing} & {size} & {drops(loses)} \\\\"
         )
-    body.append(r"readcon & con & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\")
-    body.append(r"readcon & convel & write, 8 threads & \multicolumn{3}{l}{pending camp5} \\")
     body.append(r"readcon & conbin & read & \multicolumn{3}{l}{pending h2h10} \\")
     body.append(r"readcon & conbin & write & \multicolumn{3}{l}{pending h2h10} \\")
     caption = (
@@ -895,7 +893,7 @@ def h2h9_million_tex(tsv: Path, host: str) -> str:
         "Drops names the fields that format does not keep. "
         "The chemfiles.Frame read is a read of readcon-written CON into a chemfiles.Frame. "
         "chemfiles has no CON writer. "
-        r"Threaded rows are pending camp5. CON-bin rows are pending h2h10. "
+        r"CON-bin rows are pending h2h10. "
         f"Record \\texttt{{bench/h2h/scaling/h2h9/cross-format.tsv}} at \\texttt{{c8ee7096539fc06ff3db0bc3242238f64b1170fc}}. "
         f"The file's commit line is \\texttt{{{record}}}. "
         f"{host}"
