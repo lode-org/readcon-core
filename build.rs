@@ -40,8 +40,37 @@ fn check_package_version_file() {
     }
 }
 
+fn git_rev(spec: &str) -> String {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let output = std::process::Command::new("git")
+        .args(["-C", &manifest_dir, "rev-parse", spec])
+        .output();
+    let Ok(output) = output else {
+        return String::new();
+    };
+    if !output.status.success() {
+        return String::new();
+    }
+    let text = String::from_utf8(output.stdout).unwrap_or_default();
+    let text = text.trim();
+    if text.len() == 40 && text.chars().all(|c| c.is_ascii_hexdigit()) {
+        text.to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn emit_build_identity() {
+    let commit = git_rev("HEAD");
+    let tree = git_rev("HEAD^{tree}");
+    println!("cargo:rustc-env=READCON_GIT_COMMIT={commit}");
+    println!("cargo:rustc-env=READCON_GIT_TREE={tree}");
+    println!("cargo:rerun-if-changed=build.rs");
+}
+
 fn main() {
     check_package_version_file();
+    emit_build_identity();
 
     // Cap'n Proto schema compilation (behind rpc feature)
     #[cfg(feature = "rpc")]

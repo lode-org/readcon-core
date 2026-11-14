@@ -34,6 +34,18 @@ def test_readcon_keeps_velocities_and_mdcompress_drops_them():
         assert "interval unit" not in h2h15.DROPS[arm]
 
 
+def test_unique_frame_hashes_sit_beside_the_million_fields():
+    import cross_format
+
+    spec = cross_format.make_spec(16, 4)
+    assert spec["n_unique_frames"] == 4
+    assert spec["unique_frame_hashes"] == spec["n_unique_frames"]
+    assert len(spec["frame_sha256"]) == 4
+    spec["positions"][1] = spec["positions"][0]
+    with pytest.raises(SystemExit, match="byte-identical"):
+        cross_format.require_distinct_frames(spec["positions"])
+
+
 def test_tool_pins_are_full_commits():
     assert h2h15.MDC_COMMIT == "41b600313c1a8265dbaa639651ed0124610d1bbb"
     assert h2h15.MDC_TAG == "v2.0.5"

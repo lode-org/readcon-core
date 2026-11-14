@@ -5541,6 +5541,11 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("IndexOutOfBounds", py.get_type::<IndexOutOfBounds>())?;
     m.add("MassMismatch", py.get_type::<MassMismatch>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add(
+        "__commit__",
+        option_env!("READCON_GIT_COMMIT").unwrap_or(""),
+    )?;
+    m.add("__tree__", option_env!("READCON_GIT_TREE").unwrap_or(""))?;
     m.add("CON_SPEC_VERSION", crate::CON_SPEC_VERSION)?;
     m.add_class::<PyAtomDatum>()?;
     m.add_class::<PyConFrame>()?;

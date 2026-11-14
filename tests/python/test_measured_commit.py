@@ -36,13 +36,62 @@ def test_an_unpublished_head_is_refused() -> None:
         module.require_published("local-head", "")
 
 
+def test_an_unpushed_commit_is_refused() -> None:
+    module = _load()
+    head = "a" * 40
+    tip = "b" * 40
+    with pytest.raises(SystemExit, match="not on a remote branch"):
+        module.require_published(
+            head,
+            f"{tip}\trefs/heads/feat/release-0.23.0\n",
+        )
+
+
+def test_a_local_origin_ref_is_not_publication() -> None:
+    module = _load()
+    with pytest.raises(SystemExit, match="not on a remote branch"):
+        module.require_published(
+            "0b62d689367cf69797107ca505778fde1017990d",
+            "  origin/feat/release-0.23.0\n",
+        )
+
+
 def test_a_published_head_is_the_measured_commit() -> None:
     module = _load()
+    sha = "0b62d689367cf69797107ca505778fde1017990d"
     branches = module.require_published(
-        "0b62d689367cf69797107ca505778fde1017990d",
-        "  origin/feat/release-0.23.0\n",
+        sha,
+        f"{sha}\trefs/heads/feat/release-0.23.0\n",
     )
-    assert branches == ["origin/feat/release-0.23.0"]
+    assert branches == ["refs/heads/feat/release-0.23.0"]
+
+
+def test_an_ancestor_of_the_remote_tip_is_published() -> None:
+    module = _load()
+    head = "a" * 40
+    tip = "b" * 40
+    branches = module.require_published(
+        head,
+        f"{tip}\trefs/heads/feat/release-0.23.0\n",
+        is_ancestor=lambda commit, tip_sha: commit == head and tip_sha == tip,
+    )
+    assert branches == ["refs/heads/feat/release-0.23.0"]
+
+
+def test_a_stale_install_is_refused() -> None:
+    module = _load()
+    with pytest.raises(SystemExit, match="not built from HEAD"):
+        module.require_built_from("a" * 40, "b" * 40, "c" * 40, "d" * 40)
+    with pytest.raises(SystemExit, match="not built from HEAD"):
+        module.require_built_from("a" * 40, "b" * 40, "", "")
+
+
+def test_a_module_built_from_head_is_accepted() -> None:
+    module = _load()
+    head = "a" * 40
+    tree = "b" * 40
+    module.require_built_from(head, tree, head, "other")
+    module.require_built_from(head, tree, "other", tree)
 
 
 def _needles() -> tuple[str, ...]:

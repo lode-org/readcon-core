@@ -140,6 +140,7 @@ def prepare() -> tuple[dict[str, Path], dict]:
         "n_atoms": int(spec["n_atoms"]),
         "n_frames": int(spec["n_frames"]),
         "n_unique_frames": int(spec["n_unique_frames"]),
+        "unique_frame_hashes": int(spec["unique_frame_hashes"]),
         "frame_sha256": [str(item) for item in spec["frame_sha256"]],
     }
     plain = directory / "million.con"
