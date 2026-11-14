@@ -3067,19 +3067,31 @@ mod tests {
     #[test]
     fn wait_resident_returns_an_unmapped_populate_error() {
         let page = page_size().unwrap();
-        let ptr = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                page,
-                libc::PROT_NONE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            )
-        };
-        assert_ne!(ptr, libc::MAP_FAILED);
-        unsafe { libc::munmap(ptr, page) };
-        let err = wait_resident(ptr as usize, 0, page, page).unwrap_err();
-        assert!(err.contains("os error"), "{err}");
+        // The hole sits between two mappings this test still owns, so a
+        // parallel test's mmap is unlikely to land on it. A hit is retried:
+        // the address is only unmapped until something else claims it.
+        for _ in 0..64 {
+            let ptr = unsafe {
+                libc::mmap(
+                    std::ptr::null_mut(),
+                    page * 3,
+                    libc::PROT_NONE,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                )
+            };
+            assert_ne!(ptr, libc::MAP_FAILED);
+            let hole = unsafe { (ptr as *mut u8).add(page) as *mut libc::c_void };
+            unsafe { libc::munmap(hole, page) };
+            let result = wait_resident(hole as usize, 0, page, page);
+            unsafe { libc::munmap(ptr, page) };
+            unsafe { libc::munmap((ptr as *mut u8).add(page * 2) as *mut libc::c_void, page) };
+            if let Err(err) = result {
+                assert!(err.contains("os error"), "{err}");
+                return;
+            }
+        }
+        panic!("madvise on an unmapped page returned success");
     }
 }
