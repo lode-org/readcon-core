@@ -29,6 +29,7 @@ inside that format's size range, and reads back at the full atom count.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import shutil
@@ -38,7 +39,7 @@ import time
 from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
-from measured_commit import record_path
+from measured_commit import measurement, record_path
 
 import numpy as np
 from sample_protocol import (
@@ -138,8 +139,40 @@ def serial_threads() -> None:
         os.environ[key] = "1"
 
 
+def _frame_delta(n_atoms: int, frame: int) -> np.ndarray:
+    """Seeded per-frame coordinate noise.
+
+    A million-atom file built by repeating one frame is what
+    ``parse_repeated_copies`` times: the second copy is the first. Each
+    frame gets its own stream. Species and the atom count stay put.
+    """
+    seed = (0xC0FFEE + frame * 0x9E3779B1) & 0xFFFFFFFFFFFFFFFF
+    rng = np.random.Generator(np.random.PCG64(seed))
+    return rng.uniform(-0.04, 0.04, size=(n_atoms, 3))
+
+
+def require_distinct_frames(positions: np.ndarray) -> list[str]:
+    """SHA-256 of each frame's coordinates.
+
+    Two frames with the same hash are the same bytes. The repeated-frame
+    reader would time a copy of the first.
+    """
+    coords = np.ascontiguousarray(positions, dtype="<f8")
+    if coords.ndim != 3 or coords.shape[2] != 3:
+        raise SystemExit("positions are not frames x atoms x 3")
+    hashes = [
+        hashlib.sha256(np.ascontiguousarray(frame).tobytes()).hexdigest()
+        for frame in coords
+    ]
+    if len(hashes) != len(set(hashes)):
+        raise SystemExit(
+            "byte-identical frames; a repeated frame measures a copy, not a parse"
+        )
+    return hashes
+
+
 def make_spec(n_atoms: int, n_frames: int) -> dict:
-    """One orthogonal Cu lattice, shared by every arm."""
+    """One orthogonal Cu lattice, one seeded perturbation per frame."""
     side = 1
     while side * side * side < n_atoms:
         side += 1
@@ -168,16 +201,16 @@ def make_spec(n_atoms: int, n_frames: int) -> dict:
             break
     base = np.asarray(grid, dtype=np.float64)
     for frame in range(n_frames):
-        shift = 0.01 * frame
-        coords[frame, :, 0] = base[:, 0] + shift
-        coords[frame, :, 1] = base[:, 1]
-        coords[frame, :, 2] = base[:, 2]
+        coords[frame] = base + _frame_delta(n_atoms, frame)
         velocities[frame, :, 0] = 0.05
         fixed[frame, ::10, :] = 1.0
         velocities[frame, ::10, :] = 0.0
+    hashes = require_distinct_frames(coords)
     return {
         "n_atoms": n_atoms,
         "n_frames": n_frames,
+        "n_unique_frames": len(hashes),
+        "frame_sha256": np.asarray(hashes),
         "positions": coords,
         "cell": cell,
         "masses": masses,
@@ -2306,6 +2339,7 @@ def run(
     structures=STRUCTURES,
     ops: tuple[str, ...] = ("read", "write"),
 ) -> None:
+    ident = measurement(ROOT)
     serial_threads()
     pin_cores()
     host = host_snapshot()
@@ -2320,12 +2354,8 @@ def run(
         profile_chemfiles_dcd_write(out)
     rows = []
     notes: list[str] = []
-    sha = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
-    tree = subprocess.check_output(
-        ["git", "rev-parse", f"{sha}^{{tree}}"], cwd=ROOT, text=True
-    ).strip()
+    sha = ident["commit"]
+    tree = ident["tree"]
     model = ""
     for line in (host.get("lscpu") or "").splitlines():
         if line.startswith("Model name:"):
@@ -2402,12 +2432,26 @@ def run(
         for item in os.environ.get("READCON_CROSS_STRUCTURES", "").split(",")
         if item
     }
+    frame_log = []
     for label, n_atoms, n_frames in structures:
         if only_structures and label not in only_structures:
             continue
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = make_spec(n_atoms, n_frames)
+        frame_log.append(
+            {
+                "structure": label,
+                "n_atoms": int(spec["n_atoms"]),
+                "n_frames": int(spec["n_frames"]),
+                "n_unique_frames": int(spec["n_unique_frames"]),
+                "frame_sha256": [str(item) for item in spec["frame_sha256"]],
+            }
+        )
+        lines.append(
+            f"frames {label} n_frames {spec['n_frames']} "
+            f"unique {spec['n_unique_frames']}"
+        )
         spec_path = directory / "spec.npz"
         save_spec(spec_path, spec)
         arms, structure_notes = arm_table(n_atoms)
@@ -2683,6 +2727,11 @@ def run(
             print(f"  write {arm['id']} {median:.4f}", flush=True)
     payload = {
         "commit": sha,
+        "measured_commit": ident["commit"],
+        "tree": ident["tree"],
+        "diff_sha256": ident["diff_sha256"],
+        "remote": ident["remote"],
+        "frames": frame_log,
         "host": host,
         "warmup": 1,
         "repeats": repeats,
