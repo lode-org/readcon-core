@@ -13,25 +13,55 @@
 #     [.cargo/config.toml + vendor/ when --vendor]
 #
 # Usage:
-#   scripts/package-cxx.sh <output-dir> [--vendor]
+#   scripts/package-cxx.sh <output-dir> [--vendor] [--source-root DIR]
+#
+# --source-root packs DIR instead of the repo that contains this script.
+# A workflow_dispatch backfill checks the tag out in one directory and
+# runs this script from a newer commit.
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $0 OUTPUT_DIR [--vendor]" >&2
+    echo "usage: $0 OUTPUT_DIR [--vendor] [--source-root DIR]" >&2
     exit 2
 fi
 
 OUTPUT_DIR="$1"
 shift
 VENDOR=0
-if [[ "${1:-}" == "--vendor" ]]; then
-    VENDOR=1
-fi
+SOURCE_ROOT=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --vendor) VENDOR=1 ;;
+        --source-root)
+            if [[ $# -lt 2 ]]; then
+                echo "usage: $0 OUTPUT_DIR [--vendor] [--source-root DIR]" >&2
+                exit 2
+            fi
+            SOURCE_ROOT="$2"
+            shift
+            ;;
+        *)
+            echo "usage: $0 OUTPUT_DIR [--vendor] [--source-root DIR]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [[ -n "$SOURCE_ROOT" ]]; then
+    ROOT_DIR="$(cd "$SOURCE_ROOT" && pwd)"
+else
+    ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+# cargo package rewrites [package.metadata] in an order that changed
+# after Rust 1.88. That rewrite is inside the cxx archive, so the digest
+# follows the cargo that packaged it. The v0.23.0 pin was recorded with
+# 1.88.0. Stay on that toolchain.
+export RUSTUP_TOOLCHAIN=1.88.0
 
 # Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
 # drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The

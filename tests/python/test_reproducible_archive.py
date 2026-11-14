@@ -371,5 +371,70 @@ class ReproducibleTarTest(unittest.TestCase):
             self.assertEqual(int.from_bytes(raw[4:8], "little"), 0)
 
 
+class CxxArchiveStabilityTest(unittest.TestCase):
+    def test_slim_archive_ignores_directory_and_tag(self) -> None:
+        pin = (
+            (ROOT / "packaging" / "wrapdb" / "readcon-core.sha256")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            bare = Path(tmp) / "no-tag"
+            tagged = Path(tmp) / "tagged"
+            _shared_clone(bare)
+            _shared_clone(tagged)
+            for repo in (bare, tagged):
+                subprocess.run(
+                    ["git", "-C", str(repo), "tag", "-d", f"v{VERSION}"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            _git(tagged, "tag", f"v{VERSION}", "HEAD")
+            bare_out = Path(tmp) / "no-tag-out"
+            tagged_out = Path(tmp) / "tagged-out"
+            other_dir = Path(tmp) / "other-out"
+            self.assertEqual(_slim_sha(bare, bare_out), _slim_sha(tagged, tagged_out))
+            self.assertEqual(
+                _slim_sha(bare, other_dir),
+                _slim_sha(bare, bare_out),
+            )
+            self.assertEqual(_slim_sha(bare, bare_out), pin)
+
+
+def _shared_clone(dest: Path) -> None:
+    subprocess.run(
+        ["git", "clone", "--shared", str(ROOT), str(dest)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _slim_sha(repo: Path, out: Path) -> str:
+    out.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["RUSTUP_TOOLCHAIN"] = "1.88.0"
+    env.pop("SOURCE_DATE_EPOCH", None)
+    done = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "package-cxx.sh"),
+            str(out),
+            "--source-root",
+            str(repo),
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise AssertionError(done.stderr or done.stdout)
+    name = f"readcon-core-cxx-{VERSION}.tar.gz.sha256"
+    return (out / name).read_text(encoding="utf-8").strip()
+
+
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

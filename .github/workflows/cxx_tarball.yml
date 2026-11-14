@@ -69,16 +69,27 @@ jobs:
         shell: bash
         run: brew install gnu-tar
 
+      # cargo package reorders package.metadata. Rust 1.100 does not match
+      # the 1.88.0 pin recorded for v0.23.0. Keep the packager on 1.88.0.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Assemble slim and vendor cxx tarballs
         run: |
           set -euo pipefail
           ver="$(tr -d '[:space:]' < VERSION)"
           mkdir -p dist-cxx build-cxx/slim build-cxx/vendor
-          bash scripts/package-cxx.sh build-cxx/slim
-          bash scripts/package-cxx.sh build-cxx/vendor --vendor
+          # A tag push packs the tag with the script in that commit.
+          # workflow_dispatch packs the same tag with this ref's script,
+          # which pins cargo 1.88.0, so an older tag still matches its pin.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            script="$GITHUB_WORKSPACE/uploader/scripts/package-cxx.sh"
+            bash "$script" build-cxx/slim --source-root "$GITHUB_WORKSPACE"
+            bash "$script" build-cxx/vendor --vendor --source-root "$GITHUB_WORKSPACE"
+          else
+            bash scripts/package-cxx.sh build-cxx/slim
+            bash scripts/package-cxx.sh build-cxx/vendor --vendor
+          fi
           # Release assets are the two archives and their sha256 sidecars.
           # Wrap files stay in build-cxx so the vendor hash cannot replace
           # the slim wrap, and they are not uploaded.
