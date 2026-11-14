@@ -26,6 +26,7 @@ sys.path.insert(0, str(BENCH))
 
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
+from measured_commit import measurement  # noqa: E402
 from sample_protocol import core_list, host_snapshot, pin_cores  # noqa: E402
 
 REPEATS = 12
@@ -131,24 +132,31 @@ def run_one(python: str, op: str, path: Path, dest: Path) -> dict:
     return json.loads(lines[-1])
 
 
-def prepare() -> dict[str, Path]:
+def prepare() -> tuple[dict[str, Path], dict]:
     directory = BENCH / "work" / "million-ab"
     directory.mkdir(parents=True, exist_ok=True)
     spec = cross_format.make_spec(1_000_000, 1)
+    frames = {
+        "n_atoms": int(spec["n_atoms"]),
+        "n_frames": int(spec["n_frames"]),
+        "n_unique_frames": int(spec["n_unique_frames"]),
+        "frame_sha256": [str(item) for item in spec["frame_sha256"]],
+    }
     plain = directory / "million.con"
     gz = directory / "million.con.gz"
     cross_format.write_readcon(plain, spec, None)
     cross_format.write_readcon(gz, spec, "gzip")
-    return {"con": plain, "con.gz": gz}
+    return {"con": plain, "con.gz": gz}, frames
 
 
 def main() -> None:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "bench/h2h/million/v0232b"
+    ident = measurement(ROOT)
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "bench/h2h/million3"
     out.mkdir(parents=True, exist_ok=True)
     cross_format.serial_threads()
     pin_cores()
     host = host_snapshot()
-    files = prepare()
+    files, frames = prepare()
     jobs = []
     for label, path in files.items():
         for op in ("read", "write"):
@@ -199,9 +207,7 @@ def main() -> None:
         lines.append(
             f"{key[0]} {key[1]} {key[2]} {median:.6f} {iqr:.6f} n={len(values)}"
         )
-    head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
+    head = ident["commit"]
     current = {
         (row["format"], row["op"]): row for row in rows if row["build"] == "head"
     }
@@ -213,25 +219,39 @@ def main() -> None:
                 f"ratio head/{row['build']} {row['format']} {row['op']} "
                 f"{row['head_over_this']:.3f}"
             )
-    payload = session_record(head, readcon.__version__, host, rows, lines)
+    payload = session_record(
+        head, readcon.__version__, host, rows, lines, frames=frames
+    )
+    payload["measured_commit"] = ident["commit"]
+    payload["tree"] = ident["tree"]
+    payload["diff_sha256"] = ident["diff_sha256"]
+    payload["remote"] = ident["remote"]
     (out / "ab.json").write_text(json.dumps(payload, indent=2) + "\n")
     (out / "ab.log").write_text("\n".join(lines) + "\n")
     print("wrote", out / "ab.json", flush=True)
 
 
 def session_record(
-    head: str, version: str, host: dict, rows: list, lines: list
+    head: str,
+    version: str,
+    host: dict,
+    rows: list,
+    lines: list,
+    frames: dict | None = None,
 ) -> dict:
     """The ab.json document. ``readcon_version`` is the head interpreter."""
     if not version:
         raise SystemExit("readcon_version is empty")
-    return {
+    payload = {
         "head": head,
         "readcon_version": version,
         "host": host,
         "rows": rows,
         "lines": lines,
     }
+    if frames is not None:
+        payload["frames"] = frames
+    return payload
 
 
 def builds_rotated(index: int) -> list[tuple[str, str]]:
