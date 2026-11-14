@@ -1315,7 +1315,9 @@ On 10000 frames of 8 atoms, readcon-db inserts in 0.2826~s and the ASE database 
 On one million atoms the insert is 0.1893~s and 0.2283~s.
 The frames-100 cold full read has median 0.0002543~s and interquartile range 0.0001113~s for readcon-db, and median 0.008983~s and interquartile range 0.0001123~s for the ASE database.
 The cold-open full read has median 0.0008994~s and interquartile range 0.0001091~s for readcon-db, and median 0.009127~s and interquartile range 0.0001718~s for the ASE database.
-The frames-100 selected cold row is still bimodal, and it is \todoPending\ until db11.
+The frames-100 selected cold row is still bimodal, and it is \todoPending\ until db12.
+A streamed insert of 10000 frames puts groups of 64 into one LMDB transaction and drops each group's text after the put.
+Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
 The fidelity check on these rows is exact.
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored}

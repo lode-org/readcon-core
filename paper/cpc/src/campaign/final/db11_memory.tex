@@ -1,0 +1,19 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{db11 streamed insert of 10000 frames.
+readcon yields one frame at a time, puts groups of 64 into one LMDB transaction, and drops each group's text after the put.
+The ASE atom list stays allocated for the whole trajectory.
+Peak RSS is the recorded \texttt{VmHWM}, in MB.
+Record \texttt{bench/db11/memory.json} at \texttt{4dbb746edfc54fe1e57b9fe82e7c85174e154682}.
+Host from the campaign log: Intel Xeon, 8 CPUs, Linux 6.12.113+.}
+\label{tab:db11-memory}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Tool & Peak RSS (MB) \\
+\midrule
+readcon-db & 101.1 \\
+ASE database & 190.2 \\
+\bottomrule
+\end{tabular}
+\end{table}

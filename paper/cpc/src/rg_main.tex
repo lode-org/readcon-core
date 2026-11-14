@@ -631,11 +631,17 @@ The cold full read has median 0.0002543~s and interquartile range 0.0001113~s fo
 The cold-open full read has median 0.0008994~s and interquartile range 0.0001091~s for readcon-db, and median 0.009127~s and interquartile range 0.0001718~s for the ASE database.
 The frames-100 selected cold row is still bimodal.
 Its IQR/median is 0.417 for readcon-db.
-That row is \todoPending\ until db11.
+db11 reads the open's unprefetched hole into the cache before the clock, so that selected sample is a warm query after the open.
+The selected cold row is \todoPending\ until db12.
+A streamed insert of 10000 frames yields one frame at a time, puts groups of 64 into one LMDB transaction, and drops each group's text after the put (Table~\ref{tab:db11-memory}).
+The ASE atom list stays allocated for the whole trajectory.
+Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
+The record is \path{bench/db11} at \texttt{4dbb746e}.
 The fidelity check on these rows is exact.
 The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 \input{campaign/final/db9}
 \input{campaign/final/db10}
+\input{campaign/final/db11_memory}
 
 \input{campaign/final/strong}
 The write rows in those model 207 tables are an earlier session.
@@ -715,6 +721,7 @@ The cross-format comparison is \path{bench/h2h/scaling/h2h9} at \path{c8ee709653
 Write scaling is \path{bench/h2h/scaling/camp5c} at \texttt{dc9abaf5}.
 The readcon-db inserts are \path{bench/db9} at \texttt{89105ce4} on \path{lode-org/readcon-db}.
 The frames-100 cold reads are \path{bench/db10} at \texttt{719a21f1}.
+The streamed 10000-frame insert is \path{bench/db11} at \texttt{4dbb746e}.
 The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89105ce4}.
 The weak reads and the write split are \path{bench/h2h/scaling/camp9} at \texttt{20a7ff13}.
 The copy efficiencies are \path{bench/h2h/scaling/camp10} at that commit.
