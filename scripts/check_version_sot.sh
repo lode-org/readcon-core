@@ -231,7 +231,12 @@ skip_dirs = {
 # also skips this prefix.
 # Campaign logs and rows record the version they measured. They are not
 # package metadata. bench/h2h/work is generated output and is gitignored.
-skip_prefixes = ("bench/h2h/work/", "bench/h2h/scaling/")
+skip_prefixes = (
+    "bench/h2h/work/",
+    "bench/h2h/scaling/",
+    # version_map.tex names the library that wrote it. That is a measurement.
+    "paper/cpc/src/figures/generated/version_map.tex",
+)
 bad = []
 listed = subprocess.check_output(["git", "ls-files", "-z"])
 for raw in listed.split(b"\0"):
