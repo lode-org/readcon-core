@@ -43,16 +43,16 @@ class ReleaseSmoke(unittest.TestCase):
 class InstallDocs(unittest.TestCase):
     def test_pinned_and_repo_local_commands_are_recognized(self) -> None:
         docs = load(INSTALL, "check_install_docs")
-        specs = docs.specs_in("pip install 'readcon==0.23.2' ase", "0.23.2")
-        self.assertEqual(specs, [("pip", "readcon", "0.23.2")])
+        specs = docs.specs_in("pip install 'readcon==1.2.3' ase", "1.2.3")
+        self.assertEqual(specs, [("pip", "readcon", "1.2.3")])
         cargo = docs.specs_in(
-            "cargo add readcon-core@0.23.2 --features chemfiles", "0.23.2"
+            "cargo add readcon-core@1.2.3 --features chemfiles", "1.2.3"
         )
-        self.assertEqual(cargo, [("cargo", "readcon-core", "0.23.2")])
-        ase = docs.specs_in("pip install -e ase-readcon", "0.23.2")
+        self.assertEqual(cargo, [("cargo", "readcon-core", "1.2.3")])
+        ase = docs.specs_in("pip install -e ase-readcon", "1.2.3")
         self.assertEqual(ase, [("pip", "ase-readcon", None)])
-        org = docs.specs_in("pip install 'readcon==@READCON_VERSION@'", "0.23.2")
-        self.assertEqual(org, [("pip", "readcon", "0.23.2")])
+        org = docs.specs_in("pip install 'readcon==@READCON_VERSION@'", "1.2.3")
+        self.assertEqual(org, [("pip", "readcon", "1.2.3")])
 
 
 if __name__ == "__main__":
