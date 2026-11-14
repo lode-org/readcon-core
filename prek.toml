@@ -19,6 +19,8 @@ exclude = """(?x)(
     # no NUL, so end-of-file-fixer would append one.
     ^tests/fuzz_data/|
     ^resources/test/|
+    # Paper records are byte-exact inputs of regen_paper.py.
+    ^paper/cpc/data/|
     ^.*\\.svg$|
     ^.*\\.lock$
 )"""
