@@ -128,13 +128,14 @@ We build the library from the public commit named in the manuscript.
 We run one cell at a time on one host.
 We keep the machine line to the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of the \readconcommitrole{} \texttt{\readconcommitshort} at git blob \texttt{\specTextBlob}.
+\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 as readcon-core~\readconversion{} distributes it, the file \texttt{docs/\allowbreak orgmode/\allowbreak spec.org} of this release at git blob \texttt{\rcReleaseSpecBlob}.
+The \readconcommitrole{} \texttt{\readconcommitshort} is readcon-core~\rcMeasuredVersion{}, and its \texttt{spec.org} is git blob \texttt{\rcMeasuredSpecBlob}.
 \texttt{scripts/\allowbreak gen\_spec\_supp.py -{}-as-is} typesets that file, and its \texttt{-{}-check} fails unless the typeset text matches the file.
 That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
 The library test \texttt{tests/\allowbreak ci\_gates.rs} runs \texttt{scripts/\allowbreak check\_spec\_text.sh}, which fails when the two differ.
 Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and they are left out here.
 The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (\texttt{bench/\allowbreak results/\allowbreak velocity\_case.json}).
-The reader it specifies is readcon-core~\readconversion{}.
+The reader this section specifies is the one readcon-core~\readconversion{} ships.
 Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
 Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
 The specification also points to an informative parsing expression grammar (PEG), \texttt{grammar/\allowbreak readcon.pest}, which is not reproduced.
@@ -240,7 +241,7 @@ In both modes it stops on the impossible cell with the error \texttt{cell angles
 
 Table~\ref{tab:anchors} gives the source lines of each step of Algorithm~\ref{alg:parser} and of the other read and write paths of Section~\ref{sec:implementation}.
 
-\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of the \readconcommitrole{} \texttt{\readconcommitshort}.
+\begin{table}[tbp] \centering \small \caption{Source lines of the reader and the writers, in the files under \texttt{src} of readcon-core~\readconversion{}.
 \texttt{scripts/\allowbreak src\_anchors.py} finds each range from the anchors of \texttt{paper/\allowbreak cpc/\allowbreak data/\allowbreak src\_anchors.toml} and fails when an anchor matches no line or more than one.}
 \label{tab:anchors}
 \begin{tabular}{@{}p{0.52\linewidth}p{0.42\linewidth}@{}}
