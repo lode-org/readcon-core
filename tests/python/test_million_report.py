@@ -110,6 +110,38 @@ def test_notes_name_the_fields_con_keeps(tmp_path: Path):
     notes, flags = report.build_notes(doc, baseline)
     assert flags == []
     assert "masses, velocities, constraints" in notes
+    assert "Peer reads" in notes and "Peer writes" in notes
     report.write_record(tmp_path, doc, notes)
     assert (tmp_path / "host.json").is_file()
     assert (tmp_path / "lscpu.txt").read_text().startswith("Model name")
+
+
+def test_write_only_campaign_does_not_demand_read_rows():
+    doc = {
+        "commit": "abc",
+        "warmup": 1,
+        "repeats": 12,
+        "percentile": "type7",
+        "serial": True,
+        "process": "fresh subprocess per sample",
+        "affinity": "taskset -c 0",
+        "versions": {"readcon": "0.23.2"},
+        "host": {"cpu_mhz": 2400.0, "loadavg": "0.1", "lscpu": "Model name: test\n"},
+        "rows": [
+            _row("readcon-con", "readcon", "write", 0.30),
+            _row("ase-extxyz", "ase", "write", 8.0),
+        ],
+    }
+    baseline = {
+        "rows": [
+            _row("readcon-con", "readcon", "read", 0.10),
+            _row("ase-extxyz", "ase", "read", 2.0),
+            _row("readcon-con", "readcon", "write", 0.15),
+            _row("ase-extxyz", "ase", "write", 4.0),
+        ]
+    }
+    notes, flags = report.build_notes(doc, baseline)
+    assert flags == []
+    assert "Peer writes" in notes
+    assert "Peer reads" not in notes
+    assert "readcon-con read" not in notes

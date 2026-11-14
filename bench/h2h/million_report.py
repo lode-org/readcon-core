@@ -151,7 +151,7 @@ def render_notes(
 ) -> str:
     host = doc["host"]
     lines = [
-        "Million-atom read and write, one machine.",
+        "Million-atom " + " and ".join(f"{op}s" for op in factors) + ", one machine.",
         f"commit {doc['commit']}",
         f"protocol warmup {doc['warmup']} samples {doc['repeats']} "
         f"{doc['percentile']} serial fresh-process rotate {doc['affinity']}",
@@ -159,9 +159,11 @@ def render_notes(
         f"cpu_mhz {host.get('cpu_mhz')} loadavg {host.get('loadavg')}",
         "Baseline is bench/h2h/scaling/h2h9 (readcon 0.23.0, Xeon model 173 at 2700 MHz). "
         "That file was not modified. Raw seconds are not compared across the two CPUs. "
-        f"Peer reads on this machine are {factors['read']:.3f}x that record "
-        f"({counts['read']} rows). Peer writes are {factors['write']:.3f}x "
-        f"({counts['write']} rows).",
+        + " ".join(
+            f"Peer {op}s on this machine are {factors[op]:.3f}x that record "
+            f"({counts[op]} rows)."
+            for op in factors
+        ),
         "",
         "readcon rows. median and IQR are seconds. RSS and file size are bytes. "
         "loses is what the format did not round-trip.",
@@ -240,14 +242,18 @@ def write_record(out: Path, doc: dict, notes: str) -> None:
 def build_notes(doc: dict, baseline_doc: dict) -> tuple[str, list[str]]:
     old = index_rows(baseline_doc)
     new = index_rows(doc)
+    ops = [op for op in ("read", "write") if any(key[2] == op for key in new)]
+    if not ops:
+        raise SystemExit("the campaign has no timed rows")
     factors = {}
     counts = {}
-    for op in ("read", "write"):
+    for op in ops:
         factor, count = machine_factor(old, new, op)
         factors[op] = factor
         counts[op] = count
-    flags = self_regressions(old, new, factors) + lost_leads(old, new)
-    return render_notes(doc, old, factors, counts, flags), flags
+    covered = {key: row for key, row in old.items() if key[2] in ops}
+    flags = self_regressions(covered, new, factors) + lost_leads(covered, new)
+    return render_notes(doc, covered, factors, counts, flags), flags
 
 
 def main() -> None:
