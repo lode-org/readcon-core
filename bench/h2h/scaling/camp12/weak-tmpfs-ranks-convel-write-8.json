@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.085874137, 0.086018625, 0.085179360, 0.084822610, 0.084208219, 0.084523717, 0.084981236, 0.086632188, 0.086678478, 0.088924181, 0.088341472, 0.086338463],
+  "warmup_s": 0.090709022,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/dev/shm/camp12-mw-convel-8.con",
+  "host": "Intel Xeon Processor"
+}

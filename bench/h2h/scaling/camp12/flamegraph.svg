@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="304" viewBox="0 0 1400 304">
+<style>text{font:12px sans-serif} rect{stroke:#fff;stroke-width:0.6}</style>
+<rect width="100%" height="100%" fill="#f7f7f7"/>
+<g><title>format 526</title>
+<rect x="0.0" y="278" width="1399.6" height="17" fill="#457b9d"/>
+<text x="3.0" y="291">format</text>
+</g>
+<g><title>format_profile 524</title>
+<rect x="0.0" y="260" width="1394.3" height="17" fill="#457b9d"/>
+<text x="3.0" y="273">format_profile</text>
+</g>
+<g><title>format_frame_refs_unstored 523</title>
+<rect x="0.0" y="242" width="1391.6" height="17" fill="#457b9d"/>
+<text x="3.0" y="255">format_frame_refs_unstored</text>
+</g>
+<g><title>format_group_bytes 523</title>
+<rect x="0.0" y="224" width="1391.6" height="17" fill="#457b9d"/>
+<text x="3.0" y="237">format_group_bytes</text>
+</g>
+<g><title>write_group 518</title>
+<rect x="0.0" y="206" width="1378.3" height="17" fill="#457b9d"/>
+<text x="3.0" y="219">write_group</text>
+</g>
+<g><title>ConFrameWriter<W>::write_frame_bound 518</title>
+<rect x="0.0" y="188" width="1378.3" height="17" fill="#457b9d"/>
+<text x="3.0" y="201">ConFrameWriter<W>::write_frame_bound</text>
+</g>
+<g><title>ConFrameWriter<W>::write_frame 514</title>
+<rect x="0.0" y="170" width="1367.7" height="17" fill="#457b9d"/>
+<text x="3.0" y="183">ConFrameWriter<W>::write_frame</text>
+</g>
+<g><title>append_coord_rows 494</title>
+<rect x="0.0" y="152" width="1314.4" height="17" fill="#457b9d"/>
+<text x="3.0" y="165">append_coord_rows</text>
+</g>
+<g><title>push_atom_motion 485</title>
+<rect x="0.0" y="134" width="1290.5" height="17" fill="#457b9d"/>
+<text x="3.0" y="147">push_atom_motion</text>
+</g>
+<g><title>push_xyz_line 468</title>
+<rect x="0.0" y="116" width="1245.2" height="17" fill="#457b9d"/>
+<text x="3.0" y="129">push_xyz_line</text>
+</g>
+<g><title>push_round_trip 405</title>
+<rect x="0.0" y="98" width="1077.5" height="17" fill="#457b9d"/>
+<text x="3.0" y="111">push_round_trip</text>
+</g>
+<g><title>write_finite 269</title>
+<rect x="0.0" y="80" width="715.6" height="17" fill="#2a9d8f"/>
+<text x="3.0" y="93">write_finite</text>
+</g>
+<g><title>encode_fixed_decimal 245</title>
+<rect x="0.0" y="62" width="651.7" height="17" fill="#2a9d8f"/>
+<text x="3.0" y="75">encode_fixed_decimal</text>
+</g>
+<g><title>fixed_decimal_parts 161</title>
+<rect x="0.0" y="44" width="428.1" height="17" fill="#2a9d8f"/>
+<text x="3.0" y="57">fixed_decimal_parts</text>
+</g>
+<g><title>accept_million 145</title>
+<rect x="0.0" y="26" width="385.5" height="17" fill="#457b9d"/>
+<text x="3.0" y="39">accept_million</text>
+</g>
+<g><title>count_digits 18</title>
+<rect x="0.0" y="8" width="47.5" height="17" fill="#457b9d"/>
+</g>
+<g><title>exact_small_integer 5</title>
+<rect x="385.9" y="26" width="12.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>write_fixed_digits 77</title>
+<rect x="428.5" y="44" width="204.5" height="17" fill="#457b9d"/>
+<text x="431.5" y="57">write_fixed_digits</text>
+</g>
+<g><title>write_digit_width 42</title>
+<rect x="428.5" y="26" width="111.4" height="17" fill="#457b9d"/>
+<text x="431.5" y="39">write_digit_width</text>
+</g>
+<g><title>count_digits 13</title>
+<rect x="540.3" y="26" width="34.2" height="17" fill="#457b9d"/>
+</g>
+<g><title>ryu::pretty::format64 7</title>
+<rect x="652.1" y="62" width="18.2" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::pretty::mantissa::write_mantissa_long 4</title>
+<rect x="652.1" y="44" width="10.2" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::pretty::mantissa::write_mantissa 1</title>
+<rect x="652.1" y="26" width="2.3" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::d2s::d2d 1</title>
+<rect x="662.7" y="44" width="2.3" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::pretty::format64 70</title>
+<rect x="716.0" y="80" width="185.9" height="17" fill="#f4a261"/>
+<text x="719.0" y="93">ryu::pretty::format64</text>
+</g>
+<g><title>ryu::d2s::d2d 52</title>
+<rect x="716.0" y="62" width="138.0" height="17" fill="#f4a261"/>
+<text x="719.0" y="75">ryu::d2s::d2d</text>
+</g>
+<g><title>ryu::d2s_intrinsics::div10 22</title>
+<rect x="716.0" y="44" width="58.2" height="17" fill="#f4a261"/>
+<text x="719.0" y="57">ryu::d2s_intrinsics::div10</text>
+</g>
+<g><title>ryu::d2s_intrinsics::mul_shift_all_64 5</title>
+<rect x="774.5" y="44" width="12.9" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::d2s_intrinsics::mul_shift_64 5</title>
+<rect x="774.5" y="26" width="12.9" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::d2s_intrinsics::div100 3</title>
+<rect x="787.8" y="44" width="7.6" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::common::log10_pow5 1</title>
+<rect x="795.8" y="44" width="2.3" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::common::pow5bits 1</title>
+<rect x="798.5" y="44" width="2.3" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::pretty::mantissa::write_mantissa_long 10</title>
+<rect x="854.4" y="62" width="26.2" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::pretty::mantissa::write_mantissa 7</title>
+<rect x="854.4" y="44" width="18.2" height="17" fill="#f4a261"/>
+</g>
+<g><title>ryu::d2s::decimal_length17 4</title>
+<rect x="881.0" y="62" width="10.2" height="17" fill="#f4a261"/>
+</g>
+<g><title>push_u64 29</title>
+<rect x="1077.9" y="98" width="76.8" height="17" fill="#457b9d"/>
+<text x="1080.9" y="111">push_u64</text>
+</g>
+<g><title>count_digits 11</title>
+<rect x="1077.9" y="80" width="28.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>write_digit_width 9</title>
+<rect x="1107.2" y="80" width="23.6" height="17" fill="#457b9d"/>
+</g>
+<g><title>written_fixed_flag 1</title>
+<rect x="1245.6" y="116" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>load_xyz 2</title>
+<rect x="1290.9" y="134" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>ensure_unique_ids 6</title>
+<rect x="1314.8" y="152" width="15.6" height="17" fill="#457b9d"/>
+</g>
+<g><title>ids_are_dense 6</title>
+<rect x="1314.8" y="134" width="15.6" height="17" fill="#457b9d"/>
+</g>
+<g><title>ConFrameWriter<W>::refresh_metadata_cache 5</title>
+<rect x="1330.8" y="152" width="12.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>ConFrameWriter$LT$W$GT$::refresh_metadata_cache::_$u7b$$u7b$closure$u7d$$u7d$::heec8b1ea4181e42f 2</title>
+<rect x="1330.8" y="134" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>MetadataCacheEntry::matches 2</title>
+<rect x="1330.8" y="116" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>MetadataCacheEntry::matches::_$u7b$$u7b$closure$u7d$$u7d$::h0398680412eac66e 1</title>
+<rect x="1330.8" y="98" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>metadata_value_eq 1</title>
+<rect x="1330.8" y="80" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>metadata_value_eq::_$u7b$$u7b$closure$u7d$$u7d$::h13f3c06a8961bc74 1</title>
+<rect x="1330.8" y="62" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>require_minor2_section_arity 1</title>
+<rect x="1336.1" y="134" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>push_f64 2</title>
+<rect x="1344.1" y="152" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>push_round_trip 2</title>
+<rect x="1344.1" y="134" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>write_finite 1</title>
+<rect x="1349.4" y="152" width="2.3" height="17" fill="#2a9d8f"/>
+</g>
+<g><title>encode_fixed_decimal 1</title>
+<rect x="1349.4" y="134" width="2.3" height="17" fill="#2a9d8f"/>
+</g>
+<g><title>push_str_line 1</title>
+<rect x="1352.1" y="152" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>ConFrameWriter<W>::write_frame::RestoreRows>> 1</title>
+<rect x="1354.8" y="152" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>ConFrameWriter<W>::write_frame::RestoreRows> 1</title>
+<rect x="1354.8" y="134" width="2.3" height="17" fill="#457b9d"/>
+</g>
+<g><title>binding_metadata 3</title>
+<rect x="1368.1" y="170" width="7.6" height="17" fill="#457b9d"/>
+</g>
+<g><title>format_group_bytes::_$u7b$$u7b$closure$u7d$$u7d$::hf1ece157cd693634 2</title>
+<rect x="1378.7" y="206" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>loose_frame_bytes 2</title>
+<rect x="1378.7" y="188" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>append_coord_rows 2</title>
+<rect x="1394.7" y="260" width="4.9" height="17" fill="#457b9d"/>
+</g>
+<g><title>push_atom_motion 2</title>
+<rect x="1394.7" y="242" width="4.9" height="17" fill="#457b9d"/>
+</g>
+</svg>

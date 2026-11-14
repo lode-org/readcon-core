@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 2000,
+  "repeats": 12,
+  "samples_s": [0.072949602, 0.070428515, 0.070904577, 0.071514885, 0.073877176, 0.070708991, 0.071928681, 0.071671819, 0.069317394, 0.069031067, 0.069110572, 0.069166829],
+  "warmup_s": 0.078639349,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "/home/ubuntu/camp7-ext4/camp12/camp12-mw-con-8.con",
+  "host": "Intel Xeon Processor"
+}
