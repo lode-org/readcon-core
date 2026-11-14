@@ -1,0 +1,19 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{One frame of \(10^{6}\) atoms, written once.
+The median is type-7, with the interquartile range and \(n{=}12\).
+chemfiles has no CON writer, so its row is XYZ.
+Record \texttt{bench/h2h/scaling/camp12/h2h-write.json} at \texttt{0c78ce7e662e13f72c12adb6f0e883729724b366}.
+Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp12-write}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Tool & Format & Median (s) & IQR (s) \\
+\midrule
+readcon & con & 0.04113 & 0.01008 \\
+ASE eon & con & 2.489 & 0.03437 \\
+chemfiles & xyz & 0.3143 & 0.001766 \\
+\bottomrule
+\end{tabular}
+\end{table}

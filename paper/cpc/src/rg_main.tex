@@ -590,7 +590,8 @@ The convel file and the million-atom frame differ by less than 1\%.
 On one extended XYZ frame of \(10^{6}\) atoms, readcon takes \extxyzReadconMedian~s, ASE \texttt{extxyz} \extxyzAseMedian~s, chemfiles \extxyzChemfilesMedian~s and OVITO \extxyzOvitoMedian~s (Table~\ref{tab:h2h-main}).
 On the million-atom CON frame, readcon takes \conReadconMedian~s, ASE takes \conAseMedian~s and eOn takes \conEonMedian~s (Table~\ref{tab:conread}).
 On tmpfs the eight-way weak-read efficiency is 0.8736 for threaded CON, 0.9173 for threaded convel, 0.9734 for MPI CON and 0.9835 for MPI convel (Table~\ref{tab:camp9-weak-read}).
-The weak-write efficiencies are \todoPending\ until camp12.
+The weak-write efficiencies are \todoPending\ until camp13.
+Camp13 records the store scaling.
 Table~\ref{tab:camp9-write-split} splits the eight-worker write into format, copy, the write and the residual.
 The summary marks the write's growth as matched to the copy on those rows.
 On tmpfs threads the matched mmap copy grows by 0.05216~s and the write grows by 0.04438~s.
@@ -601,9 +602,17 @@ That series is still rising at eight workers.
 Camp11's host.json is an Intel Xeon of family 6, model 173, with 8 CPUs.
 The eight-thread CON format is 0.1282~s of the 0.1918~s write.
 At eight MPI ranks the CON write is 0.05853~s and the format is 0.03883~s, so the write minus the format is 1.07 times the 0.01842~s copy.
+Camp12 writes the digits into the output buffer.
+One scale of \(10^{6}\) replaces the six-step decimal search, and a grouped format reserves its scratch once.
+The bytes match the previous writer.
+A CON format of \(10^{6}\) frames takes 15.85~s before that change and 10.47~s after it.
+On one frame of \(10^{6}\) atoms, readcon writes CON in 0.04113~s, the ASE eon writer takes 2.489~s, and chemfiles writes XYZ in 0.3143~s (Table~\ref{tab:camp12-write}).
+chemfiles has no CON writer.
+The record is \path{bench/h2h/scaling/camp12} at \texttt{0c78ce7e}, on the model 173 host.
 Figure~\ref{fig:memory} is the perf17 plot.
 \input{campaign/final/fig8}
 \input{campaign/final/camp9}
+\input{campaign/final/camp12_write}
 
 \input{campaign/final/h2h_extxyz}
 \input{campaign/final/h2h_con}
@@ -710,6 +719,7 @@ The fair-read protocol is \texttt{examples/benchmarks/FAIRNESS.md} at \texttt{89
 The weak reads and the write split are \path{bench/h2h/scaling/camp9} at \texttt{20a7ff13}.
 The copy efficiencies are \path{bench/h2h/scaling/camp10} at that commit.
 The stream bandwidth is \path{bench/h2h/scaling/camp11} at that commit.
+The formatter and the million-atom frame write are \path{bench/h2h/scaling/camp12} at \texttt{0c78ce7e}.
 The reader exchange is \texttt{bench/h2h/reader-exchange/perf22} at \texttt{1cda3eb0}.
 The in-memory thread reads of Figure~\ref{fig:scaling-r6} and Table~\ref{tab:strong-threads-read-memory} are the Snakemake target \texttt{final\_campaign}.
 One input is \path{frames-32x100000.con}.
