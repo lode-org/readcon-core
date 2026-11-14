@@ -1769,6 +1769,7 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Write version 2 from columns already in memory.
 ///
 /// Positions are required. Velocities, masses, the cell, atom ids and the
@@ -1906,7 +1907,7 @@ fn write_conbin_body(
         }
         if mass_at < n {
             let fill = frame.header.masses_per_type.last().copied().unwrap_or(0.0);
-            masses.extend(std::iter::repeat(fill).take(n - mass_at));
+            masses.extend(std::iter::repeat_n(fill, n - mass_at));
         } else if mass_at > n {
             masses.truncate(masses.len() - (mass_at - n));
         }

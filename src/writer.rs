@@ -3201,7 +3201,7 @@ fn small_int_text(n: u32) -> &'static [u8] {
 }
 
 fn push_column_f64(buf: &mut Vec<u8>, ryu: &mut ryu::Buffer, slot: &mut FmtSlot, value: f64) {
-    if value >= 0.0 && value < 10_000.0 {
+    if (0.0..10_000.0).contains(&value) {
         let n = value as u32;
         if n as f64 == value {
             buf.extend_from_slice(small_int_text(n));
@@ -3401,6 +3401,7 @@ fn column_header(
     binding_header_bytes(&frame)
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Write binding CON text from column slices, without a per-atom object.
 ///
 /// `workers` of 0 uses one thread per physical core. The bytes match
