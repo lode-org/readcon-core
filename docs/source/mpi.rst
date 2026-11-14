@@ -96,6 +96,8 @@ Every other filesystem, including tmpfs, Lustre, GPFS, BeeGFS, and NFS,
 keeps one write per rank.
 ``READCON_RANKED_WRITE=parallel`` or ``sequential``, read on rank 0, overrides
 that choice. Leave it unset. The benchmark does.
+``READCON_MPI_TEST_CHUNK=<bytes>`` lowers the gather chunk and the Gatherv
+limit so a test can take the multi-round path. Leave it unset.
 One gather of the offsets and block hashes then writes the ``.rcidx``
 sidecar, so the next read skips the scan.
 Output is uncompressed.

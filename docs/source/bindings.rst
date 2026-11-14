@@ -540,6 +540,8 @@ A ranked write (``rkr_mpi_write_block``) stores a fresh file. On ext2, ext3,
 ext4, XFS, and btrfs, rank 0 writes every slice in order. Every other
 filesystem keeps one write per rank. ``READCON_RANKED_WRITE=parallel`` or
 ``sequential``, read on rank 0, overrides that choice. Leave it unset.
+``READCON_WRITE_TRACE``, when set, prints timing lines from the compressed
+writer. Leave it unset.
 
 .. code:: c
 
@@ -777,7 +779,7 @@ CMake FetchContent
     FetchContent_Declare(
       readcon-core
       URL https://github.com/lode-org/readcon-core/releases/download/v0.23.3/readcon-core-cxx-0.23.3.tar.gz
-      URL_HASH SHA256=e4871ee0c4bd4a1aa69fe24a7ad852f5402022b17dfe61f940461dd80fe2fb84
+      URL_HASH SHA256=f57558ea80ee35f6875325f46c8e1f0447f1fa2b56db7d7ff85d5167bd6dfe82
     )
     FetchContent_MakeAvailable(readcon-core)
     target_link_libraries(my_app PRIVATE readcon-core::shared)
