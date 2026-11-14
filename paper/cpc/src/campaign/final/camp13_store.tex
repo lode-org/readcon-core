@@ -1,0 +1,24 @@
+\begin{table}[tbp]
+\centering
+\scriptsize
+\caption{Camp13 fresh-file stores at 8 workers.
+Each entry is the type-7 median in seconds, the interquartile range, and \(n{=}12\).
+The last column is the recorded weak efficiency \(T(1)/T(8)\).
+Record \texttt{bench/h2h/scaling/camp13/summary.json} at \texttt{fa51a162cd78a7ce09021ce5ace0c8a3434b2dbc}.
+Host from lscpu: Intel(R) Xeon(R) Processor, family 6, model 173, 8 CPUs.}
+\label{tab:camp13-store}
+\begin{tabular}{@{}lllrl@{}}
+\toprule
+Filesystem & Kind & Store & Median (IQR, $n$) & 8-way \\
+\midrule
+tmpfs & threads & mmap & 0.1469 (0.001102, $n{=}12$) & 0.7117 \\
+tmpfs & threads & falloc\_once & 0.1616 (0.001926, $n{=}12$) & 0.6348 \\
+tmpfs & MPI & mmap & 0.03579 (0.0004277, $n{=}12$) & 0.8092 \\
+tmpfs & MPI & falloc\_once & 0.03921 (0.001435, $n{=}12$) & 0.6974 \\
+ext4 & threads & mmap & 0.2122 (0.004397, $n{=}12$) & 0.5514 \\
+ext4 & threads & falloc\_once & 0.1989 (0.006056, $n{=}12$) & 0.5843 \\
+ext4 & MPI & mmap & 0.05637 (0.00116, $n{=}12$) & 0.5456 \\
+ext4 & MPI & falloc\_once & 0.05408 (0.001111, $n{=}12$) & 0.5685 \\
+\bottomrule
+\end{tabular}
+\end{table}
