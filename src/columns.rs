@@ -129,15 +129,33 @@ pub(crate) fn positions_parallel(
     if let Some(repeated) = parse_repeated_copies(bytes, workers, rich)? {
         return Ok(repeated);
     }
+    // Equal frames of one component are filled below, straight into the
+    // slab. Re-parsing each frame into its own vector and then copying
+    // it made 100 000 frames of 32 atoms slower at eight threads than
+    // the serial walk was at four.
+    let mut direct: Option<(usize, usize, u32, usize)> = None;
     let mut out = parse_con(bytes, rich, false, false, workers, Some(1))?;
     if let Some(first) = out.spans.first() {
+        let frame_start = first.start;
         let first_end = first.end;
         let head0 = out.head_ends.first().copied().unwrap_or(0);
         if first_end > 0 && first_end < bytes.len() {
             if let Some(nframes) = tiled_frame_count(bytes, first_end, head0) {
                 let count0 = out.counts[0];
+                let spec = frame_spec(bytes, frame_start)?;
+                let block_lines = header_block_lines(bytes, frame_start)?;
+                if count0 > 0 && block_lines == count0 + 2 {
+                    direct = Some((first_end, head0, spec, block_lines));
+                }
                 let cells0 = out.cells.clone();
                 let masses0 = out.masses.clone();
+                out.counts.reserve(nframes);
+                out.spans.reserve(nframes);
+                out.head_ends.reserve(nframes);
+                out.cells.reserve(nframes.saturating_mul(6));
+                out.masses.reserve(nframes.saturating_mul(masses0.len()));
+                out.wide_breaks.reserve(nframes);
+                out.wide_chunks.reserve(nframes);
                 for frame in 1..nframes {
                     let base = frame * first_end;
                     out.counts.push(count0);
@@ -167,6 +185,47 @@ pub(crate) fn positions_parallel(
     let positions_ptr = positions.as_mut_ptr() as usize;
     let ids_ptr = ids.as_mut_ptr() as usize;
     let flags_ptr = flags.as_mut_ptr() as usize;
+    if let Some((span, head0, spec, block_lines)) = direct {
+        let count0 = out.counts[0];
+        let nframes = out.n_frames;
+        let (certified, saw) = fill_tiled_frames(
+            bytes,
+            span,
+            head0,
+            count0,
+            nframes,
+            workers,
+            rich,
+            spec,
+            block_lines,
+            positions_ptr,
+            ids_ptr,
+            flags_ptr,
+        )?;
+        if !certified {
+            out.stock = false;
+        }
+        if saw {
+            out.has_section = true;
+        }
+        if n_atoms > 0 {
+            // SAFETY: every tiled frame wrote its rows before this, or the
+            // fill returned an error and this length stays 0.
+            unsafe {
+                positions.set_len(n_atoms * 3);
+                if rich {
+                    ids.set_len(n_atoms);
+                    flags.set_len(n_atoms);
+                }
+            }
+        }
+        out.positions = positions;
+        if rich {
+            out.ids = ids;
+            out.flags = flags;
+        }
+        return Ok(out);
+    }
     let mut jobs = Vec::with_capacity(out.n_frames);
     let mut dest_at = 0usize;
     for frame in 0..out.n_frames {
@@ -806,12 +865,155 @@ fn find_line_at(bytes: &[u8], line: &[u8], from: usize) -> Option<usize> {
 
 /// `bytes` is `n` copies of a frame of `span` bytes, each starting with
 /// the same header. Later frames can then be planned on their own core.
+/// Lines in one coordinate block: the atom rows plus a symbol line and a
+/// label line per component. One component is `count + 2`.
+#[cfg(feature = "parallel")]
+fn header_block_lines(bytes: &[u8], frame_start: usize) -> Result<usize, ParseError> {
+    let mut pos = frame_start;
+    skip_line(bytes, &mut pos)?;
+    let _meta = read_line(bytes, &mut pos)?;
+    let _box = read_line(bytes, &mut pos)?;
+    let _angles = read_line(bytes, &mut pos)?;
+    skip_line(bytes, &mut pos)?;
+    skip_line(bytes, &mut pos)?;
+    let types_line = utf8_line(read_line(bytes, &mut pos)?)?;
+    let natm_types = parse_count_line(types_line, 1)?[0];
+    if natm_types == 0 {
+        return Ok(0);
+    }
+    let count_line = utf8_line(read_line(bytes, &mut pos)?)?;
+    let counts = parse_count_line(count_line, natm_types)?;
+    let n: usize = counts.iter().sum();
+    Ok(n + natm_types.saturating_mul(2))
+}
+
+/// One worker owns a contiguous run of equal frames and writes each row
+/// into the shared slab. A rayon job per frame allocated a fresh vector
+/// for 32 atoms, and that allocation was the whole 8-thread plateau.
+#[cfg(feature = "parallel")]
+fn fill_tiled_frames(
+    bytes: &[u8],
+    span: usize,
+    head: usize,
+    count: usize,
+    nframes: usize,
+    workers: usize,
+    rich: bool,
+    spec: u32,
+    block_lines: usize,
+    positions: usize,
+    ids: usize,
+    flags: usize,
+) -> Result<(bool, bool), ParseError> {
+    let saw_section = std::sync::atomic::AtomicBool::new(false);
+    let lost_stock = std::sync::atomic::AtomicBool::new(false);
+    let saw_section = &saw_section;
+    let lost_stock = &lost_stock;
+    let pool_threads = workers.min(nframes).max(1);
+    let share = nframes.div_ceil(pool_threads);
+    let mut failed: Option<ParseError> = None;
+    std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(pool_threads);
+        for worker in 0..pool_threads {
+            let start_frame = worker * share;
+            let end_frame = (start_frame + share).min(nframes);
+            guards.push(scope.spawn(move || -> Result<(), ParseError> {
+                crate::parser::pin_worker(worker);
+                for frame in start_frame..end_frame {
+                    let start = frame * span;
+                    let (certified, saw) = fill_one_tiled_frame(
+                        bytes,
+                        start,
+                        start + span,
+                        head + start,
+                        count,
+                        frame * count,
+                        spec,
+                        block_lines,
+                        rich,
+                        positions,
+                        ids,
+                        flags,
+                    )?;
+                    if saw {
+                        saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    if !certified {
+                        lost_stock.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+                Ok(())
+            }));
+        }
+        for guard in guards {
+            if let Err(err) = guard.join().expect("tiled frame parser panicked") {
+                if failed.is_none() {
+                    failed = Some(err);
+                }
+            }
+        }
+    });
+    if let Some(err) = failed {
+        return Err(err);
+    }
+    Ok((
+        !lost_stock.load(std::sync::atomic::Ordering::Relaxed),
+        saw_section.load(std::sync::atomic::Ordering::Relaxed),
+    ))
+}
+
+#[cfg(feature = "parallel")]
+fn fill_one_tiled_frame(
+    bytes: &[u8],
+    frame_start: usize,
+    frame_end: usize,
+    head: usize,
+    count: usize,
+    dest: usize,
+    spec: u32,
+    block_lines: usize,
+    rich: bool,
+    positions: usize,
+    ids: usize,
+    flags: usize,
+) -> Result<(bool, bool), ParseError> {
+    let mut pos = head;
+    for row in 0..count {
+        let ((row_xyz, fixed, atom_id), next) = parse_coord_row_at(bytes, pos, spec, row as u64)?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                row_xyz.as_ptr(),
+                (positions as *mut f64).add((dest + row) * 3),
+                3,
+            );
+            if rich {
+                *((ids as *mut u64).add(dest + row)) = atom_id;
+                *((flags as *mut u8).add(dest + row)) = flag_bits(fixed);
+            }
+        }
+        pos = next;
+    }
+    if pos < frame_start || pos > frame_end {
+        return Err(ParseError::InvalidCount(
+            "frame atom count does not match the first frame".into(),
+        ));
+    }
+    let mut rel = pos - frame_start;
+    skip_sections(&bytes[frame_start..frame_end], &mut rel, block_lines)
+}
+
 fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
-    if span < 16 || head_end == 0 || head_end > span || !bytes.len().is_multiple_of(span) {
+    if span < 16 || head_end == 0 || head_end > span {
         return None;
     }
     let n = bytes.len() / span;
     if n < 2 {
+        return None;
+    }
+    // A trailing newline is not another frame. Requiring an exact multiple
+    // sent every 32-atom trajectory through a second parse.
+    let tail = &bytes[n * span..];
+    if !tail.iter().all(u8::is_ascii_whitespace) {
         return None;
     }
     let header = &bytes[..head_end];
@@ -1317,6 +1519,76 @@ mod tests {
         assert_eq!(parallel.ids, serial.ids);
         assert_eq!(parallel.flags, serial.flags);
         assert_eq!(parallel.masses, serial.masses);
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn tiled_small_frames_match_the_serial_walker() {
+        let one = "\n{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n20.0 20.0 20.0\n90.0 90.0 90.0\n\n\n1\n4\n63.546\nCu\nCoordinates of Component 1\n00.0 0.25 0.5 0 0\n01.0 1.25 1.5 0 1\n02.0 2.25 2.5 0 2\n03.0 3.25 3.5 7 3\n";
+        let mut text = String::new();
+        for frame in 0..64u32 {
+            text.push_str(&one.replace("00.0 0.25 0.5", &format!("{frame:02}.0 0.25 0.5")));
+        }
+        text.push('\n');
+        let bytes = text.as_bytes();
+        let serial = positions_from_con_bytes(bytes).unwrap();
+        let parallel = positions_parallel(bytes, 8, false).unwrap();
+        assert_eq!(parallel.n_frames, serial.n_frames);
+        assert_eq!(parallel.counts, serial.counts);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+        assert_eq!(parallel.masses, serial.masses);
+        assert_eq!(parallel.cells, serial.cells);
+        assert_eq!(parallel.stock, serial.stock);
+        assert!(!parallel.has_section);
+        let rich_serial = positions_with_identity(bytes).unwrap();
+        let rich = positions_parallel(bytes, 4, true).unwrap();
+        assert_eq!(rich.ids, rich_serial.ids);
+        assert_eq!(rich.flags, rich_serial.flags);
+        assert_eq!(first_bit_mismatch(&rich.positions, &rich_serial.positions), None);
+
+        let mut typed = String::new();
+        let two = "seed\n{\"con_spec_version\":2}\n10 10 10\n90 90 90\n0 0\n0 0 0\n2\n2 1\n63.546 1.0\nCu\nCoordinates of Component 1\n0.1 0.2 0.3 0 0\n0.4 0.5 0.6 0 1\nH\nCoordinates of Component 2\n0.7 0.8 0.9 7 2\n";
+        for _ in 0..8 {
+            typed.push_str(two);
+        }
+        let bytes = typed.as_bytes();
+        let serial = positions_with_identity(bytes).unwrap();
+        let parallel = positions_parallel(bytes, 4, true).unwrap();
+        assert_eq!(parallel.counts, serial.counts);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+        assert_eq!(parallel.ids, serial.ids);
+        assert_eq!(parallel.flags, serial.flags);
+
+        let real_path = manifest("bench/h2h/work/parallel-frames/frames-32x100000.con");
+        if let Ok(real) = std::fs::read(&real_path) {
+            let marker = b"\n{\"con_spec_version\":3";
+            let second = real[1..]
+                .windows(marker.len())
+                .position(|window| window == marker)
+                .map(|at| at + 1)
+                .expect("second frame");
+            let first = positions_from_con_bytes(&real[..second]).unwrap();
+            assert_eq!(first.n_frames, 1);
+            assert_eq!(
+                tiled_frame_count(&real, first.spans[0].end, first.head_ends[0]),
+                Some(100_000)
+            );
+            let parallel = positions_parallel(&real, 8, false).unwrap();
+            let serial = positions_from_con_bytes(&real).unwrap();
+            assert_eq!(parallel.n_frames, 100_000);
+            assert_eq!(
+                first_bit_mismatch(&parallel.positions, &serial.positions),
+                None
+            );
+            assert_eq!(parallel.masses, serial.masses);
+            assert_eq!(parallel.stock, serial.stock);
+        }
     }
 
     #[cfg(feature = "parallel")]
