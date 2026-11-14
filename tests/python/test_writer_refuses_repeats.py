@@ -19,6 +19,7 @@ import cross_format
 import db_v2
 import frames_guard
 import h5md_vs_con
+import make_payloads
 import run_h2h
 import run_mpi_v2
 
@@ -70,3 +71,8 @@ def test_each_writer_refuses_repeated_frames(tmp_path: Path, monkeypatch) -> Non
         cross_format.write_mdtraj(tmp_path / "m.xyz", spec)
     with pytest.raises(SystemExit, match="byte-identical"):
         cross_format.write_built_mda(tmp_path / "d.xyz", spec, None)
+
+
+def test_payload_series_refuses_repeated_positions() -> None:
+    with pytest.raises(SystemExit, match="repeat the positions"):
+        make_payloads.distinct({"positions": np.zeros((2, 1, 3))}, "trajectory")
