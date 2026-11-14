@@ -454,3 +454,12 @@ rule final_check:
 rule final_campaign:
     input:
         f"{FINAL_OUT}/COMMIT_OK",
+
+
+# Fresh-file ranked writes. The spare is a separate table, not the default.
+# n=12, one warmup, pinned. Does not edit bench/h2h/scaling/camp16.
+rule camp16b:
+    output:
+        "bench/h2h/scaling/camp16b/DONE",
+    shell:
+        "mkdir -p bench/h2h/scaling/camp16b/logs && python3 bench/h2h/camp16b_run.py"

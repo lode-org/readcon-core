@@ -1,0 +1,8 @@
+{
+  "base": "8cd3812dfb0fab0c9a9ee7858435534fa5e9be30",
+  "writer": "h2h12 serial CON writer and parallel gzip deflate. A path write publishes through the unnamed-file helper. The ranked default uses that same helper. Spare reuse is opt-in.",
+  "protocol": "one warmup, n=12, type-7 median and IQR, serial, taskset -c 0-7, mpirun --bind-to core",
+  "headline": "strong-threads.json, strong-mpi.json, weak-threads.json, weak-ranks-*.json, compressed.json, and conbin.json are default fresh-file writes",
+  "rewrite_table": "rewrite.json is rewrite=True keep_spare=True. It is not the default, and the spare is a second copy of the file.",
+  "rel1_thread_writes": "Some thread writes are slower than rel1 because each path write now publishes a fresh file. That is the landed writer."
+}
