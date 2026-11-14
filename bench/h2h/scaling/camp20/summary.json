@@ -1,0 +1,71 @@
+{
+  "question": "The fresh-file 8-rank million-atom ext4 write was 0.0137 s against camp5c 0.0075 s and a plain cp of 0.0093 s.",
+  "result": "Concurrent pwrites of one fresh ext4 inode contend in the page cache. Rank 0 now writes every slice in order, one pwrite after another. fallocate and linkat are under 0.2 ms. The rename that replaces the previous inode is about 2 ms. The formatter is about 3.5 ms and does not overlap that write: chunking the format to overlap it was slower. A plain cp of the same 23,589,039 bytes is 0.0095 s, already above camp5c, because camp5c overwrote a warm inode.",
+  "rows": [
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "disk",
+      "camp20_s": 0.012453,
+      "camp19_s": 0.013722,
+      "camp5c_s": 0.0074655,
+      "cp_s": 0.0095
+    },
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "memory",
+      "camp20_s": 0.007525,
+      "camp19_s": 0.007274,
+      "camp5c_s": 0.008964
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "disk",
+      "camp20_s": 0.015647,
+      "camp19_s": 0.016524,
+      "camp5c_s": 0.0119925
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "memory",
+      "camp20_s": 0.0119995,
+      "camp19_s": 0.0116765,
+      "camp5c_s": 0.013707
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "disk",
+      "camp20_s": 0.074742,
+      "camp19_s": 0.074536,
+      "camp5c_s": 0.101436
+    },
+    {
+      "file": "con-100k",
+      "workers": 8,
+      "sink": "memory",
+      "camp20_s": 0.068847,
+      "camp19_s": 0.067875,
+      "camp5c_s": 0.083347
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "disk",
+      "camp20_s": 0.130627,
+      "camp19_s": 0.123451,
+      "camp5c_s": 0.177641
+    },
+    {
+      "file": "convel",
+      "workers": 8,
+      "sink": "memory",
+      "camp20_s": 0.1070445,
+      "camp19_s": 0.1046925,
+      "camp5c_s": 0.138315
+    }
+  ]
+}
