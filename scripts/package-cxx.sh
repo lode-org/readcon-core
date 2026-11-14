@@ -97,7 +97,9 @@ mkdir -p "$DEST"/{cmake,include,src,scripts,examples,resources/test}
 # Crate sources: cargo package for a clean, publish-shaped tree, then overlay
 # the CMake/Meson install surface cargo package does not treat as crate files.
 cd "$ROOT_DIR"
-cargo package --allow-dirty --no-verify --package readcon-core
+# A dirty tree is not the checkout CI packages. --allow-dirty made a local
+# pin disagree with that digest.
+cargo package --no-verify --package readcon-core
 CRATE_TAR="$(ls -1 "$ROOT_DIR"/target/package/readcon-core-"${VERSION}".crate)"
 mkdir -p "${TMP_DIR}/crate"
 tar -C "${TMP_DIR}/crate" -xf "$CRATE_TAR"
