@@ -1,0 +1,333 @@
+commit 55ece7cb6d6ee623e6951ca501b9ceb3e2444824
+rev_parse 55ece7cb6d6ee623e6951ca501b9ceb3e2444824
+tree 28ba4aeec1cd6a5d9dac0002d4ebb8dbf422a0d6
+frames 100000
+atoms 32
+repeats 6
+warmup 1
+schedule each arm warmup then its repeats back-to-back; warm phase then cold phase
+settle drop_caches plus 2 s after any arm whose sample is at least 5 s
+process fresh
+affinity_allowed 0,1,2,3,4,5,6,7
+affinity taskset -c 0
+pin core=0 siblings=0 governor=absent cpu_mhz=2700.000 cpu_mhz_after_spin=2700.000 spin_s=0.200002 spin_iters=3170750
+threads 1; read_positions n_threads None stays on the calling thread
+serial 1
+malloc_trim and gc.collect between samples, and in the child before READY
+page_cache primed after READY, before the warm clock
+cold drops the page cache after READY, before the cold clock
+clock parse only; the coordinate check is outside the clock
+gc collect, malloc_trim, then gc.disable before READY, every arm
+readcon_first stays on the warm gate: its warm median was 0.040 s and its cold median 0.111 s
+an arm whose warm IQR/median exceeds 0.10 is rerun at n=12
+MALLOC_MMAP_THRESHOLD_=65536 for every arm
+memory VmHWM_after_read_minus_VmHWM_after_import_MiB
+numpy_percentile method=linear type=7
+git_status_begin
+(clean)
+git_status_end
+conbin_inner 33 single_s 0.015191065998806152
+phase warm
+arm readcon_tip cache=warm
+warmup arm=readcon_tip cache=warm seconds=0.23185332200228004 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_tip cache=warm seconds=0.18753964100324083 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_tip cache=warm seconds=0.20576689999870723 mib=322.98828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_tip cache=warm seconds=0.2265811679972103 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_tip cache=warm seconds=0.20006001200090395 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_tip cache=warm seconds=0.18449750100262463 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_tip cache=warm seconds=0.18662051700084703 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_base cache=warm
+warmup arm=readcon_base cache=warm seconds=4.694057669999893 mib=2531.54296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_base cache=warm seconds=2.7422235690028174 mib=2531.48828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_base cache=warm seconds=2.769143334000546 mib=2531.375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_base cache=warm seconds=2.7541721610032255 mib=2531.37890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_base cache=warm seconds=2.752104234001308 mib=2531.38671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_base cache=warm seconds=2.742366881997441 mib=2531.37890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_base cache=warm seconds=2.759332720997918 mib=2531.37890625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_v0173 cache=warm
+warmup arm=readcon_v0173 cache=warm seconds=2.731437600006757 mib=2531.54296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_v0173 cache=warm seconds=2.7525011299949256 mib=2531.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_v0173 cache=warm seconds=2.7763886919929064 mib=2531.37109375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_v0173 cache=warm seconds=2.7451751199987484 mib=2531.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_v0173 cache=warm seconds=2.74297254600242 mib=2531.37890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_v0173 cache=warm seconds=2.8040527920020395 mib=2531.37890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_v0173 cache=warm seconds=2.752276172002894 mib=2531.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_first cache=warm
+warmup arm=readcon_first cache=warm seconds=0.04099725400010357 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=0 arm=readcon_first cache=warm seconds=0.02722228699713014 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=1 arm=readcon_first cache=warm seconds=0.025774974994419608 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=2 arm=readcon_first cache=warm seconds=0.025688490000902675 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=3 arm=readcon_first cache=warm seconds=0.026066543003253173 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=4 arm=readcon_first cache=warm seconds=0.025261120004870463 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=5 arm=readcon_first cache=warm seconds=0.025876719002553727 mib=131.08203125 matched=1 got=1 requested=1 exit=0 error=
+arm readcon_db cache=warm
+warmup arm=readcon_db cache=warm seconds=17.53501161800523 mib=396.99609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_db cache=warm seconds=18.10358689200075 mib=396.87890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_db cache=warm seconds=17.66228473299998 mib=397.03515625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_db cache=warm seconds=17.65997942199465 mib=397.0234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_db cache=warm seconds=17.793066291997093 mib=397.01171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_db cache=warm seconds=17.930761657000403 mib=396.98046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_db cache=warm seconds=17.67373709399544 mib=397.0234375 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after readcon_db cache=warm
+arm ase_eon cache=warm
+warmup arm=ase_eon cache=warm seconds=11.477901477002888 mib=383.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ase_eon cache=warm seconds=10.748224982002284 mib=383.93359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ase_eon cache=warm seconds=10.697964291000972 mib=384.0 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ase_eon cache=warm seconds=10.665961537997646 mib=384.0 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ase_eon cache=warm seconds=10.62850993200118 mib=383.87109375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ase_eon cache=warm seconds=10.794117006000306 mib=383.93359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ase_eon cache=warm seconds=10.863572476002446 mib=383.9140625 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after ase_eon cache=warm
+arm eon cache=warm
+warmup arm=eon cache=warm seconds=0.34943736299464945 mib=262.90234375 matched=1 got=1 requested=1 exit=0 error=
+sample rep=0 arm=eon cache=warm seconds=0.3145378260014695 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=1 arm=eon cache=warm seconds=0.3198554359987611 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=2 arm=eon cache=warm seconds=0.317384663001576 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=3 arm=eon cache=warm seconds=0.3104175260014017 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=4 arm=eon cache=warm seconds=0.3113390040016384 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=5 arm=eon cache=warm seconds=0.3131635030003963 mib=262.9765625 matched=1 got=1 requested=1 exit=0 error=
+arm eon_py cache=warm
+warmup arm=eon_py cache=warm seconds=21.160701483000594 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=eon_py cache=warm seconds=19.768640047004737 mib=2406.828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=eon_py cache=warm seconds=19.89544233599736 mib=2406.828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=eon_py cache=warm seconds=19.63977031200193 mib=2406.828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=eon_py cache=warm seconds=19.87687558500329 mib=2406.828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=eon_py cache=warm seconds=19.787955040999805 mib=2407.00390625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=eon_py cache=warm seconds=19.716488207996008 mib=2406.953125 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after eon_py cache=warm
+arm readcon_eon_api cache=warm
+warmup arm=readcon_eon_api cache=warm seconds=1.62767 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_eon_api cache=warm seconds=1.58604 mib=1058.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_eon_api cache=warm seconds=1.56941 mib=1058.6875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_eon_api cache=warm seconds=1.58381 mib=1058.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_eon_api cache=warm seconds=1.56405 mib=1058.671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_eon_api cache=warm seconds=1.59032 mib=1058.7265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_eon_api cache=warm seconds=1.57565 mib=1058.72265625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm conbin cache=warm
+warmup arm=conbin cache=warm seconds=0.15840620700328145 mib=293.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=conbin cache=warm seconds=0.15242136500455672 mib=293.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=conbin cache=warm seconds=0.15183267400425393 mib=293.08203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=conbin cache=warm seconds=0.15224673400371103 mib=293.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=conbin cache=warm seconds=0.15146438500232762 mib=293.015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=conbin cache=warm seconds=0.1556204219959909 mib=293.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=conbin cache=warm seconds=0.1551457189998473 mib=293.078125 matched=100000 got=100000 requested=100000 exit=0 error=
+arm numpy cache=warm
+warmup arm=numpy cache=warm seconds=1.203904522000812 mib=390.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=numpy cache=warm seconds=1.1513699740025913 mib=390.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=numpy cache=warm seconds=1.1551958010022645 mib=390.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=numpy cache=warm seconds=1.1775190089974785 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=numpy cache=warm seconds=1.1796212600020226 mib=390.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=numpy cache=warm seconds=1.168966237004497 mib=390.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=numpy cache=warm seconds=1.1998735259985551 mib=390.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+arm chemfiles cache=warm
+warmup arm=chemfiles cache=warm seconds=1.4433448189956835 mib=203.3671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=chemfiles cache=warm seconds=1.3935567080043256 mib=203.4453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=chemfiles cache=warm seconds=1.3966497670044191 mib=203.4609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=chemfiles cache=warm seconds=1.3791598289972171 mib=203.3203125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=chemfiles cache=warm seconds=1.382961664996401 mib=203.34765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=chemfiles cache=warm seconds=1.389010041995789 mib=203.41796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=chemfiles cache=warm seconds=1.3921180949982954 mib=203.49609375 matched=100000 got=100000 requested=100000 exit=0 error=
+arm ovito cache=warm
+warmup arm=ovito cache=warm seconds=3.173483528997167 mib=172.0234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ovito cache=warm seconds=3.0038218580011744 mib=172.0 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ovito cache=warm seconds=3.0748386880004546 mib=171.97265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ovito cache=warm seconds=2.9833965729994816 mib=171.98828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ovito cache=warm seconds=2.9487859150031 mib=171.95703125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ovito cache=warm seconds=2.973547262001375 mib=171.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ovito cache=warm seconds=2.9845653390002553 mib=171.98046875 matched=100000 got=100000 requested=100000 exit=0 error=
+arm ase_extxyz cache=warm
+warmup arm=ase_extxyz cache=warm seconds=7.780747359000088 mib=345.99609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ase_extxyz cache=warm seconds=7.7253037379996385 mib=345.9140625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ase_extxyz cache=warm seconds=7.67904382100096 mib=345.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ase_extxyz cache=warm seconds=7.569734122000227 mib=346.01171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ase_extxyz cache=warm seconds=7.578187320003053 mib=345.9453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ase_extxyz cache=warm seconds=7.687091923005937 mib=346.01171875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ase_extxyz cache=warm seconds=7.606409575004363 mib=345.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after ase_extxyz cache=warm
+arm pymatgen cache=warm
+warmup arm=pymatgen cache=warm seconds=15.823571073000494 mib=2118.84375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=pymatgen cache=warm seconds=15.720905513000616 mib=2118.96484375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=pymatgen cache=warm seconds=15.644435053000052 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=pymatgen cache=warm seconds=15.451437660994998 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=pymatgen cache=warm seconds=15.595871687997715 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=pymatgen cache=warm seconds=15.687535739998566 mib=2118.90625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=pymatgen cache=warm seconds=15.549383149998903 mib=2118.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after pymatgen cache=warm
+arm h5py cache=warm
+warmup arm=h5py cache=warm seconds=0.6597892559948377 mib=758.625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=h5py cache=warm seconds=0.6068557289981982 mib=758.64453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=h5py cache=warm seconds=0.5964640239981236 mib=758.734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=h5py cache=warm seconds=0.6115916650014697 mib=758.640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=h5py cache=warm seconds=0.6047638140007621 mib=758.66796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=h5py cache=warm seconds=0.6254741119992104 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=h5py cache=warm seconds=0.6325733010016847 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm mdanalysis cache=warm
+warmup arm=mdanalysis cache=warm seconds=49.55713715299498 mib=139.40234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=mdanalysis cache=warm seconds=49.11775349399977 mib=139.2890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=mdanalysis cache=warm seconds=50.472787348000566 mib=139.3359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=mdanalysis cache=warm seconds=49.017236732004676 mib=139.28125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=mdanalysis cache=warm seconds=49.34515163800097 mib=139.24609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=mdanalysis cache=warm seconds=49.49878002800688 mib=139.22265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=mdanalysis cache=warm seconds=49.61413201999676 mib=139.31640625 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after mdanalysis cache=warm
+phase cold
+arm readcon_tip cache=cold
+warmup arm=readcon_tip cache=cold seconds=0.3763942229998065 mib=323.046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_tip cache=cold seconds=0.23224294199462747 mib=323.05078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_tip cache=cold seconds=0.23508600000059232 mib=323.05078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_tip cache=cold seconds=0.23239694200310623 mib=322.984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_tip cache=cold seconds=0.25528665899764746 mib=323.046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_tip cache=cold seconds=0.2523897799983388 mib=323.046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_tip cache=cold seconds=0.25336634700215654 mib=322.98828125 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_base cache=cold
+warmup arm=readcon_base cache=cold seconds=4.404835335997632 mib=2531.484375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_base cache=cold seconds=2.8836669720039936 mib=2531.48046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_base cache=cold seconds=2.9519877300044755 mib=2531.46875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_base cache=cold seconds=2.9384362240016344 mib=2531.4765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_base cache=cold seconds=2.8263093139976263 mib=2531.48046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_base cache=cold seconds=2.8544747169944458 mib=2531.4765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_base cache=cold seconds=2.803120234995731 mib=2531.4765625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_v0173 cache=cold
+warmup arm=readcon_v0173 cache=cold seconds=2.8360642490006285 mib=2531.48046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_v0173 cache=cold seconds=2.8101932069985196 mib=2531.46875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_v0173 cache=cold seconds=2.8956489270058228 mib=2531.47265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_v0173 cache=cold seconds=2.8142309640024905 mib=2531.46875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_v0173 cache=cold seconds=2.801702626005863 mib=2531.4765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_v0173 cache=cold seconds=2.933764211004018 mib=2531.47265625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_v0173 cache=cold seconds=2.8063541410010657 mib=2531.46875 matched=100000 got=100000 requested=100000 exit=0 error=
+arm readcon_first cache=cold
+warmup arm=readcon_first cache=cold seconds=0.11127034500532318 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=0 arm=readcon_first cache=cold seconds=0.11155847199552227 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=1 arm=readcon_first cache=cold seconds=0.106998299001134 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=2 arm=readcon_first cache=cold seconds=0.10855463500047335 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=3 arm=readcon_first cache=cold seconds=0.11038672200083965 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=4 arm=readcon_first cache=cold seconds=0.10916938199807191 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+sample rep=5 arm=readcon_first cache=cold seconds=0.1471860879973974 mib=131.078125 matched=1 got=1 requested=1 exit=0 error=
+arm readcon_db cache=cold
+warmup arm=readcon_db cache=cold seconds=17.575088904995937 mib=397.0859375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_db cache=cold seconds=17.37955744699866 mib=397.05078125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_db cache=cold seconds=17.369178758999624 mib=396.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_db cache=cold seconds=17.454833326999506 mib=396.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_db cache=cold seconds=17.571240094999666 mib=397.02734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_db cache=cold seconds=17.310968044999754 mib=396.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_db cache=cold seconds=17.611683691997314 mib=396.9921875 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after readcon_db cache=cold
+arm ase_eon cache=cold
+warmup arm=ase_eon cache=cold seconds=10.740593996997632 mib=383.9921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ase_eon cache=cold seconds=10.762460352001654 mib=383.99609375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ase_eon cache=cold seconds=10.771913721000601 mib=384.0 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ase_eon cache=cold seconds=10.764564461998816 mib=384.0 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ase_eon cache=cold seconds=10.781754704999912 mib=383.9921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ase_eon cache=cold seconds=10.772792103998654 mib=384.0390625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ase_eon cache=cold seconds=10.84452056500595 mib=383.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after ase_eon cache=cold
+arm eon cache=cold
+warmup arm=eon cache=cold seconds=0.4374606689962093 mib=262.96875 matched=1 got=1 requested=1 exit=0 error=
+sample rep=0 arm=eon cache=cold seconds=0.4135103359949426 mib=263.0390625 matched=1 got=1 requested=1 exit=0 error=
+sample rep=1 arm=eon cache=cold seconds=0.4632546450011432 mib=262.96484375 matched=1 got=1 requested=1 exit=0 error=
+sample rep=2 arm=eon cache=cold seconds=0.41258794099849183 mib=262.96484375 matched=1 got=1 requested=1 exit=0 error=
+sample rep=3 arm=eon cache=cold seconds=0.4219128059994546 mib=262.96484375 matched=1 got=1 requested=1 exit=0 error=
+sample rep=4 arm=eon cache=cold seconds=0.42374222700163955 mib=262.96484375 matched=1 got=1 requested=1 exit=0 error=
+sample rep=5 arm=eon cache=cold seconds=0.42595884400361683 mib=262.96484375 matched=1 got=1 requested=1 exit=0 error=
+arm eon_py cache=cold
+warmup arm=eon_py cache=cold seconds=20.74467339200055 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=eon_py cache=cold seconds=19.349677858001087 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=eon_py cache=cold seconds=19.34153427100682 mib=2331.27734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=eon_py cache=cold seconds=19.209007642995857 mib=2332.65625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=eon_py cache=cold seconds=19.11883884699637 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=eon_py cache=cold seconds=19.0522566130021 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=eon_py cache=cold seconds=19.069883805001155 mib=2406.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after eon_py cache=cold
+arm readcon_eon_api cache=cold
+warmup arm=readcon_eon_api cache=cold seconds=1.62379 mib=1058.69140625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=readcon_eon_api cache=cold seconds=1.60305 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=readcon_eon_api cache=cold seconds=1.60722 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=readcon_eon_api cache=cold seconds=1.60094 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=readcon_eon_api cache=cold seconds=1.60101 mib=1058.69921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=readcon_eon_api cache=cold seconds=1.59923 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=readcon_eon_api cache=cold seconds=1.60041 mib=1058.7421875 matched=100000 got=100000 requested=100000 exit=0 error=
+arm conbin cache=cold
+warmup arm=conbin cache=cold seconds=0.12242949200299336 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=conbin cache=cold seconds=0.09493307399679907 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=conbin cache=cold seconds=0.10005038300005253 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=conbin cache=cold seconds=0.1027440010002465 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=conbin cache=cold seconds=0.10436232700158143 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=conbin cache=cold seconds=0.09597654399840394 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=conbin cache=cold seconds=0.1184516000066651 mib=146.6640625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm numpy cache=cold
+warmup arm=numpy cache=cold seconds=1.2138765310010058 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=numpy cache=cold seconds=1.1935730010009138 mib=390.859375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=numpy cache=cold seconds=1.2185810820010374 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=numpy cache=cold seconds=1.2032831449978403 mib=390.86328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=numpy cache=cold seconds=1.2082232550019398 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=numpy cache=cold seconds=1.2071509270026581 mib=390.921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=numpy cache=cold seconds=1.2171914420032408 mib=390.92578125 matched=100000 got=100000 requested=100000 exit=0 error=
+arm chemfiles cache=cold
+warmup arm=chemfiles cache=cold seconds=1.4328167580024456 mib=203.2890625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=chemfiles cache=cold seconds=1.4478803259989945 mib=203.27734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=chemfiles cache=cold seconds=1.4533820819997345 mib=203.2734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=chemfiles cache=cold seconds=1.4353502910016687 mib=203.33984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=chemfiles cache=cold seconds=1.4410652820006362 mib=203.38671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=chemfiles cache=cold seconds=1.522652357998595 mib=203.3828125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=chemfiles cache=cold seconds=1.4355390870041447 mib=203.359375 matched=100000 got=100000 requested=100000 exit=0 error=
+arm ovito cache=cold
+warmup arm=ovito cache=cold seconds=3.0546549999999115 mib=172.125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ovito cache=cold seconds=3.0654934429985587 mib=171.90625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ovito cache=cold seconds=3.0419082669977797 mib=171.9453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ovito cache=cold seconds=3.0439498810010264 mib=171.93359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ovito cache=cold seconds=3.0780325980013004 mib=171.91015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ovito cache=cold seconds=3.0232840640019276 mib=171.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ovito cache=cold seconds=3.0173073849946377 mib=171.9296875 matched=100000 got=100000 requested=100000 exit=0 error=
+arm ase_extxyz cache=cold
+warmup arm=ase_extxyz cache=cold seconds=7.589563470995927 mib=345.8984375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=ase_extxyz cache=cold seconds=7.702303281002969 mib=345.94921875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=ase_extxyz cache=cold seconds=7.610803802999726 mib=345.90234375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=ase_extxyz cache=cold seconds=7.650912791003066 mib=345.85546875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=ase_extxyz cache=cold seconds=7.630263101003948 mib=345.91015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=ase_extxyz cache=cold seconds=7.597392080002464 mib=345.88671875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=ase_extxyz cache=cold seconds=7.644563895999454 mib=345.96484375 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after ase_extxyz cache=cold
+arm pymatgen cache=cold
+warmup arm=pymatgen cache=cold seconds=15.61447634200158 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=pymatgen cache=cold seconds=15.626463439999497 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=pymatgen cache=cold seconds=15.666485134999675 mib=2119.1015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=pymatgen cache=cold seconds=15.385561406998022 mib=2118.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=pymatgen cache=cold seconds=17.237601312997867 mib=2118.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=pymatgen cache=cold seconds=15.571441425003286 mib=2118.9765625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=pymatgen cache=cold seconds=15.410608965001302 mib=2118.91796875 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after pymatgen cache=cold
+arm h5py cache=cold
+warmup arm=h5py cache=cold seconds=0.6468933829964953 mib=758.6953125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=h5py cache=cold seconds=0.6325628310005413 mib=758.640625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=h5py cache=cold seconds=0.6296836589972372 mib=758.66015625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=h5py cache=cold seconds=0.6302029459984624 mib=758.6953125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=h5py cache=cold seconds=0.6342513470008271 mib=758.65625 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=h5py cache=cold seconds=0.6312575560004916 mib=758.64453125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=h5py cache=cold seconds=0.6377633240044815 mib=758.65625 matched=100000 got=100000 requested=100000 exit=0 error=
+arm mdanalysis cache=cold
+warmup arm=mdanalysis cache=cold seconds=49.92069192299823 mib=139.27734375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=0 arm=mdanalysis cache=cold seconds=49.72736253400217 mib=139.328125 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=1 arm=mdanalysis cache=cold seconds=49.48533899200265 mib=139.32421875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=2 arm=mdanalysis cache=cold seconds=49.352240840002196 mib=139.3046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=3 arm=mdanalysis cache=cold seconds=49.91539467000257 mib=139.3359375 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=4 arm=mdanalysis cache=cold seconds=49.230954277998535 mib=139.23046875 matched=100000 got=100000 requested=100000 exit=0 error=
+sample rep=5 arm=mdanalysis cache=cold seconds=50.075926138000796 mib=139.3125 matched=100000 got=100000 requested=100000 exit=0 error=
+settle after mdanalysis cache=cold
+summary arm=readcon_tip scope=all_frames n_rep=6 median_s=1.937998265e-01 iqr_s=1.748988000e-02 cold_median_s=2.437378900e-01 cold_iqr_s=2.005299875e-02 mib_median=322.984375 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_base scope=all_frames n_rep=6 median_s=2.753138198e+00 iqr_s=1.324136100e-02 cold_median_s=2.869070844e+00 cold_iqr_s=9.139324626e-02 mib_median=2531.378906 mib_iqr=0.005859 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_v0173 scope=all_frames n_rep=6 median_s=2.752388651e+00 iqr_s=2.346641849e-02 cold_median_s=2.812212086e+00 cold_iqr_s=6.798052875e-02 mib_median=2531.369141 mib_iqr=0.009766 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_first scope=first_frame n_rep=6 median_s=2.582584700e-02 iqr_s=3.089757538e-04 cold_median_s=1.097780520e-01 cold_iqr_s=2.557212747e-03 mib_median=131.078125 mib_iqr=0.000000 requested=1 matched=1 failed=0 exit=0
+summary arm=readcon_db scope=all_frames n_rep=6 median_s=1.773340169e+01 iqr_s=2.311899925e-01 cold_median_s=1.741719539e+01 cold_iqr_s=1.703649720e-01 mib_median=397.017578 mib_iqr=0.035156 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_eon scope=all_frames n_rep=6 median_s=1.072309464e+01 iqr_s=1.086817738e-01 cold_median_s=1.077235291e+01 cold_iqr_s=1.311227800e-02 mib_median=383.933594 mib_iqr=0.064453 requested=100000 matched=100000 failed=0 exit=0
+summary arm=eon scope=first_frame n_rep=6 median_s=3.138506645e-01 iqr_s=4.877825000e-03 cold_median_s=4.228275165e-01 cold_iqr_s=9.793736257e-03 mib_median=262.976562 mib_iqr=0.000000 requested=1 matched=1 failed=0 exit=0
+summary arm=eon_py scope=all_frames n_rep=6 median_s=1.977829754e+01 iqr_s=1.251192813e-01 cold_median_s=1.916392324e+01 cold_iqr_s=2.262800485e-01 mib_median=2406.828125 mib_iqr=0.093750 requested=100000 matched=100000 failed=0 exit=0
+summary arm=readcon_eon_api scope=readcon_through_eon n_rep=6 median_s=1.579730000e+00 iqr_s=1.451250000e-02 cold_median_s=1.600975000e+00 cold_iqr_s=1.997500000e-03 mib_median=1058.722656 mib_iqr=0.026367 requested=100000 matched=100000 failed=0 exit=0
+summary arm=conbin scope=all_frames n_rep=6 median_s=1.523340495e-01 iqr_s=2.528441497e-03 cold_median_s=1.013971920e-01 cold_iqr_s=6.962741752e-03 mib_median=293.078125 mib_iqr=0.000000 requested=100000 matched=100000 failed=0 exit=0
+summary arm=numpy scope=all_frames n_rep=6 median_s=1.173242623e+00 iqr_s=2.045728725e-02 cold_median_s=1.207687091e+00 cold_iqr_s=1.069930475e-02 mib_median=390.892578 mib_iqr=0.058594 requested=100000 matched=100000 failed=0 exit=0
+summary arm=chemfiles scope=all_frames n_rep=6 median_s=1.390564068e+00 iqr_s=8.723295507e-03 cold_median_s=1.444472804e+00 cold_iqr_s=1.508600725e-02 mib_median=203.431641 mib_iqr=0.091797 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ovito scope=all_frames n_rep=6 median_s=2.983980956e+00 iqr_s=2.299813850e-02 cold_median_s=3.042929074e+00 cold_iqr_s=3.216743775e-02 mib_median=171.978516 mib_iqr=0.012695 requested=100000 matched=100000 failed=0 exit=0
+summary arm=ase_extxyz scope=all_frames n_rep=6 median_s=7.642726698e+00 iqr_s=9.983701375e-02 cold_median_s=7.637413499e+00 cold_iqr_s=3.365693975e-02 mib_median=345.964844 mib_iqr=0.083008 requested=100000 matched=100000 failed=0 exit=0
+summary arm=pymatgen scope=all_frames n_rep=6 median_s=1.562015337e+01 iqr_s=1.157552838e-01 cold_median_s=1.559895243e+01 cold_iqr_s=2.056626312e-01 mib_median=2118.917969 mib_iqr=0.035156 requested=100000 matched=100000 failed=0 exit=0
+summary arm=h5py scope=all_frames n_rep=6 median_s=6.092236970e-01 iqr_s=1.671670750e-02 cold_median_s=6.319101935e-01 cold_iqr_s=3.362619502e-03 mib_median=758.660156 mib_iqr=0.017578 requested=100000 matched=100000 failed=0 exit=0
+summary arm=mdanalysis scope=all_frames n_rep=6 median_s=4.942196583e+01 iqr_s=4.106909920e-01 cold_median_s=4.960635076e+01 cold_iqr_s=4.828712580e-01 mib_median=139.285156 mib_iqr=0.054688 requested=100000 matched=100000 failed=0 exit=0
+exit_code 0
