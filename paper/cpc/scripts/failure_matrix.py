@@ -172,7 +172,7 @@ def w_readcon(fx, path):
     ]
     c = fx["cell"]
     L = np.linalg.norm(c, axis=1)
-    # The rows are CON 3.1; a frame given no minor gets the library's own (1 in readcon-core 0.23.3).
+    # The rows are CON 3.1; a frame given no minor gets the minor this library stamps.
     f = readcon.ConFrame(
         list(L),
         [90.0, 90.0, 90.0],

@@ -3,7 +3,7 @@
 The paper rests on two archives, both in its supplementary material.
 
 - `readcon-core.bundle`, a git bundle of readcon-core that holds commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the commit `src/commit.tex` names, with its whole history; `git clone readcon-core.bundle` checks it out without a network.
-  That commit is readcon-core 0.17.3 and is not a release tag. It descends from commit `d0b7d3c7a5a7e7d7a6a963d515e9524c575c09fd`, the head of pull request 80 to the main branch after the published release 0.17.3 (tag v0.17.3 at commit `12ca800bc2212c565941e04094cba6b4d99a62e0`). Cargo.toml of this tree is 0.23.3. The latest release tag is v0.23.2 at `8c2d9984c40aedfb2e0084fedefaa02e930957f2`.
+  That commit is readcon-core 0.17.3 and is not a release tag. It descends from commit `d0b7d3c7a5a7e7d7a6a963d515e9524c575c09fd`, the head of pull request 80 to the main branch after the published release 0.17.3 (tag v0.17.3 at commit `12ca800bc2212c565941e04094cba6b4d99a62e0`). Cargo.toml of this tree is the version `\readconCargoVersion` names. The latest release tag is v0.23.2 at `8c2d9984c40aedfb2e0084fedefaa02e930957f2`.
   It holds the library and its bindings, the specification `docs/orgmode/spec.org` that the supplement typesets, and the conformance corpus `resources/conformance/`, and it holds no `paper` directory.
   Besides that commit, the bundle holds `refs/archive/candidate-v3`, an earlier commit with the same tree that most records name as the commit of their checkout, the branch `main`, the branch `paper/cpc-v7.16` of the previous submission, and the release tags from v0.1.0 through the version in Cargo.toml, from which `scripts/gen_spec_supp.py --measure` writes `data/spec/versions.json`.
   A clone of the bundle keeps the objects of `refs/archive/candidate-v3` without the ref, and `scripts/gen_version_map.py` and `scripts/check_manuscript.py` read the library of that commit from them.
@@ -28,7 +28,7 @@ The script takes the client from `EONCLIENT`, then from `PATH`, then from `paper
 ## Release
 
 `src/commit.tex` holds one value, `\readconcommit`: commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the measured checkout. That commit is readcon-core 0.17.3 and is not a release tag.
-`src/release.tex` names that commit in short form, calls it a candidate commit, and states that it is not a release tag. `\readconversion` is `\readconCargoVersion`, the version of this tree (0.23.3), not the version of that commit.
+`src/release.tex` names that commit in short form, calls it a candidate commit, and states that it is not a release tag. `\readconversion` is `\readconCargoVersion`, the version of this tree, written from Cargo.toml, not the version of that commit.
 `\rcMeasuredVersion` is 0.17.3 and `\rcMeasuredSpecBlob` is the `docs/orgmode/spec.org` of that commit. `\rcReleaseSpecBlob` is the `docs/orgmode/spec.org` this release distributes.
 Every record names the library it measured by that digest and the commit of the checkout that ran it.
 One record also depends on the commit of `src/commit.tex`: `data/test_run.json`, the run of the example program in a clone of that commit, prints the commit in its commands, and `scripts/test_run.py --tables` stops when the record names another.
@@ -60,7 +60,7 @@ The commit of the tag decides which of these files change:
 - Another commit with the tree of the candidate that descends from commit d0b7d3c7, which a squash or rebase merge of the series gives once pull request 80 is on the main branch with its own commits.
   `src/commit.tex` takes that commit, and `src/release.tex`, the PDFs and `packet/CPC-FORM.md` print it where they print the commit.
   `data/test_run.json` and `test_run.tex` come from a new test run in a clone of that commit.
-- A commit with the library of the candidate and other files changed, such as a date in `CHANGELOG.md` and `CITATION.cff` of readcon-core 0.23.3.
+- A commit with the library of the candidate and other files changed, such as a date in `CHANGELOG.md` and `CITATION.cff` of this release, the version `\readconCargoVersion` names.
   The same files change, and the paper is rebuilt in a checkout of that commit, whose specification and conformance corpus the checks read.
   A new test run in that checkout writes `data/test_run.json` and `test_run.tex`.
 - A commit with other library files, such as the version bump alone on commit d0b7d3c7.
