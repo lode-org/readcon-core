@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = ROOT / "bench"
+sys.path.insert(0, str(ROOT))
+from readcon_bench import bench_file  # noqa: E402
 
 
 def _string_constants(tree: ast.AST):
@@ -29,3 +32,14 @@ def test_bench_scripts_do_not_default_to_the_system_temporary_directory() -> Non
     assert not offenders, (
         "bench script defaults to a temporary directory:\n" + "\n".join(offenders)
     )
+
+
+def test_bench_file_leaves_no_private_directory() -> None:
+    path = bench_file("unit", ".con")
+    try:
+        assert path.parent.name == "unit"
+        assert path.is_file()
+    finally:
+        path.unlink(missing_ok=True)
+    assert not path.exists()
+    assert path.parent.is_dir()
