@@ -162,8 +162,10 @@ jobs:
         run: |
           ${{ matrix.packages_install }}
       - name: Build artifacts
+        shell: bash
         run: |
-          # Actually do builds and make zips and whatnot
+          source scripts/release-rustflags.sh
+          release_rustflags "${GITHUB_WORKSPACE}"
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
       - id: cargo-dist

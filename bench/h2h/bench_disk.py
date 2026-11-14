@@ -52,8 +52,13 @@ def bench_dir(name: str = "scratch") -> Path:
 
 
 def bench_file(name: str, suffix: str = "") -> Path:
-    """A new file under the bench disk. The caller deletes it."""
-    directory = _unique(name)
-    path = directory / f"out{suffix}"
+    """A new file under the bench disk. The caller deletes the file.
+
+    The name is unique inside ``scratch/<name>``. There is no per-file
+    directory left behind after that delete.
+    """
+    root = bench_disk() / "scratch" / name
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{secrets.token_hex(8)}{suffix}"
     path.touch()
     return path

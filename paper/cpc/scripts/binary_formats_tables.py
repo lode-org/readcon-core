@@ -46,24 +46,11 @@ from r0174_tables import other_host, same_protocol
 from sinum import num
 
 
-def _load_bench_disk():
-    import importlib.util
-
-    here = Path(__file__).resolve()
-    for parent in (here, *here.parents):
-        candidate = parent / "bench" / "h2h" / "bench_disk.py"
-        if candidate.is_file():
-            spec = importlib.util.spec_from_file_location(
-                "readcon_bench_disk", candidate
-            )
-            module = importlib.util.module_from_spec(spec)
-            assert spec.loader is not None
-            spec.loader.exec_module(module)
-            return module
-    raise RuntimeError("bench/h2h/bench_disk.py was not found")
-
-
-_BENCH = _load_bench_disk()
+_repo = next(
+    _p for _p in Path(__file__).resolve().parents if (_p / "readcon_bench.py").is_file()
+)
+__import__("sys").path.insert(0, str(_repo))
+_BENCH = __import__("readcon_bench")
 bench_scratch = _BENCH.bench_scratch
 bench_file = _BENCH.bench_file
 bench_dir = _BENCH.bench_dir
