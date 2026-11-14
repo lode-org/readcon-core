@@ -34,8 +34,13 @@ FRAME = HEADER + BODY + "\n"
 
 
 def _path(n_frames: int) -> str:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+    from frames_guard import write_distinct_copies
+
     path = bench_file("path-read", ".con")
-    path.write_text("\n" + FRAME * n_frames)
+    write_distinct_copies(path, "\n" + FRAME, n_frames)
     return str(path)
 
 

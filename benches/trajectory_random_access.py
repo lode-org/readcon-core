@@ -57,7 +57,10 @@ def main():
     one = (REPO / "resources/test/cuh2.con").read_text()
     with bench_scratch("scratch") as tmp:
         path = Path(tmp) / "long.con"
-        path.write_text(one * args.frames)
+        sys.path.insert(0, str(REPO / "bench" / "h2h"))
+        from frames_guard import write_distinct_copies
+
+        write_distinct_copies(path, one, args.frames)
         side = Path(str(path) + ".rcidx")
         idx = random.Random(args.seed).sample(range(args.frames), args.k)
 

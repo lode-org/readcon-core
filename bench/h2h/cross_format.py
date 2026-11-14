@@ -29,7 +29,6 @@ inside that format's size range, and reads back at the full atom count.
 from __future__ import annotations
 
 import ctypes
-import hashlib
 import json
 import os
 import shutil
@@ -39,6 +38,7 @@ import time
 from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
+from frames_guard import require_distinct_frames
 from measured_commit import measurement, record_path
 
 import numpy as np
@@ -149,26 +149,6 @@ def _frame_delta(n_atoms: int, frame: int) -> np.ndarray:
     seed = (0xC0FFEE + frame * 0x9E3779B1) & 0xFFFFFFFFFFFFFFFF
     rng = np.random.Generator(np.random.PCG64(seed))
     return rng.uniform(-0.04, 0.04, size=(n_atoms, 3))
-
-
-def require_distinct_frames(positions: np.ndarray) -> list[str]:
-    """SHA-256 of each frame's coordinates.
-
-    Two frames with the same hash are the same bytes. The repeated-frame
-    reader would time a copy of the first.
-    """
-    coords = np.ascontiguousarray(positions, dtype="<f8")
-    if coords.ndim != 3 or coords.shape[2] != 3:
-        raise SystemExit("positions are not frames x atoms x 3")
-    hashes = [
-        hashlib.sha256(np.ascontiguousarray(frame).tobytes()).hexdigest()
-        for frame in coords
-    ]
-    if len(hashes) != len(set(hashes)):
-        raise SystemExit(
-            "byte-identical frames; a repeated frame measures a copy, not a parse"
-        )
-    return hashes
 
 
 def make_spec(n_atoms: int, n_frames: int) -> dict:

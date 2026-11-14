@@ -330,14 +330,9 @@ def strong_mpi(paths: dict[tuple[str, str], Path]) -> None:
 
 
 def repeat_fixture(dest: Path, frames: int) -> None:
-    blob = CUH2.read_bytes()
-    expect = len(blob) * frames
-    if dest.is_file() and dest.stat().st_size == expect:
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    with dest.open("wb") as handle:
-        for _ in range(frames):
-            handle.write(blob)
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(dest, CUH2.read_text(encoding="utf-8"), frames)
 
 
 def weak_threads() -> None:

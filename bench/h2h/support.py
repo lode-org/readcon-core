@@ -130,39 +130,48 @@ def expected_cell(n_atoms: int) -> np.ndarray:
     return np.array([span, span, span, 90.0, 90.0, 90.0], dtype=np.float64)
 
 
-def write_con(path: Path, n_atoms: int, n_frames: int) -> None:
+def _one_grid(n_atoms: int) -> str:
     side = side_for(n_atoms)
     span = float(side)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for _frame in range(n_frames):
-            handle.write("grid\n")
-            handle.write('{"con_spec_version":2}\n')
-            handle.write(f"{span:.6f} {span:.6f} {span:.6f}\n")
-            handle.write("90.000000 90.000000 90.000000\n")
-            handle.write("0 0\n")
-            handle.write("0 0\n")
-            handle.write("1\n")
-            handle.write(f"{n_atoms}\n")
-            handle.write("63.546000\n")
-            handle.write("Cu\n")
-            handle.write("Coordinates of Component 1\n")
-            written = 0
-            for z in range(side):
-                for y in range(side):
-                    for x in range(side):
-                        if written >= n_atoms:
-                            break
-                        handle.write(
-                            f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}\n"
-                        )
-                        written += 1
-                    else:
-                        continue
+    lines = [
+        "grid",
+        '{"con_spec_version":2}',
+        f"{span:.6f} {span:.6f} {span:.6f}",
+        "90.000000 90.000000 90.000000",
+        "0 0",
+        "0 0",
+        "1",
+        str(n_atoms),
+        "63.546000",
+        "Cu",
+        "Coordinates of Component 1",
+    ]
+    written = 0
+    for z in range(side):
+        for y in range(side):
+            for x in range(side):
+                if written >= n_atoms:
                     break
-                else:
-                    continue
-                break
+                lines.append(f" {float(x):.6f} {float(y):.6f} {float(z):.6f} 0 {written}")
+                written += 1
+            else:
+                continue
+            break
+        else:
+            continue
+        break
+    return "\n".join(lines) + "\n"
+
+
+def write_con(path: Path, n_atoms: int, n_frames: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    one = _one_grid(n_atoms)
+    if n_frames == 1:
+        path.write_text(one, encoding="utf-8")
+        return
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(path, one, n_frames)
 
 
 def _strip_vendor_marks(text: str) -> str:

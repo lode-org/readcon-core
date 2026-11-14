@@ -671,13 +671,12 @@ def weak(paths: dict[str, Path]) -> None:
     if not mpi_bin.exists():
         return
     fixture = ROOT / "resources" / "test" / "cuh2.con"
-    blob = fixture.read_bytes()
     per = 2000
     big = WORK / "thread-reads" / "weak-cuh2-x8.con"
+    from frames_guard import write_distinct_copies
+
     if not big.exists():
-        with big.open("wb") as handle:
-            for _ in range(per * 8):
-                handle.write(blob)
+        write_distinct_copies(big, fixture.read_text(encoding="utf-8"), per * 8)
     for ranks in THREADS:
         dest = OUT / f"weak-ranks-{ranks}.json"
         if dest.exists():
@@ -687,9 +686,7 @@ def weak(paths: dict[str, Path]) -> None:
         # whose frame count is per * ranks.
         sized = WORK / "thread-reads" / f"weak-cuh2-x{ranks}.con"
         if not sized.exists():
-            with sized.open("wb") as handle:
-                for _ in range(per * ranks):
-                    handle.write(blob)
+            write_distinct_copies(sized, fixture.read_text(encoding="utf-8"), per * ranks)
         run(
             [
                 "mpirun",

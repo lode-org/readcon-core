@@ -64,12 +64,10 @@ def reconcile(probe: Path) -> None:
     """Same 64000-frame cuh2 write, 8 threads, n=12, on tmpfs and on ext4."""
     con = ROOT / "resources" / "test" / "cuh2.con"
     src = Path("/dev/shm/camp16b-reconcile-src.con")
-    blob = con.read_bytes()
     frames = 64000
-    if not src.is_file() or src.stat().st_size != len(blob) * frames:
-        with src.open("wb") as handle:
-            for _ in range(frames):
-                handle.write(blob)
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(src, con.read_text(encoding="utf-8"), frames)
     rows = []
     for label, dest in (
         ("tmpfs", Path("/dev/shm/camp16b-reconcile.con")),
@@ -100,7 +98,7 @@ def reconcile(probe: Path) -> None:
         row = {
             "dest": label,
             "frames": frames,
-            "bytes": len(blob) * frames,
+            "bytes": src.stat().st_size,
             "workers": 8,
             "median_s": median(samples),
             "iqr_s": iqr(samples),

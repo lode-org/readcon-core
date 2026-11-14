@@ -151,11 +151,12 @@ def payloads() -> None:
     paths = files()
     for campaign in CAMPAIGNS:
         shutil.rmtree(paths[campaign]["peers"], ignore_errors=True)
-    fixture = (SRC / "resources/test/cuh2.con").read_bytes()
+    fixture = (SRC / "resources/test/cuh2.con").read_text(encoding="utf-8")
     con = paths["coords"]["con"]
-    with con.open("wb") as handle:
-        for _ in range(FRAMES):
-            handle.write(fixture)
+    sys.path.insert(0, str(SRC / "bench" / "h2h"))
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(con, fixture, FRAMES)
     headtohead.ensure_peers(con, paths["coords"]["peers"], FRAMES)
 
     first = velocity_campaign(WORK)

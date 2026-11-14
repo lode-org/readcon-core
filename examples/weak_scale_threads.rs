@@ -146,13 +146,8 @@ fn date_utc() -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn repeat_text(one: &str, n: usize) -> String {
-    let mut buf = String::with_capacity(one.len() * n);
-    for _ in 0..n {
-        buf.push_str(one);
-    }
-    buf
-}
+#[path = "../bench/h2h/frames_guard.rs"]
+mod frames_guard;
 
 fn frame_fingerprint(frames: &[readcon_core::types::ConFrame]) -> u64 {
     let mut acc = frames.len() as u64;
@@ -241,7 +236,7 @@ fn main() {
     let mut points = String::new();
     for (index, workers) in ladder.iter().copied().enumerate() {
         let n_frames = frames_per_worker * workers;
-        let text = repeat_text(&one, n_frames);
+        let text = frames_guard::distinct_frames(&one, n_frames);
         let serial = frames_from_text(&text, Some(1)).expect("serial parse");
         let serial_fp = frame_fingerprint(&serial);
         drop(serial);

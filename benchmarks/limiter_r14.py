@@ -100,11 +100,12 @@ def karp_flatt(speedup: float, workers: int) -> float:
 
 
 def write_frames(text: str, n_frames: int, path: Path) -> None:
-    if path.exists() and path.stat().st_size == len(text.encode("utf-8")) * n_frames:
-        return
-    with path.open("w", encoding="utf-8") as handle:
-        for _ in range(n_frames):
-            handle.write(text)
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(path, text, n_frames)
 
 
 def phase_coverage(phase: dict) -> float:

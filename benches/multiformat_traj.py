@@ -70,8 +70,12 @@ def time_reader(fn, repeats: int) -> list[float]:
 
 
 def write_ladder_con(fixture: Path, n_frames: int, out: Path) -> int:
-    text = fixture.read_text()
-    out.write_text(text * n_frames)
+    import sys
+
+    sys.path.insert(0, str(REPO / "bench" / "h2h"))
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(out, fixture.read_text(), n_frames)
     return n_frames
 
 
