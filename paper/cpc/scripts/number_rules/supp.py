@@ -72,7 +72,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         "10^{-6}",
-        float(grep(SURVEY_PY, r'np\.allclose\([^\n]*, fx\["vel"\], rtol=([\d.e-]+),')),
+        float(grep(SURVEY_PY, r'fx\["vel"\], rtol=([\d.e-]+),')),
         SURVEY_PY,
         "rtol of the declared-velocity comparison",
         (DOC,),

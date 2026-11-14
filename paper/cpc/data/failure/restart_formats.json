@@ -1,0 +1,140 @@
+{
+ "script": "paper/cpc/scripts/restart_formats.py",
+ "outputs": [
+  "data/failure/restart_formats.csv",
+  "data/failure/restart_bands.json",
+  "data/failure/bands"
+ ],
+ "parameters": {
+  "fmax_eV_A": 0.01,
+  "alpha_A2_eV": 0.02,
+  "interrupt_step": 25,
+  "step_cap": 4000,
+  "vacuum_A": 6.0,
+  "held_height_A": 1.75,
+  "endpoint_fmax_eV_A": 0.002,
+  "movable_images": 5,
+  "spring_eV_A2": 0.1,
+  "sites": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    0
+   ]
+  ],
+  "neb_method": "improvedtangent",
+  "climbing_image": true
+ },
+ "atom_ids": [
+  17,
+  20,
+  23,
+  26,
+  29,
+  32,
+  35,
+  38,
+  41,
+  44,
+  47,
+  50,
+  53,
+  56,
+  59,
+  62,
+  65,
+  68,
+  71,
+  74,
+  77,
+  80,
+  83,
+  86,
+  89,
+  92,
+  95,
+  98
+ ],
+ "columns": {
+  "barrier_eV": "highest image energy minus the first image energy of the final band",
+  "d_barrier_eV": "barrier_eV minus the uninterrupted barrier_eV",
+  "d_barrier_ulp": "d_barrier_eV in ULPs of the uninterrupted highest image energy",
+  "max_disp_A": "largest coordinate difference between the final band and the uninterrupted final band",
+  "max_disp_coord_A": "the uninterrupted coordinate at that largest difference",
+  "max_disp_ulp": "max_disp_A in ULPs of that coordinate",
+  "file_dpos_A": "largest coordinate change across the write and the read at step K",
+  "file_dpos_coord_A": "the written coordinate at that largest change",
+  "file_dpos_ulp": "file_dpos_A in ULPs of that coordinate",
+  "free_modes_mid": "free Cartesian degrees of freedom of the middle image after the read",
+  "force_calls": "NEB get_forces evaluations of the resumed leg (of the whole band when uninterrupted)",
+  "kept": "of mask (per-axis constraints), ids (atom_ids, through the route's carrier) and pbc, those the read returns equal on every image",
+  "file_version": "the version the route's first written file carries, read back from the file"
+ },
+ "roundoff_host": {
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "family": "6",
+  "model": "207",
+  "kernel": "6.12.94+",
+  "machine": "x86_64",
+  "numpy": "2.5.4",
+  "numpy_blas_build": "blas 3.9.0",
+  "conda_packages": {
+   "libblas": "3.11.0 11_h4a7cf45_openblas",
+   "liblapack": "3.11.0 11_h47877c9_openblas",
+   "libopenblas": "0.3.34 pthreads_hf13c14d_2",
+   "numpy": "2.5.4 py312he827f4e_0"
+  },
+  "blas_runtime": [
+   "openblas 0.3.34, pthreads, Nehalem kernels"
+  ],
+  "numeric_pins": {
+   "environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "Nehalem",
+    "NPY_DISABLE_CPU_FEATURES": "X86_V3 X86_V4 AVX512_ICL AVX512_SPR"
+   },
+   "numpy_dispatch": [],
+   "blas": [
+    "openblas Nehalem kernels, 1 thread"
+   ]
+  }
+ },
+ "provenance": {
+  "build": {
+   "readcon_version": "0.17.4",
+   "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+   "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+   "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+   "newer_sources": [],
+   "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+   "source_files": 47,
+   "source_tag": null,
+   "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+  },
+  "host": {
+   "kernel": "6.12.94+",
+   "uname_m": "x86_64",
+   "nproc": 8,
+   "family": "6",
+   "model": "207",
+   "cpu_model": "Intel(R) Xeon(R) Processor",
+   "mhz": 2400.0,
+   "mem_kb": 49342768
+  },
+  "peers": {
+   "ase": "3.29.0",
+   "chemfiles": "0.10.4",
+   "MDAnalysis": "2.10.0",
+   "h5py": "3.16.0",
+   "numpy": "2.5.4",
+   "scipy": "1.18.1",
+   "ovito": "3.16.1",
+   "openbabel": "3.2.1",
+   "python": "3.12.16"
+  }
+ }
+}

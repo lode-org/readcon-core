@@ -274,6 +274,7 @@ def main() -> int:
             f"{len(values)} source citations resolve in this tree and the documents cite no line by hand"
         )
         return 0
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(text)
     print(f"wrote {OUT.relative_to(REPO)}: {len(values)} anchors")
     return 0

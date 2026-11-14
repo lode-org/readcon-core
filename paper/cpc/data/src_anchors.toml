@@ -1,0 +1,117 @@
+# Source ranges the paper cites. scripts/src_anchors.py resolves each anchor
+# in the tree it runs in and writes src/figures/generated/anchors_macros.tex;
+# --check fails when an anchor no longer matches exactly one line.
+
+[read_gzip]
+file = "src/compression.rs"
+fn = "read_file_bytes"
+start = 'Compression::Gzip => gunzip_all'
+
+[read_zstd]
+file = "src/compression.rs"
+fn = "read_file_bytes"
+start = 'Compression::Zstd =>'
+
+[read_plain]
+file = "src/compression.rs"
+start = 'Compression::None if metadata\.len\(\) < MMAP_THRESHOLD'
+end = 'FileContents::Mapped\(mmap\)'
+
+[thread_choice]
+file = "src/iterators.rs"
+start = '^pub fn frames_from_text\('
+end = "block"
+
+[boundary_walk]
+file = "src/iterators.rs"
+start = '^fn frame_starts\('
+end = "block"
+
+[parallel_parse]
+file = "src/iterators.rs"
+parts = [
+  { start = '^fn parse_frames_parallel_bytes\(', end = "block" },
+  { start = '^fn parallel_boundaries\(', end = "block" },
+]
+
+[read_indexed]
+file = "src/iterators.rs"
+start = '^pub fn read_all_frames_indexed'
+end = "block"
+
+[trajectory_open]
+file = "src/trajectory.rs"
+start = '^\s*pub fn open\(path: &Path, write_index: bool\)'
+end = "block"
+
+[header_line_two]
+file = "src/parser.rs"
+fn = "parse_frame_header"
+parts = [
+  { start = 'prebox1\.starts_with', end = "block" },
+  { start = 'trimmed\.starts_with' },
+]
+
+[header_check]
+file = "src/parser.rs"
+start = '^pub fn parse_frame_header<'
+end = "block"
+
+[frame_body]
+file = "src/parser.rs"
+start = '^pub\(crate\) fn parse_single_frame_ls'
+end = "block"
+
+[coordinate_rows]
+file = "src/parser.rs"
+start = '^fn ingest_coord_rows<'
+end = "block"
+
+[finite_number]
+file = "src/parser.rs"
+parts = [
+  { start = '^fn parse_finite_float_token', end = "block" },
+  { start = '^fn parse_fixed_flag', end = "block" },
+]
+
+[real_cell]
+file = "src/parser.rs"
+start = '^fn validate_header_geometry\('
+end = "block"
+
+[legacy_velocity]
+file = "src/parser.rs"
+start = 'Some\(line\) if line\.trim\(\)\.is_empty\(\) => self\.blank_line_opens_section'
+end = "block"
+
+[declared_sections]
+file = "src/parser.rs"
+parts = [
+  { start = '^pub fn parse_declared_sections', end = "block" },
+  { start = '^fn skip_unknown_section<', end = "block" },
+]
+
+[velocity_time]
+file = "src/parser.rs"
+start = '^fn reject_velocities_without_time\('
+end = "block"
+
+[replace_file]
+file = "src/writer.rs"
+parts = [
+  { start = 'fn create\(dest: &Path\) -> io::Result<Self>', end = "block" },
+  { start = 'fn commit\(mut self, dest: &Path\)', end = "block" },
+  { start = '^impl Drop for Unpublished', end = "block" },
+]
+
+[rcbin_copy]
+file = "src/conbin.rs"
+parts = [
+  { start = '^fn parse_fields\(', end = "block" },
+  { start = '^pub fn read_into\(', end = "block" },
+]
+
+[rcbin_crc]
+file = "src/conbin.rs"
+start = '^pub fn read_header\('
+end = "block"

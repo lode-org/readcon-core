@@ -108,6 +108,9 @@ FORMAT = [
     ["scripts/plot_restart_formats.py"],
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
+    ["scripts/host_from_log.py"],
+    ["scripts/db_from_log.py"],
+    ["scripts/mpi_from_log.py"],
 ]
 
 VERSION_MAP = ["scripts/gen_version_map.py"]

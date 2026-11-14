@@ -425,6 +425,9 @@ def _landscape_labels(ax, ylabel: bool) -> None:
 
 
 def restart(theme, settings, png_dir: Path | None) -> None:
+    if not (E1 / "full" / "neb.con").is_file():
+        # The eOn band is not a committed record. Keep the figures already written.
+        return
     ira_kmax = float(settings["ira_kmax"])
     reference = _eon_images(E1 / "full")
     bands = []

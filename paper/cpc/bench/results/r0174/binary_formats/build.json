@@ -1,0 +1,552 @@
+{
+  "sources": {
+    "xdrfile": {
+      "release": "1.1.4",
+      "url": "https://ftp.gromacs.org/pub/contrib/xdrfile-1.1.4.tar.gz",
+      "sha256": "e3c587c5ff24441a092fe2f3bc1dc03667bf126558f437161e779bfbcce48022",
+      "dir": "xdrfile-1.1.4"
+    },
+    "libxtc": {
+      "commit": "58f40e1e9d392ec607e775772658eb1b748be549",
+      "url": "https://gitlab.com/impulse_md/libxtc/-/archive/58f40e1e9d392ec607e775772658eb1b748be549/libxtc-58f40e1e9d392ec607e775772658eb1b748be549.tar.gz",
+      "sha256": "6352f6f63ca337376e1b18b6610c3c29ccc1661fe50fc56064fe361bc555f421",
+      "dir": "libxtc-58f40e1e9d392ec607e775772658eb1b748be549"
+    },
+    "tng": {
+      "commit": "14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c",
+      "url": "https://codeload.github.com/gromacs/tng/tar.gz/14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c",
+      "sha256": "f29e74753ab005133eca0e0a8676549579e6f28d09fe54b2593b2fa285ef5d5b",
+      "dir": "tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c"
+    },
+    "molfile": {
+      "commit": "ae9ff4b738606ba1e7c18a8a9b99a8a87eb69f74",
+      "url": "https://raw.githubusercontent.com/MDAnalysis/mdanalysis/ae9ff4b738606ba1e7c18a8a9b99a8a87eb69f74/package/MDAnalysis/lib/formats/include/",
+      "files": {
+        "readdcd.h": "d3c6ecf3bc46e11cfe4d9328e5dba3b72b23ef2e916a6a6c2f0aadfbf877b6c3",
+        "fastio.h": "9dcd75ddabebd5387de04bbd1befbbd61e199658c3a58f7aa6aea25afb763ac0",
+        "endianswap.h": "c06034ca21ed28017eb50f6455d646a41d79d9adb78b44deb9e2bca25f35b44f"
+      }
+    }
+  },
+  "tng_version_h": {
+    "TNG_MAJOR_VERSION": "1",
+    "TNG_MINOR_VERSION": "8",
+    "TNG_VERSION_PATCH_LEVEL": "2",
+    "TNG_API_VERSION": "8",
+    "TNG_IO_VERSION": "1.8.2"
+  },
+  "compilers": {
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "g++": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "rustc": "rustc 1.88.0 (6b00bc388 2025-06-23)",
+    "cargo": "cargo 1.88.0 (873a06493 2025-05-10)"
+  },
+  "flags": {
+    "c": [
+      "-O3",
+      "-DNDEBUG"
+    ],
+    "libxtc_kernel": [
+      "-O3",
+      "-fopenmp",
+      "-DHAS_INT128",
+      "-fno-exceptions",
+      "-fno-rtti",
+      "-ffast-math",
+      "-std=c++11",
+      "-fvisibility=hidden",
+      "-fvisibility-inlines-hidden",
+      "-march=native"
+    ],
+    "tng": [
+      "-DUSE_STD_INTTYPES_H"
+    ]
+  },
+  "commands": {
+    "xdrfile.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/src/xdrfile.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile.o"
+    ],
+    "xdrfile_xtc.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/src/xdrfile_xtc.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile_xtc.o"
+    ],
+    "xdrfile_trr.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/src/xdrfile_trr.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile_trr.o"
+    ],
+    "libxdrfile.a": [
+      "ar",
+      "rcs",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libxdrfile.a",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile_xtc.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xdrfile_trr.o"
+    ],
+    "tng_bwlzh.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/bwlzh.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_bwlzh.o"
+    ],
+    "tng_bwt.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/bwt.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_bwt.o"
+    ],
+    "tng_coder.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/coder.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_coder.o"
+    ],
+    "tng_dict.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/dict.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_dict.o"
+    ],
+    "tng_fixpoint.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/fixpoint.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_fixpoint.o"
+    ],
+    "tng_huffman.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/huffman.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_huffman.o"
+    ],
+    "tng_huffmem.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/huffmem.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_huffmem.o"
+    ],
+    "tng_lz77.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/lz77.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_lz77.o"
+    ],
+    "tng_merge_sort.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/merge_sort.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_merge_sort.o"
+    ],
+    "tng_mtf.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/mtf.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_mtf.o"
+    ],
+    "tng_rle.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/rle.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_rle.o"
+    ],
+    "tng_tng_compress.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/tng_compress.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_tng_compress.o"
+    ],
+    "tng_vals16.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/vals16.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_vals16.o"
+    ],
+    "tng_warnmalloc.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/warnmalloc.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_warnmalloc.o"
+    ],
+    "tng_widemuldiv.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/widemuldiv.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_widemuldiv.o"
+    ],
+    "tng_xtc2.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/xtc2.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_xtc2.o"
+    ],
+    "tng_xtc3.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/compression/xtc3.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_xtc3.o"
+    ],
+    "tng_tng_io.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/lib/tng_io.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_tng_io.o"
+    ],
+    "tng_md5.o": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/src/lib/md5.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_md5.o"
+    ],
+    "libtng_io.a": [
+      "ar",
+      "rcs",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libtng_io.a",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_bwlzh.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_bwt.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_coder.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_dict.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_fixpoint.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_huffman.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_huffmem.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_lz77.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_merge_sort.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_mtf.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_rle.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_tng_compress.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_vals16.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_warnmalloc.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_widemuldiv.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_xtc2.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_xtc3.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_tng_io.o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/tng_md5.o"
+    ],
+    "xtc_unpack.o": [
+      "g++",
+      "-O3",
+      "-fopenmp",
+      "-DHAS_INT128",
+      "-fno-exceptions",
+      "-fno-rtti",
+      "-ffast-math",
+      "-std=c++11",
+      "-fvisibility=hidden",
+      "-fvisibility-inlines-hidden",
+      "-march=native",
+      "-c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/libxtc-58f40e1e9d392ec607e775772658eb1b748be549/libxtc/xtc_unpack.cpp",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xtc_unpack.o"
+    ],
+    "gen": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-ffp-contract=off",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/binary_formats",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/molfile-ae9ff4b738606ba1e7c18a8a9b99a8a87eb69f74",
+      "$REPO/paper/cpc/bench/binary_formats/gen.c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libxdrfile.a",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libtng_io.a",
+      "-Wl,--wrap=time",
+      "-lz",
+      "-lm",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/bin/gen"
+    ],
+    "read_xdrfile": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-I",
+      "$REPO/paper/cpc/bench/binary_formats",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/xdrfile-1.1.4/include",
+      "$REPO/paper/cpc/bench/binary_formats/read_xdrfile.c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libxdrfile.a",
+      "-lm",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/bin/read_xdrfile"
+    ],
+    "read_dcd": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-I",
+      "$REPO/paper/cpc/bench/binary_formats",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/molfile-ae9ff4b738606ba1e7c18a8a9b99a8a87eb69f74",
+      "$REPO/paper/cpc/bench/binary_formats/read_dcd.c",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/bin/read_dcd"
+    ],
+    "read_tng": [
+      "gcc",
+      "-O3",
+      "-DNDEBUG",
+      "-DUSE_STD_INTTYPES_H",
+      "-I",
+      "$REPO/paper/cpc/bench/binary_formats",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/tng-14dd68ff46df1ef1cf2d9bcc1f4f5bddb974ce1c/include",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/include",
+      "$REPO/paper/cpc/bench/binary_formats/read_tng.c",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/libtng_io.a",
+      "-lz",
+      "-lm",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/bin/read_tng"
+    ],
+    "read_libxtc": [
+      "g++",
+      "-O3",
+      "-DNDEBUG",
+      "-std=c++11",
+      "-fopenmp",
+      "-I",
+      "$REPO/paper/cpc/bench/binary_formats",
+      "-I",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/src/libxtc-58f40e1e9d392ec607e775772658eb1b748be549/libxtc",
+      "$REPO/paper/cpc/bench/binary_formats/read_libxtc.cpp",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/obj/xtc_unpack.o",
+      "-o",
+      "$REPO/paper/cpc/bench/work/r0174/binary_formats/build/bin/read_libxtc"
+    ]
+  },
+  "readcon_read": {
+    "manifest": "[package]\nname = \"binary-formats-readcon\"\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = false\n\n[[bin]]\nname = \"readcon_read\"\npath = \"$REPO/paper/cpc/bench/binary_formats/readcon_read.rs\"\n\n[dependencies]\nreadcon-core = { path = \"$REPO\", features = [\"parallel\"] }\n\n[profile.release]\nlto = \"thin\"\ncodegen-units = 1\n\n[workspace]\n",
+    "command": [
+      "cargo",
+      "build",
+      "--release"
+    ],
+    "locked_packages": 40,
+    "locked_as_library": true
+  },
+  "binaries": {
+    "gen": {
+      "sha256": "2710fcf47275dc36c9c28c200eaa010ae598fca26296719d97e56384e85d3c10"
+    },
+    "read_dcd": {
+      "sha256": "de9f9449c8f63a87ca01de4ca1a94d10371fc3525a7e7fd160bdcbf13b01930c"
+    },
+    "read_libxtc": {
+      "sha256": "0e5701d8e882ad03153540932fd9e7096165688c2f5f3d777ef0e523b8b8cd03"
+    },
+    "read_tng": {
+      "sha256": "95f4029b516c49ecce8fc2efecf314da8a8089eb271627ade35e88311286dc94"
+    },
+    "read_xdrfile": {
+      "sha256": "572401fa0790138e443365f6d372ef5ccca822d3348afa5f0c3fca5736aec9a3"
+    },
+    "readcon_read": {
+      "sha256": "f972f6997ca45cdba8ee73c7e6e5a1b359f1b5665119e1ab73513a9881a90dc1"
+    }
+  },
+  "provenance": {
+    "build": {
+      "binary": "paper/cpc/bench/work/r0174/binary_formats/build/bin/readcon_read",
+      "binary_sha256": "f972f6997ca45cdba8ee73c7e6e5a1b359f1b5665119e1ab73513a9881a90dc1",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+      "source_files": 47,
+      "source_tag": null,
+      "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114",
+      "readcon_version": "0.17.4"
+    },
+    "host": {
+      "kernel": "6.12.94+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel(R) Xeon(R) Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342768
+    }
+  }
+}

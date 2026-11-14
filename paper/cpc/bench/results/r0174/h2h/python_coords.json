@@ -1,0 +1,684 @@
+{
+  "campaign": "coords",
+  "con": "$REPO/paper/cpc/bench/work/r0174/h2h/traj_coords.con",
+  "con_bytes": 167710000,
+  "rcbin_bytes": 52800064,
+  "peers": {
+    "xyz": {
+      "path": "$REPO/paper/cpc/bench/work/r0174/h2h/coords/traj.xyz",
+      "bytes": 82220000
+    },
+    "extxyz": {
+      "path": "$REPO/paper/cpc/bench/work/r0174/h2h/coords/traj.extxyz",
+      "bytes": 83590100
+    },
+    "traj": {
+      "path": "$REPO/paper/cpc/bench/work/r0174/h2h/coords/traj.traj",
+      "bytes": 54370434
+    },
+    "h5": {
+      "path": "$REPO/paper/cpc/bench/work/r0174/h2h/coords/traj.h5",
+      "bytes": 52322432
+    }
+  },
+  "timed": "each call once untimed and once timed in a fresh h2h_child.py, from the call until what it read is released",
+  "protocol": {
+    "schedule": "paper/cpc/bench/interleave.py",
+    "seed": 20261104,
+    "rounds": 11,
+    "warmup_rounds": 1,
+    "metric": "seconds",
+    "quartiles": "statistics.quantiles(n=4, method='inclusive')",
+    "process": "a fresh process for every run of every cell",
+    "order": [
+      [
+        "ase_extxyz",
+        "read_arrays_low_memory",
+        "ase_traj",
+        "read_arrays",
+        "h5py_positions",
+        "read_rcbin_owned",
+        "read_rcbin_caller",
+        "read_con"
+      ],
+      [
+        "h5py_positions",
+        "read_con",
+        "ase_traj",
+        "read_rcbin_caller",
+        "read_arrays_low_memory",
+        "read_rcbin_owned",
+        "read_arrays",
+        "ase_extxyz"
+      ],
+      [
+        "read_arrays_low_memory",
+        "read_rcbin_caller",
+        "h5py_positions",
+        "ase_extxyz",
+        "read_rcbin_owned",
+        "ase_traj",
+        "read_arrays",
+        "read_con"
+      ],
+      [
+        "read_arrays_low_memory",
+        "read_rcbin_caller",
+        "h5py_positions",
+        "ase_traj",
+        "ase_extxyz",
+        "read_rcbin_owned",
+        "read_arrays",
+        "read_con"
+      ],
+      [
+        "ase_extxyz",
+        "h5py_positions",
+        "read_arrays_low_memory",
+        "read_arrays",
+        "ase_traj",
+        "read_con",
+        "read_rcbin_caller",
+        "read_rcbin_owned"
+      ],
+      [
+        "read_rcbin_caller",
+        "h5py_positions",
+        "read_con",
+        "read_rcbin_owned",
+        "read_arrays",
+        "read_arrays_low_memory",
+        "ase_traj",
+        "ase_extxyz"
+      ],
+      [
+        "read_arrays_low_memory",
+        "read_rcbin_caller",
+        "read_con",
+        "read_arrays",
+        "h5py_positions",
+        "ase_traj",
+        "read_rcbin_owned",
+        "ase_extxyz"
+      ],
+      [
+        "read_arrays_low_memory",
+        "ase_traj",
+        "read_arrays",
+        "read_con",
+        "read_rcbin_owned",
+        "read_rcbin_caller",
+        "h5py_positions",
+        "ase_extxyz"
+      ],
+      [
+        "read_con",
+        "read_rcbin_caller",
+        "ase_traj",
+        "read_arrays",
+        "h5py_positions",
+        "read_rcbin_owned",
+        "ase_extxyz",
+        "read_arrays_low_memory"
+      ],
+      [
+        "read_rcbin_caller",
+        "read_arrays",
+        "read_arrays_low_memory",
+        "read_rcbin_owned",
+        "h5py_positions",
+        "ase_traj",
+        "ase_extxyz",
+        "read_con"
+      ],
+      [
+        "read_rcbin_caller",
+        "read_con",
+        "read_rcbin_owned",
+        "h5py_positions",
+        "read_arrays_low_memory",
+        "ase_traj",
+        "ase_extxyz",
+        "read_arrays"
+      ]
+    ],
+    "warmup_order": [
+      [
+        "read_con",
+        "ase_traj",
+        "read_arrays_low_memory",
+        "ase_extxyz",
+        "read_rcbin_owned",
+        "read_rcbin_caller",
+        "h5py_positions",
+        "read_arrays"
+      ]
+    ],
+    "load_average_before": [
+      1.1279296875,
+      1.6513671875,
+      1.93017578125
+    ],
+    "load_average_after": [
+      1.61376953125,
+      1.68408203125,
+      1.8984375
+    ],
+    "campaign_s": 146.4
+  },
+  "hardware": {
+    "uname_m": "x86_64",
+    "nproc": 8,
+    "cpu_model": "Intel(R) Xeon(R) Processor"
+  },
+  "timings": {
+    "ase_extxyz": {
+      "n": 11,
+      "median_s": 2.843719805001456,
+      "q1_s": 2.8373232545018254,
+      "q3_s": 2.8520617064968974,
+      "iqr_s": 0.014738451995071955,
+      "samples_s": [
+        2.8274945779994596,
+        2.866296747000888,
+        2.8395852649991866,
+        2.8350612440044642,
+        2.843719805001456,
+        2.8265978019990143,
+        2.855401257998892,
+        2.8487221549949027,
+        2.841222483002639,
+        2.8688030789999175,
+        2.8455615709972335
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "ase_traj": {
+      "n": 11,
+      "median_s": 0.8049411009997129,
+      "q1_s": 0.7998617445009586,
+      "q3_s": 0.8094524424996052,
+      "iqr_s": 0.009590697998646647,
+      "samples_s": [
+        0.8051096049966873,
+        0.8049411009997129,
+        0.7956547220019274,
+        0.80810714999825,
+        0.8024700910027605,
+        0.7920218780054711,
+        0.7972533979991567,
+        0.8030265359993791,
+        0.8107977350009605,
+        0.8245892570048454,
+        0.8210016499942867
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "h5py_positions": {
+      "n": 11,
+      "median_s": 0.015786429001309443,
+      "q1_s": 0.01565904400194995,
+      "q3_s": 0.01590901850067894,
+      "iqr_s": 0.0002499744987289887,
+      "samples_s": [
+        0.015601307000906672,
+        0.01571678100299323,
+        0.015802875997906085,
+        0.016202229002374224,
+        0.015486090997001156,
+        0.015517910003836732,
+        0.016065229996456765,
+        0.015992038999684155,
+        0.015717565001978073,
+        0.015786429001309443,
+        0.015825998001673725
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "read_arrays": {
+      "n": 11,
+      "median_s": 0.21215584099991247,
+      "q1_s": 0.21001316249748925,
+      "q3_s": 0.21975735850355704,
+      "iqr_s": 0.009744196006067796,
+      "samples_s": [
+        0.2112002610010677,
+        0.20907956899463898,
+        0.20849533799628261,
+        0.21215584099991247,
+        0.20857015399815282,
+        0.21346543399704387,
+        0.21094675600033952,
+        0.22359912699903361,
+        0.21944505200372078,
+        0.2200696650033933,
+        0.22093951500573894
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "read_arrays_low_memory": {
+      "n": 11,
+      "median_s": 0.30213743099739077,
+      "q1_s": 0.29915209249884356,
+      "q3_s": 0.30679696099832654,
+      "iqr_s": 0.007644868499482982,
+      "samples_s": [
+        0.2983961959980661,
+        0.299907988999621,
+        0.3018198110003141,
+        0.29522327700397,
+        0.30493198600015603,
+        0.2876767340057995,
+        0.30213743099739077,
+        0.3139153570009512,
+        0.32173770499503007,
+        0.3061857749999035,
+        0.30740814699674957
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "read_con": {
+      "n": 11,
+      "median_s": 0.220538112000213,
+      "q1_s": 0.2194440864986973,
+      "q3_s": 0.2232762104977155,
+      "iqr_s": 0.003832123999018222,
+      "samples_s": [
+        0.220538112000213,
+        0.2194396129998495,
+        0.21914932999789016,
+        0.21970838100241963,
+        0.2194485599975451,
+        0.21891995499754557,
+        0.2207177309974213,
+        0.22357171600015135,
+        0.22485855600098148,
+        0.2243531010026345,
+        0.22298070499527967
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "read_rcbin_caller": {
+      "n": 11,
+      "median_s": 0.009891226996842306,
+      "q1_s": 0.00968104250205215,
+      "q3_s": 0.009996864999266108,
+      "iqr_s": 0.00031582249721395783,
+      "samples_s": [
+        0.009632510002120398,
+        0.009729575001983903,
+        0.009970334998797625,
+        0.009919556003296748,
+        0.01003781799954595,
+        0.008776732000114862,
+        0.010124124004505575,
+        0.009244110995496158,
+        0.009853574003500398,
+        0.009891226996842306,
+        0.010023394999734592
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    },
+    "read_rcbin_owned": {
+      "n": 11,
+      "median_s": 0.014383563000592403,
+      "q1_s": 0.014307667497632792,
+      "q3_s": 0.014459486497798935,
+      "iqr_s": 0.00015181900016614236,
+      "samples_s": [
+        0.013985778001369908,
+        0.01456575799966231,
+        0.014363957998284604,
+        0.01425137699698098,
+        0.012801119999494404,
+        0.014367837997269817,
+        0.014457394994678907,
+        0.014383563000592403,
+        0.014461578000918962,
+        0.014580038005078677,
+        0.01440902499598451
+      ],
+      "printed": {
+        "frames": 10000
+      }
+    }
+  },
+  "memray_protocol": {
+    "schedule": "paper/cpc/bench/interleave.py",
+    "seed": 20261104,
+    "rounds": 11,
+    "warmup_rounds": 1,
+    "metric": "peak_bytes",
+    "quartiles": "statistics.quantiles(n=4, method='inclusive')",
+    "process": "a fresh process for every run of every cell",
+    "order": [
+      [
+        "read_con",
+        "read_arrays_low_memory",
+        "read_rcbin_owned",
+        "h5py_positions",
+        "read_arrays",
+        "ase_extxyz",
+        "ase_traj"
+      ],
+      [
+        "read_arrays_low_memory",
+        "read_arrays",
+        "read_rcbin_owned",
+        "ase_extxyz",
+        "read_con",
+        "ase_traj",
+        "h5py_positions"
+      ],
+      [
+        "read_rcbin_owned",
+        "ase_traj",
+        "read_arrays_low_memory",
+        "read_arrays",
+        "ase_extxyz",
+        "read_con",
+        "h5py_positions"
+      ],
+      [
+        "read_arrays",
+        "ase_extxyz",
+        "h5py_positions",
+        "read_rcbin_owned",
+        "ase_traj",
+        "read_arrays_low_memory",
+        "read_con"
+      ],
+      [
+        "read_arrays",
+        "h5py_positions",
+        "ase_extxyz",
+        "read_arrays_low_memory",
+        "read_rcbin_owned",
+        "read_con",
+        "ase_traj"
+      ],
+      [
+        "read_rcbin_owned",
+        "ase_traj",
+        "read_arrays",
+        "read_con",
+        "read_arrays_low_memory",
+        "h5py_positions",
+        "ase_extxyz"
+      ],
+      [
+        "ase_extxyz",
+        "ase_traj",
+        "read_con",
+        "read_arrays",
+        "read_arrays_low_memory",
+        "read_rcbin_owned",
+        "h5py_positions"
+      ],
+      [
+        "read_rcbin_owned",
+        "read_arrays",
+        "ase_traj",
+        "read_con",
+        "h5py_positions",
+        "ase_extxyz",
+        "read_arrays_low_memory"
+      ],
+      [
+        "read_arrays_low_memory",
+        "h5py_positions",
+        "ase_traj",
+        "read_rcbin_owned",
+        "ase_extxyz",
+        "read_arrays",
+        "read_con"
+      ],
+      [
+        "read_arrays_low_memory",
+        "read_arrays",
+        "read_rcbin_owned",
+        "ase_traj",
+        "read_con",
+        "h5py_positions",
+        "ase_extxyz"
+      ],
+      [
+        "ase_traj",
+        "read_rcbin_owned",
+        "read_arrays",
+        "read_con",
+        "ase_extxyz",
+        "read_arrays_low_memory",
+        "h5py_positions"
+      ]
+    ],
+    "warmup_order": [
+      [
+        "ase_extxyz",
+        "read_arrays",
+        "read_arrays_low_memory",
+        "h5py_positions",
+        "ase_traj",
+        "read_rcbin_owned",
+        "read_con"
+      ]
+    ],
+    "load_average_before": [
+      1.61376953125,
+      1.68408203125,
+      1.8984375
+    ],
+    "load_average_after": [
+      1.4228515625,
+      1.59326171875,
+      1.82861328125
+    ],
+    "campaign_s": 162.0
+  },
+  "memray": {
+    "ase_extxyz": {
+      "n": 11,
+      "median_bytes": 117377974.0,
+      "q1_bytes": 117377974.0,
+      "q3_bytes": 117377990.0,
+      "iqr_bytes": 16.0,
+      "samples_bytes": [
+        117377974.0,
+        117377974.0,
+        117377990.0,
+        117377990.0,
+        116329414.0,
+        117377990.0,
+        117377974.0,
+        117377974.0,
+        117377990.0,
+        117377974.0,
+        117377974.0
+      ],
+      "printed": {}
+    },
+    "ase_traj": {
+      "n": 11,
+      "median_bytes": 153400064.0,
+      "q1_bytes": 153400048.0,
+      "q3_bytes": 153400064.0,
+      "iqr_bytes": 16.0,
+      "samples_bytes": [
+        153400064.0,
+        153400048.0,
+        153400048.0,
+        153400064.0,
+        153400048.0,
+        153400048.0,
+        153400064.0,
+        153400064.0,
+        153400064.0,
+        153400064.0,
+        153400048.0
+      ],
+      "printed": {}
+    },
+    "h5py_positions": {
+      "n": 11,
+      "median_bytes": 60043775.0,
+      "q1_bytes": 60043775.0,
+      "q3_bytes": 60043775.0,
+      "iqr_bytes": 0.0,
+      "samples_bytes": [
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0,
+        60043775.0
+      ],
+      "printed": {}
+    },
+    "read_arrays": {
+      "n": 11,
+      "median_bytes": 220824634.0,
+      "q1_bytes": 220824634.0,
+      "q3_bytes": 220824634.0,
+      "iqr_bytes": 0.0,
+      "samples_bytes": [
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0,
+        220824634.0
+      ],
+      "printed": {}
+    },
+    "read_arrays_low_memory": {
+      "n": 11,
+      "median_bytes": 58350847.0,
+      "q1_bytes": 58350847.0,
+      "q3_bytes": 58350847.0,
+      "iqr_bytes": 0.0,
+      "samples_bytes": [
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0,
+        58350847.0
+      ],
+      "printed": {}
+    },
+    "read_con": {
+      "n": 11,
+      "median_bytes": 413378956.0,
+      "q1_bytes": 413378956.0,
+      "q3_bytes": 413378956.0,
+      "iqr_bytes": 0.0,
+      "samples_bytes": [
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0,
+        413378956.0
+      ],
+      "printed": {}
+    },
+    "read_rcbin_owned": {
+      "n": 11,
+      "median_bytes": 57696852.0,
+      "q1_bytes": 57696852.0,
+      "q3_bytes": 57696852.0,
+      "iqr_bytes": 0.0,
+      "samples_bytes": [
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0,
+        57696852.0
+      ],
+      "printed": {}
+    }
+  },
+  "memray_peak_bytes": {
+    "ase_extxyz": 117377974,
+    "ase_traj": 153400064,
+    "h5py_positions": 60043775,
+    "read_arrays": 220824634,
+    "read_arrays_low_memory": 58350847,
+    "read_con": 413378956,
+    "read_rcbin_owned": 57696852
+  },
+  "provenance": {
+    "build": {
+      "readcon_version": "0.17.4",
+      "readcon_module": "paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/readcon/readcon.cpython-312-x86_64-linux-gnu.so",
+      "readcon_module_sha256": "7a74a7329002f94fbb29d0f1d86deb6b868c74744ece133bbf76df2edf7cfe10",
+      "rustc": "1.88.0 (6b00bc388 2025-06-23)",
+      "newer_sources": [],
+      "library_digest": "3b4d00ae2427e0e19795552d523d7597cea5fa005ce2b26f3942e5681a4458f9",
+      "source_files": 47,
+      "source_tag": null,
+      "source_commit": "ae4131ff056da306ac5d8bd9beeb74328513e114"
+    },
+    "host": {
+      "kernel": "6.12.94+",
+      "uname_m": "x86_64",
+      "nproc": 8,
+      "family": "6",
+      "model": "207",
+      "cpu_model": "Intel(R) Xeon(R) Processor",
+      "mhz": 2400.0,
+      "mem_kb": 49342768
+    },
+    "peers": {
+      "ase": "3.29.0",
+      "chemfiles": "0.10.4",
+      "MDAnalysis": "2.10.0",
+      "h5py": "3.16.0",
+      "numpy": "2.5.4",
+      "scipy": "1.18.1",
+      "ovito": "3.16.1",
+      "openbabel": "3.2.1",
+      "python": "3.12.16"
+    }
+  }
+}

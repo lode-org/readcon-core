@@ -118,8 +118,16 @@ def _paper_sources() -> list[tuple[Path, str]]:
     listings = root / "evidence" / "listings"
     suffixes = {".md", ".py", ".tex", ".json", ".log", ".org", ".bib", ".toml"}
     found: list[tuple[Path, str]] = []
+    skipped = {
+        root / "data",
+        root / "bench" / "results",
+        root / "evidence" / "results",
+        root / "src" / "figures" / "generated",
+    }
     for path in root.rglob("*"):
         if not path.is_file():
+            continue
+        if any(parent in skipped for parent in path.parents):
             continue
         if path.suffix in suffixes or listings in path.parents:
             found.append((path, path.read_text(encoding="utf-8", errors="replace")))

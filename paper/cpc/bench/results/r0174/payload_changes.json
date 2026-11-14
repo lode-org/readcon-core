@@ -1,0 +1,159 @@
+{
+  "script": "paper/cpc/bench/make_payloads.py",
+  "compared": "SHA-256 of each payload file against the payloads.json of the round-3 paper",
+  "round3": {
+    "package": "paper-cpc.tar.gz of the round-3 package",
+    "record": "paper/cpc/bench/results/r0173/payloads.json",
+    "record_sha256": "32cba6f8f89cf416d359e13ec5c0aea5509e9a14f0a81c53397f9f6323b57054",
+    "files": {
+      "one.con": {
+        "sha256": "19a5401528dfb45e9f952a4938afb76eb212223a50856191663f5b4bfd40352e",
+        "bytes": 20704,
+        "lines": 454,
+        "con_version": "3.1"
+      },
+      "one.extxyz": {
+        "sha256": "d1248fb650af18e561288687f47bb7745dd1313fd720014379370218519b0f2f",
+        "bytes": 19856,
+        "lines": 220,
+        "con_version": null
+      },
+      "one.h5md": {
+        "sha256": "8899c29d235b7264cedc901a799143f76e7e61b42e136ba5fe0712b61e59fcca",
+        "bytes": 32072,
+        "lines": null,
+        "con_version": null
+      },
+      "one.traj": {
+        "sha256": "cd3056b7b544e012553bbc230d7b9eb54abf1669572e7bf645da84425350c6b0",
+        "bytes": 14969,
+        "lines": null,
+        "con_version": null
+      },
+      "one.xyz": {
+        "sha256": "3d3a8011f3f9b1e91ec3721c65fbb7faf3e2e17db9965c1543385b9872bd8bc5",
+        "bytes": 10179,
+        "lines": 220,
+        "con_version": null
+      },
+      "one_coords.con": {
+        "sha256": "3cf41d3f73bf23be2a91f3d274dae39be1a3ed29bbcdc54215ff4bced299cbb3",
+        "bytes": 11062,
+        "lines": 231,
+        "con_version": "3.1"
+      },
+      "traj.con": {
+        "sha256": "de3057c3936b3cc993ff38f50e0d7fefdf811f8b09c975be640b4de290861870",
+        "bytes": 206095637,
+        "lines": 4540000,
+        "con_version": "3.1"
+      },
+      "traj.extxyz": {
+        "sha256": "d42176cd3d70ba8981cd717f1a1753923f5f49e57f8e486d94490c694263fae8",
+        "bytes": 197635222,
+        "lines": 2200000,
+        "con_version": null
+      },
+      "traj.h5md": {
+        "sha256": "fbb3ce317f101ee54c7782bc551f9450e9ae81942b6598eaa42b3999a84b3882",
+        "bytes": 105541070,
+        "lines": null,
+        "con_version": null
+      },
+      "traj.traj": {
+        "sha256": "fcfee196aec7b194ca6c9588f7104df08412b5558fcd090b10cc14e059e19ef4",
+        "bytes": 149561824,
+        "lines": null,
+        "con_version": null
+      },
+      "traj.xyz": {
+        "sha256": "c6599d60e3cbbcd0e7af2e7852b0177f149d1b8a3bad746181b97d9247cc4aa8",
+        "bytes": 101109577,
+        "lines": 2200000,
+        "con_version": null
+      },
+      "traj_coords.con": {
+        "sha256": "64f80d5468da4bdec9a0984ac24209fbe845ed392dc7da63e5a5805b63890a3a",
+        "bytes": 109890909,
+        "lines": 2310000,
+        "con_version": "3.1"
+      },
+      "warm.con": {
+        "sha256": "29b53dd2a7a494bdf8427910c101bd170a76b643c2400389d8b0aa08eeef4658",
+        "bytes": 206561,
+        "lines": 4540,
+        "con_version": "3.1"
+      },
+      "warm.extxyz": {
+        "sha256": "c601a4274f9d8c59354718f993335823309e4bceb08665e8eba34176801e3f44",
+        "bytes": 198087,
+        "lines": 2200,
+        "con_version": null
+      },
+      "warm.h5md": {
+        "sha256": "d3ad40348234a064eedb5d1232054c9ec7bbf2537f0e26f1a15a16bd2335755d",
+        "bytes": 127046,
+        "lines": null,
+        "con_version": null
+      },
+      "warm.traj": {
+        "sha256": "1cb93593290c8ea463c6b0b548c1f791d89f0f08555653b83399d2ad3da77640",
+        "bytes": 149252,
+        "lines": null,
+        "con_version": null
+      },
+      "warm.xyz": {
+        "sha256": "6b18d277ac88fa1f984a1116a2af7d243a98fbd333810e1138ae529f223d22ba",
+        "bytes": 101436,
+        "lines": 2200,
+        "con_version": null
+      },
+      "warm_coords.con": {
+        "sha256": "ebee50f0cac2edf30a6b3b822fc881970f87e4af40ec6bf732e60bc7f8c5f75a",
+        "bytes": 110251,
+        "lines": 2310,
+        "con_version": "3.1"
+      }
+    }
+  },
+  "same": [
+    "one.con",
+    "one.extxyz",
+    "one.h5md",
+    "one.traj",
+    "one.xyz",
+    "one_coords.con",
+    "traj.con",
+    "traj.extxyz",
+    "traj.h5md",
+    "traj.traj",
+    "traj.xyz",
+    "traj_coords.con",
+    "warm.con",
+    "warm.extxyz",
+    "warm.h5md",
+    "warm.traj",
+    "warm.xyz",
+    "warm_coords.con"
+  ],
+  "changed": {},
+  "new": [
+    "size_n1e3.con",
+    "size_n1e3.extxyz",
+    "size_n1e3.h5md",
+    "size_n1e3.traj",
+    "size_n1e4.con",
+    "size_n1e4.extxyz",
+    "size_n1e4.h5md",
+    "size_n1e4.traj",
+    "size_n1e5.con",
+    "size_n1e5.extxyz",
+    "size_n1e5.h5md",
+    "size_n1e5.traj",
+    "size_n1e6.con",
+    "size_n1e6.extxyz",
+    "size_n1e6.h5md",
+    "size_n1e6.traj"
+  ],
+  "gone": []
+}
