@@ -139,7 +139,12 @@ pub fn read_frames_for_convert(input: &Path) -> Result<(Vec<ConFrame>, bool), Co
 /// use std::path::Path;
 ///
 /// let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
-/// let dir = tempfile::tempdir().unwrap();
+/// let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("build");
+/// std::fs::create_dir_all(&base).unwrap();
+/// let dir = tempfile::Builder::new()
+///     .prefix("readcon-convert-")
+///     .tempdir_in(&base)
+///     .unwrap();
 /// let out = dir.path().join("out.con");
 /// let report = convert_path_to_con(&src, &out).unwrap();
 /// assert!(report.native_con);
@@ -238,6 +243,50 @@ mod tests {
     }
 
     fn scratch_dir() -> tempfile::TempDir {
-        tempfile::tempdir().unwrap()
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("build");
+        fs::create_dir_all(&base).unwrap();
+        tempfile::Builder::new()
+            .prefix("readcon-convert-")
+            .tempdir_in(&base)
+            .unwrap()
+    }
+
+    fn convert_names(dir: &std::path::Path) -> Vec<std::ffi::OsString> {
+        let mut names = Vec::new();
+        let Ok(entries) = fs::read_dir(dir) else {
+            return names;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let text = name.to_string_lossy();
+            if text.starts_with("readcon-convert-") || text == "water.xyz" {
+                names.push(name);
+            }
+        }
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn convert_scratch_leaves_the_system_tempdir_clean() {
+        let system = std::env::temp_dir();
+        let before = convert_names(&system);
+        let dir = scratch_dir();
+        let xyz = dir.path().join("water.xyz");
+        fs::write(&xyz, b"3\nx\nO 0 0 0\nH 1 0 0\nH 0 1 0\n").unwrap();
+        let build = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("build");
+        assert!(
+            dir.path().starts_with(&build),
+            "convert scratch {} is outside build/",
+            dir.path().display()
+        );
+        assert!(
+            !dir.path().starts_with(&system),
+            "convert scratch {} is in the system tempdir",
+            dir.path().display()
+        );
+        assert!(xyz.is_file());
+        drop(dir);
+        assert_eq!(convert_names(&system), before);
     }
 }

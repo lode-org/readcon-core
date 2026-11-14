@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,19 @@ def test_convert_to_con_xyz_chemfiles(tmp_path: Path):
     symbols = [a.symbol for a in frame.atoms]
     assert symbols.count("O") == 1
     assert symbols.count("H") == 2
+
+
+def test_system_tempdir_is_left_clean(tmp_path: Path) -> None:
+    system = Path(tempfile.gettempdir())
+
+    def snapshot() -> list[str]:
+        return sorted(str(path) for path in system.glob("readcon-convert-*/water.xyz"))
+
+    before = snapshot()
+    readcon.convert_to_con(
+        str(FIXTURES / "tiny_multi_cuh2.con"), str(tmp_path / "out.con")
+    )
+    assert snapshot() == before
 
 
 def test_convert_to_con_xyz_without_chemfiles_errors(tmp_path: Path):
