@@ -9,6 +9,7 @@ on:
       - "src/**"
       - "benchmarks/**"
       - "benches/**"
+      - "bench/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "build.rs"

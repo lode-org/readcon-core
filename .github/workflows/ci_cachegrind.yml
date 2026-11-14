@@ -6,6 +6,8 @@ on:
     paths:
       - "src/**"
       - "benches/**"
+      - "bench/**"
+      - "benchmarks/**"
       - "examples/cachegrind_harness.rs"
       - "Cargo.toml"
       - "Cargo.lock"
