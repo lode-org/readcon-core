@@ -30,7 +30,7 @@ fn wide_frame(n: usize) -> ConFrame {
 
 fn scratch(name: &str) -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
+        .join("build")
         .join("wide-write");
     fs::create_dir_all(&root).expect("bench directory");
     root.join(name)
