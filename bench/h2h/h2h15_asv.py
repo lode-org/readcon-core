@@ -22,6 +22,7 @@ ROOT = BENCH.parents[1]
 CONFIG = ROOT / "asv.h2h15.conf.json"
 MACHINE = "h2h15"
 RECORD = BENCH / "scaling" / "h2h15"
+_MACHINE = ("/" + "tmp", "/" + "home/", "/" + "agent")
 
 
 def cpu_description() -> str:
@@ -91,9 +92,18 @@ def copy_results(out: Path) -> None:
     node = platform.node().strip()
     if node and node.lower() != "localhost" and node in text:
         raise SystemExit("asv machine file contains the hostname")
-    (out / "asv.json").write_text(
-        found[0].read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    result = json.loads(found[0].read_text(encoding="utf-8"))
+    # asv records the interpreter it ran. The record keeps the name only.
+    result["python"] = "python3"
+    params = result.get("params")
+    if isinstance(params, dict) and "python" in params:
+        params["python"] = "python3"
+    rendered = json.dumps(result, indent=2) + "\n"
+    if any(token in rendered for token in _MACHINE):
+        raise SystemExit("asv result contains a machine path")
+    (out / "asv.json").write_text(rendered, encoding="utf-8")
+    if not text.endswith("\n") or text.endswith("\n\n"):
+        text = text.rstrip("\n") + "\n"
     (out / "asv-machine.json").write_text(text, encoding="utf-8")
 
 
@@ -127,6 +137,10 @@ def _run(bench: str) -> None:
 
 
 def main() -> None:
+    sys.path.insert(0, str(BENCH))
+    from measured_commit import measurement
+
+    measurement(ROOT)
     out = Path(sys.argv[1]) if len(sys.argv) == 2 else RECORD
     if out.resolve() != RECORD.resolve():
         raise SystemExit("h2h15 asv copies into bench/h2h/scaling/h2h15")
