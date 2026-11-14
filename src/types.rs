@@ -1071,14 +1071,17 @@ impl AtomDatum {
     #[inline]
     pub fn set_x(&mut self, v: f64) {
         unsafe { *self.xyz = v }
+        crate::writer::invalidate_packed_lengths();
     }
     #[inline]
     pub fn set_y(&mut self, v: f64) {
         unsafe { *self.xyz.add(1) = v }
+        crate::writer::invalidate_packed_lengths();
     }
     #[inline]
     pub fn set_z(&mut self, v: f64) {
         unsafe { *self.xyz.add(2) = v }
+        crate::writer::invalidate_packed_lengths();
     }
 
     fn owned_xyz(x: f64, y: f64, z: f64) -> *mut f64 {
@@ -1284,6 +1287,7 @@ pub(crate) fn share_arc_str(symbol: &std::sync::Arc<str>) -> std::sync::Arc<str>
 
 impl Drop for ConFrame {
     fn drop(&mut self) {
+        crate::writer::invalidate_packed_lengths_if(self as *const Self as usize);
         bulk_drop_uniform_symbols(&mut self.atom_data);
     }
 }

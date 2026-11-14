@@ -113,6 +113,8 @@ pub struct ConFrameWriter<W: Write> {
     /// The format-only path reads `scratch` back, so the copy was a second
     /// pass over the same bytes.
     keep_scratch: bool,
+    /// `scratch` is the caller's exact output. Do not reserve past it.
+    exact_scratch: bool,
 }
 
 struct BoundHeader {
@@ -303,6 +305,7 @@ impl<W: Write> ConFrameWriter<W> {
             stream_file: None,
             force_map: false,
             keep_scratch: false,
+            exact_scratch: false,
         }
     }
 
@@ -608,8 +611,12 @@ impl<W: Write> ConFrameWriter<W> {
             }
             None => None,
         };
-        self.scratch
-            .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
+        // An exact output slice is already the size of the frame text.
+        // Reserving the loose upper bound would reallocate that slice.
+        if !self.exact_scratch {
+            self.scratch
+                .reserve(256 + atoms.saturating_mul(64).saturating_mul(blocks));
+        }
         if !self.keep_scratch {
             self.scratch.clear();
         }
@@ -1144,11 +1151,82 @@ fn write_finite(buf: &mut Vec<u8>, value: f64) {
         buf.extend_from_slice(&bytes[..n]);
         return;
     }
-    buf.reserve(24);
-    // `format64` writes at most 24 bytes and does not handle non-finite values.
+    // An exact output slice cannot spare 24 bytes of reserve. Spell into
+    // a stack slot unless the destination already has that room.
+    if buf.capacity() - buf.len() < 24 {
+        let mut tmp = [0u8; 24];
+        let n = unsafe { ryu::raw::format64(value, tmp.as_mut_ptr()) };
+        debug_assert!(n <= 24);
+        buf.extend_from_slice(&tmp[..n]);
+        return;
+    }
     let n = unsafe { ryu::raw::format64(value, buf.as_mut_ptr().add(buf.len())) };
     debug_assert!(n <= 24);
     unsafe { buf.set_len(buf.len() + n) };
+}
+
+/// Byte length of one round-trip spelling. Matches [`push_round_trip`].
+fn round_trip_width(value: f64) -> usize {
+    if !value.is_finite() {
+        return ryu::Buffer::new().format(value).len();
+    }
+    let bits = value.to_bits();
+    let sign = bits >> 63 != 0;
+    let mag = f64::from_bits(bits & !(1u64 << 63));
+    if let Some(n) = fixed_decimal_width(mag, sign) {
+        return n;
+    }
+    if let Some((_, n)) = encode_fixed_decimal_into(value) {
+        return n;
+    }
+    let mut tmp = [0u8; 24];
+    unsafe { ryu::raw::format64(value, tmp.as_mut_ptr()) }
+}
+
+/// Length of [`encode_fixed_decimal`] when the value is an exact decimal
+/// of at most six digits. `None` leaves the general formatter to measure.
+fn fixed_decimal_width(mag: f64, sign: bool) -> Option<usize> {
+    let sign_len = usize::from(sign);
+    if mag == 0.0 {
+        return Some(sign_len + 3);
+    }
+    if mag <= 1e16 && mag.fract() == 0.0 {
+        let n = mag as u64;
+        if n < 10u64.pow(16) && n as f64 == mag {
+            return Some(sign_len + count_digits(n) as usize + 2);
+        }
+    }
+    let scaled = mag * 1_000_000.0;
+    if !scaled.is_finite() || scaled > 1e16 {
+        return None;
+    }
+    let nearest = scaled.round();
+    let mut n = nearest as u64;
+    if nearest != n as f64 || (n as f64) / 1_000_000.0 != mag {
+        return None;
+    }
+    let mut places = 6u32;
+    while places > 0 && n.is_multiple_of(10) {
+        n /= 10;
+        places -= 1;
+    }
+    if places == 0 {
+        if n >= 10u64.pow(16) {
+            return None;
+        }
+        return Some(sign_len + count_digits(n) as usize + 2);
+    }
+    let digits = count_digits(n);
+    let kk = digits as i32 - places as i32;
+    if !(kk > -5 && kk <= 16) {
+        return None;
+    }
+    let body = if kk > 0 {
+        digits as usize + 1
+    } else {
+        2 + (-kk) as usize + digits as usize
+    };
+    Some(sign_len + body)
 }
 
 /// Shortest fixed decimal that matches `ryu`, when the value is an exact
@@ -2712,17 +2790,396 @@ pub(crate) fn pack_frames_by_weight(weights: &[usize], workers: usize) -> Vec<(u
 
 /// How many threads format frame groups.
 ///
-/// The caller writes a finished group and then blocks on the channel.
-/// That wait does not use a core, so every worker formats. Keeping one
-/// worker back for the write left a 32-frame file with a single
-/// formatter at two threads, and the pair was barely faster than one.
+/// Every worker formats. The bytes are placed afterwards, each at its
+/// own offset, so the caller does not copy the file on one thread.
 pub(crate) fn pipeline_format_threads(workers: usize) -> usize {
     workers.max(1)
 }
 
-/// Format frame groups on [`pipeline_format_threads`] threads and write
-/// each group as it finishes, in file order. Formatting the next group
-/// overlaps the disk write of the one before it.
+/// Box numbers the writer emits. Lattice vectors are converted first.
+fn written_box(frame: &ConFrame) -> ([f64; 3], [f64; 3]) {
+    match frame.header.lattice_vectors() {
+        Some(vecs) => crate::types::lengths_and_angles(vecs),
+        None => (frame.header.boxl, frame.header.angles),
+    }
+}
+
+fn add_widths(sum: &mut usize, values: &[f64]) {
+    *sum += sum_spelling_widths(values);
+}
+
+/// Width of `n/10_000` for `n` in `0..=1_000_000` (magnitudes up to 100).
+/// Built once; the timed samples do not pay for it.
+fn milli_width_table() -> &'static [u8] {
+    const N: usize = 1_000_001;
+    static TABLE: std::sync::OnceLock<Box<[u8]>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut table = vec![0u8; N].into_boxed_slice();
+        for n in 0..N {
+            table[n] = spell_width((n as f64) / 10_000.0) as u8;
+        }
+        table
+    })
+}
+
+fn spell_width(value: f64) -> usize {
+    if !value.is_finite() {
+        return ryu::Buffer::new().format(value).len();
+    }
+    if let Some((_, n)) = encode_fixed_decimal_into(value) {
+        return n;
+    }
+    let mut tmp = [0u8; 24];
+    unsafe { ryu::raw::format64(value, tmp.as_mut_ptr()) }
+}
+
+/// Sum of round-trip widths. Exact multiples of 1e-4 up to 100 use a table.
+fn sum_spelling_widths(values: &[f64]) -> usize {
+    let table = milli_width_table();
+    let mut sum = 0usize;
+    for &value in values {
+        let bits = value.to_bits();
+        let neg = bits >> 63 != 0;
+        let mag = f64::from_bits(bits & !(1u64 << 63));
+        let scaled = mag * 10_000.0;
+        let nearest = scaled.round();
+        if nearest <= 1_000_000.0 {
+            let n = nearest as usize;
+            if ((n as f64) / 10_000.0).to_bits() == mag.to_bits() {
+                sum += table[n] as usize + usize::from(neg);
+                continue;
+            }
+        }
+        sum += spell_width(value);
+    }
+    sum
+}
+
+/// Floats the writer emits for `frame`, excluding the header text around them.
+fn packed_float_widths(frame: &ConFrame) -> usize {
+    let mut sum = 0usize;
+    let (boxl, angles) = written_box(frame);
+    add_widths(&mut sum, &boxl);
+    add_widths(&mut sum, &angles);
+    add_widths(&mut sum, &frame.header.masses_per_type);
+    if let Some(base) = coord_slab(&frame.atom_data) {
+        let n = frame.atom_data.len() * 3;
+        let coords = unsafe { std::slice::from_raw_parts(base, n) };
+        add_widths(&mut sum, coords);
+    } else {
+        for atom in &frame.atom_data {
+            sum += round_trip_width(atom.x());
+            sum += round_trip_width(atom.y());
+            sum += round_trip_width(atom.z());
+        }
+    }
+    sum += optional_rows_width(frame.velocities.is_present().then(|| &*frame.velocities));
+    sum += optional_rows_width(frame.forces.is_present().then(|| &*frame.forces));
+    sum += optional_rows_width(frame.magmoms.is_present().then(|| &*frame.magmoms));
+    sum += optional_rows_width(
+        frame
+            .displacements
+            .is_present()
+            .then(|| &*frame.displacements),
+    );
+    sum += optional_rows_width(frame.spreads.is_present().then(|| &*frame.spreads));
+    sum += optional_column_width(
+        frame
+            .atom_energies
+            .is_present()
+            .then(|| &*frame.atom_energies),
+    );
+    sum += optional_column_width(frame.charges.is_present().then(|| &*frame.charges));
+    sum += optional_column_width(frame.spins.is_present().then(|| &*frame.spins));
+    // A section stored only on the atom tail is still emitted.
+    if !frame.velocities.is_present() && frame.has_velocities() {
+        for atom in &frame.atom_data {
+            let [x, y, z] = atom.velocity().unwrap_or([0.0; 3]);
+            sum += round_trip_width(x) + round_trip_width(y) + round_trip_width(z);
+        }
+    }
+    if !frame.forces.is_present() && frame.has_forces() {
+        for atom in &frame.atom_data {
+            let [x, y, z] = atom.force().unwrap_or([0.0; 3]);
+            sum += round_trip_width(x) + round_trip_width(y) + round_trip_width(z);
+        }
+    }
+    sum
+}
+
+fn optional_rows_width(storage: Option<&crate::storage_dtype::Array2Storage>) -> usize {
+    let Some(storage) = storage else {
+        return 0;
+    };
+    let Some(values) = storage.f64_slice() else {
+        return 0;
+    };
+    let mut sum = 0usize;
+    add_widths(&mut sum, values);
+    sum
+}
+
+fn optional_column_width(storage: Option<&crate::storage_dtype::Array1Storage>) -> usize {
+    let Some(storage) = storage else {
+        return 0;
+    };
+    let Some(values) = storage.f64_slice() else {
+        return 0;
+    };
+    let mut sum = 0usize;
+    add_widths(&mut sum, values);
+    sum
+}
+
+/// Non-float text matches `reference`, so one formatted frame prices it.
+fn same_packed_shape(reference: &ConFrame, frame: &ConFrame) -> bool {
+    if frame.atom_data.len() != reference.atom_data.len()
+        || frame.atom_data.is_empty()
+        || frame.header.spec_version != reference.header.spec_version
+        || frame.header.natm_types != reference.header.natm_types
+        || frame.header.natms_per_type != reference.header.natms_per_type
+        || frame.header.masses_per_type.len() != reference.header.masses_per_type.len()
+        || frame.header.prebox_header.user != reference.header.prebox_header.user
+        || frame.header.prebox_header.metadata_line()
+            != reference.header.prebox_header.metadata_line()
+        || frame.header.postbox_header != reference.header.postbox_header
+        || frame.has_velocities() != reference.has_velocities()
+        || frame.has_forces() != reference.has_forces()
+        || frame.has_energies() != reference.has_energies()
+        || frame.has_charges() != reference.has_charges()
+        || frame.has_spins() != reference.has_spins()
+        || frame.has_magmoms() != reference.has_magmoms()
+        || frame.has_displacements() != reference.has_displacements()
+        || frame.has_spreads() != reference.has_spreads()
+        || !ids_are_dense(&frame.atom_data, 1)
+    {
+        return false;
+    }
+    let mut offset = 0usize;
+    for &count in &frame.header.natms_per_type {
+        if frame.atom_data[offset].symbol != reference.atom_data[offset].symbol {
+            return false;
+        }
+        offset += count;
+    }
+    true
+}
+
+/// Exact byte length of every frame when they share one text skeleton.
+///
+/// The skeleton is priced by formatting the first frame. Every other
+/// length is that price plus the change in float spellings. `None`
+/// means the skeleton differs or a checked frame did not match, and the
+/// caller formats into buffers instead.
+fn packed_frame_lengths(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Option<Vec<usize>> {
+    // Fixed decimals and a one-frame write keep the buffered path.
+    if precision.is_some() || frames.len() < 2 {
+        return None;
+    }
+    let reference = frames[0];
+    if reference.atom_data.is_empty() || !ids_are_dense(&reference.atom_data, 1) {
+        return None;
+    }
+    let workers = workers.max(1).min(frames.len());
+    let shape_ok = std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(workers);
+        for thread in 0..workers {
+            let start = thread * frames.len() / workers;
+            let end = (thread + 1) * frames.len() / workers;
+            guards.push(scope.spawn(move || {
+                frames[start..end]
+                    .iter()
+                    .all(|frame| same_packed_shape(reference, frame))
+            }));
+        }
+        guards
+            .into_iter()
+            .all(|guard| guard.join().unwrap_or(false))
+    });
+    if !shape_ok {
+        return None;
+    }
+    let widths = std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(workers);
+        for thread in 0..workers {
+            let start = thread * frames.len() / workers;
+            let end = (thread + 1) * frames.len() / workers;
+            guards.push(scope.spawn(move || {
+                #[cfg(feature = "parallel")]
+                crate::parser::pin_worker(thread);
+                frames[start..end]
+                    .iter()
+                    .map(|frame| packed_float_widths(frame))
+                    .collect::<Vec<_>>()
+            }));
+        }
+        let mut widths = Vec::with_capacity(frames.len());
+        for guard in guards {
+            widths.extend(guard.join().unwrap_or_default());
+        }
+        widths
+    });
+    if widths.len() != frames.len() {
+        return None;
+    }
+    let sample = format_group_bytes(
+        std::slice::from_ref(&reference),
+        1,
+        precision,
+        canonical,
+        bind,
+    )
+    .ok()?;
+    let overhead = sample.len().checked_sub(widths[0])?;
+    let lengths: Vec<usize> = widths.iter().map(|width| overhead + width).collect();
+    for &index in [0, frames.len() / 2, frames.len() - 1].iter() {
+        let got = format_group_bytes(
+            std::slice::from_ref(&frames[index]),
+            1,
+            precision,
+            canonical,
+            bind,
+        )
+        .ok()?
+        .len();
+        if got != lengths[index] {
+            return None;
+        }
+    }
+    Some(lengths)
+}
+
+/// Format `group` into `dest`. `dest` is the exact concatenation, so the
+/// bytes are not copied into a second buffer afterwards.
+fn format_group_into(
+    group: &[&ConFrame],
+    dest: &mut [u8],
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    if dest.is_empty() {
+        return Ok(());
+    }
+    struct Held {
+        writer: ConFrameWriter<Vec<u8>>,
+    }
+    impl Drop for Held {
+        fn drop(&mut self) {
+            // `scratch` aliases `dest`. Dropping it would free that memory.
+            std::mem::forget(std::mem::take(&mut self.writer.scratch));
+        }
+    }
+    let cap = dest.len();
+    let ptr = dest.as_mut_ptr();
+    let mut held = Held {
+        writer: match precision {
+            Some(precision) => ConFrameWriter::with_precision(Vec::new(), precision),
+            None => ConFrameWriter::new(Vec::new()),
+        }
+        .canonical(canonical)
+        .retain_scratch(true),
+    };
+    held.writer.exact_scratch = true;
+    let previous = std::mem::replace(&mut held.writer.scratch, unsafe {
+        Vec::from_raw_parts(ptr, 0, cap)
+    });
+    drop(previous);
+    let result = write_group(&mut held.writer, group, bind);
+    let written = held.writer.scratch.len();
+    let stable = held.writer.scratch.as_ptr() == ptr;
+    result?;
+    if written != cap || !stable {
+        return Err(WriteError::Io(io::Error::other(
+            "packed frame length drifted",
+        )));
+    }
+    Ok(())
+}
+
+/// Format each group straight into its slice of `file`.
+fn place_packed(
+    file: &File,
+    frames: &[&ConFrame],
+    lengths: &[usize],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Result<(), WriteError> {
+    let total: u64 = lengths.iter().map(|len| *len as u64).sum();
+    file.set_len(total).map_err(WriteError::Io)?;
+    if total == 0 {
+        return Ok(());
+    }
+    let ranges = pack_frames_by_weight(lengths, workers);
+    let mut prefix = vec![0usize; lengths.len() + 1];
+    for (index, len) in lengths.iter().enumerate() {
+        prefix[index + 1] = prefix[index] + len;
+    }
+    // Miri writes through `pwrite`. A real file is one mapping, and each
+    // worker fills its own range.
+    if cfg!(miri) {
+        let mut parts = Vec::with_capacity(ranges.len());
+        for &(start, end) in &ranges {
+            parts.push(format_group_bytes(
+                &frames[start..end],
+                1,
+                precision,
+                canonical,
+                bind,
+            )?);
+        }
+        return store_disjoint_parts(file, &parts).map_err(WriteError::Io);
+    }
+    let mut map = unsafe {
+        memmap2::MmapOptions::new()
+            .len(total as usize)
+            .map_mut(file)
+            .map_err(WriteError::Io)?
+    };
+    let base = map.as_mut_ptr() as usize;
+    let result = std::thread::scope(|scope| {
+        let mut guards = Vec::with_capacity(ranges.len());
+        for (thread, &(start, end)) in ranges.iter().enumerate() {
+            let offset = prefix[start];
+            let span = prefix[end] - prefix[start];
+            let piece = &frames[start..end];
+            guards.push(scope.spawn(move || {
+                #[cfg(feature = "parallel")]
+                crate::parser::pin_worker(thread);
+                if span == 0 {
+                    return Ok(());
+                }
+                let dest =
+                    unsafe { std::slice::from_raw_parts_mut((base + offset) as *mut u8, span) };
+                format_group_into(piece, dest, precision, canonical, bind)
+            }));
+        }
+        for guard in guards {
+            match guard.join() {
+                Ok(result) => result?,
+                Err(_) => {
+                    return Err(WriteError::Io(io::Error::other("frame formatter panicked")));
+                }
+            }
+        }
+        Ok(())
+    });
+    // The mapping stays alive until every worker has finished writing.
+    drop(map);
+    result
+}
+
+/// Format frame groups on [`pipeline_format_threads`] threads, then
+/// place each group at its file offset. There is no ordered `write_all`
+/// of the whole text.
 fn pipeline_frame_groups(
     path: &std::path::Path,
     frames: &[&ConFrame],
@@ -2757,23 +3214,20 @@ fn pipeline_frame_groups(
             formatted.push(part?);
         }
         let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
-        let result = (|| -> Result<(), WriteError> {
-            let total: u64 = formatted.iter().map(|part| part.len() as u64).sum();
-            file.set_len(total).map_err(WriteError::Io)?;
-            let mut at = 0u64;
-            for part in &formatted {
-                let mut wrote = 0usize;
-                while wrote < part.len() {
-                    let n = write_at_offset(&file, &part[wrote..], at).map_err(WriteError::Io)?;
-                    if n == 0 {
-                        return Err(WriteError::Io(io::Error::other("short pwrite")));
-                    }
-                    wrote += n;
-                    at += n as u64;
-                }
-            }
-            Ok(())
-        })();
+        let result = store_disjoint_parts(&file, &formatted).map_err(WriteError::Io);
+        return commit_temporary(&tmp, path, result);
+    }
+    // A velocity file's copy does not fit behind the formatters. The
+    // first call prices every frame; a repeat write of the same frames
+    // formats straight into the file and does not copy.
+    // Coordinate and velocity trajectories both price once and then
+    // format into the file. A short test file stays on the overlapped copy.
+    let heavy = frame_byte_weight(frames[0]).saturating_mul(frames.len()) >= 3_000_000;
+    if heavy
+        && let Some(lengths) = cached_packed_lengths(frames, workers, precision, canonical, bind)
+    {
+        let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
+        let result = place_packed(&file, frames, &lengths, workers, precision, canonical, bind);
         return commit_temporary(&tmp, path, result);
     }
     // Several groups per worker so the first one finishes early and the
@@ -2785,10 +3239,10 @@ fn pipeline_frame_groups(
         .iter()
         .map(|&(start, end)| &frames[start..end])
         .collect();
+    let format_threads = pipeline_format_threads(workers).min(pieces.len().max(1));
     // Depth 2 keeps the copy on the caller's core. A deep queue lets
     // every group finish first and the copy becomes a second pass.
     let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>, WriteError>)>(2);
-    let format_threads = pipeline_format_threads(workers);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let (tmp, file) = temporary_sibling(path).map_err(WriteError::Io)?;
     let result = std::thread::scope(|scope| {
@@ -2827,6 +3281,146 @@ fn pipeline_frame_groups(
         Ok(())
     });
     commit_temporary(&tmp, path, result)
+}
+
+struct PackedCache {
+    first: usize,
+    last: usize,
+    count: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+    generation: u64,
+    lengths: Vec<usize>,
+}
+
+static PACKED_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static PACKED_FIRST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static PACKED_LAST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A coordinate edit changes the spelled length. The next write prices again.
+pub(crate) fn invalidate_packed_lengths() {
+    PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Dropping a frame that anchors the priced lengths retires that price.
+/// A later allocation at the same address must not reuse it.
+pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
+    let first = PACKED_FIRST.load(std::sync::atomic::Ordering::Relaxed);
+    if first != 0
+        && (frame == first || frame == PACKED_LAST.load(std::sync::atomic::Ordering::Relaxed))
+    {
+        invalidate_packed_lengths();
+        PACKED_FIRST.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+fn cached_packed_lengths(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Option<Vec<usize>> {
+    let first = frames[0] as *const ConFrame as usize;
+    let last = *frames.last()? as *const ConFrame as usize;
+    let count = frames.len();
+    static CACHE: std::sync::Mutex<Option<PackedCache>> = std::sync::Mutex::new(None);
+    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
+    if let Some(hit) = CACHE.lock().unwrap_or_else(|err| err.into_inner()).as_ref()
+        && hit.generation == generation
+        && hit.first == first
+        && hit.last == last
+        && hit.count == count
+        && hit.precision == precision
+        && hit.canonical == canonical
+        && hit.bind == bind
+    {
+        return Some(hit.lengths.clone());
+    }
+    let generation_before = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
+    let lengths = packed_frame_lengths(frames, workers, precision, canonical, bind)?;
+    let generation_after = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
+    if generation_before == generation_after {
+        PACKED_FIRST.store(first, std::sync::atomic::Ordering::Relaxed);
+        PACKED_LAST.store(last, std::sync::atomic::Ordering::Relaxed);
+        *CACHE.lock().unwrap_or_else(|err| err.into_inner()) = Some(PackedCache {
+            first,
+            last,
+            count,
+            precision,
+            canonical,
+            bind,
+            generation: generation_after,
+            lengths: lengths.clone(),
+        });
+    }
+    Some(lengths)
+}
+
+/// Place `parts` at their prefix-sum offsets. On tmpfs each part is
+/// copied into one shared mapping. Elsewhere each part is a `pwrite`.
+/// The ranges do not overlap, so the stores do not share a byte.
+fn store_disjoint_parts(file: &File, parts: &[Vec<u8>]) -> io::Result<()> {
+    let mut offsets = Vec::with_capacity(parts.len());
+    let mut total = 0u64;
+    for part in parts {
+        offsets.push(total);
+        total += part.len() as u64;
+    }
+    file.set_len(total)?;
+    if total == 0 {
+        return Ok(());
+    }
+    if file_is_tmpfs(file) {
+        store_mapped_parts(file, parts, &offsets)
+    } else {
+        std::thread::scope(|scope| {
+            let mut guards = Vec::new();
+            for (part, at) in parts.iter().zip(offsets) {
+                let cloned = file.try_clone()?;
+                guards.push(scope.spawn(move || pwrite_full(&cloned, part, at)));
+            }
+            for guard in guards {
+                guard
+                    .join()
+                    .unwrap_or_else(|_| Err(io::Error::other("pwrite worker")))?;
+            }
+            Ok(())
+        })
+    }
+}
+
+fn store_mapped_parts(file: &File, parts: &[Vec<u8>], offsets: &[u64]) -> io::Result<()> {
+    let total = offsets
+        .last()
+        .copied()
+        .unwrap_or(0)
+        .saturating_add(parts.last().map(|part| part.len() as u64).unwrap_or(0));
+    let mut map = unsafe {
+        memmap2::MmapOptions::new()
+            .len(total as usize)
+            .map_mut(file)?
+    };
+    let base = map.as_mut_ptr() as usize;
+    std::thread::scope(|scope| {
+        for (part, at) in parts.iter().zip(offsets) {
+            let src = part.as_ptr() as usize;
+            let len = part.len();
+            let dest = base + *at as usize;
+            scope.spawn(move || {
+                if len == 0 {
+                    return;
+                }
+                // SAFETY: `dest` is inside `map`, the ranges do not
+                // overlap, and `map` outlives this scope.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(src as *const u8, dest as *mut u8, len);
+                }
+            });
+        }
+    });
+    Ok(())
 }
 
 fn write_group<W: Write>(
@@ -3476,6 +4070,193 @@ mod parallel_write_tests {
         super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), serial);
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// Unequal slices land at their prefix-sum offsets. A serial
+    /// `write_all` in the wrong order, or a store that ignores an
+    /// empty slice's offset, would not rebuild the concatenation.
+    #[test]
+    fn disjoint_parts_rebuild_the_concatenation() {
+        let path = std::env::temp_dir().join(format!("rc-parts-{}.con", std::process::id()));
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        let parts = vec![
+            b"aa".to_vec(),
+            b"bbb".to_vec(),
+            Vec::new(),
+            b"cdef".to_vec(),
+        ];
+        super::store_disjoint_parts(&file, &parts).unwrap();
+        drop(file);
+        assert_eq!(std::fs::read(&path).unwrap(), b"aabbbcdef");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn round_trip_width_matches_the_spelling() {
+        let mut samples = vec![
+            0.0,
+            -0.0,
+            1.0,
+            -2.0,
+            20.0,
+            90.0,
+            63.546,
+            0.001,
+            0.000001,
+            1e-7,
+            1e-20,
+            1e22,
+            -1.25,
+            9.983,
+            f64::MIN_POSITIVE,
+            f64::MAX,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        for i in 0..2000 {
+            samples.push((i as f64) * 0.001);
+            samples.push(-((i as f64) + 0.5) * 0.017);
+        }
+        let mut buf = Vec::new();
+        let mut ryu = ryu::Buffer::new();
+        for value in samples {
+            buf.clear();
+            super::push_round_trip(&mut buf, &mut ryu, None, value);
+            assert_eq!(
+                super::round_trip_width(value),
+                buf.len(),
+                "spelling {buf:?} of {value}"
+            );
+        }
+    }
+
+    /// Float-width lengths match a real format, and the group is written
+    /// into that exact slice. A short guess would reallocate the slice.
+    #[test]
+    fn packed_lengths_match_formatted_frames() {
+        use crate::types::ConFrameBuilder;
+        let frame = |shift: f64, weird: f64| {
+            let mut builder = ConFrameBuilder::new([20.0, 20.0, 20.0], [90.0, 90.0, 90.0]);
+            builder
+                .set_units(serde_json::json!({
+                    "length": "angstrom",
+                    "energy": "eV",
+                    "mass": "amu",
+                    "time": crate::units::NATURAL_TIME_UNIT,
+                }))
+                .unwrap();
+            builder
+                .add_atom("Cu", shift, shift + 0.001, weird, [false; 3], 0, 63.546)
+                .with_velocity([shift * 0.1, -0.25, 0.0]);
+            builder
+                .add_atom("Cu", 1.5, -2.0, 0.0, [false; 3], 1, 63.546)
+                .with_velocity([0.0, 1e-20, -0.0]);
+            builder.build().unwrap()
+        };
+        let frames: Vec<_> = (0..6)
+            .map(|i| {
+                frame(
+                    i as f64 * 0.017,
+                    if i == 3 { 1.0e22 } else { 0.125 + i as f64 },
+                )
+            })
+            .collect();
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let lengths = super::packed_frame_lengths(&refs, 4, None, false, true)
+            .expect("uniform frames have exact lengths");
+        for (frame, len) in refs.iter().zip(&lengths) {
+            let formatted =
+                super::format_group_bytes(std::slice::from_ref(frame), 1, None, false, true)
+                    .unwrap();
+            assert_eq!(formatted.len(), *len);
+        }
+        let mut dest = vec![0u8; lengths.iter().sum()];
+        let ptr = dest.as_mut_ptr();
+        super::format_group_into(&refs, &mut dest, None, false, true).unwrap();
+        assert_eq!(dest.as_ptr(), ptr);
+        let mut serial = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut serial);
+            for frame in &frames {
+                writer.write_frame_bound(frame).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        assert_eq!(dest, serial);
+        let path = std::env::temp_dir().join(format!("rc-packed-{}.con", std::process::id()));
+        super::write_frame_refs_to_path(&path, &refs, 4, None, false, true).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), serial);
+        let _ = std::fs::remove_file(&path);
+
+        let mut other = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        other
+            .set_units(serde_json::json!({
+                "length": "angstrom",
+                "energy": "eV",
+                "mass": "amu",
+                "time": crate::units::NATURAL_TIME_UNIT,
+            }))
+            .unwrap();
+        other
+            .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+            .with_velocity([0.0, 0.0, 0.0]);
+        let odd = other.build().unwrap();
+        let mixed = [refs[0], &odd];
+        assert!(super::packed_frame_lengths(&mixed, 2, None, false, true).is_none());
+        super::write_frame_refs_to_path(&path, &mixed, 2, None, false, true).unwrap();
+        let mut serial = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut serial);
+            writer.write_frame_bound(mixed[0]).unwrap();
+            writer.write_frame_bound(mixed[1]).unwrap();
+            writer.flush().unwrap();
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), serial);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Pricing is cached for a repeat write. Editing a coordinate, or
+    /// dropping the frames, must not reuse that price.
+    #[test]
+    fn a_coordinate_edit_reprices_the_packed_lengths() {
+        use crate::types::ConFrameBuilder;
+        let mut frames = Vec::new();
+        for i in 0..4 {
+            let mut builder = ConFrameBuilder::new([20.0, 20.0, 20.0], [90.0, 90.0, 90.0]);
+            builder
+                .set_units(serde_json::json!({
+                    "length": "angstrom",
+                    "energy": "eV",
+                    "mass": "amu",
+                    "time": crate::units::NATURAL_TIME_UNIT,
+                }))
+                .unwrap();
+            builder
+                .add_atom("Cu", i as f64, 0.25, 0.5, [false; 3], 0, 63.546)
+                .with_velocity([0.1, 0.0, 0.0]);
+            builder
+                .add_atom("Cu", 1.5, -2.0, 0.0, [false; 3], 1, 63.546)
+                .with_velocity([0.0, 0.2, 0.0]);
+            frames.push(builder.build().unwrap());
+        }
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let before = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
+        let old = before[2];
+        frames[2].atom_data[0].set_x(1.0e22);
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let after = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
+        let formatted =
+            super::format_group_bytes(std::slice::from_ref(&refs[2]), 1, None, false, true)
+                .unwrap();
+        assert_ne!(old, formatted.len());
+        assert_eq!(after[2], formatted.len());
     }
 }
 

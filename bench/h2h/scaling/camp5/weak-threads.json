@@ -1,0 +1,87 @@
+{
+  "kind": "threads",
+  "relation": "n_frames = frames_per_worker * workers",
+  "frames_per_worker": 8000,
+  "fixture": "resources/test/cuh2.con",
+  "repeats": 6,
+  "serial_match": true,
+  "host": "Intel Xeon Processor",
+  "ncpus": 8,
+  "physical_cores": 8,
+  "mpi": "absent",
+  "gpu": "absent",
+  "commit": "c8ee7096539fc06ff3db0bc3242238f64b1170fc",
+  "date_utc": "2026-11-14T00:24Z",
+  "complete": true,
+  "points": [
+    {
+      "workers": 1,
+      "n_frames": 8000,
+      "bytes": 134168000,
+      "samples_s": [
+        0.112506808,
+        0.111888576,
+        0.1097686,
+        0.110540837,
+        0.11082434,
+        0.119052573
+      ]
+    },
+    {
+      "workers": 2,
+      "n_frames": 16000,
+      "bytes": 268336000,
+      "samples_s": [
+        0.116207247,
+        0.11610751,
+        0.118468156,
+        0.119057846,
+        0.116055805,
+        0.116203747
+      ]
+    },
+    {
+      "workers": 4,
+      "n_frames": 32000,
+      "bytes": 536672000,
+      "samples_s": [
+        0.119886302,
+        0.11943439,
+        0.119949153,
+        0.11830948,
+        0.130521043,
+        0.134198574
+      ]
+    },
+    {
+      "workers": 8,
+      "n_frames": 64000,
+      "bytes": 1073344000,
+      "samples_s": [
+        0.120236828,
+        0.125827358,
+        0.122427746,
+        0.129743123,
+        0.124646628,
+        0.120071728
+      ]
+    }
+  ],
+  "protocol": {
+    "warmup": 1,
+    "samples": 6,
+    "percentile": "type7",
+    "serial": true,
+    "unlink_create": true
+  },
+  "ceilings": {
+    "stream": "n 167772160\nrepeats 8\nparallel_threads 8\nparallel_triad_gbs 100.732979\nparallel_triad_iqr 11.529686\narray_kib 1310720\ncopy_gbs 17.104992\ncopy_iqr 0.139833\nscale_gbs 17.625495\nscale_iqr 0.143736\nadd_gbs 17.913663\nadd_iqr 0.065904\ntriad_gbs 17.928044\ntriad_iqr 0.058849\n",
+    "fdatasync_median_s": 0.2864890294986253,
+    "fdatasync_iqr_s": 0.0038109795059426688,
+    "pwrite_median_s": 0.10635332349920645,
+    "pwrite_iqr_s": 0.003501318251437624,
+    "disk_sync": "fdatasync",
+    "pwrite": "raw",
+    "bytes": 268435456
+  }
+}
