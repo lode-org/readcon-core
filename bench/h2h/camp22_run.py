@@ -720,13 +720,20 @@ def conbin() -> None:
             save_rows(dest, rows, repeats=REPEATS, warmup=1)
     groups: dict[str, float] = {}
     for row in rows:
-        if row["threads"] == 1:
+        if (
+            row.get("file") == "con-1e6"
+            and row.get("op") == "read"
+            and row.get("threads") == 1
+        ):
             groups[row["sink"]] = row["median_s"]
     for row in rows:
+        if row.get("file") != "con-1e6" or row.get("op") != "read":
+            continue
         base = groups.get(row["sink"])
+        threads = row.get("threads")
         row["strong_efficiency"] = (
-            (base / row["median_s"]) / row["threads"]
-            if base and row["median_s"]
+            (base / row["median_s"]) / threads
+            if base and row["median_s"] and threads
             else None
         )
     save_rows(dest, rows, repeats=REPEATS, warmup=1)
