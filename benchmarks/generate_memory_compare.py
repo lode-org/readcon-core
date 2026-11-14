@@ -17,6 +17,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from published_commit import require_published
+
 
 def _rewrite(table: str, before: str, after: str) -> str:
     """Replace asv's short-hash-plus-branch headers with the full SHAs."""
@@ -69,6 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--asv", default=shutil.which("asv") or "asv")
     args = parser.parse_args(argv)
+    root = Path(__file__).resolve().parents[1]
+    for path in (args.before_json, args.after_json):
+        require_published(json.loads(path.read_text(encoding="utf-8"))["commit_hash"], root)
+    require_published(args.before, root)
+    require_published(args.after, root)
     stage_root = Path("build") / "bench"
     stage_root.mkdir(parents=True, exist_ok=True)
     staged = Path(tempfile.mkdtemp(prefix="mem-compare-", dir=stage_root))

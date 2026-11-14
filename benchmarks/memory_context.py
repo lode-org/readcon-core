@@ -12,9 +12,13 @@ import ast
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from published_commit import require_published
 
 # ``lscpu`` keys, in the order they are written. Newer util-linux still
 # emits these as ``Key: value`` lines.
@@ -73,17 +77,90 @@ def _tracking_method(suite: Path) -> str:
     raise SystemExit(f"{suite} does not set MEMORY_TRACKING_METHOD")
 
 
+def _first_line(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return text.splitlines()[0].strip() if text else ""
+
+
+def host_runtime() -> dict[str, str]:
+    """Virtual machine, pinning, governor, and turbo, read when the row is written."""
+    flags = ""
+    try:
+        cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        cpuinfo = ""
+    for line in cpuinfo.splitlines():
+        if line.lower().startswith("flags"):
+            flags = line.split(":", 1)[-1]
+            break
+    virtual = "yes" if "hypervisor" in flags.split() else "no"
+    governor = _first_line(Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"))
+    if not governor:
+        governor = "unavailable"
+    no_turbo = _first_line(Path("/sys/devices/system/cpu/intel_pstate/no_turbo"))
+    boost = _first_line(Path("/sys/devices/system/cpu/cpufreq/boost"))
+    if no_turbo == "1":
+        turbo = "off"
+    elif no_turbo == "0":
+        turbo = "on"
+    elif boost == "1":
+        turbo = "on"
+    elif boost == "0":
+        turbo = "off"
+    else:
+        turbo = "unavailable"
+    allowed = ""
+    try:
+        status = Path("/proc/self/status").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        status = ""
+    for line in status.splitlines():
+        if line.startswith("Cpus_allowed_list:"):
+            allowed = line.split(":", 1)[-1].strip()
+            break
+    online = _first_line(Path("/sys/devices/system/cpu/online"))
+    if allowed and online and allowed == online:
+        pinning = "process affinity is every online cpu; workers pin to one core each"
+    elif allowed:
+        pinning = "process affinity is restricted; workers pin to one core each"
+    else:
+        pinning = "workers pin to one core each"
+    return {
+        "virtual_machine": virtual,
+        "core_pinning": pinning,
+        "cpu_governor": governor,
+        "turbo": turbo,
+    }
+
+
 def write_context(results: Path, command: str, method: str) -> Path:
     if not command.strip():
         raise SystemExit("the asv command is empty")
+    root = Path(__file__).resolve().parents[1]
+    for sha in re.findall(r"\b[0-9a-f]{40}\b", command):
+        require_published(sha, root)
     results.mkdir(parents=True, exist_ok=True)
     out = results / "memory-context.csv"
     row = _lscpu_summary()
+    row.update(host_runtime())
     row["asv_command"] = command.strip()
     row["memory_tracking_method"] = method
     row["n_threads"] = "1"
     fieldnames = [column for _key, column in _LSCPU_FIELDS]
-    fieldnames.extend(("asv_command", "memory_tracking_method", "n_threads"))
+    fieldnames.extend(
+        (
+            "virtual_machine",
+            "core_pinning",
+            "cpu_governor",
+            "turbo",
+            "asv_command",
+            "memory_tracking_method",
+            "n_threads",
+        )
+    )
     with out.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()

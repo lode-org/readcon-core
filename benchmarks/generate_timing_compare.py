@@ -12,11 +12,13 @@ import argparse
 import csv
 import itertools
 import json
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from memory_context import _lscpu_summary
+from memory_context import _lscpu_summary, host_runtime
+from published_commit import require_published
 
 
 def _load(path: Path) -> tuple[str, dict[str, dict]]:
@@ -118,70 +120,14 @@ def _table(before_sha: str, after_sha: str, before: dict, after: dict, select) -
     return text
 
 
-def _first_line(path: Path) -> str:
-    try:
-        text = path.read_text(encoding="utf-8").strip()
-    except OSError:
-        return ""
-    return text.splitlines()[0].strip() if text else ""
-
-
-def _host_runtime() -> dict[str, str]:
-    """Virtual machine, pinning, governor, and turbo. No host name."""
-    flags = ""
-    try:
-        cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        cpuinfo = ""
-    for line in cpuinfo.splitlines():
-        if line.lower().startswith("flags"):
-            flags = line.split(":", 1)[-1]
-            break
-    virtual = "yes" if "hypervisor" in flags.split() else "no"
-    governor = _first_line(Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"))
-    if not governor:
-        governor = "unavailable"
-    no_turbo = _first_line(Path("/sys/devices/system/cpu/intel_pstate/no_turbo"))
-    boost = _first_line(Path("/sys/devices/system/cpu/cpufreq/boost"))
-    if no_turbo == "1":
-        turbo = "off"
-    elif no_turbo == "0":
-        turbo = "on"
-    elif boost == "1":
-        turbo = "on"
-    elif boost == "0":
-        turbo = "off"
-    else:
-        turbo = "unavailable"
-    allowed = ""
-    try:
-        status = Path("/proc/self/status").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        status = ""
-    for line in status.splitlines():
-        if line.startswith("Cpus_allowed_list:"):
-            allowed = line.split(":", 1)[-1].strip()
-            break
-    online = _first_line(Path("/sys/devices/system/cpu/online"))
-    if allowed and online and allowed == online:
-        pinning = "process affinity is every online cpu; workers pin to one core each"
-    elif allowed:
-        pinning = "process affinity is restricted; workers pin to one core each"
-    else:
-        pinning = "workers pin to one core each"
-    return {
-        "virtual_machine": virtual,
-        "core_pinning": pinning,
-        "cpu_governor": governor,
-        "turbo": turbo,
-    }
-
-
 def _write_context(path: Path, command: str, n_threads: str) -> None:
     if not command.strip():
         raise SystemExit("the asv command is empty")
+    root = Path(__file__).resolve().parents[1]
+    for sha in re.findall(r"\b[0-9a-f]{40}\b", command):
+        require_published(sha, root)
     row = _lscpu_summary()
-    row.update(_host_runtime())
+    row.update(host_runtime())
     row["asv_command"] = command.strip()
     row["n_threads"] = n_threads
     fieldnames = [
@@ -231,6 +177,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     before_sha, before = _load(args.before_json)
     after_sha, after = _load(args.after_json)
+    root = Path(__file__).resolve().parents[1]
+    before_sha = require_published(before_sha, root)
+    after_sha = require_published(after_sha, root)
     needle = args.include
     dropped = args.exclude
 
