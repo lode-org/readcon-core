@@ -1037,14 +1037,30 @@ fn gzip_one_member(src: &[u8]) -> io::Result<(Vec<u8>, bool)> {
 }
 
 fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
-    let (out, exact) = gzip_one_member(src)?;
-    if out.len() != dst.len() || !exact {
+    // Inflate into the caller's slice. A temporary member buffer was a
+    // second copy of every slice, and a million-atom CON.gz paid it on
+    // top of the serial decoder the older releases use.
+    let mut decoder = flate2::bufread::GzDecoder::new(std::io::Cursor::new(src));
+    decoder.read_exact(dst)?;
+    let mut extra = [0u8; 1];
+    match decoder.read(&mut extra) {
+        Ok(0) => {}
+        Ok(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "gzip member does not fill its index slice",
+            ));
+        }
+        Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {}
+        Err(err) => return Err(err),
+    }
+    let consumed = decoder.get_ref().position() as usize;
+    if consumed != src.len() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "gzip member does not fill its index slice",
         ));
     }
-    dst.copy_from_slice(&out);
     Ok(())
 }
 
