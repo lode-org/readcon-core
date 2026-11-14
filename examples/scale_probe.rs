@@ -71,13 +71,25 @@ fn main() {
             let text = std::fs::read_to_string(&path).unwrap();
             let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
             let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
-            let out = std::path::Path::new("/dev/shm/r7-rust-write.con");
-            time_logged("write", 6, || {
-                let _ = std::fs::remove_file(out);
+            let out_owned = std::env::var("READCON_PROBE_OUT")
+                .unwrap_or_else(|_| "/dev/shm/r7-rust-write.con".to_string());
+            let out = std::path::PathBuf::from(&out_owned);
+            let repeats = std::env::var("READCON_PROBE_REPEATS")
+                .ok()
+                .and_then(|text| text.parse().ok())
+                .unwrap_or(6);
+            let fsync = std::env::var_os("READCON_PROBE_FSYNC").is_some();
+            time_logged("write", repeats, || {
+                let _ = std::fs::remove_file(&out);
                 readcon_core::writer::write_frame_refs_to_path(
-                    out, &refs, workers, None, false, true,
+                    &out, &refs, workers, None, false, true,
                 )
                 .unwrap();
+                if fsync {
+                    if let Ok(file) = std::fs::File::open(&out) {
+                        let _ = file.sync_all();
+                    }
+                }
             })
         }
         "floats" => {

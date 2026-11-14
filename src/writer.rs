@@ -1974,6 +1974,59 @@ fn side_copy_workers(workers: usize) -> bool {
 
 /// tmpfs wants many small ranges so the writer starts early. The page
 /// cache wants fewer writes.
+/// Ask for huge pages on a tmpfs that was mounted to allow them.
+///
+/// `MADV_POPULATE_WRITE` was slower than the plain first touch on both
+/// a normal tmpfs and `huge=within_size`, so this does not pre-fault.
+/// `MADV_HUGEPAGE` is a no-op unless the mount (or `shmem_enabled=advise`)
+/// is willing to use huge pages.
+pub(crate) fn advise_shared_store(file: &File, ptr: *mut u8, len: usize) {
+    #[cfg(all(target_os = "linux", not(miri)))]
+    if len >= 2 * 1024 * 1024 && mount_requests_huge(file) {
+        unsafe {
+            let _ = libc::madvise(ptr.cast::<libc::c_void>(), len, libc::MADV_HUGEPAGE);
+        }
+    }
+    #[cfg(any(not(target_os = "linux"), miri))]
+    {
+        let _ = (file, ptr, len);
+    }
+}
+
+#[cfg(all(target_os = "linux", not(miri)))]
+fn mount_requests_huge(file: &File) -> bool {
+    use std::os::fd::AsRawFd;
+    let Ok(linked) = std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())) else {
+        return false;
+    };
+    let Ok(table) = std::fs::read_to_string("/proc/mounts") else {
+        return false;
+    };
+    let path = linked.to_string_lossy();
+    let mut best_len = 0usize;
+    let mut huge = false;
+    for line in table.lines() {
+        let mut fields = line.split_whitespace();
+        let _device = fields.next();
+        let Some(raw_mount) = fields.next() else {
+            continue;
+        };
+        let mount = raw_mount.replace("\\040", " ");
+        if mount.len() >= best_len && path.starts_with(&mount) {
+            let _fstype = fields.next();
+            let options = fields.next().unwrap_or("");
+            best_len = mount.len();
+            huge = options.split(',').any(|opt| {
+                matches!(
+                    opt,
+                    "huge=within_size" | "huge=always" | "huge=advise" | "huge=force"
+                )
+            });
+        }
+    }
+    huge
+}
+
 pub(crate) fn file_is_tmpfs(file: &File) -> bool {
     // tmpfs is a Linux filesystem. Miri has no `fstatfs`. Treating the
     // file as a normal one only changes how many ranges the pipeline formats.
@@ -3317,6 +3370,7 @@ fn place_packed(
                         .map_mut(&cloned)
                         .map_err(WriteError::Io)?
                 };
+                advise_shared_store(&cloned, map.as_mut_ptr(), map.len());
                 let dest = &mut map[delta..delta + span];
                 format_group_into(piece, dest, precision, canonical, bind)?;
                 drop(map);

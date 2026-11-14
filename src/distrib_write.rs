@@ -267,6 +267,7 @@ fn copy_mapped(file: &std::fs::File, body: &[u8], offset: u64) -> std::io::Resul
             .len(delta + body.len())
             .map_mut(file)?
     };
+    crate::writer::advise_shared_store(file, map.as_mut_ptr(), map.len());
     map[delta..delta + body.len()].copy_from_slice(body);
     Ok(())
 }
