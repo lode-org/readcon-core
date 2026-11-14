@@ -82,16 +82,9 @@ def run(cmd: list[str], log: Path, env: dict | None = None) -> str:
 
 
 def repeat_blob(blob: bytes, count: int, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    chunk_n = max(1, (8 << 20) // len(blob))
-    chunk = blob * chunk_n
-    with dest.open("wb") as handle:
-        left = count
-        while left >= chunk_n:
-            handle.write(chunk)
-            left -= chunk_n
-        if left:
-            handle.write(blob * left)
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(dest, blob, count)
 
 
 def parse_probe(text: str) -> list[float]:

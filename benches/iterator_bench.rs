@@ -1,19 +1,18 @@
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use readcon_core::iterators::ConFrameIterator;
 use std::fs;
 use std::hint::black_box;
 use std::path::Path;
 
+#[path = "../bench/h2h/frames_guard.rs"]
+mod frames_guard;
+
 fn generate_large_file(num_frames: usize) -> String {
     let single_frame = fs::read_to_string(test_case!("tiny_cuh2.con")).expect("Can't find test.");
-    let mut buf = String::with_capacity(single_frame.len() * num_frames);
-    for _ in 0..num_frames {
-        buf.push_str(&single_frame);
-    }
-    buf
+    frames_guard::distinct_frames(&single_frame, num_frames)
 }
 
 fn iterator_bench(c: &mut Criterion) {
@@ -185,7 +184,7 @@ fn fast_float_microbench(c: &mut Criterion) {
 fn multi_frame_parse_bench(c: &mut Criterion) {
     // Multi-atom multi-frame full-frame parse (sequential iterator path).
     let cuh2 = fs::read_to_string(test_case!("cuh2.con")).expect("cuh2 fixture");
-    let multi: String = cuh2.repeat(30);
+    let multi = frames_guard::distinct_frames(&cuh2, 30);
     let mut group = c.benchmark_group("MultiFrameParse");
     group.sample_size(40);
     group.bench_function("parse_cuh2_x30_sequential", |b| {

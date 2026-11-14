@@ -1192,7 +1192,12 @@ def command_run_ranks(args: argparse.Namespace) -> int:
     for ranks in plan["ladder"]:
         n_frames = frames_for_workers(int(ranks), args.frames_per_worker)
         con = work / f"frames-{n_frames}.con"
-        con.write_text(fixture_text * n_frames, encoding="utf-8")
+        import sys
+
+        sys.path.insert(0, str(ROOT / "bench" / "h2h"))
+        from frames_guard import write_distinct_copies
+
+        write_distinct_copies(con, fixture_text, n_frames)
         out = work / f"ranks-{ranks}.json"
         argv = mpirun_argv(
             str(host["mpi"]), int(ranks), str(binary), str(con), str(out), REPEATS

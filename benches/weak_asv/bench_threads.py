@@ -83,7 +83,12 @@ class TimeWeakThreads:
         per_worker = frames_per_worker()
         n_frames = frames_for_workers(int(workers), per_worker)
         path = str(bench_file("weak-threads", ".con"))
-        Path(path).write_text(text * n_frames, encoding="utf-8")
+        import sys
+
+        sys.path.insert(0, str(ROOT / "bench" / "h2h"))
+        from frames_guard import write_distinct_copies
+
+        write_distinct_copies(Path(path), text, n_frames)
         serial_match(path, int(workers), n_frames)
         self._path = path
         self._n_frames = n_frames

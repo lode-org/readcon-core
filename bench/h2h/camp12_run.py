@@ -72,12 +72,9 @@ def samples_of(text: str) -> list[float]:
 
 
 def repeat_file(one: Path, dest: Path, frames: int) -> None:
-    if dest.is_file() and dest.stat().st_size == one.stat().st_size * frames:
-        return
-    blob = one.read_bytes()
-    with dest.open("wb") as handle:
-        for _ in range(frames):
-            handle.write(blob)
+    from frames_guard import write_distinct_copies
+
+    write_distinct_copies(dest, one.read_text(encoding="utf-8"), frames)
 
 
 def capture(cmd: list[str]) -> str:

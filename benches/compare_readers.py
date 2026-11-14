@@ -88,11 +88,13 @@ def generate_atom_lines():
 
 def generate_trajectory(num_frames, path):
     """Write a multi-frame .con trajectory file."""
-    atom_block = generate_atom_lines()
-    with open(path, "w") as f:
-        for _ in range(num_frames):
-            f.write(SINGLE_FRAME)
-            f.write(atom_block)
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench" / "h2h"))
+    from frames_guard import write_distinct_copies
+
+    one = SINGLE_FRAME + generate_atom_lines()
+    write_distinct_copies(Path(path), one, num_frames)
 
 
 # ---------------------------------------------------------------------------

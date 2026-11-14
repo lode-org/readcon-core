@@ -170,7 +170,9 @@ def write_inputs() -> dict[str, Path]:
     for spec in PANEL:
         path = folder / f"{spec['id']}.con"
         if spec["kind"] == "repeat":
-            path.write_text(one * spec["frames"], encoding="utf-8")
+            from frames_guard import write_distinct_copies
+
+            write_distinct_copies(path, one, spec["frames"])
         else:
             write_grid(path, spec["atoms"], spec["frames"])
         paths[spec["id"]] = path

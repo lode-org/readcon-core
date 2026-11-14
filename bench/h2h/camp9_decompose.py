@@ -97,18 +97,10 @@ def slowest(groups: list[list[float]]) -> list[float]:
 
 
 def ensure_frames(path: Path, frames: int) -> None:
-    if path.is_file() and path.stat().st_size > 0:
-        return
-    blob = (ROOT / "resources/test/cuh2.con").read_bytes()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    chunk = blob * 200
-    with path.open("wb") as handle:
-        left = frames
-        while left >= 200:
-            handle.write(chunk)
-            left -= 200
-        if left:
-            handle.write(blob * left)
+    from frames_guard import write_distinct_copies
+
+    one = ROOT / "resources/test/cuh2.con"
+    write_distinct_copies(path, one.read_text(encoding="utf-8"), frames)
 
 
 def page_up(n: int) -> int:

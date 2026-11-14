@@ -50,7 +50,12 @@ CUH2_FRAMES = (50, 100)
 
 
 def _ladder_con(src: Path, n_frames: int) -> str:
-    return src.read_text() * n_frames
+    import sys
+
+    sys.path.insert(0, str(REPO / "bench" / "h2h"))
+    from frames_guard import distinct_frames
+
+    return distinct_frames(src.read_text(), n_frames)
 
 
 def _write_temp(text: str, suffix: str = ".con") -> str:
