@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import tarfile
-import tempfile
+from work_dir import work_dir
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -262,8 +262,7 @@ def compile_against(prefix: Path) -> None:
         "-lpthread",
         "-lm",
     ]
-    with tempfile.TemporaryDirectory() as tmp:
-        work = Path(tmp)
+    with work_dir("smoke") as work:
         (work / "smoke.c").write_text(C_PROGRAM, encoding="utf-8")
         (work / "smoke.cpp").write_text(CPP_PROGRAM, encoding="utf-8")
         c_bin = work / "smoke-c"
@@ -330,8 +329,8 @@ def check_published(version: str, pinned: str, tag: str) -> None:
         name = dist_name(version, target)
         blob = download_asset(asset_named(release, name))
         print(f"dist {name} {len(blob)} bytes")
-    with tempfile.TemporaryDirectory() as tmp:
-        prefix = unpack_clib(linux, Path(tmp))
+    with work_dir("clib") as tmp:
+        prefix = unpack_clib(linux, tmp)
         compile_against(prefix)
 
 
