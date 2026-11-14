@@ -12,7 +12,6 @@ exclude = """(?x)(
     ^docs/source/crates/|
     ^docs/notebooks/|
     ^fortran/.*/build/|
-    ^benches/|
     ^fuzz/corpus/|
     # Byte-exact inputs. extxyz_huge_stride.bin has no trailing newline and
     # no NUL, so end-of-file-fixer would append one.
