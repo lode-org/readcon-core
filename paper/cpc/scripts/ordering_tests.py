@@ -106,7 +106,7 @@ def claims() -> list[dict]:
         out.append({"family": family, "name": name, "x": x, "y": y})
 
     reads = load("reads.json")["cells"]
-    family = r"Python reads (Table~\ref{tab:perf}), one thread"
+    family = r"Python reads (Section~\ref{sec:host}), one thread"
     peers = (
         ("readcon", "ase_extxyz", "ASE, extended XYZ"),
         ("readcon", "extxyz_c", r"\texttt{extxyz} (C)"),
@@ -138,7 +138,7 @@ def claims() -> list[dict]:
             reads[f"python:{a}:8"]["samples_s"],
         )
 
-    family = r"C++ reads (Table~\ref{tab:cpp})"
+    family = r"C++ reads (Section~\ref{sec:host})"
     for a, b, label in (
         (
             "readcon_cpp_moc_1",
@@ -159,7 +159,7 @@ def claims() -> list[dict]:
             reads[f"cpp:{b}"]["samples_s"],
         )
 
-    family = r"Python head-to-head (Table~\ref{tab:h2h-python})"
+    family = r"Python head-to-head (Section~\ref{sec:host})"
     calls = {
         "read_arrays": r"\texttt{read\_arrays}",
         "read_rcbin_owned": r"\texttt{read\_rcbin}",
@@ -182,7 +182,7 @@ def claims() -> list[dict]:
                 t[b]["samples_s"],
             )
 
-    family = r"C++ head-to-head at one thread (Table~\ref{tab:h2h-cpp})"
+    family = r"C++ head-to-head at one thread (Section~\ref{sec:host})"
     pairs = (
         ("readcon_coordinates", "chemfiles_xyz", "columns / XYZ"),
         ("readcon_frames", "chemfiles_xyz", "by frame / XYZ"),
@@ -201,7 +201,7 @@ def claims() -> list[dict]:
                         cell[b]["samples_s"],
                     )
 
-    family = r"Native readers at one thread (Table~\ref{tab:binary-ratios})"
+    family = r"Native readers at one thread (Section~\ref{sec:host})"
     bf = load("binary_formats/timings.json")["cells"]
     natives = {
         "xdrfile-xtc": "xdrfile XTC",
