@@ -6,7 +6,8 @@ use proptest::prelude::*;
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::units::NATURAL_TIME_UNIT;
 use readcon_core::writer::{
-    write_frame_refs_to_path, write_frames_to_vec, write_frames_to_vec_with_threads,
+    format_frame_refs_unstored, write_frame_refs_to_path, write_frames_to_vec,
+    write_frames_to_vec_with_threads,
 };
 use serde_json::json;
 
@@ -61,6 +62,47 @@ fn path_bytes(frames: &[readcon_core::types::ConFrame], workers: usize, bind: bo
     let got = std::fs::read(&path).expect("read path");
     let _ = std::fs::remove_file(&path);
     got
+}
+
+#[test]
+fn unstored_groups_match_the_file_writer() {
+    let small = one_frame(4, true, 0.5);
+    for workers in [1usize, 2, 4, 8] {
+        let frames = vec![small.clone(); 6];
+        assert_groups_match(&frames, workers);
+    }
+    // Eight workers and a long run format into one buffer per worker,
+    // the same span the file writer maps.
+    let heavy = one_frame(64, false, 1.25);
+    let frames = vec![heavy; 50_000];
+    let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
+    let parts = format_frame_refs_unstored(&refs, 8, None, false, true).expect("unstored");
+    assert_eq!(parts.len(), 8, "the mapping path is one buffer per worker");
+    assert!(parts.iter().all(|part| !part.is_empty()));
+    let mut got = Vec::new();
+    for part in &parts {
+        got.extend_from_slice(part);
+    }
+    let path = std::env::temp_dir().join(format!("readcon-unstored-{}", std::process::id()));
+    write_frame_refs_to_path(&path, &refs, 8, None, false, true).expect("path");
+    let disk = std::fs::read(&path).expect("read");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(got, disk);
+}
+
+fn assert_groups_match(frames: &[readcon_core::types::ConFrame], workers: usize) {
+    let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
+    let parts = format_frame_refs_unstored(&refs, workers, None, false, true).expect("unstored");
+    let mut got = Vec::new();
+    for part in &parts {
+        got.extend_from_slice(part);
+    }
+    let path =
+        std::env::temp_dir().join(format!("readcon-unstored-{}-{workers}", std::process::id()));
+    write_frame_refs_to_path(&path, &refs, workers, None, false, true).expect("path");
+    let disk = std::fs::read(&path).expect("read");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(got, disk, "workers {workers}");
 }
 
 fn binding_bytes(frames: &[readcon_core::types::ConFrame]) -> Vec<u8> {
@@ -188,6 +230,36 @@ fn mpi_ranks_match_the_serial_writer() {
             Ok(())
         })
         .expect("mpi property");
+}
+
+#[cfg(feature = "mpi")]
+#[test]
+fn mpi_index_bytes_match_a_fresh_fingerprint() {
+    if std::env::var("READCON_RANK_CHILD").is_ok() {
+        mpi_rank_child();
+        return;
+    }
+    // Enough bytes to cross a 1 MiB hash block, so a rank boundary
+    // falls inside a block. The sidecar must still match a fingerprint
+    // of the file, including ranks that own no frames.
+    let frame = one_frame(48, true, 0.25);
+    let frames = vec![frame; 700];
+    let text = binding_bytes(&frames);
+    assert!(text.len() > 1 << 20, "fixture is {} bytes", text.len());
+    let dir = std::env::temp_dir().join(format!("readcon-mpi-index-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let input = dir.join("in.con");
+    std::fs::write(&input, &text).expect("input");
+    for ranks in [1usize, 3, 7, 8] {
+        let output = dir.join(format!("out-{ranks}.con"));
+        run_ranks(ranks, &input, &output, None);
+    }
+    let short = binding_bytes(&frames[..5]);
+    let short_input = dir.join("short.con");
+    std::fs::write(&short_input, &short).expect("short");
+    let output = dir.join("out-empty.con");
+    run_ranks(8, &short_input, &output, None);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(feature = "mpi")]

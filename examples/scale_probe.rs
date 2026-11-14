@@ -46,6 +46,27 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let which = args.next().unwrap_or_else(|| "pos".into());
     let path = args.next().expect("path");
+    if which == "mkvel" {
+        let dest = args.next().expect("dest");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let mut frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
+        let frame = &mut frames[0];
+        for (index, atom) in frame.atom_data.iter_mut().enumerate() {
+            atom.set_velocity(Some([0.01, -0.02, (index as f64) * 0.001]));
+        }
+        let refs = vec![&frames[0]];
+        readcon_core::writer::write_frame_refs_to_path(
+            std::path::Path::new(&dest),
+            &refs,
+            1,
+            None,
+            false,
+            true,
+        )
+        .unwrap();
+        println!("mkvel bytes={}", std::fs::metadata(&dest).unwrap().len());
+        return;
+    }
     let workers: usize = args.next().unwrap_or_else(|| "1".into()).parse().unwrap();
     let samples = match which.as_str() {
         "pos" => time_logged("read", 6, || {
@@ -59,12 +80,34 @@ fn main() {
         "fmt" => {
             let text = std::fs::read_to_string(&path).unwrap();
             let frames = readcon_core::iterators::frames_from_text(&text, Some(1)).unwrap();
-            time_it(6, || {
-                let bytes = readcon_core::writer::write_frames_to_vec_with_threads(
-                    &frames, workers, None, false,
-                )
-                .unwrap();
-                std::hint::black_box(bytes.len());
+            let refs: Vec<&readcon_core::types::ConFrame> = frames.iter().collect();
+            let repeats = std::env::var("READCON_PROBE_REPEATS")
+                .ok()
+                .and_then(|text| text.parse().ok())
+                .unwrap_or(6);
+            // The file writer formats into per-worker buffers. Ranking
+            // formats each frame on its own, which is what an MPI rank does.
+            let ranked = std::env::var("READCON_PROBE_FMT").ok().as_deref() == Some("ranked");
+            time_logged("fmt", repeats, || {
+                if ranked {
+                    #[cfg(feature = "mpi")]
+                    {
+                        let (bytes, starts) =
+                            readcon_core::distrib_write::format_frames(&refs, None).unwrap();
+                        std::hint::black_box((bytes, starts));
+                    }
+                    #[cfg(not(feature = "mpi"))]
+                    {
+                        let _ = &refs;
+                        panic!("ranked format needs the mpi feature");
+                    }
+                } else {
+                    let parts = readcon_core::writer::format_frame_refs_unstored(
+                        &refs, workers, None, false, true,
+                    )
+                    .unwrap();
+                    std::hint::black_box(parts);
+                }
             })
         }
         "write" => {
