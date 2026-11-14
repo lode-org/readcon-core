@@ -160,6 +160,18 @@ class ReleaseArtifactGuard(unittest.TestCase):
             'allow-dirty = ["ci"]', (ROOT / "dist-workspace.toml").read_text()
         )
 
+    def test_release_host_uploads_when_the_release_already_exists(self) -> None:
+        yml = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn('gh release view "$tag" --repo "$repo"', yml)
+        self.assertIn(
+            'gh release upload "$tag" --repo "$repo" --clobber artifacts/*', yml
+        )
+        self.assertIn('gh release edit "$tag" --repo "$repo"', yml)
+        self.assertIn(
+            "readcon-core-version.h",
+            (ROOT / "scripts" / "package-clib.sh").read_text(encoding="utf-8"),
+        )
+
     def test_dist_backfill_uploads_without_publishing_or_tagging(self) -> None:
         yml = (ROOT / ".github/workflows/dist_backfill.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", yml)

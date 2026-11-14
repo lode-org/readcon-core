@@ -4,7 +4,8 @@
 #
 # Layout:
 #   readcon-core-clib-$VERSION-$TARGET/
-#     include/readcon-core.h include/readcon-core.hpp include/readcon-metatensor.h
+#     include/readcon-core.h include/readcon-core.hpp
+#     include/readcon-core-version.h include/readcon-metatensor.h
 #     lib/libreadcon_core.{so,dylib} | bin/readcon_core.dll + lib/readcon_core.dll.lib
 #     lib/pkgconfig/readcon-core.pc
 #     LICENSE README.clib.md
@@ -147,7 +148,7 @@ DEST="${TMP_DIR}/${ARCHIVE_NAME}"
 mkdir -p "$DEST"/{include,lib/pkgconfig}
 
 # Shipped headers: never generate, never ship cbindgen.toml.
-for h in readcon-core.h readcon-core.hpp readcon-metatensor.h; do
+for h in readcon-core.h readcon-core.hpp readcon-core-version.h readcon-metatensor.h; do
     if [[ ! -f "$ROOT_DIR/include/$h" ]]; then
         echo "package-clib: missing shipped header include/$h" >&2
         exit 1

@@ -134,6 +134,8 @@ assert_unpacked() {
         || die "$tarpath: missing include/readcon-core.h"
     [[ -f "$root/include/readcon-core.hpp" ]] \
         || die "$tarpath: missing include/readcon-core.hpp"
+    [[ -f "$root/include/readcon-core-version.h" ]] \
+        || die "$tarpath: missing include/readcon-core-version.h"
 
     local lib=""
     local candidate

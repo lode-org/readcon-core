@@ -310,10 +310,35 @@ jobs:
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
-          # Write and read notes from a file to avoid quoting breaking things
-          echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
-
-          gh release create "${{ needs.plan.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          # Wheels (softprops/action-gh-release), the cxx uploader, or the
+          # clib uploader can create the release before this step. A bare
+          # `gh release create` then fails with "already exists" and the
+          # dist archives never land. Create only when the release is
+          # absent, then always upload --clobber and edit the notes. A
+          # second run of this step does the same work.
+          set -euo pipefail
+          echo "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          tag="${{ needs.plan.outputs.tag }}"
+          repo="$GITHUB_REPOSITORY"
+          if [ -n "$PRERELEASE_FLAG" ]; then
+            pre_args=(--prerelease)
+          else
+            pre_args=(--prerelease=false)
+          fi
+          if ! gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$repo" \
+              --target "$RELEASE_COMMIT" \
+              "${pre_args[@]}" \
+              --title "$ANNOUNCEMENT_TITLE" \
+              --notes-file "$RUNNER_TEMP/notes.txt" \
+              artifacts/* \
+              || gh release view "$tag" --repo "$repo" >/dev/null
+          fi
+          gh release upload "$tag" --repo "$repo" --clobber artifacts/*
+          gh release edit "$tag" --repo "$repo" \
+            "${pre_args[@]}" \
+            --title "$ANNOUNCEMENT_TITLE" \
+            --notes-file "$RUNNER_TEMP/notes.txt"
 
   announce:
     needs:
