@@ -26,7 +26,9 @@ exclude = """(?x)(
 [[repos]]
 repo = "builtin"
 hooks = [
-  { id = "trailing-whitespace" },
+  # Saved campaign records are byte-exact, the same files Cargo.toml excludes
+  # with bench/**. A refreshed cachegrind header keeps its trailing spaces.
+  { id = "trailing-whitespace", exclude = "(?x)(^bench/h2h/.*\\.(?:txt|json|log|tsv|time|csv|out)$|^bench/h2h/.*/DONE$)" },
   # The natural-unit golden is byte-exact and has no trailing newline.
   # The zero-atom fixture keeps the two blank lines after the type count.
   { id = "end-of-file-fixer", exclude = "(?x)(^resources/conformance/natural_time_unit\\.txt$|^resources/conformance/valid/zero_atom\\.con$|^tests/writer_golden/valid__zero_atom\\.con$|^tests/writer_golden/valid__zero_atom_eof\\.con$)" },
