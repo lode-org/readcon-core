@@ -1313,9 +1313,9 @@ The mapped binary file reads the frames in \SI{0.0076}{\second}.
 The 40-frame ingest comparison is \todoPending.
 On 10000 frames of 8 atoms, readcon-db inserts in 0.2826~s and the ASE database in 2.524~s.
 On one million atoms the insert is 0.1893~s and 0.2283~s.
-The frames-100 cold full read has median 0.0002543~s and interquartile range 0.0001113~s for readcon-db, and median 0.008983~s and interquartile range 0.0001123~s for the ASE database.
-The cold-open full read has median 0.0008994~s and interquartile range 0.0001091~s for readcon-db, and median 0.009127~s and interquartile range 0.0001718~s for the ASE database.
-The frames-100 selected cold row is still bimodal, and it is \todoPending\ until db12.
+The selected cold-open read has median 0.000866~s for readcon-db and 0.001152~s for the ASE database.
+The full-read cold-open has median 0.0005948~s for readcon-db and 0.008862~s for the ASE database, and the full-read IQR/median is 0.3218 for readcon-db.
+A cold open of a map under 1~MiB reads the file with one pread before it returns, and the selected-cold query is the query after that open.
 A streamed insert of 10000 frames puts groups of 64 into one LMDB transaction and drops each group's text after the put.
 Peak RSS is 101.1~MB for readcon-db and 190.2~MB for the ASE database.
 The fidelity check on these rows is exact.
