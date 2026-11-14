@@ -1,9 +1,7 @@
-"""Cite a commit that exists on the published branch.
+"""Measure only a clean ``HEAD`` that a remote branch already contains.
 
-A measurement names ``origin/feat/release-0.23.0`` when that commit is an
-ancestor of HEAD, and the sha256 of ``git diff <that> HEAD``. A dirty
-index or worktree is refused, because that diff would not describe the
-bytes that ran.
+Pushes re-stamp commits, so a local SHA never exists upstream. The guard
+is ``git branch -r --contains HEAD`` plus a clean index and worktree.
 """
 
 from __future__ import annotations
@@ -11,8 +9,6 @@ from __future__ import annotations
 import hashlib
 import subprocess
 from pathlib import Path
-
-ORIGIN = "origin/feat/release-0.23.0"
 
 
 def tracked_changes(porcelain: str) -> list[str]:
@@ -33,17 +29,18 @@ def require_clean(porcelain: str) -> None:
         )
 
 
-def cite_from(head: str, base: str, on_origin, diff: bytes) -> dict[str, str]:
-    """Name ``base`` when it is on origin, plus the sha256 of ``diff``."""
-    if not on_origin(base):
-        raise SystemExit(f"{base} is not on {ORIGIN}")
-    payload = b"" if head == base else diff
-    if head == base and on_origin(head):
-        payload = b""
-    return {
-        "commit": base,
-        "diff_sha256": hashlib.sha256(payload).hexdigest(),
-    }
+def require_published(head: str, remote_contains: str) -> list[str]:
+    """Branches from ``git branch -r --contains HEAD``. Empty means refuse."""
+    branches = [
+        line.strip()
+        for line in remote_contains.splitlines()
+        if line.strip().startswith("origin/")
+    ]
+    if not branches:
+        raise SystemExit(
+            f"{head} is not on a remote branch; git branch -r --contains HEAD is empty"
+        )
+    return branches
 
 
 def _git(root: Path, *args: str, binary: bool = False) -> str | bytes:
@@ -59,36 +56,19 @@ def _git(root: Path, *args: str, binary: bool = False) -> str | bytes:
     return completed.stdout.decode()
 
 
-def origin_contains(root: Path, rev: str) -> bool:
-    completed = subprocess.run(
-        ["git", "-C", str(root), "branch", "-r", "--contains", rev],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        return False
-    return any(
-        line.strip().startswith("origin/") for line in completed.stdout.splitlines()
-    )
-
-
 def measurement(root: Path) -> dict[str, str]:
-    """The published commit and the diff that was actually run."""
+    """HEAD when a remote branch contains it and the tree is clean."""
     porcelain = _git(root, "status", "--porcelain", "--untracked-files=no")
     require_clean(str(porcelain))
     head = str(_git(root, "rev-parse", "HEAD")).strip()
-    if origin_contains(root, head):
-        base = head
-        diff = b""
-    else:
-        base = str(_git(root, "merge-base", "HEAD", ORIGIN)).strip()
-        diff = _git(root, "diff", base, "HEAD", binary=True)
-        if not isinstance(diff, bytes):
-            diff = diff.encode()
-    info = cite_from(head, base, lambda rev: origin_contains(root, rev), diff)
-    info["tree"] = str(_git(root, "rev-parse", f"{base}^{{tree}}")).strip()
-    return info
+    listed = _git(root, "branch", "-r", "--contains", head)
+    branches = require_published(head, str(listed))
+    return {
+        "commit": head,
+        "tree": str(_git(root, "rev-parse", f"{head}^{{tree}}")).strip(),
+        "diff_sha256": hashlib.sha256(b"").hexdigest(),
+        "remote": branches[0],
+    }
 
 
 def record_path(path: Path, root: Path) -> str:
