@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Measure the appendix database records and write them from the raw log.
 
 Five kinds of row come from one log: ingest, query, file size, correctness

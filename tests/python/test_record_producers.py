@@ -1,3 +1,4 @@
+# Copyright (c) readcon-core developers
 """A file a regen plotter reads, or a generated file the TeX inputs, has a writer."""
 
 from __future__ import annotations
@@ -8,6 +9,44 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CPC = ROOT / "paper" / "cpc"
+_DEVELOPERS = "Copyright (c) readcon-core developers"
+_NEW_SOURCES = (
+    ".github/workflows/ci_paper.yml",
+    "benches/cpp_peer_matrix.py",
+    "paper/cpc/bench/million_paths.py",
+    "paper/cpc/bench/native/cpp_ratio.cpp",
+    "paper/cpc/bench/write_million_release.py",
+    "paper/cpc/scripts/campaign_records.py",
+    "paper/cpc/scripts/check_figures.py",
+    "paper/cpc/scripts/make_db_traces.py",
+    "paper/cpc/scripts/measure_db.py",
+    "paper/cpc/scripts/measure_novel.py",
+    "paper/cpc/scripts/write_e5_bands.py",
+    "tests/python/test_record_producers.py",
+    "tests/python/test_write_million_release.py",
+    "tests/staticlib_system_alloc.rs",
+)
+
+
+def test_new_sources_name_the_developers() -> None:
+    missing = [
+        rel
+        for rel in _NEW_SOURCES
+        if _DEVELOPERS
+        not in "\n".join((ROOT / rel).read_text(encoding="utf-8").splitlines()[:3])
+    ]
+    assert not missing, missing
+
+
+def test_the_peer_matrix_and_cross_format_notes_use_american_spelling() -> None:
+    peer = (ROOT / "benches/cpp_peer_matrix.py").read_text(encoding="utf-8")
+    notes = (ROOT / "bench/h2h/cross_format.py").read_text(encoding="utf-8")
+    assert "optimisation" not in peer
+    assert "optimization" in peer
+    assert "serialise" not in notes
+    assert "serialize" in notes
+
+
 TEXTS = (CPC / "src" / "rg_main.tex", CPC / "src" / "rg_supp.tex")
 INPUT = re.compile(r"\\(?:input|includegraphics)(?:\[[^\]]*\])?\{([^}]+)\}")
 QUOTED = re.compile(r'["\']([^"\'\n]{1,180})["\']')

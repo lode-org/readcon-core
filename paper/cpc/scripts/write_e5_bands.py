@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Write the height-held and adatom-frozen EMT bands used by the novel figures.
 
 The slab is the one ``e5_prefactor.py`` relaxes. Held freezes the adatom's

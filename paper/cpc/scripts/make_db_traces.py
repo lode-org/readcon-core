@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) readcon-core developers
 """Deterministic EMT searches and the aKMC trace in data/db/RESULTS.md.
 
 The four searches are ASE EMT bands. HCN and HNC keep the atom order H, C, N.

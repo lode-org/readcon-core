@@ -1,3 +1,4 @@
+// Copyright (c) readcon-core developers
 // One head-to-head cell. The first argument is the mode and the second is
 // the file. The modes are the ones paper/cpc/bench/h2h.py times.
 //
