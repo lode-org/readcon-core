@@ -30,11 +30,34 @@ import json
 import os
 import struct
 import sys
-import tempfile
 import warnings
 from importlib import metadata
 from pathlib import Path
 import numpy as np
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parents[1]
@@ -283,7 +306,7 @@ def moved(rows):
 
 def part_a():
     rows = []
-    with tempfile.TemporaryDirectory() as td:
+    with bench_scratch("scratch") as td:
         for name, (comment, body) in CASES.items():
             p = Path(td) / f"{name}.xyz"
             write_case(p, comment, body)

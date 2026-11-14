@@ -40,11 +40,34 @@ import math
 import os
 import statistics
 import sys
-import tempfile
 from pathlib import Path
 
 from r0174_tables import other_host, same_protocol
 from sinum import num
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 ROOT = Path(__file__).resolve().parents[1]
 BF = Path(os.environ.get("BF", ROOT / "bench" / "results" / "r0174" / "binary_formats"))
@@ -506,7 +529,7 @@ def main() -> int:
     if not args.check:
         print("wrote {} macros and {} table rows".format(*write(OUT, LEDGER)))
         return 0
-    with tempfile.TemporaryDirectory() as tmp:
+    with bench_scratch("scratch") as tmp:
         counts = write(Path(tmp), Path(tmp) / LEDGER.name)
         pairs = [(Path(tmp) / n, OUT / n) for n in OUTPUTS] + [
             (Path(tmp) / LEDGER.name, LEDGER)

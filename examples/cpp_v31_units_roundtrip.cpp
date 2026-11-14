@@ -3,6 +3,7 @@
 // bytes back.
 #include "readcon-core.hpp"
 
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -22,10 +23,15 @@ void check(bool ok, const std::string &what) {
 
 int main(int argc, char *argv[]) {
     try {
-        const std::filesystem::path out =
-            argc > 1 ? std::filesystem::path(argv[1])
-                     : std::filesystem::temp_directory_path() /
-                           "readcon_cpp_v31_units.con";
+        std::filesystem::path out = "build/readcon_cpp_v31_units.con";
+        if (argc > 1) {
+            out = argv[1];
+        } else if (const char *dir = std::getenv("READCON_EXAMPLE_DIR")) {
+            std::filesystem::create_directories(dir);
+            out = std::filesystem::path(dir) / "readcon_cpp_v31_units.con";
+        } else {
+            std::filesystem::create_directories("build");
+        }
 
         readcon::ConFrameBuilder builder({10.0, 10.0, 10.0}, {90.0, 90.0, 90.0});
         builder.add_atom("H", 0.0, 0.0, 0.0, false, 0, 1.008);

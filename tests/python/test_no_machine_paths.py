@@ -18,6 +18,13 @@ ROOT = Path(__file__).resolve().parents[2]
 # The path prefixes this scanner rejects. Not a destination.
 PATHS = ("/tmp", "/var/tmp", "/home/", "/agent")
 MANIFEST = "CARGO_MANIFEST_DIR"
+RESULT_TOKENS = (
+    "mkstemp",
+    "gettempdir",
+    "TemporaryDirectory",
+    "temp_directory_path",
+    "tempfile",
+)
 
 ROOTS = (
     "src/",
@@ -186,6 +193,13 @@ def _has_machine_path(line: str) -> bool:
     return ('"' + home + '"') in line or ("'" + home + "'") in line
 
 
+def _result_scope(path: str) -> bool:
+    """Benchmarks, paper scripts, and examples must not use the system scratch APIs."""
+    if path.startswith(("benchmarks/", "benches/", "paper/", "examples/")):
+        return True
+    return path.startswith("bench/") and scanned(path)
+
+
 def offenders(path: str, lines: list[str]) -> list[str]:
     allowed = {text for text, _reason in allowlist().get(path, [])}
     manifest_ok = (
@@ -204,6 +218,8 @@ def offenders(path: str, lines: list[str]) -> list[str]:
         if _has_machine_path(line):
             found.append(f"{path}:{number}: {stripped}")
             continue
+        if _result_scope(path) and any(token in line for token in RESULT_TOKENS):
+            found.append(f"{path}:{number}: {stripped}")
         if (
             check_manifest
             and MANIFEST in line
@@ -256,6 +272,9 @@ def test_a_reintroduced_prefix_is_reported() -> None:
     ]
     found = offenders("src/planted.rs", planted)
     assert len(found) == 2, found
+    planted_result = ["handle, path = " + RESULT_TOKENS[0] + "(suffix='.con')"]
+    assert offenders("benchmarks/planted.py", planted_result)
+    assert offenders("src/planted.rs", planted_result) == []
     doctest = ['/// let root = env!("' + MANIFEST + '");']
     assert offenders("src/planted.rs", doctest) == []
     inside_test = [

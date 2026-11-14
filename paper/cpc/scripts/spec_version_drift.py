@@ -30,12 +30,35 @@ import hashlib
 import json
 import subprocess
 import sys
-import tempfile
 import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from error_class import classify  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "spec"
@@ -136,7 +159,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    with tempfile.TemporaryDirectory(prefix="version-drift-") as tmp:
+    with bench_scratch("scratch") as tmp:
         readers, sources = [], {}
         for spec in args.reader:
             label, _, raw = spec.partition("=")

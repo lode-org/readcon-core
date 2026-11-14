@@ -6,13 +6,38 @@ Usage:
   maturin develop --features python,chemfiles --release
   python benches/ase_xyz_vs_chemfiles_con.py [--frames 100] [--repeats 5]
 """
+
 from __future__ import annotations
 
 import argparse
 import json
-import tempfile
 import time
 from pathlib import Path
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+release = _BENCH.release
+
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -50,50 +75,58 @@ def main() -> None:
     from ase.io import write as ase_write
 
     if not readcon.has_chemfiles_support():
-        raise SystemExit("need chemfiles-linked readcon (maturin --features python,chemfiles)")
+        raise SystemExit(
+            "need chemfiles-linked readcon (maturin --features python,chemfiles)"
+        )
 
     frames = list(readcon.iter_con(str(args.fixture)))
     atoms0 = frames[0].to_ase()
     atoms_list = [atoms0.copy() for _ in range(args.frames)]
-    work = Path(tempfile.mkdtemp(prefix="ase_vs_cf_"))
-    xyz = work / "traj.xyz"
-    con = work / "traj.con"
-    ase_write(str(xyz), atoms_list, format="xyz")
-    con.write_text(args.fixture.read_text() * args.frames)
+    work = bench_dir("ase-vs-cf")
+    try:
+        xyz = work / "traj.xyz"
+        con = work / "traj.con"
+        ase_write(str(xyz), atoms_list, format="xyz")
+        con.write_text(args.fixture.read_text() * args.frames)
 
-    def ase_xyz() -> int:
-        return len(ase_read(str(xyz), index=":", format="xyz"))
+        def ase_xyz() -> int:
+            return len(ase_read(str(xyz), index=":", format="xyz"))
 
-    def cf_to_con() -> int:
-        return len(readcon.read_chemfiles(str(xyz)))
+        def cf_to_con() -> int:
+            return len(readcon.read_chemfiles(str(xyz)))
 
-    def native_con() -> int:
-        return len(readcon.read_con(str(con)))
+        def native_con() -> int:
+            return len(readcon.read_con(str(con)))
 
-    ase_xyz()
-    cf_to_con()
-    native_con()
+        ase_xyz()
+        cf_to_con()
+        native_con()
 
-    res = {
-        "protocol": "equal geometry multi-frame; ASE XYZ traj vs readcon.read_chemfiles vs readcon.read_con",
-        "n_frames": args.frames,
-        "n_atoms": len(frames[0]),
-        "repeats": args.repeats,
-        "fixture": str(args.fixture),
-        "ase_xyz_median_ms": median_ms(ase_xyz, args.repeats),
-        "readcon_chemfiles_xyz_to_con_median_ms": median_ms(cf_to_con, args.repeats),
-        "readcon_con_median_ms": median_ms(native_con, args.repeats),
-    }
-    res["ratio_ase_xyz_over_chemfiles_to_con"] = (
-        res["ase_xyz_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
-    )
-    res["ratio_ase_xyz_over_native_con"] = (
-        res["ase_xyz_median_ms"] / res["readcon_con_median_ms"]
-    )
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(res, indent=2) + "\n")
-    print(json.dumps(res, indent=2))
-    print(f"wrote {args.out}")
+        res = {
+            "protocol": "equal geometry multi-frame; ASE XYZ traj vs readcon.read_chemfiles vs readcon.read_con",
+            "n_frames": args.frames,
+            "n_atoms": len(frames[0]),
+            "repeats": args.repeats,
+            "fixture": str(args.fixture),
+            "ase_xyz_median_ms": median_ms(ase_xyz, args.repeats),
+            "readcon_chemfiles_xyz_to_con_median_ms": median_ms(
+                cf_to_con, args.repeats
+            ),
+            "readcon_con_median_ms": median_ms(native_con, args.repeats),
+        }
+        res["ratio_ase_xyz_over_chemfiles_to_con"] = (
+            res["ase_xyz_median_ms"] / res["readcon_chemfiles_xyz_to_con_median_ms"]
+        )
+        res["ratio_ase_xyz_over_native_con"] = (
+            res["ase_xyz_median_ms"] / res["readcon_con_median_ms"]
+        )
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(res, indent=2) + "\n")
+        print(json.dumps(res, indent=2))
+        print(f"wrote {args.out}")
+
+    finally:
+        release(work)
 
 
 if __name__ == "__main__":

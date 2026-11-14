@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -133,10 +134,15 @@ int main(int argc, char *argv[]) {
         auto frame = b.build();
         check_frame(frame, "built");
 
-        const std::filesystem::path out =
-            argc > 1 ? std::filesystem::path(argv[1])
-                     : std::filesystem::temp_directory_path() /
-                           "readcon_cpp_displacements.con";
+        std::filesystem::path out = "build/readcon_cpp_displacements.con";
+        if (argc > 1) {
+            out = argv[1];
+        } else if (const char *dir = std::getenv("READCON_EXAMPLE_DIR")) {
+            std::filesystem::create_directories(dir);
+            out = std::filesystem::path(dir) / "readcon_cpp_displacements.con";
+        } else {
+            std::filesystem::create_directories("build");
+        }
         {
             std::vector<readcon::ConFrame> frames;
             frames.push_back(std::move(frame));

@@ -17,11 +17,34 @@ import os
 import random
 import statistics
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import readcon
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -45,7 +68,7 @@ def main():
     args = ap.parse_args()
 
     one = (REPO / "resources/test/cuh2.con").read_text()
-    with tempfile.TemporaryDirectory() as tmp:
+    with bench_scratch("scratch") as tmp:
         path = Path(tmp) / "long.con"
         path.write_text(one * args.frames)
         side = Path(str(path) + ".rcidx")

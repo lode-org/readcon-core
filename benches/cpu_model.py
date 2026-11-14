@@ -11,7 +11,9 @@ def normalize_cpu(raw: str) -> str:
 
     The kernel prints trademark marks. The records use one plain name.
     """
-    cleaned = " ".join(raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split())
+    cleaned = " ".join(
+        raw.replace("(R)", "").replace("(TM)", "").replace("®", "").split()
+    )
     if "Xeon" in cleaned:
         return "Intel Xeon Processor"
     return cleaned or "unknown"

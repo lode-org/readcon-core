@@ -53,7 +53,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 import tomllib
 import urllib.request
 from pathlib import Path
@@ -65,6 +64,30 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
 import portable  # noqa: E402
 import provenance  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 STEPS = ("build", "payloads", "check", "time")
 DRIVERS = HERE / "binary_formats"
@@ -601,7 +624,7 @@ def payloads() -> None:
     shutil.rmtree(PAYLOADS, ignore_errors=True)
     write_payloads(PAYLOADS)
     files, identical = {}, {}
-    with tempfile.TemporaryDirectory(prefix="binary-formats-rerun-", dir=WORK) as tmp:
+    with bench_scratch("scratch") as tmp:
         write_payloads(Path(tmp))
         for name in (*GENERATED, *WRITTEN):
             path = PAYLOADS / name
@@ -711,7 +734,7 @@ def check() -> None:
     ref_box = np.fromfile(PAYLOADS / "reference_box.f64")
     sysdef = system()
     cells = {}
-    with tempfile.TemporaryDirectory(prefix="binary-formats-check-", dir=WORK) as tmp:
+    with bench_scratch("scratch") as tmp:
         for name, (driver, mode, threads, file) in CELLS.items():
             printed, pos, box = dump(driver, mode, threads, PAYLOADS / file, Path(tmp))
             pos_err, box_err = compared(pos, ref), compared(box, ref_box)

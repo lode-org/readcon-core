@@ -6,9 +6,31 @@ same 32-atom frame repeated, which is the shape of the 100k-frame read.
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 HEADER = (
     '{"con_spec_version":3,"con_spec_minor":1,'
@@ -25,11 +47,9 @@ FRAME = HEADER + BODY + "\n"
 
 
 def _path(n_frames: int) -> str:
-    fd, name = tempfile.mkstemp(suffix=".con")
-    os.close(fd)
-    path = Path(name)
+    path = bench_file("path-read", ".con")
     path.write_text("\n" + FRAME * n_frames)
-    return name
+    return str(path)
 
 
 class PathRead:

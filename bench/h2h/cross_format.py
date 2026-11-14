@@ -36,7 +36,7 @@ import sys
 import time
 from pathlib import Path
 
-from bench_disk import bench_disk
+from bench_disk import bench_dir, bench_disk, release
 
 import numpy as np
 from sample_protocol import (
@@ -386,40 +386,42 @@ def chemfiles_codecs() -> dict:
     import bz2
     import gzip
     import lzma
-    import tempfile
 
     import chemfiles
 
     text = "1\nprobe\nCu 0.0 0.0 0.0\n"
-    root = Path(tempfile.mkdtemp(prefix="h2h5-cf-"))
-    found = {"gz": False, "bz2": False, "xz": False, "trr": False}
-    blobs = {
-        "gz": (gzip.compress(text.encode()), "t.xyz.gz"),
-        "bz2": (bz2.compress(text.encode()), "t.xyz.bz2"),
-        "xz": (lzma.compress(text.encode()), "t.xyz.xz"),
-    }
-    # Empty format lets chemfiles read the compression from the extension
-    # (XYZ/GZ, XYZ/BZ2, XYZ/XZ). Passing "XYZ" skips that.
-    for name, (blob, filename) in blobs.items():
-        path = root / filename
-        path.write_bytes(blob)
-        try:
-            with chemfiles.Trajectory(os.fspath(path), "r", "") as traj:
-                frame = traj.read()
-                found[name] = len(frame.positions) == 1
-        except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
-            found[name] = False
+    root = bench_dir("h2h5-cf")
     try:
-        spec = make_spec(1, 1)
-        trr = root / "t.trr"
-        write_chemfiles(trr, spec, "TRR")
-        with chemfiles.Trajectory(os.fspath(trr), "r", "TRR") as traj:
-            frame = traj.read()
-            found["trr"] = len(frame.positions) == 1
-    except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
-        found["trr"] = False
-    _CODECS = found
-    return found
+        found = {"gz": False, "bz2": False, "xz": False, "trr": False}
+        blobs = {
+            "gz": (gzip.compress(text.encode()), "t.xyz.gz"),
+            "bz2": (bz2.compress(text.encode()), "t.xyz.bz2"),
+            "xz": (lzma.compress(text.encode()), "t.xyz.xz"),
+        }
+        # Empty format lets chemfiles read the compression from the extension
+        # (XYZ/GZ, XYZ/BZ2, XYZ/XZ). Passing "XYZ" skips that.
+        for name, (blob, filename) in blobs.items():
+            path = root / filename
+            path.write_bytes(blob)
+            try:
+                with chemfiles.Trajectory(os.fspath(path), "r", "") as traj:
+                    frame = traj.read()
+                    found[name] = len(frame.positions) == 1
+            except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
+                found[name] = False
+        try:
+            spec = make_spec(1, 1)
+            trr = root / "t.trr"
+            write_chemfiles(trr, spec, "TRR")
+            with chemfiles.Trajectory(os.fspath(trr), "r", "TRR") as traj:
+                frame = traj.read()
+                found["trr"] = len(frame.positions) == 1
+        except (OSError, RuntimeError, ValueError, chemfiles.ChemfilesError):
+            found["trr"] = False
+        _CODECS = found
+        return found
+    finally:
+        release(root)
 
 
 def read_chemfiles_con(path: str) -> dict:
@@ -932,7 +934,6 @@ def ovito_extxyz_periodicity_and_drift() -> dict:
     One axis is not periodic. The second frame moves past the cell so a
     reader that wraps coordinates, or that repeats frame 0, fails the check.
     """
-    import tempfile
 
     from ovito.io import import_file
 
@@ -945,38 +946,43 @@ Lattice="5.0 0.0 0.0 0.0 5.0 0.0 0.0 0.0 5.0" Properties=species:S:1:pos:R:3 pbc
 Cu 1.2 6.4 -0.3
 Cu 0.2 0.2 0.2
 """
-    folder = Path(tempfile.mkdtemp(prefix="h2h8-ovito-"))
-    path = folder / "drift.extxyz"
-    path.write_text(text)
-    pipeline = import_file(os.fspath(path))
-    frames = []
-    flags = []
-    for index in range(pipeline.source.num_frames):
-        block = pipeline.compute(index)
-        frames.append(np.array(block.particles.positions[0], dtype=np.float64))
-        flags.append([bool(value) for value in block.cell.pbc])
-    file_pbc = [True, True, False]
-    file_frame1 = np.array([1.2, 6.4, -0.3])
-    read_frame1 = frames[1] if len(frames) > 1 else None
-    drift = (
-        None
-        if read_frame1 is None
-        else float(np.max(np.abs(read_frame1 - file_frame1)))
-    )
-    wrapped = drift is not None and abs(float(read_frame1[1]) - 1.4) < 1e-6
-    stuck = drift is not None and float(np.max(np.abs(read_frame1 - frames[0]))) < 1e-8
-    return {
-        "ovito": "3.17.2",
-        "frames": len(frames),
-        "file_pbc": file_pbc,
-        "read_pbc": flags,
-        "pbc_matches": flags == [file_pbc, file_pbc],
-        "file_frame1": file_frame1.tolist(),
-        "read_frame1": None if read_frame1 is None else read_frame1.tolist(),
-        "drift_max_abs": drift,
-        "wrapped_into_cell": wrapped,
-        "stuck_on_frame0": stuck,
-    }
+    folder = bench_dir("h2h8-ovito")
+    try:
+        path = folder / "drift.extxyz"
+        path.write_text(text)
+        pipeline = import_file(os.fspath(path))
+        frames = []
+        flags = []
+        for index in range(pipeline.source.num_frames):
+            block = pipeline.compute(index)
+            frames.append(np.array(block.particles.positions[0], dtype=np.float64))
+            flags.append([bool(value) for value in block.cell.pbc])
+        file_pbc = [True, True, False]
+        file_frame1 = np.array([1.2, 6.4, -0.3])
+        read_frame1 = frames[1] if len(frames) > 1 else None
+        drift = (
+            None
+            if read_frame1 is None
+            else float(np.max(np.abs(read_frame1 - file_frame1)))
+        )
+        wrapped = drift is not None and abs(float(read_frame1[1]) - 1.4) < 1e-6
+        stuck = (
+            drift is not None and float(np.max(np.abs(read_frame1 - frames[0]))) < 1e-8
+        )
+        return {
+            "ovito": "3.17.2",
+            "frames": len(frames),
+            "file_pbc": file_pbc,
+            "read_pbc": flags,
+            "pbc_matches": flags == [file_pbc, file_pbc],
+            "file_frame1": file_frame1.tolist(),
+            "read_frame1": None if read_frame1 is None else read_frame1.tolist(),
+            "drift_max_abs": drift,
+            "wrapped_into_cell": wrapped,
+            "stuck_on_frame0": stuck,
+        }
+    finally:
+        release(folder)
 
 
 def expect_file_bytes(arm_id: str, n_atoms: int, n_frames: int, size: int) -> None:

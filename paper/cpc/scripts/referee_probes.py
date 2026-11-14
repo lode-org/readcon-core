@@ -45,7 +45,6 @@ import re
 import resource
 import subprocess
 import sys
-import tempfile
 import textwrap
 import time
 import warnings
@@ -61,6 +60,30 @@ sys.path.insert(0, str(SCRIPTS))
 
 import indep_reader  # noqa: E402
 import provenance  # noqa: E402
+
+
+def _load_bench_disk():
+    import importlib.util
+
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "bench" / "h2h" / "bench_disk.py"
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location(
+                "readcon_bench_disk", candidate
+            )
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    raise RuntimeError("bench/h2h/bench_disk.py was not found")
+
+
+_BENCH = _load_bench_disk()
+bench_scratch = _BENCH.bench_scratch
+bench_file = _BENCH.bench_file
+bench_dir = _BENCH.bench_dir
+
 
 REPO = SCRIPTS.parents[2]
 OUT = REPO / "paper" / "cpc" / "data" / "referee_probes.json"
@@ -324,7 +347,7 @@ def read_isolated(reader: str, text: str, tmp: Path) -> dict:
 
 def child(reader: str) -> dict:
     text = sys.stdin.buffer.read().decode("utf-8")
-    with tempfile.TemporaryDirectory(prefix="referee-probe-") as tmp:
+    with bench_scratch("scratch") as tmp:
         before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         start = time.perf_counter()
         got = read(reader, text, Path(tmp))
@@ -3241,7 +3264,7 @@ def run_all() -> list[dict]:
     results = []
     for item in PROBES:
         WRITTEN.clear()
-        with tempfile.TemporaryDirectory(prefix="referee-probe-") as tmp:
+        with bench_scratch("scratch") as tmp:
             try:
                 runs = item["run"](Path(tmp))
             except Exception as exc:  # noqa: BLE001 - a probe that raises fails with its error
