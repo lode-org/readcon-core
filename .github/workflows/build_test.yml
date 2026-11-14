@@ -47,6 +47,9 @@ jobs:
       - name: Run Rust tests
         run: cargo test
 
+      - name: Parallel library tests
+        run: cargo test --lib --features parallel
+
       - name: Surface grammar (PEG companion)
         # grammar is optional (not on hot path); still gate PR lockstep with prose/spec.
         run: cargo test --features grammar --lib grammar
