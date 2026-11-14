@@ -20,16 +20,19 @@ def _rewrite(table: str, before: str, after: str) -> str:
     """Replace asv's short-hash-plus-branch headers with the full SHAs."""
 
     def label(sha: str) -> str:
-        return r"\texttt{" + sha + "}"
+        # re.sub treats backslashes in the replacement as escapes.
+        return r"\\texttt{" + sha + "}"
 
     rewritten = table
     for sha in (before, after):
         short = sha[:8]
         rewritten = re.sub(
-            r"\\texttt\{" + re.escape(short) + r"\}(?:\s*\\texttt\{<[^>]+>\})?",
+            r"\\texttt\{" + re.escape(short) + r"\}",
             label(sha),
             rewritten,
         )
+    # Drop the branch decoration asv appends after the hash.
+    rewritten = re.sub(r"\s*\\texttt\{<[^>]*>\}", "", rewritten)
     return rewritten
 
 

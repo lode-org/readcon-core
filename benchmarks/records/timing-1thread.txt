@@ -1,0 +1,20 @@
+
+Benchmarks that have improved:
+
+| Change   | Before [a1af753e2577f20f7885c702d196547d33c5f2e4]   | After [7b839602b053b518d888dabfbc9d2df2099d52a0]   | Ratio             | Benchmark (Parameter)                                 |
+|----------|--------------------------------------------|-----------------------------------------|-------------------|-------------------------------------------------------|
+| -        | 7.05±0.4ms                                 | 3.71±0.2ms                              | 0.53 [0.52, 0.54] | bench_readcon.TimeReadConCuh2.time_read_con_path(100) |
+| -        | 3.50±0.2ms                                 | 1.86±0.08ms                             | 0.53 [0.52, 0.54] | bench_readcon.TimeReadConCuh2.time_read_con_path(50)  |
+| -        | 324±10μs                                   | 182±7μs                                 | 0.56 [0.55, 0.57] | bench_readcon.TimeReadConTiny.time_read_con_path(100) |
+| -        | 651±20μs                                   | 352±20μs                                | 0.54 [0.53, 0.55] | bench_readcon.TimeReadConTiny.time_read_con_path(200) |
+| -        | 168±6μs                                    | 96.4±5μs                                | 0.57 [0.56, 0.58] | bench_readcon.TimeReadConTiny.time_read_con_path(50)  |
+
+Benchmarks that have stayed the same:
+
+| Change   | Before [a1af753e2577f20f7885c702d196547d33c5f2e4]   | After [7b839602b053b518d888dabfbc9d2df2099d52a0]   | Ratio             | Benchmark (Parameter)                               |
+|----------|--------------------------------------------|-----------------------------------------|-------------------|-----------------------------------------------------|
+|          | 39.4±2ms                                   | 39.8±2ms                                | 1.01 [1.00, 1.03] | bench_readcon.TimeAseEonCuh2.time_read_ase_eon(100) |
+|          | 19.8±1ms                                   | 19.8±1ms                                | 1.00 [0.98, 1.04] | bench_readcon.TimeAseEonCuh2.time_read_ase_eon(50)  |
+|          | 9.54±0.4ms                                 | 9.53±0.5ms                              | 1.00 [0.98, 1.02] | bench_readcon.TimeAseEonTiny.time_read_ase_eon(100) |
+|          | 18.8±0.8ms                                 | 18.6±0.8ms                              | 0.99 [0.97, 1.01] | bench_readcon.TimeAseEonTiny.time_read_ase_eon(200) |
+|          | 4.77±0.3ms                                 | 4.81±0.3ms                              | 1.01 [0.99, 1.03] | bench_readcon.TimeAseEonTiny.time_read_ase_eon(50)  |

@@ -146,8 +146,13 @@ def _min_atom_bytes(suite: Path) -> int:
             if isinstance(target, ast.Name) and target.id == "MIN_ATOM_BYTES":
                 if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
                     return int(node.value.value)
-                if isinstance(node.value, ast.BinOp):
-                    return int(ast.literal_eval(node.value))
+                if (
+                    isinstance(node.value, ast.BinOp)
+                    and isinstance(node.value.op, ast.Mult)
+                    and isinstance(node.value.left, ast.Constant)
+                    and isinstance(node.value.right, ast.Constant)
+                ):
+                    return int(node.value.left.value) * int(node.value.right.value)
     raise SystemExit(f"{suite} does not set MIN_ATOM_BYTES")
 
 

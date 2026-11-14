@@ -1,55 +1,40 @@
 % Requires \usepackage{booktabs,siunitx}
 
 \noindent
-\textbf{Benchmarks that have improved:}
-
-\begin{tabular}{llrrrc}
-\toprule
-Benchmark & Params & Before [\texttt{1de8d53d}] \texttt{<bench/memray-peaks\textasciitilde{}1>} & After [\texttt{6369b4ea}] \texttt{<bench/memray-peaks>} & Ratio & Mark \\
-\midrule
-bench\_readcon.RayReadConCuh2.ray\_read\_con\_path & 100 & \qty{3.51}{\mega\byte} & \qty{859}{\kilo\byte} & \num{0.24} & - \\
-bench\_readcon.RayReadConCuh2.ray\_read\_con\_path & 50 & \qty{1.76}{\mega\byte} & \qty{455}{\kilo\byte} & \num{0.26} & - \\
-bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 100 & \qty{185}{\kilo\byte} & \qty{33.6}{\kilo\byte} & \num{0.18} & - \\
-bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 200 & \qty{370}{\kilo\byte} & \qty{48.8}{\kilo\byte} & \num{0.13} & - \\
-bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 50 & \qty{91.8}{\kilo\byte} & \qty{26}{\kilo\byte} & \num{0.28} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 100 & \qty{172}{\kilo\byte} & \qty{33.6}{\kilo\byte} & \num{0.19} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 200 & \qty{345}{\kilo\byte} & \qty{48.8}{\kilo\byte} & \num{0.14} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 50 & \qty{86.2}{\kilo\byte} & \qty{26}{\kilo\byte} & \num{0.30} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 100 & \qty{182}{\kilo\byte} & \qty{33.5}{\kilo\byte} & \num{0.18} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 200 & \qty{364}{\kilo\byte} & \qty{48.7}{\kilo\byte} & \num{0.13} & - \\
-bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 50 & \qty{91}{\kilo\byte} & \qty{25.9}{\kilo\byte} & \num{0.29} & - \\
-\bottomrule
-\end{tabular}
-
-\noindent
 \textbf{Benchmarks that have stayed the same:}
 
 \begin{tabular}{llrrrc}
 \toprule
-Benchmark & Params & Before [\texttt{1de8d53d}] \texttt{<bench/memray-peaks\textasciitilde{}1>} & After [\texttt{6369b4ea}] \texttt{<bench/memray-peaks>} & Ratio & Mark \\
+Benchmark & Params & Before [\texttt{a1af753e2577f20f7885c702d196547d33c5f2e4}] & After [\texttt{7b839602b053b518d888dabfbc9d2df2099d52a0}] & Ratio & Mark \\
 \midrule
 bench\_readcon.RayAseEonCuh2.ray\_read\_ase\_eon & 100 & \qty{1.09}{\mega\byte} & \qty{1.09}{\mega\byte} & \num{1.00} &  \\
 bench\_readcon.RayAseEonCuh2.ray\_read\_ase\_eon & 50 & \qty{555}{\kilo\byte} & \qty{555}{\kilo\byte} & \num{1.00} &  \\
 bench\_readcon.RayAseEonTiny.ray\_read\_ase\_eon & 100 & \qty{60}{\kilo\byte} & \qty{60}{\kilo\byte} & \num{1.00} &  \\
 bench\_readcon.RayAseEonTiny.ray\_read\_ase\_eon & 200 & \qty{104}{\kilo\byte} & \qty{104}{\kilo\byte} & \num{1.00} &  \\
 bench\_readcon.RayAseEonTiny.ray\_read\_ase\_eon & 50 & \qty{37.8}{\kilo\byte} & \qty{37.8}{\kilo\byte} & \num{1.00} &  \\
-bench\_readcon.RayChemfilesXyz.ray\_read\_chemfiles\_xyz & 100 & \qty{2.16}{\mega\byte} & \qty{2.12}{\mega\byte} & \num{0.98} &  \\
+bench\_readcon.RayChemfilesXyz.ray\_read\_chemfiles\_xyz & 100 & \qty{2.12}{\mega\byte} & \qty{2.12}{\mega\byte} & \num{1.00} &  \\
 bench\_readcon.RayChemfilesXyz.ray\_read\_chemfiles\_xyz & 50 & \qty{1.09}{\mega\byte} & \qty{1.09}{\mega\byte} & \num{1.00} &  \\
+bench\_readcon.RayReadConCuh2.ray\_read\_con\_path & 100 & \qty{859}{\kilo\byte} & \qty{578}{\kilo\byte} & \num{0.67} & \textasciitilde{} \\
+bench\_readcon.RayReadConCuh2.ray\_read\_con\_path & 50 & \qty{455}{\kilo\byte} & \qty{317}{\kilo\byte} & \num{0.70} & \textasciitilde{} \\
+bench\_readcon.RayReadConCuh2.track\_python\_heap\_read\_con\_path & 100 & \qty{524}{\kilo\byte} & \qty{524}{\kilo\byte} & \num{1.00} &  \\
+bench\_readcon.RayReadConCuh2.track\_python\_heap\_read\_con\_path & 50 & \qty{262}{\kilo\byte} & \qty{263}{\kilo\byte} & \num{1.00} &  \\
+bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 100 & \qty{33.6}{\kilo\byte} & \qty{28.5}{\kilo\byte} & \num{0.85} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 200 & \qty{48.8}{\kilo\byte} & \qty{38.5}{\kilo\byte} & \num{0.79} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_iter\_con\_materialize & 50 & \qty{26}{\kilo\byte} & \qty{23.5}{\kilo\byte} & \num{0.90} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 100 & \qty{33.6}{\kilo\byte} & \qty{28.5}{\kilo\byte} & \num{0.85} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 200 & \qty{48.8}{\kilo\byte} & \qty{38.5}{\kilo\byte} & \num{0.79} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_path & 50 & \qty{26}{\kilo\byte} & \qty{23.5}{\kilo\byte} & \num{0.90} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 100 & \qty{33.5}{\kilo\byte} & \qty{78.3}{\kilo\byte} & \num{2.33} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 200 & \qty{48.7}{\kilo\byte} & \qty{138}{\kilo\byte} & \num{2.84} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.ray\_read\_con\_string & 50 & \qty{25.9}{\kilo\byte} & \qty{48.3}{\kilo\byte} & \num{1.86} & \textasciitilde{} \\
+bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 100 & \qty{10.4}{\kilo\byte} & \qty{10.6}{\kilo\byte} & \num{1.01} &  \\
+bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 200 & \qty{20}{\kilo\byte} & \qty{20.2}{\kilo\byte} & \num{1.01} &  \\
+bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 50 & \qty{5.62}{\kilo\byte} & \qty{5.75}{\kilo\byte} & \num{1.02} &  \\
+bench\_readcon.RayReadConvelTiny.ray\_read\_con\_path & 100 & \qty{224}{\kilo\byte} & \qty{38.6}{\kilo\byte} & \num{0.17} & \textasciitilde{} \\
+bench\_readcon.RayReadConvelTiny.ray\_read\_con\_path & 200 & \qty{449}{\kilo\byte} & \qty{58.2}{\kilo\byte} & \num{0.13} & \textasciitilde{} \\
+bench\_readcon.RayReadConvelTiny.ray\_read\_con\_path & 50 & \qty{112}{\kilo\byte} & \qty{28.8}{\kilo\byte} & \num{0.26} & \textasciitilde{} \\
+bench\_readcon.RayReadForcesTiny.ray\_read\_con\_path & 100 & \qty{246}{\kilo\byte} & \qty{39.8}{\kilo\byte} & \num{0.16} & \textasciitilde{} \\
+bench\_readcon.RayReadForcesTiny.ray\_read\_con\_path & 50 & \qty{124}{\kilo\byte} & \qty{30}{\kilo\byte} & \num{0.24} & \textasciitilde{} \\
 bench\_readcon.RaySelectAtoms.ray\_select\_name\_Cu &  & \qty{143}{\kilo\byte} & \qty{143}{\kilo\byte} & \num{1.00} &  \\
-\bottomrule
-\end{tabular}
-
-\noindent
-\textbf{Benchmarks that have got worse:}
-
-\begin{tabular}{llrrrc}
-\toprule
-Benchmark & Params & Before [\texttt{1de8d53d}] \texttt{<bench/memray-peaks\textasciitilde{}1>} & After [\texttt{6369b4ea}] \texttt{<bench/memray-peaks>} & Ratio & Mark \\
-\midrule
-bench\_readcon.RayReadConCuh2.track\_python\_heap\_read\_con\_path & 100 & \qty{1.37}{\kilo\byte} & \qty{524}{\kilo\byte} & \num{383.06} & + \\
-bench\_readcon.RayReadConCuh2.track\_python\_heap\_read\_con\_path & 50 & \qty{1.37}{\kilo\byte} & \qty{262}{\kilo\byte} & \num{191.83} & + \\
-bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 100 & \qty{1.37}{\kilo\byte} & \qty{10.4}{\kilo\byte} & \num{7.62} & + \\
-bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 200 & \qty{1.37}{\kilo\byte} & \qty{20}{\kilo\byte} & \num{14.64} & + \\
-bench\_readcon.RayReadConTiny.track\_python\_heap\_read\_con\_path & 50 & \qty{1.37}{\kilo\byte} & \qty{5.62}{\kilo\byte} & \num{4.11} & + \\
 \bottomrule
 \end{tabular}
