@@ -151,6 +151,49 @@ proptest! {
 }
 
 #[cfg(feature = "mpi")]
+fn mpi_command() -> std::process::Command {
+    let mut cmd = std::process::Command::new("mpirun");
+    let version = std::process::Command::new("mpirun")
+        .arg("--version")
+        .output();
+    let open_mpi = version.ok().is_some_and(|out| {
+        let text = String::from_utf8_lossy(&out.stdout);
+        let err = String::from_utf8_lossy(&out.stderr);
+        text.contains("Open MPI") || err.contains("Open MPI")
+    });
+    if open_mpi {
+        cmd.args([
+            "--oversubscribe",
+            "--bind-to",
+            "none",
+            "--mca",
+            "pml",
+            "ob1",
+            "--mca",
+            "btl",
+            "tcp,self",
+        ]);
+    }
+    for (key, _) in std::env::vars() {
+        if key.starts_with("OMPI_") || key.starts_with("PMIX_") || key.starts_with("PMI_") {
+            cmd.env_remove(key);
+        }
+    }
+    cmd
+}
+
+#[cfg(feature = "mpi")]
+fn assert_mpi(output: &std::process::Output, label: &str) {
+    assert!(
+        output.status.success(),
+        "{label} failed: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[cfg(feature = "mpi")]
 fn run_ranks(
     ranks: usize,
     input: &std::path::Path,
@@ -158,7 +201,7 @@ fn run_ranks(
     second: Option<&std::path::Path>,
 ) {
     let exe = std::env::current_exe().expect("test binary");
-    let mut cmd = readcon_core::mpi_launch::mpi_command();
+    let mut cmd = mpi_command();
     cmd.args(["-n", &ranks.to_string()])
         .arg(&exe)
         .arg("mpi_ranks_match_the_serial_writer")
@@ -174,7 +217,7 @@ fn run_ranks(
     let output = cmd
         .output()
         .unwrap_or_else(|err| panic!("mpirun -n {ranks}: {err}"));
-    readcon_core::mpi_launch::assert_success(&output, &format!("mpirun -n {ranks}"));
+    assert_mpi(&output, &format!("mpirun -n {ranks}"));
 }
 
 #[cfg(feature = "mpi")]

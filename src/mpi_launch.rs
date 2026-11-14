@@ -7,58 +7,68 @@
 
 use std::process::{Command, Output};
 
-/// `mpirun`, plus `--oversubscribe` on Open MPI.
-pub fn mpi_launcher() -> Vec<String> {
-    let mut argv = vec!["mpirun".to_string()];
-    if Command::new("mpirun")
-        .arg("--help")
+fn open_mpi() -> bool {
+    // `mpirun --help` is a one-screen summary and does not mention
+    // `--oversubscribe`. The version line does name Open MPI.
+    Command::new("mpirun")
+        .arg("--version")
         .output()
         .ok()
         .is_some_and(|out| {
             let text = String::from_utf8_lossy(&out.stdout);
             let err = String::from_utf8_lossy(&out.stderr);
-            text.contains("oversubscribe") || err.contains("oversubscribe")
+            text.contains("Open MPI") || err.contains("Open MPI")
         })
-    {
-        argv.push("--oversubscribe".to_string());
+}
+
+/// `mpirun`, plus the Open MPI flags a GitHub runner needs.
+///
+/// Ubuntu runners expose a verbs device UCX cannot use, and their cgroup
+/// rejects the default bind. `--bind-to none` and the `tcp,self` BTL keep
+/// `MPI_Init` from exiting 1. MPICH does not get these flags.
+pub(crate) fn mpi_launcher() -> Vec<String> {
+    let mut argv = vec!["mpirun".to_string()];
+    if open_mpi() {
+        argv.extend(
+            [
+                "--oversubscribe",
+                "--bind-to",
+                "none",
+                "--mca",
+                "pml",
+                "ob1",
+                "--mca",
+                "btl",
+                "tcp,self",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        );
     }
     argv
 }
 
 /// A `mpirun` command with the launcher flags and a clean rank environment.
-pub fn mpi_command() -> Command {
+pub(crate) fn mpi_command() -> Command {
     let mut cmd = Command::new("mpirun");
     for arg in mpi_launcher().into_iter().skip(1) {
         cmd.arg(arg);
     }
-    for key in [
-        "OMPI_COMM_WORLD_RANK",
-        "OMPI_COMM_WORLD_SIZE",
-        "OMPI_COMM_WORLD_LOCAL_RANK",
-        "OMPI_COMM_WORLD_LOCAL_SIZE",
-        "OMPI_COMM_WORLD_NODE_RANK",
-        "OMPI_UNIVERSE_SIZE",
-        "PMI_RANK",
-        "PMI_SIZE",
-        "PMI_FD",
-        "PMIX_RANK",
-        "PMIX_NAMESPACE",
-        "HYDRA_CONTROL_FD",
-        "HYDI_CONTROL_FD",
-        "MPI_LOCALRANKID",
-        "MPI_LOCALNRANKS",
-    ] {
-        cmd.env_remove(key);
+    for (key, _) in std::env::vars() {
+        if key.starts_with("OMPI_") || key.starts_with("PMIX_") || key.starts_with("PMI_") {
+            cmd.env_remove(key);
+        }
     }
     cmd
 }
 
-/// Panic with the child's stderr. `status()` alone hides the Open MPI slot error.
-pub fn assert_success(output: &Output, label: &str) {
+/// Panic with the child's stdout and stderr. Open MPI prints the slot error on stdout.
+pub(crate) fn assert_success(output: &Output, label: &str) {
     assert!(
         output.status.success(),
-        "{label} failed: {}\n{}",
+        "{label} failed: {}\nstdout:\n{}\nstderr:\n{}",
         output.status,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
 }
