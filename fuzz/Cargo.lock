@@ -574,8 +574,10 @@ dependencies = [
 name = "readcon-core-fuzz"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "libfuzzer-sys",
  "readcon-core",
+ "ryu",
  "serde_json",
  "tempfile",
 ]

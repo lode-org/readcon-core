@@ -464,72 +464,14 @@ fn unpack_slice_parts(mut buf: &[u8]) -> Result<frame_index::SliceParts, String>
     Ok(frame_index::SliceParts { hashed, fragments })
 }
 
-/// Hashes this rank can finish without a neighbour's cursor.
-struct LocalReady {
-    hashes: Vec<(u64, u64)>,
-    tail: Option<[u8; 129]>,
-}
+use frame_index::{Lead, LocalReady};
 
-/// Full blocks, and a 129-byte cursor when a partial block continues on
-/// a later rank. A block this rank finishes, including the last block of
-/// the file, is already in `hashes`.
 fn local_ready(start: u64, bytes: &[u8], total: u64) -> LocalReady {
-    let block = frame_index::HASH_BLOCK as u64;
-    let end = start + bytes.len() as u64;
-    let mut hashes = Vec::new();
-    let mut pos = if start % block == 0 {
-        start
-    } else {
-        (start / block + 1) * block
-    };
-    if pos > end {
-        pos = end;
-    }
-    let mut local = (pos - start) as usize;
-    while pos < end {
-        let take_end = (pos + block).min(end);
-        let full = take_end - pos == block;
-        let owned_tail = take_end == total;
-        if !(full || owned_tail) {
-            break;
-        }
-        let n = (take_end - pos) as usize;
-        hashes.push((
-            pos / block,
-            frame_index::block_hash(&bytes[local..local + n]),
-        ));
-        local += n;
-        pos = take_end;
-    }
-    let tail = if pos < end && pos % block == 0 && pos != total {
-        let mut cursor = frame_index::BlockCursor::new();
-        cursor.feed(&bytes[(pos - start) as usize..]);
-        Some(cursor.to_bytes())
-    } else {
-        None
-    };
-    LocalReady { hashes, tail }
+    frame_index::local_ready(start, bytes, total)
 }
 
-enum Lead {
-    Hash((u64, u64)),
-    Forward([u8; 129]),
-}
-
-/// Continue `cursor` across this rank's leading partial block.
 fn finish_lead(start: u64, bytes: &[u8], total: u64, cursor_bytes: [u8; 129]) -> Lead {
-    let block = frame_index::HASH_BLOCK as u64;
-    let end = start + bytes.len() as u64;
-    let block_end = (start / block + 1) * block;
-    let lead_end = block_end.min(end);
-    let n = (lead_end - start) as usize;
-    let mut cursor = frame_index::BlockCursor::from_bytes(&cursor_bytes);
-    cursor.feed(&bytes[..n]);
-    if end >= block_end || end == total {
-        Lead::Hash((start / block, cursor.finish()))
-    } else {
-        Lead::Forward(cursor.to_bytes())
-    }
+    frame_index::finish_lead(start, bytes, total, cursor_bytes)
 }
 
 /// Block hashes this rank will own. Every rank can compute this from the
@@ -607,36 +549,9 @@ fn rank_offset(lengths: &[u64], rank: usize) -> u64 {
 }
 
 /// Fold per-rank slices the way the collective exchange does, with no MPI.
-/// The result matches a hash of the concatenation.
 #[cfg(test)]
 fn fold_ranked_slices(parts: &[&[u8]]) -> u64 {
-    let total: u64 = parts.iter().map(|part| part.len() as u64).sum();
-    if total == 0 {
-        return frame_index::fold_block_hashes(0, &[]);
-    }
-    let mut blocks = vec![0u64; total.div_ceil(frame_index::HASH_BLOCK as u64) as usize];
-    let mut pending: Option<[u8; 129]> = None;
-    let mut offset = 0u64;
-    for part in parts {
-        if part.is_empty() {
-            continue;
-        }
-        let ready = local_ready(offset, part, total);
-        if let Some(cursor) = pending.take() {
-            match finish_lead(offset, part, total, cursor) {
-                Lead::Hash((index, hash)) => blocks[index as usize] = hash,
-                Lead::Forward(next) => pending = Some(next),
-            }
-        }
-        for (index, hash) in ready.hashes {
-            blocks[index as usize] = hash;
-        }
-        if let Some(tail) = ready.tail {
-            pending = Some(tail);
-        }
-        offset += part.len() as u64;
-    }
-    frame_index::fold_block_hashes(total, &blocks)
+    frame_index::ranked_content_hash(parts)
 }
 
 fn recv_cursor(world: &::mpi::topology::SimpleCommunicator, src: usize) -> [u8; 129] {
