@@ -435,14 +435,11 @@ class AsvPinAndFailedRounds(unittest.TestCase):
     def test_requirements_pin_the_asv_commit_that_writes_interleaved_rounds(self) -> None:
         text = (ROOT / "benchmarks" / "workflow" / "requirements.txt").read_text(encoding="utf-8")
         self.assertIn(
-            "asv @ git+https://github.com/HaoZeke/asv.git@15e9a444b424aae46c08dafa8fe80f2bdb4fca18",
+            "asv @ git+https://github.com/HaoZeke/asv.git@0bac2a9157a207d4a2579de4365ae59c27b15713",
             text,
         )
         self.assertNotIn("asv==0.6.6", text)
-        patch = (ROOT / "benchmarks" / "workflow" / "asv-keep-failed-round.patch").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("A failed round stays None", patch)
+        self.assertFalse((ROOT / "benchmarks" / "workflow" / "asv-keep-failed-round.patch").exists())
         timing = (ROOT / "benchmarks" / "generate_timing_compare.py").read_text(encoding="utf-8")
         self.assertIn("bootstrap_median_ratio_ci(left[\"samples\"], right[\"samples\"], seed=1)", timing)
         memory = (ROOT / "benchmarks" / "generate_memory_compare.py").read_text(encoding="utf-8")

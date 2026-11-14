@@ -1,6 +1,6 @@
 # Interleaved rounds, failed_rounds, comparisons, and compare --format=latex.
-# benchmarks/workflow/asv-keep-failed-round.patch keeps a failed round empty.
-asv @ git+https://github.com/HaoZeke/asv.git@15e9a444b424aae46c08dafa8fe80f2bdb4fca18
+# The failed-round guard is in this asv commit. There is no vendored patch.
+asv @ git+https://github.com/HaoZeke/asv.git@0bac2a9157a207d4a2579de4365ae59c27b15713
 asv-runner==0.3.2
 asv_bench_memray==0.1.2
 memray==1.20.0
