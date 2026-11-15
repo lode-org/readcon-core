@@ -75,6 +75,17 @@ def test_lost_lead_needs_a_real_gap():
     assert report.lost_leads(old_close, new_close) == []
 
 
+def test_a_per_size_repeat_map_is_the_campaign_protocol():
+    assert report.protocol_error({"warmup": 1, "repeats": 12}) is None
+    assert (
+        report.protocol_error(
+            {"warmup": 1, "repeats": {"1k": 12, "100k": 12, "1M": 6, "traj": 12}}
+        )
+        is None
+    )
+    assert report.protocol_error({"warmup": 1, "repeats": {"1M": 0}}) is not None
+
+
 def test_report_refuses_to_write_the_baseline_directory():
     with pytest.raises(SystemExit, match="existing records"):
         report.fresh_output(report.BASELINE.parent)
