@@ -239,6 +239,9 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
             # readcon-db's revision, not a tag of this repository.
             if "READCON_DB_REV" in line:
                 continue
+            # The results directory is named for this release. It is not a tag.
+            if line.strip().startswith("VERSION ="):
+                continue
             if (
                 _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode
                 != 0
