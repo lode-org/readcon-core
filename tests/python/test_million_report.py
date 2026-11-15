@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -87,112 +88,143 @@ def _tip(root: Path) -> tuple[str, str]:
     return full, short
 
 
-def _measure_shell(text: str) -> str:
-    start = text.index("rule million_measure:")
-    body = text[start:].split('"""', 2)[1]
-    return body
+_STUB = """\
+#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+out = None
+ops = "read,write"
+index = 0
+while index < len(args):
+    if args[index] == "--out":
+        out = Path(args[index + 1])
+        index += 2
+    elif args[index] == "--ops":
+        ops = args[index + 1]
+        index += 2
+    else:
+        index += 1
+if os.environ.get("READCON_STUB_FAIL") == "1":
+    sys.exit(1)
+if out is None:
+    sys.exit("missing --out")
+out.mkdir(parents=True, exist_ok=True)
+for name in ("cross-format.json", "cross-format.log", "cross-format.tsv"):
+    (out / name).write_text("measured\\n", encoding="utf-8")
+if "read" in ops.split(","):
+    (out / "chemfiles-write-profile.txt").write_text("measured\\n", encoding="utf-8")
+"""
 
 
-def _run_measure_shell(
-    shell: str, *, cwd: Path, out: str, previous: str, tip: str, measure: bool
-) -> subprocess.CompletedProcess[str]:
-    body = shell
-    body = body.replace("{params.out}", out)
-    body = body.replace("{params.previous}", previous)
-    body = body.replace("{params.tip}", tip)
-    body = body.replace("{params.ops}", "read")
-    body = body.replace("{{", "{").replace("}}", "}")
-    if not measure:
-        body = body.replace(
-            "python3 bench/h2h/cross_format.py",
-            "true #",
-        )
+def _worktree(tmp_path: Path, name: str) -> Path:
+    source = Path(__file__).resolve().parents[2]
+    tree = tmp_path / name
+    subprocess.check_call(
+        ["git", "worktree", "add", "--detach", str(tree), "HEAD"],
+        cwd=source,
+    )
+    shutil.copy(source / "bench/h2h/Snakefile", tree / "bench/h2h/Snakefile")
+    (tree / "bench/h2h/cross_format.py").write_text(_STUB, encoding="utf-8")
+    return tree
+
+
+def _snakemake(tree: Path, *args: str, env: dict[str, str] | None = None):
+    snakemake = shutil.which("snakemake")
+    if snakemake is None:
+        pytest.skip("snakemake is not installed")
+    command = [snakemake, "-s", "bench/h2h/Snakefile", "-c1", *args]
+    merged = os.environ.copy()
+    if env:
+        merged.update(env)
     return subprocess.run(
-        ["bash", "-c", body],
-        cwd=cwd,
+        command,
+        cwd=tree,
         check=False,
         capture_output=True,
         text=True,
+        env=merged,
     )
 
 
 def test_million_rule_targets_the_versioned_record(tmp_path: Path):
     root = Path(__file__).resolve().parents[2]
-    text = (root / "bench/h2h/Snakefile").read_text(encoding="utf-8")
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
-    tip, short = _tip(root)
-    fresh = f"bench/h2h/million/v{version}-{short}"
-    saved = f"bench/h2h/million/v{version}"
-    saved_json = root / saved / "cross-format.json"
-    saved_log = root / saved / "cross-format.log"
-    before = (saved_json.read_bytes(), saved_log.read_bytes())
-    assert 'MILLION = f"bench/h2h/million/v{_RELEASE}-{_TIP_SHORT}"' in text
-    assert "refusing to write a saved record" in text
-    assert "SUPERSEDED.md" in text
-    snakemake = shutil.which("snakemake")
-    if snakemake is not None:
-        completed = subprocess.run(
-            [
-                snakemake,
-                "-s",
-                "bench/h2h/Snakefile",
-                "-n",
-                "--force",
-                "million_measure",
-            ],
-            cwd=root,
-            check=False,
-            capture_output=True,
-            text=True,
+    trees = []
+    try:
+        fresh_tree = _worktree(tmp_path, "fresh")
+        trees.append(fresh_tree)
+        tip, short = _tip(fresh_tree)
+        fresh = f"bench/h2h/million/v{version}-{short}"
+        saved = fresh_tree / "bench/h2h/million" / f"v{version}"
+        before = (
+            (saved / "cross-format.json").read_bytes(),
+            (saved / "cross-format.log").read_bytes(),
         )
-        shown = completed.stdout + completed.stderr
-        assert completed.returncode == 0, shown
-        assert f"{fresh}/cross-format.json" in shown
-        assert f"{fresh}/cross-format.log" in shown
-        assert f"{saved}/cross-format.json" not in shown
-    shell = _measure_shell(text)
-    existing = tmp_path / fresh
-    existing.mkdir(parents=True)
-    (existing / "cross-format.json").write_text("kept\n", encoding="utf-8")
-    refused = _run_measure_shell(
-        shell, cwd=tmp_path, out=fresh, previous=saved, tip=tip, measure=False
-    )
-    assert refused.returncode != 0, refused.stdout + refused.stderr
-    assert "refusing to write a saved record" in refused.stderr
-    assert (existing / "cross-format.json").read_text(encoding="utf-8") == "kept\n"
-    assert not (existing / "SUPERSEDED.md").exists()
-    scaling = _run_measure_shell(
-        shell,
-        cwd=tmp_path,
-        out="bench/h2h/scaling/new",
-        previous=saved,
-        tip=tip,
-        measure=False,
-    )
-    assert scaling.returncode != 0
-    assert "refusing to write a saved record" in scaling.stderr
-    previous = tmp_path / "records" / f"v{version}"
-    previous.mkdir(parents=True)
-    (previous / "cross-format.json").write_text("saved\n", encoding="utf-8")
-    (previous / "cross-format.log").write_text("saved\n", encoding="utf-8")
-    new_dir = f"records/v{version}-{short}"
-    wrote = _run_measure_shell(
-        shell,
-        cwd=tmp_path,
-        out=new_dir,
-        previous=f"records/v{version}",
-        tip=tip,
-        measure=False,
-    )
-    assert wrote.returncode == 0, wrote.stdout + wrote.stderr
-    note = (previous / "SUPERSEDED.md").read_text(encoding="utf-8")
-    assert new_dir in note
-    assert tip in note
-    assert (previous / "cross-format.json").read_text(encoding="utf-8") == "saved\n"
-    assert (previous / "cross-format.log").read_text(encoding="utf-8") == "saved\n"
-    assert saved_json.read_bytes() == before[0]
-    assert saved_log.read_bytes() == before[1]
-    assert not (root / saved / "SUPERSEDED.md").exists()
+        accepted = _snakemake(fresh_tree, "million_measure")
+        shown = accepted.stdout + accepted.stderr
+        assert accepted.returncode == 0, shown
+        for name in (
+            "cross-format.json",
+            "cross-format.log",
+            "cross-format.tsv",
+            "chemfiles-write-profile.txt",
+        ):
+            assert (fresh_tree / fresh / name).read_text(
+                encoding="utf-8"
+            ) == "measured\n"
+        assert (saved / "cross-format.json").read_bytes() == before[0]
+        assert (saved / "cross-format.log").read_bytes() == before[1]
+
+        existing = _worktree(tmp_path, "existing")
+        trees.append(existing)
+        _, existing_short = _tip(existing)
+        existing_fresh = existing / "bench/h2h/million" / f"v{version}-{existing_short}"
+        existing_fresh.mkdir(parents=True)
+        (existing_fresh / "cross-format.json").write_text("kept\n", encoding="utf-8")
+        (existing_fresh / "cross-format.log").write_text("kept\n", encoding="utf-8")
+        saved_existing = existing / "bench/h2h/million" / f"v{version}"
+        existing_before = (
+            (saved_existing / "cross-format.json").read_bytes(),
+            (saved_existing / "cross-format.log").read_bytes(),
+        )
+        refused = _snakemake(existing, "million_measure")
+        refused_text = refused.stdout + refused.stderr
+        assert refused.returncode != 0, refused_text
+        assert "refusing to write a saved record" in refused_text
+        assert (existing_fresh / "cross-format.json").read_text(
+            encoding="utf-8"
+        ) == "kept\n"
+        assert (existing_fresh / "cross-format.log").read_text(
+            encoding="utf-8"
+        ) == "kept\n"
+        assert (saved_existing / "cross-format.json").read_bytes() == existing_before[0]
+        assert (saved_existing / "cross-format.log").read_bytes() == existing_before[1]
+        other = _snakemake(existing, "-n", "publication")
+        assert other.returncode == 0, other.stdout + other.stderr
+
+        scaling = _worktree(tmp_path, "scaling")
+        trees.append(scaling)
+        denied = _snakemake(
+            scaling,
+            "million_measure",
+            "--config",
+            "million_out=bench/h2h/scaling/new",
+        )
+        denied_text = denied.stdout + denied.stderr
+        assert denied.returncode != 0, denied_text
+        assert "refusing to write a saved record" in denied_text
+        assert not (scaling / "bench/h2h/scaling/new").exists()
+        assert tip
+    finally:
+        for tree in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+            )
 
 
 def test_a_per_size_repeat_map_is_the_campaign_protocol():
