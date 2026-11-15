@@ -1,6 +1,7 @@
 use ndarray::{Array1, Array2, Array3, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
+    PyUntypedArrayMethods,
 };
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
@@ -349,14 +350,6 @@ fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
     }
 }
 
-fn py_atoms_to_list(py: Python<'_>, atoms: Vec<PyAtomDatum>) -> PyResult<Py<PyList>> {
-    let list = PyList::empty(py);
-    for atom in atoms {
-        list.append(Py::new(py, atom)?)?;
-    }
-    Ok(list.unbind())
-}
-
 /// Python-visible simulation frame.
 #[pyclass(name = "ConFrame")]
 pub struct PyConFrame {
@@ -384,7 +377,12 @@ pub struct PyConFrame {
     slab_index: usize,
     /// Coordinates of a frame that was not part of a shared read.
     xyz_owned: Option<Py<PyArray2<f64>>>,
+    /// Exact file substring from `iter_con`. `None` for a batch read,
+    /// a constructed frame, or a frame edited after the read.
+    source_text: Option<String>,
 }
+
+include!("python_seq.rs");
 
 #[pymethods]
 impl PyConFrame {
@@ -394,37 +392,62 @@ impl PyConFrame {
         py: Python<'_>,
         cell: [f64; 3],
         angles: [f64; 3],
-        atoms: Vec<PyAtomDatum>,
+        atoms: &Bound<'_, PyAny>,
         prebox_header: Option<[String; 2]>,
         postbox_header: Option<[String; 2]>,
         metadata: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let atoms = py_atoms_to_list(py, atoms)?;
-        let metadata = match metadata {
-            Some(obj) => json_map_to_py_dict(py, &py_metadata_to_json_map(obj)?)?,
-            None => PyDict::new(py).unbind(),
+        let snaps = snaps_from_iterable(atoms)?;
+        let prebox_header = prebox_header.unwrap_or_default();
+        let postbox_header = postbox_header.unwrap_or_default();
+        let meta = match metadata {
+            Some(obj) => py_metadata_to_json_map(obj)?,
+            None => BTreeMap::new(),
         };
+        let inner = frame_for_storage(
+            cell,
+            angles,
+            &prebox_header,
+            &postbox_header,
+            meta.clone(),
+            &snaps,
+        )?;
+        let metadata = json_map_to_py_dict(py, &meta)?;
         Ok(PyConFrame {
             cell,
             angles,
-            prebox_header: prebox_header.unwrap_or_default(),
-            postbox_header: postbox_header.unwrap_or_default(),
+            prebox_header,
+            postbox_header,
             spec_version: crate::CON_SPEC_VERSION,
-            atoms,
+            atoms: PyList::empty(py).unbind(),
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
             metadata,
-            inner: None,
-            n_atoms: 0,
+            inner: Some(inner),
+            n_atoms: snaps.len(),
             slab: None,
             slab_index: 0,
             xyz_owned: None,
+            source_text: None,
         })
     }
 
+    /// Live sequence of atom views. The same store as `frame[i]`.
     #[getter]
-    fn atoms(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        self.ensure_atoms(py)?;
-        Ok(self.atoms.clone_ref(py))
+    fn atoms(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAtomSeq>> {
+        Py::new(py, PyAtomSeq { frame: slf })
+    }
+
+    /// Exact substring `iter_con` read for this frame, including the
+    /// separator whitespace that preceded it.
+    #[getter]
+    fn source_text(&self) -> Option<&str> {
+        self.source_text.as_deref()
+    }
+
+    /// Alias of `source_text`.
+    #[getter]
+    fn raw(&self) -> Option<&str> {
+        self.source_text.as_deref()
     }
 
     #[getter]
@@ -435,6 +458,7 @@ impl PyConFrame {
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
         self.metadata = json_map_to_py_dict(py, &py_metadata_to_json_map(metadata)?)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -474,22 +498,117 @@ impl PyConFrame {
     }
 
     /// Atoms in file order. The file cursor is `iter_con`, not this.
-    fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
-        self.ensure_atoms(py)?;
-        self.atoms.bind(py).try_iter()
+    fn __iter__(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAtomIter>> {
+        Py::new(
+            py,
+            PyAtomIter {
+                frame: slf,
+                index: 0,
+                step: 1,
+            },
+        )
     }
 
-    fn __getitem__<'py>(&self, py: Python<'py>, index: isize) -> PyResult<Bound<'py, PyAny>> {
-        self.ensure_atoms(py)?;
-        let atoms = self.atoms.bind(py);
-        let n = atoms.len() as isize;
-        let resolved = if index < 0 { n + index } else { index };
-        if resolved < 0 || resolved >= n {
-            return Err(pyo3::exceptions::PyIndexError::new_err(
-                "atom index out of range",
-            ));
+    fn __reversed__(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PyAtomIter>> {
+        let n = slf.borrow(py).n_atoms() as isize;
+        Py::new(
+            py,
+            PyAtomIter {
+                frame: slf,
+                index: n - 1,
+                step: -1,
+            },
+        )
+    }
+
+    fn __getitem__(slf: Py<Self>, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        sequence_getitem(&slf, py, key)
+    }
+
+    fn __setitem__(
+        slf: Py<Self>,
+        py: Python<'_>,
+        key: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        if let Ok(index) = key.extract::<isize>() {
+            let snap = snap_from_bound(value)?;
+            let mut frame = slf.borrow_mut(py);
+            let i = frame.normalize_index(index)?;
+            let mut snaps = frame.snapshot_atoms();
+            snaps[i] = snap;
+            return frame.replace_atoms(py, snaps);
         }
-        atoms.get_item(resolved as usize)
+        if let Ok(slice) = key.cast::<PySlice>() {
+            let incoming = snaps_from_iterable(value)?;
+            let mut frame = slf.borrow_mut(py);
+            return frame.set_slice_snaps(py, slice, incoming);
+        }
+        Err(PyTypeError::new_err(
+            "ConFrame indices must be integers or slices",
+        ))
+    }
+
+    fn __delitem__(&mut self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<()> {
+        sequence_delitem(self, py, key)
+    }
+
+    /// True when an atom or atom view has the same symbol, position, velocity,
+    /// force, mass, and fixed flags.
+    fn __contains__(&self, item: &Bound<'_, PyAny>) -> PyResult<bool> {
+        self.contains_atom(item)
+    }
+
+    /// Exact equality of physical content: cell, angles, symbols, positions,
+    /// velocities, forces, masses, and fixed flags, in stored order.
+    ///
+    /// Metadata, atom ids, file text, and sections other than velocities and
+    /// forces are not compared. Floats use `==`.
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        match other.cast::<Self>() {
+            Ok(other) => Ok(self.same_physical(&other.borrow())),
+            Err(_) => Ok(false),
+        }
+    }
+
+    /// Append an atom. Stored order is CON type-group order (the order
+    /// `write_con` emits). A symbol already present joins that group.
+    fn append(slf: Py<Self>, py: Python<'_>, atom: &Bound<'_, PyAny>) -> PyResult<()> {
+        let snap = snap_from_bound(atom)?;
+        let mut frame = slf.borrow_mut(py);
+        let mut snaps = frame.snapshot_atoms();
+        snaps.push(snap);
+        frame.replace_atoms(py, snaps)
+    }
+
+    /// Insert an atom at `index`, then store the frame in CON type-group order.
+    fn insert(
+        slf: Py<Self>,
+        py: Python<'_>,
+        index: isize,
+        atom: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let snap = snap_from_bound(atom)?;
+        let mut frame = slf.borrow_mut(py);
+        let mut snaps = frame.snapshot_atoms();
+        let n = snaps.len() as isize;
+        let mut i = if index < 0 { index + n } else { index };
+        if i < 0 {
+            i = 0;
+        }
+        if i > n {
+            i = n;
+        }
+        snaps.insert(i as usize, snap);
+        frame.replace_atoms(py, snaps)
+    }
+
+    fn extend(slf: Py<Self>, py: Python<'_>, atoms: &Bound<'_, PyAny>) -> PyResult<()> {
+        let extra = snaps_from_iterable(atoms)?;
+        let mut frame = slf.borrow_mut(py);
+        let mut snaps = frame.snapshot_atoms();
+        snaps.extend(extra);
+        frame.replace_atoms(py, snaps)
     }
 
     // --- NumPy array views ---
@@ -988,6 +1107,7 @@ impl PyConFrame {
             metadata.insert(key, value);
         }
         self.metadata = json_map_to_py_dict(py, &metadata)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -998,12 +1118,14 @@ impl PyConFrame {
         self.metadata
             .bind(py)
             .set_item(key, json_value_to_py(py, &Value::Number(number))?)?;
+        self.note_mutated();
         Ok(())
     }
 
     /// Set a string metadata key.
     fn set_string_metadata(&mut self, py: Python<'_>, key: &str, value: &str) -> PyResult<()> {
         self.metadata.bind(py).set_item(key, value)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -1015,6 +1137,7 @@ impl PyConFrame {
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, py: Python<'_>, idx: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::FRAME_INDEX, idx)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -1031,12 +1154,14 @@ impl PyConFrame {
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, py: Python<'_>, bead: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::NEB_BEAD, bead)?;
+        self.note_mutated();
         Ok(())
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, py: Python<'_>, band: u64) -> PyResult<()> {
         self.metadata.bind(py).set_item(meta::NEB_BAND, band)?;
+        self.note_mutated();
         Ok(())
     }
 
@@ -1077,16 +1202,16 @@ impl PyConFrame {
 
 impl PyConFrame {
     fn atom_count(&self, py: Python<'_>) -> usize {
+        if let Some(frame) = self.inner.as_ref() {
+            return frame.atom_data.len();
+        }
         if self.n_atoms > 0 {
             return self.n_atoms;
         }
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return self.atoms.bind(py).len();
         }
-        self.inner
-            .as_ref()
-            .map(|frame| frame.atom_data.len())
-            .unwrap_or(0)
+        0
     }
 
     fn from_con_frame(py: Python<'_>, frame: &ConFrame) -> PyResult<Self> {
@@ -1167,7 +1292,18 @@ impl PyConFrame {
             slab: None,
             slab_index: 0,
             xyz_owned,
+            source_text: None,
         })
+    }
+
+    fn from_owned_with_source(
+        py: Python<'_>,
+        frame: ConFrame,
+        source_text: Option<String>,
+    ) -> PyResult<Self> {
+        let mut out = Self::from_owned(py, frame)?;
+        out.source_text = source_text;
+        Ok(out)
     }
 
     fn from_slab(
@@ -1217,6 +1353,7 @@ impl PyConFrame {
             slab: Some(slab),
             slab_index: index,
             xyz_owned: None,
+            source_text: None,
         })
     }
 
@@ -1252,6 +1389,9 @@ impl PyConFrame {
     }
 
     fn py_atoms(&self, py: Python<'_>) -> PyResult<Vec<PyAtomDatum>> {
+        if self.inner.is_some() {
+            return Ok(self.snapshot_atoms().iter().map(datum_from_snap).collect());
+        }
         self.ensure_atoms(py)?;
         self.atoms
             .bind(py)
@@ -3164,6 +3304,7 @@ impl PyConFrameIterator {
         let mut iter = ConFrameIterator::new(slice);
         match iter.next_with_raw_span(slice) {
             Some(Ok((frame, span))) => {
+                let source_text = span.to_owned();
                 let consumed =
                     (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
                 let lines = newlines_in(span);
@@ -3173,7 +3314,11 @@ impl PyConFrameIterator {
                 contents
                     .release_before(*pos)
                     .map_err(|e| PyIOError::new_err(format!("release error: {e}")))?;
-                Ok(Some(PyConFrame::from_owned(py, frame)?))
+                Ok(Some(PyConFrame::from_owned_with_source(
+                    py,
+                    frame,
+                    Some(source_text),
+                )?))
             }
             Some(Err(e)) => {
                 let line = file_line(self.line_base, iter.lines.line_no());
@@ -4562,6 +4707,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         })
         .collect();
 
+    let snaps: Vec<AtomSnap> = atoms.iter().map(snap_from_datum).collect();
     let metadata = PyDict::new(py);
     metadata.set_item(meta::PBC, pbc.to_vec())?;
     if angles_defined {
@@ -4577,20 +4723,30 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         ]
         .into_py_dict(py)?,
     )?;
+    let meta = py_metadata_to_json_map(metadata.as_any())?;
+    let inner = frame_for_storage(
+        cell,
+        angles,
+        &Default::default(),
+        &Default::default(),
+        meta,
+        &snaps,
+    )?;
     Ok(PyConFrame {
         cell,
         angles,
         prebox_header: Default::default(),
         postbox_header: Default::default(),
-        atoms: py_atoms_to_list(py, atoms)?,
+        atoms: PyList::empty(py).unbind(),
         atoms_ready: std::sync::atomic::AtomicBool::new(true),
         spec_version: crate::CON_SPEC_VERSION,
         metadata: metadata.unbind(),
-        inner: None,
-        n_atoms,
+        inner: Some(inner),
+        n_atoms: snaps.len(),
         slab: None,
         slab_index: 0,
         xyz_owned: None,
+        source_text: None,
     })
 }
 

@@ -293,17 +293,35 @@ Types
 ``readcon.ConFrame``
     Constructable with cell, angles, atoms, and
     optional headers and metadata (v0.4.0+).  Properties: cell, angles,
-    atoms (live list), has\_velocities, has\_forces, has\_energies
+    atoms (live sequence of views), has\_velocities, has\_forces, has\_energies
     (v0.10.0+), prebox\_header, postbox\_header, spec\_version (v0.6.0+),
     metadata (v0.6.0+, live dict of native JSON-compatible values),
-    energy, frame\_index, time, timestep, neb\_bead, neb\_band.
+    energy, frame\_index, time, timestep, neb\_bead, neb\_band,
+    source\_text and raw (the ``iter_con`` substring, or ``None``).
     Methods: to\_ase(), from\_ase() (v0.4.0+), set\_metadata\_json(),
     set\_scalar\_metadata(), set\_string\_metadata(), set\_energy(),
     set\_frame\_index(), set\_time(), set\_timestep(), set\_neb\_bead(),
     set\_neb\_band(), atom\_index\_by\_id(id) (v0.10.0+),
     build\_atom\_id\_index() (v0.10.0+), coords\_array() (v0.10.0+),
     velocities\_array() (v0.10.0+), forces\_array() (v0.10.0+),
-    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+).
+    energies\_array() (v0.10.0+), atom\_ids\_array() (v0.10.0+),
+    ``__iter__``, ``__reversed__``, integer and slice get, set, and delete,
+    ``__contains__``, ``__eq__``, ``append``, ``insert``, and ``extend``.
+    ``len(frame)`` is the atom count, and ``bool(frame)`` follows it.
+
+``frame[i]`` and ``frame.atoms[i]`` read and write one store, so an
+in-place component write shows up in ``xyz``, ``vel``, ``frc``, and the
+``*_array()`` methods. Those array methods return a fresh copy.
+``read_con`` still exposes ``xyz`` as a view of the shared coordinate
+slab, so writing that view updates the store. A constructed frame's
+``xyz`` is a copy, and writing the copy does not. ``append``,
+``insert``, ``extend``, and item or slice replacement rebuild the frame
+in CON type-group order. A symbol that is already present joins that
+group. A view index is a position in that order. Two atoms of one
+symbol with different masses still construct, stay in insertion order,
+and fail at write with ``inconsistent masses``. ``==`` compares cell,
+angles, symbols, positions, velocities, forces, masses, and fixed flags.
+It ignores file text, metadata, atom ids, and other sections.
 
 ``readcon.read_first_frame(path)``
     Parse and return only the first
@@ -313,6 +331,9 @@ Types
     Return a Python iterator over frames, with ``forward()``, ``skip(n)`` and ``nth(i)``.
 
     The iterator API avoids indexing into ``read_con(path)`` for first-frame and loop-based workflows.
+    Each frame's ``source_text`` (also ``raw``) is the exact substring of the file, including separator whitespace that preceded the frame.
+    Concatenating ``source_text`` reproduces the file. ``read_con`` and a constructed frame leave it as ``None``.
+    An atom edit, a sequence edit, or a metadata setter clears it. ``frame.metadata[key] = value`` does not, because that writes the live dict.
     By default the whole file is read, and decompressed, into memory first.
     ``mmap=True`` maps an uncompressed file instead.
     ``stream=True`` decompresses and parses the file as it is read, so memory stays near one frame plus 1 MiB (mebibyte).
