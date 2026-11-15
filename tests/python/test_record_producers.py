@@ -113,6 +113,37 @@ def _generated_inputs() -> set[str]:
     return found
 
 
+_DRIVER = re.compile(r"(?:scripts|bench|evidence)/[\w./-]+\.py")
+_REGISTERED = {
+    "make_db_traces.py",
+    "measure_db.py",
+    "measure_novel.py",
+    "write_e5_bands.py",
+}
+
+
+def test_campaign_map_drivers_write_the_records() -> None:
+    """The measurement map names the programs that write each stored record."""
+    import sys
+
+    sys.path.insert(0, str(CPC / "scripts"))
+    import campaign_records
+
+    named = set()
+    missing = []
+    for spec in campaign_records.CAMPAIGNS.values():
+        for rel in _DRIVER.findall(spec["driver"]):
+            path = CPC / rel
+            if not path.is_file():
+                missing.append(rel)
+            named.add(path.name)
+        for record in spec["records"]:
+            if not _writes(record):
+                missing.append(record)
+    missing.extend(sorted(_REGISTERED - named))
+    assert not missing, "campaign map:\n" + "\n".join(missing)
+
+
 def test_plotter_inputs_have_committed_writers() -> None:
     missing = sorted(rel for rel in _plotter_inputs() if not _writes(rel))
     assert not missing, "plotter input with no committed writer:\n" + "\n".join(missing)
