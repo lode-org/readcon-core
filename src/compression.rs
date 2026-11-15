@@ -708,7 +708,8 @@ fn write_fused_frame(
     }
     let header = crate::writer::binding_header_bytes(frame)
         .map_err(|err| io::Error::other(err.to_string()))?;
-    let slots: Vec<std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>> = (0..ranges.len())
+    type MemberSlot = std::sync::Mutex<Option<io::Result<(Vec<u8>, usize)>>>;
+    let slots: Vec<MemberSlot> = (0..ranges.len())
         .map(|_| std::sync::Mutex::new(None))
         .collect();
     let threads = threads.max(1).min(ranges.len());

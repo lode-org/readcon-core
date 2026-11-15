@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 
-include!("metatensor_link.rs");
+include!("common/metatensor_link.rs");
 
 static CWD: Mutex<()> = Mutex::new(());
 

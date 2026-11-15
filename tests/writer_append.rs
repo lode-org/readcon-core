@@ -17,7 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-include!("metatensor_link.rs");
+include!("common/metatensor_link.rs");
 
 fn plain_library(dir: &Path) -> bool {
     let so = dir.join("libreadcon_core.so");

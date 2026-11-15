@@ -3705,10 +3705,13 @@ pub struct PhasedFrames {
 /// worker, with no barrier between the two. Old indexes without a row
 /// table return `None` and the caller keeps the full-buffer parser.
 #[cfg(feature = "parallel")]
+type PipedFrames = (Vec<types::ConFrame>, f64, f64);
+
+#[cfg(feature = "parallel")]
 fn piped_stock_frames(
     file: &[u8],
     threads: usize,
-) -> Result<Option<(Vec<types::ConFrame>, f64, f64)>, Box<dyn std::error::Error>> {
+) -> Result<Option<PipedFrames>, Box<dyn std::error::Error>> {
     use std::sync::atomic::{AtomicBool, Ordering};
     let Some(index) = crate::compression::indexed_members(file) else {
         return Ok(None);
@@ -3744,12 +3747,9 @@ fn piped_stock_frames(
     let failed = AtomicBool::new(false);
     let spec = std::sync::atomic::AtomicU32::new(0);
     let row_origin = std::sync::atomic::AtomicUsize::new(0);
-    let mut xyz = Vec::<f64>::new();
-    xyz.reserve(n.saturating_mul(3));
-    let mut ids = Vec::<u64>::new();
-    ids.reserve(n);
-    let mut flags = Vec::<[bool; 3]>::new();
-    flags.reserve(n);
+    let mut xyz = Vec::<f64>::with_capacity(n.saturating_mul(3));
+    let mut ids = Vec::<u64>::with_capacity(n);
+    let mut flags = Vec::<[bool; 3]>::with_capacity(n);
     let mut atoms = crate::types::take_atom_spare(n);
     unsafe { atoms.set_len(n) };
     let error: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
@@ -3855,10 +3855,12 @@ fn piped_stock_frames(
                                 spec_v,
                                 row,
                                 Some(symbol),
-                                xyz_ptr,
-                                ids_ptr,
-                                flags_ptr,
-                                atoms_ptr,
+                                crate::parser::CoordRunOut {
+                                    xyz: xyz_ptr,
+                                    ids: ids_ptr,
+                                    flags: flags_ptr,
+                                    atoms: atoms_ptr,
+                                },
                             ) {
                                 return Err(err.to_string());
                             }
@@ -3934,8 +3936,8 @@ mod spare_capacity {
         let cap = raw.capacity();
         assert!(cap >= 32);
         unsafe { raw.set_len(4) };
-        for index in 0..4 {
-            raw[index].write(crate::types::AtomDatum::coords(
+        for (index, slot) in raw.iter_mut().take(4).enumerate() {
+            slot.write(crate::types::AtomDatum::coords(
                 "Cu",
                 0.0,
                 0.0,
@@ -3950,9 +3952,10 @@ mod spare_capacity {
 }
 
 #[cfg(feature = "parallel")]
-fn stock_header(
-    bytes: &[u8],
-) -> Option<(types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize)> {
+type StockHeader = (types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize);
+
+#[cfg(feature = "parallel")]
+fn stock_header(bytes: &[u8]) -> Option<StockHeader> {
     // The member is several megabytes. The header is the first few dozen
     // lines; scanning the whole member as UTF-8 sat on the critical path.
     let header_region = {
@@ -3998,23 +4001,6 @@ fn stock_header(
         return None;
     }
     Some((header, symbols, origin))
-}
-
-#[cfg(feature = "parallel")]
-fn symbol_covering(
-    symbols: &[(std::sync::Arc<str>, usize)],
-    row: usize,
-) -> (&std::sync::Arc<str>, usize) {
-    let mut acc = 0usize;
-    for (symbol, count) in symbols {
-        let end = acc + *count;
-        if row < end {
-            return (symbol, end);
-        }
-        acc = end;
-    }
-    let (symbol, count) = symbols.last().expect("species");
-    (symbol, acc + *count)
 }
 
 fn read_compressed_phased(

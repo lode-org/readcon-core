@@ -149,9 +149,9 @@ pub(crate) fn positions_parallel(
     let flags_ptr = flags.as_mut_ptr() as usize;
     let mut jobs = Vec::with_capacity(out.n_frames);
     let mut dest_at = 0usize;
-    for frame in 0..out.n_frames {
+    for (frame, count) in out.counts.iter().enumerate() {
         jobs.push((frame, dest_at));
-        dest_at += out.counts[frame];
+        dest_at += count;
     }
     // One wide frame must start the row split on this thread. An outer
     // parallel iterator of a single job would run the split inside a
@@ -165,9 +165,11 @@ pub(crate) fn positions_parallel(
             dest,
             workers,
             rich,
-            positions_ptr as *mut f64,
-            ids_ptr as *mut u64,
-            flags_ptr as *mut u8,
+            crate::parser::CoordColumns {
+                xyz: positions_ptr as *mut f64,
+                ids: ids_ptr as *mut u64,
+                flags: flags_ptr as *mut u8,
+            },
         )?;
     } else if !jobs.is_empty() {
         // One worker per frame once there is a frame for every worker.
@@ -236,9 +238,11 @@ pub(crate) fn positions_parallel(
                     dest,
                     frame_workers,
                     rich,
-                    positions_ptr as *mut f64,
-                    ids_ptr as *mut u64,
-                    flags_ptr as *mut u8,
+                    crate::parser::CoordColumns {
+                        xyz: positions_ptr as *mut f64,
+                        ids: ids_ptr as *mut u64,
+                        flags: flags_ptr as *mut u8,
+                    },
                 )?;
             }
         }
@@ -271,10 +275,13 @@ fn fill_frame_rows(
     dest: usize,
     workers: usize,
     rich: bool,
-    positions: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    columns: crate::parser::CoordColumns,
 ) -> Result<(), ParseError> {
+    let crate::parser::CoordColumns {
+        xyz: positions,
+        ids,
+        flags,
+    } = columns;
     let count = out.counts[frame];
     if count == 0 {
         return Ok(());
@@ -303,9 +310,11 @@ fn fill_frame_rows(
             spec,
             0,
             workers,
-            unsafe { positions.add(dest * 3) },
-            ids_ptr,
-            flags_ptr,
+            crate::parser::CoordColumns {
+                xyz: unsafe { positions.add(dest * 3) },
+                ids: ids_ptr,
+                flags: flags_ptr,
+            },
         );
     }
     if out.wide_breaks.get(frame).map(|item| item.len()) == Some(count) {
@@ -327,9 +336,11 @@ fn fill_frame_rows(
             spec,
             0,
             workers,
-            unsafe { positions.add(dest * 3) },
-            ids_ptr,
-            flags_ptr,
+            crate::parser::CoordColumns {
+                xyz: unsafe { positions.add(dest * 3) },
+                ids: ids_ptr,
+                flags: flags_ptr,
+            },
         );
     }
     let rows = if count >= 4096 {
@@ -537,17 +548,21 @@ fn parse_repeated_copies(
                     let start = frame * span;
                     let (certified, saw) = fill_copied_frame(
                         bytes,
-                        start,
-                        start + span,
-                        head0 + start,
-                        count0,
-                        mass,
-                        frame * count0,
+                        CopiedFrame {
+                            start,
+                            end: start + span,
+                            head: head0 + start,
+                            count: count0,
+                            mass,
+                            dest: frame * count0,
+                        },
                         rich,
-                        positions_ptr,
-                        masses_ptr,
-                        ids_ptr,
-                        flags_ptr,
+                        CopiedColumns {
+                            positions: positions_ptr,
+                            masses: masses_ptr,
+                            ids: ids_ptr,
+                            flags: flags_ptr,
+                        },
                     )?;
                     if saw {
                         saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -598,6 +613,22 @@ fn parse_repeated_copies(
     Ok(Some(out))
 }
 
+struct CopiedFrame {
+    start: usize,
+    end: usize,
+    head: usize,
+    count: usize,
+    mass: f64,
+    dest: usize,
+}
+
+struct CopiedColumns {
+    positions: usize,
+    masses: usize,
+    ids: usize,
+    flags: usize,
+}
+
 struct PeekedHeader {
     count: usize,
     head_end: usize,
@@ -616,18 +647,24 @@ struct PeekedHeader {
 #[cfg(feature = "parallel")]
 fn fill_copied_frame(
     bytes: &[u8],
-    frame_start: usize,
-    frame_end: usize,
-    head: usize,
-    count: usize,
-    mass: f64,
-    dest: usize,
+    frame: CopiedFrame,
     rich: bool,
-    positions: usize,
-    masses: usize,
-    ids: usize,
-    flags: usize,
+    columns: CopiedColumns,
 ) -> Result<(bool, bool), ParseError> {
+    let CopiedFrame {
+        start: frame_start,
+        end: frame_end,
+        head,
+        count,
+        mass,
+        dest,
+    } = frame;
+    let CopiedColumns {
+        positions,
+        masses,
+        ids,
+        flags,
+    } = columns;
     let spec = frame_spec(bytes, frame_start)?;
     let mut pos = head;
     for row in 0..count {

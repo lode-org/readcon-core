@@ -44,11 +44,18 @@ std::thread_local! {
     static WIDE_WORKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
 }
 
+/// Output columns for a parallel coordinate fill. `ids` and `flags` may be null.
+#[cfg(feature = "parallel")]
+pub(crate) struct CoordColumns {
+    pub xyz: *mut f64,
+    pub ids: *mut u64,
+    pub flags: *mut u8,
+}
+
 /// Fill `n` coordinate rows.
 ///
 /// `breaks[i]` is the absolute index of that row's `\n`. Row 0 begins at
-/// `row0`. `xyz` receives `n * 3` values. `ids` and `flags` may be null
-/// when the caller does not want them. `flags` is the packed column-4 mask.
+/// `row0`. `columns.xyz` receives `n * 3` values. `flags` is the packed column-4 mask.
 #[cfg(feature = "parallel")]
 pub(crate) fn fill_rows_from_breaks(
     bytes: &[u8],
@@ -57,10 +64,9 @@ pub(crate) fn fill_rows_from_breaks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    columns: CoordColumns,
 ) -> Result<(), ParseError> {
+    let CoordColumns { xyz, ids, flags } = columns;
     let n = breaks.len();
     if n == 0 {
         return Ok(());
@@ -232,10 +238,11 @@ pub(crate) fn parallel_coord_rows(
     }
     let fill_chunk = |index: usize| -> Result<(), ParseError> {
         let (start, nrows) = chunks[index];
-        let mut row = row0[index];
+        let row_base = row0[index];
         let mut pos = start;
         let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
-        for _ in 0..nrows {
+        for step in 0..nrows {
+            let row = row_base + step;
             let ((xyz, fixed, atom_id), next) =
                 parse_coord_row_at(bytes, pos, spec_version, start_id + row as u64)?;
             unsafe {
@@ -251,7 +258,6 @@ pub(crate) fn parallel_coord_rows(
                 }
             }
             pos = next;
-            row += 1;
         }
         Ok(())
     };
@@ -301,6 +307,14 @@ pub(crate) fn parallel_coord_rows(
 /// This is the per-member kernel of [`fill_rows_from_chunks`], so a worker
 /// can parse a slice as soon as that slice has been inflated.
 #[cfg(feature = "parallel")]
+pub(crate) struct CoordRunOut {
+    pub xyz: *mut f64,
+    pub ids: *mut u64,
+    pub flags: *mut [bool; 3],
+    pub atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+}
+
+#[cfg(feature = "parallel")]
 pub(crate) fn parse_coord_run(
     bytes: &[u8],
     start: usize,
@@ -308,11 +322,14 @@ pub(crate) fn parse_coord_run(
     spec_version: u32,
     row_base: usize,
     symbol: Option<&std::sync::Arc<str>>,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut [bool; 3],
-    atoms: *mut std::mem::MaybeUninit<crate::types::AtomDatum>,
+    out: CoordRunOut,
 ) -> Result<usize, ParseError> {
+    let CoordRunOut {
+        xyz,
+        ids,
+        flags,
+        atoms,
+    } = out;
     let mut pos = start;
     let mut shares = symbol.map(|symbol| symbol_shares(symbol, nrows));
     for step in 0..nrows {
@@ -542,10 +559,9 @@ pub(crate) fn fill_rows_from_chunks(
     spec_version: u32,
     start_id: u64,
     workers: usize,
-    xyz: *mut f64,
-    ids: *mut u64,
-    flags: *mut u8,
+    columns: CoordColumns,
 ) -> Result<(), ParseError> {
+    let CoordColumns { xyz, ids, flags } = columns;
     if chunks.is_empty() {
         return Ok(());
     }
@@ -638,12 +654,12 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
         use rayon::prelude::*;
         (0..nchunks).into_par_iter().for_each(|index| {
             let from = cuts[index];
-            let mut at = slots[index];
-            for rel in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]) {
+            let at0 = slots[index];
+            for (step, rel) in memchr::memchr_iter(b'\n', &bytes[from..cuts[index + 1]]).enumerate()
+            {
                 unsafe {
-                    *((ptr as *mut usize).add(at)) = base + from + rel;
+                    *((ptr as *mut usize).add(at0 + step)) = base + from + rel;
                 }
-                at += 1;
             }
         });
     };
@@ -655,46 +671,6 @@ fn newline_index_exact(cuts: &[usize], bytes: &[u8], base: usize) -> Vec<usize> 
     // SAFETY: the store wrote every index in `0..total`.
     unsafe { out.set_len(total) };
     out
-}
-
-#[cfg(feature = "parallel")]
-#[allow(dead_code)]
-fn write_coord_group(
-    bytes: &[u8],
-    group: &[(usize, usize)],
-    row0: usize,
-    spec_version: u32,
-    start_id: u64,
-    symbol: Option<&std::sync::Arc<str>>,
-    xyz_ptr: usize,
-    ids_ptr: usize,
-    flags_ptr: usize,
-    atoms_ptr: usize,
-) -> Result<(), ParseError> {
-    let mut shares = symbol.map(|symbol| symbol_shares(symbol, group.len()));
-    for (offset, &(start, end)) in group.iter().enumerate() {
-        let row_index = row0 + offset;
-        let default_id = start_id + row_index as u64;
-        let ((row, fixed, atom_id), _next) =
-            parse_coord_row_at(&bytes[start..end], 0, spec_version, default_id)?;
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                row.as_ptr(),
-                (xyz_ptr as *mut f64).add(row_index * 3),
-                3,
-            );
-            *((ids_ptr as *mut u64).add(row_index)) = atom_id;
-            *((flags_ptr as *mut [bool; 3]).add(row_index)) = fixed;
-            if let Some(shares) = shares.as_mut() {
-                let slot = (xyz_ptr as *mut f64).add(row_index * 3);
-                let atom = crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
-                (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>)
-                    .add(row_index))
-                .write(atom);
-            }
-        }
-    }
-    Ok(())
 }
 
 pub trait LineStream<'a> {
@@ -2108,15 +2084,10 @@ pub fn parse_frame_header<'a>(
     })
 }
 
-/// Spec line limited to `con_spec_version`, optional `con_spec_minor`, and `units`.
-///
-/// Returns the major version when the object is exactly that shape and, for
-/// version 3 or newer, `length` and `energy` are valid units. Anything else
-/// is `None` so the general JSON parser can accept or reject it.
-/// Reuse the allocation when the next frame repeats a header line.
-///
-/// A trajectory stamps the same metadata line on every frame. A fresh
-/// `Arc` per frame showed up in the all-frames read.
+// A trajectory stamps the same metadata line on every frame. A fresh
+// `Arc` per frame showed up in the all-frames read. This flag records
+// whether the rows stayed sequential and unfixed so the caller can skip
+// a second walk.
 thread_local! {
     static SEQUENTIAL_PLAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
@@ -2583,9 +2554,11 @@ where
             header.spec_version,
             global_atom_idx,
             &symbol,
-            &mut pos_flat,
-            &mut ids,
-            &mut atom_data,
+            &mut IngestRows {
+                pos_flat: &mut pos_flat,
+                ids: &mut ids,
+                atom_data: &mut atom_data,
+            },
         )?;
     }
     let mut positions = FloatArray2::from_f64_row_major(total_atoms, 3, pos_flat);
@@ -2716,24 +2689,28 @@ where
 }
 
 /// Coordinate rows when the declared count must not bump an `Arc` by `n`.
+struct IngestRows<'a> {
+    pos_flat: &'a mut Vec<f64>,
+    ids: &'a mut Vec<u64>,
+    atom_data: &'a mut Vec<AtomDatum>,
+}
+
 fn ingest_coord_rows_cloned<'a, L>(
     lines: &mut L,
     n: usize,
     spec_version: u32,
     mut global_atom_idx: u64,
     symbol: &Arc<str>,
-    pos_flat: &mut Vec<f64>,
-    ids: &mut Vec<u64>,
-    atom_data: &mut Vec<AtomDatum>,
+    rows: &mut IngestRows<'_>,
 ) -> Result<u64, ParseError>
 where
     L: LineStream<'a>,
 {
     for _ in 0..n {
         let (xyz, fixed, atom_id) = lines.next_coord_row(spec_version, global_atom_idx)?;
-        pos_flat.extend_from_slice(&xyz);
-        ids.push(atom_id);
-        atom_data.push(AtomDatum::coords(
+        rows.pos_flat.extend_from_slice(&xyz);
+        rows.ids.push(atom_id);
+        rows.atom_data.push(AtomDatum::coords(
             Arc::clone(symbol),
             xyz[0],
             xyz[1],

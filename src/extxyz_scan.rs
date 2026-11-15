@@ -390,7 +390,17 @@ pub fn tables_from_extxyz_bytes_reporting(
         .collect();
     if let Some(nfloat) = fast_nfloat {
         return fill_species_pos_parallel(
-            n_frames, n_atoms, nfloat, workers, &lines, &starts, cell, columns, batches,
+            n_frames,
+            n_atoms,
+            nfloat,
+            workers,
+            SpeciesPosInput {
+                lines: &lines,
+                starts: &starts,
+                cell,
+                columns,
+            },
+            batches,
         );
     }
     let chunk = n_frames.div_ceil(workers).max(1);
@@ -411,105 +421,103 @@ pub fn tables_from_extxyz_bytes_reporting(
     let spec_ref = &specs;
     let line_ref = &lines;
     let wide_atoms = n_frames == 1 && n_atoms >= 4096 && workers >= 2;
-    let worker_species =
-        std::thread::scope(|scope| -> Result<Vec<(Vec<String>, Vec<u32>)>, String> {
-            let mut handles = Vec::new();
-            for worker in 0..workers {
-                let (frame_from, frame_to, atom_from, atom_to) = if wide_atoms {
-                    let atom_chunk = n_atoms.div_ceil(workers);
-                    let atom_from = worker * atom_chunk;
-                    if atom_from >= n_atoms {
-                        break;
-                    }
-                    (0, 1, atom_from, (atom_from + atom_chunk).min(n_atoms))
-                } else {
-                    let from = worker * chunk;
-                    if from >= n_frames {
-                        break;
-                    }
-                    (from, (from + chunk).min(n_frames), 0, n_atoms)
-                };
-                let column_ptrs = &column_ptrs;
-                let starts = &starts;
-                let cell_ptr = cell_ptr;
-                handles.push(
-                    scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
-                        let mut pool = Vec::new();
-                        let mut ids = Vec::new();
-                        for frame in frame_from..frame_to {
-                            let comment = line_ref[starts[frame] - 1];
-                            let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
-                            let frame_cell = lattice_cell(lattice)?;
-                            if atom_from == 0 {
-                                unsafe {
-                                    std::ptr::copy_nonoverlapping(
-                                        frame_cell.as_ptr(),
-                                        (cell_ptr as *mut f64).add(frame * 6),
-                                        6,
-                                    );
-                                }
+    let worker_species = std::thread::scope(|scope| -> Result<Vec<SpeciesParts>, String> {
+        let mut handles = Vec::new();
+        for worker in 0..workers {
+            let (frame_from, frame_to, atom_from, atom_to) = if wide_atoms {
+                let atom_chunk = n_atoms.div_ceil(workers);
+                let atom_from = worker * atom_chunk;
+                if atom_from >= n_atoms {
+                    break;
+                }
+                (0, 1, atom_from, (atom_from + atom_chunk).min(n_atoms))
+            } else {
+                let from = worker * chunk;
+                if from >= n_frames {
+                    break;
+                }
+                (from, (from + chunk).min(n_frames), 0, n_atoms)
+            };
+            let column_ptrs = &column_ptrs;
+            let starts = &starts;
+            handles.push(
+                scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
+                    let mut pool = Vec::new();
+                    let mut ids = Vec::new();
+                    for frame in frame_from..frame_to {
+                        let comment = line_ref[starts[frame] - 1];
+                        let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
+                        let frame_cell = lattice_cell(lattice)?;
+                        if atom_from == 0 {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    frame_cell.as_ptr(),
+                                    (cell_ptr as *mut f64).add(frame * 6),
+                                    6,
+                                );
                             }
-                            let base_atom = frame * n_atoms;
-                            for (offset, line) in line_ref
-                                [starts[frame] + atom_from..starts[frame] + atom_to]
-                                .iter()
-                                .enumerate()
-                            {
-                                let atom = atom_from + offset;
-                                let mut cursor = 0usize;
-                                for (col, spec) in spec_ref.iter().enumerate() {
-                                    let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
-                                    for slot in 0..width {
-                                        let token = next_field(line, &mut cursor).ok_or("atom")?;
-                                        let index = (base_atom + atom) * width + slot;
-                                        if kind == b'S' && spec.name == "species" && width == 1 {
-                                            ids.push(intern_symbol(&mut pool, token));
-                                        } else if kind == b'S' {
-                                            let text = String::from_utf8_lossy(token).into_owned();
-                                            unsafe {
-                                                std::ptr::write(
-                                                    (text_ptr as *mut String).add(index),
-                                                    text,
-                                                );
-                                            }
+                        }
+                        let base_atom = frame * n_atoms;
+                        for (offset, line) in line_ref
+                            [starts[frame] + atom_from..starts[frame] + atom_to]
+                            .iter()
+                            .enumerate()
+                        {
+                            let atom = atom_from + offset;
+                            let mut cursor = 0usize;
+                            for (col, spec) in spec_ref.iter().enumerate() {
+                                let (text_ptr, real_ptr, kind, width) = column_ptrs[col];
+                                for slot in 0..width {
+                                    let token = next_field(line, &mut cursor).ok_or("atom")?;
+                                    let index = (base_atom + atom) * width + slot;
+                                    if kind == b'S' && spec.name == "species" && width == 1 {
+                                        ids.push(intern_symbol(&mut pool, token));
+                                    } else if kind == b'S' {
+                                        let text = String::from_utf8_lossy(token).into_owned();
+                                        unsafe {
+                                            std::ptr::write(
+                                                (text_ptr as *mut String).add(index),
+                                                text,
+                                            );
+                                        }
+                                    } else {
+                                        let value = if kind == b'L' {
+                                            logical_value(token)
                                         } else {
-                                            let value = if kind == b'L' {
-                                                logical_value(token)
-                                            } else {
-                                                parse_token_f64(token)?
-                                            };
-                                            unsafe {
-                                                *((real_ptr as *mut f64).add(index)) = value;
-                                            }
+                                            parse_token_f64(token)?
+                                        };
+                                        unsafe {
+                                            *((real_ptr as *mut f64).add(index)) = value;
                                         }
                                     }
                                 }
                             }
                         }
-                        Ok((pool, ids))
-                    }),
-                );
-            }
-            let mut chunks = Vec::new();
-            for handle in handles {
-                match handle.join() {
-                    Ok(Ok(chunk)) => chunks.push(chunk),
-                    Ok(Err(err)) => {
-                        for column in &mut columns {
-                            std::mem::forget(std::mem::take(&mut column.text));
-                        }
-                        return Err(err);
                     }
-                    Err(_) => {
-                        for column in &mut columns {
-                            std::mem::forget(std::mem::take(&mut column.text));
-                        }
-                        return Err("atom".to_string());
+                    Ok((pool, ids))
+                }),
+            );
+        }
+        let mut chunks = Vec::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok(chunk)) => chunks.push(chunk),
+                Ok(Err(err)) => {
+                    for column in &mut columns {
+                        std::mem::forget(std::mem::take(&mut column.text));
                     }
+                    return Err(err);
+                }
+                Err(_) => {
+                    for column in &mut columns {
+                        std::mem::forget(std::mem::take(&mut column.text));
+                    }
+                    return Err("atom".to_string());
                 }
             }
-            Ok(chunks)
-        })?;
+        }
+        Ok(chunks)
+    })?;
     for column in &mut columns {
         if column.kind == b'S' && column.name != "species" {
             let n = n_frames * n_atoms * column.width;
@@ -700,7 +708,9 @@ enum SpeciesChunk {
     Mixed { pool: Vec<String>, ids: Vec<u32> },
 }
 
-fn merge_species_chunks(chunks: Vec<(Vec<String>, Vec<u32>)>) -> (Vec<String>, Vec<u32>) {
+type SpeciesParts = (Vec<String>, Vec<u32>);
+
+fn merge_species_chunks(chunks: Vec<SpeciesParts>) -> SpeciesParts {
     let mut pool = Vec::new();
     let mut ids = Vec::new();
     for (local, local_ids) in chunks {
@@ -718,17 +728,27 @@ fn merge_species_chunks(chunks: Vec<(Vec<String>, Vec<u32>)>) -> (Vec<String>, V
 
 /// Species and positions (and an optional mass) with no per-atom string
 /// until a frame actually mixes symbols.
+struct SpeciesPosInput<'a> {
+    lines: &'a [&'a [u8]],
+    starts: &'a [usize],
+    cell: Vec<f64>,
+    columns: Vec<XyzColumn>,
+}
+
 fn fill_species_pos_parallel(
     n_frames: usize,
     n_atoms: usize,
     nfloat: usize,
     workers: usize,
-    lines: &[&[u8]],
-    starts: &[usize],
-    mut cell: Vec<f64>,
-    columns: Vec<XyzColumn>,
+    input: SpeciesPosInput<'_>,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
 ) -> Result<XyzTables, String> {
+    let SpeciesPosInput {
+        lines,
+        starts,
+        mut cell,
+        columns,
+    } = input;
     let cell_ptr = cell.as_mut_ptr() as usize;
     let pos_ptr = columns
         .iter()
@@ -875,7 +895,7 @@ fn fill_species_pos_parallel(
                         }
                     }
                 }
-                let frames = if n_atoms == 0 { 0 } else { ids.len() / n_atoms };
+                let frames = ids.len().checked_div(n_atoms).unwrap_or(0);
                 let chunk = if pool.len() == 1 {
                     SpeciesChunk::Uniform {
                         symbol: pool.pop().unwrap_or_default(),
@@ -1277,11 +1297,7 @@ fn fill_stream_frames(
                     ids: local_ids.clone(),
                 }
             };
-            let frames = if n_atoms == 0 {
-                0
-            } else {
-                local_ids.len() / n_atoms
-            };
+            let frames = local_ids.len().checked_div(n_atoms).unwrap_or(0);
             emit_species(batches, worker as u16, frames, &chunk);
         }
     }
@@ -1777,13 +1793,15 @@ fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
             if !push_stream_atom(
                 line,
                 &specs,
-                &mut pool,
-                &mut ids,
-                &mut positions,
-                &mut masses,
-                mass_slot,
-                &mut extras,
-                &extra_slot,
+                StreamAtom {
+                    pool: &mut pool,
+                    ids: &mut ids,
+                    positions: &mut positions,
+                    masses: &mut masses,
+                    mass_slot,
+                    extras: &mut extras,
+                    extra_slot: &extra_slot,
+                },
             ) {
                 return None;
             }
@@ -1871,17 +1889,26 @@ fn stream_layout(specs: &[ColumnSpec]) -> bool {
         .all(|spec| spec.kind == b'R' || spec.kind == b'I')
 }
 
-fn push_stream_atom(
-    line: &[u8],
-    specs: &[ColumnSpec],
-    pool: &mut Vec<String>,
-    ids: &mut Vec<u32>,
-    positions: &mut Vec<f64>,
-    masses: &mut Vec<f64>,
+struct StreamAtom<'a> {
+    pool: &'a mut Vec<String>,
+    ids: &'a mut Vec<u32>,
+    positions: &'a mut Vec<f64>,
+    masses: &'a mut Vec<f64>,
     mass_slot: Option<usize>,
-    extras: &mut [Vec<f64>],
-    extra_slot: &[Option<usize>],
-) -> bool {
+    extras: &'a mut [Vec<f64>],
+    extra_slot: &'a [Option<usize>],
+}
+
+fn push_stream_atom(line: &[u8], specs: &[ColumnSpec], atom: StreamAtom<'_>) -> bool {
+    let StreamAtom {
+        pool,
+        ids,
+        positions,
+        masses,
+        mass_slot,
+        extras,
+        extra_slot,
+    } = atom;
     let mut index = 0usize;
     while index < line.len() && (line[index] == b' ' || line[index] == b'\t') {
         index += 1;

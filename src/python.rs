@@ -1887,14 +1887,16 @@ fn write_columns(
     let workers = n_threads.unwrap_or(1);
     py.detach(move || {
         let frames = frames_from_columns(
-            &pos_owned,
-            &mass_owned,
-            &cell_owned,
-            fixed_owned.as_deref(),
-            vel_owned.as_deref(),
-            force_owned.as_deref(),
-            n_frames,
-            n_atoms,
+            ColumnInput {
+                positions: &pos_owned,
+                masses: &mass_owned,
+                cell: &cell_owned,
+                fixed: fixed_owned.as_deref(),
+                velocities: vel_owned.as_deref(),
+                forces: force_owned.as_deref(),
+                n_frames,
+                n_atoms,
+            },
             &symbol_owned,
         )?;
         let refs: Vec<&ConFrame> = frames.iter().collect();
@@ -1930,17 +1932,28 @@ fn optional_vec3(
     }
 }
 
-fn frames_from_columns(
-    positions: &[f64],
-    masses: &[f64],
-    cell: &[f64],
-    fixed: Option<&[f64]>,
-    velocities: Option<&[f64]>,
-    forces: Option<&[f64]>,
+struct ColumnInput<'a> {
+    positions: &'a [f64],
+    masses: &'a [f64],
+    cell: &'a [f64],
+    fixed: Option<&'a [f64]>,
+    velocities: Option<&'a [f64]>,
+    forces: Option<&'a [f64]>,
     n_frames: usize,
     n_atoms: usize,
-    symbol: &str,
-) -> Result<Vec<ConFrame>, String> {
+}
+
+fn frames_from_columns(columns: ColumnInput<'_>, symbol: &str) -> Result<Vec<ConFrame>, String> {
+    let ColumnInput {
+        positions,
+        masses,
+        cell,
+        fixed,
+        velocities,
+        forces,
+        n_frames,
+        n_atoms,
+    } = columns;
     let mut frames = Vec::with_capacity(n_frames);
     for index in 0..n_frames {
         let p = index * n_atoms * 3;
@@ -2020,11 +2033,10 @@ fn frame_from_column_slice(
         }
     }
     let mut velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(0, 3);
-    if velocities.is_some() {
+    if let Some(vel) = velocities {
         velocities_storage = crate::storage_dtype::Array2Storage::zeros_f64(n, 3);
         for i in 0..n {
             let base = i * 3;
-            let vel = velocities.unwrap();
             velocities_storage.set_f64_row(i, [vel[base], vel[base + 1], vel[base + 2]]);
         }
     }
@@ -5581,105 +5593,6 @@ fn py_text_frames<'py>(
         prev_row = Some(owned);
     }
     Ok(frames)
-}
-
-fn species_list_from_batches(
-    rx: std::sync::mpsc::Receiver<crate::extxyz_scan::SpeciesBatch>,
-) -> Option<pyo3::Py<pyo3::types::PyList>> {
-    pyo3::Python::attach(|py| {
-        let mut waiting = std::collections::BTreeMap::new();
-        let mut next = 0u16;
-        let mut rows: Vec<pyo3::Py<pyo3::types::PyTuple>> = Vec::new();
-        let mut partials: Vec<Vec<pyo3::Py<pyo3::types::PyString>>> = Vec::new();
-        let mut shared: Option<(String, usize, pyo3::Py<pyo3::types::PyTuple>)> = None;
-        let mut prev_ids: Vec<u32> = Vec::new();
-        let mut prev_tuple: Option<pyo3::Py<pyo3::types::PyTuple>> = None;
-        while let Ok(batch) = rx.recv() {
-            waiting.insert(batch.worker, batch);
-            while let Some(batch) = waiting.remove(&next) {
-                if batch.frames == 0 {
-                    partials.push(slice_symbols(py, &batch)?);
-                } else if let Some(symbol) = batch.uniform.clone() {
-                    let tuple = if shared.as_ref().is_some_and(|(known, atoms, _)| {
-                        known == &symbol && *atoms == batch.n_atoms
-                    }) {
-                        shared.as_ref().unwrap().2.clone_ref(py)
-                    } else {
-                        let py_symbol = pyo3::types::PyString::new(py, &symbol).unbind();
-                        let tuple = pyo3::types::PyTuple::new(
-                            py,
-                            (0..batch.n_atoms).map(|_| py_symbol.clone_ref(py)),
-                        )?
-                        .unbind();
-                        shared = Some((symbol, batch.n_atoms, tuple.clone_ref(py)));
-                        tuple
-                    };
-                    for _ in 0..batch.frames {
-                        rows.push(tuple.clone_ref(py));
-                    }
-                } else {
-                    let symbols = pool_symbols(py, &batch)?;
-                    let width = batch.n_atoms.max(1);
-                    for frame in 0..batch.frames {
-                        let start = frame * width;
-                        let row = &batch.ids[start..start + width];
-                        if prev_tuple.is_some() && prev_ids == row {
-                            rows.push(prev_tuple.as_ref().unwrap().clone_ref(py));
-                            continue;
-                        }
-                        let tuple = pyo3::types::PyTuple::new(
-                            py,
-                            row.iter().map(|id| symbols[*id as usize].clone_ref(py)),
-                        )?
-                        .unbind();
-                        prev_ids = row.to_vec();
-                        prev_tuple = Some(tuple.clone_ref(py));
-                        rows.push(tuple);
-                    }
-                }
-                next += 1;
-            }
-        }
-        if !partials.is_empty() {
-            let flat: Vec<_> = partials.into_iter().flatten().collect();
-            rows.push(pyo3::types::PyTuple::new(py, flat)?.unbind());
-        }
-        if rows.is_empty() {
-            return Ok::<_, pyo3::PyErr>(None);
-        }
-        Ok(Some(pyo3::types::PyList::new(py, rows)?.unbind()))
-    })
-    .ok()
-    .flatten()
-}
-
-fn pool_symbols<'py>(
-    py: Python<'py>,
-    batch: &crate::extxyz_scan::SpeciesBatch,
-) -> PyResult<Vec<pyo3::Py<pyo3::types::PyString>>> {
-    Ok(batch
-        .pool
-        .iter()
-        .map(|symbol| pyo3::types::PyString::new(py, symbol).unbind())
-        .collect())
-}
-
-fn slice_symbols<'py>(
-    py: Python<'py>,
-    batch: &crate::extxyz_scan::SpeciesBatch,
-) -> PyResult<Vec<pyo3::Py<pyo3::types::PyString>>> {
-    if let Some(symbol) = &batch.uniform {
-        let py_symbol = pyo3::types::PyString::new(py, symbol).unbind();
-        return Ok((0..batch.n_atoms)
-            .map(|_| py_symbol.clone_ref(py))
-            .collect());
-    }
-    let pool = pool_symbols(py, batch)?;
-    Ok(batch
-        .ids
-        .iter()
-        .map(|id| pool[*id as usize].clone_ref(py))
-        .collect())
 }
 
 fn indexed_symbol_frames<'py>(

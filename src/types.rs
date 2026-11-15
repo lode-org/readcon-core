@@ -321,6 +321,9 @@ impl FrameMeta {
     /// The parsed map is kept only after a lookup that expects to reuse it.
     /// A streaming write must not be one of those lookups: one map per frame
     /// is about a kilobyte, and a long trajectory holds every frame.
+    /// Used by the writer tests to check that a streaming write did not
+    /// keep a parsed map on every frame.
+    #[cfg(test)]
     pub(crate) fn has_cached_map(&self) -> bool {
         self.map.get().is_some()
     }
@@ -946,33 +949,15 @@ impl AtomSections {
     fn from_full(tail: AtomTail) -> Self {
         Self::Present(Box::new(HeapTail::Full(Box::new(tail))))
     }
-
-    fn velocity_value(&self) -> Option<[f64; 3]> {
-        match self {
-            Self::Empty => None,
-            Self::Present(tail) => match tail.as_ref() {
-                HeapTail::Velocity(v) => Some(*v),
-                HeapTail::Full(full) => full.velocity,
-                HeapTail::Column { .. } => None,
-            },
-        }
-    }
-
-    fn full(&self) -> Option<&AtomTail> {
-        match self {
-            Self::Present(tail) => match tail.as_ref() {
-                HeapTail::Full(full) => Some(full),
-                HeapTail::Velocity(_) | HeapTail::Column { .. } => None,
-            },
-            Self::Empty => None,
-        }
-    }
 }
 
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
 /// does not pay a fat tail on every atom.
+///
+/// Public because [`HeapTail::Full`] stores it and `HeapTail` is public.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Default)]
-struct AtomTail {
+pub struct AtomTail {
     velocity: Option<[f64; 3]>,
     force: Option<[f64; 3]>,
     energy: Option<f64>,
@@ -1283,6 +1268,7 @@ fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
 ///
 /// Pair each added count with [`share_arc_str`]. The source `Arc` must stay
 /// alive until those shares exist, or the allocation can be freed early.
+#[cfg(feature = "chemfiles")]
 pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
     if extra == 0 {
         return;
@@ -1293,6 +1279,7 @@ pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
 }
 
 /// One strong reference already counted by [`bump_arc_str`].
+#[cfg(feature = "chemfiles")]
 pub(crate) fn share_arc_str(symbol: &std::sync::Arc<str>) -> std::sync::Arc<str> {
     unsafe { std::sync::Arc::from_raw(std::sync::Arc::as_ptr(symbol)) }
 }
@@ -2101,16 +2088,15 @@ impl ConFrame {
         if self.column_tails.is_empty() {
             return;
         }
-        let n = self.atom_data.len();
-        for i in 0..n {
-            let velocity = self.atom_data[i].velocity();
-            let force = self.atom_data[i].force();
-            self.atom_data[i].detach_external_tail();
+        for atom in &mut self.atom_data {
+            let velocity = atom.velocity();
+            let force = atom.force();
+            atom.detach_external_tail();
             if velocity.is_some() {
-                self.atom_data[i].set_velocity(velocity);
+                atom.set_velocity(velocity);
             }
             if force.is_some() {
-                self.atom_data[i].set_force(force);
+                atom.set_force(force);
             }
         }
         self.column_tails.clear();

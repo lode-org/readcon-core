@@ -315,7 +315,7 @@ fn stock_frames_match_the_line_parser_and_round_trip() {
 fn assert_frames_match(path: &Path) {
     let bytes = fs::read(path).unwrap();
     let mut slow = Vec::new();
-    let mut iter = ConFrameIterator::from_bytes(&bytes);
+    let iter = ConFrameIterator::from_bytes(&bytes);
     for item in iter {
         slow.push(item.unwrap_or_else(|err| panic!("{} iterator: {err}", path.display())));
     }
