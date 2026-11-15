@@ -51,6 +51,36 @@ fn round_trip(energies: &[f64], beads: &[u64], workers: usize) {
     }
 }
 
+fn frame(energy: f64) -> readcon_core::types::ConFrame {
+    let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+    builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+    builder.add_atom("Cu", 1.0, 0.0, 0.0, [false; 3], 1, 63.546);
+    builder.set_energy(energy);
+    builder.build().expect("frame")
+}
+
+#[test]
+fn a_frame_list_keeps_each_energy() {
+    let frames = [frame(-1.5), frame(-1.2)];
+    let refs: Vec<_> = frames.iter().collect();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("frames.con");
+    write_frame_refs_to_path(&path, &refs, 1, None, false, true).expect("write");
+    let got = read_all_frames(&path).expect("read");
+    let energies: Vec<_> = got.iter().map(|item| item.header.energy()).collect();
+    assert_eq!(energies, vec![Some(-1.5), Some(-1.2)]);
+
+    // A longer energy token changes the header size. That list must
+    // still round-trip instead of reusing the first header's price.
+    let wide = [frame(-1.5), frame(-10.25)];
+    let wide_refs: Vec<_> = wide.iter().collect();
+    let wide_path = dir.path().join("wide.con");
+    write_frame_refs_to_path(&wide_path, &wide_refs, 1, None, false, true).expect("wide write");
+    let wide_got = read_all_frames(&wide_path).expect("wide read");
+    let wide_energies: Vec<_> = wide_got.iter().map(|item| item.header.energy()).collect();
+    assert_eq!(wide_energies, vec![Some(-1.5), Some(-10.25)]);
+}
+
 #[test]
 fn packed_write_keeps_each_frames_energy() {
     round_trip(&[-1.5, -1.2], &[0, 0], 1);
