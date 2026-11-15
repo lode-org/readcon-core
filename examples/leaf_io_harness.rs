@@ -198,27 +198,26 @@ fn main() {
     json.push_str(&format!("  \"date_utc\": \"{}\",\n", chrono_like_utc()));
     json.push_str(&format!("  \"commit\": \"{}\",\n", git_commit()));
     json.push_str("  \"features\": \"rpc\",\n");
-    json.push_str(&format!("  \"ncpus\": {},\n", ncpus));
-    json.push_str(&format!("  \"n_frames\": {},\n", n_frames));
-    json.push_str(&format!("  \"n_atoms\": {},\n", n_atoms));
-    json.push_str(&format!("  \"repeats\": {},\n", repeats));
+    json.push_str(&format!("  \"ncpus\": {ncpus},\n"));
+    json.push_str(&format!("  \"n_frames\": {n_frames},\n"));
+    json.push_str(&format!("  \"n_atoms\": {n_atoms},\n"));
+    json.push_str(&format!("  \"repeats\": {repeats},\n"));
     json.push_str("  \"fixture\": \"resources/test/cuh2.con\",\n");
-    json.push_str(&format!("  \"payload_bytes\": {},\n", text.len()));
-    json.push_str(&format!("  \"one_frame_bytes\": {},\n", one.len()));
-    json.push_str(&format!("  \"rcsb_bytes\": {},\n", batch.len()));
-    json.push_str(&format!("  \"parse_100_frames_ms\": {:.6},\n", parse_ms));
-    json.push_str(&format!("  \"rcso_pack_100_ms\": {:.6},\n", pack_ms));
-    json.push_str(&format!("  \"rcso_decode_100_ms\": {:.6},\n", decode_ms));
+    let payload_bytes = text.len();
+    let one_frame_bytes = one.len();
+    let rcsb_bytes = batch.len();
+    json.push_str(&format!("  \"payload_bytes\": {payload_bytes},\n"));
+    json.push_str(&format!("  \"one_frame_bytes\": {one_frame_bytes},\n"));
+    json.push_str(&format!("  \"rcsb_bytes\": {rcsb_bytes},\n"));
+    json.push_str(&format!("  \"parse_100_frames_ms\": {parse_ms:.6},\n"));
+    json.push_str(&format!("  \"rcso_pack_100_ms\": {pack_ms:.6},\n"));
+    json.push_str(&format!("  \"rcso_decode_100_ms\": {decode_ms:.6},\n"));
     json.push_str(&format!(
-        "  \"parse_over_decode\": {:.4},\n",
-        ratio_parse_over_decode
+        "  \"parse_over_decode\": {ratio_parse_over_decode:.4},\n"
     ));
-    json.push_str(&format!("  \"rpc_unix_one_frame_ms\": {:.6},\n", unix_ms));
-    json.push_str(&format!("  \"rpc_tcp_one_frame_ms\": {:.6},\n", tcp_ms));
-    json.push_str(&format!(
-        "  \"tcp_over_unix\": {:.4}\n",
-        ratio_tcp_over_unix
-    ));
+    json.push_str(&format!("  \"rpc_unix_one_frame_ms\": {unix_ms:.6},\n"));
+    json.push_str(&format!("  \"rpc_tcp_one_frame_ms\": {tcp_ms:.6},\n"));
+    json.push_str(&format!("  \"tcp_over_unix\": {ratio_tcp_over_unix:.4}\n"));
     json.push_str("}\n");
 
     if let Some(parent) = out_path.parent() {

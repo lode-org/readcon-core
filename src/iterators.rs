@@ -4164,6 +4164,7 @@ fn stock_header(
 }
 
 #[cfg(feature = "parallel")]
+#[allow(dead_code)]
 fn symbol_covering(
     symbols: &[(std::sync::Arc<str>, usize)],
     row: usize,
@@ -4188,6 +4189,7 @@ fn read_compressed_phased(
     let file = std::fs::read(path)?;
     let open_s = t_open.elapsed().as_secs_f64();
     let t_all = std::time::Instant::now();
+    #[cfg(feature = "parallel")]
     let piped_threads = match num_threads {
         Some(n) if n >= 2 => n,
         _ => {

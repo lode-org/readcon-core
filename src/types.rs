@@ -321,6 +321,7 @@ impl FrameMeta {
     /// The parsed map is kept only after a lookup that expects to reuse it.
     /// A streaming write must not be one of those lookups: one map per frame
     /// is about a kilobyte, and a long trajectory holds every frame.
+    #[cfg(test)]
     pub(crate) fn has_cached_map(&self) -> bool {
         self.map.get().is_some()
     }
@@ -946,33 +947,16 @@ impl AtomSections {
     fn from_full(tail: AtomTail) -> Self {
         Self::Present(Box::new(HeapTail::Full(Box::new(tail))))
     }
-
-    fn velocity_value(&self) -> Option<[f64; 3]> {
-        match self {
-            Self::Empty => None,
-            Self::Present(tail) => match tail.as_ref() {
-                HeapTail::Velocity(v) => Some(*v),
-                HeapTail::Full(full) => full.velocity,
-                HeapTail::Column { .. } => None,
-            },
-        }
-    }
-
-    fn full(&self) -> Option<&AtomTail> {
-        match self {
-            Self::Present(tail) => match tail.as_ref() {
-                HeapTail::Full(full) => Some(full),
-                HeapTail::Velocity(_) | HeapTail::Column { .. } => None,
-            },
-            Self::Empty => None,
-        }
-    }
 }
 
 /// Optional per-atom sections. Absent on the coordinate-only path so a frame
 /// does not pay a fat tail on every atom.
+///
+/// Public only because [`HeapTail::Full`] stores it. The tail is an
+/// implementation detail of the atom record.
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Default)]
-struct AtomTail {
+pub struct AtomTail {
     velocity: Option<[f64; 3]>,
     force: Option<[f64; 3]>,
     energy: Option<f64>,
@@ -1189,6 +1173,7 @@ thread_local! {
 /// The next drop of this atom buffer releases its symbol counts in one step.
 ///
 /// The buffer must be one shared symbol and no owned coordinate boxes.
+#[cfg(any(feature = "parallel", feature = "chemfiles"))]
 pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     if atoms.is_empty() {
         return;
@@ -1240,6 +1225,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn take_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
     ATOM_SPARE.with(|cell| {
         let spare = cell.replace(Vec::new());
@@ -1283,6 +1269,7 @@ fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
 ///
 /// Pair each added count with [`share_arc_str`]. The source `Arc` must stay
 /// alive until those shares exist, or the allocation can be freed early.
+#[cfg(feature = "chemfiles")]
 pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
     if extra == 0 {
         return;
@@ -1293,6 +1280,7 @@ pub(crate) fn bump_arc_str(symbol: &std::sync::Arc<str>, extra: usize) {
 }
 
 /// One strong reference already counted by [`bump_arc_str`].
+#[cfg(feature = "chemfiles")]
 pub(crate) fn share_arc_str(symbol: &std::sync::Arc<str>) -> std::sync::Arc<str> {
     unsafe { std::sync::Arc::from_raw(std::sync::Arc::as_ptr(symbol)) }
 }

@@ -8,8 +8,6 @@
 //! Semantic constraints (per-type atom counts, component indices, JSON metadata)
 //! are **not** fully encoded in the PEG — see comments in `grammar/readcon.pest`.
 
-#![cfg(feature = "grammar")]
-
 use pest::Parser;
 use pest_derive::Parser;
 

@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 //=============================================================================
 // Transparent compression support
 //=============================================================================
@@ -724,7 +726,7 @@ fn write_fused_frame(
                     let (atom_from, atom_to) = ranges_ref[index];
                     plain.clear();
                     if atom_from == 0 {
-                        plain.extend_from_slice(&header);
+                        plain.extend_from_slice(header);
                     }
                     plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
                     let plain_len = plain.len();
@@ -871,6 +873,7 @@ struct MemberPlan {
     plain: Option<Vec<usize>>,
     /// `(first coordinate row, row count)` per member, when the payload is
     /// one coordinate block after a single header.
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     rows: Option<Vec<(u32, u32)>>,
 }
 
@@ -1229,7 +1232,7 @@ where
     // eight-thread gzip write slower than four.
     let ranges = worker_ranges(parts.len(), threads);
     std::thread::scope(|scope| {
-        for (_worker, (begin, end)) in ranges.into_iter().enumerate() {
+        for (begin, end) in ranges.into_iter() {
             let slots = &slots;
             let parts = &parts;
             let encode = &encode;
@@ -1565,6 +1568,7 @@ pub fn codec_deflate(
 }
 
 /// Indexed members whose plain lengths and coordinate-row spans are known.
+#[cfg(feature = "parallel")]
 pub(crate) struct IndexedMembers {
     pub starts: Vec<usize>,
     pub plain: Vec<usize>,
@@ -1572,6 +1576,7 @@ pub(crate) struct IndexedMembers {
     pub gzip: bool,
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn indexed_members(bytes: &[u8]) -> Option<IndexedMembers> {
     if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
         let plan = gzip_member_starts(bytes)?;
@@ -1605,6 +1610,7 @@ pub(crate) fn indexed_members(bytes: &[u8]) -> Option<IndexedMembers> {
     None
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn inflate_member(gzip: bool, src: &[u8], dst: &mut [u8]) -> io::Result<()> {
     if gzip {
         gzip_into(src, dst)

@@ -241,6 +241,7 @@ fn fresh_ranked_file(path: &Path, total: u64) -> std::io::Result<std::path::Path
 /// Truncating a file we are about to fill frees every page and faults
 /// them back. Rank 0 did that alone, so eight ranks waited on one
 /// free of the whole trajectory. A same-length rewrite keeps the pages.
+#[cfg(test)]
 fn prepare_ranked_file(path: &Path, total: u64) -> std::io::Result<()> {
     if let Ok(meta) = std::fs::metadata(path)
         && meta.len() == total
@@ -350,6 +351,7 @@ pub fn write_block_refs(
     Ok(total)
 }
 
+#[cfg(test)]
 fn pack_slice_parts(parts: &frame_index::SliceParts) -> Vec<u8> {
     let mut out =
         Vec::with_capacity(16 + parts.fragments.iter().map(|(_, b)| b.len()).sum::<usize>());
@@ -367,6 +369,7 @@ fn pack_slice_parts(parts: &frame_index::SliceParts) -> Vec<u8> {
     out
 }
 
+#[cfg(test)]
 fn unpack_slice_parts(mut buf: &[u8]) -> Result<frame_index::SliceParts, String> {
     fn take<'a>(buf: &mut &'a [u8], n: usize) -> Result<&'a [u8], String> {
         if buf.len() < n {

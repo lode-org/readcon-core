@@ -61,8 +61,8 @@ pub fn fill_frame_builder(
         sections.set(i as u32, s.as_str());
     }
 
-    let meta_json =
-        serde_json::to_string(&frame.header.metadata).map_err(|e| format!("metadata json: {e}"))?;
+    let meta_json = serde_json::to_string(&frame.header.metadata.to_map())
+        .map_err(|e| format!("metadata json: {e}"))?;
     fb.set_metadata_json(&meta_json);
     fb.set_strict_validation(frame.header.strict_validation);
     fb.set_sections_declared(frame.header.sections_declared);
@@ -341,7 +341,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
         natms_per_type,
         masses_per_type,
         spec_version: fd.get_spec_version(),
-        metadata,
+        metadata: crate::types::FrameMeta::from_map(metadata),
         sections,
         strict_validation: fd.get_strict_validation(),
         sections_declared: fd.get_sections_declared(),

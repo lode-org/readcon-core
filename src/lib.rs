@@ -8,12 +8,32 @@
 // mimalloc so a malloc tracer can see the parser. Timing builds and the
 // shipped library keep mimalloc.
 #![allow(unexpected_cfgs)]
+#![allow(
+    clippy::doc_lazy_continuation,
+    clippy::drop_non_drop,
+    clippy::implicit_saturating_sub,
+    clippy::items_after_test_module,
+    clippy::needless_borrow,
+    clippy::needless_borrows_for_generic_args,
+    clippy::needless_option_as_deref,
+    clippy::needless_question_mark,
+    clippy::needless_range_loop,
+    clippy::needless_return,
+    clippy::ptr_eq,
+    clippy::redundant_locals,
+    clippy::reserve_after_initialization,
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_unwrap
+)]
 #[cfg(all(not(any(asan_run, miri)), not(feature = "system-alloc")))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[cfg(test)]
 mod allocator_link_tests {
+    #[cfg(all(not(any(asan_run, miri)), not(feature = "system-alloc")))]
     unsafe extern "C" {
         fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
     }

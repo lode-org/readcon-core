@@ -41,6 +41,12 @@ fn link_flags_for(library_dirs: &[std::path::PathBuf]) -> Vec<String> {
     flags
 }
 
+#[test]
+fn empty_dirs_link_only_readcon() {
+    assert_eq!(link_flags_for(&[]), vec!["-lreadcon_core".to_string()]);
+    assert_eq!(runtime_library_path(&[]), "");
+}
+
 fn runtime_library_path(library_dirs: &[std::path::PathBuf]) -> String {
     let mut dirs = library_dirs.to_vec();
     dirs.extend(metatensor_lib_dirs(library_dirs));

@@ -6572,6 +6572,7 @@ fn py_text_frames<'py>(
     Ok(frames)
 }
 
+#[allow(dead_code)]
 fn species_list_from_batches(
     rx: std::sync::mpsc::Receiver<crate::extxyz_scan::SpeciesBatch>,
 ) -> Option<pyo3::Py<pyo3::types::PyList>> {
@@ -6642,6 +6643,7 @@ fn species_list_from_batches(
     .flatten()
 }
 
+#[allow(dead_code)]
 fn pool_symbols<'py>(
     py: Python<'py>,
     batch: &crate::extxyz_scan::SpeciesBatch,
@@ -6653,6 +6655,7 @@ fn pool_symbols<'py>(
         .collect())
 }
 
+#[allow(dead_code)]
 fn slice_symbols<'py>(
     py: Python<'py>,
     batch: &crate::extxyz_scan::SpeciesBatch,

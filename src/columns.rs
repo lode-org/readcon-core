@@ -598,6 +598,7 @@ fn parse_repeated_copies(
     Ok(Some(out))
 }
 
+#[cfg(feature = "parallel")]
 struct PeekedHeader {
     count: usize,
     head_end: usize,
@@ -752,6 +753,7 @@ fn find_line_at(bytes: &[u8], line: &[u8], from: usize) -> Option<usize> {
 
 /// `bytes` is `n` copies of a frame of `span` bytes, each starting with
 /// the same header. Later frames can then be planned on their own core.
+#[cfg(feature = "parallel")]
 fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
     if span < 16 || head_end == 0 || head_end > span || !bytes.len().is_multiple_of(span) {
         return None;
