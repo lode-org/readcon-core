@@ -474,6 +474,70 @@ def test_a_protected_measure_is_not_rewritten(tmp_path: Path):
             )
 
 
+def test_a_committed_record_is_refused(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    record = "bench/h2h/million/v0.23.3"
+    trees = []
+    try:
+        tree = _worktree(tmp_path, "committed")
+        trees.append(tree)
+        host = (tree / record / "host.json").read_bytes()
+        refused = _snakemake(
+            tree,
+            "million",
+            "--config",
+            f"million_out={record}",
+        )
+        refused_text = refused.stdout + refused.stderr
+        assert refused.returncode != 0, refused_text
+        assert "refusing to write a saved record" in refused_text
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain", "--", record],
+            cwd=tree,
+            text=True,
+        )
+        assert status == ""
+        assert (tree / record / "host.json").read_bytes() == host
+        assert not (tree / record / "NOTES.txt").exists()
+        assert not (tree / record / "asv.json").exists()
+        assert not (tree / record / "asv-machine.json").exists()
+        assert not (tree / record / "library-commit.txt").exists()
+        assert not (tree / record / "lscpu.txt").exists()
+    finally:
+        for path in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(path)],
+                cwd=root,
+                check=False,
+            )
+
+
+def test_a_fresh_directory_still_measures_and_resumes(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    trees = []
+    try:
+        tree = _worktree(tmp_path, "fresh-resume")
+        trees.append(tree)
+        _, short = _tip(tree)
+        fresh = tree / "bench/h2h/million" / f"v{version}-{short}"
+        measured = _snakemake(tree, "million_measure")
+        assert measured.returncode == 0, measured.stdout + measured.stderr
+        measured_bytes = (fresh / "cross-format.json").read_bytes()
+        resumed = _snakemake(tree, "million")
+        assert resumed.returncode == 0, resumed.stdout + resumed.stderr
+        assert (fresh / "cross-format.json").read_bytes() == measured_bytes
+        assert (fresh / "asv.json").read_text(encoding="utf-8") == "asv\n"
+        assert (fresh / "host.json").read_text(encoding="utf-8") == "record\n"
+    finally:
+        for path in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(path)],
+                cwd=root,
+                check=False,
+            )
+
+
 def test_a_per_size_repeat_map_is_the_campaign_protocol():
     assert report.protocol_error({"warmup": 1, "repeats": 12}) is None
     assert (
