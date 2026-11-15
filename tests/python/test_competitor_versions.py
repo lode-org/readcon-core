@@ -76,3 +76,39 @@ def test_competitor_versions_are_one_set() -> None:
     assert _lock_has("mdanalysis", MDA)
     assert _lock_has("ovito", OVITO)
     assert _conda_has("mdanalysis", MDA)
+
+
+def _canonical(name: str) -> str:
+    return name.lower().replace("_", "-").replace(".", "-")
+
+
+def _lock_pypi() -> set[tuple[str, str]]:
+    """Pinned PyPI distributions in pixi.lock, not conda packages or optional extras."""
+    text = (ROOT / "paper/cpc/pixi.lock").read_text(encoding="utf-8")
+    found = set()
+    for url in re.findall(r"(?m)^- pypi: (\S+)", text):
+        filename = url.rstrip("/").rsplit("/", 1)[-1]
+        match = re.match(r"^(.*?)-(\d[\w.]*)-", filename)
+        assert match, filename
+        found.add((_canonical(match.group(1)), match.group(2)))
+    return found
+
+
+def test_requirements_lines_are_locked_pypi_entries() -> None:
+    locked = _lock_pypi()
+    bad = []
+    for line in (
+        (ROOT / "paper/cpc/environment/requirements.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ):
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==(\S+)", line)
+        assert match, line
+        pin = (_canonical(match.group(1)), match.group(2))
+        if pin not in locked:
+            bad.append(line)
+    assert not bad, "requirements line is not a pip entry in pixi.lock:\n" + "\n".join(
+        bad
+    )

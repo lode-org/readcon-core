@@ -102,6 +102,10 @@ FORMAT = [
     ["scripts/test_run.py", "--tables"],
     ["scripts/sinum.py"],
     ["scripts/gen_figures.py"],
+    # Figures the plotters below do not emit. Those plotters then rewrite
+    # the names they do own: timing, restart_formats, structures, velocity_mislabel.
+    ["scripts/plot_restored.py"],
+    ["scripts/plot_union_extra.py"],
     ["scripts/plot_perf.py"],
     ["scripts/gen_spec_supp.py", "--as-is"],
     ["scripts/plot_figures.py"],
