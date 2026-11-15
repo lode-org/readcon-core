@@ -14,54 +14,14 @@ use readcon_core::types::{ConFrame, ConFrameBuilder};
 use readcon_core::writer::{ConFrameWriter, write_frames_to_string, write_frames_to_vec};
 use std::ffi::{CStr, CString};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 include!("metatensor_link.rs");
 
-fn plain_library(dir: &Path) -> bool {
-    let so = dir.join("libreadcon_core.so");
-    if !so.is_file() {
-        return dir.join("libreadcon_core.a").is_file();
-    }
-    let listed = Command::new("nm")
-        .args(["-D"])
-        .arg(&so)
-        .output()
-        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
-        .unwrap_or_default();
-    !listed.contains("PyExc_BaseException")
-}
-
-fn library_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    let mut dir = std::env::current_exe().unwrap();
-    dir.pop();
-    for _ in 0..8 {
-        if plain_library(&dir) {
-            dirs.push(dir.clone());
-        }
-        if !dir.pop() {
-            break;
-        }
-    }
-    // A non-Python build can leave the plain cdylib in the build-script
-    // out directory. A Python build must not pick up an older plain library
-    // from that tree.
-    if !cfg!(feature = "python") {
-        let build =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/build/readcon-core");
-        if let Ok(entries) = fs::read_dir(&build) {
-            for entry in entries.flatten() {
-                let out = entry.path().join("out");
-                if plain_library(&out) {
-                    dirs.push(out);
-                }
-            }
-        }
-    }
-    dirs
-}
+#[path = "common/plain_library.rs"]
+mod plain_library;
+use plain_library::library_dirs;
 
 fn frame(id: u64, x: f64) -> ConFrame {
     let mut builder = ConFrameBuilder::new([4.0, 4.0, 4.0], [90.0, 90.0, 90.0]);
