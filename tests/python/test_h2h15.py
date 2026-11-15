@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import struct
 import sys
 from pathlib import Path
@@ -13,6 +14,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench" / "h2h"))
 
 import h2h15
 from bench_disk import bench_file
+
+
+def test_an_extra_only_run_writes_the_host(monkeypatch, tmp_path: Path) -> None:
+    pytest.importorskip("readcon")
+    monkeypatch.setenv("READCON_CROSS_PART", "extra")
+    ident = {
+        "commit": "a" * 40,
+        "tree": "b" * 40,
+        "diff_sha256": "0" * 64,
+        "remote": "refs/heads/feat/release-0.23.0",
+    }
+    monkeypatch.setattr(h2h15, "refuse_stale_build", lambda _root: ident)
+    monkeypatch.setattr(h2h15, "pin_mdcompress", lambda: (tmp_path, tmp_path))
+    monkeypatch.setattr(h2h15, "_extra_rows", lambda *_args, **_kwargs: ([], []))
+    monkeypatch.setattr(
+        h2h15.cross_format,
+        "campaign_host",
+        lambda _out, tree: {
+            "loadavg": "0.10 0.10 0.10 1/1 1",
+            "governor": {"0": "performance"},
+            "cpu_model": "Test CPU",
+            "tree": tree,
+        },
+    )
+    h2h15.run(tmp_path)
+    host = json.loads((tmp_path / "host.json").read_text(encoding="utf-8"))
+    assert host["loadavg"].startswith("0.10")
+    assert host["governor"]["0"] == "performance"
+    assert host["cpu_model"] == "Test CPU"
+    assert host["commit"] == "a" * 40
 
 
 def test_chemfiles_rows_stay_separate_and_name_the_interval_unit():

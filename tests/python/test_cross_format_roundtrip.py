@@ -163,6 +163,10 @@ def test_repeats_follow_the_structure_size() -> None:
     assert cross_format.repeats_for("100k") == 12
     assert cross_format.repeats_for("traj") == 12
     assert cross_format.repeats_for("1M") == 6
+    assert cross_format.sample_count("1M", None) == 6
+    assert cross_format.sample_count("1k", 3) == 3
+    with pytest.raises(SystemExit, match="positive"):
+        cross_format.sample_count("1k", 0)
 
 
 def test_a_finished_sample_is_appended(tmp_path: Path) -> None:

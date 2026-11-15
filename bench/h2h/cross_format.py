@@ -145,6 +145,45 @@ def repeats_for(label: str) -> int:
     return 12
 
 
+def sample_count(label: str, repeats: int | None) -> int:
+    """``repeats`` overrides the per-size count. ``None`` keeps ``repeats_for``."""
+    if repeats is None:
+        return repeats_for(label)
+    if repeats < 1:
+        raise SystemExit("repeats must be positive")
+    return repeats
+
+
+def campaign_host(out: Path, tree: str) -> dict:
+    """Load, governor, CPU model and the disks used for this record."""
+    host = host_snapshot()
+    out.mkdir(parents=True, exist_ok=True)
+    disk = bench_disk()
+    work = WORK
+    for path in (out, work, disk):
+        path.mkdir(parents=True, exist_ok=True)
+    model = ""
+    for line in (host.get("lscpu") or "").splitlines():
+        if line.startswith("Model name:"):
+            model = line.split(":", 1)[1].strip()
+            break
+
+    def filesystem(path: Path) -> str:
+        return subprocess.check_output(
+            ["stat", "-f", "-c", "%T", str(path)], text=True
+        ).strip()
+
+    host["cpu_model"] = model
+    host["tree"] = tree
+    host["bench_disk"] = record_path(disk, ROOT)
+    host["bench_disk_filesystem"] = filesystem(disk)
+    host["work"] = record_path(work, ROOT)
+    host["work_filesystem"] = filesystem(work)
+    host["record"] = record_path(out, ROOT)
+    host["record_filesystem"] = filesystem(out)
+    return host
+
+
 def arm_selected(label: str, arm_id: str) -> bool:
     """Structure and arm filters. A shard sets one and leaves the other open."""
     structures = {
@@ -2847,21 +2886,15 @@ def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
 
 def run(
     out: Path,
-    repeats: int = 6,
+    repeats: int | None = None,
     structures=STRUCTURES,
     ops: tuple[str, ...] = ("read", "write"),
 ) -> None:
-    """``repeats`` is ignored. ``repeats_for`` chooses the count from the size."""
-    del repeats
+    """``repeats`` overrides the per-size count for every structure in this run."""
     ident = refuse_stale_build(ROOT)
     serial_threads()
     pin_cores()
-    host = host_snapshot()
-    out.mkdir(parents=True, exist_ok=True)
-    disk = bench_disk()
-    work = WORK
-    for path in (out, work, disk):
-        path.mkdir(parents=True, exist_ok=True)
+    host = campaign_host(out, ident["tree"])
     # The profile is the chemfiles Frame build, which the read session already
     # recorded. A write-only rerun must not spend another pass on it.
     if "read" in ops:
@@ -2869,26 +2902,6 @@ def run(
     rows = []
     notes: list[str] = []
     sha = ident["commit"]
-    tree = ident["tree"]
-    model = ""
-    for line in (host.get("lscpu") or "").splitlines():
-        if line.startswith("Model name:"):
-            model = line.split(":", 1)[1].strip()
-            break
-
-    def filesystem(path: Path) -> str:
-        return subprocess.check_output(
-            ["stat", "-f", "-c", "%T", str(path)], text=True
-        ).strip()
-
-    host["cpu_model"] = model
-    host["tree"] = tree
-    host["bench_disk"] = record_path(disk, ROOT)
-    host["bench_disk_filesystem"] = filesystem(disk)
-    host["work"] = record_path(work, ROOT)
-    host["work_filesystem"] = filesystem(work)
-    host["record"] = record_path(out, ROOT)
-    host["record_filesystem"] = filesystem(out)
     versions = library_versions()
     ovito_check = ovito_extxyz_periodicity_and_drift()
     if (
@@ -2928,7 +2941,8 @@ def run(
             "warmup 1 percentile type7 serial 1 "
             + "samples "
             + " ".join(
-                f"{label}={repeats_for(label)}" for label, _atoms, _frames in structures
+                f"{label}={sample_count(label, repeats)}"
+                for label, _atoms, _frames in structures
             ),
             f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
             f"loadavg {host['loadavg']}",
@@ -2950,7 +2964,7 @@ def run(
     for label, n_atoms, n_frames in structures:
         if only_structures and label not in only_structures:
             continue
-        repeats = repeats_for(label)
+        count = sample_count(label, repeats)
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = make_spec(n_atoms, n_frames)
@@ -3058,14 +3072,14 @@ def run(
             usable.append(arm)
         if label == "1M" and any(arm["id"] == "readcon-con" for arm in usable):
             plain = directory / "readcon.con"
-            default_read = _fresh_reads(plain, None, repeats)
-            serial_note = _fresh_reads(plain, 1, repeats)
+            default_read = _fresh_reads(plain, None, count)
+            serial_note = _fresh_reads(plain, 1, count)
             notes.append(
                 "1M readcon-con serial fresh-process read "
                 f"{serial_note:.4f} s, default threads {default_read:.4f} s. "
                 "The table row is the interleaved serial measurement. "
                 "Default threads is one worker per core, same warmup and "
-                f"sample count ({repeats})."
+                f"sample count ({count})."
             )
             lines.append(f"note {notes[-1]}")
         write_jobs = []
@@ -3279,9 +3293,11 @@ def run(
         "frames": frame_log,
         "host": host,
         "warmup": 1,
-        "repeats": {label: repeats_for(label) for label, _n, _f in structures},
+        "repeats": {
+            label: sample_count(label, repeats) for label, _n, _f in structures
+        },
         "repeats_by_structure": {
-            label: repeats_for(label) for label, _n, _f in structures
+            label: sample_count(label, repeats) for label, _n, _f in structures
         },
         "percentile": "type7",
         "serial": True,
@@ -3385,7 +3401,12 @@ def main() -> None:
         default=BENCH / "work" / "cross-format-out",
         help="campaign directory; saved records under scaling/ are not the default",
     )
-    parser.add_argument("--repeats", type=int, default=6)
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=None,
+        help="sample count for every structure; omit it to use the per-size count",
+    )
     parser.add_argument(
         "--ops",
         default="read,write",
