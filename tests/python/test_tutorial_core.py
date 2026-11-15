@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,16 +63,64 @@ def test_tutorial_script_does_not_call_system_python3():
     assert not hits, "script hard-codes system python3:\n" + "\n".join(hits)
 
 
+def _maturin_invocation(python: str) -> str | None:
+    """Return how ``python`` can reach maturin, or None if it is not installed.
+
+    A virtualenv keeps the maturin script beside the interpreter. Other
+    layouts put that script elsewhere on PATH, or expose only
+    ``python -m maturin``.
+    """
+    found = shutil.which("maturin")
+    if found:
+        return found
+    sibling = Path(python).resolve().with_name("maturin")
+    if sibling.is_file() and os.access(sibling, os.X_OK):
+        return str(sibling)
+    proc = subprocess.run(
+        [python, "-m", "maturin", "--version"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if proc.returncode == 0:
+        return f"{python} -m maturin"
+    return None
+
+
+def _runner_env(python: str, maturin: str) -> dict[str, str]:
+    """Use pytest's interpreter, and make the maturin we found visible."""
+    env = _env()
+    env["PYTHON"] = python
+    exe = Path(python).resolve()
+    venv = env.get("VIRTUAL_ENV")
+    if venv and Path(venv).resolve() != exe.parent.parent:
+        # Pytest is not the interpreter of the active virtualenv.
+        env.pop("VIRTUAL_ENV", None)
+    bins = [str(exe.parent)]
+    maturin_path = Path(maturin)
+    if maturin_path.is_file():
+        bins.append(str(maturin_path.resolve().parent))
+    env["PATH"] = os.pathsep.join(bins) + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def test_org_babel_tutorial_core_script():
     if _emacs_path() is None:
         if os.environ.get("CI"):
             pytest.fail("emacs required on CI for Org Babel tutorials")
         pytest.skip("emacs required for org-babel-tangle")
+    python = sys.executable
+    maturin = _maturin_invocation(python)
+    if maturin is None:
+        pytest.skip(
+            "maturin is unavailable: not on PATH, not beside the pytest "
+            "interpreter, and `python -m maturin` failed"
+        )
     assert ORG.is_file() and SCRIPT.is_file()
     proc = subprocess.run(
         ["bash", str(SCRIPT)],
         cwd=str(REPO),
-        env=_env(),
+        env=_runner_env(python, maturin),
         capture_output=True,
         text=True,
         timeout=300,
