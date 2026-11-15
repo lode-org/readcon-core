@@ -474,7 +474,7 @@ rule camp16b:
 # n=12, type-7 median and IQR. The asv class times the same readcon calls.
 # ``--config ops=write`` times writes. The default times reads and writes.
 # ``--config million_out=...`` selects a different directory and is refused
-# when that directory is an existing record or lies under bench/h2h/scaling.
+# when that directory is a committed record or lies under bench/h2h/scaling.
 import os
 import subprocess
 import sys
@@ -508,24 +508,48 @@ def _measure_outputs_missing():
     return any(not os.path.isfile(path) for path in MILLION_MEASURE)
 
 
+def _committed_record_directories():
+    # A committed measurement, not the benchmark package that sits beside it.
+    # git ls-files is the list of record directories, so a later release is
+    # included when its cross-format.json is committed.
+    listed = subprocess.check_output(
+        ["git", "-C", _REPO, "ls-files", "-z", "--", "bench/h2h/million"],
+        text=True,
+    )
+    marker = "/cross-format.json"
+    found = set()
+    for raw in listed.split("\0"):
+        if not raw.endswith(marker):
+            continue
+        found.add(raw[: -len(marker)])
+    return found
+
+
+def _refuse_saved_path(path):
+    normalized = str(path).rstrip("/")
+    if normalized == "bench/h2h/scaling" or normalized.startswith(
+        "bench/h2h/scaling/"
+    ):
+        raise SystemExit("refusing to write a saved record")
+    for saved in _committed_record_directories():
+        if normalized == saved or normalized.startswith(saved + "/"):
+            raise SystemExit("refusing to write a saved record")
+
+
 def _refuse_saved_record(path):
     # Snakemake creates output directories before the shell. This check has
     # to run first, and only for a million-atom target, so another rule's
     # dry run is left alone.
+    _refuse_saved_path(path)
     normalized = str(path).rstrip("/")
-    if normalized == "bench/h2h/scaling" or normalized.startswith("bench/h2h/scaling/"):
-        raise SystemExit("refusing to write a saved record")
-    saved = MILLION_SAVED.rstrip("/")
-    if normalized == saved or normalized.startswith(saved + "/"):
-        raise SystemExit("refusing to write a saved record")
     if os.path.isdir(normalized):
         raise SystemExit("refusing to write a saved record")
 
 
 def _refuse_million_target(targets):
-    # A fresh measurement is always refused when the directory is already a
-    # record. A later step in that directory is refused only while a
-    # measurement output is still missing, so a finished measure can resume.
+    # A fresh measurement is refused when the directory already exists.
+    # A later step is refused on a committed record even when the
+    # measurement files are present, and also while one of them is missing.
     measure_files = set(MILLION_MEASURE)
     prefix = MILLION + "/"
     later_step = False
@@ -536,8 +560,10 @@ def _refuse_million_target(targets):
             return
         if text == "million" or text == MILLION or text.startswith(prefix):
             later_step = True
-    if later_step and _measure_outputs_missing():
-        _refuse_saved_record(MILLION)
+    if later_step:
+        _refuse_saved_path(MILLION)
+        if _measure_outputs_missing():
+            _refuse_saved_record(MILLION)
 
 
 def _cli_targets():
