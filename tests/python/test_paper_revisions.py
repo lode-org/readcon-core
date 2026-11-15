@@ -228,7 +228,17 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
             tag_text = "\n".join(
                 line for line in text.splitlines() if "readcon" in line.lower()
             )
-        for version in TAG.findall(tag_text):
+        for match in TAG.finditer(tag_text):
+            version = match.group(1)
+            # A directory name such as results/v0.23.3 is not a cited tag.
+            if match.start() > 0 and tag_text[match.start() - 1] == "/":
+                continue
+            line_start = tag_text.rfind("\n", 0, match.start()) + 1
+            line_end = tag_text.find("\n", match.end())
+            line = tag_text[line_start : line_end if line_end >= 0 else None]
+            # readcon-db's revision, not a tag of this repository.
+            if "READCON_DB_REV" in line:
+                continue
             if (
                 _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode
                 != 0
