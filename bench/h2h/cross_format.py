@@ -167,6 +167,27 @@ def arm_selected(label: str, arm_id: str) -> bool:
     return arm_id not in skip
 
 
+def capacity_limit(arm_id: str, exc: BaseException) -> str | None:
+    """Return an unsupported reason, or None when the run must stop.
+
+    Only a format that cannot hold the structure is unsupported. A crash
+    in our own reader is not that case.
+    """
+    if arm_id == "extxyz-ng" and isinstance(exc, OSError):
+        return unsupported_reason(arm_id, exc)
+    return None
+
+
+def reject_round_trip(
+    arm_id: str, position_error: float, cell_error: float, precision: float
+) -> None:
+    raise SystemExit(
+        "round-trip failure: "
+        f"{arm_id} position {position_error:.3g} "
+        f"cell {cell_error:.3g} exceeds {precision}"
+    )
+
+
 def unsupported_reason(arm_id: str, exc: BaseException) -> str:
     if arm_id == "extxyz-ng" and isinstance(exc, OSError):
         return EXTXYZ_NG_UNSUPPORTED
@@ -2968,6 +2989,9 @@ def run(
                 path = convert_arm(arm["id"], spec, directory)
                 got = read_arm(arm["id"], os.fspath(path))
             except Exception as exc:
+                reason = capacity_limit(arm["id"], exc)
+                if reason is None:
+                    raise
                 record_unsupported(
                     out,
                     rows,
@@ -2976,7 +3000,7 @@ def run(
                     n_atoms,
                     n_frames,
                     arm,
-                    unsupported_reason(arm["id"], exc),
+                    reason,
                 )
                 continue
             checked = audit(spec, got, arm["precision"])
@@ -2988,21 +3012,12 @@ def run(
             position_bad = checked["position_error"] > arm["precision"]
             cell_bad = "cell" not in lost and checked["cell_error"] > arm["precision"]
             if position_bad or cell_bad:
-                record_unsupported(
-                    out,
-                    rows,
-                    lines,
-                    label,
-                    n_atoms,
-                    n_frames,
-                    arm,
-                    (
-                        "unsupported: round-trip position "
-                        f"{checked['position_error']:.3g} cell "
-                        f"{checked['cell_error']:.3g} exceeds {arm['precision']}"
-                    ),
+                reject_round_trip(
+                    arm["id"],
+                    checked["position_error"],
+                    checked["cell_error"],
+                    arm["precision"],
                 )
-                continue
             expect_full_read(got, n_atoms, n_frames, arm["id"])
             size = path.stat().st_size
             expect_file_bytes(arm["id"], n_atoms, n_frames, size)
