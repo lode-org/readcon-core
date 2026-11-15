@@ -8,8 +8,8 @@ from __future__ import annotations
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parent
-VERSION = "0.23.3"
-MILLION = BENCH / "results" / f"v{VERSION}" / "million"
+VERSION = "v0.23.3"
+MILLION = BENCH / "results" / VERSION / "million"
 HOLD = MILLION / "million_hold.json"
 PEERS = MILLION / "peers_n1e6.json"
 SUPERSEDED = BENCH / "results" / "r0174" / "million"

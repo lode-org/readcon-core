@@ -44,8 +44,8 @@ fn visit_scaling_text(dir: &Path, seen: &mut usize) {
     for entry in fs::read_dir(dir).unwrap_or_else(|err| panic!("read {}: {err}", dir.display())) {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
-            // The 0.23.3 mpi-pwrite logs are the recorded run. Some store
-            // logs have no final newline, and those bytes stay as measured.
+            // The mpi-pwrite logs for this release are the recorded run.
+            // Some store logs have no final newline, and those bytes stay.
             if path.file_name().and_then(|name| name.to_str()) == Some("v0.23.3") {
                 continue;
             }
