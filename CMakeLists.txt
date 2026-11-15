@@ -145,9 +145,22 @@ endif()
 
 set(CARGO_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo-target)
 set(CARGO_BUILD_ARG "${CARGO_BUILD_ARG};--target-dir=${CARGO_TARGET_DIR}")
+set(_readcon_user_feats "")
 if (NOT "${READCON_CORE_CARGO_FEATURES}" STREQUAL "")
-    string(REPLACE " " "," _feats "${READCON_CORE_CARGO_FEATURES}")
-    set(CARGO_BUILD_ARG "${CARGO_BUILD_ARG};--features=${_feats}")
+    string(REPLACE " " "," _readcon_user_feats "${READCON_CORE_CARGO_FEATURES}")
+endif()
+# The static archive is linked beside other Rust staticlibs. It must use
+# the system allocator so it does not define mi_malloc. The cdylib keeps
+# mimalloc and the caller's features.
+if ("${_readcon_user_feats}" STREQUAL "")
+    set(_readcon_static_feats "static_system_alloc")
+else()
+    set(_readcon_static_feats "${_readcon_user_feats},static_system_alloc")
+endif()
+set(_readcon_static_feat_arg "--features=${_readcon_static_feats}")
+set(_readcon_shared_feat_arg "")
+if (NOT "${_readcon_user_feats}" STREQUAL "")
+    set(_readcon_shared_feat_arg "--features=${_readcon_user_feats}")
 endif()
 
 if ("${RUST_BUILD_TARGET}" STREQUAL "")
@@ -265,33 +278,57 @@ if (NOT "$ENV{RUSTC_WRAPPER}" STREQUAL "")
 endif()
 
 if (READCON_CORE_INSTALL_BOTH_STATIC_SHARED)
-    set(CARGO_RUSTC_CRATE_TYPES "--crate-type=cdylib;--crate-type=staticlib")
     set(CARGO_OUTPUTS ${READCON_CORE_SHARED_LOCATION} ${READCON_CORE_STATIC_LOCATION})
     if (WIN32)
         list(APPEND CARGO_OUTPUTS ${READCON_CORE_IMPLIB_LOCATION})
     endif()
-else()
-    if (BUILD_SHARED_LIBS)
-        set(CARGO_RUSTC_CRATE_TYPES "--crate-type=cdylib")
-        set(CARGO_OUTPUTS ${READCON_CORE_SHARED_LOCATION})
-        if (WIN32)
-            list(APPEND CARGO_OUTPUTS ${READCON_CORE_IMPLIB_LOCATION})
-        endif()
-    else()
-        set(CARGO_RUSTC_CRATE_TYPES "--crate-type=staticlib")
-        set(CARGO_OUTPUTS ${READCON_CORE_STATIC_LOCATION})
+    # Two rustc invocations. One feature set cannot both keep mimalloc in
+    # the cdylib and leave it out of the static archive.
+    add_custom_command(
+        OUTPUT ${CARGO_OUTPUTS}
+        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
+                ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_static_feat_arg}
+                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+                -- --crate-type=staticlib
+        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
+                ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_shared_feat_arg}
+                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+                -- --crate-type=cdylib ${CARGO_RUSTC_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS ${ALL_RUST_SOURCES}
+        COMMENT "Building readcon-core C ABI with cargo"
+        VERBATIM
+    )
+elseif (BUILD_SHARED_LIBS)
+    set(CARGO_OUTPUTS ${READCON_CORE_SHARED_LOCATION})
+    if (WIN32)
+        list(APPEND CARGO_OUTPUTS ${READCON_CORE_IMPLIB_LOCATION})
     endif()
+    add_custom_command(
+        OUTPUT ${CARGO_OUTPUTS}
+        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
+                ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_shared_feat_arg}
+                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+                -- --crate-type=cdylib ${CARGO_RUSTC_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS ${ALL_RUST_SOURCES}
+        COMMENT "Building readcon-core C ABI with cargo"
+        VERBATIM
+    )
+else()
+    set(CARGO_OUTPUTS ${READCON_CORE_STATIC_LOCATION})
+    add_custom_command(
+        OUTPUT ${CARGO_OUTPUTS}
+        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
+                ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_static_feat_arg}
+                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+                -- --crate-type=staticlib
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS ${ALL_RUST_SOURCES}
+        COMMENT "Building readcon-core C ABI with cargo"
+        VERBATIM
+    )
 endif()
-
-add_custom_command(
-    OUTPUT ${CARGO_OUTPUTS}
-    COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
-            ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml -- ${CARGO_RUSTC_CRATE_TYPES} ${CARGO_RUSTC_ARGS}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    DEPENDS ${ALL_RUST_SOURCES}
-    COMMENT "Building readcon-core C ABI with cargo"
-    VERBATIM
-)
 add_custom_target(cargo-build-readcon-core ALL DEPENDS ${CARGO_OUTPUTS})
 add_dependencies(readcon-core::shared cargo-build-readcon-core)
 add_dependencies(readcon-core::static cargo-build-readcon-core)
