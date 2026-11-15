@@ -142,8 +142,8 @@ def main() -> None:
 
     refuse_stale_build(ROOT)
     out = Path(sys.argv[1]) if len(sys.argv) == 2 else RECORD
-    if out.resolve() != RECORD.resolve():
-        raise SystemExit("h2h15 asv copies into bench/h2h/scaling/h2h15")
+    if not out.resolve().is_relative_to(ROOT.resolve()):
+        raise SystemExit("asv output must stay inside the repository")
     out.mkdir(parents=True, exist_ok=True)
     write_machine_file()
     _run("H2H15Shared")

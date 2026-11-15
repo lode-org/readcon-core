@@ -122,6 +122,134 @@ STRUCTURES = (
 )
 # PDB's atom serial is five columns.
 PDB_MAX_ATOMS = 99_999
+
+# extxyz-ng 0.0.2 reads a short frame, including
+# Properties=species:S:1:pos:R:3, and raises OSError once the frame
+# passes 128 atoms. The same limit holds with masses and momenta.
+# The extended XYZ written for every reader is unchanged.
+EXTXYZ_NG_UNSUPPORTED = (
+    "unsupported: extxyz-ng 0.0.2 raises OSError past 128 atoms, "
+    "including a standard Properties=species:S:1:pos:R:3 header. "
+    "The extended XYZ columns were not changed"
+)
+
+
+def repeats_for(label: str) -> int:
+    """Sample count shared by every tool at this size.
+
+    One million atoms uses 6. Every smaller structure, including the
+    eight-frame trajectory, uses 12.
+    """
+    if label == "1M":
+        return 6
+    return 12
+
+
+def arm_selected(label: str, arm_id: str) -> bool:
+    """Structure and arm filters. A shard sets one and leaves the other open."""
+    structures = {
+        item
+        for item in os.environ.get("READCON_CROSS_STRUCTURES", "").split(",")
+        if item
+    }
+    arms = {
+        item for item in os.environ.get("READCON_CROSS_ARMS", "").split(",") if item
+    }
+    skip = {
+        item
+        for item in os.environ.get("READCON_CROSS_SKIP_ARMS", "").split(",")
+        if item
+    }
+    if structures and label not in structures:
+        return False
+    if arms and arm_id not in arms:
+        return False
+    return arm_id not in skip
+
+
+def unsupported_reason(arm_id: str, exc: BaseException) -> str:
+    if arm_id == "extxyz-ng" and isinstance(exc, OSError):
+        return EXTXYZ_NG_UNSUPPORTED
+    return "unsupported: " + record_text(f"{type(exc).__name__}: {exc}")
+
+
+def _file_bytes(path: str | None) -> str:
+    if not path:
+        return ""
+    file = Path(path)
+    if file.is_file():
+        return str(file.stat().st_size)
+    return ""
+
+
+def append_arm_row(
+    out: Path,
+    structure: str,
+    arm_id: str,
+    op: str,
+    sample: str,
+    wall_s: str,
+    rss_bytes: str,
+    file_bytes: str,
+    drops: str,
+) -> None:
+    """Append one finished sample. A stopped run keeps the lines already written."""
+    directory = out / "by-arm" / structure
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{arm_id}.tsv"
+    new = not path.is_file()
+    line = "\t".join(
+        record_text(str(part))
+        for part in (op, sample, wall_s, rss_bytes, file_bytes, drops)
+    )
+    with path.open("a", encoding="utf-8") as handle:
+        if new:
+            handle.write("op\tsample\twall_s\trss_bytes\tfile_bytes\tdrops\n")
+        handle.write(line + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def record_unsupported(
+    out: Path,
+    rows: list,
+    lines: list[str],
+    label: str,
+    n_atoms: int,
+    n_frames: int,
+    arm: dict,
+    reason: str,
+) -> None:
+    """A format that cannot hold this structure stays in the table."""
+    rows.append(
+        {
+            "structure": label,
+            "atoms": n_atoms,
+            "frames": n_frames,
+            "tool": arm["tool"],
+            "format": arm["format"],
+            "arm": arm["id"],
+            "notes": arm.get("notes", ""),
+            "op": "read",
+            "cache": "unsupported",
+            "median_s": None,
+            "iqr_s": None,
+            "samples_s": [],
+            "rss_bytes": None,
+            "file_bytes": None,
+            "loses": reason,
+            "position_error": None,
+            "cell_error": None,
+            "precision": arm["precision"],
+            "checksum_ok": None,
+            "n": 0,
+        }
+    )
+    lines.append(f"unsupported {label} {arm['id']} {reason}")
+    print(f"  unsupported {label} {arm['id']} {reason}", flush=True)
+    append_arm_row(out, label, arm["id"], "unsupported", "", "", "", "", reason)
+
+
 PRECISION = {
     "con": 1e-5,
     "extxyz": 1e-6,
@@ -1788,8 +1916,12 @@ def arm_table(n_atoms: int) -> tuple[list[dict], list[str]]:
                     f"extxyz-ng {ng[0]} (Rust). The default install replaces "
                     "the extxyz 0.4.6 import, so this arm loads the 0.0.2 "
                     "wheel from its own prefix and leaves extxyz 0.4.6 "
-                    "installed. The timed operation is read_frames_from_file "
-                    "of the ASE extended XYZ of the same frames. The module "
+                    "installed. It reads a short frame with "
+                    "Properties=species:S:1:pos:R:3 and raises OSError once "
+                    "the frame passes 128 atoms, with or without masses and "
+                    "momenta. The extended XYZ written for ASE keeps masses, "
+                    "momenta and the fixed-atom column. A frame of this "
+                    "table's sizes is an unsupported row. The module "
                     "publishes no __version__; the version is the wheel version"
                 ),
             }
@@ -2586,30 +2718,47 @@ def _record_sample(found, rss, checksums, arm, result) -> None:
     print(f"    {arm['id']} {result['wall_s']:.4f}", flush=True)
 
 
-def _interleave(arms: list[dict], repeats: int, lines: list[str], tag: str) -> dict:
+def _interleave(
+    arms: list[dict],
+    repeats: int,
+    lines: list[str],
+    tag: str,
+    out: Path | None = None,
+    structure: str = "",
+    op: str = "",
+    drops: dict | None = None,
+) -> dict:
+    """Time every arm ``repeats`` times. A noisy arm is not given extra samples."""
     found = {arm["id"]: [] for arm in arms}
     rss = {arm["id"]: [] for arm in arms}
     checksums = {arm["id"]: [] for arm in arms}
     script = Path(__file__).resolve()
+    drops = drops or {}
 
     def take(order: list[dict], label: str) -> None:
         lines.append(f"order {tag} {label} " + " ".join(arm["id"] for arm in order))
         print(f"  sample {label} " + " ".join(arm["id"] for arm in order), flush=True)
         for arm in order:
-            _record_sample(found, rss, checksums, arm, spawn_worker(script, arm["job"]))
+            result = spawn_worker(script, arm["job"])
+            _record_sample(found, rss, checksums, arm, result)
+            if out is None:
+                continue
+            job = arm["job"]
+            path = job.get("dest") or job.get("path")
+            append_arm_row(
+                out,
+                structure,
+                arm["id"],
+                op,
+                label,
+                f"{float(result['wall_s']):.6f}",
+                str(int(result.get("rss_bytes") or 0)),
+                _file_bytes(path),
+                str(drops.get(arm["id"], "")),
+            )
 
     for index in range(repeats):
         take(rotate(arms, index), str(index))
-    noisy = [arm for arm in arms if _spread(found[arm["id"]]) > 0.05]
-    # n=12 is already the full sample. A shorter run still grows to 12 when noisy.
-    if repeats < 12 and noisy:
-        detail = " ".join(
-            f"{arm['id']}={_spread(found[arm['id']]):.3f}" for arm in noisy
-        )
-        lines.append(f"extend {tag} iqr/median {detail}")
-        print(f"  extend {tag} {detail}", flush=True)
-        for index in range(repeats):
-            take(rotate(noisy, index), f"extend-{index}")
     return {"samples": found, "rss": rss, "checksums": checksums}
 
 
@@ -2645,44 +2794,14 @@ def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
     return median
 
 
-def con_writer_samples() -> tuple[list[float], list[float]]:
-    """Back-to-back 1M CON writes: one warmup, then twelve samples.
-
-    The interleaved campaign write follows other formats, so its median
-    is not this measurement. The published readcon-con write row uses
-    these serial samples.
-    """
-    import readcon
-
-    spec = make_spec(1_000_000, 1)
-    columns = _columns(spec)
-    path = WORK / "con-writer-1M.con"
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    def once(threads: int | None) -> float:
-        path.unlink(missing_ok=True)
-        started = time.perf_counter()
-        if threads is None:
-            readcon.write_columns(os.fspath(path), columns)
-        else:
-            readcon.write_columns(os.fspath(path), columns, n_threads=threads)
-        return time.perf_counter() - started
-
-    def collect(threads: int | None) -> list[float]:
-        once(threads)
-        samples = [once(threads) for _ in range(12)]
-        expect_written_roundtrip("readcon-con", path, 1_000_000, 1)
-        return samples
-
-    return collect(1), collect(None)
-
-
 def run(
     out: Path,
     repeats: int = 6,
     structures=STRUCTURES,
     ops: tuple[str, ...] = ("read", "write"),
 ) -> None:
+    """``repeats`` is ignored. ``repeats_for`` chooses the count from the size."""
+    del repeats
     ident = refuse_stale_build(ROOT)
     serial_threads()
     pin_cores()
@@ -2739,17 +2858,13 @@ def run(
         "that format's size range, and reads back at the full atom count. "
         "That check runs after the clock stops."
     )
-    serial_con, default_con = con_writer_samples()
-    serial_med, _serial_iqr = type7(serial_con)
-    default_med, _default_iqr = type7(default_con)
     notes.append(
-        "Every write sample except the 1M readcon-con row is the interleaved "
-        "fresh-process measurement from this session. The clock is serialise "
-        "and store of a structure that already exists: see each row's Clock "
-        "note. The 1M readcon-con write is the back-to-back serial "
-        f"measurement, {serial_med:.4f} s. Default threads are "
-        f"{default_med:.4f} s. Chemfiles has no CON writer, so its write "
-        "cell is 'no writer'."
+        "Every write sample, including 1M readcon-con, is the interleaved "
+        "fresh-process measurement from this session. The sample count is "
+        "12 at 1k, 100k and traj, and 6 at 1M, for every tool. The clock is "
+        "serialise and store of a structure that already exists: see each "
+        "row's Clock note. Chemfiles has no CON writer, so its write cell "
+        "is 'no writer'."
     )
     lines = []
     for note in notes:
@@ -2759,7 +2874,11 @@ def run(
             f"commit {sha}",
             f"versions {json.dumps(versions, sort_keys=True)}",
             "ovito-extxyz " + json.dumps(ovito_check, sort_keys=True),
-            f"warmup 1 samples {repeats} percentile type7 serial 1",
+            "warmup 1 percentile type7 serial 1 "
+            + "samples "
+            + " ".join(
+                f"{label}={repeats_for(label)}" for label, _atoms, _frames in structures
+            ),
             f"fresh process per sample, taskset -c {core_list()}, rotate order each sample",
             f"loadavg {host['loadavg']}",
             f"governor {json.dumps(host['governor'], sort_keys=True)}",
@@ -2780,6 +2899,7 @@ def run(
     for label, n_atoms, n_frames in structures:
         if only_structures and label not in only_structures:
             continue
+        repeats = repeats_for(label)
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = make_spec(n_atoms, n_frames)
@@ -2799,9 +2919,13 @@ def run(
         )
         spec_path = directory / "spec.npz"
         save_spec(spec_path, spec)
+        shard = out / "by-arm" / label
+        if shard.is_dir():
+            shutil.rmtree(shard)
         arms, structure_notes = arm_table(n_atoms)
         if only_arms:
             arms = [arm for arm in arms if arm["id"] in only_arms]
+        arms = [arm for arm in arms if arm_selected(label, arm["id"])]
         for note in structure_notes:
             if note not in notes:
                 notes.append(note)
@@ -2824,45 +2948,36 @@ def run(
                     "'Cannot read first frame')"
                 )
             if arm.get("unsupported"):
-                rows.append(
-                    {
-                        "structure": label,
-                        "atoms": n_atoms,
-                        "frames": n_frames,
-                        "tool": arm["tool"],
-                        "format": arm["format"],
-                        "arm": arm["id"],
-                        "notes": arm.get("notes", ""),
-                        "op": "read",
-                        "cache": "unsupported",
-                        "median_s": None,
-                        "iqr_s": None,
-                        "samples_s": [],
-                        "rss_bytes": None,
-                        "file_bytes": None,
-                        "loses": arm["drops"],
-                        "position_error": None,
-                        "cell_error": None,
-                        "precision": arm["precision"],
-                        "checksum_ok": None,
-                        "n": 0,
-                    }
+                record_unsupported(
+                    out, rows, lines, label, n_atoms, n_frames, arm, arm["drops"]
                 )
-                lines.append(f"unsupported {label} {arm['id']} {arm['drops']}")
                 continue
             if arm["id"] == "readcon-con-zst" and not _try_zstd(spec, directory):
-                note = "readcon-con-zst skipped; this build has no zstd feature."
-                if note not in notes:
-                    notes.append(note)
-                    lines.append(f"note {note}")
+                record_unsupported(
+                    out,
+                    rows,
+                    lines,
+                    label,
+                    n_atoms,
+                    n_frames,
+                    arm,
+                    "unsupported: this build has no zstd feature",
+                )
                 continue
             try:
                 path = convert_arm(arm["id"], spec, directory)
                 got = read_arm(arm["id"], os.fspath(path))
             except Exception as exc:
-                note = f"{label} {arm['id']} skipped: {type(exc).__name__}: {exc}"
-                notes.append(note)
-                lines.append(f"note {note}")
+                record_unsupported(
+                    out,
+                    rows,
+                    lines,
+                    label,
+                    n_atoms,
+                    n_frames,
+                    arm,
+                    unsupported_reason(arm["id"], exc),
+                )
                 continue
             checked = audit(spec, got, arm["precision"])
             lost = (
@@ -2873,12 +2988,20 @@ def run(
             position_bad = checked["position_error"] > arm["precision"]
             cell_bad = "cell" not in lost and checked["cell_error"] > arm["precision"]
             if position_bad or cell_bad:
-                note = (
-                    f"{label} {arm['id']} round-trip position {checked['position_error']:.3g} "
-                    f"cell {checked['cell_error']:.3g} exceeds {arm['precision']}"
+                record_unsupported(
+                    out,
+                    rows,
+                    lines,
+                    label,
+                    n_atoms,
+                    n_frames,
+                    arm,
+                    (
+                        "unsupported: round-trip position "
+                        f"{checked['position_error']:.3g} cell "
+                        f"{checked['cell_error']:.3g} exceeds {arm['precision']}"
+                    ),
                 )
-                notes.append(note)
-                lines.append(f"note {note}")
                 continue
             expect_full_read(got, n_atoms, n_frames, arm["id"])
             size = path.stat().st_size
@@ -2944,12 +3067,33 @@ def run(
                 ]
                 print(f"cross {label} read {cache}", flush=True)
                 timed[cache] = _interleave(
-                    read_jobs, repeats, lines, f"read-{cache} {label}"
+                    read_jobs,
+                    repeats,
+                    lines,
+                    f"read-{cache} {label}",
+                    out=out,
+                    structure=label,
+                    op=f"read-{cache}",
+                    drops={
+                        arm["id"]: arm.get("audit", {}).get("loses", "")
+                        for arm in usable
+                    },
                 )
         write_timed = None
         if "write" in ops:
             print(f"cross {label} write", flush=True)
-            write_timed = _interleave(write_jobs, repeats, lines, f"write {label}")
+            write_timed = _interleave(
+                write_jobs,
+                repeats,
+                lines,
+                f"write {label}",
+                out=out,
+                structure=label,
+                op="write",
+                drops={
+                    arm["id"]: arm.get("audit", {}).get("loses", "") for arm in usable
+                },
+            )
         for arm in usable:
             if "read" in ops:
                 for cache in ("warm", "cold"):
@@ -3030,16 +3174,21 @@ def run(
                 rows.append(row)
                 lines.append(f"write {label} {arm['id']} no writer")
                 print(f"  write {arm['id']} no writer", flush=True)
+                append_arm_row(
+                    out,
+                    label,
+                    arm["id"],
+                    "write",
+                    "",
+                    "no writer",
+                    "",
+                    "",
+                    str(arm["audit"]["loses"]),
+                )
                 continue
             if write_timed is None:
                 continue
             samples = list(write_timed["samples"][arm["id"]])
-            if label == "1M" and arm["id"] == "readcon-con":
-                lines.append(
-                    "interleaved write 1M readcon-con "
-                    + " ".join(f"{sample:.9f}" for sample in samples)
-                )
-                samples = list(serial_con)
             median, iqr = type7(samples)
             rss_values = write_timed["rss"][arm["id"]]
             written = arm.get("write_dest")
@@ -3086,7 +3235,10 @@ def run(
         "frames": frame_log,
         "host": host,
         "warmup": 1,
-        "repeats": repeats,
+        "repeats": {label: repeats_for(label) for label, _n, _f in structures},
+        "repeats_by_structure": {
+            label: repeats_for(label) for label, _n, _f in structures
+        },
         "percentile": "type7",
         "serial": True,
         "process": "fresh subprocess per sample",

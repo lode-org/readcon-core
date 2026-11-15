@@ -418,7 +418,7 @@ def _median(values: list[float]) -> tuple[float, float]:
     return cross_format.type7(values)
 
 
-def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list[str]]:
+def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
     """MDCompress on XTC, and chemfiles DCD at fc1e930.
 
     The cross-format table already times MDCompress on DCD as
@@ -433,6 +433,11 @@ def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list
     lines: list[str] = []
     work = BENCH / "work" / "h2h15"
     for label, n_atoms, n_frames in cross_format.STRUCTURES:
+        if not cross_format.arm_selected(label, "chemfiles-dcd-012") and not (
+            cross_format.arm_selected(label, "mdcompress-xtc")
+        ):
+            continue
+        repeats = cross_format.repeats_for(label)
         directory = work / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = cross_format.make_spec(n_atoms, n_frames)
@@ -459,15 +464,29 @@ def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list
             )
         arms = ["chemfiles-dcd-012"]
         if n_frames < 2:
-            rows.append(
-                _unsupported(label, n_atoms, n_frames, "mdcompress-xtc", "read")
-            )
-            rows.append(
-                _unsupported(label, n_atoms, n_frames, "mdcompress-xtc", "write")
-            )
-            lines.append(f"unsupported {label} mdcompress-xtc")
+            if cross_format.arm_selected(label, "mdcompress-xtc"):
+                for op in ("read", "write"):
+                    rows.append(
+                        _unsupported(label, n_atoms, n_frames, "mdcompress-xtc", op)
+                    )
+                    cross_format.append_arm_row(
+                        out,
+                        label,
+                        "mdcompress-xtc",
+                        "unsupported",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "unsupported: MDCompress 2.0.5 cannot read a one-frame "
+                        "trajectory",
+                    )
+                lines.append(f"unsupported {label} mdcompress-xtc")
         else:
             arms = ["mdcompress-xtc", "chemfiles-dcd-012"]
+        arms = [arm for arm in arms if cross_format.arm_selected(label, arm)]
+        if not arms:
+            continue
         timed: dict[str, dict] = {}
         for cache in ("warm", "cold"):
             samples = {arm: [] for arm in arms}
@@ -488,6 +507,17 @@ def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list
                     )
                     samples[arm].append(float(result["wall_s"]))
                     rss[arm].append(int(result["rss_bytes"]))
+                    cross_format.append_arm_row(
+                        out,
+                        label,
+                        arm,
+                        f"read-{cache}",
+                        str(sample),
+                        f"{float(result['wall_s']):.6f}",
+                        str(int(result["rss_bytes"])),
+                        str(inputs[arm].stat().st_size),
+                        DROPS[arm],
+                    )
             timed[cache] = {"samples": samples, "rss": rss}
         for arm in arms:
             warm = timed["warm"]["samples"][arm]
@@ -537,6 +567,17 @@ def _extra_rows(out: Path, repeats: int, script: Path) -> tuple[list[dict], list
                 )
                 write_found[arm].append(float(result["wall_s"]))
                 write_rss[arm].append(int(result["rss_bytes"]))
+                cross_format.append_arm_row(
+                    out,
+                    label,
+                    arm,
+                    "write",
+                    str(sample),
+                    f"{float(result['wall_s']):.6f}",
+                    str(int(result["rss_bytes"])),
+                    str(dest.stat().st_size) if dest.is_file() else "",
+                    DROPS[arm],
+                )
         for arm in arms:
             samples = write_found[arm]
             median, iqr = _median(samples)
@@ -596,15 +637,16 @@ def _scrub_record(out: Path) -> None:
 
 
 def run(out: Path, repeats: int = 12) -> None:
-    """One invocation writes every row of bench/h2h/scaling/h2h15.
+    """Write the table, then the XTC and later chemfiles DCD rows.
 
-    ``cross_format.run`` is the table. The XTC and chemfiles 0.12 rows are
-    measured after it and stored in those same files. ``measurement``
-    refuses unless the tree is clean and ``git ls-remote`` lists HEAD.
-    The installed readcon module must record that same commit or tree.
+    The sample count comes from the structure size: 12 below one million
+    atoms and 6 at one million, for every tool. ``repeats`` is ignored.
+    ``READCON_CROSS_PART`` is ``table``, ``extra``, or ``all``.
+    ``measurement`` refuses unless the tree is clean and ``git ls-remote``
+    lists HEAD. The installed readcon module must record that same commit
+    or tree.
     """
-    if repeats < 12:
-        raise SystemExit("h2h15 takes at least 12 samples")
+    del repeats
     ident = refuse_stale_build(ROOT)
     head = ident["commit"]
     import readcon
@@ -612,9 +654,17 @@ def run(out: Path, repeats: int = 12) -> None:
     pin_mdcompress()
     version = readcon.__version__
     out.mkdir(parents=True, exist_ok=True)
-    cross_format.run(out, repeats)
-    extra_rows, extra_lines = _extra_rows(out, repeats, Path(__file__).resolve())
-    payload = json.loads((out / "cross-format.json").read_text(encoding="utf-8"))
+    part = os.environ.get("READCON_CROSS_PART", "all")
+    if part in ("all", "table"):
+        cross_format.run(out)
+    extra_rows: list[dict] = []
+    extra_lines: list[str] = []
+    if part in ("all", "extra"):
+        extra_rows, extra_lines = _extra_rows(out, Path(__file__).resolve())
+    if (out / "cross-format.json").is_file():
+        payload = json.loads((out / "cross-format.json").read_text(encoding="utf-8"))
+    else:
+        payload = {"rows": [], "notes": [], "versions": {}}
     _annotate_interval(payload["rows"])
     payload["rows"].extend(extra_rows)
     payload["commit"] = head
@@ -647,7 +697,10 @@ def run(out: Path, repeats: int = 12) -> None:
         log_path, prior + "\n".join(extra_lines) + ("\n" if extra_lines else "")
     )
     host_path = out / "host.json"
-    host = json.loads(host_path.read_text(encoding="utf-8"))
+    if host_path.is_file():
+        host = json.loads(host_path.read_text(encoding="utf-8"))
+    else:
+        host = {}
     host["commit"] = head
     host["tree"] = ident["tree"]
     host["diff_sha256"] = ident["diff_sha256"]
@@ -689,6 +742,19 @@ def run(out: Path, repeats: int = 12) -> None:
                 "MDCompress 2.0.5 times DCD as mdcompress-mdc and XTC as mdcompress-xtc.",
                 "chemfiles-dcd is 0.10.4. chemfiles-dcd-012 is 0.12.0-dev at fc1e930.",
                 "The Drops column names the DCD interval unit.",
+                (
+                    "The sample count is 12 below one million atoms and 6 "
+                    "at one million, for every tool."
+                ),
+                (
+                    "Each finished sample is appended under by-arm before "
+                    "the next sample starts."
+                ),
+                (
+                    "extxyz-ng 0.0.2 fails past 128 atoms even with "
+                    "Properties=species:S:1:pos:R:3, so the extended XYZ "
+                    "columns were not changed."
+                ),
                 "versions " + json.dumps(payload["versions"], sort_keys=True),
                 (
                     "OVITO is 3.17.2. MDAnalysis is 2.11.0, with H5MD and the "
