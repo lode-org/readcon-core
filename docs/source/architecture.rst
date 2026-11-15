@@ -331,6 +331,17 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the ``[lib]`` name (``readcon_core``), which downstream packagers check
 for at the hyphenated name.
 
+The Meson build writes the cdylib and the static archive.
+The cdylib keeps mimalloc and enables ``local_dynamic_tls``, so a later
+``dlopen`` does not need static TLS surplus. The static archive enables
+``static_system_alloc`` and leaves the global allocator unset.
+``scripts/meson_cargo_build.py`` turns that feature on for the staticlib
+only. A C host that links ``libreadcon_core.a`` beside another Rust
+staticlib has two copies of ``std``. A mimalloc pointer from one copy is
+freed with glibc by the other. The system allocator is the one both
+copies already call. A Rust binary and ``cargo test`` leave the feature
+off and keep mimalloc.
+
 .. _abi-stability:
 
 C ABI stability contract (``rkr_*``)
