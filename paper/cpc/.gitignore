@@ -43,5 +43,5 @@ logs/reader-work/
 logs/dlpack-work/
 
 # Records under data/ are inputs of scripts/regen_paper.py.
-# regen_paper.py rewrites this ledger after the format steps.
-data/trace/reads.json
+# regen_paper.py and the format steps rewrite the ledgers under data/trace.
+data/trace/
