@@ -1,0 +1,3 @@
+Coordinates are frames_guard.thermal_shift with seed 1.
+Each atom moves by 0.01 to 0.05 angstrom. One frame, one million atoms.
+The hash is in cross-format.json under frames.

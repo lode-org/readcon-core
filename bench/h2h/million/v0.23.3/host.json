@@ -1,0 +1,11 @@
+{
+  "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
+  "tree": "02569ffe41a51da8bfc812f3bdd5f964da752eca",
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "bench_disk": "build/bench",
+  "bench_disk_filesystem": "ext2/ext3",
+  "work": "bench/h2h/work/cross-format",
+  "work_filesystem": "ext2/ext3",
+  "record": "bench/h2h/million/v0.23.3",
+  "record_filesystem": "ext2/ext3"
+}
