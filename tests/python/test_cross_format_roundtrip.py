@@ -194,6 +194,16 @@ def test_a_finished_sample_is_appended(tmp_path: Path) -> None:
     assert "0.020000" in text
 
 
+def test_a_reader_crash_is_not_an_unsupported_format() -> None:
+    assert cross_format.capacity_limit("readcon-con", RuntimeError("boom")) is None
+    assert cross_format.capacity_limit("ase-extxyz", ValueError("parse")) is None
+
+
+def test_a_precision_miss_fails_the_run() -> None:
+    with pytest.raises(SystemExit, match="round-trip failure"):
+        cross_format.reject_round_trip("readcon-con", 1.0, 0.0, 1e-5)
+
+
 def test_extxyz_ng_oserror_names_the_limit() -> None:
     reason = cross_format.unsupported_reason("extxyz-ng", OSError("Digit"))
     assert reason.startswith("unsupported:")
