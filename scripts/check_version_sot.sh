@@ -234,6 +234,7 @@ skip_dirs = {
 skip_prefixes = (
     "bench/h2h/work/",
     "bench/h2h/scaling/",
+    "bench/h2h/formats/",
     # The million-atom log names the release it measured. The note under
     # the older paper table points at that log and at this release.
     "bench/h2h/million/",
