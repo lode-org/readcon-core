@@ -271,6 +271,7 @@ def test_interleave_keeps_one_sample_count(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_an_unsupported_row_is_stored(tmp_path: Path) -> None:
+    pytest.importorskip("MDAnalysis")
     arms, _notes = cross_format.arm_table(100_000)
     pdb = next(arm for arm in arms if arm["id"] == "mda-pdb")
     rows: list[dict] = []
@@ -285,6 +286,7 @@ def test_an_unsupported_row_is_stored(tmp_path: Path) -> None:
 
 
 def test_pdb_above_serial_is_reported() -> None:
+    pytest.importorskip("MDAnalysis")
     arms, _notes = cross_format.arm_table(100_000)
     pdb = [arm for arm in arms if arm["id"] == "mda-pdb"]
     if not pdb:
