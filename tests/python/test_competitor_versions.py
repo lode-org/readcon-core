@@ -94,9 +94,10 @@ def _lock_pypi() -> set[tuple[str, str]]:
     return found
 
 
-def test_requirements_lines_are_locked_pypi_entries() -> None:
+def test_requirements_match_the_locked_pypi_entries() -> None:
     locked = _lock_pypi()
     bad = []
+    pinned = set()
     for line in (
         (ROOT / "paper/cpc/environment/requirements.txt")
         .read_text(encoding="utf-8")
@@ -107,8 +108,11 @@ def test_requirements_lines_are_locked_pypi_entries() -> None:
         match = re.fullmatch(r"([A-Za-z0-9_.-]+)==(\S+)", line)
         assert match, line
         pin = (_canonical(match.group(1)), match.group(2))
+        pinned.add(pin)
         if pin not in locked:
             bad.append(line)
-    assert not bad, "requirements line is not a pip entry in pixi.lock:\n" + "\n".join(
-        bad
+    # A locked PyPI entry with no requirements line is drift too.
+    bad += [f"{name}=={version}" for name, version in sorted(locked - pinned)]
+    assert not bad, (
+        "requirements.txt and the pixi.lock pip entries differ:\n" + "\n".join(bad)
     )
