@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -73,6 +75,34 @@ def test_lost_lead_needs_a_real_gap():
     assert report.lost_leads(old, new)
     old_close, new_close = _pair(0.99, 1.01, 1.0, 1.0)
     assert report.lost_leads(old_close, new_close) == []
+
+
+def test_million_rule_targets_the_versioned_record():
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "bench/h2h/Snakefile").read_text(encoding="utf-8")
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert 'MILLION = f"bench/h2h/million/v{_RELEASE}"' in text
+    snakemake = shutil.which("snakemake")
+    if snakemake is None:
+        pytest.skip("snakemake is not installed")
+    completed = subprocess.run(
+        [
+            snakemake,
+            "-s",
+            "bench/h2h/Snakefile",
+            "-n",
+            "--force",
+            "million_measure",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    shown = completed.stdout + completed.stderr
+    assert completed.returncode == 0, shown
+    assert f"bench/h2h/million/v{version}/cross-format.json" in shown
+    assert f"bench/h2h/million/v{version}/cross-format.log" in shown
 
 
 def test_a_per_size_repeat_map_is_the_campaign_protocol():
