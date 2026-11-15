@@ -104,3 +104,41 @@ fn cmake_static_archive_does_not_install_mimalloc() {
         "CMake static archive still installs mimalloc:\n{hits}"
     );
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn cmake_both_libraries_archive_does_not_install_mimalloc() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let work = alloc_work("cmake-both-system-alloc");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).expect("workdir");
+    // The default installs both libraries. Do not force the static-only option.
+    let configure = Command::new("cmake")
+        .args([
+            "-S",
+            root.to_str().unwrap(),
+            "-B",
+            work.to_str().unwrap(),
+            "-DCMAKE_BUILD_TYPE=debug",
+        ])
+        .status()
+        .expect("cmake");
+    assert!(configure.success(), "cmake configure failed");
+    let built = Command::new("cmake")
+        .args([
+            "--build",
+            work.to_str().unwrap(),
+            "--target",
+            "cargo-build-readcon-core",
+        ])
+        .status()
+        .expect("cmake build");
+    assert!(built.success(), "cmake both-libraries build failed");
+    let archive = work.join("cargo-target/debug/libreadcon_core.a");
+    assert!(archive.is_file(), "missing {}", archive.display());
+    let hits = defined_mimalloc(&archive);
+    assert!(
+        hits.is_empty(),
+        "default CMake archive still installs mimalloc:\n{hits}"
+    );
+}
