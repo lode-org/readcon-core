@@ -475,25 +475,55 @@ rule camp16b:
 # ``--config ops=write`` times writes. The default times reads and writes.
 # ``--config million_out=...`` selects a different directory and is refused
 # when that directory is a committed record or lies under bench/h2h/scaling.
+# The path is resolved first, so ".", "..", an absolute path, and a symlink
+# are the same directory. The working directory has to be the repository.
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-_REPO = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), "..", ".."))
+# abspath the Snakefile before climbing. A relative -s path is otherwise
+# joined from its dirname, which walks out of the checkout.
+_SNAKEFILE = os.path.abspath(workflow.snakefile)
+_REPO = os.path.abspath(os.path.join(os.path.dirname(_SNAKEFILE), "..", ".."))
 with open(os.path.join(_REPO, "VERSION"), encoding="utf-8") as _version_file:
     _RELEASE = _version_file.read().strip()
-_TIP = subprocess.check_output(
-    ["git", "-C", _REPO, "rev-parse", "HEAD"], text=True
+
+
+def _git_output(args, failure):
+    try:
+        return subprocess.check_output(args, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        raise SystemExit(failure)
+
+
+_TIP = _git_output(
+    ["git", "-C", _REPO, "rev-parse", "HEAD"],
+    "refusing to write a saved record: could not read the git tip",
 ).strip()
-_TIP_SHORT = subprocess.check_output(
-    ["git", "-C", _REPO, "rev-parse", "--short=12", "HEAD"], text=True
+_TIP_SHORT = _git_output(
+    ["git", "-C", _REPO, "rev-parse", "--short=12", "HEAD"],
+    "refusing to write a saved record: could not read the git tip",
 ).strip()
+
+
+def _canonical_repo_path(raw):
+    # Follow symlinks and collapse "." and ".." before any comparison.
+    # A path that leaves the repository is refused.
+    resolved = Path(_REPO, str(raw)).resolve()
+    try:
+        relative = resolved.relative_to(Path(_REPO).resolve())
+    except ValueError:
+        raise SystemExit("refusing to write a saved record")
+    return relative.as_posix()
+
+
 MILLION_SAVED = f"bench/h2h/million/v{_RELEASE}"
 _million_override = config.get("million_out")
 if _million_override:
-    MILLION = str(_million_override).rstrip("/")
+    MILLION = _canonical_repo_path(str(_million_override).rstrip("/"))
 else:
-    MILLION = f"bench/h2h/million/v{_RELEASE}-{_TIP_SHORT}"
+    MILLION = _canonical_repo_path(f"bench/h2h/million/v{_RELEASE}-{_TIP_SHORT}")
 MILLION_OPS = config.get("ops", "read,write")
 MILLION_MEASURE = [
     f"{MILLION}/cross-format.json",
@@ -508,28 +538,33 @@ def _measure_outputs_missing():
     return any(not os.path.isfile(path) for path in MILLION_MEASURE)
 
 
+def _require_repo_cwd():
+    if Path(os.getcwd()).resolve() != Path(_REPO).resolve():
+        raise SystemExit("refusing to write a saved record")
+
+
 def _committed_record_directories():
     # A committed measurement, not the benchmark package that sits beside it.
     # git ls-files is the list of record directories, so a later release is
-    # included when its cross-format.json is committed.
-    listed = subprocess.check_output(
+    # included when its cross-format.json is committed. Resolve each one the
+    # same way as the requested output.
+    listed = _git_output(
         ["git", "-C", _REPO, "ls-files", "-z", "--", "bench/h2h/million"],
-        text=True,
+        "refusing to write a saved record: could not list committed records",
     )
     marker = "/cross-format.json"
     found = set()
     for raw in listed.split("\0"):
         if not raw.endswith(marker):
             continue
-        found.add(raw[: -len(marker)])
+        found.add(_canonical_repo_path(raw[: -len(marker)]))
     return found
 
 
 def _refuse_saved_path(path):
-    normalized = str(path).rstrip("/")
-    if normalized == "bench/h2h/scaling" or normalized.startswith(
-        "bench/h2h/scaling/"
-    ):
+    normalized = _canonical_repo_path(path)
+    scaling = _canonical_repo_path("bench/h2h/scaling")
+    if normalized == scaling or normalized.startswith(scaling + "/"):
         raise SystemExit("refusing to write a saved record")
     for saved in _committed_record_directories():
         if normalized == saved or normalized.startswith(saved + "/"):
@@ -541,7 +576,7 @@ def _refuse_saved_record(path):
     # to run first, and only for a million-atom target, so another rule's
     # dry run is left alone.
     _refuse_saved_path(path)
-    normalized = str(path).rstrip("/")
+    normalized = _canonical_repo_path(path)
     if os.path.isdir(normalized):
         raise SystemExit("refusing to write a saved record")
 
@@ -550,17 +585,27 @@ def _refuse_million_target(targets):
     # A fresh measurement is refused when the directory already exists.
     # A later step is refused on a committed record even when the
     # measurement files are present, and also while one of them is missing.
+    # million_asv and million_record are later steps: they write into the
+    # same directory and use the same guard.
     measure_files = set(MILLION_MEASURE)
     prefix = MILLION + "/"
     later_step = False
     for target in targets:
         text = str(target)
         if text == "million_measure" or text in measure_files:
+            _require_repo_cwd()
             _refuse_saved_record(MILLION)
             return
-        if text == "million" or text == MILLION or text.startswith(prefix):
+        if (
+            text == "million"
+            or text == "million_asv"
+            or text == "million_record"
+            or text == MILLION
+            or text.startswith(prefix)
+        ):
             later_step = True
     if later_step:
+        _require_repo_cwd()
         _refuse_saved_path(MILLION)
         if _measure_outputs_missing():
             _refuse_saved_record(MILLION)
@@ -609,12 +654,6 @@ rule million_measure:
         previous="{params.previous}"
         tip="{params.tip}"
         ops="{params.ops}"
-        case "$out" in
-            bench/h2h/scaling|bench/h2h/scaling/*|"$previous"|"$previous"/*)
-                echo "refusing to write a saved record" >&2
-                exit 1
-                ;;
-        esac
         export READCON_CROSS_STRUCTURES=1M
         export OMP_NUM_THREADS=1
         export OPENBLAS_NUM_THREADS=1
