@@ -376,7 +376,7 @@ Record & Restart-exact & Velocities & Metadata & Indexed \\
 \midrule
 CON 3.1 & yes & declared & versioned & offsets \\
 extended XYZ, ASE writer & no, 8 decimals & no unit & comment & scan \\
-extended XYZ, OVITO writer & no, periodicity & no unit & comment & scan \\
+extended XYZ, OVITO 3.16.1 writer & no, periodicity & no unit & comment & scan \\
 ASE trajectory, identifiers as tags & yes, by convention & no unit & ULM and ASE versions & yes \\
 POSCAR, FixScaled & no, mask only & no unit & none & no \\
 H5MD (h5py), private mask dataset & yes, mask by convention & declared & versioned & yes \\
@@ -384,6 +384,10 @@ H5MD, MDAnalysis & single precision & declared & versioned & yes \\
 CIF, Open Babel & no & omitted & none & no \\
 \bottomrule
 \end{tabular}} \end{table}
+
+The extended XYZ row for the OVITO writer is OVITO 3.16.1, the version of Section~\ref{sec:supp-versions}.
+OVITO 3.17.0 writes \texttt{pbc} on every extended XYZ file \cite{ovitoNewFeatures31702026}.
+That file still names no velocity time unit.
 
 \input{figures/generated/survey_compare}
 
@@ -420,6 +424,11 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 Section~\ref{sec:performance} of the main text uses the measurements in Section~\ref{sec:host}.
 Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
 Each head-to-head arm reports how many frames match the reference and how many do not.
+A fair rerun times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
+A fair rerun of the MDAnalysis readers times each of XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}, keeps the fastest, and records what that format loses.
+The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 measurement.
+A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
+That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
 extxyz-ng 0.0.2 is a candidate extended-XYZ reader beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015,kaliberaRigorousBenchmarkingReasonable2013}.
 The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.

@@ -210,7 +210,9 @@ The ASE trajectory keeps every field in a layout that the Python code of ASE def
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
 Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
-OVITO can write the periodicity of the simulation cell into an extended XYZ file, and that file has no place for a per-component constraint or a velocity unit.
+OVITO 3.16.1, the version in Section~\ref*{sec:supp-versions}, writes an extended XYZ file that drops the periodicity of the simulation cell, and that file has no place for a per-component constraint or a velocity time unit.
+OVITO 3.17.0, released 2026-10-21, always writes that periodicity as \texttt{pbc}, and its XYZ reader accepts whitespace around \texttt{=}, escape sequences in quoted strings, array values and string columns \cite{ovitoNewFeatures31702026}.
+The extended XYZ file still names no velocity time unit.
 MDAnalysis can read one model of an mmCIF/PDBx file, with positions and a cell, and it has no element for that mask.
 extxyz-ng reads extended XYZ \cite{yuExtxyzNgV0022026}.
 An info line that is not a key-value pair is plain XYZ, which carries neither the cell nor the mask.
@@ -599,7 +601,8 @@ The ASE trajectory, with the identifiers stored as ASE tags, and H5MD written an
 The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our reader knows to read.
 Extended XYZ returns the mask and the identifiers through the column names of ASE, which chemfiles and OVITO also read.
 ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
-MDAnalysis returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
+MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
+MDAnalysis 2.11.0 still writes the H5MD position, velocity and force values as \texttt{float32}, which is single precision \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
 \subsection{A climbing-image band through every route} The restart study uses a larger slab, Pt(100) under the effective-medium theory (EMT) potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three layers of \(3\times3\) atoms with the bottom layer held in every component and one adatom held in \(z\) at the height of Table~\ref{tab:params} (Figure~\ref{fig:structures}, right).
@@ -730,9 +733,13 @@ The readers are readcon from C, Fortran, and Python, the upstream eon client, eo
 The nearest-native panel reads different files that carry the same atoms and the same cell.
 NumPy reads an npy coordinate array, which has no cell.
 ASE and chemfiles read extended xyz.
+The ASE extended-XYZ arm is ASE's built-in reader.
+ase-extxyz 0.1.2, released 2026-10-02, registers the libAtoms C parser as the ASE format \texttt{cextxyz} \cite{kermodeAseExtxyzV0122026,kermodeAseExtxyzPyproject2026,kermodeAseExtxyzIo2026}.
 OVITO reads extended xyz.
 pymatgen reads a POSCAR.
 MDAnalysis reads a protein data bank file with a crystal record.
+That protein data bank row is the MDAnalysis 2.10.0 measurement.
+Release 2.11.0 adds XYZ and protein data bank read benchmarks, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, protein data bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
 That panel is separate from the con table.
 A row passes only when the atom count, the cell, and the coordinates match.
 NumPy has no cell, so that row fails the cell check.
