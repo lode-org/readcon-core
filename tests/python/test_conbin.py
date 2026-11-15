@@ -104,6 +104,24 @@ def test_offset_inside_header(tmp_path):
         readcon.read_conbin(str(path))
 
 
+def test_a_short_position_axis_is_rejected(tmp_path):
+    _require_conbin()
+    if not hasattr(readcon, "write_conbin_columns"):
+        pytest.skip("column writer is not in this build")
+    frames, atoms = 1, 2
+    positions = np.zeros((frames, atoms, 2))
+    velocities = np.zeros((frames, atoms, 3))
+    masses = np.ones((frames, atoms))
+    cell = np.array([[10.0, 10.0, 10.0, 90.0, 90.0, 90.0]])
+    fixed = np.zeros((frames, atoms, 3))
+    out = tmp_path / "short.conbin"
+    with pytest.raises(ValueError, match="columns disagree"):
+        readcon.write_conbin_columns(
+            str(out), positions, velocities, masses, cell, fixed
+        )
+    assert not out.exists()
+
+
 def test_truncated_payload(tmp_path):
     _require_conbin()
     path, _n_frames, _n_atoms = _write(tmp_path, False)
