@@ -401,6 +401,26 @@ def build_notes(doc: dict, ab: dict | None = None) -> tuple[str, list[str]]:
     return render_notes(doc, flags, ab), flags
 
 
+def protocol_error(doc: dict) -> str | None:
+    """``repeats`` is 12, or a map of structure name to its sample count."""
+    if doc.get("warmup") != 1:
+        return f"campaign protocol is not warmup 1: {doc.get('warmup')}"
+    repeats = doc.get("repeats")
+    if repeats == 12:
+        return None
+    counts = repeats.values() if isinstance(repeats, dict) else ()
+    if (
+        isinstance(repeats, dict)
+        and repeats
+        and all(
+            isinstance(count, int) and not isinstance(count, bool) and count >= 1
+            for count in counts
+        )
+    ):
+        return None
+    return f"campaign protocol is not warmup 1 with n=12 or a per-size map: {repeats}"
+
+
 def main() -> None:
     import argparse
 
@@ -410,10 +430,8 @@ def main() -> None:
     args = parser.parse_args()
     fresh_output(args.out, args.baseline)
     doc = json.loads((args.out / "cross-format.json").read_text(encoding="utf-8"))
-    if doc.get("repeats") != 12 or doc.get("warmup") != 1:
-        raise SystemExit(
-            f"campaign protocol is not warmup 1 n=12: {doc.get('repeats')}"
-        )
+    if message := protocol_error(doc):
+        raise SystemExit(message)
     ab_path = args.out / "ab.json"
     ab = json.loads(ab_path.read_text(encoding="utf-8")) if ab_path.is_file() else None
     notes, flags = build_notes(doc, ab)
