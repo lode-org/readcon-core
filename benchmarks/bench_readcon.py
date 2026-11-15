@@ -1079,6 +1079,62 @@ class RayReadMovingForces:
         _read_con_threads(self._path, self._n, 4, self._threads)
 
 
+# The moving-read peak table: cuh2 at 50, 100, and 200 frames, and the
+# 200-frame velocity and force files, each at 1 and 4 threads.
+_PEAK_TABLE = (
+    ("cuh2", 50),
+    ("cuh2", 100),
+    ("cuh2", 200),
+    ("convel", 200),
+    ("forces", 200),
+)
+
+
+def _peak_case(case: str) -> tuple[str, int, int]:
+    kind, frames = str(case).split("-", 1)
+    n_frames = int(frames)
+    n_atoms = 218 if kind == "cuh2" else 4
+    return kind, n_frames, n_atoms
+
+
+class RayReadMovingPeakTable:
+    """Memray peak of the moving reads at 1 and 4 threads.
+
+    One sample is one ``read_con``. The recorded value is the median of
+    ``repeat`` peaks. cuh2 is positions only. The velocity and force files
+    add that section's slab.
+    """
+
+    timeout = 180
+    number = 1
+    repeat = REPEAT
+    rounds = 1
+    unit = "bytes"
+    params = [
+        [f"{kind}-{n_frames}" for kind, n_frames in _PEAK_TABLE],
+        [1, 4],
+    ]
+    param_names = ["case", "n_threads"]
+
+    def setup(self, case: str, n_threads: int) -> None:
+        kind, n_frames, n_atoms = _peak_case(case)
+        _src, suffix = _moving_source(kind)
+        self._path = _write_temp(_moving_text(kind, n_frames), suffix=suffix)
+        self._n = n_frames
+        self._atoms = n_atoms
+        self._threads = int(n_threads)
+        _read_con_threads(self._path, self._n, self._atoms, self._threads)
+
+    def teardown(self, case: str, n_threads: int) -> None:
+        try:
+            os.unlink(self._path)
+        except OSError:
+            pass
+
+    def ray_read_moving_peak(self, case: str, n_threads: int) -> None:
+        _read_con_threads(self._path, self._n, self._atoms, int(n_threads))
+
+
 def _built_cuh2(n_frames: int):
     """Constructed frames, not a column-backed read of a repeated file."""
     import readcon
