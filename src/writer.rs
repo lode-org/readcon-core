@@ -530,14 +530,23 @@ impl<W: Write> ConFrameWriter<W> {
             frame.has_spreads(),
         ];
         let line = frame.header.prebox_header.metadata_line();
+        // Energy, bead, and the other metadata keys are per frame. The
+        // packed writer may reuse a header only when that map is the same.
+        let incoming = binding_metadata(frame);
+        let meta_same = self
+            .bound
+            .as_ref()
+            .is_some_and(|item| item.spec == spec && item.meta == incoming);
         let reuse = self.exact_scratch
-            && self.bound.is_some()
-            && self.bound.as_ref().is_some_and(|item| item.spec == spec)
+            && meta_same
             && self.bound_flags == Some(flags)
             && self.bound_line.as_deref() == Some(line);
         if !reuse {
+            if self.exact_scratch && !meta_same {
+                self.metadata_cache = None;
+            }
             self.bound = Some(BoundHeader {
-                meta: binding_metadata(frame),
+                meta: incoming,
                 spec,
             });
             if self.exact_scratch {

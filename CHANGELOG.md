@@ -45,6 +45,8 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- A packed multi-frame write keeps each frame's own metadata. The header
+  cache used to reuse the first frame's energy when the atom skeleton matched.
 - CON-bin payload values are little-endian. A failed populate hint leaves
   the mapping in place, and one byte of each page is read so the caller
   still sees the file. When `mmap` itself fails, the file is read into a
