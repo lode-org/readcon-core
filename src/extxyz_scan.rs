@@ -1,4 +1,3 @@
-#![allow(clippy::too_many_arguments, clippy::type_complexity)]
 // Copyright (c) readcon-core developers
 //! Sequential extended-XYZ scan.
 //!
@@ -432,6 +431,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                 };
                 let column_ptrs = &column_ptrs;
                 let starts = &starts;
+                let cell_ptr = cell_ptr;
                 handles.push(
                     scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
                         let mut pool = Vec::new();

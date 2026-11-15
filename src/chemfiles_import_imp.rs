@@ -911,6 +911,7 @@ fn parallel_mixed(
     Ok(Some(grouped_geometry(kinds, &sym_of, positions, None)))
 }
 
+#[allow(clippy::uninit_vec)]
 fn grouped_geometry(
     kinds: Vec<ImportedKind>,
     sym_of: &[u32],
@@ -935,7 +936,8 @@ fn grouped_geometry(
         next[kind as usize] = slot + 1;
         chem_at[slot] = index;
     }
-    let mut flat = vec![0.0f64; n * 3];
+    let mut flat = Vec::with_capacity(n * 3);
+    unsafe { flat.set_len(n * 3) };
     for grouped in 0..n {
         let chem = chem_at[grouped];
         let row = positions[chem];
@@ -1848,7 +1850,7 @@ Cu 0.00000000 0.00000000 0.00000000
     }
 }
 
-#[cfg(test)]
+#[allow(dead_code)]
 fn mimalloc_mallocs() -> u64 {
     let stats = mimalloc::MiMalloc::stats_json().expect("mimalloc stats");
     let text = stats.to_str().expect("stats utf-8");

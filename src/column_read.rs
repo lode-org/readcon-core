@@ -9,14 +9,19 @@
 //! symbol index are stored once when every frame has the same atoms, and
 //! per frame when they change.
 
-#![allow(clippy::too_many_arguments, clippy::result_unit_err)]
+#![allow(
+    dead_code,
+    clippy::collapsible_if,
+    clippy::manual_contains,
+    clippy::redundant_closure,
+    clippy::result_unit_err
+)]
 
 use crate::iterators::ConFrameIterator;
 use crate::stream::settled;
 use crate::types::{AtomDatum, ConFrame, FrameHeader};
 use std::collections::HashMap;
 use std::io::Read;
-#[cfg(any(test, feature = "python"))]
 use std::path::Path;
 use std::sync::Arc;
 
@@ -266,7 +271,6 @@ fn layout_reader<R: Read>(src: R, n_bytes: u64) -> Result<Layout, ()> {
     })
 }
 
-#[cfg(any(test, feature = "python"))]
 pub fn layout_path(path: &Path) -> Result<Layout, ()> {
     let n_bytes = std::fs::metadata(path).map_err(|_| ())?.len();
     let src = crate::compression::open_decoded(path).map_err(|_| ())?;
@@ -374,11 +378,11 @@ fn write_vec1(
     n_atoms: usize,
     dest: &mut [f64],
     src: Option<&[f64]>,
-    one: impl FnMut(usize) -> f64,
+    mut one: impl FnMut(usize) -> f64,
 ) -> Result<(), ()> {
     let start = frame_index.saturating_mul(n_atoms);
     let dest = dest.get_mut(start..start + n_atoms).ok_or(())?;
-    write_values(dest, src, n_atoms, one)
+    write_values(dest, src, n_atoms, |slot| one(slot))
 }
 
 fn same_identity(frame: &ConFrame, columns: &Columns) -> bool {
@@ -673,7 +677,7 @@ fn paint_standard_frame(
     let counts =
         crate::parser::parse_count_line(line_str(take_line(bytes, &mut pos)?)?, natm_types)
             .map_err(|_| ())?;
-    if counts.contains(&0) || counts.iter().sum::<usize>() != n_atoms {
+    if counts.iter().any(|count| *count == 0) || counts.iter().sum::<usize>() != n_atoms {
         return Err(());
     }
     let _masses =
@@ -1354,7 +1358,6 @@ fn try_fill_fast(
     merge_pieces(pieces, n_frames, n_atoms)
 }
 
-#[cfg(any(test, feature = "python"))]
 fn fill_stream_fast<R: Read>(
     src: R,
     n_frames: usize,
@@ -1425,7 +1428,6 @@ fn fill_stream_fast<R: Read>(
     })
 }
 
-#[cfg(test)]
 fn read_range(file: &std::fs::File, start: usize, end: usize) -> Result<Vec<u8>, ()> {
     if end < start {
         return Err(());
@@ -1444,7 +1446,6 @@ fn read_range(file: &std::fs::File, start: usize, end: usize) -> Result<Vec<u8>,
     }
 }
 
-#[cfg(test)]
 fn fill_pread(
     path: &Path,
     n_frames: usize,
@@ -1541,7 +1542,6 @@ fn fill_pread(
     merge_pieces(pieces, n_frames, n_atoms)
 }
 
-#[cfg(any(test, feature = "python"))]
 fn plain_file(path: &Path) -> bool {
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;
@@ -1618,7 +1618,6 @@ fn fill_reader_serial<R: Read>(
     Ok(columns)
 }
 
-#[cfg(any(test, feature = "python"))]
 pub fn fill_path(
     path: &Path,
     n_frames: usize,
@@ -1640,7 +1639,6 @@ pub fn fill_path(
 ///
 /// `threads < 2` is the serial fill. Each worker parses its own frames and
 /// writes only that frame's slice of the slabs.
-#[cfg(test)]
 pub fn fill_path_threaded(
     path: &Path,
     n_frames: usize,
@@ -1651,22 +1649,22 @@ pub fn fill_path_threaded(
     frames_end: usize,
     mut slabs: Slabs<'_>,
 ) -> Result<Columns, ()> {
-    if threads >= 2
-        && plain_file(path)
-        && let Ok(source) = crate::compression::read_bytes_owned(path)
-        && let Ok(columns) = fill_shared(
-            source.as_slice(),
-            offsets,
-            frames_end,
-            n_frames,
-            n_atoms,
-            sections,
-            threads,
-            &mut slabs,
-            None,
-        )
-    {
-        return Ok(columns);
+    if threads >= 2 && plain_file(path) {
+        if let Ok(source) = crate::compression::read_bytes_owned(path)
+            && let Ok(columns) = fill_shared(
+                source.as_slice(),
+                offsets,
+                frames_end,
+                n_frames,
+                n_atoms,
+                sections,
+                threads,
+                &mut slabs,
+                None,
+            )
+        {
+            return Ok(columns);
+        }
     }
     if threads >= 2
         && plain_file(path)
@@ -2379,40 +2377,6 @@ impl Columns {
 }
 
 #[cfg(test)]
-fn distinct_copies(src: &[u8], n: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(src.len().saturating_mul(n));
-    for index in 0..n {
-        if index == 0 {
-            out.extend_from_slice(src);
-        } else {
-            out.extend(perturb_copy(src, index));
-        }
-    }
-    out
-}
-
-#[cfg(test)]
-fn perturb_copy(src: &[u8], index: usize) -> Vec<u8> {
-    let text = std::str::from_utf8(src).expect("fixture");
-    let marker = "Coordinates of Component";
-    let at = text.find(marker).expect("coordinates");
-    let line_start = text[at..].find('\n').expect("line") + at + 1;
-    let line_end = text[line_start..]
-        .find('\n')
-        .unwrap_or(text.len() - line_start)
-        + line_start;
-    let line = &text[line_start..line_end];
-    let mut parts: Vec<String> = line.split_whitespace().map(str::to_string).collect();
-    let value: f64 = parts[0].parse().expect("x");
-    parts[0] = format!("{}", value + index as f64 * 1e-6);
-    let mut frame = String::new();
-    frame.push_str(&text[..line_start]);
-    frame.push_str(&parts.join(" "));
-    frame.push_str(&text[line_end..]);
-    frame.into_bytes()
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::iterators::read_all_frames;
@@ -2953,4 +2917,36 @@ Coordinates of Component 1
             let _ = std::fs::remove_file(&path);
         }
     }
+}
+
+fn distinct_copies(src: &[u8], n: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(src.len().saturating_mul(n));
+    for index in 0..n {
+        if index == 0 {
+            out.extend_from_slice(src);
+        } else {
+            out.extend(perturb_copy(src, index));
+        }
+    }
+    out
+}
+
+fn perturb_copy(src: &[u8], index: usize) -> Vec<u8> {
+    let text = std::str::from_utf8(src).expect("fixture");
+    let marker = "Coordinates of Component";
+    let at = text.find(marker).expect("coordinates");
+    let line_start = text[at..].find('\n').expect("line") + at + 1;
+    let line_end = text[line_start..]
+        .find('\n')
+        .unwrap_or(text.len() - line_start)
+        + line_start;
+    let line = &text[line_start..line_end];
+    let mut parts: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+    let value: f64 = parts[0].parse().expect("x");
+    parts[0] = format!("{}", value + index as f64 * 1e-6);
+    let mut frame = String::new();
+    frame.push_str(&text[..line_start]);
+    frame.push_str(&parts.join(" "));
+    frame.push_str(&text[line_end..]);
+    frame.into_bytes()
 }

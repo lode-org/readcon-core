@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+#![allow(dead_code, unused_variables, clippy::let_and_return)]
 
 use crate::types::{
     ConFrame, SECTION_CHARGES, SECTION_DISPLACEMENTS, SECTION_ENERGIES, SECTION_FORCES,
@@ -278,7 +278,6 @@ impl Drop for StreamOut {
 }
 
 // General implementation for any type that implements `Write`.
-#[cfg(any(test, feature = "python"))]
 pub(crate) struct CoordGroup {
     pub symbol: String,
     pub mass: f64,
@@ -564,7 +563,6 @@ impl<W: Write> ConFrameWriter<W> {
     /// The bytes match [`Self::write_frame_bound`] for a frame the builder
     /// would group the same way. The rows are the only geometry kept, and
     /// the formatted text is handed to the sink before this returns.
-    #[cfg(any(test, feature = "python"))]
     pub(crate) fn write_coord_groups(
         &mut self,
         user: &str,
@@ -700,7 +698,6 @@ impl<W: Write> ConFrameWriter<W> {
         self.writer.flush()
     }
 
-    #[cfg(any(test, feature = "python"))]
     fn emit_scratch(&mut self) -> Result<(), WriteError> {
         if self.scratch.is_empty() {
             return Ok(());
@@ -2097,7 +2094,7 @@ fn append_coord_rows(
                 spec_version,
             );
         }
-        Ok(())
+        return Ok(());
     }
 }
 
@@ -2202,7 +2199,7 @@ pub(crate) fn file_is_tmpfs(file: &File) -> bool {
         use std::os::fd::AsRawFd;
         let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
         let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
-        rc == 0 && stat.f_type == 0x01021994
+        return rc == 0 && stat.f_type == 0x01021994;
     }
     #[cfg(any(miri, not(target_os = "linux")))]
     {
@@ -2305,9 +2302,9 @@ fn stream_coord_pipeline(
         }
         crate::parser::pin_worker(0);
         let written = (|| -> Result<_, WriteError> {
-            for slot in slots.iter().take(nparts) {
+            for index in 0..nparts {
                 let (coord, vel) = loop {
-                    if let Some(part) = slot.lock().expect("format slot").take() {
+                    if let Some(part) = slots[index].lock().expect("format slot").take() {
                         break part;
                     }
                     std::hint::spin_loop();
@@ -2529,14 +2526,14 @@ fn stream_coord_rows(
                     }
                     lengths[index].store(n as u64 + 1, std::sync::atomic::Ordering::Release);
                     let mut offset = 0usize;
-                    for length in lengths.iter().take(index) {
+                    for prev in 0..index {
                         loop {
                             if failed.load(std::sync::atomic::Ordering::Acquire) {
                                 return Err(WriteError::Io(io::Error::other(
                                     "coordinate line exceeded the mapped reserve",
                                 )));
                             }
-                            let known = length.load(std::sync::atomic::Ordering::Acquire);
+                            let known = lengths[prev].load(std::sync::atomic::Ordering::Acquire);
                             if known != 0 {
                                 if failed.load(std::sync::atomic::Ordering::Acquire) {
                                     return Err(WriteError::Io(io::Error::other(
@@ -3513,8 +3510,7 @@ fn place_packed(
     }
     // One mapping per worker, dropped on that worker. Tearing down a single
     // 184 MB map was a serial tail after the formatters had finished.
-
-    std::thread::scope(|scope| {
+    let result = std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
         for (thread, &(start, end)) in ranges.iter().enumerate() {
             let offset = prefix[start];
@@ -3524,8 +3520,6 @@ fn place_packed(
             guards.push(scope.spawn(move || -> Result<(), WriteError> {
                 #[cfg(feature = "parallel")]
                 crate::parser::pin_worker(thread);
-                #[cfg(not(feature = "parallel"))]
-                let _ = thread;
                 if span == 0 {
                     return Ok(());
                 }
@@ -3556,7 +3550,8 @@ fn place_packed(
             }
         }
         Ok(())
-    })
+    });
+    result
 }
 
 /// Format frame groups on [`pipeline_format_threads`] threads, then
@@ -3600,8 +3595,6 @@ fn pipeline_frame_groups(
                 guards.push(scope.spawn(move || {
                     #[cfg(feature = "parallel")]
                     crate::parser::pin_worker(index);
-                    #[cfg(not(feature = "parallel"))]
-                    let _ = index;
                     format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
                 }));
             }
@@ -3981,6 +3974,19 @@ fn pwrite_full(file: &File, buf: &[u8], mut offset: u64) -> io::Result<()> {
         use std::os::windows::fs::FileExt;
         file.seek_write(buf, offset)?;
         Ok(())
+    }
+}
+
+fn write_at_offset(file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        return file.write_at(buf, offset);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        file.seek_write(buf, offset)
     }
 }
 

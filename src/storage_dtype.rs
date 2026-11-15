@@ -425,7 +425,7 @@ impl Array2Storage {
     /// `None` when the storage is shared or not a packed f64 block. The
     /// returned `Vec` is the same allocation, so pointers into it stay valid
     /// when the `Vec` is moved and not reallocated.
-    #[cfg(feature = "python")]
+    #[allow(dead_code)]
     pub(crate) fn take_contiguous_f64(&mut self) -> Option<Vec<f64>> {
         let stolen = std::mem::replace(self, empty_f64_rows());
         match stolen {
@@ -737,8 +737,9 @@ impl Optional1 {
         self.inner.is_some()
     }
 
+    #[allow(clippy::len_zero)]
     pub fn new(array: Array1Storage) -> Self {
-        if array.is_empty() {
+        if array.len() == 0 {
             Self { inner: None }
         } else {
             Self {
