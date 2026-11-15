@@ -1871,7 +1871,15 @@ fn pread_parallel_uninit(
     })
 }
 
-trait StoreLe: Copy {
+mod sealed_number {
+    pub trait Sealed {}
+    impl Sealed for f64 {}
+    impl Sealed for f32 {}
+    impl Sealed for u64 {}
+    impl Sealed for u8 {}
+}
+
+trait StoreLe: Copy + sealed_number::Sealed {
     fn store_le(self, out: &mut Vec<u8>);
     fn load_le(self) -> Self;
 }
@@ -1959,7 +1967,11 @@ fn header_page_bytes(header: &ConBinHeader, page: usize) -> Vec<u8> {
 /// Little-endian hosts already store values in file order. The slice is
 /// that memory. It is not a second buffer.
 #[cfg(target_endian = "little")]
-fn view_bytes<T>(values: &[T]) -> &[u8] {
+fn view_bytes<T: StoreLe>(values: &[T]) -> &[u8] {
+    // SAFETY: `T: StoreLe` is sealed to f64, f32, u64 and u8. Each is a
+    // plain number with no padding. This function is compiled only on a
+    // little-endian host, so those bytes are already the file order. The
+    // slice borrows `values` and does not outlive it.
     unsafe {
         std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
     }
@@ -2703,6 +2715,17 @@ fn emit_built(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_endian = "little")]
+    #[test]
+    fn view_bytes_matches_the_number_encoding() {
+        let values = [1.5f64, -0.25];
+        let mut expect = Vec::new();
+        for value in values {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        assert_eq!(view_bytes(&values), expect.as_slice());
+    }
 
     #[test]
     fn a_short_positions_column_is_rejected_before_publish() {
