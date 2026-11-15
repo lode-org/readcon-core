@@ -4,7 +4,7 @@
 # Authoritative path (no soft-fail theater):
 #   1) org-babel-tangle → docs/notebooks/tutorial_core.py
 #   2) fail if committed tangle differs from re-tangle (unless READCON_TANGLE_UPDATE=1)
-#   3) run the tangled file with the venv interpreter (asserts + summary.json)
+#   3) run the tangled file with the interpreter that imports readcon
 #
 # Local interactive C-c C-c in Emacs is fine for humans; CI does not use
 # session execute as a second success path (session vs tangle can disagree).
@@ -46,8 +46,11 @@ mkdir -p "$OUT_DIR" "$(dirname "$TANGLE_PY")"
 export READCON_TUT_ROOT="$ROOT"
 export READCON_TUT_WORK="$OUT_DIR"
 
-# Maturin installs into the active virtualenv. $PYTHON wins when it is set.
-# The system python3 is not that interpreter.
+# $PYTHON wins when the caller names an interpreter (pytest passes
+# sys.executable). Otherwise use the active virtualenv, the interpreter
+# beside `maturin` on PATH, or a `python` that can run `python -m maturin`.
+# A bare python3 is not that interpreter: maturin is often on PATH, or
+# installed only as a module, with no sibling named python.
 resolve_python() {
   if [[ -n "${PYTHON:-}" ]]; then
     if [[ ! -x "$PYTHON" ]]; then
@@ -69,23 +72,55 @@ resolve_python() {
       return
     fi
   fi
-  echo "set PYTHON to the venv interpreter maturin installs into" >&2
+  if command -v python >/dev/null 2>&1; then
+    local py
+    py="$(command -v python)"
+    if [[ -x "$py" ]] && "$py" -m maturin --version >/dev/null 2>&1; then
+      echo "$py"
+      return
+    fi
+  fi
+  echo "maturin is unavailable; set PYTHON to an interpreter that can run it" >&2
+  echo "looked for VIRTUAL_ENV, maturin on PATH, and \`python -m maturin\`" >&2
   return 1
+}
+
+# venv and conda roots have a marker. The parent of a system interpreter
+# does not; pointing VIRTUAL_ENV at that parent installs into the wrong prefix.
+maturin_env_root() {
+  local parent
+  parent="$(cd "$(dirname "$1")/.." && pwd)"
+  if [[ -f "$parent/pyvenv.cfg" || -d "$parent/conda-meta" ]]; then
+    echo "$parent"
+  fi
+  return 0
+}
+
+develop_readcon() {
+  local root=() env_root
+  env_root="$(maturin_env_root "$PYTHON_BIN")"
+  if [[ -n "$env_root" ]]; then
+    root=(env "VIRTUAL_ENV=$env_root")
+  else
+    # An inherited VIRTUAL_ENV belongs to a different interpreter.
+    root=(env -u VIRTUAL_ENV)
+  fi
+  if "$PYTHON_BIN" -m maturin --version >/dev/null 2>&1; then
+    "${root[@]}" "$PYTHON_BIN" -m maturin develop --features python
+  elif command -v maturin >/dev/null 2>&1; then
+    "${root[@]}" maturin develop --features python
+  else
+    echo "maturin is unavailable (not on PATH and \`$PYTHON_BIN -m maturin\` failed)" >&2
+    echo "install maturin or: pixi run -e python python-build" >&2
+    exit 1
+  fi
 }
 
 PYTHON_BIN="$(resolve_python)"
 
 if ! "$PYTHON_BIN" -c "import readcon" 2>/dev/null; then
   echo "Building lean Python extension into $PYTHON_BIN (maturin develop --features python)..." >&2
-  venv="$(cd "$(dirname "$PYTHON_BIN")/.." && pwd)"
-  if "$PYTHON_BIN" -m maturin --version >/dev/null 2>&1; then
-    VIRTUAL_ENV="$venv" "$PYTHON_BIN" -m maturin develop --features python
-  elif command -v maturin >/dev/null 2>&1; then
-    VIRTUAL_ENV="$venv" maturin develop --features python
-  else
-    echo "maturin not on PATH; install maturin or: pixi run -e python python-build" >&2
-    exit 1
-  fi
+  develop_readcon
   "$PYTHON_BIN" -c "import readcon"
 fi
 
