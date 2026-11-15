@@ -91,13 +91,21 @@ def main(argv: list[str]) -> int:
         rustc_extra.append(f"-Clink-arg=-Wl,-install_name,@rpath/{shared_name}")
     # One crate-type per rustc invocation. MSVC cdylib+staticlib in one
     # call can omit readcon_core.lib while still writing the DLL.
-    # The cdylib asks mimalloc for local-dynamic TLS. The staticlib does
-    # not, so a statically linked binary keeps initial-exec.
+    # The cdylib asks mimalloc for local-dynamic TLS so a later dlopen
+    # does not need static TLS surplus. The staticlib uses the system
+    # allocator: a C host links it beside another Rust staticlib, and
+    # mimalloc in one std copy plus glibc free in the other aborts.
     for crate_type, extra in (("cdylib", rustc_extra), ("staticlib", [])):
         crate_features = features.strip()
         if crate_type == "cdylib":
             crate_features = ",".join(
                 part for part in (crate_features, "local_dynamic_tls") if part
+            )
+        else:
+            crate_features = ",".join(
+                part
+                for part in (crate_features, "static_system_alloc")
+                if part
             )
         crate_cmd = list(cmd)
         if crate_features:
