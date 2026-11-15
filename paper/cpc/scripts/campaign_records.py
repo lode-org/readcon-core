@@ -75,8 +75,9 @@ CAMPAIGNS = {
             "data/db/dedup.json",
         ),
         "driver": (
-            "bench/db_v2.py; scripts/campaign_records.py write_db_summary, "
-            "write_db_sizes, write_db_correctness, write_db_hardware, write_db_dedup"
+            "scripts/make_db_traces.py; scripts/measure_db.py; "
+            "scripts/campaign_records.py write_db_summary, write_db_sizes, "
+            "write_db_correctness, write_db_hardware, write_db_dedup"
         ),
         "rule": "db_log",
     },
@@ -90,6 +91,7 @@ CAMPAIGNS = {
             "data/novel/velocity.json",
         ),
         "driver": (
+            "scripts/write_e5_bands.py; scripts/measure_novel.py; "
             "scripts/campaign_records.py:write_novel_anatomy, "
             "write_novel_dedup_graph, write_novel_errors, "
             "write_novel_fidelity, write_novel_restart_diff, "
