@@ -497,32 +497,44 @@ def test_a_protected_measure_is_not_rewritten(tmp_path: Path):
 
 def _committed_attack(
     tree: Path, record: str, kind: str
-) -> tuple[str, Path | None, bool]:
+) -> tuple[str | None, Path | None, bool, tuple[str, ...]]:
     record_path = tree / record
+    rules = ("million", "million_asv", "million_record")
+    notes = f"{record}/NOTES.txt"
     if kind == "plain":
-        return record, None, False
+        return record, None, False, rules
     if kind == "leading-dot":
-        return f"./{record}", None, False
+        return f"./{record}", None, False, rules
     if kind == "embedded-dot":
-        return "bench/h2h/million/./v0.23.3", None, False
+        return "bench/h2h/million/./v0.23.3", None, False, rules
     if kind == "parent-foo":
-        return "bench/h2h/foo/../million/v0.23.3", None, False
+        return "bench/h2h/foo/../million/v0.23.3", None, False, rules
     if kind == "parent-million":
-        return "bench/h2h/million/../million/v0.23.3", None, False
+        return "bench/h2h/million/../million/v0.23.3", None, False, rules
     if kind == "absolute":
-        return str(record_path.resolve()), None, False
+        return str(record_path.resolve()), None, False, rules
     if kind == "symlink-dir":
         link = tree / "bench" / "h2h" / "record-link"
         link.symlink_to(Path("million") / "v0.23.3", target_is_directory=True)
-        return "bench/h2h/record-link", None, False
+        return "bench/h2h/record-link", None, False, rules
     if kind == "symlink-parent":
         link = tree / "bench" / "h2h" / "parent-link"
         link.symlink_to("million", target_is_directory=True)
-        return "bench/h2h/parent-link/v0.23.3", None, False
+        return "bench/h2h/parent-link/v0.23.3", None, False, rules
     if kind == "removed-leading-dot":
-        return f"./{record}", None, True
+        return f"./{record}", None, True, rules
     if kind == "nested-cwd":
-        return "v0.23.3", tree / "bench" / "h2h" / "million", False
+        return "v0.23.3", tree / "bench" / "h2h" / "million", False, rules
+    if kind == "file-leading-dot":
+        return None, None, False, (f"./{notes}",)
+    if kind == "file-embedded-dot":
+        return None, None, False, ("bench/h2h/million/./v0.23.3/NOTES.txt",)
+    if kind == "file-parent-foo":
+        return None, None, False, ("bench/h2h/foo/../million/v0.23.3/NOTES.txt",)
+    if kind == "file-double-slash":
+        return None, None, False, ("bench/h2h/million//v0.23.3/NOTES.txt",)
+    if kind == "file-absolute":
+        return None, None, False, (str((record_path / "NOTES.txt").resolve()),)
     raise AssertionError(kind)
 
 
@@ -539,6 +551,11 @@ def _committed_attack(
         "symlink-parent",
         "removed-leading-dot",
         "nested-cwd",
+        "file-leading-dot",
+        "file-embedded-dot",
+        "file-parent-foo",
+        "file-double-slash",
+        "file-absolute",
     ],
 )
 def test_a_committed_record_is_refused(tmp_path: Path, kind: str):
@@ -549,16 +566,17 @@ def test_a_committed_record_is_refused(tmp_path: Path, kind: str):
         tree = _worktree(tmp_path, "committed")
         trees.append(tree)
         before = _record_hashes(tree / record)
-        million_out, cwd, remove = _committed_attack(tree, record, kind)
+        million_out, cwd, remove, targets = _committed_attack(tree, record, kind)
         if remove:
             shutil.rmtree(tree / record)
-        targets = ["million", "million_asv", "million_record"]
+        config: tuple[str, ...] = ()
+        if million_out is not None:
+            config = ("--config", f"million_out={million_out}")
         for target in targets:
             refused = _snakemake(
                 tree,
                 target,
-                "--config",
-                f"million_out={million_out}",
+                *config,
                 cwd=cwd,
             )
             refused_text = refused.stdout + refused.stderr
