@@ -121,6 +121,42 @@ if "read" in ops.split(","):
 """
 
 
+_ASV_STUB = """\
+#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+if os.environ.get("READCON_STUB_ASV_FAIL") == "1":
+    sys.exit(1)
+(out / "asv.json").write_text("asv\\n", encoding="utf-8")
+(out / "asv-machine.json").write_text("machine\\n", encoding="utf-8")
+"""
+
+_RECORD_STUB = """\
+#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+out = None
+index = 0
+while index < len(sys.argv):
+    if sys.argv[index] == "--out":
+        out = Path(sys.argv[index + 1])
+        index += 2
+    else:
+        index += 1
+if os.environ.get("READCON_STUB_RECORD_FAIL") == "1":
+    sys.exit(1)
+if out is None:
+    sys.exit("missing --out")
+for name in ("host.json", "lscpu.txt", "NOTES.txt", "library-commit.txt"):
+    (out / name).write_text("record\\n", encoding="utf-8")
+"""
+
+
 def _worktree(tmp_path: Path, name: str) -> Path:
     source = Path(__file__).resolve().parents[2]
     tree = tmp_path / name
@@ -129,7 +165,10 @@ def _worktree(tmp_path: Path, name: str) -> Path:
         cwd=source,
     )
     shutil.copy(source / "bench/h2h/Snakefile", tree / "bench/h2h/Snakefile")
-    (tree / "bench/h2h/cross_format.py").write_text(_STUB, encoding="utf-8")
+    bench = tree / "bench" / "h2h"
+    (bench / "cross_format.py").write_text(_STUB, encoding="utf-8")
+    (bench / "million_asv.py").write_text(_ASV_STUB, encoding="utf-8")
+    (bench / "million_report.py").write_text(_RECORD_STUB, encoding="utf-8")
     return tree
 
 
@@ -272,6 +311,76 @@ def test_superseded_note_follows_a_complete_measurement(tmp_path: Path):
         assert empty_run.returncode != 0
         assert not (empty_saved / "SUPERSEDED.md").exists()
         assert (empty_saved / "cross-format.json").read_bytes() == before[0]
+    finally:
+        for tree in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+            )
+
+
+def test_a_finished_measure_can_resume(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    trees = []
+    try:
+        resume = _worktree(tmp_path, "resume")
+        trees.append(resume)
+        _, short = _tip(resume)
+        fresh = resume / "bench/h2h/million" / f"v{version}-{short}"
+        measured = _snakemake(resume, "million_measure")
+        assert measured.returncode == 0, measured.stdout + measured.stderr
+        measured_bytes = (fresh / "cross-format.json").read_bytes()
+        planned = _snakemake(resume, "-n", "million")
+        planned_text = planned.stdout + planned.stderr
+        assert planned.returncode == 0, planned_text
+        assert "refusing to write a saved record" not in planned_text
+        assert "rule million_measure:" not in planned_text
+        assert "rule million_asv:" in planned_text
+        assert (fresh / "cross-format.json").read_bytes() == measured_bytes
+
+        asv_fail = _worktree(tmp_path, "asv-fail")
+        trees.append(asv_fail)
+        _, asv_short = _tip(asv_fail)
+        asv_fresh = asv_fail / "bench/h2h/million" / f"v{version}-{asv_short}"
+        first_asv = _snakemake(asv_fail, "million", env={"READCON_STUB_ASV_FAIL": "1"})
+        assert first_asv.returncode != 0
+        asv_bytes = (asv_fresh / "cross-format.json").read_bytes()
+        continued = _snakemake(asv_fail, "million")
+        assert continued.returncode == 0, continued.stdout + continued.stderr
+        assert (asv_fresh / "cross-format.json").read_bytes() == asv_bytes
+        assert (asv_fresh / "asv.json").read_text(encoding="utf-8") == "asv\n"
+        assert (asv_fresh / "host.json").read_text(encoding="utf-8") == "record\n"
+
+        record_fail = _worktree(tmp_path, "record-fail")
+        trees.append(record_fail)
+        _, record_short = _tip(record_fail)
+        record_fresh = record_fail / "bench/h2h/million" / f"v{version}-{record_short}"
+        first_record = _snakemake(
+            record_fail, "million", env={"READCON_STUB_RECORD_FAIL": "1"}
+        )
+        assert first_record.returncode != 0
+        record_bytes = (record_fresh / "cross-format.json").read_bytes()
+        assert (record_fresh / "asv.json").is_file()
+        assert not (record_fresh / "host.json").exists()
+        finished = _snakemake(record_fail, "million")
+        assert finished.returncode == 0, finished.stdout + finished.stderr
+        assert (record_fresh / "cross-format.json").read_bytes() == record_bytes
+        assert (record_fresh / "host.json").read_text(encoding="utf-8") == "record\n"
+
+        blocked = _worktree(tmp_path, "blocked")
+        trees.append(blocked)
+        _, blocked_short = _tip(blocked)
+        blocked_fresh = blocked / "bench/h2h/million" / f"v{version}-{blocked_short}"
+        blocked_fresh.mkdir(parents=True)
+        (blocked_fresh / "sentinel").write_text("kept\n", encoding="utf-8")
+        refused = _snakemake(blocked, "million")
+        refused_text = refused.stdout + refused.stderr
+        assert refused.returncode != 0, refused_text
+        assert "refusing to write a saved record" in refused_text
+        assert (blocked_fresh / "sentinel").read_text(encoding="utf-8") == "kept\n"
+        assert not (blocked_fresh / "cross-format.json").exists()
     finally:
         for tree in trees:
             subprocess.run(

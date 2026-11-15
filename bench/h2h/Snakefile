@@ -504,15 +504,8 @@ if "read" in MILLION_OPS.split(","):
     MILLION_MEASURE.append(f"{MILLION}/chemfiles-write-profile.txt")
 
 
-def _million_measure_requested(targets):
-    names = {"million_measure", "million", MILLION}
-    names.update(MILLION_MEASURE)
-    prefix = MILLION + "/"
-    for target in targets:
-        text = str(target)
-        if text in names or text.startswith(prefix):
-            return True
-    return False
+def _measure_outputs_missing():
+    return any(not os.path.isfile(path) for path in MILLION_MEASURE)
 
 
 def _refuse_saved_record(path):
@@ -527,6 +520,24 @@ def _refuse_saved_record(path):
         raise SystemExit("refusing to write a saved record")
     if os.path.isdir(normalized):
         raise SystemExit("refusing to write a saved record")
+
+
+def _refuse_million_target(targets):
+    # A fresh measurement is always refused when the directory is already a
+    # record. A later step in that directory is refused only while a
+    # measurement output is still missing, so a finished measure can resume.
+    measure_files = set(MILLION_MEASURE)
+    prefix = MILLION + "/"
+    later_step = False
+    for target in targets:
+        text = str(target)
+        if text == "million_measure" or text in measure_files:
+            _refuse_saved_record(MILLION)
+            return
+        if text == "million" or text == MILLION or text.startswith(prefix):
+            later_step = True
+    if later_step and _measure_outputs_missing():
+        _refuse_saved_record(MILLION)
 
 
 def _cli_targets():
@@ -547,15 +558,13 @@ def _cli_targets():
     return found
 
 
-if _million_measure_requested(_cli_targets()):
-    _refuse_saved_record(MILLION)
+_refuse_million_target(_cli_targets())
 
 
 onstart:
     settings = workflow.dag_settings
     requested = list(settings.targets) if settings is not None and settings.targets else []
-    if _million_measure_requested(requested):
-        _refuse_saved_record(MILLION)
+    _refuse_million_target(requested)
 
 
 rule million_measure:
