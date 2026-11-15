@@ -2046,12 +2046,21 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
-#[allow(clippy::too_many_arguments)]
 /// Write version 2 from columns already in memory.
 ///
 /// Positions are required. Velocities, masses, the cell, atom ids and the
 /// per-axis fixed mask are stored when the caller passes them. The payload
 /// order is positions, velocities, masses, cell, atom ids, fixed masks.
+fn column_len(name: &str, got: usize, want: usize) -> Result<(), ParseError> {
+    if got == want {
+        return Ok(());
+    }
+    Err(ParseError::InvalidCount(format!(
+        "CON-bin {name} has {got} values, need {want}"
+    )))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn write_f64_columns(
     path: &Path,
     n_frames: u64,
@@ -2063,6 +2072,35 @@ pub fn write_f64_columns(
     atom_ids: Option<&[u64]>,
     fixed: Option<&[u8]>,
 ) -> Result<ConBinHeader, ParseError> {
+    let frames = usize::try_from(n_frames)
+        .map_err(|_| ParseError::InvalidCount("CON-bin frame count does not fit".into()))?;
+    let atoms = usize::try_from(n_atoms)
+        .map_err(|_| ParseError::InvalidCount("CON-bin atom count does not fit".into()))?;
+    let n = frames
+        .checked_mul(atoms)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    let xyz = n
+        .checked_mul(3)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    let cells = frames
+        .checked_mul(6)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
+    column_len("positions", positions.len(), xyz)?;
+    if let Some(values) = velocities {
+        column_len("velocities", values.len(), xyz)?;
+    }
+    if let Some(values) = masses {
+        column_len("masses", values.len(), n)?;
+    }
+    if let Some(values) = cell {
+        column_len("cell", values.len(), cells)?;
+    }
+    if let Some(values) = atom_ids {
+        column_len("atom ids", values.len(), n)?;
+    }
+    if let Some(values) = fixed {
+        column_len("fixed masks", values.len(), n)?;
+    }
     let header = ConBinHeader {
         version: VERSION_2,
         n_frames,
@@ -2665,6 +2703,20 @@ fn emit_built(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_short_positions_column_is_rejected_before_publish() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short.bin");
+        let err = write_f64_columns(&path, 1, 2, &[0.0, 1.0, 2.0], None, None, None, None, None)
+            .expect_err("three positions cannot fill two atoms");
+        let message = err.to_string();
+        assert!(
+            message.contains("positions") && message.contains("need 6"),
+            "{message}"
+        );
+        assert!(!path.exists(), "a rejected column must not publish a file");
+    }
 
     fn write_known(path: &Path, frames: usize, atoms: usize) {
         let page = page_size().unwrap();

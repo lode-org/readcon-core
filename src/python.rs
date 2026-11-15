@@ -4926,11 +4926,18 @@ fn write_conbin_columns(
     let shape = positions.dims();
     let n_frames = shape[0] as u64;
     let n_atoms = shape[1] as u64;
-    let n = (n_frames as usize).saturating_mul(n_atoms as usize);
-    if vel.len() != pos.len()
+    let n = (n_frames as usize)
+        .checked_mul(n_atoms as usize)
+        .ok_or_else(|| PyValueError::new_err("CON-bin column length overflows"))?;
+    let xyz = n
+        .checked_mul(3)
+        .ok_or_else(|| PyValueError::new_err("CON-bin column length overflows"))?;
+    if shape[2] != 3
+        || pos.len() != xyz
+        || vel.len() != xyz
         || mass.len() != n
-        || box_cell.len() != (n_frames as usize) * 6
-        || flags.len() != n * 3
+        || box_cell.len() != (n_frames as usize).saturating_mul(6)
+        || flags.len() != xyz
     {
         return Err(PyValueError::new_err("CON-bin columns disagree"));
     }
