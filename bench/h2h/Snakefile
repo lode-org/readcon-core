@@ -573,7 +573,7 @@ rule h2h15_measure:
         export NUMEXPR_NUM_THREADS=1
         export VECLIB_MAXIMUM_THREADS=1
         export RAYON_NUM_THREADS=1
-        python3 bench/h2h/h2h15.py --out bench/h2h/scaling/h2h15 --repeats 12
+        python3 bench/h2h/h2h15.py --out bench/h2h/scaling/h2h15
         """
 
 
@@ -605,3 +605,100 @@ rule h2h15:
         f"{H2H15}/host.json",
         f"{H2H15}/asv.json",
         f"{H2H15}/asv-machine.json",
+
+
+rule cross_1k:
+    output:
+        "bench/h2h/formats/v0.23.3/1k/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1k
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1k
+        """
+
+
+rule cross_100k:
+    output:
+        "bench/h2h/formats/v0.23.3/100k/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=100k
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/100k
+        """
+
+
+rule cross_1m:
+    output:
+        "bench/h2h/formats/v0.23.3/1m/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1M
+        export READCON_CROSS_SKIP_ARMS=mda-mmcif
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1m
+        """
+
+
+rule cross_1m_mmcif:
+    output:
+        "bench/h2h/formats/v0.23.3/1m-mmcif/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1M
+        export READCON_CROSS_ARMS=mda-mmcif
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1m-mmcif
+        """
+
+
+rule cross_traj:
+    output:
+        "bench/h2h/formats/v0.23.3/traj/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=traj
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/traj
+        """
+
+
+rule cross_extra:
+    output:
+        "bench/h2h/formats/v0.23.3/extra/host.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=extra
+        python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/extra
+        """
+
+
+rule cross_asv:
+    output:
+        "bench/h2h/formats/v0.23.3/asv/asv.json",
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
+        python3 bench/h2h/h2h15_asv.py bench/h2h/formats/v0.23.3/asv
+        """

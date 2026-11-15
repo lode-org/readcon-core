@@ -1,0 +1,22 @@
+Wall time on one machine, from the stopped run's sample times.
+1k at n=12 is about 10 minutes.
+100k at n=12 is about 30 minutes.
+1M except the mmCIF reader, at n=6, is about 45 minutes.
+1M mmCIF, at n=6, warm and cold, is about 4.3 hours.
+Each finished mmCIF sample was about 1300 seconds, and the write is not timed.
+traj, 1000 atoms and 8 frames, at n=12, is about 45 minutes.
+The extra rows, MDCompress on XTC and chemfiles DCD at fc1e930, are about 25 minutes.
+asv on that same 8-frame trajectory, at n=12, is about 30 minutes.
+One machine, one after another, is about 7.2 hours.
+In parallel the mmCIF shard sets the wait, about 4.3 hours.
+The other shards finish within an hour.
+
+Each shard writes its own directory. Same tip, same sample count for every tool at that size.
+
+READCON_CROSS_PART=table READCON_CROSS_STRUCTURES=1k python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1k
+READCON_CROSS_PART=table READCON_CROSS_STRUCTURES=100k python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/100k
+READCON_CROSS_PART=table READCON_CROSS_STRUCTURES=1M READCON_CROSS_SKIP_ARMS=mda-mmcif python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1m
+READCON_CROSS_PART=table READCON_CROSS_STRUCTURES=1M READCON_CROSS_ARMS=mda-mmcif python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/1m-mmcif
+READCON_CROSS_PART=table READCON_CROSS_STRUCTURES=traj python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/traj
+READCON_CROSS_PART=extra python3 bench/h2h/h2h15.py --out bench/h2h/formats/v0.23.3/extra
+python3 bench/h2h/h2h15_asv.py bench/h2h/formats/v0.23.3/asv

@@ -158,6 +158,93 @@ def test_extxyz_ng_reads_the_same_extended_xyz(tmp_path: Path) -> None:
     assert checked["position_error"] <= row["precision"], checked
 
 
+def test_repeats_follow_the_structure_size() -> None:
+    assert cross_format.repeats_for("1k") == 12
+    assert cross_format.repeats_for("100k") == 12
+    assert cross_format.repeats_for("traj") == 12
+    assert cross_format.repeats_for("1M") == 6
+
+
+def test_a_finished_sample_is_appended(tmp_path: Path) -> None:
+    cross_format.append_arm_row(
+        tmp_path,
+        "1k",
+        "readcon-con",
+        "read-warm",
+        "0",
+        "0.010000",
+        "100",
+        "200",
+        "forces,energies",
+    )
+    cross_format.append_arm_row(
+        tmp_path,
+        "1k",
+        "readcon-con",
+        "read-warm",
+        "1",
+        "0.020000",
+        "110",
+        "200",
+        "forces,energies",
+    )
+    text = (tmp_path / "by-arm" / "1k" / "readcon-con.tsv").read_text(encoding="utf-8")
+    assert text.startswith("op\tsample\twall_s\trss_bytes\tfile_bytes\tdrops\n")
+    assert text.count("\n") == 3
+    assert "0.020000" in text
+
+
+def test_extxyz_ng_oserror_names_the_limit() -> None:
+    reason = cross_format.unsupported_reason("extxyz-ng", OSError("Digit"))
+    assert reason.startswith("unsupported:")
+    assert "128" in reason
+    assert "not changed" in reason
+
+
+def test_interleave_keeps_one_sample_count(tmp_path: Path, monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake(_script, _job):
+        calls["n"] += 1
+        wall = 1.0 if calls["n"] % 2 else 50.0
+        return {"wall_s": wall, "rss_bytes": 4, "checksum": 1.0}
+
+    monkeypatch.setattr(cross_format, "spawn_worker", fake)
+    arms = [
+        {"id": "a", "job": {"path": "x"}},
+        {"id": "b", "job": {"path": "y"}},
+    ]
+    found = cross_format._interleave(
+        arms,
+        6,
+        [],
+        "read-warm 1M",
+        out=tmp_path,
+        structure="1M",
+        op="read-warm",
+        drops={"a": "none", "b": "none"},
+    )
+    assert len(found["samples"]["a"]) == 6
+    assert len(found["samples"]["b"]) == 6
+    assert calls["n"] == 12
+    text = (tmp_path / "by-arm" / "1M" / "a.tsv").read_text(encoding="utf-8")
+    assert text.count("\n") == 7
+
+
+def test_an_unsupported_row_is_stored(tmp_path: Path) -> None:
+    arms, _notes = cross_format.arm_table(100_000)
+    pdb = next(arm for arm in arms if arm["id"] == "mda-pdb")
+    rows: list[dict] = []
+    lines: list[str] = []
+    cross_format.record_unsupported(
+        tmp_path, rows, lines, "100k", 100_000, 1, pdb, pdb["drops"]
+    )
+    assert rows[0]["cache"] == "unsupported"
+    assert str(rows[0]["loses"]).startswith("unsupported:")
+    stored = (tmp_path / "by-arm" / "100k" / "mda-pdb.tsv").read_text(encoding="utf-8")
+    assert "unsupported:" in stored
+
+
 def test_pdb_above_serial_is_reported() -> None:
     arms, _notes = cross_format.arm_table(100_000)
     pdb = [arm for arm in arms if arm["id"] == "mda-pdb"]
