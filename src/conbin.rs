@@ -7,8 +7,9 @@
 //! `pread` fill of a caller-owned slice, kept so a measurement can pair the
 //! two on the same file.
 
+use std::cell::RefCell;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{IoSlice, Read, Write};
 #[cfg(unix)]
 use std::os::fd::AsRawFd;
 use std::path::Path;
@@ -1973,6 +1974,12 @@ fn decode_le<T: StoreLe>(values: &mut [T]) {
     }
 }
 
+thread_local! {
+    /// One header page per thread. The padding stays zero, and each write
+    /// fills the 40-byte prefix in place instead of allocating another page.
+    static HEADER_PAGE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
+
 fn header_page_bytes(header: &ConBinHeader, page: usize) -> Vec<u8> {
     let mut header_page = vec![0u8; page];
     let prefix = header_fields(header, page as u64);
@@ -1980,6 +1987,87 @@ fn header_page_bytes(header: &ConBinHeader, page: usize) -> Vec<u8> {
     header_page
 }
 
+/// Little-endian hosts already store values in file order. The slice is
+/// that memory. It is not a second buffer.
+#[cfg(target_endian = "little")]
+fn view_bytes<T>(values: &[T]) -> &[u8] {
+    unsafe {
+        std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), std::mem::size_of_val(values))
+    }
+}
+
+#[cfg(target_endian = "big")]
+fn le_bytes<T: StoreLe>(values: &[T]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
+    for value in values {
+        value.store_le(&mut bytes);
+    }
+    bytes
+}
+
+/// Preallocate `page + parts` and store the reused header plus every part
+/// with one vectored write. A short write is resumed. Nothing is synced:
+/// the caller still publishes by rename.
+fn write_assembled(
+    file: &mut File,
+    header: &ConBinHeader,
+    page: usize,
+    parts: &[&[u8]],
+) -> Result<(), ParseError> {
+    let payload = parts
+        .iter()
+        .try_fold(0u64, |sum, part| sum.checked_add(part.len() as u64))
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin file length overflows".into()))?;
+    let total = (page as u64)
+        .checked_add(payload)
+        .ok_or_else(|| ParseError::InvalidCount("CON-bin file length overflows".into()))?;
+    preallocate(file, total)?;
+    HEADER_PAGE.with(|slot| {
+        let mut buf = slot.borrow_mut();
+        if buf.len() != page {
+            buf.clear();
+            buf.resize(page, 0);
+        }
+        let prefix = header_fields(header, page as u64);
+        buf[..FIELD_BYTES].copy_from_slice(&prefix);
+        let mut iovecs = Vec::with_capacity(1 + parts.len());
+        iovecs.push(IoSlice::new(buf.as_slice()));
+        for part in parts {
+            if !part.is_empty() {
+                iovecs.push(IoSlice::new(part));
+            }
+        }
+        let mut rest = iovecs.as_mut_slice();
+        while !rest.is_empty() {
+            match file.write_vectored(rest) {
+                Ok(0) => {
+                    return Err(ParseError::ValidationError(
+                        "CON-bin write stored no bytes".into(),
+                    ));
+                }
+                Ok(n) => IoSlice::advance_slices(&mut rest, n),
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(err) => return Err(ParseError::ValidationError(err.to_string())),
+            }
+        }
+        Ok(())
+    })
+}
+
+fn publish_assembled(
+    path: &Path,
+    header: &ConBinHeader,
+    page: usize,
+    parts: &[&[u8]],
+) -> Result<(), ParseError> {
+    crate::writer::publish_new(
+        path,
+        |err| ParseError::ValidationError(err.to_string()),
+        |file| write_assembled(file, header, page, parts),
+    )
+}
+
+#[cfg(test)]
 fn write_header_page(
     file: &mut File,
     header: &ConBinHeader,
@@ -2153,6 +2241,14 @@ fn accumulate_frames(text: &str) -> Result<FrameColumns, ParseError> {
                 "CON-bin requires the same atom count in every frame".into(),
             ));
         }
+        let xyz = n.saturating_mul(3);
+        positions.reserve(xyz);
+        velocities.reserve(xyz);
+        forces.reserve(xyz);
+        masses.reserve(n);
+        fixed.reserve(n);
+        ids.reserve(n);
+        cells.reserve(6);
         let mut mass_at = 0usize;
         for (count, mass) in frame
             .header
@@ -2412,61 +2508,97 @@ fn write_conbin_body(
             return write_parts_at(file, &parts, binary32, page);
         }
     }
-    write_header_page(file, &ConBinHeader::version1(0, 0, binary32, true), page)?;
-
     let built = accumulate_frames(text)?;
-    let n_frames = built.n_frames;
-    let n_atoms = built.n_atoms;
-    let positions = built.positions;
-    let velocities = built.velocities;
-    let forces = built.forces;
-    let masses = built.masses;
-    let fixed = built.fixed;
-    let cells = built.cells;
-    let ids = built.ids;
-    let any_force = built.any_force;
-    let any_velocity = built.any_velocity;
     let header = ConBinHeader {
         version: VERSION_2,
-        n_frames,
-        n_atoms,
+        n_frames: built.n_frames,
+        n_atoms: built.n_atoms,
         binary32,
         velocities: true,
-        forces: any_force,
+        forces: built.any_force,
         masses: true,
         fixed: true,
         cell: true,
         atom_ids: true,
     };
-    let _ = any_velocity;
-    if binary32 {
-        let pos32: Vec<f32> = positions.iter().map(|v| *v as f32).collect();
-        let vel32: Vec<f32> = velocities.iter().map(|v| *v as f32).collect();
-        write_values(file, &pos32)?;
-        write_values(file, &vel32)?;
-        if any_force {
-            let force32: Vec<f32> = forces.iter().map(|v| *v as f32).collect();
-            write_values(file, &force32)?;
+    emit_built(file, &header, page, binary32, &built)
+}
+
+fn emit_built(
+    file: &mut File,
+    header: &ConBinHeader,
+    page: usize,
+    binary32: bool,
+    built: &FrameColumns,
+) -> Result<(), ParseError> {
+    let _ = built.any_velocity;
+    #[cfg(target_endian = "little")]
+    {
+        if binary32 {
+            let pos32: Vec<f32> = built.positions.iter().map(|v| *v as f32).collect();
+            let vel32: Vec<f32> = built.velocities.iter().map(|v| *v as f32).collect();
+            let force32 = if built.any_force {
+                Some(built.forces.iter().map(|v| *v as f32).collect::<Vec<f32>>())
+            } else {
+                None
+            };
+            let mass32: Vec<f32> = built.masses.iter().map(|v| *v as f32).collect();
+            let cell32: Vec<f32> = built.cells.iter().map(|v| *v as f32).collect();
+            let mut parts = Vec::with_capacity(7);
+            parts.push(view_bytes(&pos32));
+            parts.push(view_bytes(&vel32));
+            if let Some(values) = force32.as_ref() {
+                parts.push(view_bytes(values));
+            }
+            parts.push(view_bytes(&mass32));
+            parts.push(view_bytes(&cell32));
+            parts.push(view_bytes(&built.ids));
+            parts.push(view_bytes(&built.fixed));
+            write_assembled(file, header, page, &parts)
+        } else {
+            let mut parts = Vec::with_capacity(7);
+            parts.push(view_bytes(&built.positions));
+            parts.push(view_bytes(&built.velocities));
+            if built.any_force {
+                parts.push(view_bytes(&built.forces));
+            }
+            parts.push(view_bytes(&built.masses));
+            parts.push(view_bytes(&built.cells));
+            parts.push(view_bytes(&built.ids));
+            parts.push(view_bytes(&built.fixed));
+            write_assembled(file, header, page, &parts)
         }
-        let mass32: Vec<f32> = masses.iter().map(|v| *v as f32).collect();
-        write_values(file, &mass32)?;
-        let cell32: Vec<f32> = cells.iter().map(|v| *v as f32).collect();
-        write_values(file, &cell32)?;
-    } else {
-        write_values(file, &positions)?;
-        write_values(file, &velocities)?;
-        if any_force {
-            write_values(file, &forces)?;
-        }
-        write_values(file, &masses)?;
-        write_values(file, &cells)?;
     }
-    write_values(file, &ids)?;
-    write_values(file, &fixed)?;
-    file.seek(SeekFrom::Start(0))
-        .map_err(|err| ParseError::ValidationError(err.to_string()))?;
-    write_header_page(file, &header, page)?;
-    Ok(())
+    #[cfg(target_endian = "big")]
+    {
+        let mut owned = Vec::with_capacity(7);
+        if binary32 {
+            let pos32: Vec<f32> = built.positions.iter().map(|v| *v as f32).collect();
+            let vel32: Vec<f32> = built.velocities.iter().map(|v| *v as f32).collect();
+            let force32: Vec<f32> = built.forces.iter().map(|v| *v as f32).collect();
+            let mass32: Vec<f32> = built.masses.iter().map(|v| *v as f32).collect();
+            let cell32: Vec<f32> = built.cells.iter().map(|v| *v as f32).collect();
+            owned.push(le_bytes(&pos32));
+            owned.push(le_bytes(&vel32));
+            if built.any_force {
+                owned.push(le_bytes(&force32));
+            }
+            owned.push(le_bytes(&mass32));
+            owned.push(le_bytes(&cell32));
+        } else {
+            owned.push(le_bytes(&built.positions));
+            owned.push(le_bytes(&built.velocities));
+            if built.any_force {
+                owned.push(le_bytes(&built.forces));
+            }
+            owned.push(le_bytes(&built.masses));
+            owned.push(le_bytes(&built.cells));
+        }
+        owned.push(le_bytes(&built.ids));
+        owned.push(le_bytes(&built.fixed));
+        let parts: Vec<&[u8]> = owned.iter().map(|bytes| bytes.as_slice()).collect();
+        write_assembled(file, header, page, &parts)
+    }
 }
 
 #[cfg(test)]
@@ -2608,6 +2740,107 @@ mod tests {
             mapped.positions_f64().unwrap(),
             &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         );
+    }
+
+    #[test]
+    fn f64_columns_round_trip_matches_the_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("columns.conbin");
+        let positions = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let velocities = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
+        let masses = [12.0, 16.0];
+        let cell = [10.0, 11.0, 12.0, 90.0, 90.0, 90.0];
+        let ids = [3u64, 4];
+        let fixed = [0b001u8, 0b110];
+        let header = write_f64_columns(
+            &path,
+            1,
+            2,
+            &positions,
+            Some(&velocities),
+            Some(&masses),
+            Some(&cell),
+            Some(&ids),
+            Some(&fixed),
+        )
+        .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let copy = dir.path().join("copy.conbin");
+        write_f64_columns(
+            &copy,
+            1,
+            2,
+            &positions,
+            Some(&velocities),
+            Some(&masses),
+            Some(&cell),
+            Some(&ids),
+            Some(&fixed),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&copy).unwrap(), bytes);
+
+        let page = page_size().unwrap();
+        let mut expect = vec![0u8; page];
+        expect[..FIELD_BYTES].copy_from_slice(&header_fields(&header, page as u64));
+        for value in positions {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in velocities {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in masses {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in cell {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in ids {
+            expect.extend_from_slice(&value.to_le_bytes());
+        }
+        expect.extend_from_slice(&fixed);
+        assert_eq!(bytes, expect);
+
+        let mapped = map_file(&path, 1).unwrap();
+        assert_eq!(mapped.positions_f64().unwrap(), &positions);
+        assert_eq!(mapped.velocities_f64().unwrap(), &velocities);
+        assert_eq!(mapped.masses_f64().unwrap().unwrap(), &masses);
+        assert_eq!(mapped.cell_f64().unwrap().unwrap(), &cell);
+        assert_eq!(mapped.atom_ids().unwrap().unwrap(), &ids);
+        assert_eq!(mapped.fixed_masks().unwrap().unwrap(), &fixed);
+
+        let bare = dir.path().join("positions.conbin");
+        write_f64_columns(&bare, 1, 1, &[9.0, 8.0, 7.0], None, None, None, None, None).unwrap();
+        let bare_bytes = std::fs::read(&bare).unwrap();
+        assert_eq!(bare_bytes.len(), page + 24);
+        assert!(bare_bytes[FIELD_BYTES..page].iter().all(|byte| *byte == 0));
+        let mut coords = Vec::new();
+        coords.extend_from_slice(&9.0f64.to_le_bytes());
+        coords.extend_from_slice(&8.0f64.to_le_bytes());
+        coords.extend_from_slice(&7.0f64.to_le_bytes());
+        assert_eq!(&bare_bytes[page..], coords.as_slice());
+    }
+
+    #[test]
+    fn write_from_con_is_byte_identical() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/test/tiny_cuh2.con");
+        let first = dir.path().join("a.conbin");
+        let second = dir.path().join("b.conbin");
+        let header = write_from_con(&src, &first, false).unwrap();
+        write_from_con(&src, &second, false).unwrap();
+        let bytes = std::fs::read(&first).unwrap();
+        assert_eq!(std::fs::read(&second).unwrap(), bytes);
+        let page = page_size().unwrap();
+        assert!(bytes.len() > page);
+        assert_eq!(&bytes[..8], MAGIC);
+        assert!(bytes[FIELD_BYTES..page].iter().all(|byte| *byte == 0));
+        let (_again, positions, velocities) = read_owned_f64(&first, 1).unwrap();
+        assert_eq!(positions.len(), header.position_len().unwrap());
+        assert_eq!(velocities.len(), positions.len());
+        let mapped = map_file(&first, 1).unwrap();
+        assert_eq!(mapped.positions_f64().unwrap(), positions.as_slice());
+        assert_eq!(mapped.velocities_f64().unwrap(), velocities.as_slice());
     }
 
     #[test]
