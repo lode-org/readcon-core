@@ -203,6 +203,36 @@ def _file_bytes(path: str | None) -> str:
     return ""
 
 
+def recorded_rss(result: dict) -> str:
+    """Blank when the worker did not report a peak. Zero is a real measurement."""
+    value = result.get("rss_bytes") if isinstance(result, dict) else None
+    if value is None:
+        return ""
+    return str(int(value))
+
+
+def remember_rss(bucket: list, result: dict) -> None:
+    value = result.get("rss_bytes")
+    if value is None:
+        return
+    bucket.append(int(value))
+
+
+def median_rss(values: list) -> int | None:
+    if not values:
+        return None
+    return int(np.median(values))
+
+
+def refuse_recorded_shard(shard: Path) -> None:
+    """A rerun must not delete per-sample rows that were already appended."""
+    if not shard.is_dir():
+        return
+    for path in shard.glob("*.tsv"):
+        if len(path.read_text(encoding="utf-8").splitlines()) > 1:
+            raise SystemExit(f"refusing to delete recorded samples in {shard}")
+
+
 def append_arm_row(
     out: Path,
     structure: str,
@@ -2733,7 +2763,7 @@ def worker_main() -> None:
 
 def _record_sample(found, rss, checksums, arm, result) -> None:
     found[arm["id"]].append(float(result["wall_s"]))
-    rss[arm["id"]].append(int(result.get("rss_bytes") or 0))
+    remember_rss(rss[arm["id"]], result)
     if "checksum" in result:
         checksums[arm["id"]].append(float(result["checksum"]))
     print(f"    {arm['id']} {result['wall_s']:.4f}", flush=True)
@@ -2773,7 +2803,7 @@ def _interleave(
                 op,
                 label,
                 f"{float(result['wall_s']):.6f}",
-                str(int(result.get("rss_bytes") or 0)),
+                recorded_rss(result),
                 _file_bytes(path),
                 str(drops.get(arm["id"], "")),
             )
@@ -2941,8 +2971,7 @@ def run(
         spec_path = directory / "spec.npz"
         save_spec(spec_path, spec)
         shard = out / "by-arm" / label
-        if shard.is_dir():
-            shutil.rmtree(shard)
+        refuse_recorded_shard(shard)
         arms, structure_notes = arm_table(n_atoms)
         if only_arms:
             arms = [arm for arm in arms if arm["id"] in only_arms]
@@ -3144,7 +3173,7 @@ def run(
                         "median_s": median,
                         "iqr_s": iqr,
                         "samples_s": samples,
-                        "rss_bytes": int(np.median(rss_values)),
+                        "rss_bytes": median_rss(rss_values),
                         "file_bytes": arm["file_bytes"],
                         "loses": arm["audit"]["loses"],
                         "position_error": arm["audit"]["position_error"],
@@ -3223,7 +3252,7 @@ def run(
                 "median_s": median,
                 "iqr_s": iqr,
                 "samples_s": samples,
-                "rss_bytes": int(np.median(rss_values)),
+                "rss_bytes": median_rss(rss_values),
                 "file_bytes": file_bytes,
                 "loses": arm["audit"]["loses"],
                 "position_error": arm["audit"]["position_error"],
