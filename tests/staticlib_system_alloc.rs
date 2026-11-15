@@ -28,11 +28,18 @@ fn defined_mimalloc(archive: &Path) -> String {
         .join("\n")
 }
 
+fn alloc_work(name: &str) -> std::path::PathBuf {
+    let base = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target"));
+    base.join(name)
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn static_archive_does_not_install_mimalloc() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let work = root.join("target").join("staticlib-system-alloc");
+    let work = alloc_work("staticlib-system-alloc");
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("workdir");
     let status = Command::new("python3")
@@ -62,10 +69,7 @@ fn static_archive_does_not_install_mimalloc() {
 #[test]
 fn cmake_static_archive_does_not_install_mimalloc() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let base = std::env::var_os("CARGO_TARGET_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| root.join("target"));
-    let work = base.join("cmake-static-system-alloc");
+    let work = alloc_work("cmake-static-system-alloc");
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("workdir");
     let configure = Command::new("cmake")

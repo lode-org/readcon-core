@@ -34,6 +34,21 @@ def _load(name: str):
     return __import__(name)
 
 
+def _output_dir(base: Path | None) -> Path:
+    """Pytest passes a base. A direct call stays under build/scratch."""
+    if base is not None:
+        return base
+    scratch = ROOT / "build" / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(dir=scratch))
+
+
+def test_the_plot_scratch_stays_under_the_build_tree() -> None:
+    path = _output_dir(None)
+    assert path.is_relative_to(ROOT / "build" / "scratch")
+    path.rmdir()
+
+
 def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
     try:
         import chemparseplot  # noqa: F401
@@ -41,8 +56,7 @@ def test_plotters_write_included_figures(tmp_path: Path | None = None) -> None:
         import pytest
 
         pytest.importorskip("chemparseplot")
-    if tmp_path is None:
-        tmp_path = Path(tempfile.mkdtemp())
+    tmp_path = _output_dir(tmp_path)
     restored = _load("plot_restored")
     extra = _load("plot_union_extra")
     figures = _load("plot_figures")
