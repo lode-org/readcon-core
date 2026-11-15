@@ -2727,18 +2727,92 @@ mod tests {
         assert_eq!(view_bytes(&values), expect.as_slice());
     }
 
-    #[test]
-    fn a_short_positions_column_is_rejected_before_publish() {
+    fn reject_short(label: &str, needle: &str, want: &str) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("short.bin");
-        let err = write_f64_columns(&path, 1, 2, &[0.0, 1.0, 2.0], None, None, None, None, None)
-            .expect_err("three positions cannot fill two atoms");
+        let positions = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let err = match label {
+            "positions" => {
+                write_f64_columns(&path, 1, 2, &[0.0, 1.0, 2.0], None, None, None, None, None)
+            }
+            "velocities" => write_f64_columns(
+                &path,
+                1,
+                2,
+                &positions,
+                Some(&[0.0, 1.0, 2.0]),
+                None,
+                None,
+                None,
+                None,
+            ),
+            "masses" => write_f64_columns(
+                &path,
+                1,
+                2,
+                &positions,
+                None,
+                Some(&[63.5]),
+                None,
+                None,
+                None,
+            ),
+            "cell" => write_f64_columns(
+                &path,
+                1,
+                2,
+                &positions,
+                None,
+                None,
+                Some(&[1.0, 1.0, 1.0]),
+                None,
+                None,
+            ),
+            "atom ids" => {
+                write_f64_columns(&path, 1, 2, &positions, None, None, None, Some(&[0]), None)
+            }
+            "fixed masks" => {
+                write_f64_columns(&path, 1, 2, &positions, None, None, None, None, Some(&[0]))
+            }
+            _ => panic!("unknown column {label}"),
+        }
+        .expect_err(label);
         let message = err.to_string();
         assert!(
-            message.contains("positions") && message.contains("need 6"),
+            message.contains(needle) && message.contains(want),
             "{message}"
         );
         assert!(!path.exists(), "a rejected column must not publish a file");
+    }
+
+    #[test]
+    fn a_short_positions_column_is_rejected_before_publish() {
+        reject_short("positions", "positions", "need 6");
+    }
+
+    #[test]
+    fn a_short_velocities_column_is_rejected_before_publish() {
+        reject_short("velocities", "velocities", "need 6");
+    }
+
+    #[test]
+    fn a_short_masses_column_is_rejected_before_publish() {
+        reject_short("masses", "masses", "need 2");
+    }
+
+    #[test]
+    fn a_short_cell_column_is_rejected_before_publish() {
+        reject_short("cell", "cell", "need 6");
+    }
+
+    #[test]
+    fn a_short_atom_id_column_is_rejected_before_publish() {
+        reject_short("atom ids", "atom ids", "need 2");
+    }
+
+    #[test]
+    fn a_short_fixed_mask_column_is_rejected_before_publish() {
+        reject_short("fixed masks", "fixed masks", "need 2");
     }
 
     fn write_known(path: &Path, frames: usize, atoms: usize) {
