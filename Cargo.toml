@@ -53,6 +53,11 @@ rpc = [
 # This is the stable switch (libmimalloc-sys `local_dynamic_tls`). Static
 # bins and `cargo test` leave it off, so they keep initial-exec.
 local_dynamic_tls = ["mimalloc/local_dynamic_tls"]
+# The static archive is linked into a C host beside another Rust staticlib.
+# Each archive carries its own std, so a mimalloc pointer from this crate
+# is freed with glibc. The system allocator is the one both copies already
+# call. The cdylib does not enable this and keeps mimalloc.
+static_system_alloc = []
 # Counters for the borrowed-frame writer. Off in a release module.
 borrow-path-counts = []
 python = ["dep:pyo3", "dep:numpy", "parallel", "local_dynamic_tls"]
