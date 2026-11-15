@@ -77,6 +77,11 @@ All notable changes to this project will be documented in this file. See [conven
   The default initial-exec TLS made `dlopen` fail with "cannot allocate
   memory in static TLS block" once the process surplus was spent. Static
   Rust binaries leave the feature off and keep initial-exec.
+- The static archive uses the system allocator. Feature
+  `static_system_alloc` leaves the global allocator unset, and the meson
+  staticlib build enables it. A C host that links `libreadcon_core.a`
+  beside another Rust staticlib then frees with one allocator. The
+  cdylib keeps mimalloc.
 - A coordinate line spells an exact `N.0` in `0` ..= `9999` from the integer
   table. Signed zero stays `-0.0`, the spelling ryu uses. Writing an unmodified frame borrows the stored atoms instead of
   rebuilding them through `add_atom`, which boxed a coordinate triple per
