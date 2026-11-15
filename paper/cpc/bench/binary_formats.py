@@ -15,8 +15,8 @@ Every reader is a driver of ``bench/binary_formats`` that times, in a fresh
 process, the open, the read of every frame and the release (``bf_driver.h``).
 ``frames`` reads one frame at a time into a buffer the next frame reuses;
 ``all`` holds every frame in its own buffer until the read ends.  readcon-core
-adds ``columns`` (``read_soa_path`` of the positions) and ``image``
-(``read_rcbin``).
+adds ``columns`` (``read_coord_columns``) and ``image``
+(a mapped CON-bin position run).
 
 Steps, each writing one record to ``BENCH_RESULTS/binary_formats``:
 
