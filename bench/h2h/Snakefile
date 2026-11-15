@@ -569,7 +569,8 @@ onstart:
 
 rule million_measure:
     output:
-        MILLION_MEASURE,
+        # A later change of the shell or the tip must not replace a record.
+        protected(MILLION_MEASURE),
     params:
         out=MILLION,
         previous=MILLION_SAVED,
