@@ -158,6 +158,99 @@ def test_extxyz_ng_reads_the_same_extended_xyz(tmp_path: Path) -> None:
     assert checked["position_error"] <= row["precision"], checked
 
 
+def _stub_campaign(monkeypatch, seen: list[int]) -> None:
+    ident = {
+        "commit": "a" * 40,
+        "tree": "b" * 40,
+        "diff_sha256": "0" * 64,
+        "remote": "refs/heads/feat/release-0.23.0",
+    }
+    monkeypatch.setattr(cross_format, "refuse_stale_build", lambda _root: ident)
+    monkeypatch.setattr(cross_format, "serial_threads", lambda: None)
+    monkeypatch.setattr(cross_format, "pin_cores", lambda: None)
+    monkeypatch.setattr(
+        cross_format,
+        "campaign_host",
+        lambda _out, tree: {
+            "loadavg": "0.1 0.1 0.1 1/1 1",
+            "governor": {"0": "performance"},
+            "cpu_mhz": 1000.0,
+            "cpu_model": "Test",
+            "lscpu": "Model name: Test\n",
+            "bench_disk": "build/bench",
+            "bench_disk_filesystem": "ext2/ext3",
+            "work": "bench/h2h/work",
+            "work_filesystem": "ext2/ext3",
+            "record": "bench/out",
+            "record_filesystem": "ext2/ext3",
+            "tree": tree,
+        },
+    )
+    release = (
+        (Path(__file__).resolve().parents[2] / "VERSION")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
+    monkeypatch.setattr(cross_format, "library_versions", lambda: {"readcon": release})
+    monkeypatch.setattr(
+        cross_format,
+        "ovito_extxyz_periodicity_and_drift",
+        lambda: {
+            "pbc_matches": True,
+            "wrapped_into_cell": False,
+            "stuck_on_frame0": False,
+            "drift_max_abs": 0.0,
+        },
+    )
+    monkeypatch.setattr(cross_format, "core_list", lambda: "0")
+    monkeypatch.setattr(
+        cross_format,
+        "make_spec",
+        lambda n_atoms, n_frames: {
+            "n_atoms": n_atoms,
+            "n_frames": n_frames,
+            "n_unique_frames": n_frames,
+            "unique_frame_hashes": n_frames,
+            "frame_sha256": ["ab"],
+        },
+    )
+    monkeypatch.setattr(cross_format, "save_spec", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(cross_format, "arm_table", lambda _n: ([], []))
+
+    def record(arms, repeats, *_args, **_kwargs):
+        seen.append(repeats)
+        return {
+            "samples": {arm["id"]: [] for arm in arms},
+            "rss": {arm["id"]: [] for arm in arms},
+            "checksums": {arm["id"]: [] for arm in arms},
+        }
+
+    monkeypatch.setattr(cross_format, "_interleave", record)
+
+
+def test_omitted_repeats_use_the_size_count(monkeypatch, tmp_path: Path) -> None:
+    seen: list[int] = []
+    _stub_campaign(monkeypatch, seen)
+    cross_format.run(
+        tmp_path, None, structures=[("1k", 8, 1), ("1M", 8, 1)], ops=("write",)
+    )
+    assert seen == [12, 6]
+    note = (tmp_path / "cross-format.log").read_text(encoding="utf-8")
+    assert "6 at 1M" in note
+
+
+def test_given_repeats_apply_to_every_structure(monkeypatch, tmp_path: Path) -> None:
+    seen: list[int] = []
+    _stub_campaign(monkeypatch, seen)
+    cross_format.run(
+        tmp_path, 4, structures=[("1k", 8, 1), ("1M", 8, 1)], ops=("write",)
+    )
+    assert seen == [4, 4]
+    note = (tmp_path / "cross-format.log").read_text(encoding="utf-8")
+    assert "6 at 1M" not in note
+    assert "4 for every structure" in note
+
+
 def test_repeats_follow_the_structure_size() -> None:
     assert cross_format.repeats_for("1k") == 12
     assert cross_format.repeats_for("100k") == 12
