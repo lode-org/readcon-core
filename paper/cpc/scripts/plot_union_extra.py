@@ -20,10 +20,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from chemparseplot.plot.palette import RUHI_COLORS, RUHI_SEQUENTIAL
+from chemparseplot.plot.theme import RUHI_COLORS
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
 import plot_figures as pf
+
+# 1.11.0 keeps the Ruhi colours on the theme module and registers this
+# colormap from them. It has no chemparseplot.plot.palette.
+RUHI_SEQUENTIAL = "ruhi_diverging"
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated"
