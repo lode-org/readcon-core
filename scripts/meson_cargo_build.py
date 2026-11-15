@@ -103,9 +103,7 @@ def main(argv: list[str]) -> int:
             )
         else:
             crate_features = ",".join(
-                part
-                for part in (crate_features, "static_system_alloc")
-                if part
+                part for part in (crate_features, "static_system_alloc") if part
             )
         crate_cmd = list(cmd)
         if crate_features:

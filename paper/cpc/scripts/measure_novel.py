@@ -22,7 +22,7 @@ CPC = Path(__file__).resolve().parents[1]
 REPO = CPC.parents[1]
 sys.path.insert(0, str(REPO / "bench" / "h2h"))
 
-from bench_disk import bench_scratch
+from bench_disk import bench_scratch  # noqa: E402
 
 E1 = CPC / "evidence" / "work" / "e1"
 E5_HELD = CPC / "evidence" / "work" / "e5" / "bands" / "held" / "neb.con"

@@ -9,10 +9,7 @@
 // std, and mimalloc in one copy is freed with glibc by the other. The
 // cdylib is one shared object and keeps mimalloc.
 #![allow(unexpected_cfgs)]
-#[cfg(all(
-    not(any(asan_run, miri)),
-    not(feature = "static_system_alloc")
-))]
+#[cfg(all(not(any(asan_run, miri)), not(feature = "static_system_alloc")))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

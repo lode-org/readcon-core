@@ -10,7 +10,11 @@ fn defined_mimalloc(archive: &Path) -> String {
         .arg(archive)
         .output()
         .expect("nm");
-    assert!(output.status.success(), "nm failed on {}", archive.display());
+    assert!(
+        output.status.success(),
+        "nm failed on {}",
+        archive.display()
+    );
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter(|line| {

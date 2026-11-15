@@ -22,7 +22,7 @@ CPC = Path(__file__).resolve().parents[1]
 REPO = CPC.parents[1]
 sys.path.insert(0, str(REPO / "bench" / "h2h"))
 
-from bench_disk import bench_dir, release
+from bench_disk import bench_dir, release  # noqa: E402
 
 DEFAULT_OUT = CPC / "campaign" / "3d2118af" / "data" / "db"
 READCON_DB_REV = "v0.2.1"
