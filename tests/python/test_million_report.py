@@ -77,32 +77,122 @@ def test_lost_lead_needs_a_real_gap():
     assert report.lost_leads(old_close, new_close) == []
 
 
-def test_million_rule_targets_the_versioned_record():
-    root = Path(__file__).resolve().parents[2]
-    text = (root / "bench/h2h/Snakefile").read_text(encoding="utf-8")
-    version = (root / "VERSION").read_text(encoding="utf-8").strip()
-    assert 'MILLION = f"bench/h2h/million/v{_RELEASE}"' in text
-    snakemake = shutil.which("snakemake")
-    if snakemake is None:
-        pytest.skip("snakemake is not installed")
-    completed = subprocess.run(
-        [
-            snakemake,
-            "-s",
-            "bench/h2h/Snakefile",
-            "-n",
-            "--force",
-            "million_measure",
-        ],
-        cwd=root,
+def _tip(root: Path) -> tuple[str, str]:
+    full = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    short = subprocess.check_output(
+        ["git", "rev-parse", "--short=12", "HEAD"], cwd=root, text=True
+    ).strip()
+    return full, short
+
+
+def _measure_shell(text: str) -> str:
+    start = text.index("rule million_measure:")
+    body = text[start:].split('"""', 2)[1]
+    return body
+
+
+def _run_measure_shell(
+    shell: str, *, cwd: Path, out: str, previous: str, tip: str, measure: bool
+) -> subprocess.CompletedProcess[str]:
+    body = shell
+    body = body.replace("{params.out}", out)
+    body = body.replace("{params.previous}", previous)
+    body = body.replace("{params.tip}", tip)
+    body = body.replace("{params.ops}", "read")
+    body = body.replace("{{", "{").replace("}}", "}")
+    if not measure:
+        body = body.replace(
+            "python3 bench/h2h/cross_format.py",
+            "true #",
+        )
+    return subprocess.run(
+        ["bash", "-c", body],
+        cwd=cwd,
         check=False,
         capture_output=True,
         text=True,
     )
-    shown = completed.stdout + completed.stderr
-    assert completed.returncode == 0, shown
-    assert f"bench/h2h/million/v{version}/cross-format.json" in shown
-    assert f"bench/h2h/million/v{version}/cross-format.log" in shown
+
+
+def test_million_rule_targets_the_versioned_record(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "bench/h2h/Snakefile").read_text(encoding="utf-8")
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    tip, short = _tip(root)
+    fresh = f"bench/h2h/million/v{version}-{short}"
+    saved = f"bench/h2h/million/v{version}"
+    saved_json = root / saved / "cross-format.json"
+    saved_log = root / saved / "cross-format.log"
+    before = (saved_json.read_bytes(), saved_log.read_bytes())
+    assert 'MILLION = f"bench/h2h/million/v{_RELEASE}-{_TIP_SHORT}"' in text
+    assert "refusing to write a saved record" in text
+    assert "SUPERSEDED.md" in text
+    snakemake = shutil.which("snakemake")
+    if snakemake is not None:
+        completed = subprocess.run(
+            [
+                snakemake,
+                "-s",
+                "bench/h2h/Snakefile",
+                "-n",
+                "--force",
+                "million_measure",
+            ],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        shown = completed.stdout + completed.stderr
+        assert completed.returncode == 0, shown
+        assert f"{fresh}/cross-format.json" in shown
+        assert f"{fresh}/cross-format.log" in shown
+        assert f"{saved}/cross-format.json" not in shown
+    shell = _measure_shell(text)
+    existing = tmp_path / fresh
+    existing.mkdir(parents=True)
+    (existing / "cross-format.json").write_text("kept\n", encoding="utf-8")
+    refused = _run_measure_shell(
+        shell, cwd=tmp_path, out=fresh, previous=saved, tip=tip, measure=False
+    )
+    assert refused.returncode != 0, refused.stdout + refused.stderr
+    assert "refusing to write a saved record" in refused.stderr
+    assert (existing / "cross-format.json").read_text(encoding="utf-8") == "kept\n"
+    assert not (existing / "SUPERSEDED.md").exists()
+    scaling = _run_measure_shell(
+        shell,
+        cwd=tmp_path,
+        out="bench/h2h/scaling/new",
+        previous=saved,
+        tip=tip,
+        measure=False,
+    )
+    assert scaling.returncode != 0
+    assert "refusing to write a saved record" in scaling.stderr
+    previous = tmp_path / "records" / f"v{version}"
+    previous.mkdir(parents=True)
+    (previous / "cross-format.json").write_text("saved\n", encoding="utf-8")
+    (previous / "cross-format.log").write_text("saved\n", encoding="utf-8")
+    new_dir = f"records/v{version}-{short}"
+    wrote = _run_measure_shell(
+        shell,
+        cwd=tmp_path,
+        out=new_dir,
+        previous=f"records/v{version}",
+        tip=tip,
+        measure=False,
+    )
+    assert wrote.returncode == 0, wrote.stdout + wrote.stderr
+    note = (previous / "SUPERSEDED.md").read_text(encoding="utf-8")
+    assert new_dir in note
+    assert tip in note
+    assert (previous / "cross-format.json").read_text(encoding="utf-8") == "saved\n"
+    assert (previous / "cross-format.log").read_text(encoding="utf-8") == "saved\n"
+    assert saved_json.read_bytes() == before[0]
+    assert saved_log.read_bytes() == before[1]
+    assert not (root / saved / "SUPERSEDED.md").exists()
 
 
 def test_a_per_size_repeat_map_is_the_campaign_protocol():
