@@ -40,13 +40,32 @@ fn scaling_text_files_end_with_one_newline() {
     assert!(seen >= 1, "expected scaling text files");
 }
 
+#[test]
+fn only_the_recorded_mpi_pwrite_directory_is_exempt() {
+    let keep = Path::new("bench/h2h/scaling/v0.23.3/mpi-pwrite/logs/store-ab-1-unset.log");
+    let other = Path::new("bench/h2h/scaling/v0.23.3/other/note.txt");
+    assert!(under_recorded_mpi_pwrite(keep));
+    assert!(!under_recorded_mpi_pwrite(other));
+    assert!(!under_recorded_mpi_pwrite(Path::new(
+        "bench/h2h/formats/v0.23.3/1k"
+    )));
+}
+
+fn under_recorded_mpi_pwrite(path: &Path) -> bool {
+    let marker = ["bench", "h2h", "scaling", "v0.23.3", "mpi-pwrite"];
+    let parts: Vec<_> = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+    parts.windows(marker.len()).any(|window| window == marker)
+}
+
 fn visit_scaling_text(dir: &Path, seen: &mut usize) {
     for entry in fs::read_dir(dir).unwrap_or_else(|err| panic!("read {}: {err}", dir.display())) {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
-            // The mpi-pwrite logs for this release are the recorded run.
-            // Some store logs have no final newline, and those bytes stay.
-            if path.file_name().and_then(|name| name.to_str()) == Some("v0.23.3") {
+            // These store logs were measured without a final newline.
+            if under_recorded_mpi_pwrite(&path) {
                 continue;
             }
             visit_scaling_text(&path, seen);
