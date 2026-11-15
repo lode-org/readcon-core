@@ -20,7 +20,7 @@ from ase.optimize import BFGS
 CPC = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CPC / "evidence"))
 
-import e5_prefactor as e5
+import e5_prefactor as e5  # noqa: E402
 
 HELD = CPC / "evidence" / "work" / "e5" / "bands" / "held"
 FROZEN = CPC / "evidence" / "work" / "e5" / "bands" / "frozen"
