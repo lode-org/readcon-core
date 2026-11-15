@@ -506,5 +506,35 @@ class AsvPinAndFailedRounds(unittest.TestCase):
         self.assertEqual(result.failed_rounds["bench.time_threads"], [1])
 
 
+class FamilyBand(unittest.TestCase):
+    def test_family_interval_covers_the_nominal_one_and_a_doubled_series_flags(
+        self,
+    ) -> None:
+        from asv._stats import bootstrap_median_ratio_ci, ci_outside_band
+
+        timing = _load(
+            "generate_timing_compare",
+            ROOT / "benchmarks" / "generate_timing_compare.py",
+        )
+        self.assertEqual(timing.family_alpha(1), 0.05)
+        self.assertAlmostEqual(timing.family_alpha(42), 0.05 / 42)
+        before = [1.0 + (index % 11) * 0.01 for index in range(90)]
+        after = [value * 1.01 for value in before]
+        copy = list(before)
+        nominal = bootstrap_median_ratio_ci(before, after, seed=1)
+        family = bootstrap_median_ratio_ci(
+            before, after, alpha=timing.family_alpha(42), seed=1
+        )
+        band = bootstrap_median_ratio_ci(before, copy, seed=2)
+        self.assertLessEqual(family[1], nominal[1])
+        self.assertGreaterEqual(family[2], nominal[2])
+        doubled = [value * 2 for value in before]
+        huge = bootstrap_median_ratio_ci(
+            before, doubled, alpha=timing.family_alpha(42), seed=1
+        )
+        self.assertTrue(ci_outside_band(huge, band))
+        self.assertGreater(huge[0], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

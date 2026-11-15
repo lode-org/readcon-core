@@ -61,6 +61,18 @@ def _load(path: Path) -> tuple[str, dict[str, dict]]:
     return data["commit_hash"], rows
 
 
+def family_alpha(n_cells: int, alpha: float = 0.05) -> float:
+    """Per-cell tail for one comparison of ``n_cells`` cells.
+
+    A 95% interval on every cell flags a few identical-code rows once the
+    table is wide. Dividing the tail by the cell count keeps that table
+    from calling noise a change.
+    """
+    if n_cells < 1:
+        raise ValueError("a comparison needs at least one cell")
+    return alpha / n_cells
+
+
 def _cell(row: dict, unit: str) -> str:
     from asv.util import human_value
     from asv_runner.statistics import get_err
@@ -81,13 +93,14 @@ def _table(
     import tabulate
     from asv._stats import (
         bootstrap_median_ratio_ci,
+        ci_outside_band,
         format_ratio_ci,
-        interleaved_ratio_decision,
     )
 
     improved = []
     same = []
     worse = []
+    labels = []
     for label in sorted(set(before) & set(after)):
         if not select(label):
             continue
@@ -95,23 +108,37 @@ def _table(
         right = after[label]
         if left["median"] in (None,) or right["median"] in (None,):
             continue
+        labels.append(label)
+    alpha = family_alpha(len(labels)) if labels else 0.05
+    for label in labels:
+        left = before[label]
+        right = after[label]
         band = ""
         if aa is not None and label in aa:
-            ci, mark = interleaved_ratio_decision(
-                left["samples"], right["samples"], aa[label]["samples"], seed=1
-            )
+            # The printed interval stays the ordinary 95% ratio. The mark
+            # uses the wider family interval, so one noisy cell in a wide
+            # table is not a change.
+            ci = bootstrap_median_ratio_ci(left["samples"], right["samples"], seed=1)
             if ci is None:
                 raise SystemExit(f"{label} has no ratio interval")
+            family = bootstrap_median_ratio_ci(
+                left["samples"],
+                right["samples"],
+                alpha=alpha,
+                seed=1,
+            )
             aa_ci = bootstrap_median_ratio_ci(
                 left["samples"], aa[label]["samples"], seed=2
             )
-            if aa_ci is None:
+            if family is None or aa_ci is None:
                 raise SystemExit(f"{label} has no A/A band")
             band = format_ratio_ci(aa_ci)
-            if mark == "-":
-                bucket = improved
-            elif mark == "+":
+            if ci_outside_band(family, aa_ci) and family[0] > 1:
+                mark = "+"
                 bucket = worse
+            elif ci_outside_band(family, aa_ci) and family[0] < 1:
+                mark = "-"
+                bucket = improved
             else:
                 mark = " "
                 bucket = same
