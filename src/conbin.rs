@@ -2605,6 +2605,20 @@ fn emit_built(
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_short_positions_column_is_rejected_before_publish() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short.bin");
+        let err = write_f64_columns(&path, 1, 2, &[0.0, 1.0, 2.0], None, None, None, None, None)
+            .expect_err("three positions cannot fill two atoms");
+        let message = err.to_string();
+        assert!(
+            message.contains("positions") && message.contains("need 6"),
+            "{message}"
+        );
+        assert!(!path.exists(), "a rejected column must not publish a file");
+    }
+
     fn write_known(path: &Path, frames: usize, atoms: usize) {
         let page = page_size().unwrap();
         let mut file = File::create(path).unwrap();
