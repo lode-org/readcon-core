@@ -468,7 +468,8 @@ rule camp16b:
 # Million-atom matrix. An existing record directory is refused before
 # Snakemake creates the output directory. A real run writes
 # bench/h2h/million/v<release>-<12-character tip> and names that
-# directory and the tip in the previous record's SUPERSEDED.md.
+# directory and the tip in the previous record's SUPERSEDED.md, and
+# only after those new outputs exist.
 # Fresh process per sample, pinned to the starting CPU set, one warmup,
 # n=12, type-7 median and IQR. The asv class times the same readcon calls.
 # ``--config ops=write`` times writes. The default times reads and writes.
@@ -571,18 +572,13 @@ rule million_measure:
         out="{params.out}"
         previous="{params.previous}"
         tip="{params.tip}"
+        ops="{params.ops}"
         case "$out" in
             bench/h2h/scaling|bench/h2h/scaling/*|"$previous"|"$previous"/*)
                 echo "refusing to write a saved record" >&2
                 exit 1
                 ;;
         esac
-        if [ -d "$previous" ] && [ "$previous" != "$out" ]; then
-            cat > "${{previous}}/SUPERSEDED.md" <<EOF
-Superseded by ${{out}}.
-Tip: ${{tip}}.
-EOF
-        fi
         export READCON_CROSS_STRUCTURES=1M
         export OMP_NUM_THREADS=1
         export OPENBLAS_NUM_THREADS=1
@@ -592,6 +588,18 @@ EOF
         export RAYON_NUM_THREADS=1
         python3 bench/h2h/cross_format.py --out "{params.out}" --repeats 12 --ops "{params.ops}"
         rm -f "{params.out}/profile.dcd"
+        test -s "$out/cross-format.json"
+        test -s "$out/cross-format.log"
+        test -s "$out/cross-format.tsv"
+        case ",$ops," in
+            *,read,*) test -s "$out/chemfiles-write-profile.txt" ;;
+        esac
+        if [ -d "$previous" ] && [ "$previous" != "$out" ]; then
+            cat > "${{previous}}/SUPERSEDED.md" <<EOF
+Superseded by ${{out}}.
+Tip: ${{tip}}.
+EOF
+        fi
         """
 
 

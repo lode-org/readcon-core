@@ -109,6 +109,8 @@ while index < len(args):
         index += 1
 if os.environ.get("READCON_STUB_FAIL") == "1":
     sys.exit(1)
+if os.environ.get("READCON_STUB_EMPTY") == "1":
+    sys.exit(0)
 if out is None:
     sys.exit("missing --out")
 out.mkdir(parents=True, exist_ok=True)
@@ -218,6 +220,58 @@ def test_million_rule_targets_the_versioned_record(tmp_path: Path):
         assert "refusing to write a saved record" in denied_text
         assert not (scaling / "bench/h2h/scaling/new").exists()
         assert tip
+    finally:
+        for tree in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+            )
+
+
+def test_superseded_note_follows_a_complete_measurement(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    trees = []
+    try:
+        done = _worktree(tmp_path, "done")
+        trees.append(done)
+        tip, short = _tip(done)
+        fresh = f"bench/h2h/million/v{version}-{short}"
+        saved = done / "bench/h2h/million" / f"v{version}"
+        before = (
+            (saved / "cross-format.json").read_bytes(),
+            (saved / "cross-format.log").read_bytes(),
+        )
+        accepted = _snakemake(done, "million_measure")
+        assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+        note = (saved / "SUPERSEDED.md").read_text(encoding="utf-8")
+        assert fresh in note
+        assert tip in note
+        assert (done / fresh / "cross-format.json").is_file()
+        assert (saved / "cross-format.json").read_bytes() == before[0]
+        assert (saved / "cross-format.log").read_bytes() == before[1]
+
+        failed = _worktree(tmp_path, "failed")
+        trees.append(failed)
+        failed_saved = failed / "bench/h2h/million" / f"v{version}"
+        failed_run = _snakemake(
+            failed, "million_measure", env={"READCON_STUB_FAIL": "1"}
+        )
+        assert failed_run.returncode != 0
+        assert not (failed_saved / "SUPERSEDED.md").exists()
+        assert (failed_saved / "cross-format.json").read_bytes() == before[0]
+        assert (failed_saved / "cross-format.log").read_bytes() == before[1]
+
+        empty = _worktree(tmp_path, "empty")
+        trees.append(empty)
+        empty_saved = empty / "bench/h2h/million" / f"v{version}"
+        empty_run = _snakemake(
+            empty, "million_measure", env={"READCON_STUB_EMPTY": "1"}
+        )
+        assert empty_run.returncode != 0
+        assert not (empty_saved / "SUPERSEDED.md").exists()
+        assert (empty_saved / "cross-format.json").read_bytes() == before[0]
     finally:
         for tree in trees:
             subprocess.run(
