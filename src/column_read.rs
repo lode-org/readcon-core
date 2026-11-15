@@ -287,9 +287,9 @@ pub fn layout_bytes(bytes: &[u8]) -> Result<Layout, ()> {
 /// starts from the newline index and parses only the first frame for the
 /// shape. `threads < 2` uses the serial scan.
 pub fn layout_indexed(bytes: &[u8], threads: usize) -> Result<Layout, ()> {
-    let text = std::str::from_utf8(bytes).map_err(|_| ())?;
-    let frame_offsets =
-        crate::iterators::frame_start_offsets_with_threads(text, Some(threads.max(1)));
+    // Header lines are checked as the scan reads them. Validating the whole
+    // buffer first was a serial pass before any worker ran.
+    let frame_offsets = crate::iterators::frame_start_offsets_bytes(bytes, Some(threads.max(1)))?;
     if frame_offsets.is_empty() {
         return Ok(Layout {
             n_frames: 0,

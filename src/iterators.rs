@@ -2,7 +2,7 @@
 // The Public API - A clean iterator for users of our library
 //=============================================================================
 
-use crate::parser::{LineStream, parse_declared_sections};
+use crate::parser::{parse_declared_sections, LineStream};
 use crate::{error, types};
 use std::path::Path;
 
@@ -203,7 +203,11 @@ impl<'a> MemchrLines<'a> {
 
     /// Keep `err` unless this cursor already rejected a line as UTF-8.
     fn prefer_utf8(&self, err: error::ParseError) -> error::ParseError {
-        if self.utf8_bad { invalid_utf8() } else { err }
+        if self.utf8_bad {
+            invalid_utf8()
+        } else {
+            err
+        }
     }
 }
 
@@ -509,6 +513,14 @@ impl<'a> ConFrameIterator<'a> {
     pub(crate) fn starting_at(file_contents: &'a str, pos: usize) -> Self {
         debug_assert!(pos == 0 || file_contents.as_bytes()[pos - 1] == b'\n');
         let mut it = Self::new(file_contents);
+        it.lines.pos = pos;
+        it
+    }
+
+    /// [`Self::starting_at`] for a buffer that has not been UTF-8 validated.
+    pub(crate) fn starting_at_bytes(bytes: &'a [u8], pos: usize) -> Self {
+        debug_assert!(pos == 0 || bytes[pos - 1] == b'\n');
+        let mut it = Self::from_bytes(bytes);
         it.lines.pos = pos;
         it
     }
@@ -2122,7 +2134,11 @@ fn sample_llc_misses() -> i64 {
         unsafe {
             libc::close(fd);
         }
-        if n == 8 { value as i64 } else { -1 }
+        if n == 8 {
+            value as i64
+        } else {
+            -1
+        }
     }
 }
 
@@ -2594,8 +2610,8 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache()
--> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
+fn slot_cache(
+) -> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
 {
     static CACHE: std::sync::Mutex<
         Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
@@ -2706,7 +2722,11 @@ fn host_page_size() -> usize {
     #[cfg(all(unix, not(miri)))]
     {
         let raw = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        if raw > 0 { raw as usize } else { 4096 }
+        if raw > 0 {
+            raw as usize
+        } else {
+            4096
+        }
     }
     #[cfg(not(all(unix, not(miri))))]
     {
@@ -3272,7 +3292,11 @@ fn scan_thread_count(num_threads: Option<usize>, len: usize) -> usize {
         Some(n) if n >= 2 => n,
         _ => return 1,
     };
-    if len < 2 { 1 } else { requested }
+    if len < 2 {
+        1
+    } else {
+        requested
+    }
 }
 
 /// I/O, UTF-8, or a located parse failure while loading a path.
@@ -3554,11 +3578,10 @@ fn type_count_at(bytes: &[u8], pos: usize) -> bool {
 /// Two successful header walks confirm the alignment when a successor
 /// exists. A last frame is kept when that walk ends with no further frame.
 #[cfg(feature = "parallel")]
-fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Option<usize> {
+fn first_aligned_start(bytes: &[u8], range_start: usize, range_end: usize) -> Option<usize> {
     if range_start == 0 {
         return Some(0);
     }
-    let bytes = text.as_bytes();
     let mut pos = if range_start > 0 && bytes.get(range_start - 1) == Some(&b'\n') {
         range_start
     } else {
@@ -3568,7 +3591,7 @@ fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Opti
     };
     while pos < range_end {
         if type_count_at(bytes, pos) {
-            let mut scanner = ConFrameIterator::starting_at(text, pos);
+            let mut scanner = ConFrameIterator::starting_at_bytes(bytes, pos);
             if matches!(scanner.forward_fast(), Some(Ok(()))) {
                 let second = scanner.byte_pos();
                 if second > pos && matches!(scanner.forward_fast(), Some(Ok(()))) {
@@ -3590,14 +3613,14 @@ fn first_aligned_start(text: &str, range_start: usize, range_end: usize) -> Opti
 }
 
 #[cfg(feature = "parallel")]
-fn bounds_in_range(text: &str, range_start: usize, range_end: usize) -> Result<RangeStarts, ()> {
-    let Some(origin) = first_aligned_start(text, range_start, range_end) else {
+fn bounds_in_range(bytes: &[u8], range_start: usize, range_end: usize) -> Result<RangeStarts, ()> {
+    let Some(origin) = first_aligned_start(bytes, range_start, range_end) else {
         return Ok(RangeStarts {
             starts: Vec::new(),
             next: range_start,
         });
     };
-    let mut scanner = ConFrameIterator::starting_at(text, origin);
+    let mut scanner = ConFrameIterator::starting_at_bytes(bytes, origin);
     let mut starts = Vec::new();
     loop {
         let start = scanner.byte_pos();
@@ -3649,15 +3672,15 @@ fn stitch_ranges(parts: &[RangeStarts], bytes: &[u8]) -> Result<Vec<usize>, ()> 
 /// its cut, walks headers only inside that range, and the seam keeps the
 /// start that continues the previous range. A gap falls back to one walk.
 #[cfg(feature = "parallel")]
-fn frame_start_offsets_ranged(text: &str, threads: usize) -> Vec<usize> {
+fn frame_start_offsets_ranged(bytes: &[u8], threads: usize) -> Result<Vec<usize>, ()> {
     // One walk is faster below about 1 MB. 50-frame cuh2 is 838 KB and
     // 2/4 threads sat above the noise band; 100-frame cuh2 is 1.7 MB and
     // those thread counts got faster.
     const MIN_BYTES: usize = 1024 * 1024;
-    if text.len() < MIN_BYTES {
-        return frame_start_offsets_serial(text);
+    if bytes.len() < MIN_BYTES {
+        return Err(());
     }
-    let cuts = equal_cuts(text.len(), threads);
+    let cuts = equal_cuts(bytes.len(), threads);
     let ranges: Vec<(usize, usize)> = cuts
         .windows(2)
         .map(|window| (window[0], window[1]))
@@ -3666,31 +3689,44 @@ fn frame_start_offsets_ranged(text: &str, threads: usize) -> Vec<usize> {
         use rayon::prelude::*;
         ranges
             .par_iter()
-            .map(|&(start, end)| bounds_in_range(text, start, end))
+            .map(|&(start, end)| bounds_in_range(bytes, start, end))
             .collect::<Result<Vec<_>, ()>>()
     });
-    match parts.and_then(|parts| stitch_ranges(&parts, text.as_bytes())) {
-        Ok(starts) => starts,
-        Err(()) => frame_start_offsets_serial(text),
-    }
+    parts.and_then(|parts| stitch_ranges(&parts, bytes))
 }
 
 pub fn frame_start_offsets_with_threads(
     file_contents: &str,
     num_threads: Option<usize>,
 ) -> Vec<usize> {
+    frame_start_offsets_bytes(file_contents.as_bytes(), num_threads)
+        .unwrap_or_else(|_| frame_start_offsets_serial(file_contents))
+}
+
+/// [`frame_start_offsets_with_threads`] on bytes that are not yet a `str`.
+///
+/// Header lines are checked when they are read. The whole buffer is not
+/// validated up front, so a threaded read does not pay a serial UTF-8 pass
+/// before the workers start.
+pub fn frame_start_offsets_bytes(
+    bytes: &[u8],
+    num_threads: Option<usize>,
+) -> Result<Vec<usize>, ()> {
     #[cfg(feature = "parallel")]
     {
-        let threads = scan_thread_count(num_threads, file_contents.len());
-        if threads >= 2 {
-            return frame_start_offsets_ranged(file_contents, threads);
+        let threads = scan_thread_count(num_threads, bytes.len());
+        if threads >= 2
+            && let Ok(starts) = frame_start_offsets_ranged(bytes, threads)
+        {
+            return Ok(starts);
         }
     }
     #[cfg(not(feature = "parallel"))]
     {
         let _ = num_threads;
     }
-    frame_start_offsets_serial(file_contents)
+    let text = std::str::from_utf8(bytes).map_err(|_| ())?;
+    Ok(frame_start_offsets_serial(text))
 }
 
 /// Parses frames in parallel using rayon, splitting on frame boundaries.
@@ -4194,7 +4230,11 @@ fn read_compressed_phased(
         Some(n) if n >= 2 => n,
         _ => {
             let budget = crate::compression::decode_thread_budget();
-            if budget >= 2 { budget } else { 1 }
+            if budget >= 2 {
+                budget
+            } else {
+                1
+            }
         }
     };
     #[cfg(feature = "parallel")]
@@ -6019,11 +6059,9 @@ mod frame_equality_tests {
             .map(|frame| frame.expect("convel"))
             .collect();
         assert_eq!(frames.len(), 3);
-        assert!(
-            frames
-                .iter()
-                .all(|frame| frame.atom_data[0].velocity().is_some())
-        );
+        assert!(frames
+            .iter()
+            .all(|frame| frame.atom_data[0].velocity().is_some()));
         assert_eq!(frames[0].positions.nrows(), 5);
         // Every stored coordinate and velocity bit matches the general parser.
         let mut frame_i = 0usize;
