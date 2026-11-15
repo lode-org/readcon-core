@@ -1,0 +1,15 @@
+{
+  "kind": "ranks",
+  "op": "write",
+  "measured": true,
+  "relation": "n_frames = frames_per_worker * workers",
+  "workers": 8,
+  "frames_per_worker": 8000,
+  "repeats": 12,
+  "samples_s": [0.422586321, 0.351982413, 0.344811524, 0.344295362, 0.369687705, 0.355869868, 0.374984024, 0.423164540, 0.344727636, 0.348623160, 0.343867846, 0.346379989],
+  "warmup_s": 1.936903674,
+  "warmup_on": true,
+  "clock": "unlink-collective-write",
+  "dest": "shm/weak/weak-out-8.con",
+  "host": "Intel Xeon Processor"
+}

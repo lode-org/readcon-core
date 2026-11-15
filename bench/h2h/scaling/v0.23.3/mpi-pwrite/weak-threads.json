@@ -1,0 +1,112 @@
+{
+  "kind": "threads",
+  "relation": "n_frames = frames_per_worker * workers",
+  "frames_per_worker": 8000,
+  "fixture": "resources/test/cuh2.con",
+  "repeats": 12,
+  "serial_match": true,
+  "host": "Intel Xeon Processor",
+  "ncpus": 8,
+  "physical_cores": 8,
+  "mpi": "absent",
+  "gpu": "absent",
+  "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
+  "date_utc": "2026-11-15T00:50Z",
+  "complete": true,
+  "points": [
+    {
+      "workers": 1,
+      "n_frames": 8000,
+      "bytes": 134168000,
+      "samples_s": [
+        0.109965658,
+        0.109766399,
+        0.109562809,
+        0.111084871,
+        0.110998143,
+        0.110942043,
+        0.111514632,
+        0.109939614,
+        0.10967775,
+        0.109532474,
+        0.109122694,
+        0.110161383
+      ],
+      "median_s": 0.10995263599999999,
+      "iqr_s": 0.0013070532500000093,
+      "weak_efficiency": 1.0,
+      "harness": "weak_scale_threads repeats=12 in-process"
+    },
+    {
+      "workers": 2,
+      "n_frames": 16000,
+      "bytes": 268336000,
+      "samples_s": [
+        0.118318925,
+        0.118282605,
+        0.118421108,
+        0.12111985,
+        0.13718745,
+        0.117757496,
+        0.116983662,
+        0.11710374,
+        0.117295815,
+        0.117683981,
+        0.117184372,
+        0.117329921
+      ],
+      "median_s": 0.1177207385,
+      "iqr_s": 0.0010765164999999993,
+      "weak_efficiency": 0.9340124552480614,
+      "harness": "weak_scale_threads repeats=12 in-process"
+    },
+    {
+      "workers": 4,
+      "n_frames": 32000,
+      "bytes": 536672000,
+      "samples_s": [
+        0.124341892,
+        0.127431504,
+        0.121374712,
+        0.12333213,
+        0.119865785,
+        0.120320468,
+        0.120403358,
+        0.13254973,
+        0.141820488,
+        0.126630234,
+        0.120518794,
+        0.120571047
+      ],
+      "median_s": 0.12235342099999999,
+      "iqr_s": 0.006340616500000007,
+      "weak_efficiency": 0.8986478277546486,
+      "harness": "weak_scale_threads repeats=12 in-process"
+    },
+    {
+      "workers": 8,
+      "n_frames": 64000,
+      "bytes": 1073344000,
+      "samples_s": [
+        0.131733311,
+        0.123727042,
+        0.123929591,
+        0.125670209,
+        0.13961952,
+        0.125790556,
+        0.121397928,
+        0.127679297,
+        0.124588122,
+        0.121357455,
+        0.121432499,
+        0.124274169
+      ],
+      "median_s": 0.1244311455,
+      "iqr_s": 0.0031093350000000047,
+      "weak_efficiency": 0.8836423996434236,
+      "harness": "weak_scale_threads repeats=12 in-process"
+    }
+  ],
+  "efficiency": "t(1)/t(n)",
+  "harness": "weak_scale_threads repeats=12 in-process"
+}

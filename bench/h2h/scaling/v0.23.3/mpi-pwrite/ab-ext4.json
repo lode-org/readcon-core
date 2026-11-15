@@ -1,0 +1,102 @@
+{
+  "harness": "both rows name their own harness",
+  "label": "Same binary, two clocks. repeats=1 is a new process per sample and times the second write of a cold process. repeats=12 is one process; the median is a later write, after the output inode and the page cache are warm. Process start and the input read are outside both clocks.",
+  "rows": [
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "disk",
+      "strategy": "default",
+      "harness": "strong_scale_mpi repeats=1 one-process-per-sample",
+      "median_s": 0.0461885,
+      "iqr_s": 0.0015147500000000022,
+      "samples_s": [
+        0.044342,
+        0.045069,
+        0.046236,
+        0.044694,
+        0.046614,
+        0.048343,
+        0.045157,
+        0.045595,
+        0.046757,
+        0.046141,
+        0.046598,
+        0.047277
+      ],
+      "bytes": 26589136
+    },
+    {
+      "file": "con-1e6",
+      "workers": 4,
+      "sink": "disk",
+      "strategy": "default",
+      "harness": "strong_scale_mpi repeats=12 in-process",
+      "median_s": 0.046251,
+      "iqr_s": 0.000343000000000003,
+      "samples_s": [
+        0.046073,
+        0.046285,
+        0.046112,
+        0.046225,
+        0.046995,
+        0.046104,
+        0.045684,
+        0.046277,
+        0.046957,
+        0.046206,
+        0.046278,
+        0.046991
+      ],
+      "bytes": 26589136
+    },
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "disk",
+      "strategy": "default",
+      "harness": "strong_scale_mpi repeats=1 one-process-per-sample",
+      "median_s": 0.0292925,
+      "iqr_s": 0.0009277500000000015,
+      "samples_s": [
+        0.029146,
+        0.028929,
+        0.029755,
+        0.030115,
+        0.030075,
+        0.029254,
+        0.029994,
+        0.029773,
+        0.028511,
+        0.029331,
+        0.028715,
+        0.028815
+      ],
+      "bytes": 26589136
+    },
+    {
+      "file": "con-1e6",
+      "workers": 8,
+      "sink": "disk",
+      "strategy": "default",
+      "harness": "strong_scale_mpi repeats=12 in-process",
+      "median_s": 0.027868999999999998,
+      "iqr_s": 0.00041350000000000067,
+      "samples_s": [
+        0.028998,
+        0.028092,
+        0.028204,
+        0.028015,
+        0.027972,
+        0.02771,
+        0.027716,
+        0.028459,
+        0.027696,
+        0.027766,
+        0.027612,
+        0.027453
+      ],
+      "bytes": 26589136
+    }
+  ]
+}
