@@ -247,12 +247,18 @@ if (CARGO_VERSION_CHANGED OR NOT DEFINED CARGO_DEFAULT_LIBRARIES)
     endif()
 endif()
 
-file(GLOB_RECURSE ALL_RUST_SOURCES
+# Name the manifests this library compiles. A recursive search from the
+# source root also matches Cargo.toml files that configure creates and
+# deletes under the build tree, including _cargo_required_libs. A second
+# configure running at the same time then has no rule for that probe.
+set(ALL_RUST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
     ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.lock
     ${CMAKE_CURRENT_SOURCE_DIR}/build.rs
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.rs
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/metatensor-sys/Cargo.toml
 )
+file(GLOB_RECURSE READCON_RS_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.rs)
+list(APPEND ALL_RUST_SOURCES ${READCON_RS_SOURCES})
 
 add_library(readcon-core::shared SHARED IMPORTED GLOBAL)
 set(READCON_CORE_SHARED_LOCATION "${CARGO_OUTPUT_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}readcon_core${CMAKE_SHARED_LIBRARY_SUFFIX}")
