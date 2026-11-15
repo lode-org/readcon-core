@@ -23,6 +23,17 @@ import os
 import tempfile
 from pathlib import Path
 
+# read_con returns NumPy arrays, so NumPy's OpenBLAS starts in this process.
+# Its pool shares the worker cores and spins. The reader does not call BLAS.
+# The other timing drivers already keep these at one thread.
+for _blas_key in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ[_blas_key] = "1"
+
 REPO = Path(__file__).resolve().parent.parent
 FIXTURE_TINY = REPO / "resources" / "test" / "tiny_cuh2.con"
 FIXTURE_CUH2 = REPO / "resources" / "test" / "cuh2.con"
