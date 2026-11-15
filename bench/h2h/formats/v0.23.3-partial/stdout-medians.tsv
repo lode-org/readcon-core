@@ -1,0 +1,208 @@
+structure	op	arm	median_s	read_file_bytes
+1k	warm	readcon-con	0.0002	80495
+1k	cold	readcon-con	0.0013	80495
+1k	write	readcon-con	0.0020	
+1k	warm	readcon-con-gz	0.0016	31756
+1k	cold	readcon-con-gz	0.0027	31756
+1k	write	readcon-con-gz	0.0012	
+1k	warm	readcon-con-zst	0.0016	29828
+1k	cold	readcon-con-zst	0.0022	29828
+1k	write	readcon-con-zst	0.0010	
+1k	warm	readcon-chemfiles	0.0002	27690
+1k	cold	readcon-chemfiles	0.0015	27690
+1k	write	readcon-chemfiles	0.0016	
+1k	warm	chemfiles-con	0.0003	80495
+1k	cold	chemfiles-con	0.0014	80495
+1k	write	chemfiles-con	no writer	
+1k	warm	chemfiles-xyz	0.0002	27690
+1k	cold	chemfiles-xyz	0.0013	27690
+1k	write	chemfiles-xyz	0.0003	
+1k	warm	chemfiles-xyz-gz	0.0004	10671
+1k	cold	chemfiles-xyz-gz	0.0015	10671
+1k	write	chemfiles-xyz-gz	0.0021	
+1k	warm	chemfiles-xyz-xz	0.0011	9300
+1k	cold	chemfiles-xyz-xz	0.0022	9300
+1k	write	chemfiles-xyz-xz	0.0078	
+1k	warm	chemfiles-xyz-bz2	0.0015	8707
+1k	cold	chemfiles-xyz-bz2	0.0026	8707
+1k	write	chemfiles-xyz-bz2	0.0021	
+1k	warm	chemfiles-trr	0.0001	24120
+1k	cold	chemfiles-trr	0.0014	24120
+1k	write	chemfiles-trr	0.0015	
+1k	warm	chemfiles-ncdf	0.0001	24800
+1k	cold	chemfiles-ncdf	0.0011	24800
+1k	write	chemfiles-ncdf	0.0014	
+1k	warm	chemfiles-dcd	0.0001	12196
+1k	cold	chemfiles-dcd	0.0012	12196
+1k	write	chemfiles-dcd	0.0014	
+1k	warm	chemfiles-xtc	0.0001	3788
+1k	cold	chemfiles-xtc	0.0012	3788
+1k	write	chemfiles-xtc	0.0012	
+1k	warm	chemfiles-pdb	0.0010	79093
+1k	cold	chemfiles-pdb	0.0021	79093
+1k	write	chemfiles-pdb	0.0007	
+1k	warm	chemfiles-gro	0.0005	69067
+1k	cold	chemfiles-gro	0.0018	69067
+1k	write	chemfiles-gro	0.0005	
+1k	warm	chemfiles-pdb-gz	0.0013	12487
+1k	cold	chemfiles-pdb-gz	0.0027	12487
+1k	write	chemfiles-pdb-gz	0.0033	
+1k	warm	chemfiles-gro-gz	0.0007	9479
+1k	cold	chemfiles-gro-gz	0.0020	9479
+1k	write	chemfiles-gro-gz	0.0027	
+1k	warm	chemfiles-pdb-xz	0.0019	7636
+1k	cold	chemfiles-pdb-xz	0.0028	7636
+1k	write	chemfiles-pdb-xz	0.0244	
+1k	warm	chemfiles-gro-xz	0.0011	5684
+1k	cold	chemfiles-gro-xz	0.0023	5684
+1k	write	chemfiles-gro-xz	0.0217	
+1k	warm	ase-extxyz	0.0022	125134
+1k	cold	ase-extxyz	0.0039	125134
+1k	write	ase-extxyz	0.0040	
+1k	warm	ase-extxyz-gz	0.0029	17627
+1k	cold	ase-extxyz-gz	0.0039	17627
+1k	write	ase-extxyz-gz	0.0213	
+1k	warm	mda-pdb	0.0067	81162
+1k	cold	mda-pdb	0.0080	81162
+1k	write	mda-pdb	0.0062	
+1k	warm	mda-xyz	0.0048	43065
+1k	cold	mda-xyz	0.0055	43065
+1k	write	mda-xyz	0.0022	
+1k	warm	readcon-conbin	0.0001	69144
+1k	cold	readcon-conbin	0.0010	69144
+1k	write	readcon-conbin	0.0014	
+1k	warm	mda-dcd	0.0002	12436
+1k	cold	mda-dcd	0.0015	12436
+1k	write	mda-dcd	0.0002	
+1k	warm	mda-xtc	0.0010	3788
+1k	cold	mda-xtc	0.0021	3788
+1k	write	mda-xtc	0.0002	
+1k	warm	mda-ncdf	0.0004	24964
+1k	cold	mda-ncdf	0.0017	24964
+1k	write	mda-ncdf	0.0022	
+1k	warm	mda-trr	0.0011	24120
+1k	cold	mda-trr	0.0022	24120
+1k	write	mda-trr	0.0002	
+1k	warm	mda-h5md	0.0027	77920
+1k	cold	mda-h5md	0.0051	77920
+1k	write	mda-h5md	0.0023	
+1k	warm	mda-mmcif	0.0019	89503
+1k	cold	mda-mmcif	0.0029	89503
+1k	write	mda-mmcif	no writer	
+1k	warm	mdtraj-ncdf	0.0008	12900
+1k	cold	mdtraj-ncdf	0.0018	12900
+1k	write	mdtraj-ncdf	0.0013	
+1k	warm	mdtraj-dcd	0.0001	12356
+1k	cold	mdtraj-dcd	0.0011	12356
+1k	write	mdtraj-dcd	0.0002	
+1k	warm	mdtraj-xtc	0.0001	3788
+1k	cold	mdtraj-xtc	0.0010	3788
+1k	write	mdtraj-xtc	0.0003	
+1k	warm	ovito-xyz	0.0009	61927
+1k	cold	ovito-xyz	0.0019	61927
+1k	write	ovito-xyz	0.0011	
+1k	warm	ovito-xyz-gz	0.0011	19387
+1k	cold	ovito-xyz-gz	0.0016	19387
+1k	write	ovito-xyz-gz	0.0069	
+100k	warm	readcon-con	0.0118	8414036
+100k	cold	readcon-con	0.0195	8414036
+100k	write	readcon-con	0.0271	
+100k	warm	readcon-con-gz	0.0266	3097112
+100k	cold	readcon-con-gz	0.0311	3097112
+100k	write	readcon-con-gz	0.0458	
+100k	warm	readcon-con-zst	0.0189	2907793
+100k	cold	readcon-con-zst	0.0234	2907793
+100k	write	readcon-con-zst	0.0301	
+100k	warm	readcon-chemfiles	0.0212	2687528
+100k	cold	readcon-chemfiles	0.0251	2687528
+100k	write	readcon-chemfiles	0.0201	
+100k	warm	chemfiles-con	0.0169	8414036
+100k	cold	chemfiles-con	0.0252	8414036
+100k	write	chemfiles-con	no writer	
+100k	warm	chemfiles-xyz	0.0187	2687528
+100k	cold	chemfiles-xyz	0.0237	2687528
+100k	write	chemfiles-xyz	0.0303	
+100k	warm	chemfiles-xyz-gz	0.0380	897254
+100k	cold	chemfiles-xyz-gz	0.0408	897254
+100k	write	chemfiles-xyz-gz	0.3543	
+100k	warm	chemfiles-xyz-xz	0.0795	745820
+100k	cold	chemfiles-xyz-xz	0.0821	745820
+100k	write	chemfiles-xyz-xz	1.1882	
+100k	warm	chemfiles-xyz-bz2	0.1625	724043
+100k	cold	chemfiles-xyz-bz2	0.1648	724043
+100k	write	chemfiles-xyz-bz2	0.1583	
+100k	warm	chemfiles-trr	0.0085	2400120
+100k	cold	chemfiles-trr	0.0174	2400120
+100k	write	chemfiles-trr	0.0090	
+100k	warm	chemfiles-ncdf	0.0076	2400800
+100k	cold	chemfiles-ncdf	0.0176	2400800
+100k	write	chemfiles-ncdf	0.0075	
+100k	warm	chemfiles-dcd	0.0073	1200196
+100k	cold	chemfiles-dcd	0.0146	1200196
+100k	write	chemfiles-dcd	0.0047	
+100k	warm	chemfiles-xtc	0.0090	369516
+100k	cold	chemfiles-xtc	0.0124	369516
+100k	write	chemfiles-xtc	0.0056	
+100k	warm	chemfiles-pdb	0.1225	7900093
+100k	cold	chemfiles-pdb	0.1380	7900093
+100k	write	chemfiles-pdb	0.0757	
+100k	warm	chemfiles-gro	0.0597	6900068
+100k	cold	chemfiles-gro	0.0716	6900068
+100k	write	chemfiles-gro	0.0473	
+100k	warm	chemfiles-pdb-gz	0.1500	1363027
+100k	cold	chemfiles-pdb-gz	0.1522	1363027
+100k	write	chemfiles-pdb-gz	0.3737	
+100k	warm	chemfiles-gro-gz	0.0833	1057973
+100k	cold	chemfiles-gro-gz	0.0856	1057973
+100k	write	chemfiles-gro-gz	0.4065	
+100k	warm	chemfiles-pdb-xz	0.2136	717256
+100k	cold	chemfiles-pdb-xz	0.2162	717256
+100k	write	chemfiles-pdb-xz	3.1079	
+100k	warm	chemfiles-gro-xz	0.1234	556280
+100k	cold	chemfiles-gro-xz	0.1293	556280
+100k	write	chemfiles-gro-xz	2.6976	
+100k	warm	ase-extxyz	0.1958	12500136
+100k	cold	ase-extxyz	0.2076	12500136
+100k	write	ase-extxyz	0.3805	
+100k	warm	ase-extxyz-gz	0.2570	1809894
+100k	cold	ase-extxyz-gz	0.2654	1809894
+100k	write	ase-extxyz-gz	2.0394	
+100k	warm	mda-xyz	0.4181	4300067
+100k	cold	mda-xyz	0.4101	4300067
+100k	write	mda-xyz	0.2092	
+100k	warm	readcon-conbin	0.0010	6504144
+100k	cold	readcon-conbin	0.0092	6504144
+100k	write	readcon-conbin	0.0055	
+100k	warm	mda-dcd	0.0047	1200436
+100k	cold	mda-dcd	0.0076	1200436
+100k	write	mda-dcd	0.0036	
+100k	warm	mda-xtc	0.0104	369516
+100k	cold	mda-xtc	0.0132	369516
+100k	write	mda-xtc	0.0053	
+100k	warm	mda-ncdf	0.0055	2400964
+100k	cold	mda-ncdf	0.0094	2400964
+100k	write	mda-ncdf	0.0086	
+100k	warm	mda-trr	0.0245	2400120
+100k	cold	mda-trr	0.0271	2400120
+100k	write	mda-trr	0.0115	
+100k	warm	mda-h5md	0.0062	1265920
+100k	cold	mda-h5md	0.0099	1265920
+100k	write	mda-h5md	0.0059	
+100k	warm	mda-mmcif	11.2716	9702361
+100k	cold	mda-mmcif	11.3193	9702361
+100k	write	mda-mmcif	no writer	
+100k	warm	mdtraj-ncdf	0.0026	1200900
+100k	cold	mdtraj-ncdf	0.0061	1200900
+100k	write	mdtraj-ncdf	0.0024	
+100k	warm	mdtraj-dcd	0.0019	1200356
+100k	cold	mdtraj-dcd	0.0044	1200356
+100k	write	mdtraj-dcd	0.0009	
+100k	warm	mdtraj-xtc	0.0043	369516
+100k	cold	mdtraj-xtc	0.0061	369516
+100k	write	mdtraj-xtc	0.0033	
+100k	warm	ovito-xyz	0.0174	6392383
+100k	cold	ovito-xyz	0.0267	6392383
+100k	write	ovito-xyz	0.0620	
+100k	warm	ovito-xyz-gz	0.0422	1936924
+100k	cold	ovito-xyz-gz	0.0439	1936924
+100k	write	ovito-xyz-gz	0.8371	

@@ -1,0 +1,1 @@
+The JSON files that used to live in this directory repeated one frame, so ASE and chemfiles timed a copy. They are not edited. The distinct-frame rerun is `benches/results/v0.23.3/`, measured on acbb1d100bc192971f6c57c3fd204616f2b41a5b with 100 frames and 12 repeats.

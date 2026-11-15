@@ -1,0 +1,12 @@
+{
+  "protocol": "equal geometry multi-frame; ASE XYZ traj vs readcon.read_chemfiles vs readcon.read_con",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 12,
+  "fixture": "resources/test/cuh2.con",
+  "ase_xyz_median_ms": 48.86521599837579,
+  "readcon_chemfiles_xyz_to_con_median_ms": 5.3007889946457,
+  "readcon_con_median_ms": 1.5517430001636967,
+  "ratio_ase_xyz_over_chemfiles_to_con": 9.218479748530699,
+  "ratio_ase_xyz_over_native_con": 31.490534188471216
+}

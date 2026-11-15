@@ -1,0 +1,23 @@
+Partial format record on acbb1d100bc192971f6c57c3fd204616f2b41a5b.
+The run was stopped because the full table was still several hours from done.
+Nothing was hung. The 1M warm mda-mmcif read takes about 1300 s per sample.
+
+Finished, n=12, serial, fresh process per sample:
+1k and 100k, every arm the harness timed. Medians are in stdout-medians.tsv.
+read_file_bytes there is the size of the file that was read, taken from disk after the stop.
+The harness writes peak RSS, the timed file size, and Drops only when run() returns.
+That return did not happen, so those three columns are not in this record.
+
+Not timed:
+extxyz-ng. The file was written. extxyz-ng 0.0.2 then raised OSError on the ASE extended XYZ line that carries the force flag and the mass. The arm was skipped.
+mdcompress-mdc on 1k and 100k. One frame is unsupported.
+mda-pdb on 100k and 1M. PDB serial is five digits.
+
+1M warm reads are partial. Counts and the raw samples are in partial-1M-warm.txt.
+mda-mmcif has 9 samples, each about 1280 s. Cold reads and writes of 1M were not run.
+
+Not started: the traj structure, mdcompress-xtc, chemfiles-dcd-012, and asv.
+
+Versions loaded before the run: ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.11.0, mdtraj 1.11.2, numpy 2.5.4, OVITO 3.17.2, readcon 0.23.3, extxyz 0.4.6, h5py 3.16.0, gemmi 0.7.5, extxyz-ng 0.0.2, MDCompress 2.0.5.
+The readcon wheel commit is acbb1d100bc192971f6c57c3fd204616f2b41a5b.
+stdout.log is the campaign stdout with machine prefixes removed.
