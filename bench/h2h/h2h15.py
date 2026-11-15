@@ -636,17 +636,17 @@ def _scrub_record(out: Path) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-def run(out: Path, repeats: int = 12) -> None:
+def run(out: Path, repeats: int | None = None) -> None:
     """Write the table, then the XTC and later chemfiles DCD rows.
 
     The sample count comes from the structure size: 12 below one million
-    atoms and 6 at one million, for every tool. ``repeats`` is ignored.
-    ``READCON_CROSS_PART`` is ``table``, ``extra``, or ``all``.
+    atoms and 6 at one million, for every tool. ``repeats`` overrides that
+    count for every structure. ``READCON_CROSS_PART`` is ``table``,
+    ``extra``, or ``all``.
     ``measurement`` refuses unless the tree is clean and ``git ls-remote``
     lists HEAD. The installed readcon module must record that same commit
     or tree.
     """
-    del repeats
     ident = refuse_stale_build(ROOT)
     head = ident["commit"]
     import readcon
@@ -656,7 +656,7 @@ def run(out: Path, repeats: int = 12) -> None:
     out.mkdir(parents=True, exist_ok=True)
     part = os.environ.get("READCON_CROSS_PART", "all")
     if part in ("all", "table"):
-        cross_format.run(out)
+        cross_format.run(out, repeats)
     extra_rows: list[dict] = []
     extra_lines: list[str] = []
     if part in ("all", "extra"):
@@ -700,7 +700,7 @@ def run(out: Path, repeats: int = 12) -> None:
     if host_path.is_file():
         host = json.loads(host_path.read_text(encoding="utf-8"))
     else:
-        host = {}
+        host = cross_format.campaign_host(out, ident["tree"])
     host["commit"] = head
     host["tree"] = ident["tree"]
     host["diff_sha256"] = ident["diff_sha256"]
@@ -778,7 +778,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=RECORD)
-    parser.add_argument("--repeats", type=int, default=12)
+    parser.add_argument("--repeats", type=int, default=None)
     args = parser.parse_args()
     run(args.out, args.repeats)
 
