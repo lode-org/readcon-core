@@ -2922,10 +2922,15 @@ def run(
         "that format's size range, and reads back at the full atom count. "
         "That check runs after the clock stops."
     )
+    if repeats is None:
+        count_sentence = "12 at 1k, 100k and traj, and 6 at 1M, for every tool."
+    else:
+        count_sentence = f"{repeats} for every structure, for every tool."
     notes.append(
         "Every write sample, including 1M readcon-con, is the interleaved "
         "fresh-process measurement from this session. The sample count is "
-        "12 at 1k, 100k and traj, and 6 at 1M, for every tool. The clock is "
+        + count_sentence
+        + " The clock is "
         "serialize and store of a structure that already exists: see each "
         "row's Clock note. Chemfiles has no CON writer, so its write cell "
         "is 'no writer'."
@@ -3126,7 +3131,7 @@ def run(
                 print(f"cross {label} read {cache}", flush=True)
                 timed[cache] = _interleave(
                     read_jobs,
-                    repeats,
+                    count,
                     lines,
                     f"read-{cache} {label}",
                     out=out,
@@ -3142,7 +3147,7 @@ def run(
             print(f"cross {label} write", flush=True)
             write_timed = _interleave(
                 write_jobs,
-                repeats,
+                count,
                 lines,
                 f"write {label}",
                 out=out,
