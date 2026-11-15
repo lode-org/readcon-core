@@ -107,7 +107,9 @@ class TestReadCon:
         assert restored[0].energy == pytest.approx(-1.5)
         assert restored[1].metadata["generator"] == "json"
         assert restored[1].frame_index == 9
-        assert restored[0].metadata.get("generator") != restored[1].metadata.get("generator")
+        assert restored[0].metadata.get("generator") != restored[1].metadata.get(
+            "generator"
+        )
 
     @pytest.mark.parametrize("n_threads", [1, 2, 8])
     def test_column_metadata_item_assignment_is_kept(self, tmp_path, n_threads):

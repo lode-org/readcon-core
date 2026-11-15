@@ -97,7 +97,9 @@ def host_runtime() -> dict[str, str]:
             flags = line.split(":", 1)[-1]
             break
     virtual = "yes" if "hypervisor" in flags.split() else "no"
-    governor = _first_line(Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"))
+    governor = _first_line(
+        Path("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+    )
     if not governor:
         governor = "unavailable"
     no_turbo = _first_line(Path("/sys/devices/system/cpu/intel_pstate/no_turbo"))
@@ -221,7 +223,9 @@ def _min_atom_bytes(suite: Path) -> int:
             continue
         for target in node.targets:
             if isinstance(target, ast.Name) and target.id == "MIN_ATOM_BYTES":
-                if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
+                if isinstance(node.value, ast.Constant) and isinstance(
+                    node.value.value, int
+                ):
                     return int(node.value.value)
                 if (
                     isinstance(node.value, ast.BinOp)
@@ -237,9 +241,13 @@ def _file_bytes(benchmark: str, frames: int, repo: Path) -> int:
     if "Chemfiles" in benchmark:
         return _xyz_bytes(repo, frames)
     if "Convel" in benchmark:
-        return (repo / "resources" / "test" / "tiny_cuh2.convel").stat().st_size * frames
+        return (
+            repo / "resources" / "test" / "tiny_cuh2.convel"
+        ).stat().st_size * frames
     if "Force" in benchmark:
-        return (repo / "resources" / "test" / "tiny_cuh2_forces.con").stat().st_size * frames
+        return (
+            repo / "resources" / "test" / "tiny_cuh2_forces.con"
+        ).stat().st_size * frames
     if "Tiny" in benchmark:
         return (repo / "resources" / "test" / "tiny_cuh2.con").stat().st_size * frames
     if "Select" in benchmark:
@@ -267,7 +275,9 @@ def _xyz_bytes(repo: Path, frames: int) -> int:
         os.unlink(path)
 
 
-def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = None) -> None:
+def write_peaks(
+    result_json: Path, dest: Path, repo: Path, suite: Path | None = None
+) -> None:
     data = json.loads(result_json.read_text(encoding="utf-8"))
     columns = data["result_columns"]
     per_atom = _min_atom_bytes(suite or Path(__file__).with_name("bench_readcon.py"))
@@ -345,7 +355,9 @@ def write_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = 
         writer.writerows(rows)
 
 
-def write_thread_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | None = None) -> None:
+def write_thread_peaks(
+    result_json: Path, dest: Path, repo: Path, suite: Path | None = None
+) -> None:
     """Rows whose benchmark crosses frame count with thread count."""
     import itertools
 
@@ -364,11 +376,15 @@ def write_thread_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | 
         q75 = record.get("stats_q_75") or []
         pairs = list(itertools.product(*params))
         if len(pairs) != len(medians):
-            raise SystemExit(f"{benchmark} has {len(medians)} results for {len(pairs)} parameters")
+            raise SystemExit(
+                f"{benchmark} has {len(medians)} results for {len(pairs)} parameters"
+            )
         for index, (frames_text, threads_text) in enumerate(pairs):
             frames = int(frames_text)
             if index >= len(q25) or index >= len(q75):
-                raise SystemExit(f"{benchmark} parameter {frames_text} is missing stats_q_25/stats_q_75")
+                raise SystemExit(
+                    f"{benchmark} parameter {frames_text} is missing stats_q_25/stats_q_75"
+                )
             sample_row = samples[index] if index < len(samples) else []
             if not isinstance(sample_row, list):
                 sample_row = []
@@ -377,12 +393,16 @@ def write_thread_peaks(result_json: Path, dest: Path, repo: Path, suite: Path | 
                 count = len(sample_row)
                 spread = _quartile_gap([float(item) for item in sample_row])
             else:
-                raise SystemExit(f"{benchmark} parameter {frames_text},{threads_text} is missing samples")
+                raise SystemExit(
+                    f"{benchmark} parameter {frames_text},{threads_text} is missing samples"
+                )
             atoms = _atoms_for(benchmark, repo)
             minimal = atoms * frames * (per_atom + _extra_atom_bytes(benchmark))
             ratio = median / minimal if minimal else 0.0
             if ratio < 1.0:
-                raise SystemExit(f"{benchmark} peak {median} is below the stored minimum {minimal}")
+                raise SystemExit(
+                    f"{benchmark} peak {median} is below the stored minimum {minimal}"
+                )
             rows.append(
                 {
                     "benchmark": benchmark,

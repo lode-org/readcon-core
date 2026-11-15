@@ -87,4 +87,9 @@ def test_moving_read_matches_across_threads(tmp_path: Path) -> None:
         for left, right in zip(serial, other):
             assert len(left) == len(right)
             for lhs, rhs in zip(left, right):
-                assert (lhs.x, lhs.y, lhs.z, lhs.atom_id) == (rhs.x, rhs.y, rhs.z, rhs.atom_id)
+                assert (lhs.x, lhs.y, lhs.z, lhs.atom_id) == (
+                    rhs.x,
+                    rhs.y,
+                    rhs.z,
+                    rhs.atom_id,
+                )

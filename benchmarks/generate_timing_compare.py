@@ -42,7 +42,9 @@ def _load(path: Path) -> tuple[str, dict[str, dict]]:
             params = []
         pairs = list(itertools.product(*params)) if params else [()]
         if len(pairs) != len(medians):
-            raise SystemExit(f"{name} has {len(medians)} results for {len(pairs)} parameters")
+            raise SystemExit(
+                f"{name} has {len(medians)} results for {len(pairs)} parameters"
+            )
         for param, median, sample, low, high in zip(pairs, medians, samples, q25, q75):
             if param == ():
                 label = name
@@ -77,7 +79,11 @@ def _table(
     unit: str = "seconds",
 ) -> str:
     import tabulate
-    from asv._stats import bootstrap_median_ratio_ci, format_ratio_ci, interleaved_ratio_decision
+    from asv._stats import (
+        bootstrap_median_ratio_ci,
+        format_ratio_ci,
+        interleaved_ratio_decision,
+    )
 
     improved = []
     same = []
@@ -87,7 +93,7 @@ def _table(
             continue
         left = before[label]
         right = after[label]
-        if left["median"] in (None, ) or right["median"] in (None, ):
+        if left["median"] in (None,) or right["median"] in (None,):
             continue
         band = ""
         if aa is not None and label in aa:
@@ -96,7 +102,9 @@ def _table(
             )
             if ci is None:
                 raise SystemExit(f"{label} has no ratio interval")
-            aa_ci = bootstrap_median_ratio_ci(left["samples"], aa[label]["samples"], seed=2)
+            aa_ci = bootstrap_median_ratio_ci(
+                left["samples"], aa[label]["samples"], seed=2
+            )
             if aa_ci is None:
                 raise SystemExit(f"{label} has no A/A band")
             band = format_ratio_ci(aa_ci)
@@ -201,7 +209,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--context", type=Path, required=True)
-    parser.add_argument("--command", required=True, help="the asv command that produced the JSON")
+    parser.add_argument(
+        "--command", required=True, help="the asv command that produced the JSON"
+    )
     parser.add_argument("--n-threads", default="1")
     parser.add_argument(
         "--unit",
@@ -256,7 +266,9 @@ def main(argv: list[str] | None = None) -> int:
     if not table.strip():
         raise SystemExit("no shared benchmarks")
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(table if table.endswith("\n") else table + "\n", encoding="utf-8")
+    args.output.write_text(
+        table if table.endswith("\n") else table + "\n", encoding="utf-8"
+    )
     _write_context(args.context, args.command, args.n_threads)
     print(args.output)
     print(args.context)

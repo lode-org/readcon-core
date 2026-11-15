@@ -519,9 +519,7 @@ class RayReadConCuh2:
         import readcon
 
         return _peak_samples(
-            lambda: _hold_parsed(
-                readcon.read_con(self._path), self._n, n_atoms=218
-            )
+            lambda: _hold_parsed(readcon.read_con(self._path), self._n, n_atoms=218)
         )
 
 
@@ -1212,7 +1210,9 @@ class TimeWritePythonCuh2:
     def time_write_python_frames(self, n_frames: int) -> None:
         import readcon
 
-        readcon.write_con(_write_target("write-python.con"), _python_write_frames(n_frames))
+        readcon.write_con(
+            _write_target("write-python.con"), _python_write_frames(n_frames)
+        )
 
 
 class TimeWriteAseCuh2:
@@ -1426,9 +1426,7 @@ def _install_memray_repeats() -> None:
                     destination=memray.FileDestination(capture, overwrite=True)
                 ):
                     self.func(*param)
-                peaks.append(
-                    int(memray.FileReader(str(capture)).metadata.peak_memory)
-                )
+                peaks.append(int(memray.FileReader(str(capture)).metadata.peak_memory))
             finally:
                 capture.unlink(missing_ok=True)
         return {"samples": peaks, "number": 1}

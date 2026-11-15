@@ -41,7 +41,14 @@ def _rewrite(table: str, before: str, after: str) -> str:
     return rewritten
 
 
-def _stage(directory: Path, machine: str, before: Path, after: Path, benchmarks: Path, machine_file: Path) -> None:
+def _stage(
+    directory: Path,
+    machine: str,
+    before: Path,
+    after: Path,
+    benchmarks: Path,
+    machine_file: Path,
+) -> None:
     """Lay the committed results out the way asv compare reads them."""
     bench_dir = directory / machine
     bench_dir.mkdir(parents=True)
@@ -74,14 +81,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     for path in (args.before_json, args.after_json):
-        require_published(json.loads(path.read_text(encoding="utf-8"))["commit_hash"], root)
+        require_published(
+            json.loads(path.read_text(encoding="utf-8"))["commit_hash"], root
+        )
     require_published(args.before, root)
     require_published(args.after, root)
     stage_root = Path("build") / "bench"
     stage_root.mkdir(parents=True, exist_ok=True)
     staged = Path(tempfile.mkdtemp(prefix="mem-compare-", dir=stage_root))
     try:
-        _stage(staged, args.machine, args.before_json, args.after_json, args.benchmarks, args.machine_json)
+        _stage(
+            staged,
+            args.machine,
+            args.before_json,
+            args.after_json,
+            args.benchmarks,
+            args.machine_json,
+        )
         conf = json.loads(Path(args.config).read_text(encoding="utf-8"))
         conf["results_dir"] = str(staged)
         conf["repo"] = str(Path(args.config).resolve().parent)

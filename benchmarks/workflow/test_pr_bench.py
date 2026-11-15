@@ -132,7 +132,9 @@ class SplitAndLayout(unittest.TestCase):
         self.assertNotIn("asan_run", bench.MEMORY_TRACKING_METHOD)
         self.assertEqual(bench.MIN_ATOM_BYTES, 24)
         self.assertEqual(bench.minimal_output_bytes(4, 50), 4 * 50 * 24)
-        self.assertEqual(bench.minimal_output_bytes(4, 50, extra_atom_bytes=24), 4 * 50 * 48)
+        self.assertEqual(
+            bench.minimal_output_bytes(4, 50, extra_atom_bytes=24), 4 * 50 * 48
+        )
         self.assertIn('format="eon"', inspect.getsource(bench._ase_eon))
         self.assertIn("not a CON", bench.RayChemfilesXyz.__doc__)
         path = bench._write_temp("one frame\n")
@@ -436,17 +438,30 @@ class CommentShowsRowBound(unittest.TestCase):
 
 
 class AsvPinAndFailedRounds(unittest.TestCase):
-    def test_requirements_pin_the_asv_commit_that_writes_interleaved_rounds(self) -> None:
-        text = (ROOT / "benchmarks" / "workflow" / "requirements.txt").read_text(encoding="utf-8")
+    def test_requirements_pin_the_asv_commit_that_writes_interleaved_rounds(
+        self,
+    ) -> None:
+        text = (ROOT / "benchmarks" / "workflow" / "requirements.txt").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             "asv @ git+https://github.com/HaoZeke/asv.git@0bac2a9157a207d4a2579de4365ae59c27b15713",
             text,
         )
         self.assertNotIn("asv==0.6.6", text)
-        self.assertFalse((ROOT / "benchmarks" / "workflow" / "asv-keep-failed-round.patch").exists())
-        timing = (ROOT / "benchmarks" / "generate_timing_compare.py").read_text(encoding="utf-8")
-        self.assertIn("bootstrap_median_ratio_ci(left[\"samples\"], right[\"samples\"], seed=1)", timing)
-        memory = (ROOT / "benchmarks" / "generate_memory_compare.py").read_text(encoding="utf-8")
+        self.assertFalse(
+            (ROOT / "benchmarks" / "workflow" / "asv-keep-failed-round.patch").exists()
+        )
+        timing = (ROOT / "benchmarks" / "generate_timing_compare.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'bootstrap_median_ratio_ci(left["samples"], right["samples"], seed=1)',
+            timing,
+        )
+        memory = (ROOT / "benchmarks" / "generate_memory_compare.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('Path("build") / "bench"', memory)
         self.assertIn("dir=stage_root", memory)
 

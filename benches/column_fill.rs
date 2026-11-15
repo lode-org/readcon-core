@@ -4,8 +4,8 @@
 //! machine was busy. This benchmark is where that comparison lives.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use readcon_core::{Slabs, fill_bytes, fill_bytes_threaded, layout_bytes};
 use readcon_core::iterators::frames_from_bytes_phased;
+use readcon_core::{Slabs, fill_bytes, fill_bytes_threaded, layout_bytes};
 use std::hint::black_box;
 
 fn distinct_copies(src: &[u8], n: usize) -> Vec<u8> {
