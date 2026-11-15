@@ -535,6 +535,40 @@ class FamilyBand(unittest.TestCase):
         self.assertTrue(ci_outside_band(huge, band))
         self.assertGreater(huge[0], 1)
 
+    def test_an_unrun_parameter_is_not_a_cell(self) -> None:
+        import json
+        import tempfile
+
+        timing = _load(
+            "generate_timing_compare",
+            ROOT / "benchmarks" / "generate_timing_compare.py",
+        )
+        payload = {
+            "commit_hash": "a" * 40,
+            "result_columns": [
+                "result",
+                "params",
+                "samples",
+                "stats_q_25",
+                "stats_q_75",
+            ],
+            "results": {
+                "bench.time_read": [
+                    [1.0, None],
+                    [["10"], ["1", "4"]],
+                    [[1.0, 1.1, 1.2], None],
+                    [0.9, None],
+                    [1.1, None],
+                ]
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "result.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            _sha, rows = timing._load(path)
+        self.assertEqual(list(rows), ["bench.time_read(10, 1)"])
+        self.assertEqual(timing.family_alpha(len(rows)), 0.05)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -50,6 +50,12 @@ def _load(path: Path) -> tuple[str, dict[str, dict]]:
                 label = name
             else:
                 label = f"{name}({', '.join(str(item) for item in param)})"
+            # A parameter column the run left empty is not a cell. The
+            # family size counts only rows that were actually sampled.
+            if sample is None or median is None:
+                continue
+            if isinstance(median, float) and median != median:
+                continue
             if not isinstance(sample, list):
                 raise SystemExit(f"{label} is missing its samples")
             rows[label] = {
