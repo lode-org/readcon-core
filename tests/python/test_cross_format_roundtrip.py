@@ -194,6 +194,31 @@ def test_a_finished_sample_is_appended(tmp_path: Path) -> None:
     assert "0.020000" in text
 
 
+def test_a_shard_with_samples_is_not_deleted(tmp_path: Path) -> None:
+    cross_format.append_arm_row(
+        tmp_path,
+        "1k",
+        "readcon-con",
+        "read-warm",
+        "0",
+        "0.010000",
+        "100",
+        "200",
+        "none",
+    )
+    shard = tmp_path / "by-arm" / "1k"
+    with pytest.raises(SystemExit, match="recorded samples"):
+        cross_format.refuse_recorded_shard(shard)
+    assert (shard / "readcon-con.tsv").is_file()
+
+
+def test_missing_rss_is_blank_not_zero() -> None:
+    assert cross_format.recorded_rss({}) == ""
+    assert cross_format.recorded_rss({"rss_bytes": None}) == ""
+    assert cross_format.recorded_rss({"rss_bytes": 0}) == "0"
+    assert cross_format.recorded_rss({"rss_bytes": 12}) == "12"
+
+
 def test_a_reader_crash_is_not_an_unsupported_format() -> None:
     assert cross_format.capacity_limit("readcon-con", RuntimeError("boom")) is None
     assert cross_format.capacity_limit("ase-extxyz", ValueError("parse")) is None
