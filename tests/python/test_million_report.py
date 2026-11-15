@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -172,22 +173,42 @@ def _worktree(tmp_path: Path, name: str) -> Path:
     return tree
 
 
-def _snakemake(tree: Path, *args: str, env: dict[str, str] | None = None):
+def _snakemake(
+    tree: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
+):
     snakemake = shutil.which("snakemake")
     if snakemake is None:
         pytest.skip("snakemake is not installed")
-    command = [snakemake, "-s", "bench/h2h/Snakefile", "-c1", *args]
+    run_cwd = tree if cwd is None else cwd
+    if cwd is None:
+        snakefile = "bench/h2h/Snakefile"
+    else:
+        snakefile = os.path.relpath(tree / "bench" / "h2h" / "Snakefile", run_cwd)
+    command = [snakemake, "-s", snakefile, "-c1", *args]
     merged = os.environ.copy()
     if env:
         merged.update(env)
     return subprocess.run(
         command,
-        cwd=tree,
+        cwd=run_cwd,
         check=False,
         capture_output=True,
         text=True,
         env=merged,
     )
+
+
+def _record_hashes(record: Path) -> dict[str, str]:
+    found = {}
+    for path in sorted(record.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        found[path.relative_to(record).as_posix()] = digest
+    return found
 
 
 def test_million_rule_targets_the_versioned_record(tmp_path: Path):
@@ -474,35 +495,93 @@ def test_a_protected_measure_is_not_rewritten(tmp_path: Path):
             )
 
 
-def test_a_committed_record_is_refused(tmp_path: Path):
+def _committed_attack(
+    tree: Path, record: str, kind: str
+) -> tuple[str, Path | None, bool]:
+    record_path = tree / record
+    if kind == "plain":
+        return record, None, False
+    if kind == "leading-dot":
+        return f"./{record}", None, False
+    if kind == "embedded-dot":
+        return "bench/h2h/million/./v0.23.3", None, False
+    if kind == "parent-foo":
+        return "bench/h2h/foo/../million/v0.23.3", None, False
+    if kind == "parent-million":
+        return "bench/h2h/million/../million/v0.23.3", None, False
+    if kind == "absolute":
+        return str(record_path.resolve()), None, False
+    if kind == "symlink-dir":
+        link = tree / "bench" / "h2h" / "record-link"
+        link.symlink_to(Path("million") / "v0.23.3", target_is_directory=True)
+        return "bench/h2h/record-link", None, False
+    if kind == "symlink-parent":
+        link = tree / "bench" / "h2h" / "parent-link"
+        link.symlink_to("million", target_is_directory=True)
+        return "bench/h2h/parent-link/v0.23.3", None, False
+    if kind == "removed-leading-dot":
+        return f"./{record}", None, True
+    if kind == "nested-cwd":
+        return "v0.23.3", tree / "bench" / "h2h" / "million", False
+    raise AssertionError(kind)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "plain",
+        "leading-dot",
+        "embedded-dot",
+        "parent-foo",
+        "parent-million",
+        "absolute",
+        "symlink-dir",
+        "symlink-parent",
+        "removed-leading-dot",
+        "nested-cwd",
+    ],
+)
+def test_a_committed_record_is_refused(tmp_path: Path, kind: str):
     root = Path(__file__).resolve().parents[2]
     record = "bench/h2h/million/v0.23.3"
     trees = []
     try:
         tree = _worktree(tmp_path, "committed")
         trees.append(tree)
-        host = (tree / record / "host.json").read_bytes()
-        refused = _snakemake(
-            tree,
-            "million",
-            "--config",
-            f"million_out={record}",
-        )
-        refused_text = refused.stdout + refused.stderr
-        assert refused.returncode != 0, refused_text
-        assert "refusing to write a saved record" in refused_text
+        before = _record_hashes(tree / record)
+        million_out, cwd, remove = _committed_attack(tree, record, kind)
+        if remove:
+            shutil.rmtree(tree / record)
+        targets = ["million", "million_asv", "million_record"]
+        for target in targets:
+            refused = _snakemake(
+                tree,
+                target,
+                "--config",
+                f"million_out={million_out}",
+                cwd=cwd,
+            )
+            refused_text = refused.stdout + refused.stderr
+            assert refused.returncode != 0, refused_text
+            assert "refusing to write a saved record" in refused_text
         status = subprocess.check_output(
             ["git", "status", "--porcelain", "--", record],
             cwd=tree,
             text=True,
         )
-        assert status == ""
-        assert (tree / record / "host.json").read_bytes() == host
-        assert not (tree / record / "NOTES.txt").exists()
-        assert not (tree / record / "asv.json").exists()
-        assert not (tree / record / "asv-machine.json").exists()
-        assert not (tree / record / "library-commit.txt").exists()
-        assert not (tree / record / "lscpu.txt").exists()
+        if remove:
+            assert not (tree / record).exists()
+            assert status != ""
+            for line in status.splitlines():
+                assert line.startswith(" D"), line
+        else:
+            assert _record_hashes(tree / record) == before
+            assert status == ""
+            assert not (tree / record / "NOTES.txt").exists()
+            assert not (tree / record / "asv.json").exists()
+            assert not (tree / record / "asv-machine.json").exists()
+            assert not (tree / record / "library-commit.txt").exists()
+            assert not (tree / record / "lscpu.txt").exists()
     finally:
         for path in trees:
             subprocess.run(
