@@ -1,0 +1,29 @@
+{
+  "protocol": "equal geometry multi-frame full load; ASE Trajectory (.traj), NetCDFTrajectory, multi-frame XYZ vs readcon.read_chemfiles and readcon.read_con",
+  "n_frames": 100,
+  "n_atoms": 218,
+  "repeats": 12,
+  "fixture": "resources/test/cuh2.con",
+  "file_sizes_bytes": {
+    "traj.traj": 1017737,
+    "traj.nc": 356892,
+    "traj.xyz": 1570100,
+    "traj.con": 1677100
+  },
+  "ase_xyz_median_ms": 49.725013988791034,
+  "ase_traj_median_ms": 18.08012400579173,
+  "ase_netcdf_median_ms": 58.64244999247603,
+  "readcon_chemfiles_xyz_to_con_median_ms": 5.3091300069354475,
+  "readcon_con_median_ms": 1.5938159922370687,
+  "note_h5md": "ASE format h5md not registered in this ASE build (UnknownFileTypeError)",
+  "ratio_ase_xyz_median_ms_over_con": 31.198716935320345,
+  "ratio_ase_traj_median_ms_over_con": 11.343921816479329,
+  "ratio_ase_netcdf_median_ms_over_con": 36.79373922592276,
+  "ratio_readcon_chemfiles_xyz_to_con_median_ms_over_con": 3.3310808981679187,
+  "ratio_ase_traj_over_chemfiles_to_con": 3.4054777302822155,
+  "ratio_ase_netcdf_over_chemfiles_to_con": 11.045585607410244,
+  "host": "Intel Xeon Processor",
+  "platform": "Linux-x86_64-with-glibc2.39",
+  "date_utc": "2026-11-15T00:39Z",
+  "commit": "3d2118af"
+}

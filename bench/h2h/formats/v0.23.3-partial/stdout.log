@@ -1,0 +1,3188 @@
+Building DAG of jobs...
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.log ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.log ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /provenance.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /provenance.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /identity.txt ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /identity.txt ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /host.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /host.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv-machine.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv-machine.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.log ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.log ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /provenance.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /provenance.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /identity.txt ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /identity.txt ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /host.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /host.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /cross-format.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv-machine.json ' starts with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+File path ' bench/h2h/formats/v0.23.3-partial /asv-machine.json ' ends with whitespace. This is likely unintended. It can also lead to inconsistent results of the file-matching approach used by Snakemake.
+Using shell: /usr/bin/bash
+Provided cores: 1 (use --cores to define parallelism)
+Rules claiming more threads will be scaled down.
+Job stats:
+job              count
+-------------  -------
+partial                1
+partial_asv            1
+partial_measure        1
+total                3
+
+Select jobs to execute...
+
+[Sun Nov 15 00:41:58 2026]
+rule partial_measure:
+    output:  bench/h2h/formats/v0.23.3-partial /cross-format.json ,  bench/h2h/formats/v0.23.3-partial /cross-format.log ,  bench/h2h/formats/v0.23.3-partial /provenance.json ,  bench/h2h/formats/v0.23.3-partial /identity.txt ,  bench/h2h/formats/v0.23.3-partial /host.json 
+    jobid: 1
+    reason: Missing output files:  bench/h2h/formats/v0.23.3-partial /cross-format.log ,  bench/h2h/formats/v0.23.3-partial /provenance.json ,  bench/h2h/formats/v0.23.3-partial /identity.txt ,  bench/h2h/formats/v0.23.3-partial /cross-format.json ,  bench/h2h/formats/v0.23.3-partial /host.json 
+    resources: tmpdir=tmp
+
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/ovito/_extensions/analysis.py:2: UserWarning: Did you accidentally install the OVITO package from the PyPI repository in an Anaconda/Miniconda Python interpreter using the 'pip' command? This will likely lead to conflicts with existing libraries in the Anaconda environment, and import of the OVITO module may fail with an error related to the Qt framework. To fix this, please uninstall the ovito pip package by running 'pip uninstall -y ovito PySide6' and then install the OVITO Anaconda package provided by OVITO GmbH. Visit https://docs.ovito.org/python/introduction/getting_started/installation.html for further instructions. If you would rather like to ignore this warning message, add the following code to the top of your Python script:
+
+  import warnings
+  warnings.filterwarnings('ignore', message='.*OVITO.*PyPI')
+
+  import ovito._extensions.pyscript
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'altLocs' Using default value of ' '
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'resnames' Using default value of 'UNK'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'icodes' Using default value of ' '
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'segids' Using default value of ' '
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'chainIDs' Using default value of ''
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'resids' Using default value of '1'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'occupancies' Using default value of '1.0'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'tempfactors' Using default value of '0.0'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'elements' Using default value of ' '
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'record_types' Using default value of 'ATOM'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1282: UserWarning: Found no information for attr: 'formalcharges' Using default value of '0'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/PDB.py:1336: UserWarning: Found missing chainIDs. Corresponding atoms will use value of 'X'
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/topology/PDBParser.py:409: UserWarning: Element information is missing, elements attribute will not be populated. If needed these can be guessed using universe.guess_TopologyAttrs(context='default', to_guess=['elements']).
+  warnings.warn(
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/DCD.py:176: DeprecationWarning: DCDReader currently makes independent timesteps by copying self.ts while other readers update self.ts inplace. This behavior will be changed in 3.0 to be the same as other readers. Read more at https://github.com/MDAnalysis/mdanalysis/issues/3889 to learn if this change in behavior might affect you.
+  warnings.warn(
+cross 1k read warm
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0002
+    readcon-con-gz 0.0009
+    readcon-con-zst 0.0008
+    readcon-chemfiles 0.0003
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0002
+    chemfiles-pdb 0.0011
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0024
+    chemfiles-gro-xz 0.0012
+    ase-extxyz 0.0023
+    ase-extxyz-gz 0.0031
+    mda-pdb 0.0070
+    mda-xyz 0.0050
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0009
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0027
+    mda-mmcif 0.0018
+    mdtraj-ncdf 0.0011
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0002
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0012
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0008
+    readcon-con-zst 0.0006
+    readcon-chemfiles 0.0003
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0002
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0011
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0019
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0024
+    ase-extxyz-gz 0.0032
+    mda-pdb 0.0071
+    mda-xyz 0.0051
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0012
+    mda-h5md 0.0027
+    mda-mmcif 0.0021
+    mdtraj-ncdf 0.0009
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0010
+    ovito-xyz-gz 0.0010
+    readcon-con 0.0002
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0018
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0005
+    chemfiles-xyz-xz 0.0010
+    chemfiles-xyz-bz2 0.0014
+    chemfiles-trr 0.0002
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0006
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0020
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0029
+    mda-pdb 0.0068
+    mda-xyz 0.0046
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0009
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0027
+    mda-mmcif 0.0018
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0012
+    readcon-con 0.0002
+    readcon-con-gz 0.0022
+  sample 3 readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0003
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0002
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0030
+    mda-pdb 0.0065
+    mda-xyz 0.0048
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0009
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0028
+    mda-mmcif 0.0019
+    mdtraj-ncdf 0.0010
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0011
+    readcon-con 0.0002
+    readcon-con-gz 0.0020
+    readcon-con-zst 0.0017
+  sample 4 chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0002
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0012
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0030
+    mda-pdb 0.0069
+    mda-xyz 0.0049
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0009
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0041
+    mda-mmcif 0.0019
+    mdtraj-ncdf 0.0010
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0006
+    ovito-xyz 0.0005
+    ovito-xyz-gz 0.0011
+    readcon-con 0.0002
+    readcon-con-gz 0.0017
+    readcon-con-zst 0.0018
+    readcon-chemfiles 0.0003
+  sample 5 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0002
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0002
+    chemfiles-pdb 0.0011
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0008
+    chemfiles-pdb-xz 0.0019
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0024
+    ase-extxyz-gz 0.0030
+    mda-pdb 0.0071
+    mda-xyz 0.0049
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0027
+    mda-mmcif 0.0020
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0010
+    readcon-con 0.0002
+    readcon-con-gz 0.0016
+    readcon-con-zst 0.0015
+    readcon-chemfiles 0.0003
+    chemfiles-con 0.0003
+  sample 6 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0002
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0019
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0028
+    mda-pdb 0.0066
+    mda-xyz 0.0047
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0012
+    mda-h5md 0.0028
+    mda-mmcif 0.0019
+    mdtraj-ncdf 0.0009
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0007
+    ovito-xyz-gz 0.0010
+    readcon-con 0.0002
+    readcon-con-gz 0.0016
+    readcon-con-zst 0.0006
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+  sample 7 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0002
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0011
+    chemfiles-gro 0.0006
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0019
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0023
+    ase-extxyz-gz 0.0029
+    mda-pdb 0.0065
+    mda-xyz 0.0049
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0027
+    mda-mmcif 0.0018
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0011
+    readcon-con 0.0002
+    readcon-con-gz 0.0008
+    readcon-con-zst 0.0016
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0004
+  sample 8 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.0014
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0002
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0021
+    ase-extxyz-gz 0.0029
+    mda-pdb 0.0065
+    mda-xyz 0.0048
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0028
+    mda-mmcif 0.0020
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0010
+    readcon-con 0.0002
+    readcon-con-gz 0.0017
+    readcon-con-zst 0.0006
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0010
+  sample 9 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0002
+    chemfiles-pdb 0.0011
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0014
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0012
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0029
+    mda-pdb 0.0067
+    mda-xyz 0.0048
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0012
+    mda-h5md 0.0028
+    mda-mmcif 0.0018
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0007
+    ovito-xyz-gz 0.0012
+    readcon-con 0.0002
+    readcon-con-gz 0.0018
+    readcon-con-zst 0.0016
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0010
+    chemfiles-xyz-bz2 0.0015
+  sample 10 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0001
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0011
+    ase-extxyz 0.0022
+    ase-extxyz-gz 0.0031
+    mda-pdb 0.0066
+    mda-xyz 0.0047
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0027
+    mda-mmcif 0.0019
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0011
+    readcon-con 0.0002
+    readcon-con-gz 0.0017
+    readcon-con-zst 0.0016
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0011
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0002
+  sample 11 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0001
+    chemfiles-xtc 0.0001
+    chemfiles-pdb 0.0010
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0013
+    chemfiles-gro-gz 0.0007
+    chemfiles-pdb-xz 0.0018
+    chemfiles-gro-xz 0.0012
+    ase-extxyz 0.0023
+    ase-extxyz-gz 0.0029
+    mda-pdb 0.0068
+    mda-xyz 0.0049
+    readcon-conbin 0.0001
+    mda-dcd 0.0002
+    mda-xtc 0.0010
+    mda-ncdf 0.0004
+    mda-trr 0.0011
+    mda-h5md 0.0030
+    mda-mmcif 0.0019
+    mdtraj-ncdf 0.0008
+    mdtraj-dcd 0.0001
+    mdtraj-xtc 0.0001
+    ovito-xyz 0.0007
+    ovito-xyz-gz 0.0011
+    readcon-con 0.0002
+    readcon-con-gz 0.0016
+    readcon-con-zst 0.0006
+    readcon-chemfiles 0.0002
+    chemfiles-con 0.0003
+    chemfiles-xyz 0.0002
+    chemfiles-xyz-gz 0.0004
+    chemfiles-xyz-xz 0.0010
+    chemfiles-xyz-bz2 0.0015
+    chemfiles-trr 0.0001
+    chemfiles-ncdf 0.0001
+cross 1k read cold
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0014
+    readcon-con-gz 0.0046
+    readcon-con-zst 0.0019
+    readcon-chemfiles 0.0010
+    chemfiles-con 0.0015
+    chemfiles-xyz 0.0014
+    chemfiles-xyz-gz 0.0017
+    chemfiles-xyz-xz 0.0022
+    chemfiles-xyz-bz2 0.0025
+    chemfiles-trr 0.0006
+    chemfiles-ncdf 0.0014
+    chemfiles-dcd 0.0012
+    chemfiles-xtc 0.0014
+    chemfiles-pdb 0.0023
+    chemfiles-gro 0.0011
+    chemfiles-pdb-gz 0.0021
+    chemfiles-gro-gz 0.0024
+    chemfiles-pdb-xz 0.0031
+    chemfiles-gro-xz 0.0023
+    ase-extxyz 0.0043
+    ase-extxyz-gz 0.0040
+    mda-pdb 0.0087
+    mda-xyz 0.0059
+    readcon-conbin 0.0017
+    mda-dcd 0.0014
+    mda-xtc 0.0025
+    mda-ncdf 0.0017
+    mda-trr 0.0022
+    mda-h5md 0.0053
+    mda-mmcif 0.0024
+    mdtraj-ncdf 0.0016
+    mdtraj-dcd 0.0004
+    mdtraj-xtc 0.0012
+    ovito-xyz 0.0020
+    ovito-xyz-gz 0.0017
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0029
+    readcon-con-zst 0.0009
+    readcon-chemfiles 0.0018
+    chemfiles-con 0.0010
+    chemfiles-xyz 0.0017
+    chemfiles-xyz-gz 0.0016
+    chemfiles-xyz-xz 0.0025
+    chemfiles-xyz-bz2 0.0025
+    chemfiles-trr 0.0014
+    chemfiles-ncdf 0.0007
+    chemfiles-dcd 0.0014
+    chemfiles-xtc 0.0015
+    chemfiles-pdb 0.0019
+    chemfiles-gro 0.0015
+    chemfiles-pdb-gz 0.0017
+    chemfiles-gro-gz 0.0024
+    chemfiles-pdb-xz 0.0023
+    chemfiles-gro-xz 0.0027
+    ase-extxyz 0.0042
+    ase-extxyz-gz 0.0050
+    mda-pdb 0.0083
+    mda-xyz 0.0055
+    readcon-conbin 0.0010
+    mda-dcd 0.0021
+    mda-xtc 0.0029
+    mda-ncdf 0.0009
+    mda-trr 0.0017
+    mda-h5md 0.0051
+    mda-mmcif 0.0032
+    mdtraj-ncdf 0.0019
+    mdtraj-dcd 0.0007
+    mdtraj-xtc 0.0009
+    ovito-xyz 0.0020
+    ovito-xyz-gz 0.0018
+    readcon-con 0.0015
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0026
+    readcon-chemfiles 0.0015
+    chemfiles-con 0.0019
+    chemfiles-xyz 0.0016
+    chemfiles-xyz-gz 0.0008
+    chemfiles-xyz-xz 0.0023
+    chemfiles-xyz-bz2 0.0031
+    chemfiles-trr 0.0014
+    chemfiles-ncdf 0.0015
+    chemfiles-dcd 0.0010
+    chemfiles-xtc 0.0007
+    chemfiles-pdb 0.0024
+    chemfiles-gro 0.0020
+    chemfiles-pdb-gz 0.0030
+    chemfiles-gro-gz 0.0022
+    chemfiles-pdb-xz 0.0034
+    chemfiles-gro-xz 0.0015
+    ase-extxyz 0.0042
+    ase-extxyz-gz 0.0035
+    mda-pdb 0.0087
+    mda-xyz 0.0056
+    readcon-conbin 0.0014
+    mda-dcd 0.0016
+    mda-xtc 0.0024
+    mda-ncdf 0.0024
+    mda-trr 0.0025
+    mda-h5md 0.0076
+    mda-mmcif 0.0028
+    mdtraj-ncdf 0.0021
+    mdtraj-dcd 0.0004
+    mdtraj-xtc 0.0010
+    ovito-xyz 0.0025
+    ovito-xyz-gz 0.0016
+    readcon-con 0.0016
+    readcon-con-gz 0.0017
+  sample 3 readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0014
+    chemfiles-con 0.0007
+    chemfiles-xyz 0.0008
+    chemfiles-xyz-gz 0.0013
+    chemfiles-xyz-xz 0.0018
+    chemfiles-xyz-bz2 0.0027
+    chemfiles-trr 0.0015
+    chemfiles-ncdf 0.0011
+    chemfiles-dcd 0.0010
+    chemfiles-xtc 0.0020
+    chemfiles-pdb 0.0020
+    chemfiles-gro 0.0018
+    chemfiles-pdb-gz 0.0047
+    chemfiles-gro-gz 0.0016
+    chemfiles-pdb-xz 0.0033
+    chemfiles-gro-xz 0.0016
+    ase-extxyz 0.0028
+    ase-extxyz-gz 0.0042
+    mda-pdb 0.0072
+    mda-xyz 0.0057
+    readcon-conbin 0.0005
+    mda-dcd 0.0020
+    mda-xtc 0.0014
+    mda-ncdf 0.0014
+    mda-trr 0.0019
+    mda-h5md 0.0041
+    mda-mmcif 0.0034
+    mdtraj-ncdf 0.0015
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0010
+    ovito-xyz 0.0022
+    ovito-xyz-gz 0.0010
+    readcon-con 0.0020
+    readcon-con-gz 0.0019
+    readcon-con-zst 0.0025
+  sample 4 chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-con 0.0014
+    chemfiles-xyz 0.0017
+    chemfiles-xyz-gz 0.0016
+    chemfiles-xyz-xz 0.0022
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0018
+    chemfiles-ncdf 0.0006
+    chemfiles-dcd 0.0011
+    chemfiles-xtc 0.0010
+    chemfiles-pdb 0.0021
+    chemfiles-gro 0.0011
+    chemfiles-pdb-gz 0.0018
+    chemfiles-gro-gz 0.0017
+    chemfiles-pdb-xz 0.0033
+    chemfiles-gro-xz 0.0021
+    ase-extxyz 0.0026
+    ase-extxyz-gz 0.0034
+    mda-pdb 0.0077
+    mda-xyz 0.0052
+    readcon-conbin 0.0011
+    mda-dcd 0.0015
+    mda-xtc 0.0019
+    mda-ncdf 0.0016
+    mda-trr 0.0022
+    mda-h5md 0.0041
+    mda-mmcif 0.0023
+    mdtraj-ncdf 0.0020
+    mdtraj-dcd 0.0006
+    mdtraj-xtc 0.0010
+    ovito-xyz 0.0018
+    ovito-xyz-gz 0.0014
+    readcon-con 0.0016
+    readcon-con-gz 0.0028
+    readcon-con-zst 0.0022
+    readcon-chemfiles 0.0014
+  sample 5 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+    chemfiles-xyz 0.0015
+    chemfiles-xyz-gz 0.0014
+    chemfiles-xyz-xz 0.0027
+    chemfiles-xyz-bz2 0.0031
+    chemfiles-trr 0.0015
+    chemfiles-ncdf 0.0009
+    chemfiles-dcd 0.0009
+    chemfiles-xtc 0.0008
+    chemfiles-pdb 0.0015
+    chemfiles-gro 0.0012
+    chemfiles-pdb-gz 0.0017
+    chemfiles-gro-gz 0.0013
+    chemfiles-pdb-xz 0.0027
+    chemfiles-gro-xz 0.0023
+    ase-extxyz 0.0040
+    ase-extxyz-gz 0.0034
+    mda-pdb 0.0086
+    mda-xyz 0.0053
+    readcon-conbin 0.0009
+    mda-dcd 0.0010
+    mda-xtc 0.0017
+    mda-ncdf 0.0014
+    mda-trr 0.0036
+    mda-h5md 0.0036
+    mda-mmcif 0.0031
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0010
+    ovito-xyz 0.0017
+    ovito-xyz-gz 0.0015
+    readcon-con 0.0007
+    readcon-con-gz 0.0034
+    readcon-con-zst 0.0016
+    readcon-chemfiles 0.0015
+    chemfiles-con 0.0012
+  sample 6 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz
+    chemfiles-xyz-gz 0.0018
+    chemfiles-xyz-xz 0.0020
+    chemfiles-xyz-bz2 0.0029
+    chemfiles-trr 0.0018
+    chemfiles-ncdf 0.0014
+    chemfiles-dcd 0.0013
+    chemfiles-xtc 0.0009
+    chemfiles-pdb 0.0023
+    chemfiles-gro 0.0012
+    chemfiles-pdb-gz 0.0032
+    chemfiles-gro-gz 0.0019
+    chemfiles-pdb-xz 0.0023
+    chemfiles-gro-xz 0.0015
+    ase-extxyz 0.0038
+    ase-extxyz-gz 0.0039
+    mda-pdb 0.0087
+    mda-xyz 0.0055
+    readcon-conbin 0.0010
+    mda-dcd 0.0018
+    mda-xtc 0.0029
+    mda-ncdf 0.0019
+    mda-trr 0.0021
+    mda-h5md 0.0064
+    mda-mmcif 0.0027
+    mdtraj-ncdf 0.0021
+    mdtraj-dcd 0.0013
+    mdtraj-xtc 0.0009
+    ovito-xyz 0.0012
+    ovito-xyz-gz 0.0015
+    readcon-con 0.0005
+    readcon-con-gz 0.0033
+    readcon-con-zst 0.0016
+    readcon-chemfiles 0.0019
+    chemfiles-con 0.0006
+    chemfiles-xyz 0.0006
+  sample 7 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.0021
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0010
+    chemfiles-ncdf 0.0005
+    chemfiles-dcd 0.0011
+    chemfiles-xtc 0.0009
+    chemfiles-pdb 0.0024
+    chemfiles-gro 0.0021
+    chemfiles-pdb-gz 0.0040
+    chemfiles-gro-gz 0.0024
+    chemfiles-pdb-xz 0.0027
+    chemfiles-gro-xz 0.0020
+    ase-extxyz 0.0026
+    ase-extxyz-gz 0.0039
+    mda-pdb 0.0072
+    mda-xyz 0.0053
+    readcon-conbin 0.0009
+    mda-dcd 0.0012
+    mda-xtc 0.0020
+    mda-ncdf 0.0022
+    mda-trr 0.0030
+    mda-h5md 0.0059
+    mda-mmcif 0.0032
+    mdtraj-ncdf 0.0018
+    mdtraj-dcd 0.0016
+    mdtraj-xtc 0.0011
+    ovito-xyz 0.0017
+    ovito-xyz-gz 0.0016
+    readcon-con 0.0013
+    readcon-con-gz 0.0026
+    readcon-con-zst 0.0021
+    readcon-chemfiles 0.0013
+    chemfiles-con 0.0015
+    chemfiles-xyz 0.0009
+    chemfiles-xyz-gz 0.0012
+  sample 8 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0014
+    chemfiles-ncdf 0.0013
+    chemfiles-dcd 0.0010
+    chemfiles-xtc 0.0011
+    chemfiles-pdb 0.0022
+    chemfiles-gro 0.0018
+    chemfiles-pdb-gz 0.0024
+    chemfiles-gro-gz 0.0016
+    chemfiles-pdb-xz 0.0033
+    chemfiles-gro-xz 0.0026
+    ase-extxyz 0.0036
+    ase-extxyz-gz 0.0047
+    mda-pdb 0.0073
+    mda-xyz 0.0059
+    readcon-conbin 0.0009
+    mda-dcd 0.0015
+    mda-xtc 0.0020
+    mda-ncdf 0.0016
+    mda-trr 0.0021
+    mda-h5md 0.0043
+    mda-mmcif 0.0026
+    mdtraj-ncdf 0.0018
+    mdtraj-dcd 0.0006
+    mdtraj-xtc 0.0011
+    ovito-xyz 0.0018
+    ovito-xyz-gz 0.0013
+    readcon-con 0.0013
+    readcon-con-gz 0.0017
+    readcon-con-zst 0.0026
+    readcon-chemfiles 0.0016
+    chemfiles-con 0.0017
+    chemfiles-xyz 0.0013
+    chemfiles-xyz-gz 0.0017
+    chemfiles-xyz-xz 0.0022
+  sample 9 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0018
+    chemfiles-ncdf 0.0011
+    chemfiles-dcd 0.0012
+    chemfiles-xtc 0.0018
+    chemfiles-pdb 0.0027
+    chemfiles-gro 0.0018
+    chemfiles-pdb-gz 0.0040
+    chemfiles-gro-gz 0.0022
+    chemfiles-pdb-xz 0.0026
+    chemfiles-gro-xz 0.0024
+    ase-extxyz 0.0043
+    ase-extxyz-gz 0.0046
+    mda-pdb 0.0072
+    mda-xyz 0.0069
+    readcon-conbin 0.0010
+    mda-dcd 0.0015
+    mda-xtc 0.0023
+    mda-ncdf 0.0024
+    mda-trr 0.0021
+    mda-h5md 0.0054
+    mda-mmcif 0.0035
+    mdtraj-ncdf 0.0024
+    mdtraj-dcd 0.0013
+    mdtraj-xtc 0.0013
+    ovito-xyz 0.0018
+    ovito-xyz-gz 0.0017
+    readcon-con 0.0008
+    readcon-con-gz 0.0028
+    readcon-con-zst 0.0028
+    readcon-chemfiles 0.0012
+    chemfiles-con 0.0024
+    chemfiles-xyz 0.0016
+    chemfiles-xyz-gz 0.0016
+    chemfiles-xyz-xz 0.0023
+    chemfiles-xyz-bz2 0.0030
+  sample 10 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0012
+    chemfiles-dcd 0.0017
+    chemfiles-xtc 0.0015
+    chemfiles-pdb 0.0014
+    chemfiles-gro 0.0018
+    chemfiles-pdb-gz 0.0028
+    chemfiles-gro-gz 0.0022
+    chemfiles-pdb-xz 0.0025
+    chemfiles-gro-xz 0.0023
+    ase-extxyz 0.0034
+    ase-extxyz-gz 0.0036
+    mda-pdb 0.0076
+    mda-xyz 0.0053
+    readcon-conbin 0.0011
+    mda-dcd 0.0009
+    mda-xtc 0.0018
+    mda-ncdf 0.0027
+    mda-trr 0.0035
+    mda-h5md 0.0050
+    mda-mmcif 0.0027
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0015
+    mdtraj-xtc 0.0005
+    ovito-xyz 0.0028
+    ovito-xyz-gz 0.0017
+    readcon-con 0.0008
+    readcon-con-gz 0.0022
+    readcon-con-zst 0.0017
+    readcon-chemfiles 0.0019
+    chemfiles-con 0.0016
+    chemfiles-xyz 0.0012
+    chemfiles-xyz-gz 0.0015
+    chemfiles-xyz-xz 0.0025
+    chemfiles-xyz-bz2 0.0029
+    chemfiles-trr 0.0012
+  sample 11 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0015
+    chemfiles-xtc 0.0012
+    chemfiles-pdb 0.0018
+    chemfiles-gro 0.0024
+    chemfiles-pdb-gz 0.0025
+    chemfiles-gro-gz 0.0013
+    chemfiles-pdb-xz 0.0029
+    chemfiles-gro-xz 0.0025
+    ase-extxyz 0.0043
+    ase-extxyz-gz 0.0035
+    mda-pdb 0.0086
+    mda-xyz 0.0049
+    readcon-conbin 0.0019
+    mda-dcd 0.0015
+    mda-xtc 0.0022
+    mda-ncdf 0.0009
+    mda-trr 0.0029
+    mda-h5md 0.0044
+    mda-mmcif 0.0036
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0009
+    ovito-xyz 0.0021
+    ovito-xyz-gz 0.0017
+    readcon-con 0.0015
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0029
+    readcon-chemfiles 0.0012
+    chemfiles-con 0.0008
+    chemfiles-xyz 0.0008
+    chemfiles-xyz-gz 0.0009
+    chemfiles-xyz-xz 0.0015
+    chemfiles-xyz-bz2 0.0019
+    chemfiles-trr 0.0006
+    chemfiles-ncdf 0.0006
+cross 1k write
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0020
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0016
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0079
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0010
+    chemfiles-ncdf 0.0017
+    chemfiles-dcd 0.0009
+    chemfiles-xtc 0.0017
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0034
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0245
+    chemfiles-gro-xz 0.0218
+    ase-extxyz 0.0040
+    ase-extxyz-gz 0.0213
+    mda-pdb 0.0066
+    mda-xyz 0.0022
+    readcon-conbin 0.0016
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0026
+    mda-trr 0.0003
+    mda-h5md 0.0023
+    mdtraj-ncdf 0.0019
+    mdtraj-dcd 0.0003
+    mdtraj-xtc 0.0005
+    ovito-xyz 0.0009
+    ovito-xyz-gz 0.0070
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0017
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0079
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0019
+    chemfiles-ncdf 0.0019
+    chemfiles-dcd 0.0013
+    chemfiles-xtc 0.0016
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0028
+    chemfiles-pdb-xz 0.0245
+    chemfiles-gro-xz 0.0222
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0211
+    mda-pdb 0.0063
+    mda-xyz 0.0022
+    readcon-conbin 0.0015
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0023
+    mda-trr 0.0002
+    mda-h5md 0.0023
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0067
+    readcon-con 0.0027
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0016
+    chemfiles-xyz 0.0004
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0080
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0020
+    chemfiles-ncdf 0.0018
+    chemfiles-dcd 0.0016
+    chemfiles-xtc 0.0015
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0336
+    chemfiles-gro-xz 0.0220
+    ase-extxyz 0.0041
+    ase-extxyz-gz 0.0223
+    mda-pdb 0.0062
+    mda-xyz 0.0021
+    readcon-conbin 0.0017
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0023
+    mda-trr 0.0002
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0012
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0069
+    readcon-con 0.0020
+    readcon-con-gz 0.0012
+  sample 3 readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0020
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0079
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0015
+    chemfiles-ncdf 0.0013
+    chemfiles-dcd 0.0015
+    chemfiles-xtc 0.0020
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0034
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0243
+    chemfiles-gro-xz 0.0216
+    ase-extxyz 0.0042
+    ase-extxyz-gz 0.0211
+    mda-pdb 0.0062
+    mda-xyz 0.0022
+    readcon-conbin 0.0014
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0022
+    mda-trr 0.0002
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0014
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0070
+    readcon-con 0.0030
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+  sample 4 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-xyz 0.0004
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0078
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0012
+    chemfiles-ncdf 0.0012
+    chemfiles-dcd 0.0015
+    chemfiles-xtc 0.0013
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0241
+    chemfiles-gro-xz 0.0216
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0213
+    mda-pdb 0.0063
+    mda-xyz 0.0022
+    readcon-conbin 0.0013
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0023
+    mda-trr 0.0002
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0012
+    ovito-xyz-gz 0.0068
+    readcon-con 0.0018
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0009
+    readcon-chemfiles 0.0014
+  sample 5 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0075
+    chemfiles-xyz-bz2 0.0020
+    chemfiles-trr 0.0019
+    chemfiles-ncdf 0.0011
+    chemfiles-dcd 0.0018
+    chemfiles-xtc 0.0016
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0243
+    chemfiles-gro-xz 0.0217
+    ase-extxyz 0.0040
+    ase-extxyz-gz 0.0215
+    mda-pdb 0.0062
+    mda-xyz 0.0022
+    readcon-conbin 0.0013
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0024
+    mda-trr 0.0002
+    mda-h5md 0.0023
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0008
+    ovito-xyz-gz 0.0068
+    readcon-con 0.0022
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0009
+    readcon-chemfiles 0.0017
+    chemfiles-xyz 0.0003
+  sample 6 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.0076
+    chemfiles-xyz-bz2 0.0025
+    chemfiles-trr 0.0004
+    chemfiles-ncdf 0.0020
+    chemfiles-dcd 0.0008
+    chemfiles-xtc 0.0011
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0028
+    chemfiles-pdb-xz 0.0243
+    chemfiles-gro-xz 0.0216
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0214
+    mda-pdb 0.0062
+    mda-xyz 0.0021
+    readcon-conbin 0.0014
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0011
+    mda-trr 0.0002
+    mda-h5md 0.0023
+    mdtraj-ncdf 0.0012
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0069
+    readcon-con 0.0019
+    readcon-con-gz 0.0014
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0019
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+  sample 7 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0017
+    chemfiles-ncdf 0.0013
+    chemfiles-dcd 0.0006
+    chemfiles-xtc 0.0010
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0246
+    chemfiles-gro-xz 0.0217
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0213
+    mda-pdb 0.0062
+    mda-xyz 0.0022
+    readcon-conbin 0.0012
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0021
+    mda-trr 0.0002
+    mda-h5md 0.0023
+    mdtraj-ncdf 0.0014
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0068
+    readcon-con 0.0028
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0015
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0078
+  sample 8 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0021
+    chemfiles-ncdf 0.0005
+    chemfiles-dcd 0.0015
+    chemfiles-xtc 0.0003
+    chemfiles-pdb 0.0008
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0244
+    chemfiles-gro-xz 0.0217
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0212
+    mda-pdb 0.0062
+    mda-xyz 0.0022
+    readcon-conbin 0.0016
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0022
+    mda-trr 0.0002
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0068
+    readcon-con 0.0018
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0017
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0078
+    chemfiles-xyz-bz2 0.0021
+  sample 9 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0015
+    chemfiles-dcd 0.0019
+    chemfiles-xtc 0.0011
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0244
+    chemfiles-gro-xz 0.0218
+    ase-extxyz 0.0040
+    ase-extxyz-gz 0.0211
+    mda-pdb 0.0063
+    mda-xyz 0.0022
+    readcon-conbin 0.0013
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0012
+    mda-trr 0.0003
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0012
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0010
+    ovito-xyz-gz 0.0078
+    readcon-con 0.0030
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0009
+    readcon-chemfiles 0.0015
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0076
+    chemfiles-xyz-bz2 0.0021
+    chemfiles-trr 0.0008
+  sample 10 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0006
+    chemfiles-xtc 0.0005
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0249
+    chemfiles-gro-xz 0.0216
+    ase-extxyz 0.0039
+    ase-extxyz-gz 0.0214
+    mda-pdb 0.0062
+    mda-xyz 0.0022
+    readcon-conbin 0.0014
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0021
+    mda-trr 0.0003
+    mda-h5md 0.0022
+    mdtraj-ncdf 0.0013
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0069
+    readcon-con 0.0019
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0009
+    readcon-chemfiles 0.0015
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0076
+    chemfiles-xyz-bz2 0.0020
+    chemfiles-trr 0.0014
+    chemfiles-ncdf 0.0009
+  sample 11 chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-pdb mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd
+    chemfiles-xtc 0.0010
+    chemfiles-pdb 0.0007
+    chemfiles-gro 0.0005
+    chemfiles-pdb-gz 0.0033
+    chemfiles-gro-gz 0.0027
+    chemfiles-pdb-xz 0.0240
+    chemfiles-gro-xz 0.0216
+    ase-extxyz 0.0040
+    ase-extxyz-gz 0.0212
+    mda-pdb 0.0063
+    mda-xyz 0.0021
+    readcon-conbin 0.0015
+    mda-dcd 0.0002
+    mda-xtc 0.0002
+    mda-ncdf 0.0023
+    mda-trr 0.0002
+    mda-h5md 0.0024
+    mdtraj-ncdf 0.0014
+    mdtraj-dcd 0.0002
+    mdtraj-xtc 0.0003
+    ovito-xyz 0.0011
+    ovito-xyz-gz 0.0069
+    readcon-con 0.0019
+    readcon-con-gz 0.0012
+    readcon-con-zst 0.0010
+    readcon-chemfiles 0.0015
+    chemfiles-xyz 0.0003
+    chemfiles-xyz-gz 0.0021
+    chemfiles-xyz-xz 0.0076
+    chemfiles-xyz-bz2 0.0020
+    chemfiles-trr 0.0008
+    chemfiles-ncdf 0.0018
+    chemfiles-dcd 0.0008
+  read warm readcon-con 0.0002
+  read cold readcon-con 0.0013
+  write readcon-con 0.0020
+  read warm readcon-con-gz 0.0016
+  read cold readcon-con-gz 0.0027
+  write readcon-con-gz 0.0012
+  read warm readcon-con-zst 0.0016
+  read cold readcon-con-zst 0.0022
+  write readcon-con-zst 0.0010
+  read warm readcon-chemfiles 0.0002
+  read cold readcon-chemfiles 0.0015
+  write readcon-chemfiles 0.0016
+  read warm chemfiles-con 0.0003
+  read cold chemfiles-con 0.0014
+  write chemfiles-con no writer
+  read warm chemfiles-xyz 0.0002
+  read cold chemfiles-xyz 0.0013
+  write chemfiles-xyz 0.0003
+  read warm chemfiles-xyz-gz 0.0004
+  read cold chemfiles-xyz-gz 0.0015
+  write chemfiles-xyz-gz 0.0021
+  read warm chemfiles-xyz-xz 0.0011
+  read cold chemfiles-xyz-xz 0.0022
+  write chemfiles-xyz-xz 0.0078
+  read warm chemfiles-xyz-bz2 0.0015
+  read cold chemfiles-xyz-bz2 0.0026
+  write chemfiles-xyz-bz2 0.0021
+  read warm chemfiles-trr 0.0001
+  read cold chemfiles-trr 0.0014
+  write chemfiles-trr 0.0015
+  read warm chemfiles-ncdf 0.0001
+  read cold chemfiles-ncdf 0.0011
+  write chemfiles-ncdf 0.0014
+  read warm chemfiles-dcd 0.0001
+  read cold chemfiles-dcd 0.0012
+  write chemfiles-dcd 0.0014
+  read warm chemfiles-xtc 0.0001
+  read cold chemfiles-xtc 0.0012
+  write chemfiles-xtc 0.0012
+  read warm chemfiles-pdb 0.0010
+  read cold chemfiles-pdb 0.0021
+  write chemfiles-pdb 0.0007
+  read warm chemfiles-gro 0.0005
+  read cold chemfiles-gro 0.0018
+  write chemfiles-gro 0.0005
+  read warm chemfiles-pdb-gz 0.0013
+  read cold chemfiles-pdb-gz 0.0027
+  write chemfiles-pdb-gz 0.0033
+  read warm chemfiles-gro-gz 0.0007
+  read cold chemfiles-gro-gz 0.0020
+  write chemfiles-gro-gz 0.0027
+  read warm chemfiles-pdb-xz 0.0019
+  read cold chemfiles-pdb-xz 0.0028
+  write chemfiles-pdb-xz 0.0244
+  read warm chemfiles-gro-xz 0.0011
+  read cold chemfiles-gro-xz 0.0023
+  write chemfiles-gro-xz 0.0217
+  read warm ase-extxyz 0.0022
+  read cold ase-extxyz 0.0039
+  write ase-extxyz 0.0040
+  read warm ase-extxyz-gz 0.0029
+  read cold ase-extxyz-gz 0.0039
+  write ase-extxyz-gz 0.0213
+  read warm mda-pdb 0.0067
+  read cold mda-pdb 0.0080
+  write mda-pdb 0.0062
+  read warm mda-xyz 0.0048
+  read cold mda-xyz 0.0055
+  write mda-xyz 0.0022
+  read warm readcon-conbin 0.0001
+  read cold readcon-conbin 0.0010
+  write readcon-conbin 0.0014
+  read warm mda-dcd 0.0002
+  read cold mda-dcd 0.0015
+  write mda-dcd 0.0002
+  read warm mda-xtc 0.0010
+  read cold mda-xtc 0.0021
+  write mda-xtc 0.0002
+  read warm mda-ncdf 0.0004
+  read cold mda-ncdf 0.0017
+  write mda-ncdf 0.0022
+  read warm mda-trr 0.0011
+  read cold mda-trr 0.0022
+  write mda-trr 0.0002
+  read warm mda-h5md 0.0027
+  read cold mda-h5md 0.0051
+  write mda-h5md 0.0023
+  read warm mda-mmcif 0.0019
+  read cold mda-mmcif 0.0029
+  write mda-mmcif no writer
+  read warm mdtraj-ncdf 0.0008
+  read cold mdtraj-ncdf 0.0018
+  write mdtraj-ncdf 0.0013
+  read warm mdtraj-dcd 0.0001
+  read cold mdtraj-dcd 0.0011
+  write mdtraj-dcd 0.0002
+  read warm mdtraj-xtc 0.0001
+  read cold mdtraj-xtc 0.0010
+  write mdtraj-xtc 0.0003
+  read warm ovito-xyz 0.0009
+  read cold ovito-xyz 0.0019
+  write ovito-xyz 0.0011
+  read warm ovito-xyz-gz 0.0011
+  read cold ovito-xyz-gz 0.0016
+  write ovito-xyz-gz 0.0069
+bench/h2h/cross_format.py:420: ChemfilesWarning: GRO writer: too many atoms, removing atomic id bigger than 100000
+  traj.write(frame)
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/DCD.py:176: DeprecationWarning: DCDReader currently makes independent timesteps by copying self.ts while other readers update self.ts inplace. This behavior will be changed in 3.0 to be the same as other readers. Read more at https://github.com/MDAnalysis/mdanalysis/issues/3889 to learn if this change in behavior might affect you.
+  warnings.warn(
+cross 100k read warm
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0115
+    readcon-con-gz 0.0260
+    readcon-con-zst 0.0186
+    readcon-chemfiles 0.0188
+    chemfiles-con 0.0169
+    chemfiles-xyz 0.0182
+    chemfiles-xyz-gz 0.0375
+    chemfiles-xyz-xz 0.0786
+    chemfiles-xyz-bz2 0.1595
+    chemfiles-trr 0.0086
+    chemfiles-ncdf 0.0070
+    chemfiles-dcd 0.0066
+    chemfiles-xtc 0.0085
+    chemfiles-pdb 0.1185
+    chemfiles-gro 0.0601
+    chemfiles-pdb-gz 0.1447
+    chemfiles-gro-gz 0.0831
+    chemfiles-pdb-xz 0.1989
+    chemfiles-gro-xz 0.1219
+    ase-extxyz 0.1998
+    ase-extxyz-gz 0.2570
+    mda-xyz 0.3966
+    readcon-conbin 0.0013
+    mda-dcd 0.0045
+    mda-xtc 0.0103
+    mda-ncdf 0.0052
+    mda-trr 0.0239
+    mda-h5md 0.0062
+    mda-mmcif 11.2389
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0041
+    ovito-xyz 0.0170
+    ovito-xyz-gz 0.0414
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0262
+    readcon-con-zst 0.0186
+    readcon-chemfiles 0.0191
+    chemfiles-con 0.0156
+    chemfiles-xyz 0.0184
+    chemfiles-xyz-gz 0.0376
+    chemfiles-xyz-xz 0.0781
+    chemfiles-xyz-bz2 0.1604
+    chemfiles-trr 0.0081
+    chemfiles-ncdf 0.0070
+    chemfiles-dcd 0.0066
+    chemfiles-xtc 0.0085
+    chemfiles-pdb 0.1149
+    chemfiles-gro 0.0574
+    chemfiles-pdb-gz 0.1430
+    chemfiles-gro-gz 0.0818
+    chemfiles-pdb-xz 0.2091
+    chemfiles-gro-xz 0.1230
+    ase-extxyz 0.1883
+    ase-extxyz-gz 0.2566
+    mda-xyz 0.4032
+    readcon-conbin 0.0010
+    mda-dcd 0.0047
+    mda-xtc 0.0102
+    mda-ncdf 0.0052
+    mda-trr 0.0245
+    mda-h5md 0.0062
+    mda-mmcif 11.2779
+    mdtraj-ncdf 0.0024
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0041
+    ovito-xyz 0.0171
+    ovito-xyz-gz 0.0412
+    readcon-con 0.0116
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0188
+    readcon-chemfiles 0.0192
+    chemfiles-con 0.0157
+    chemfiles-xyz 0.0184
+    chemfiles-xyz-gz 0.0372
+    chemfiles-xyz-xz 0.0786
+    chemfiles-xyz-bz2 0.1587
+    chemfiles-trr 0.0080
+    chemfiles-ncdf 0.0069
+    chemfiles-dcd 0.0069
+    chemfiles-xtc 0.0085
+    chemfiles-pdb 0.1166
+    chemfiles-gro 0.0570
+    chemfiles-pdb-gz 0.1422
+    chemfiles-gro-gz 0.0813
+    chemfiles-pdb-xz 0.1994
+    chemfiles-gro-xz 0.1214
+    ase-extxyz 0.1862
+    ase-extxyz-gz 0.2540
+    mda-xyz 0.3937
+    readcon-conbin 0.0010
+    mda-dcd 0.0045
+    mda-xtc 0.0102
+    mda-ncdf 0.0050
+    mda-trr 0.0237
+    mda-h5md 0.0063
+    mda-mmcif 11.3236
+    mdtraj-ncdf 0.0024
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0042
+    ovito-xyz 0.0173
+    ovito-xyz-gz 0.0414
+    readcon-con 0.0118
+    readcon-con-gz 0.0263
+  sample 3 readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0186
+    chemfiles-con 0.0159
+    chemfiles-xyz 0.0181
+    chemfiles-xyz-gz 0.0378
+    chemfiles-xyz-xz 0.0784
+    chemfiles-xyz-bz2 0.1621
+    chemfiles-trr 0.0080
+    chemfiles-ncdf 0.0068
+    chemfiles-dcd 0.0067
+    chemfiles-xtc 0.0087
+    chemfiles-pdb 0.1136
+    chemfiles-gro 0.0600
+    chemfiles-pdb-gz 0.1423
+    chemfiles-gro-gz 0.0814
+    chemfiles-pdb-xz 0.1974
+    chemfiles-gro-xz 0.1203
+    ase-extxyz 0.1965
+    ase-extxyz-gz 0.2514
+    mda-xyz 0.4099
+    readcon-conbin 0.0009
+    mda-dcd 0.0047
+    mda-xtc 0.0104
+    mda-ncdf 0.0053
+    mda-trr 0.0246
+    mda-h5md 0.0062
+    mda-mmcif 11.6563
+    mdtraj-ncdf 0.0026
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0175
+    ovito-xyz-gz 0.0427
+    readcon-con 0.0117
+    readcon-con-gz 0.0266
+    readcon-con-zst 0.0190
+  sample 4 chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-con 0.0170
+    chemfiles-xyz 0.0186
+    chemfiles-xyz-gz 0.0384
+    chemfiles-xyz-xz 0.0801
+    chemfiles-xyz-bz2 0.1629
+    chemfiles-trr 0.0089
+    chemfiles-ncdf 0.0078
+    chemfiles-dcd 0.0074
+    chemfiles-xtc 0.0092
+    chemfiles-pdb 0.1335
+    chemfiles-gro 0.0625
+    chemfiles-pdb-gz 0.1560
+    chemfiles-gro-gz 0.0872
+    chemfiles-pdb-xz 0.2287
+    chemfiles-gro-xz 0.1293
+    ase-extxyz 0.1973
+    ase-extxyz-gz 0.2631
+    mda-xyz 0.4292
+    readcon-conbin 0.0010
+    mda-dcd 0.0049
+    mda-xtc 0.0103
+    mda-ncdf 0.0056
+    mda-trr 0.0250
+    mda-h5md 0.0064
+    mda-mmcif 11.7443
+    mdtraj-ncdf 0.0029
+    mdtraj-dcd 0.0020
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0184
+    ovito-xyz-gz 0.0422
+    readcon-con 0.0119
+    readcon-con-gz 0.0269
+    readcon-con-zst 0.0195
+    readcon-chemfiles 0.0227
+  sample 5 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+    chemfiles-xyz 0.0187
+    chemfiles-xyz-gz 0.0391
+    chemfiles-xyz-xz 0.0799
+    chemfiles-xyz-bz2 0.1682
+    chemfiles-trr 0.0095
+    chemfiles-ncdf 0.0077
+    chemfiles-dcd 0.0079
+    chemfiles-xtc 0.0088
+    chemfiles-pdb 0.1502
+    chemfiles-gro 0.0587
+    chemfiles-pdb-gz 0.1722
+    chemfiles-gro-gz 0.0835
+    chemfiles-pdb-xz 0.2229
+    chemfiles-gro-xz 0.1209
+    ase-extxyz 0.1989
+    ase-extxyz-gz 0.2569
+    mda-xyz 0.4287
+    readcon-conbin 0.0009
+    mda-dcd 0.0049
+    mda-xtc 0.0106
+    mda-ncdf 0.0057
+    mda-trr 0.0245
+    mda-h5md 0.0062
+    mda-mmcif 11.2841
+    mdtraj-ncdf 0.0026
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0188
+    ovito-xyz-gz 0.0422
+    readcon-con 0.0117
+    readcon-con-gz 0.0266
+    readcon-con-zst 0.0191
+    readcon-chemfiles 0.0214
+    chemfiles-con 0.0169
+  sample 6 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz
+    chemfiles-xyz-gz 0.0383
+    chemfiles-xyz-xz 0.0815
+    chemfiles-xyz-bz2 0.1648
+    chemfiles-trr 0.0084
+    chemfiles-ncdf 0.0080
+    chemfiles-dcd 0.0073
+    chemfiles-xtc 0.0092
+    chemfiles-pdb 0.1588
+    chemfiles-gro 0.0635
+    chemfiles-pdb-gz 0.1485
+    chemfiles-gro-gz 0.0916
+    chemfiles-pdb-xz 0.2304
+    chemfiles-gro-xz 0.1242
+    ase-extxyz 0.1981
+    ase-extxyz-gz 0.2552
+    mda-xyz 0.4365
+    readcon-conbin 0.0010
+    mda-dcd 0.0048
+    mda-xtc 0.0105
+    mda-ncdf 0.0054
+    mda-trr 0.0249
+    mda-h5md 0.0065
+    mda-mmcif 11.4669
+    mdtraj-ncdf 0.0028
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0047
+    ovito-xyz 0.0175
+    ovito-xyz-gz 0.0444
+    readcon-con 0.0118
+    readcon-con-gz 0.0277
+    readcon-con-zst 0.0193
+    readcon-chemfiles 0.0227
+    chemfiles-con 0.0178
+    chemfiles-xyz 0.0190
+  sample 7 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.0804
+    chemfiles-xyz-bz2 0.1661
+    chemfiles-trr 0.0095
+    chemfiles-ncdf 0.0079
+    chemfiles-dcd 0.0072
+    chemfiles-xtc 0.0092
+    chemfiles-pdb 0.1235
+    chemfiles-gro 0.0634
+    chemfiles-pdb-gz 0.1624
+    chemfiles-gro-gz 0.0889
+    chemfiles-pdb-xz 0.2308
+    chemfiles-gro-xz 0.1348
+    ase-extxyz 0.1998
+    ase-extxyz-gz 0.2642
+    mda-xyz 0.4373
+    readcon-conbin 0.0010
+    mda-dcd 0.0050
+    mda-xtc 0.0111
+    mda-ncdf 0.0063
+    mda-trr 0.0248
+    mda-h5md 0.0065
+    mda-mmcif 11.0822
+    mdtraj-ncdf 0.0026
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0171
+    ovito-xyz-gz 0.0439
+    readcon-con 0.0120
+    readcon-con-gz 0.0267
+    readcon-con-zst 0.0189
+    readcon-chemfiles 0.0210
+    chemfiles-con 0.0179
+    chemfiles-xyz 0.0210
+    chemfiles-xyz-gz 0.0382
+  sample 8 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.1647
+    chemfiles-trr 0.0092
+    chemfiles-ncdf 0.0072
+    chemfiles-dcd 0.0081
+    chemfiles-xtc 0.0093
+    chemfiles-pdb 0.1205
+    chemfiles-gro 0.0595
+    chemfiles-pdb-gz 0.1482
+    chemfiles-gro-gz 0.0827
+    chemfiles-pdb-xz 0.2091
+    chemfiles-gro-xz 0.1221
+    ase-extxyz 0.1945
+    ase-extxyz-gz 0.2723
+    mda-xyz 0.4255
+    readcon-conbin 0.0009
+    mda-dcd 0.0048
+    mda-xtc 0.0103
+    mda-ncdf 0.0060
+    mda-trr 0.0246
+    mda-h5md 0.0063
+    mda-mmcif 11.2653
+    mdtraj-ncdf 0.0027
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0172
+    ovito-xyz-gz 0.0427
+    readcon-con 0.0119
+    readcon-con-gz 0.0263
+    readcon-con-zst 0.0188
+    readcon-chemfiles 0.0212
+    chemfiles-con 0.0169
+    chemfiles-xyz 0.0187
+    chemfiles-xyz-gz 0.0379
+    chemfiles-xyz-xz 0.0795
+  sample 9 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0089
+    chemfiles-ncdf 0.0079
+    chemfiles-dcd 0.0073
+    chemfiles-xtc 0.0092
+    chemfiles-pdb 0.1216
+    chemfiles-gro 0.0594
+    chemfiles-pdb-gz 0.1573
+    chemfiles-gro-gz 0.0854
+    chemfiles-pdb-xz 0.2135
+    chemfiles-gro-xz 0.1256
+    ase-extxyz 0.1935
+    ase-extxyz-gz 0.2568
+    mda-xyz 0.4058
+    readcon-conbin 0.0009
+    mda-dcd 0.0046
+    mda-xtc 0.0104
+    mda-ncdf 0.0055
+    mda-trr 0.0243
+    mda-h5md 0.0061
+    mda-mmcif 11.1312
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0019
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0180
+    ovito-xyz-gz 0.0424
+    readcon-con 0.0127
+    readcon-con-gz 0.0270
+    readcon-con-zst 0.0195
+    readcon-chemfiles 0.0222
+    chemfiles-con 0.0181
+    chemfiles-xyz 0.0190
+    chemfiles-xyz-gz 0.0384
+    chemfiles-xyz-xz 0.0795
+    chemfiles-xyz-bz2 0.1660
+  sample 10 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0081
+    chemfiles-dcd 0.0076
+    chemfiles-xtc 0.0093
+    chemfiles-pdb 0.1327
+    chemfiles-gro 0.0612
+    chemfiles-pdb-gz 0.1652
+    chemfiles-gro-gz 0.0853
+    chemfiles-pdb-xz 0.2323
+    chemfiles-gro-xz 0.1328
+    ase-extxyz 0.1951
+    ase-extxyz-gz 0.2633
+    mda-xyz 0.4381
+    readcon-conbin 0.0009
+    mda-dcd 0.0045
+    mda-xtc 0.0107
+    mda-ncdf 0.0054
+    mda-trr 0.0246
+    mda-h5md 0.0062
+    mda-mmcif 11.2078
+    mdtraj-ncdf 0.0027
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0187
+    ovito-xyz-gz 0.0420
+    readcon-con 0.0130
+    readcon-con-gz 0.0272
+    readcon-con-zst 0.0188
+    readcon-chemfiles 0.0225
+    chemfiles-con 0.0164
+    chemfiles-xyz 0.0190
+    chemfiles-xyz-gz 0.0380
+    chemfiles-xyz-xz 0.0840
+    chemfiles-xyz-bz2 0.1611
+    chemfiles-trr 0.0084
+  sample 11 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0072
+    chemfiles-xtc 0.0087
+    chemfiles-pdb 0.1260
+    chemfiles-gro 0.0589
+    chemfiles-pdb-gz 0.1515
+    chemfiles-gro-gz 0.0820
+    chemfiles-pdb-xz 0.2138
+    chemfiles-gro-xz 0.1239
+    ase-extxyz 0.1864
+    ase-extxyz-gz 0.2619
+    mda-xyz 0.4106
+    readcon-conbin 0.0009
+    mda-dcd 0.0046
+    mda-xtc 0.0103
+    mda-ncdf 0.0056
+    mda-trr 0.0240
+    mda-h5md 0.0061
+    mda-mmcif 11.1603
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0018
+    mdtraj-xtc 0.0043
+    ovito-xyz 0.0173
+    ovito-xyz-gz 0.0417
+    readcon-con 0.0115
+    readcon-con-gz 0.0262
+    readcon-con-zst 0.0185
+    readcon-chemfiles 0.0212
+    chemfiles-con 0.0163
+    chemfiles-xyz 0.0188
+    chemfiles-xyz-gz 0.0378
+    chemfiles-xyz-xz 0.0794
+    chemfiles-xyz-bz2 0.1603
+    chemfiles-trr 0.0085
+    chemfiles-ncdf 0.0076
+cross 100k read cold
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0214
+    readcon-con-gz 0.0335
+    readcon-con-zst 0.0229
+    readcon-chemfiles 0.0293
+    chemfiles-con 0.0279
+    chemfiles-xyz 0.0239
+    chemfiles-xyz-gz 0.0405
+    chemfiles-xyz-xz 0.0845
+    chemfiles-xyz-bz2 0.1673
+    chemfiles-trr 0.0245
+    chemfiles-ncdf 0.0152
+    chemfiles-dcd 0.0164
+    chemfiles-xtc 0.0128
+    chemfiles-pdb 0.1461
+    chemfiles-gro 0.0765
+    chemfiles-pdb-gz 0.1509
+    chemfiles-gro-gz 0.0851
+    chemfiles-pdb-xz 0.2174
+    chemfiles-gro-xz 0.1280
+    ase-extxyz 0.2083
+    ase-extxyz-gz 0.2660
+    mda-xyz 0.4203
+    readcon-conbin 0.0122
+    mda-dcd 0.0076
+    mda-xtc 0.0124
+    mda-ncdf 0.0094
+    mda-trr 0.0266
+    mda-h5md 0.0098
+    mda-mmcif 11.3312
+    mdtraj-ncdf 0.0064
+    mdtraj-dcd 0.0046
+    mdtraj-xtc 0.0055
+    ovito-xyz 0.0281
+    ovito-xyz-gz 0.0441
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0309
+    readcon-con-zst 0.0253
+    readcon-chemfiles 0.0273
+    chemfiles-con 0.0257
+    chemfiles-xyz 0.0219
+    chemfiles-xyz-gz 0.0404
+    chemfiles-xyz-xz 0.0849
+    chemfiles-xyz-bz2 0.1705
+    chemfiles-trr 0.0176
+    chemfiles-ncdf 0.0224
+    chemfiles-dcd 0.0101
+    chemfiles-xtc 0.0112
+    chemfiles-pdb 0.1365
+    chemfiles-gro 0.0720
+    chemfiles-pdb-gz 0.1734
+    chemfiles-gro-gz 0.0929
+    chemfiles-pdb-xz 0.2282
+    chemfiles-gro-xz 0.1333
+    ase-extxyz 0.1986
+    ase-extxyz-gz 0.2649
+    mda-xyz 0.4187
+    readcon-conbin 0.0100
+    mda-dcd 0.0062
+    mda-xtc 0.0129
+    mda-ncdf 0.0094
+    mda-trr 0.0268
+    mda-h5md 0.0112
+    mda-mmcif 11.1188
+    mdtraj-ncdf 0.0062
+    mdtraj-dcd 0.0042
+    mdtraj-xtc 0.0060
+    ovito-xyz 0.0290
+    ovito-xyz-gz 0.0438
+    readcon-con 0.0203
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0236
+    readcon-chemfiles 0.0238
+    chemfiles-con 0.0261
+    chemfiles-xyz 0.0225
+    chemfiles-xyz-gz 0.0429
+    chemfiles-xyz-xz 0.0818
+    chemfiles-xyz-bz2 0.1638
+    chemfiles-trr 0.0173
+    chemfiles-ncdf 0.0176
+    chemfiles-dcd 0.0097
+    chemfiles-xtc 0.0155
+    chemfiles-pdb 0.1321
+    chemfiles-gro 0.0680
+    chemfiles-pdb-gz 0.1448
+    chemfiles-gro-gz 0.0824
+    chemfiles-pdb-xz 0.2026
+    chemfiles-gro-xz 0.1225
+    ase-extxyz 0.2064
+    ase-extxyz-gz 0.2538
+    mda-xyz 0.4031
+    readcon-conbin 0.0106
+    mda-dcd 0.0077
+    mda-xtc 0.0127
+    mda-ncdf 0.0098
+    mda-trr 0.0273
+    mda-h5md 0.0128
+    mda-mmcif 11.6820
+    mdtraj-ncdf 0.0047
+    mdtraj-dcd 0.0048
+    mdtraj-xtc 0.0051
+    ovito-xyz 0.0252
+    ovito-xyz-gz 0.0435
+    readcon-con 0.0165
+    readcon-con-gz 0.0302
+  sample 3 readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0235
+    chemfiles-con 0.0241
+    chemfiles-xyz 0.0218
+    chemfiles-xyz-gz 0.0392
+    chemfiles-xyz-xz 0.0806
+    chemfiles-xyz-bz2 0.1627
+    chemfiles-trr 0.0163
+    chemfiles-ncdf 0.0259
+    chemfiles-dcd 0.0157
+    chemfiles-xtc 0.0101
+    chemfiles-pdb 0.1313
+    chemfiles-gro 0.0707
+    chemfiles-pdb-gz 0.1460
+    chemfiles-gro-gz 0.0835
+    chemfiles-pdb-xz 0.2038
+    chemfiles-gro-xz 0.1288
+    ase-extxyz 0.2029
+    ase-extxyz-gz 0.2690
+    mda-xyz 0.4032
+    readcon-conbin 0.0097
+    mda-dcd 0.0063
+    mda-xtc 0.0139
+    mda-ncdf 0.0094
+    mda-trr 0.0268
+    mda-h5md 0.0122
+    mda-mmcif 11.3074
+    mdtraj-ncdf 0.0072
+    mdtraj-dcd 0.0032
+    mdtraj-xtc 0.0066
+    ovito-xyz 0.0295
+    ovito-xyz-gz 0.0429
+    readcon-con 0.0166
+    readcon-con-gz 0.0312
+    readcon-con-zst 0.0234
+  sample 4 chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-con 0.0224
+    chemfiles-xyz 0.0251
+    chemfiles-xyz-gz 0.0410
+    chemfiles-xyz-xz 0.0827
+    chemfiles-xyz-bz2 0.1656
+    chemfiles-trr 0.0177
+    chemfiles-ncdf 0.0177
+    chemfiles-dcd 0.0128
+    chemfiles-xtc 0.0120
+    chemfiles-pdb 0.1271
+    chemfiles-gro 0.0911
+    chemfiles-pdb-gz 0.1716
+    chemfiles-gro-gz 0.0840
+    chemfiles-pdb-xz 0.2104
+    chemfiles-gro-xz 0.1272
+    ase-extxyz 0.2389
+    ase-extxyz-gz 0.2720
+    mda-xyz 0.4046
+    readcon-conbin 0.0082
+    mda-dcd 0.0090
+    mda-xtc 0.0136
+    mda-ncdf 0.0101
+    mda-trr 0.0282
+    mda-h5md 0.0089
+    mda-mmcif 11.1294
+    mdtraj-ncdf 0.0070
+    mdtraj-dcd 0.0043
+    mdtraj-xtc 0.0069
+    ovito-xyz 0.0253
+    ovito-xyz-gz 0.0457
+    readcon-con 0.0170
+    readcon-con-gz 0.0290
+    readcon-con-zst 0.0215
+    readcon-chemfiles 0.0293
+  sample 5 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+    chemfiles-xyz 0.0266
+    chemfiles-xyz-gz 0.0457
+    chemfiles-xyz-xz 0.0819
+    chemfiles-xyz-bz2 0.1655
+    chemfiles-trr 0.0151
+    chemfiles-ncdf 0.0172
+    chemfiles-dcd 0.0102
+    chemfiles-xtc 0.0159
+    chemfiles-pdb 0.1395
+    chemfiles-gro 0.0731
+    chemfiles-pdb-gz 0.1631
+    chemfiles-gro-gz 0.0861
+    chemfiles-pdb-xz 0.2252
+    chemfiles-gro-xz 0.1297
+    ase-extxyz 0.2015
+    ase-extxyz-gz 0.2578
+    mda-xyz 0.4156
+    readcon-conbin 0.0089
+    mda-dcd 0.0079
+    mda-xtc 0.0118
+    mda-ncdf 0.0095
+    mda-trr 0.0258
+    mda-h5md 0.0088
+    mda-mmcif 11.6367
+    mdtraj-ncdf 0.0056
+    mdtraj-dcd 0.0045
+    mdtraj-xtc 0.0062
+    ovito-xyz 0.0262
+    ovito-xyz-gz 0.0449
+    readcon-con 0.0199
+    readcon-con-gz 0.0305
+    readcon-con-zst 0.0219
+    readcon-chemfiles 0.0238
+    chemfiles-con 0.0254
+  sample 6 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz
+    chemfiles-xyz-gz 0.0398
+    chemfiles-xyz-xz 0.0812
+    chemfiles-xyz-bz2 0.1636
+    chemfiles-trr 0.0149
+    chemfiles-ncdf 0.0143
+    chemfiles-dcd 0.0156
+    chemfiles-xtc 0.0099
+    chemfiles-pdb 0.1277
+    chemfiles-gro 0.0641
+    chemfiles-pdb-gz 0.1442
+    chemfiles-gro-gz 0.0823
+    chemfiles-pdb-xz 0.2149
+    chemfiles-gro-xz 0.1289
+    ase-extxyz 0.2160
+    ase-extxyz-gz 0.2577
+    mda-xyz 0.4003
+    readcon-conbin 0.0089
+    mda-dcd 0.0075
+    mda-xtc 0.0136
+    mda-ncdf 0.0077
+    mda-trr 0.0292
+    mda-h5md 0.0110
+    mda-mmcif 11.3825
+    mdtraj-ncdf 0.0053
+    mdtraj-dcd 0.0044
+    mdtraj-xtc 0.0076
+    ovito-xyz 0.0298
+    ovito-xyz-gz 0.0471
+    readcon-con 0.0199
+    readcon-con-gz 0.0310
+    readcon-con-zst 0.0229
+    readcon-chemfiles 0.0266
+    chemfiles-con 0.0235
+    chemfiles-xyz 0.0234
+  sample 7 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.0811
+    chemfiles-xyz-bz2 0.1626
+    chemfiles-trr 0.0230
+    chemfiles-ncdf 0.0170
+    chemfiles-dcd 0.0175
+    chemfiles-xtc 0.0114
+    chemfiles-pdb 0.1539
+    chemfiles-gro 0.0712
+    chemfiles-pdb-gz 0.1517
+    chemfiles-gro-gz 0.0830
+    chemfiles-pdb-xz 0.2041
+    chemfiles-gro-xz 0.1435
+    ase-extxyz 0.2114
+    ase-extxyz-gz 0.2703
+    mda-xyz 0.4051
+    readcon-conbin 0.0092
+    mda-dcd 0.0073
+    mda-xtc 0.0126
+    mda-ncdf 0.0086
+    mda-trr 0.0270
+    mda-h5md 0.0100
+    mda-mmcif 11.4340
+    mdtraj-ncdf 0.0048
+    mdtraj-dcd 0.0048
+    mdtraj-xtc 0.0055
+    ovito-xyz 0.0248
+    ovito-xyz-gz 0.0444
+    readcon-con 0.0200
+    readcon-con-gz 0.0317
+    readcon-con-zst 0.0217
+    readcon-chemfiles 0.0251
+    chemfiles-con 0.0262
+    chemfiles-xyz 0.0244
+    chemfiles-xyz-gz 0.0424
+  sample 8 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.1628
+    chemfiles-trr 0.0213
+    chemfiles-ncdf 0.0228
+    chemfiles-dcd 0.0151
+    chemfiles-xtc 0.0160
+    chemfiles-pdb 0.1634
+    chemfiles-gro 0.0762
+    chemfiles-pdb-gz 0.1764
+    chemfiles-gro-gz 0.0906
+    chemfiles-pdb-xz 0.2409
+    chemfiles-gro-xz 0.1377
+    ase-extxyz 0.2069
+    ase-extxyz-gz 0.2648
+    mda-xyz 0.4161
+    readcon-conbin 0.0111
+    mda-dcd 0.0077
+    mda-xtc 0.0134
+    mda-ncdf 0.0078
+    mda-trr 0.0307
+    mda-h5md 0.0095
+    mda-mmcif 11.5980
+    mdtraj-ncdf 0.0074
+    mdtraj-dcd 0.0041
+    mdtraj-xtc 0.0081
+    ovito-xyz 0.0289
+    ovito-xyz-gz 0.0426
+    readcon-con 0.0192
+    readcon-con-gz 0.0323
+    readcon-con-zst 0.0234
+    readcon-chemfiles 0.0231
+    chemfiles-con 0.0250
+    chemfiles-xyz 0.0264
+    chemfiles-xyz-gz 0.0388
+    chemfiles-xyz-xz 0.0803
+  sample 9 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0158
+    chemfiles-ncdf 0.0150
+    chemfiles-dcd 0.0140
+    chemfiles-xtc 0.0107
+    chemfiles-pdb 0.1417
+    chemfiles-gro 0.0709
+    chemfiles-pdb-gz 0.1526
+    chemfiles-gro-gz 0.0927
+    chemfiles-pdb-xz 0.2206
+    chemfiles-gro-xz 0.1344
+    ase-extxyz 0.2150
+    ase-extxyz-gz 0.2658
+    mda-xyz 0.4152
+    readcon-conbin 0.0091
+    mda-dcd 0.0076
+    mda-xtc 0.0142
+    mda-ncdf 0.0107
+    mda-trr 0.0280
+    mda-h5md 0.0106
+    mda-mmcif 11.2299
+    mdtraj-ncdf 0.0063
+    mdtraj-dcd 0.0030
+    mdtraj-xtc 0.0059
+    ovito-xyz 0.0264
+    ovito-xyz-gz 0.0439
+    readcon-con 0.0176
+    readcon-con-gz 0.0309
+    readcon-con-zst 0.0271
+    readcon-chemfiles 0.0256
+    chemfiles-con 0.0239
+    chemfiles-xyz 0.0234
+    chemfiles-xyz-gz 0.0414
+    chemfiles-xyz-xz 0.0823
+    chemfiles-xyz-bz2 0.1641
+  sample 10 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0223
+    chemfiles-dcd 0.0133
+    chemfiles-xtc 0.0161
+    chemfiles-pdb 0.1422
+    chemfiles-gro 0.0742
+    chemfiles-pdb-gz 0.1687
+    chemfiles-gro-gz 0.0907
+    chemfiles-pdb-xz 0.2251
+    chemfiles-gro-xz 0.1393
+    ase-extxyz 0.2133
+    ase-extxyz-gz 0.2663
+    mda-xyz 0.4396
+    readcon-conbin 0.0077
+    mda-dcd 0.0073
+    mda-xtc 0.0129
+    mda-ncdf 0.0119
+    mda-trr 0.0292
+    mda-h5md 0.0098
+    mda-mmcif 11.2064
+    mdtraj-ncdf 0.0057
+    mdtraj-dcd 0.0044
+    mdtraj-xtc 0.0078
+    ovito-xyz 0.0271
+    ovito-xyz-gz 0.0437
+    readcon-con 0.0200
+    readcon-con-gz 0.0315
+    readcon-con-zst 0.0237
+    readcon-chemfiles 0.0250
+    chemfiles-con 0.0264
+    chemfiles-xyz 0.0229
+    chemfiles-xyz-gz 0.0396
+    chemfiles-xyz-xz 0.0823
+    chemfiles-xyz-bz2 0.1678
+    chemfiles-trr 0.0172
+  sample 11 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0174
+    chemfiles-xtc 0.0163
+    chemfiles-pdb 0.1281
+    chemfiles-gro 0.0707
+    chemfiles-pdb-gz 0.1479
+    chemfiles-gro-gz 0.1029
+    chemfiles-pdb-xz 0.2011
+    chemfiles-gro-xz 0.1274
+    ase-extxyz 0.2024
+    ase-extxyz-gz 0.2572
+    mda-xyz 0.4049
+    readcon-conbin 0.0091
+    mda-dcd 0.0094
+    mda-xtc 0.0153
+    mda-ncdf 0.0084
+    mda-trr 0.0255
+    mda-h5md 0.0086
+    mda-mmcif 11.0837
+    mdtraj-ncdf 0.0059
+    mdtraj-dcd 0.0046
+    mdtraj-xtc 0.0056
+    ovito-xyz 0.0245
+    ovito-xyz-gz 0.0432
+    readcon-con 0.0158
+    readcon-con-gz 0.0317
+    readcon-con-zst 0.0238
+    readcon-chemfiles 0.0252
+    chemfiles-con 0.0236
+    chemfiles-xyz 0.0245
+    chemfiles-xyz-gz 0.0448
+    chemfiles-xyz-xz 0.0867
+    chemfiles-xyz-bz2 0.1663
+    chemfiles-trr 0.0224
+    chemfiles-ncdf 0.0228
+cross 100k write
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.0263
+    readcon-con-gz 0.0430
+    readcon-con-zst 0.0317
+    readcon-chemfiles 0.0194
+    chemfiles-xyz 0.0303
+    chemfiles-xyz-gz 0.3542
+    chemfiles-xyz-xz 1.1598
+    chemfiles-xyz-bz2 0.1581
+    chemfiles-trr 0.0095
+    chemfiles-ncdf 0.0071
+    chemfiles-dcd 0.0039
+    chemfiles-xtc 0.0068
+    chemfiles-pdb 0.0744
+    chemfiles-gro 0.0473
+    chemfiles-pdb-gz 0.3718
+    chemfiles-gro-gz 0.4048
+    chemfiles-pdb-xz 3.0652
+    chemfiles-gro-xz 2.6924
+    ase-extxyz 0.3808
+    ase-extxyz-gz 2.0352
+    mda-xyz 0.2103
+    readcon-conbin 0.0055
+    mda-dcd 0.0036
+    mda-xtc 0.0051
+    mda-ncdf 0.0089
+    mda-trr 0.0116
+    mda-h5md 0.0059
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0010
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0618
+    ovito-xyz-gz 0.8369
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.0412
+    readcon-con-zst 0.0285
+    readcon-chemfiles 0.0195
+    chemfiles-xyz 0.0307
+    chemfiles-xyz-gz 0.3549
+    chemfiles-xyz-xz 1.1874
+    chemfiles-xyz-bz2 0.1584
+    chemfiles-trr 0.0097
+    chemfiles-ncdf 0.0103
+    chemfiles-dcd 0.0052
+    chemfiles-xtc 0.0062
+    chemfiles-pdb 0.0748
+    chemfiles-gro 0.0468
+    chemfiles-pdb-gz 0.3714
+    chemfiles-gro-gz 0.4062
+    chemfiles-pdb-xz 3.0569
+    chemfiles-gro-xz 2.6477
+    ase-extxyz 0.3795
+    ase-extxyz-gz 2.0231
+    mda-xyz 0.2074
+    readcon-conbin 0.0044
+    mda-dcd 0.0035
+    mda-xtc 0.0053
+    mda-ncdf 0.0083
+    mda-trr 0.0115
+    mda-h5md 0.0056
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0008
+    mdtraj-xtc 0.0031
+    ovito-xyz 0.0603
+    ovito-xyz-gz 0.8354
+    readcon-con 0.0259
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.0297
+    readcon-chemfiles 0.0195
+    chemfiles-xyz 0.0298
+    chemfiles-xyz-gz 0.3515
+    chemfiles-xyz-xz 1.1889
+    chemfiles-xyz-bz2 0.1576
+    chemfiles-trr 0.0088
+    chemfiles-ncdf 0.0063
+    chemfiles-dcd 0.0035
+    chemfiles-xtc 0.0047
+    chemfiles-pdb 0.0743
+    chemfiles-gro 0.0469
+    chemfiles-pdb-gz 0.3717
+    chemfiles-gro-gz 0.4045
+    chemfiles-pdb-xz 3.1131
+    chemfiles-gro-xz 2.6852
+    ase-extxyz 0.4002
+    ase-extxyz-gz 2.0393
+    mda-xyz 0.2068
+    readcon-conbin 0.0045
+    mda-dcd 0.0036
+    mda-xtc 0.0053
+    mda-ncdf 0.0087
+    mda-trr 0.0114
+    mda-h5md 0.0059
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0032
+    ovito-xyz 0.0611
+    ovito-xyz-gz 0.8340
+    readcon-con 0.0259
+    readcon-con-gz 0.0447
+  sample 3 readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.0193
+    chemfiles-xyz 0.0298
+    chemfiles-xyz-gz 0.3560
+    chemfiles-xyz-xz 1.1694
+    chemfiles-xyz-bz2 0.1580
+    chemfiles-trr 0.0081
+    chemfiles-ncdf 0.0078
+    chemfiles-dcd 0.0055
+    chemfiles-xtc 0.0071
+    chemfiles-pdb 0.0760
+    chemfiles-gro 0.0471
+    chemfiles-pdb-gz 0.3718
+    chemfiles-gro-gz 0.4133
+    chemfiles-pdb-xz 3.1099
+    chemfiles-gro-xz 2.6728
+    ase-extxyz 0.3902
+    ase-extxyz-gz 2.0360
+    mda-xyz 0.2092
+    readcon-conbin 0.0046
+    mda-dcd 0.0037
+    mda-xtc 0.0053
+    mda-ncdf 0.0084
+    mda-trr 0.0113
+    mda-h5md 0.0058
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0032
+    ovito-xyz 0.0618
+    ovito-xyz-gz 0.8336
+    readcon-con 0.0258
+    readcon-con-gz 0.0504
+    readcon-con-zst 0.0287
+  sample 4 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-xyz 0.0301
+    chemfiles-xyz-gz 0.3525
+    chemfiles-xyz-xz 1.1541
+    chemfiles-xyz-bz2 0.1571
+    chemfiles-trr 0.0084
+    chemfiles-ncdf 0.0094
+    chemfiles-dcd 0.0054
+    chemfiles-xtc 0.0054
+    chemfiles-pdb 0.0760
+    chemfiles-gro 0.0474
+    chemfiles-pdb-gz 0.3744
+    chemfiles-gro-gz 0.4050
+    chemfiles-pdb-xz 3.1064
+    chemfiles-gro-xz 2.9717
+    ase-extxyz 0.3920
+    ase-extxyz-gz 2.0438
+    mda-xyz 0.2207
+    readcon-conbin 0.0063
+    mda-dcd 0.0037
+    mda-xtc 0.0053
+    mda-ncdf 0.0092
+    mda-trr 0.0114
+    mda-h5md 0.0060
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0011
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0625
+    ovito-xyz-gz 0.8697
+    readcon-con 0.0285
+    readcon-con-gz 0.0524
+    readcon-con-zst 0.0301
+    readcon-chemfiles 0.0201
+  sample 5 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz
+    chemfiles-xyz-gz 0.3605
+    chemfiles-xyz-xz 1.2178
+    chemfiles-xyz-bz2 0.1589
+    chemfiles-trr 0.0095
+    chemfiles-ncdf 0.0118
+    chemfiles-dcd 0.0081
+    chemfiles-xtc 0.0069
+    chemfiles-pdb 0.0750
+    chemfiles-gro 0.0474
+    chemfiles-pdb-gz 0.3845
+    chemfiles-gro-gz 0.4132
+    chemfiles-pdb-xz 3.1316
+    chemfiles-gro-xz 2.7873
+    ase-extxyz 0.3769
+    ase-extxyz-gz 2.0573
+    mda-xyz 0.2073
+    readcon-conbin 0.0062
+    mda-dcd 0.0039
+    mda-xtc 0.0055
+    mda-ncdf 0.0087
+    mda-trr 0.0118
+    mda-h5md 0.0058
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0032
+    ovito-xyz 0.0616
+    ovito-xyz-gz 0.8336
+    readcon-con 0.0276
+    readcon-con-gz 0.0463
+    readcon-con-zst 0.0301
+    readcon-chemfiles 0.0199
+    chemfiles-xyz 0.0303
+  sample 6 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 1.1868
+    chemfiles-xyz-bz2 0.1573
+    chemfiles-trr 0.0087
+    chemfiles-ncdf 0.0065
+    chemfiles-dcd 0.0039
+    chemfiles-xtc 0.0049
+    chemfiles-pdb 0.0769
+    chemfiles-gro 0.0477
+    chemfiles-pdb-gz 0.3708
+    chemfiles-gro-gz 0.4065
+    chemfiles-pdb-xz 3.0331
+    chemfiles-gro-xz 2.7750
+    ase-extxyz 0.3777
+    ase-extxyz-gz 2.0315
+    mda-xyz 0.2091
+    readcon-conbin 0.0056
+    mda-dcd 0.0035
+    mda-xtc 0.0052
+    mda-ncdf 0.0083
+    mda-trr 0.0114
+    mda-h5md 0.0058
+    mdtraj-ncdf 0.0024
+    mdtraj-dcd 0.0008
+    mdtraj-xtc 0.0032
+    ovito-xyz 0.0644
+    ovito-xyz-gz 0.8319
+    readcon-con 0.0275
+    readcon-con-gz 0.0490
+    readcon-con-zst 0.0284
+    readcon-chemfiles 0.0207
+    chemfiles-xyz 0.0301
+    chemfiles-xyz-gz 0.3519
+  sample 7 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 0.1577
+    chemfiles-trr 0.0086
+    chemfiles-ncdf 0.0072
+    chemfiles-dcd 0.0041
+    chemfiles-xtc 0.0055
+    chemfiles-pdb 0.0760
+    chemfiles-gro 0.0476
+    chemfiles-pdb-gz 0.3795
+    chemfiles-gro-gz 0.4065
+    chemfiles-pdb-xz 3.1093
+    chemfiles-gro-xz 2.7029
+    ase-extxyz 0.3802
+    ase-extxyz-gz 2.0395
+    mda-xyz 0.2081
+    readcon-conbin 0.0056
+    mda-dcd 0.0036
+    mda-xtc 0.0053
+    mda-ncdf 0.0086
+    mda-trr 0.0117
+    mda-h5md 0.0059
+    mdtraj-ncdf 0.0024
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0620
+    ovito-xyz-gz 0.8403
+    readcon-con 0.0300
+    readcon-con-gz 0.0448
+    readcon-con-zst 0.0324
+    readcon-chemfiles 0.0217
+    chemfiles-xyz 0.0304
+    chemfiles-xyz-gz 0.3545
+    chemfiles-xyz-xz 1.2337
+  sample 8 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.0087
+    chemfiles-ncdf 0.0081
+    chemfiles-dcd 0.0039
+    chemfiles-xtc 0.0051
+    chemfiles-pdb 0.0755
+    chemfiles-gro 0.0471
+    chemfiles-pdb-gz 0.3762
+    chemfiles-gro-gz 0.4064
+    chemfiles-pdb-xz 3.2288
+    chemfiles-gro-xz 2.7813
+    ase-extxyz 0.3822
+    ase-extxyz-gz 2.0464
+    mda-xyz 0.2102
+    readcon-conbin 0.0058
+    mda-dcd 0.0036
+    mda-xtc 0.0052
+    mda-ncdf 0.0088
+    mda-trr 0.0118
+    mda-h5md 0.0058
+    mdtraj-ncdf 0.0025
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0032
+    ovito-xyz 0.0666
+    ovito-xyz-gz 0.8386
+    readcon-con 0.0278
+    readcon-con-gz 0.0520
+    readcon-con-zst 0.0376
+    readcon-chemfiles 0.0201
+    chemfiles-xyz 0.0306
+    chemfiles-xyz-gz 0.3550
+    chemfiles-xyz-xz 1.2023
+    chemfiles-xyz-bz2 0.1590
+  sample 9 chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr
+    chemfiles-ncdf 0.0107
+    chemfiles-dcd 0.0055
+    chemfiles-xtc 0.0066
+    chemfiles-pdb 0.0759
+    chemfiles-gro 0.0503
+    chemfiles-pdb-gz 0.3730
+    chemfiles-gro-gz 0.4067
+    chemfiles-pdb-xz 3.0858
+    chemfiles-gro-xz 2.7165
+    ase-extxyz 0.3854
+    ase-extxyz-gz 2.0413
+    mda-xyz 0.2074
+    readcon-conbin 0.0058
+    mda-dcd 0.0040
+    mda-xtc 0.0053
+    mda-ncdf 0.0085
+    mda-trr 0.0115
+    mda-h5md 0.0061
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0626
+    ovito-xyz-gz 0.8372
+    readcon-con 0.0280
+    readcon-con-gz 0.0487
+    readcon-con-zst 0.0368
+    readcon-chemfiles 0.0224
+    chemfiles-xyz 0.0303
+    chemfiles-xyz-gz 0.3554
+    chemfiles-xyz-xz 1.1834
+    chemfiles-xyz-bz2 0.1588
+    chemfiles-trr 0.0105
+  sample 10 chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf
+    chemfiles-dcd 0.0040
+    chemfiles-xtc 0.0050
+    chemfiles-pdb 0.0752
+    chemfiles-gro 0.0472
+    chemfiles-pdb-gz 0.3810
+    chemfiles-gro-gz 0.4073
+    chemfiles-pdb-xz 3.0935
+    chemfiles-gro-xz 2.6882
+    ase-extxyz 0.3794
+    ase-extxyz-gz 2.0263
+    mda-xyz 0.2121
+    readcon-conbin 0.0054
+    mda-dcd 0.0036
+    mda-xtc 0.0053
+    mda-ncdf 0.0085
+    mda-trr 0.0118
+    mda-h5md 0.0059
+    mdtraj-ncdf 0.0023
+    mdtraj-dcd 0.0009
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0626
+    ovito-xyz-gz 0.8415
+    readcon-con 0.0263
+    readcon-con-gz 0.0454
+    readcon-con-zst 0.0292
+    readcon-chemfiles 0.0203
+    chemfiles-xyz 0.0308
+    chemfiles-xyz-gz 0.3538
+    chemfiles-xyz-xz 1.2614
+    chemfiles-xyz-bz2 0.1590
+    chemfiles-trr 0.0103
+    chemfiles-ncdf 0.0071
+  sample 11 chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd
+    chemfiles-xtc 0.0056
+    chemfiles-pdb 0.0769
+    chemfiles-gro 0.0470
+    chemfiles-pdb-gz 0.3757
+    chemfiles-gro-gz 0.4057
+    chemfiles-pdb-xz 3.1167
+    chemfiles-gro-xz 2.6737
+    ase-extxyz 0.3785
+    ase-extxyz-gz 2.0423
+    mda-xyz 0.2142
+    readcon-conbin 0.0049
+    mda-dcd 0.0037
+    mda-xtc 0.0054
+    mda-ncdf 0.0087
+    mda-trr 0.0115
+    mda-h5md 0.0062
+    mdtraj-ncdf 0.0026
+    mdtraj-dcd 0.0010
+    mdtraj-xtc 0.0033
+    ovito-xyz 0.0620
+    ovito-xyz-gz 0.8418
+    readcon-con 0.0268
+    readcon-con-gz 0.0447
+    readcon-con-zst 0.0320
+    readcon-chemfiles 0.0202
+    chemfiles-xyz 0.0301
+    chemfiles-xyz-gz 0.3533
+    chemfiles-xyz-xz 1.1918
+    chemfiles-xyz-bz2 0.1584
+    chemfiles-trr 0.0092
+    chemfiles-ncdf 0.0072
+    chemfiles-dcd 0.0072
+  read warm readcon-con 0.0118
+  read cold readcon-con 0.0195
+  write readcon-con 0.0271
+  read warm readcon-con-gz 0.0266
+  read cold readcon-con-gz 0.0311
+  write readcon-con-gz 0.0458
+  read warm readcon-con-zst 0.0189
+  read cold readcon-con-zst 0.0234
+  write readcon-con-zst 0.0301
+  read warm readcon-chemfiles 0.0212
+  read cold readcon-chemfiles 0.0251
+  write readcon-chemfiles 0.0201
+  read warm chemfiles-con 0.0169
+  read cold chemfiles-con 0.0252
+  write chemfiles-con no writer
+  read warm chemfiles-xyz 0.0187
+  read cold chemfiles-xyz 0.0237
+  write chemfiles-xyz 0.0303
+  read warm chemfiles-xyz-gz 0.0380
+  read cold chemfiles-xyz-gz 0.0408
+  write chemfiles-xyz-gz 0.3543
+  read warm chemfiles-xyz-xz 0.0795
+  read cold chemfiles-xyz-xz 0.0821
+  write chemfiles-xyz-xz 1.1882
+  read warm chemfiles-xyz-bz2 0.1625
+  read cold chemfiles-xyz-bz2 0.1648
+  write chemfiles-xyz-bz2 0.1583
+  read warm chemfiles-trr 0.0085
+  read cold chemfiles-trr 0.0174
+  write chemfiles-trr 0.0090
+  read warm chemfiles-ncdf 0.0076
+  read cold chemfiles-ncdf 0.0176
+  write chemfiles-ncdf 0.0075
+  read warm chemfiles-dcd 0.0073
+  read cold chemfiles-dcd 0.0146
+  write chemfiles-dcd 0.0047
+  read warm chemfiles-xtc 0.0090
+  read cold chemfiles-xtc 0.0124
+  write chemfiles-xtc 0.0056
+  read warm chemfiles-pdb 0.1225
+  read cold chemfiles-pdb 0.1380
+  write chemfiles-pdb 0.0757
+  read warm chemfiles-gro 0.0597
+  read cold chemfiles-gro 0.0716
+  write chemfiles-gro 0.0473
+  read warm chemfiles-pdb-gz 0.1500
+  read cold chemfiles-pdb-gz 0.1522
+  write chemfiles-pdb-gz 0.3737
+  read warm chemfiles-gro-gz 0.0833
+  read cold chemfiles-gro-gz 0.0856
+  write chemfiles-gro-gz 0.4065
+  read warm chemfiles-pdb-xz 0.2136
+  read cold chemfiles-pdb-xz 0.2162
+  write chemfiles-pdb-xz 3.1079
+  read warm chemfiles-gro-xz 0.1234
+  read cold chemfiles-gro-xz 0.1293
+  write chemfiles-gro-xz 2.6976
+  read warm ase-extxyz 0.1958
+  read cold ase-extxyz 0.2076
+  write ase-extxyz 0.3805
+  read warm ase-extxyz-gz 0.2570
+  read cold ase-extxyz-gz 0.2654
+  write ase-extxyz-gz 2.0394
+  read warm mda-xyz 0.4181
+  read cold mda-xyz 0.4101
+  write mda-xyz 0.2092
+  read warm readcon-conbin 0.0010
+  read cold readcon-conbin 0.0092
+  write readcon-conbin 0.0055
+  read warm mda-dcd 0.0047
+  read cold mda-dcd 0.0076
+  write mda-dcd 0.0036
+  read warm mda-xtc 0.0104
+  read cold mda-xtc 0.0132
+  write mda-xtc 0.0053
+  read warm mda-ncdf 0.0055
+  read cold mda-ncdf 0.0094
+  write mda-ncdf 0.0086
+  read warm mda-trr 0.0245
+  read cold mda-trr 0.0271
+  write mda-trr 0.0115
+  read warm mda-h5md 0.0062
+  read cold mda-h5md 0.0099
+  write mda-h5md 0.0059
+  read warm mda-mmcif 11.2716
+  read cold mda-mmcif 11.3193
+  write mda-mmcif no writer
+  read warm mdtraj-ncdf 0.0026
+  read cold mdtraj-ncdf 0.0061
+  write mdtraj-ncdf 0.0024
+  read warm mdtraj-dcd 0.0019
+  read cold mdtraj-dcd 0.0044
+  write mdtraj-dcd 0.0009
+  read warm mdtraj-xtc 0.0043
+  read cold mdtraj-xtc 0.0061
+  write mdtraj-xtc 0.0033
+  read warm ovito-xyz 0.0174
+  read cold ovito-xyz 0.0267
+  write ovito-xyz 0.0620
+  read warm ovito-xyz-gz 0.0422
+  read cold ovito-xyz-gz 0.0439
+  write ovito-xyz-gz 0.8371
+bench/h2h/cross_format.py:420: ChemfilesWarning: GRO writer: too many atoms, removing atomic id bigger than 100000
+  traj.write(frame)
+paper/cpc/.pixi/envs/default/lib/python3.12/site-packages/MDAnalysis/coordinates/DCD.py:176: DeprecationWarning: DCDReader currently makes independent timesteps by copying self.ts while other readers update self.ts inplace. This behavior will be changed in 3.0 to be the same as other readers. Read more at https://github.com/MDAnalysis/mdanalysis/issues/3889 to learn if this change in behavior might affect you.
+  warnings.warn(
+cross 1M read warm
+  sample 0 readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz
+    readcon-con 0.1285
+    readcon-con-gz 0.2581
+    readcon-con-zst 0.2341
+    readcon-chemfiles 0.2509
+    chemfiles-con 0.2237
+    chemfiles-xyz 0.2269
+    chemfiles-xyz-gz 0.3910
+    chemfiles-xyz-xz 0.8488
+    chemfiles-xyz-bz2 1.5941
+    chemfiles-trr 0.0968
+    chemfiles-ncdf 0.0886
+    chemfiles-dcd 0.0649
+    chemfiles-xtc 0.1054
+    chemfiles-pdb 1.7189
+    chemfiles-gro 0.4085
+    chemfiles-pdb-gz 2.0539
+    chemfiles-gro-gz 0.5148
+    chemfiles-pdb-xz 2.5229
+    chemfiles-gro-xz 0.7007
+    ase-extxyz 2.0185
+    ase-extxyz-gz 3.4426
+    mda-xyz 5.1695
+    readcon-conbin 0.0123
+    mda-dcd 0.0366
+    mda-xtc 0.0760
+    mda-ncdf 0.0261
+    mda-trr 0.2228
+    mda-h5md 0.0178
+    mda-mmcif 1307.7297
+    mdtraj-ncdf 0.0251
+    mdtraj-dcd 0.0162
+    mdtraj-xtc 0.0385
+    ovito-xyz 0.2208
+    ovito-xyz-gz 0.4373
+  sample 1 readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con
+    readcon-con-gz 0.2574
+    readcon-con-zst 0.2053
+    readcon-chemfiles 0.2419
+    chemfiles-con 0.2104
+    chemfiles-xyz 0.2257
+    chemfiles-xyz-gz 0.4079
+    chemfiles-xyz-xz 0.8779
+    chemfiles-xyz-bz2 1.6122
+    chemfiles-trr 0.1368
+    chemfiles-ncdf 0.1264
+    chemfiles-dcd 0.0776
+    chemfiles-xtc 0.1189
+    chemfiles-pdb 1.7484
+    chemfiles-gro 0.4366
+    chemfiles-pdb-gz 1.9837
+    chemfiles-gro-gz 0.5127
+    chemfiles-pdb-xz 2.7255
+    chemfiles-gro-xz 0.7468
+    ase-extxyz 2.1405
+    ase-extxyz-gz 2.7225
+    mda-xyz 6.3567
+    readcon-conbin 0.0143
+    mda-dcd 0.0312
+    mda-xtc 0.0796
+    mda-ncdf 0.0350
+    mda-trr 0.2326
+    mda-h5md 0.0191
+    mda-mmcif 1279.0748
+    mdtraj-ncdf 0.0204
+    mdtraj-dcd 0.0115
+    mdtraj-xtc 0.0371
+    ovito-xyz 0.2125
+    ovito-xyz-gz 0.4112
+    readcon-con 0.1365
+  sample 2 readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz
+    readcon-con-zst 0.2068
+    readcon-chemfiles 0.2233
+    chemfiles-con 0.1927
+    chemfiles-xyz 0.1869
+    chemfiles-xyz-gz 0.3734
+    chemfiles-xyz-xz 0.8348
+    chemfiles-xyz-bz2 1.5814
+    chemfiles-trr 0.1000
+    chemfiles-ncdf 0.0945
+    chemfiles-dcd 0.0635
+    chemfiles-xtc 0.1104
+    chemfiles-pdb 1.6827
+    chemfiles-gro 0.3743
+    chemfiles-pdb-gz 2.1567
+    chemfiles-gro-gz 0.8269
+    chemfiles-pdb-xz 2.4999
+    chemfiles-gro-xz 0.7065
+    ase-extxyz 2.0796
+    ase-extxyz-gz 2.6533
+    mda-xyz 5.4839
+    readcon-conbin 0.0122
+    mda-dcd 0.0296
+    mda-xtc 0.0781
+    mda-ncdf 0.0288
+    mda-trr 0.2097
+    mda-h5md 0.0186
+    mda-mmcif 1306.0914
+    mdtraj-ncdf 0.0269
+    mdtraj-dcd 0.0134
+    mdtraj-xtc 0.0419
+    ovito-xyz 0.2193
+    ovito-xyz-gz 0.4252
+    readcon-con 0.1321
+    readcon-con-gz 0.2564
+  sample 3 readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst
+    readcon-chemfiles 0.2709
+    chemfiles-con 0.2144
+    chemfiles-xyz 0.2133
+    chemfiles-xyz-gz 0.4026
+    chemfiles-xyz-xz 0.8620
+    chemfiles-xyz-bz2 1.6014
+    chemfiles-trr 0.1261
+    chemfiles-ncdf 0.1094
+    chemfiles-dcd 0.0691
+    chemfiles-xtc 0.1261
+    chemfiles-pdb 1.7120
+    chemfiles-gro 0.3990
+    chemfiles-pdb-gz 1.9859
+    chemfiles-gro-gz 0.5192
+    chemfiles-pdb-xz 2.5304
+    chemfiles-gro-xz 0.7001
+    ase-extxyz 2.0290
+    ase-extxyz-gz 2.7607
+    mda-xyz 5.3120
+    readcon-conbin 0.0135
+    mda-dcd 0.0294
+    mda-xtc 0.0765
+    mda-ncdf 0.0267
+    mda-trr 0.2122
+    mda-h5md 0.0164
+    mda-mmcif 1309.6593
+    mdtraj-ncdf 0.0211
+    mdtraj-dcd 0.0180
+    mdtraj-xtc 0.0385
+    ovito-xyz 0.2708
+    ovito-xyz-gz 0.4804
+    readcon-con 0.1327
+    readcon-con-gz 0.2714
+    readcon-con-zst 0.2094
+  sample 4 chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles
+    chemfiles-con 0.2131
+    chemfiles-xyz 0.2137
+    chemfiles-xyz-gz 0.3804
+    chemfiles-xyz-xz 0.8937
+    chemfiles-xyz-bz2 1.6344
+    chemfiles-trr 0.1060
+    chemfiles-ncdf 0.1088
+    chemfiles-dcd 0.0635
+    chemfiles-xtc 0.1359
+    chemfiles-pdb 2.0253
+    chemfiles-gro 0.4281
+    chemfiles-pdb-gz 2.1176
+    chemfiles-gro-gz 0.5060
+    chemfiles-pdb-xz 2.5912
+    chemfiles-gro-xz 0.7329
+    ase-extxyz 2.0900
+    ase-extxyz-gz 2.7538
+    mda-xyz 5.3134
+    readcon-conbin 0.0114
+    mda-dcd 0.0292
+    mda-xtc 0.0765
+    mda-ncdf 0.0277
+    mda-trr 0.2080
+    mda-h5md 0.0168
+    mda-mmcif 1278.8529
+    mdtraj-ncdf 0.0184
+    mdtraj-dcd 0.0171
+    mdtraj-xtc 0.0406
+    ovito-xyz 0.2722
+    ovito-xyz-gz 0.4486
+    readcon-con 0.1452
+    readcon-con-gz 0.2781
+    readcon-con-zst 0.2257
+    readcon-chemfiles 0.2661
+  sample 5 chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con
+    chemfiles-xyz 0.2215
+    chemfiles-xyz-gz 0.4303
+    chemfiles-xyz-xz 0.8940
+    chemfiles-xyz-bz2 1.5879
+    chemfiles-trr 0.1243
+    chemfiles-ncdf 0.1210
+    chemfiles-dcd 0.0935
+    chemfiles-xtc 0.1144
+    chemfiles-pdb 1.8329
+    chemfiles-gro 0.4363
+    chemfiles-pdb-gz 2.0798
+    chemfiles-gro-gz 0.5494
+    chemfiles-pdb-xz 2.5146
+    chemfiles-gro-xz 0.7539
+    ase-extxyz 2.0245
+    ase-extxyz-gz 2.7289
+    mda-xyz 5.2224
+    readcon-conbin 0.0123
+    mda-dcd 0.0301
+    mda-xtc 0.0761
+    mda-ncdf 0.0328
+    mda-trr 0.2096
+    mda-h5md 0.0179
+    mda-mmcif 1272.1778
+    mdtraj-ncdf 0.0237
+    mdtraj-dcd 0.0177
+    mdtraj-xtc 0.0399
+    ovito-xyz 0.2360
+    ovito-xyz-gz 0.4524
+    readcon-con 0.1342
+    readcon-con-gz 0.2548
+    readcon-con-zst 0.2117
+    readcon-chemfiles 0.2393
+    chemfiles-con 0.2041
+  sample 6 chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz
+    chemfiles-xyz-gz 0.4095
+    chemfiles-xyz-xz 0.8577
+    chemfiles-xyz-bz2 1.5939
+    chemfiles-trr 0.1060
+    chemfiles-ncdf 0.0974
+    chemfiles-dcd 0.0798
+    chemfiles-xtc 0.0971
+    chemfiles-pdb 1.7376
+    chemfiles-gro 0.4150
+    chemfiles-pdb-gz 2.0264
+    chemfiles-gro-gz 0.5113
+    chemfiles-pdb-xz 2.7575
+    chemfiles-gro-xz 0.7163
+    ase-extxyz 2.1255
+    ase-extxyz-gz 2.7762
+    mda-xyz 5.5821
+    readcon-conbin 0.0139
+    mda-dcd 0.0309
+    mda-xtc 0.0810
+    mda-ncdf 0.0317
+    mda-trr 0.2498
+    mda-h5md 0.0223
+    mda-mmcif 1295.4982
+    mdtraj-ncdf 0.0196
+    mdtraj-dcd 0.0122
+    mdtraj-xtc 0.0413
+    ovito-xyz 0.2112
+    ovito-xyz-gz 0.4561
+    readcon-con 0.1313
+    readcon-con-gz 0.2466
+    readcon-con-zst 0.1929
+    readcon-chemfiles 0.2163
+    chemfiles-con 0.2148
+    chemfiles-xyz 0.1927
+  sample 7 chemfiles-xyz-xz chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz
+    chemfiles-xyz-xz 0.8280
+    chemfiles-xyz-bz2 1.5602
+    chemfiles-trr 0.1239
+    chemfiles-ncdf 0.0977
+    chemfiles-dcd 0.0707
+    chemfiles-xtc 0.0918
+    chemfiles-pdb 1.7537
+    chemfiles-gro 0.3873
+    chemfiles-pdb-gz 1.9477
+    chemfiles-gro-gz 0.4979
+    chemfiles-pdb-xz 2.5300
+    chemfiles-gro-xz 0.6891
+    ase-extxyz 2.0831
+    ase-extxyz-gz 2.6914
+    mda-xyz 5.3688
+    readcon-conbin 0.0116
+    mda-dcd 0.0315
+    mda-xtc 0.0798
+    mda-ncdf 0.0323
+    mda-trr 0.2221
+    mda-h5md 0.0184
+    mda-mmcif 1296.5405
+    mdtraj-ncdf 0.0167
+    mdtraj-dcd 0.0144
+    mdtraj-xtc 0.0337
+    ovito-xyz 0.2468
+    ovito-xyz-gz 0.4095
+    readcon-con 0.1349
+    readcon-con-gz 0.2567
+    readcon-con-zst 0.1968
+    readcon-chemfiles 0.2286
+    chemfiles-con 0.2067
+    chemfiles-xyz 0.1988
+    chemfiles-xyz-gz 0.3758
+  sample 8 chemfiles-xyz-bz2 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz
+    chemfiles-xyz-bz2 1.5881
+    chemfiles-trr 0.1012
+    chemfiles-ncdf 0.0945
+    chemfiles-dcd 0.0705
+    chemfiles-xtc 0.0927
+    chemfiles-pdb 1.6977
+    chemfiles-gro 0.3834
+    chemfiles-pdb-gz 2.0029
+    chemfiles-gro-gz 0.4975
+    chemfiles-pdb-xz 2.5061
+    chemfiles-gro-xz 0.6956
+    ase-extxyz 2.0853
+    ase-extxyz-gz 2.6920
+    mda-xyz 5.0730
+    readcon-conbin 0.0116
+    mda-dcd 0.0308
+    mda-xtc 0.0746
+    mda-ncdf 0.0287
+    mda-trr 0.2098
+    mda-h5md 0.0177
+    mda-mmcif 1277.4090
+    mdtraj-ncdf 0.0214
+    mdtraj-dcd 0.0144
+    mdtraj-xtc 0.0405
+    ovito-xyz 0.2140
+    ovito-xyz-gz 0.4089
+    readcon-con 0.1285
+    readcon-con-gz 0.2511
+    readcon-con-zst 0.1964
+    readcon-chemfiles 0.2156
+    chemfiles-con 0.1818
+    chemfiles-xyz 0.1869
+    chemfiles-xyz-gz 0.3933
+    chemfiles-xyz-xz 0.8366
+  sample 9 chemfiles-trr chemfiles-ncdf chemfiles-dcd chemfiles-xtc chemfiles-pdb chemfiles-gro chemfiles-pdb-gz chemfiles-gro-gz chemfiles-pdb-xz chemfiles-gro-xz ase-extxyz ase-extxyz-gz mda-xyz readcon-conbin mda-dcd mda-xtc mda-ncdf mda-trr mda-h5md mda-mmcif mdtraj-ncdf mdtraj-dcd mdtraj-xtc ovito-xyz ovito-xyz-gz readcon-con readcon-con-gz readcon-con-zst readcon-chemfiles chemfiles-con chemfiles-xyz chemfiles-xyz-gz chemfiles-xyz-xz chemfiles-xyz-bz2
+    chemfiles-trr 0.1112
+    chemfiles-ncdf 0.1251
+    chemfiles-dcd 0.1128
+    chemfiles-xtc 0.1180
+    chemfiles-pdb 1.8100
+    chemfiles-gro 0.4130
+    chemfiles-pdb-gz 2.0278
+    chemfiles-gro-gz 0.5377
+    chemfiles-pdb-xz 2.6721
+    chemfiles-gro-xz 0.7378
+    ase-extxyz 2.1799
+    ase-extxyz-gz 2.7281
+    mda-xyz 5.4798
+    readcon-conbin 0.0122
+    mda-dcd 0.0293
+    mda-xtc 0.0816
+    mda-ncdf 0.0326
+    mda-trr 0.2161
+    mda-h5md 0.0183
+Terminating processes on user request, this might take some time.
+dcdplugin) detected standard 32-bit DCD file of native endianness
+dcdplugin) CHARMM format DCD file (also NAMD 2.1 and later)
+dcdplugin) detected standard 32-bit DCD file of native endianness
+dcdplugin) CHARMM format DCD file (also NAMD 2.1 and later)
+dcdplugin) detected standard 32-bit DCD file of native endianness
+dcdplugin) CHARMM format DCD file (also NAMD 2.1 and later)
+Traceback (most recent call last):
+  File "bench/h2h/partial.py", line 724, in <module>
+    main()
+  File "bench/h2h/partial.py", line 717, in main
+    run(args.out, args.repeats)
+  File "bench/h2h/partial.py", line 615, in run
+    cross_format.run(out, repeats)
+  File "bench/h2h/cross_format.py", line 2946, in run
+    timed[cache] = _interleave(
+                   ^^^^^^^^^^^^
+  File "bench/h2h/cross_format.py", line 2602, in _interleave
+    take(rotate(arms, index), str(index))
+  File "bench/h2h/cross_format.py", line 2599, in take
+    _record_sample(found, rss, checksums, arm, spawn_worker(script, arm["job"]))
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "bench/h2h/sample_protocol.py", line 93, in spawn_worker
+    completed = subprocess.run(
+                ^^^^^^^^^^^^^^^
+  File "paper/cpc/.pixi/envs/default/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "paper/cpc/.pixi/envs/default/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "paper/cpc/.pixi/envs/default/lib/python3.12/subprocess.py", line 2115, in _communicate
+    ready = selector.select(timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "paper/cpc/.pixi/envs/default/lib/python3.12/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
