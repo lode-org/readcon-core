@@ -581,17 +581,38 @@ def _refuse_saved_record(path):
         raise SystemExit("refusing to write a saved record")
 
 
+_MILLION_RULES = {
+    "million",
+    "million_measure",
+    "million_asv",
+    "million_record",
+}
+
+
 def _refuse_million_target(targets):
     # A fresh measurement is refused when the directory already exists.
     # A later step is refused on a committed record even when the
     # measurement files are present, and also while one of them is missing.
     # million_asv and million_record are later steps: they write into the
     # same directory and use the same guard.
-    measure_files = set(MILLION_MEASURE)
+    # Snakemake normalizes a file target onto the rule output. Compare the
+    # resolved path, and refuse one that lands in any committed record even
+    # when the selected output directory is a new one.
+    measure_files = {_canonical_repo_path(path) for path in MILLION_MEASURE}
     prefix = MILLION + "/"
+    records = None
     later_step = False
     for target in targets:
-        text = str(target)
+        raw = str(target)
+        if raw in _MILLION_RULES:
+            text = raw
+        else:
+            text = _canonical_repo_path(raw)
+            if records is None:
+                records = _committed_record_directories()
+            for saved in records:
+                if text == saved or text.startswith(saved + "/"):
+                    raise SystemExit("refusing to write a saved record")
         if text == "million_measure" or text in measure_files:
             _require_repo_cwd()
             _refuse_saved_record(MILLION)
