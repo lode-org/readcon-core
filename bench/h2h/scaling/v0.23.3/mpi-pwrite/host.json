@@ -1,0 +1,35 @@
+{
+  "commit": "3d2118afa8265d8bf4395fb25deca2d5b27430e2",
+  "tree": "02569ffe41a51da8bfc812f3bdd5f964da752eca",
+  "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           52 bits physical, 57 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  8\nOn-line CPU(s) list:                     0-7\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Xeon(R) Processor\nCPU family:                              6\nModel:                                   173\nThread(s) per core:                      1\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                5400.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc pebs bts rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq dtes64 vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd arat vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid bus_lock_detect cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 flush_l1d arch_capabilities\nVirtualization:                          VT-x\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               384 KiB (8 instances)\nL1i cache:                               512 KiB (8 instances)\nL2 cache:                                16 MiB (8 instances)\nL3 cache:                                480 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-7\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Mitigation; TSX disabled\nVulnerability Vmscape:                   Not affected\n",
+  "disk": "build/bench",
+  "disk_filesystem": "ext2/ext3",
+  "nproc": 8,
+  "repeats": 12,
+  "warmup": "until the last three agree within 10 percent, at least four, at most twelve",
+  "pinned": "taskset -c 0-7",
+  "mpi": "mpirun --bind-to core",
+  "note": "mpi-pwrite. Repeats are 12. taskset -c 0-7. mpirun --bind-to core. Disk rows use build/bench. Memory rows use shm. Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n). Multi-frame inputs are thermal-displacement frames.",
+  "loadavg": "start 00:40:41 0.33 1.35 1.88 9/357 723144\nab n=1 unset 00:40:42 0.31 1.33 1.87 1/357 723252\nfloor n=1 00:40:52 0.41 1.31 1.86 1/357 723261\nab n=1 sequential 00:40:56 0.41 1.31 1.86 1/357 723270\nab n=1 parallel 00:41:10 0.54 1.30 1.85 1/356 723300\nab n=1 mpiio 00:41:20 0.61 1.29 1.84 1/356 723309\nab n=2 unset 00:41:33 0.77 1.29 1.83 1/356 723338\nfloor n=2 00:41:39 0.87 1.30 1.83 1/356 723352\nab n=2 sequential 00:41:41 0.87 1.30 1.83 1/356 723366\nab n=2 parallel 00:41:49 1.05 1.33 1.83 1/356 723412\nab n=2 mpiio 00:41:54 1.12 1.34 1.83 1/356 723426\nab n=4 unset 00:42:02 1.26 1.36 1.83 1/356 723476\nfloor n=4 00:42:05 1.26 1.36 1.83 1/355 723501\nab n=4 sequential 00:42:07 1.48 1.40 1.84 1/355 723525\nab n=4 parallel 00:42:12 1.48 1.40 1.84 1/355 723613\nab n=4 mpiio 00:42:15 1.36 1.38 1.83 1/355 723637\nab n=8 unset 00:42:20 1.57 1.42 1.85 1/355 723726\nfloor n=8 00:42:22 2.09 1.53 1.88 1/355 723770\nab n=8 sequential 00:42:24 2.09 1.53 1.88 1/355 723814\nab n=8 parallel 00:42:27 2.56 1.64 1.91 1/355 723986\nab n=8 mpiio 00:42:29 2.56 1.64 1.91 1/355 724034\nthreads 00:42:34 3.08 1.76 1.95 1/355 724231\nmpi 00:44:36 2.05 1.77 1.92 1/358 726515\nweak 00:50:14 4.32 2.42 2.10 2/358 728379\nranked 01:03:15 3.47 2.10 1.90 1/361 729508\ncompressed 01:05:17 5.85 3.45 2.42 1/359 731898\nconbin 02:11:19 3.41 2.06 1.62 1/390 734163\nhost 02:16:12 3.23 2.31 1.80 1/381 735896\nend 02:16:13 3.23 2.31 1.80 1/381 736000\n",
+  "frames": {
+    "con-100k": {
+      "n_frames": 100000,
+      "unique_frames": 100000,
+      "displacement": "thermal 0.01-0.05 A"
+    },
+    "convel": {
+      "n_frames": 100000,
+      "unique_frames": 100000,
+      "displacement": "thermal 0.01-0.05 A"
+    },
+    "con-1e6": {
+      "n_frames": 1,
+      "unique_frames": 1,
+      "displacement": "thermal 0.01-0.05 A"
+    },
+    "weak": "frames_guard distinct_frames, one PCG32 stream per frame"
+  },
+  "label": "mpi-pwrite. Repeats are 12. taskset -c 0-7. mpirun --bind-to core. Disk rows use build/bench. Memory rows use shm. Strong efficiency is (t(1)/t(n))/n. Weak efficiency is t(1)/t(n). Multi-frame inputs are thermal-displacement frames."
+}

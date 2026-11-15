@@ -1,5 +1,5 @@
 payload,threads,n_ok,median_s,speedup,speedup_low,speedup_high,efficiency,hashes_identical_1_2_3_4_8,n_distinct_hashes
-frames-10000,1,90,1.35258,1,1,1,1,yes,1
-frames-10000,2,30,1.15588,1.1476,1.12586,1.15689,0.573798,yes,1
-frames-10000,4,30,1.0865,1.2091,1.19359,1.22343,0.302276,yes,1
-frames-10000,8,30,1.10452,1.28399,1.26255,1.31306,0.160499,yes,1
+con-100k-read-disk,1,12,0.187144,1.000000,0.986980,1.013192,1.000000,not-in-log,
+con-100k-read-disk,2,12,0.168644,1.109699,1.093119,1.129719,0.554850,not-in-log,
+con-100k-read-disk,4,12,0.131910,1.418725,1.345543,1.511652,0.354681,not-in-log,
+con-100k-read-disk,8,12,0.099817,1.874870,1.861348,1.905025,0.234359,not-in-log,
