@@ -179,6 +179,15 @@ else()
     set(CARGO_OUTPUT_DIR "${CARGO_TARGET_DIR}/${RUST_BUILD_TARGET}/${CARGO_BUILD_TYPE}")
 endif()
 
+# The cdylib cargo rustc also emits libreadcon_core.a, because the package
+# lists staticlib among its crate types. That second archive is built
+# without static_system_alloc and would replace the one we want. Build
+# the archive in its own target directory and copy it into place last.
+set(CARGO_STATIC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo-target-static")
+string(REPLACE "--target-dir=${CARGO_TARGET_DIR}" "--target-dir=${CARGO_STATIC_TARGET_DIR}" CARGO_STATIC_BUILD_ARG "${CARGO_BUILD_ARG}")
+string(REPLACE "${CARGO_TARGET_DIR}" "${CARGO_STATIC_TARGET_DIR}" CARGO_STATIC_OUTPUT_DIR "${CARGO_OUTPUT_DIR}")
+set(CARGO_STATIC_ARCHIVE "${CARGO_STATIC_OUTPUT_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}readcon_core${CMAKE_STATIC_LIBRARY_SUFFIX}")
+
 # rustc native-static-libs for consumers of the static archive
 if (CARGO_VERSION_CHANGED OR NOT DEFINED CARGO_DEFAULT_LIBRARIES)
     # A nested cargo rustc inherits the parent's target directory and waits
@@ -287,13 +296,16 @@ if (READCON_CORE_INSTALL_BOTH_STATIC_SHARED)
     add_custom_command(
         OUTPUT ${CARGO_OUTPUTS}
         COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
-                ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_static_feat_arg}
-                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
-                -- --crate-type=staticlib
-        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
                 ${CARGO_EXE} rustc --lib ${CARGO_BUILD_ARG} ${_readcon_shared_feat_arg}
                 --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
                 -- --crate-type=cdylib ${CARGO_RUSTC_ARGS}
+        COMMAND ${CMAKE_COMMAND} -E env ${CARGO_ENV}
+                ${CARGO_EXE} rustc --lib ${CARGO_STATIC_BUILD_ARG} ${_readcon_static_feat_arg}
+                --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml
+                -- --crate-type=staticlib
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CARGO_STATIC_ARCHIVE}"
+                "${READCON_CORE_STATIC_LOCATION}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS ${ALL_RUST_SOURCES}
         COMMENT "Building readcon-core C ABI with cargo"
