@@ -57,3 +57,45 @@ fn static_archive_does_not_install_mimalloc() {
         "static archive still installs mimalloc:\n{hits}"
     );
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn cmake_static_archive_does_not_install_mimalloc() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let base = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join("target"));
+    let work = base.join("cmake-static-system-alloc");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).expect("workdir");
+    let configure = Command::new("cmake")
+        .args([
+            "-S",
+            root.to_str().unwrap(),
+            "-B",
+            work.to_str().unwrap(),
+            "-DREADCON_CORE_INSTALL_BOTH_STATIC_SHARED=OFF",
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DCMAKE_BUILD_TYPE=debug",
+        ])
+        .status()
+        .expect("cmake");
+    assert!(configure.success(), "cmake configure failed");
+    let built = Command::new("cmake")
+        .args([
+            "--build",
+            work.to_str().unwrap(),
+            "--target",
+            "cargo-build-readcon-core",
+        ])
+        .status()
+        .expect("cmake build");
+    assert!(built.success(), "cmake static archive build failed");
+    let archive = work.join("cargo-target/debug/libreadcon_core.a");
+    assert!(archive.is_file(), "missing {}", archive.display());
+    let hits = defined_mimalloc(&archive);
+    assert!(
+        hits.is_empty(),
+        "CMake static archive still installs mimalloc:\n{hits}"
+    );
+}
