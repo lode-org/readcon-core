@@ -218,13 +218,21 @@ def _oracle(path: Path) -> dict:
         unique_energy[min(len(unique_energy) - 1, 2 * len(unique_energy) // 5)]
     )
     after = int(np.searchsorted(unique_energy, last, side="right"))
-    hi = last + 1.0 if after == len(unique_energy) else float(unique_energy[after])
+    hi = (
+        last + 1.0
+        if after == len(unique_energy)
+        else float(last + unique_energy[after]) / 2.0
+    )
     energy_hits = int(np.sum((energies >= lo) & (energies < hi)))
     unique_force = np.unique(euclid)
     flo = float(unique_force[len(unique_force) // 5])
     flast = float(unique_force[min(len(unique_force) - 1, 2 * len(unique_force) // 5)])
     fafter = int(np.searchsorted(unique_force, flast, side="right"))
-    fhi = flast + 1.0 if fafter == len(unique_force) else float(unique_force[fafter])
+    fhi = (
+        flast + 1.0
+        if fafter == len(unique_force)
+        else float(flast + unique_force[fafter]) / 2.0
+    )
     left = (euclid >= flo) & (euclid < fhi)
     right = (rss >= flo) & (rss < fhi)
     if not np.array_equal(left, right):

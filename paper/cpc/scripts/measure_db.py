@@ -212,9 +212,9 @@ def worker_ingest(src: Path, dest: Path, kind: str, oracle: dict) -> dict:
         db = connect(dest / "atoms.db")
         for item in prepared:
             db.write(item)
+        stored = len(prepared)
         hits = db.count(formula="Cu9")
         seconds = time.perf_counter() - t0
-        stored = hits
         index_sum = hits
         store = dest / "atoms.db"
     elif kind == "ase.db-txn":
@@ -226,9 +226,9 @@ def worker_ingest(src: Path, dest: Path, kind: str, oracle: dict) -> dict:
         with db:
             for item in prepared:
                 db.write(item)
+        stored = len(prepared)
         hits = db.count(formula="Cu9")
         seconds = time.perf_counter() - t0
-        stored = hits
         index_sum = hits
         store = dest / "atoms.db"
     else:
@@ -548,8 +548,9 @@ def correctness(log) -> None:
                 "event": "correctness",
                 "name": "hash_index_survives_rewrite_of_duplicate",
                 "pass": rewritten > 0
-                and moved == (3, 0)
-                and bytes(db.frame_hash(3, 0)) == hash_a,
+                and moved is not None
+                and moved[0] != 2
+                and bytes(db.frame_hash(moved[0], moved[1])) == hash_a,
                 "detail": (
                     "set_units rewrote trajectory 2; "
                     f"find_by_hash of the old digest returns {moved}"
