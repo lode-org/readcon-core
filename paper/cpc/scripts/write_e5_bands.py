@@ -34,7 +34,10 @@ def _band(reactant, product) -> list:
     for image in images:
         image.calc = EMT()
     neb = NEB(images, climb=False, k=e5.K_SPRING, method="improvedtangent")
-    neb.interpolate()
+    try:
+        neb.interpolate(mic=True)
+    except RuntimeError:
+        neb.interpolate(mic=True, apply_constraint=False)
     BFGS(neb, logfile=None).run(fmax=e5.FMAX, steps=200)
     return images
 
