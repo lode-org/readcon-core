@@ -737,7 +737,7 @@ impl Optional1 {
     }
 
     pub fn new(array: Array1Storage) -> Self {
-        if array.len() == 0 {
+        if array.is_empty() {
             Self { inner: None }
         } else {
             Self {

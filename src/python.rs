@@ -1705,11 +1705,11 @@ fn frame_has_force(frame: &ConFrame) -> bool {
 }
 
 fn push_masses(frame: &ConFrame, into: &mut Vec<f64>) {
-    if let Some(slice) = frame.masses.f64_slice() {
-        if slice.len() == frame.atom_data.len() {
-            into.extend_from_slice(slice);
-            return;
-        }
+    if let Some(slice) = frame.masses.f64_slice()
+        && slice.len() == frame.atom_data.len()
+    {
+        into.extend_from_slice(slice);
+        return;
     }
     let mut written = 0usize;
     for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
@@ -1735,11 +1735,11 @@ fn push_vec3(
     from_atom: impl Fn(&crate::types::AtomDatum) -> Option<[f64; 3]>,
 ) {
     let n = frame.atom_data.len();
-    if let Some(slice) = storage.f64_slice() {
-        if slice.len() == n * 3 {
-            into.extend_from_slice(slice);
-            return;
-        }
+    if let Some(slice) = storage.f64_slice()
+        && slice.len() == n * 3
+    {
+        into.extend_from_slice(slice);
+        return;
     }
     if storage.nrows() == n {
         for row in 0..n {
@@ -5543,10 +5543,7 @@ fn py_text_frames<'py>(
             let row = pyo3::types::PyTuple::new(py, (0..n_atoms).map(|_| py_symbol.clone_ref(py)))?
                 .unbind();
             let n_frames = text.len() / stride;
-            return Ok(pyo3::types::PyList::new(
-                py,
-                (0..n_frames).map(|_| row.clone_ref(py)),
-            )?);
+            return pyo3::types::PyList::new(py, (0..n_frames).map(|_| row.clone_ref(py)));
         }
     }
     let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
@@ -6112,7 +6109,7 @@ impl SpeciesRow {
             let this = slf.borrow();
             (this.parent.clone_ref(py), this.frame)
         };
-        frame_matches(py, &parent.bind(py), frame, other)
+        frame_matches(py, parent.bind(py), frame, other)
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
@@ -6802,7 +6799,7 @@ fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Res
             written += n as usize;
             offset += n as u64;
         }
-        return Ok(());
+        Ok(())
     }
     #[cfg(windows)]
     {

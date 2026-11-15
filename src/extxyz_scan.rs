@@ -2718,12 +2718,11 @@ pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
         species_text = Some(vec![symbol.clone(); tables.n_frames * tables.n_atoms]);
     }
     let mut owned = tables.columns.clone();
-    if let Some(text) = species_text {
-        if let Some(column) = owned.iter_mut().find(|column| column.name == "species") {
-            if column.text.is_empty() {
-                column.text = text;
-            }
-        }
+    if let Some(text) = species_text
+        && let Some(column) = owned.iter_mut().find(|column| column.name == "species")
+        && column.text.is_empty()
+    {
+        column.text = text;
     }
     for column in &mut owned {
         if column.name == "pos" && column.real.is_empty() {

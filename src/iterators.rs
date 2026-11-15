@@ -273,7 +273,7 @@ impl<'a> LineStream<'a> for MemchrLines<'a> {
             if self.newlines.is_some() {
                 self.index_line = self.index_line.saturating_add(n);
             }
-            return Some(block);
+            Some(block)
         }
         #[cfg(not(feature = "parallel"))]
         {
@@ -1258,15 +1258,14 @@ fn error_needs_more_input(error: &error::ParseError) -> bool {
 
 fn earlier_parse_or_utf8(bytes: &[u8], err: std::str::Utf8Error) -> Result<&str, LoadError> {
     let valid = err.valid_up_to();
-    if valid > 0 {
-        if let Ok(prefix) = std::str::from_utf8(&bytes[..valid]) {
-            if let Err(located) = frames_from_text_located(prefix, Some(1)) {
-                // A frame cut off by the bad byte is still the UTF-8 error.
-                // A finished frame that already failed is the error to keep.
-                if !error_needs_more_input(&located.error) {
-                    return Err(LoadError::Parse(located));
-                }
-            }
+    if valid > 0
+        && let Ok(prefix) = std::str::from_utf8(&bytes[..valid])
+        && let Err(located) = frames_from_text_located(prefix, Some(1))
+    {
+        // A frame cut off by the bad byte is still the UTF-8 error.
+        // A finished frame that already failed is the error to keep.
+        if !error_needs_more_input(&located.error) {
+            return Err(LoadError::Parse(located));
         }
     }
     Err(LoadError::Utf8(err))
@@ -2623,32 +2622,30 @@ static PARSE_GEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsiz
 pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
     #[cfg(feature = "parallel")]
     {
-        if workers >= 2 {
-            if let Some(pool) = shared_pool(workers) {
-                let mut slots: Vec<Option<types::ConFrame>> =
-                    frames.into_iter().map(Some).collect();
-                let ptr = slots.as_mut_ptr() as usize;
-                let len = slots.len();
-                let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
-                pool.broadcast(|_| {
-                    let ranges =
-                        OWNED_RANGES.with(|ranges| std::mem::take(&mut *ranges.borrow_mut()));
-                    for (seen, start, end) in ranges {
-                        if seen != generation {
-                            continue;
-                        }
-                        let end = end.min(len);
-                        let start = start.min(end);
-                        for index in start..end {
-                            unsafe {
-                                drop((*((ptr as *mut Option<types::ConFrame>).add(index))).take());
-                            }
+        if workers >= 2
+            && let Some(pool) = shared_pool(workers)
+        {
+            let mut slots: Vec<Option<types::ConFrame>> = frames.into_iter().map(Some).collect();
+            let ptr = slots.as_mut_ptr() as usize;
+            let len = slots.len();
+            let generation = PARSE_GEN.load(std::sync::atomic::Ordering::Relaxed);
+            pool.broadcast(|_| {
+                let ranges = OWNED_RANGES.with(|ranges| std::mem::take(&mut *ranges.borrow_mut()));
+                for (seen, start, end) in ranges {
+                    if seen != generation {
+                        continue;
+                    }
+                    let end = end.min(len);
+                    let start = start.min(end);
+                    for index in start..end {
+                        unsafe {
+                            drop((*((ptr as *mut Option<types::ConFrame>).add(index))).take());
                         }
                     }
-                });
-                drop(slots);
-                return;
-            }
+                }
+            });
+            drop(slots);
+            return;
         }
     }
     let _ = workers;
@@ -3845,11 +3842,7 @@ fn piped_stock_frames(
                             };
                             let spec_v = spec.load(Ordering::Acquire);
                             let origin = row_origin.load(Ordering::Acquire);
-                            let local = if offset[member] >= origin {
-                                0
-                            } else {
-                                origin - offset[member]
-                            };
+                            let local = origin.saturating_sub(offset[member]);
                             let row = base as usize;
                             let nrows = count as usize;
                             if row.checked_add(nrows).map(|end| end <= n) != Some(true) {
@@ -3907,7 +3900,7 @@ fn piped_stock_frames(
     crate::types::mark_uniform_symbol_drop(&atoms);
     if let Some(slice) = positions.f64_slice() {
         let new_ptr = slice.as_ptr() as *mut f64;
-        if new_ptr != old as *mut f64 {
+        if !std::ptr::eq(new_ptr, old) {
             for (index, atom) in atoms.iter_mut().enumerate() {
                 atom.retarget(unsafe { new_ptr.add(index * 3) });
             }
@@ -4040,30 +4033,30 @@ fn read_compressed_phased(
         }
     };
     #[cfg(feature = "parallel")]
-    if piped_threads >= 2 {
-        if let Some((frames, alloc_s, scope_s)) = piped_stock_frames(&file, piped_threads)? {
-            let elapsed = t_all.elapsed().as_secs_f64();
-            let n_frames = frames.len() as u64;
-            return Ok(PhasedFrames {
-                frames,
-                n_bytes: file.len(),
-                chunk_s: vec![scope_s],
-                scan_kind: SCAN_SERIAL,
-                worker_minflt: Vec::new(),
-                share_frames: vec![n_frames],
-                share_bytes: Vec::new(),
-                phases: ReadPhaseTimes {
-                    open_mmap_s: open_s,
-                    slot_alloc_s: alloc_s,
-                    worker_parse_s: scope_s,
-                    worker_sum_s: scope_s,
-                    worker_max_s: scope_s,
-                    finish_s: (elapsed - alloc_s - scope_s).max(0.0),
-                    ..ReadPhaseTimes::default()
-                },
-                pool: None,
-            });
-        }
+    if piped_threads >= 2
+        && let Some((frames, alloc_s, scope_s)) = piped_stock_frames(&file, piped_threads)?
+    {
+        let elapsed = t_all.elapsed().as_secs_f64();
+        let n_frames = frames.len() as u64;
+        return Ok(PhasedFrames {
+            frames,
+            n_bytes: file.len(),
+            chunk_s: vec![scope_s],
+            scan_kind: SCAN_SERIAL,
+            worker_minflt: Vec::new(),
+            share_frames: vec![n_frames],
+            share_bytes: Vec::new(),
+            phases: ReadPhaseTimes {
+                open_mmap_s: open_s,
+                slot_alloc_s: alloc_s,
+                worker_parse_s: scope_s,
+                worker_sum_s: scope_s,
+                worker_max_s: scope_s,
+                finish_s: (elapsed - alloc_s - scope_s).max(0.0),
+                ..ReadPhaseTimes::default()
+            },
+            pool: None,
+        });
     }
     crate::compression::with_inflated_plain(&file, |plain| {
         let open_mmap_s = open_s + t_all.elapsed().as_secs_f64();

@@ -2136,7 +2136,7 @@ pub(crate) fn take_sequential_plain() -> bool {
 fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
     thread_local! {
         static RECENT: std::cell::RefCell<Vec<std::sync::Arc<str>>> =
-            std::cell::RefCell::new(Vec::new());
+            const { std::cell::RefCell::new(Vec::new()) };
     }
     RECENT.with(|slot| {
         let mut slot = slot.borrow_mut();
@@ -2217,10 +2217,10 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
             i += 1;
             break;
         }
-        if version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit {
-            if !eat(&mut i, b',') {
-                return None;
-            }
+        if (version.is_some() || saw_minor || length.is_some() || energy.is_some() || extra_unit)
+            && !eat(&mut i, b',')
+        {
+            return None;
         }
         let key = quoted(&mut i)?;
         if !eat(&mut i, b':') {
@@ -2242,10 +2242,8 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                         i += 1;
                         break;
                     }
-                    if length.is_some() || energy.is_some() || extra_unit {
-                        if !eat(&mut i, b',') {
-                            return None;
-                        }
+                    if (length.is_some() || energy.is_some() || extra_unit) && !eat(&mut i, b',') {
+                        return None;
                     }
                     let ukey = quoted(&mut i)?;
                     if !eat(&mut i, b':') {
@@ -2670,35 +2668,35 @@ where
     L: LineStream<'a>,
 {
     let workers = wide_workers();
-    if workers >= 2 && n >= 4096 {
-        if let Some(mut block) =
+    if workers >= 2
+        && n >= 4096
+        && let Some(mut block) =
             lines.try_take_coord_block(n, spec_version, global_atom_idx, symbol, workers)
-        {
-            let base = pos_flat.len();
-            // Keep a reservation that covers the whole frame. Replacing it
-            // with a shorter block makes the next species group reallocate
-            // under live pointers.
-            if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
-                *pos_flat = block.xyz;
-            } else {
-                pos_flat.extend_from_slice(&block.xyz);
-            }
-            let ptr = pos_flat.as_mut_ptr();
-            for (i, atom) in block.atoms.iter_mut().enumerate() {
-                atom.retarget(unsafe { ptr.add(base + i * 3) });
-            }
-            if ids.is_empty() {
-                *ids = block.ids;
-            } else {
-                ids.extend_from_slice(&block.ids);
-            }
-            if atom_data.is_empty() {
-                *atom_data = block.atoms;
-            } else {
-                atom_data.extend(block.atoms);
-            }
-            return Ok(global_atom_idx + n as u64);
+    {
+        let base = pos_flat.len();
+        // Keep a reservation that covers the whole frame. Replacing it
+        // with a shorter block makes the next species group reallocate
+        // under live pointers.
+        if pos_flat.is_empty() && block.xyz.capacity() >= pos_flat.capacity() {
+            *pos_flat = block.xyz;
+        } else {
+            pos_flat.extend_from_slice(&block.xyz);
         }
+        let ptr = pos_flat.as_mut_ptr();
+        for (i, atom) in block.atoms.iter_mut().enumerate() {
+            atom.retarget(unsafe { ptr.add(base + i * 3) });
+        }
+        if ids.is_empty() {
+            *ids = block.ids;
+        } else {
+            ids.extend_from_slice(&block.ids);
+        }
+        if atom_data.is_empty() {
+            *atom_data = block.atoms;
+        } else {
+            atom_data.extend(block.atoms);
+        }
+        return Ok(global_atom_idx + n as u64);
     }
     let mut shares = symbol_shares(symbol, n);
     for _ in 0..n {

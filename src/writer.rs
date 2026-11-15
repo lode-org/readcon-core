@@ -1114,7 +1114,7 @@ fn ids_are_dense(atoms: &[crate::types::AtomDatum], workers: usize) -> bool {
     #[cfg(feature = "parallel")]
     {
         let chunk = n.div_ceil(workers);
-        return crate::parser::on_pool(workers, || {
+        crate::parser::on_pool(workers, || {
             use rayon::prelude::*;
             atoms.par_chunks(chunk).enumerate().all(|(index, group)| {
                 let base = index * chunk;
@@ -1123,7 +1123,7 @@ fn ids_are_dense(atoms: &[crate::types::AtomDatum], workers: usize) -> bool {
                     .enumerate()
                     .all(|(offset, atom)| atom.atom_id == (base + offset) as u64)
             })
-        });
+        })
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -1757,24 +1757,25 @@ fn append_coord_rows(
     mut vel: Option<&mut Vec<u8>>,
 ) -> Result<(), WriteError> {
     let want_vel = vel.is_some();
-    if let Some(file) = stream {
-        if mapped && !atoms.is_empty() {
-            file.write_all(buf).map_err(WriteError::Io)?;
-            buf.clear();
-            let vel_bytes = stream_coord_rows(
-                file,
-                atoms,
-                workers,
-                prec,
-                spec_version,
-                want_vel,
-                force_map,
-            )?;
-            if let Some(dest) = vel.as_mut() {
-                dest.extend_from_slice(&vel_bytes);
-            }
-            return Ok(());
+    if let Some(file) = stream
+        && mapped
+        && !atoms.is_empty()
+    {
+        file.write_all(buf).map_err(WriteError::Io)?;
+        buf.clear();
+        let vel_bytes = stream_coord_rows(
+            file,
+            atoms,
+            workers,
+            prec,
+            spec_version,
+            want_vel,
+            force_map,
+        )?;
+        if let Some(dest) = vel.as_mut() {
+            dest.extend_from_slice(&vel_bytes);
         }
+        return Ok(());
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
         let mut vel_slots = [FmtSlot::new(); 3];
@@ -1902,7 +1903,7 @@ fn append_coord_rows(
             // bytes that were already initialised.
             unsafe { buf.set_len(coord_at + coord_len) };
         }
-        if let Some(dest) = vel.as_deref_mut() {
+        if let Some(dest) = vel {
             for part in &parts {
                 let guard = part.lock().expect("format part");
                 if let Some((_, rows)) = guard.as_ref() {
@@ -1910,7 +1911,7 @@ fn append_coord_rows(
                 }
             }
         }
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -2035,7 +2036,7 @@ pub(crate) fn file_is_tmpfs(file: &File) -> bool {
         use std::os::fd::AsRawFd;
         let mut stat = unsafe { std::mem::zeroed::<libc::statfs>() };
         let rc = unsafe { libc::fstatfs(file.as_raw_fd(), &mut stat) };
-        return rc == 0 && stat.f_type == 0x01021994;
+        rc == 0 && stat.f_type == 0x01021994
     }
     #[cfg(any(miri, not(target_os = "linux")))]
     {
@@ -3346,7 +3347,8 @@ fn place_packed(
     }
     // One mapping per worker, dropped on that worker. Tearing down a single
     // 184 MB map was a serial tail after the formatters had finished.
-    let result = std::thread::scope(|scope| {
+
+    std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
         for (thread, &(start, end)) in ranges.iter().enumerate() {
             let offset = prefix[start];
@@ -3386,8 +3388,7 @@ fn place_packed(
             }
         }
         Ok(())
-    });
-    result
+    })
 }
 
 /// Format frame groups on [`pipeline_format_threads`] threads, then
@@ -3712,13 +3713,13 @@ fn formatted_parts(
     #[cfg(feature = "parallel")]
     {
         let chunk = frames.len().div_ceil(workers).max(1);
-        return crate::parser::on_pool(workers, || {
+        crate::parser::on_pool(workers, || {
             use rayon::prelude::*;
             frames
                 .par_chunks(chunk)
                 .map(|group| format_group_bytes(group, 1, precision, canonical, bind))
                 .collect()
-        });
+        })
     }
     #[cfg(not(feature = "parallel"))]
     {
@@ -3817,7 +3818,7 @@ fn write_at_offset(file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::FileExt;
-        return file.write_at(buf, offset);
+        file.write_at(buf, offset)
     }
     #[cfg(windows)]
     {

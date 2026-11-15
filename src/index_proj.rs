@@ -55,11 +55,11 @@ pub fn species_counts_from_symbols(
         if symbol.is_empty() {
             continue;
         }
-        if let Some(last) = order.last_mut() {
-            if last.0 == symbol {
-                last.1 = last.1.saturating_add(1);
-                continue;
-            }
+        if let Some(last) = order.last_mut()
+            && last.0 == symbol
+        {
+            last.1 = last.1.saturating_add(1);
+            continue;
         }
         if let Some(slot) = order.iter_mut().find(|(name, _)| name == symbol) {
             slot.1 = slot.1.saturating_add(1);

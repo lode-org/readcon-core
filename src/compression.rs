@@ -564,13 +564,12 @@ fn coord_member_rows(data: &[u8], parts: &[&[u8]]) -> Option<Vec<(u32, u32)>> {
     if total as usize != natoms {
         return None;
     }
-    if let Some(last_nl) = memchr::memrchr(b'\n', data) {
-        if data[last_nl + 1..]
+    if let Some(last_nl) = memchr::memrchr(b'\n', data)
+        && data[last_nl + 1..]
             .iter()
             .any(|byte| !byte.is_ascii_whitespace())
-        {
-            return None;
-        }
+    {
+        return None;
     }
     let mut row = 0u32;
     let mut table = Vec::with_capacity(parts.len());
@@ -724,7 +723,7 @@ fn write_fused_frame(
                     let (atom_from, atom_to) = ranges_ref[index];
                     plain.clear();
                     if atom_from == 0 {
-                        plain.extend_from_slice(&header);
+                        plain.extend_from_slice(header);
                     }
                     plain.extend(crate::writer::format_coord_range(frame, atom_from, atom_to));
                     let plain_len = plain.len();
@@ -1034,23 +1033,22 @@ fn gzip_into(src: &[u8], dst: &mut [u8]) -> io::Result<()> {
 }
 
 fn inflate_gzip(bytes: &[u8], out: &mut Vec<u8>) -> io::Result<()> {
-    if decode_thread_budget() != 1 {
-        if let Some(plan) = gzip_member_starts(bytes) {
-            if plan.starts.len() > 1 {
-                let threads = worker_limit_from_budget(plan.starts.len());
-                if let Some(plain) = plan.plain.as_deref() {
-                    if plain.len() == plan.starts.len() {
-                        return inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out);
-                    }
-                }
-                let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
-                out.clear();
-                for part in parts {
-                    out.extend_from_slice(&part);
-                }
-                return Ok(());
-            }
+    if decode_thread_budget() != 1
+        && let Some(plan) = gzip_member_starts(bytes)
+        && plan.starts.len() > 1
+    {
+        let threads = worker_limit_from_budget(plan.starts.len());
+        if let Some(plain) = plan.plain.as_deref()
+            && plain.len() == plan.starts.len()
+        {
+            return inflate_sized(bytes, &plan.starts, plain, threads, gzip_into, out);
         }
+        let parts = inflate_unknown(bytes, &plan.starts, threads, gunzip_member)?;
+        out.clear();
+        for part in parts {
+            out.extend_from_slice(&part);
+        }
+        return Ok(());
     }
     let mut decoder = flate2::read::MultiGzDecoder::new(bytes);
     out.clear();
@@ -1229,7 +1227,7 @@ where
     // eight-thread gzip write slower than four.
     let ranges = worker_ranges(parts.len(), threads);
     std::thread::scope(|scope| {
-        for (_worker, (begin, end)) in ranges.into_iter().enumerate() {
+        for (begin, end) in ranges.into_iter() {
             let slots = &slots;
             let parts = &parts;
             let encode = &encode;

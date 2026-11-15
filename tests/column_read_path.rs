@@ -316,7 +316,7 @@ fn assert_frames_match(path: &Path) {
     let bytes = fs::read(path).unwrap();
     let mut slow = Vec::new();
     let mut iter = ConFrameIterator::from_bytes(&bytes);
-    while let Some(item) = iter.next() {
+    for item in iter {
         slow.push(item.unwrap_or_else(|err| panic!("{} iterator: {err}", path.display())));
     }
     let fast = read_all_frames_with_threads(path, Some(1))
