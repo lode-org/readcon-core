@@ -390,6 +390,90 @@ def test_a_finished_measure_can_resume(tmp_path: Path):
             )
 
 
+def test_a_protected_measure_is_not_rewritten(tmp_path: Path):
+    root = Path(__file__).resolve().parents[2]
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    trees = []
+    try:
+        forced = _worktree(tmp_path, "forced")
+        trees.append(forced)
+        _, short = _tip(forced)
+        fresh = forced / "bench/h2h/million" / f"v{version}-{short}"
+        measured = _snakemake(forced, "million_measure")
+        assert measured.returncode == 0, measured.stdout + measured.stderr
+        measured_bytes = (fresh / "cross-format.json").read_bytes()
+        forced_run = _snakemake(forced, "-F", "million")
+        forced_text = forced_run.stdout + forced_run.stderr
+        assert forced_run.returncode != 0, forced_text
+        assert "ProtectedOutputException" in forced_text
+        assert (fresh / "cross-format.json").read_bytes() == measured_bytes
+
+        edited = _worktree(tmp_path, "edited")
+        trees.append(edited)
+        _, edited_short = _tip(edited)
+        edited_fresh = edited / "bench/h2h/million" / f"v{version}-{edited_short}"
+        edited_measure = _snakemake(edited, "million_measure")
+        assert edited_measure.returncode == 0, (
+            edited_measure.stdout + edited_measure.stderr
+        )
+        edited_bytes = (edited_fresh / "cross-format.json").read_bytes()
+        snakefile = edited / "bench/h2h/Snakefile"
+        original = snakefile.read_text(encoding="utf-8")
+        needle = (
+            'python3 bench/h2h/cross_format.py --out "{params.out}" '
+            '--repeats 12 --ops "{params.ops}"\n'
+        )
+        assert needle in original
+        snakefile.write_text(
+            original.replace(needle, needle + "        : record stays\n", 1),
+            encoding="utf-8",
+        )
+        changed = _snakemake(edited, "million")
+        changed_text = changed.stdout + changed.stderr
+        assert changed.returncode != 0, changed_text
+        assert "ProtectedOutputException" in changed_text
+        assert (edited_fresh / "cross-format.json").read_bytes() == edited_bytes
+
+        moved = _worktree(tmp_path, "moved")
+        trees.append(moved)
+        _, moved_short = _tip(moved)
+        moved_rel = f"bench/h2h/million/v{version}-{moved_short}"
+        moved_fresh = moved / moved_rel
+        moved_measure = _snakemake(moved, "million_measure")
+        assert moved_measure.returncode == 0, (
+            moved_measure.stdout + moved_measure.stderr
+        )
+        moved_bytes = (moved_fresh / "cross-format.json").read_bytes()
+        subprocess.check_call(
+            ["git", "commit", "--allow-empty", "-m", "note a later tip"],
+            cwd=moved,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "Rohit Goswami",
+                "GIT_AUTHOR_EMAIL": "rgoswami@ieee.org",
+                "GIT_COMMITTER_NAME": "Rohit Goswami",
+                "GIT_COMMITTER_EMAIL": "rgoswami@ieee.org",
+            },
+        )
+        retargeted = _snakemake(
+            moved,
+            "million",
+            "--config",
+            f"million_out={moved_rel}",
+        )
+        retargeted_text = retargeted.stdout + retargeted.stderr
+        assert retargeted.returncode != 0, retargeted_text
+        assert "ProtectedOutputException" in retargeted_text
+        assert (moved_fresh / "cross-format.json").read_bytes() == moved_bytes
+    finally:
+        for tree in trees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(tree)],
+                cwd=root,
+                check=False,
+            )
+
+
 def test_a_per_size_repeat_map_is_the_campaign_protocol():
     assert report.protocol_error({"warmup": 1, "repeats": 12}) is None
     assert (
