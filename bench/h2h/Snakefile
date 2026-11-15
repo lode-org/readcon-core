@@ -465,17 +465,26 @@ rule camp16b:
         "mkdir -p bench/h2h/scaling/camp16b/logs && python3 bench/h2h/camp16b_run.py"
 
 
-# Million-atom matrix. The output directory is the versioned record
-# bench/h2h/million/v<release>/. A real run measures that directory again.
+# Million-atom matrix. An existing record directory is refused. A real
+# run writes bench/h2h/million/v<release>-<12-character tip> and names
+# that directory and the tip in the previous record's SUPERSEDED.md.
 # Fresh process per sample, pinned to the starting CPU set, one warmup,
 # n=12, type-7 median and IQR. The asv class times the same readcon calls.
 # ``--config ops=write`` times writes. The default times reads and writes.
 import os
+import subprocess
 
 _REPO = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), "..", ".."))
 with open(os.path.join(_REPO, "VERSION"), encoding="utf-8") as _version_file:
     _RELEASE = _version_file.read().strip()
-MILLION = f"bench/h2h/million/v{_RELEASE}"
+_TIP = subprocess.check_output(
+    ["git", "-C", _REPO, "rev-parse", "HEAD"], text=True
+).strip()
+_TIP_SHORT = subprocess.check_output(
+    ["git", "-C", _REPO, "rev-parse", "--short=12", "HEAD"], text=True
+).strip()
+MILLION_SAVED = f"bench/h2h/million/v{_RELEASE}"
+MILLION = f"bench/h2h/million/v{_RELEASE}-{_TIP_SHORT}"
 MILLION_OPS = config.get("ops", "read,write")
 MILLION_MEASURE = [
     f"{MILLION}/cross-format.json",
@@ -491,13 +500,31 @@ rule million_measure:
         MILLION_MEASURE,
     params:
         out=MILLION,
+        previous=MILLION_SAVED,
+        tip=_TIP,
         ops=MILLION_OPS,
     shell:
         """
         set -euo pipefail
-        case "{params.out}" in
-            bench/h2h/scaling|bench/h2h/scaling/*) echo "refusing to write a saved record" >&2; exit 1 ;;
+        out="{params.out}"
+        previous="{params.previous}"
+        tip="{params.tip}"
+        case "$out" in
+            bench/h2h/scaling|bench/h2h/scaling/*|"$previous"|"$previous"/*)
+                echo "refusing to write a saved record" >&2
+                exit 1
+                ;;
         esac
+        if [ -d "$out" ]; then
+            echo "refusing to write a saved record" >&2
+            exit 1
+        fi
+        if [ -d "$previous" ] && [ "$previous" != "$out" ]; then
+            cat > "${{previous}}/SUPERSEDED.md" <<EOF
+Superseded by ${{out}}.
+Tip: ${{tip}}.
+EOF
+        fi
         export READCON_CROSS_STRUCTURES=1M
         export OMP_NUM_THREADS=1
         export OPENBLAS_NUM_THREADS=1
