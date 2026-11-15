@@ -234,6 +234,10 @@ skip_dirs = {
 skip_prefixes = (
     "bench/h2h/work/",
     "bench/h2h/scaling/",
+    # The million-atom log names the release it measured. The note under
+    # the older paper table points at that log and at this release.
+    "bench/h2h/million/",
+    "paper/cpc/bench/results/r0174/million/SUPERSEDED.md",
     # version_map.tex names the library that wrote it. That is a measurement.
     "paper/cpc/src/figures/generated/version_map.tex",
 )
