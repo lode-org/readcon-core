@@ -4934,35 +4934,40 @@ fn write_conbin_columns(
     {
         return Err(PyValueError::new_err("CON-bin columns disagree"));
     }
-    let mut masks = Vec::with_capacity(n);
-    for index in 0..n {
+    // One buffer for the masks and one for the ids. The loops only store
+    // bytes; they do not allocate per atom.
+    let mut masks = vec![0u8; n];
+    for (index, mask) in masks.iter_mut().enumerate() {
         let base = index * 3;
-        let mask = u8::from(flags[base] != 0.0)
+        *mask = u8::from(flags[base] != 0.0)
             | (u8::from(flags[base + 1] != 0.0) << 1)
             | (u8::from(flags[base + 2] != 0.0) << 2);
-        masks.push(mask);
     }
-    let mut ids = Vec::with_capacity(n);
-    for _ in 0..n_frames {
-        for atom in 0..n_atoms {
-            ids.push(atom);
+    let mut ids = vec![0u64; n];
+    let atoms = n_atoms as usize;
+    if atoms > 0 {
+        for chunk in ids.chunks_mut(atoms) {
+            for (atom, slot) in chunk.iter_mut().enumerate() {
+                *slot = atom as u64;
+            }
         }
     }
     let path_owned = path.to_owned();
-    let _ = py;
-    crate::conbin::write_f64_columns(
-        Path::new(&path_owned),
-        n_frames,
-        n_atoms,
-        pos,
-        Some(vel),
-        Some(mass),
-        Some(box_cell),
-        Some(&ids),
-        Some(&masks),
-    )
-    .map(|_| ())
-    .map_err(|err| PyIOError::new_err(err.to_string()))
+    py.detach(move || {
+        crate::conbin::write_f64_columns(
+            Path::new(&path_owned),
+            n_frames,
+            n_atoms,
+            pos,
+            Some(vel),
+            Some(mass),
+            Some(box_cell),
+            Some(&ids),
+            Some(&masks),
+        )
+        .map(|_| ())
+        .map_err(|err| PyIOError::new_err(err.to_string()))
+    })
 }
 
 /// Read every column a version-2 CON-bin stored, as views of the map.
