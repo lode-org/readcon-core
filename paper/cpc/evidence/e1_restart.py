@@ -486,6 +486,10 @@ initializer = {init}
 {opt_line}max_move = {band["max_move"]}
 converged_force = {FMAX}
 max_iterations = {max_iterations}
+
+[Debug]
+write_movies = true
+write_movies_interval = 1
 """
 
 

@@ -13,13 +13,13 @@
 //! default) or with DECIMALS decimals: atom `i` is Cu in the first half and H
 //! in the second, with fixed flags 0 and id `i`, in a box with 90 degree
 //! angles.
-//! `write-rcbin` writes the positions image of a CON file: `read_soa_path` with
-//! `Retain::POSITIONS`, then `write_rcbin`.
+//! `write-rcbin` writes the CON-bin image of a CON file with
+//! `conbin::write_from_con_with_threads`.
 //!
 //! The modes are the readers: `frames` iterates `ConFrameIterator` over the
 //! `read_file_contents` of the file, one frame at a time; `all` is
-//! `read_all_frames_with_threads`; `columns` is `read_soa_path` with
-//! `Retain::POSITIONS`; `image` is `read_rcbin`.  Only `all` takes a thread
+//! `read_all_frames_with_threads`; `columns` is `read_coord_columns`; `image`
+//! maps the CON-bin and reads its position run.  Only `all` takes a thread
 //! count.  `time` and `dump` print and write what the native drivers of
 //! `bf_driver.h` do.
 
@@ -31,8 +31,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use readcon_core::compression::read_file_contents;
-use readcon_core::iterators::{read_all_frames_with_threads, ConFrameIterator};
-use readcon_core::soa_traj::{read_rcbin, read_soa_path, write_rcbin, Retain, SoaTraj};
+use readcon_core::conbin::{map_file, write_from_con_with_threads};
+use readcon_core::iterators::{read_all_frames_with_threads, read_coord_columns, ConFrameIterator};
 use readcon_core::types::ConFrameBuilder;
 use readcon_core::writer::ConFrameWriter;
 
@@ -68,16 +68,6 @@ impl Fold {
         Ok(())
     }
 
-    fn columns(&mut self, soa: &SoaTraj) -> Result<()> {
-        if !soa.rectangular {
-            return Err("the frames hold different atom counts".into());
-        }
-        let width = 3 * soa.n_atoms;
-        for f in 0..soa.n_frames {
-            self.frame(&soa.positions[f * width..(f + 1) * width], &soa.cell[3 * f..3 * f + 3])?;
-        }
-        Ok(())
-    }
 }
 
 fn read(mode: &str, threads: usize, path: &Path, fold: &mut Fold) -> Result<()> {
@@ -103,14 +93,32 @@ fn read(mode: &str, threads: usize, path: &Path, fold: &mut Fold) -> Result<()> 
             black_box(&frames);
         }
         "columns" => {
-            let soa = read_soa_path(path, Retain::POSITIONS, Some(threads))?;
-            fold.columns(&soa)?;
-            black_box(&soa);
+            let cols = read_coord_columns(path, Some(threads))?;
+            let width = 3 * cols.block.n_atoms;
+            for f in 0..cols.block.n_frames {
+                let pos = &cols.block.values[f * width..(f + 1) * width];
+                let cell = &cols.cells[6 * f..6 * f + 3];
+                fold.frame(pos, cell)?;
+            }
+            black_box(&cols);
         }
         "image" => {
-            let soa = read_rcbin(path)?;
-            fold.columns(&soa)?;
-            black_box(&soa);
+            let mapped = map_file(path, 1)?;
+            let positions = mapped.positions_f64()?;
+            let n_atoms = mapped.header.n_atoms as usize;
+            let n_frames = mapped.header.n_frames as usize;
+            let width = 3 * n_atoms;
+            let cells = mapped.cell_f64()?;
+            let zero = [0.0, 0.0, 0.0];
+            for f in 0..n_frames {
+                let pos = &positions[f * width..(f + 1) * width];
+                let cell = match cells {
+                    Some(all) => &all[6 * f..6 * f + 3],
+                    None => &zero,
+                };
+                fold.frame(pos, cell)?;
+            }
+            black_box(&mapped);
         }
         _ => return Err("mode is frames, all, columns or image".into()),
     }
@@ -142,7 +150,7 @@ fn write_con(reference: &Path, boxes: &Path, out: &Path, format: &str) -> Result
         }
         writer.write_frame(&builder.build()?)?;
     }
-    writer.finish()?;
+    writer.flush()?;
     Ok(())
 }
 
@@ -155,8 +163,8 @@ fn main() -> Result<()> {
             write_con(Path::new(&args[2]), Path::new(&args[3]), Path::new(&args[4]), &args[5])
         }
         Some("write-rcbin") if args.len() == 4 => {
-            let soa = read_soa_path(Path::new(&args[2]), Retain::POSITIONS, Some(1))?;
-            Ok(write_rcbin(Path::new(&args[3]), &soa)?)
+            write_from_con_with_threads(Path::new(&args[2]), Path::new(&args[3]), false, 1)?;
+            Ok(())
         }
         Some(command @ ("time" | "dump")) if args.len() == if command == "dump" { 7 } else { 5 } => {
             let threads: usize = args[3].parse()?;
