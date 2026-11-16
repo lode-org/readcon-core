@@ -326,11 +326,40 @@ def test_a_precision_miss_fails_the_run() -> None:
         cross_format.reject_round_trip("readcon-con", 1.0, 0.0, 1e-5)
 
 
-def test_extxyz_ng_oserror_names_the_limit() -> None:
-    reason = cross_format.unsupported_reason("extxyz-ng", OSError("Digit"))
+def test_extxyz_ng_oserror_stores_the_actual_message() -> None:
+    reason = cross_format.unsupported_reason(
+        "extxyz-ng", OSError("frame of 256 atoms past the 128 limit")
+    )
     assert reason.startswith("unsupported:")
-    assert "128" in reason
-    assert "not changed" in reason
+    assert "OSError" in reason
+    # The stored reason is the exception this run saw, not a fixed string.
+    assert "frame of 256 atoms past the 128 limit" in reason
+
+
+def test_fresh_reads_returns_and_records_its_samples(tmp_path, monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake(_script, _job):
+        calls["n"] += 1
+        return {"wall_s": 0.01 * calls["n"], "rss_bytes": 7, "checksum": 1.0}
+
+    monkeypatch.setattr(cross_format, "spawn_worker", fake)
+    plain = tmp_path / "readcon.con"
+    plain.write_bytes(b"x" * 64)
+    samples = cross_format._fresh_reads(
+        tmp_path, plain, 1, 6, "1M", "readcon-con-fresh-serial"
+    )
+    # The output carries one value per requested sample.
+    assert len(samples) == 6
+    # One warmup read, then the six recorded samples.
+    assert calls["n"] == 7
+    tsv = tmp_path / "by-arm" / "1M" / "readcon-con-fresh-serial.tsv"
+    text = tsv.read_text(encoding="utf-8")
+    assert text.startswith("op\tsample\twall_s\trss_bytes\tfile_bytes\tdrops\n")
+    # header plus six sample lines
+    assert text.count("\n") == 7
+    for sample in samples:
+        assert f"{sample:.6f}" in text
 
 
 def test_interleave_keeps_one_sample_count(tmp_path: Path, monkeypatch) -> None:

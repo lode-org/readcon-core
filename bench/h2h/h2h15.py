@@ -37,6 +37,7 @@ BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
 sys.path.insert(0, str(BENCH))
 
+import campaign_protocol  # noqa: E402
 import cross_format  # noqa: E402
 from bench_disk import bench_disk  # noqa: E402
 from measured_commit import measurement, record_path, refuse_stale_build  # noqa: E402, F401
@@ -120,6 +121,17 @@ def dcd_delta(path: Path) -> float:
     if len(data) < 48:
         raise SystemExit(f"DCD header is short: {path}")
     return float(struct.unpack_from("<f", data, 44)[0])
+
+
+def write_loses(arm: str, dest: Path, n_frames: int) -> str:
+    """Loses for a write row: the fixed drops plus, for a multi-frame
+    chemfiles-dcd-012 write, the header DELTA. The same string is stored
+    in the JSON row and in every by-arm sample, so the two never diverge.
+    """
+    loses = DROPS[arm]
+    if arm == "chemfiles-dcd-012" and dest.is_file() and n_frames >= 2:
+        loses = f"{loses}; header DELTA {dcd_delta(dest):.6g}"
+    return loses
 
 
 def chemfiles_012_library() -> Path | None:
@@ -437,6 +449,15 @@ def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
             cross_format.arm_selected(label, "mdcompress-xtc")
         ):
             continue
+        load1 = os.getloadavg()[0]
+        lines.append(f"loadavg-shard {label} {load1:.2f}")
+        if load1 > 1.0:
+            warning = (
+                f"shard {label} started at load average {load1:.2f}, above 1; "
+                "its samples may be contended"
+            )
+            lines.append(f"note {warning}")
+            print(f"  WARNING: {warning}", flush=True)
         repeats = cross_format.repeats_for(label)
         directory = work / label
         directory.mkdir(parents=True, exist_ok=True)
@@ -576,15 +597,13 @@ def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
                     f"{float(result['wall_s']):.6f}",
                     str(int(result["rss_bytes"])),
                     str(dest.stat().st_size) if dest.is_file() else "",
-                    DROPS[arm],
+                    write_loses(arm, dest, n_frames),
                 )
         for arm in arms:
             samples = write_found[arm]
             median, iqr = _median(samples)
             dest = timed_dir / Path(inputs[arm]).name
-            loses = DROPS[arm]
-            if arm == "chemfiles-dcd-012" and dest.is_file() and n_frames >= 2:
-                loses = f"{loses}; header DELTA {dcd_delta(dest):.6g}"
+            loses = write_loses(arm, dest, n_frames)
             rows.append(
                 {
                     "structure": label,
@@ -677,6 +696,19 @@ def run(out: Path, repeats: int | None = None) -> None:
     payload["mdcompress_commit"] = MDC_COMMIT
     payload["chemfiles_012_version"] = CF012_VERSION
     payload["chemfiles_012_commit"] = CF012_COMMIT
+    # The extra-only shard never runs the table, so the measurement
+    # protocol the table writes at top level is absent. Record it here so
+    # the shard JSON states its warmup, percentile, and sample count.
+    protocol_block = campaign_protocol.protocol(0)
+    protocol_block["samples"] = (
+        repeats
+        if repeats is not None
+        else {
+            label: cross_format.sample_count(label, None)
+            for label, _n, _f in cross_format.STRUCTURES
+        }
+    )
+    payload["protocol"] = protocol_block
     versions = dict(payload.get("versions") or {})
     versions["chemfiles-0.12.0-dev"] = f"{CF012_VERSION} {CF012_COMMIT}"
     versions["mdcompress-tag"] = MDC_TAG
@@ -741,7 +773,7 @@ def run(out: Path, repeats: int | None = None) -> None:
                 "Every row comes from this run. host.json is written with the table.",
                 "MDCompress 2.0.5 times DCD as mdcompress-mdc and XTC as mdcompress-xtc.",
                 "chemfiles-dcd is 0.10.4. chemfiles-dcd-012 is 0.12.0-dev at fc1e930.",
-                "The Drops column names the DCD interval unit.",
+                "The loses column names the DCD interval unit.",
                 (
                     "The sample count is 12 below one million atoms and 6 "
                     "at one million, for every tool."

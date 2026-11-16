@@ -16,8 +16,8 @@ positions and the cell out of a chemfiles Frame. That row exists only
 when ``has_chemfiles_support()`` is true. Compressed XYZ rows exist when
 this chemfiles build opens ``.xyz.gz``, ``.xyz.xz`` and ``.xyz.bz2``.
 MDAnalysis PDB above 99,999 atoms stays in the table with that limit in
-the Drops column. A round trip that moves a coordinate records precision
-in Drops.
+the loses column. A round trip that moves a coordinate records precision
+in loses.
 
 Each arm is converted once, outside the clock. Samples are fresh processes
 pinned to the same CPU set, one warmup, serial samples, rotated order.
@@ -35,6 +35,7 @@ import ctypes
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -125,13 +126,15 @@ PDB_MAX_ATOMS = 99_999
 
 # extxyz-ng 0.0.2 reads a short frame, including
 # Properties=species:S:1:pos:R:3, and raises OSError once the frame
-# passes 128 atoms. The same limit holds with masses and momenta.
-# The extended XYZ written for every reader is unchanged.
-EXTXYZ_NG_UNSUPPORTED = (
-    "unsupported: extxyz-ng 0.0.2 raises OSError past 128 atoms, "
-    "including a standard Properties=species:S:1:pos:R:3 header. "
-    "The extended XYZ columns were not changed"
-)
+# passes 128 atoms. The same limit holds with masses and momenta. The
+# extended XYZ written for every reader is unchanged. The reason stored
+# for this arm is the actual OSError text, not a canned sentence.
+
+# The interval unit each chemfiles DCD writer stamps on disk. The 0.10.4
+# writer stores AKMA; the 0.12.0-dev build at fc1e930 stores picoseconds.
+# A DCD row names its unit (and, for a multi-frame write, the header
+# DELTA) in the same loses string it reports in JSON and TSV alike.
+DCD_INTERVAL_UNIT = {"chemfiles-dcd": "AKMA"}
 
 
 def repeats_for(label: str) -> int:
@@ -152,6 +155,22 @@ def sample_count(label: str, repeats: int | None) -> int:
     if repeats < 1:
         raise SystemExit("repeats must be positive")
     return repeats
+
+
+def record_shard_loadavg(lines: list[str], notes: list[str], label: str) -> float:
+    """Load average at the start of a shard. Above 1 is recorded as a warning."""
+    load1 = os.getloadavg()[0]
+    lines.append(f"loadavg-shard {label} {load1:.2f}")
+    print(f"cross {label} loadavg {load1:.2f}", flush=True)
+    if load1 > 1.0:
+        warning = (
+            f"shard {label} started at load average {load1:.2f}, above 1; "
+            "its samples may be contended"
+        )
+        notes.append(warning)
+        lines.append(f"note {warning}")
+        print(f"  WARNING: {warning}", flush=True)
+    return load1
 
 
 def campaign_host(out: Path, tree: str) -> dict:
@@ -228,9 +247,42 @@ def reject_round_trip(
 
 
 def unsupported_reason(arm_id: str, exc: BaseException) -> str:
-    if arm_id == "extxyz-ng" and isinstance(exc, OSError):
-        return EXTXYZ_NG_UNSUPPORTED
+    """The real exception text, so the record names what the arm raised.
+
+    extxyz-ng past 128 atoms is no longer collapsed to a fixed sentence:
+    its stored reason is the OSError this run actually saw.
+    """
     return "unsupported: " + record_text(f"{type(exc).__name__}: {exc}")
+
+
+def dcd_header_delta(path: str | os.PathLike) -> float | None:
+    """CHARMM DCD DELTA, a little-endian float32 at file offset 44.
+
+    ``None`` when the file is too short to hold a header.
+    """
+    data = Path(path).read_bytes()
+    if len(data) < 48:
+        return None
+    return float(struct.unpack_from("<f", data, 44)[0])
+
+
+def dcd_loses(arm_id: str, base_loses: str, *, delta: float | None = None) -> str:
+    """Loses text for a DCD row, the same string for JSON and TSV.
+
+    It names the interval unit the arm's writer stamps and, for a
+    multi-frame write (``delta`` given), the header DELTA. An arm with no
+    known unit keeps its audit loses unchanged.
+    """
+    unit = DCD_INTERVAL_UNIT.get(arm_id)
+    if unit is None:
+        return base_loses
+    text = "" if base_loses in ("", "none") else base_loses
+    suffix = f"interval unit: {unit}"
+    if "interval unit:" not in text:
+        text = suffix if not text else f"{text}; {suffix}"
+    if delta is not None and "header DELTA" not in text:
+        text = f"{text}; header DELTA {delta:.6g}"
+    return text
 
 
 def _file_bytes(path: str | None) -> str:
@@ -2868,8 +2920,22 @@ def _spread(samples: list[float]) -> float:
     return iqr / abs(median)
 
 
-def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
-    """Median of fresh-process reads. ``None`` is the default thread count."""
+def _fresh_reads(
+    out: Path,
+    path: Path,
+    n_threads: int | None,
+    repeats: int,
+    structure: str,
+    arm_id: str,
+    loses: str = "none",
+) -> list[float]:
+    """Fresh-process reads of one file, returning the raw samples.
+
+    ``None`` is the default thread count. Each finished sample is appended
+    under by-arm as ``arm_id``, the same as every other arm, so the median
+    the summary sentence reports is backed by recorded samples rather than
+    a number with nothing behind it.
+    """
     script = Path(__file__).resolve()
     job = {
         "op": "read",
@@ -2878,10 +2944,24 @@ def _fresh_reads(path: Path, n_threads: int | None, repeats: int) -> float:
         "cache": "warm",
         "n_threads": n_threads,
     }
-    spawn_worker(script, job)
-    samples = [float(spawn_worker(script, job)["wall_s"]) for _ in range(repeats)]
-    median, _iqr = type7(samples)
-    return median
+    spawn_worker(script, job)  # one warmup, outside the record
+    samples: list[float] = []
+    for index in range(repeats):
+        result = spawn_worker(script, job)
+        wall = float(result["wall_s"])
+        samples.append(wall)
+        append_arm_row(
+            out,
+            structure,
+            arm_id,
+            "read",
+            str(index),
+            f"{wall:.6f}",
+            recorded_rss(result),
+            _file_bytes(os.fspath(path)),
+            loses,
+        )
+    return samples
 
 
 def run(
@@ -2969,6 +3049,7 @@ def run(
     for label, n_atoms, n_frames in structures:
         if only_structures and label not in only_structures:
             continue
+        record_shard_loadavg(lines, notes, label)
         count = sample_count(label, repeats)
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
@@ -3074,17 +3155,73 @@ def run(
             arm["file_bytes"] = size
             arm["audit"] = checked
             arm["checksum"] = float(got["checksum"])
+            # A DCD row names its interval unit (and, for a multi-frame
+            # write, the header DELTA) in one loses string reused for the
+            # JSON row, the summary TSV and every by-arm sample.
+            arm["read_loses"] = checked["loses"]
+            arm["write_loses"] = checked["loses"]
+            if arm["id"] in DCD_INTERVAL_UNIT:
+                delta = dcd_header_delta(path) if n_frames >= 2 else None
+                arm["read_loses"] = dcd_loses(arm["id"], checked["loses"])
+                arm["write_loses"] = dcd_loses(arm["id"], checked["loses"], delta=delta)
             usable.append(arm)
         if label == "1M" and any(arm["id"] == "readcon-con" for arm in usable):
             plain = directory / "readcon.con"
-            default_read = _fresh_reads(plain, None, count)
-            serial_note = _fresh_reads(plain, 1, count)
+            base = next(a for a in usable if a["id"] == "readcon-con")
+            base_loses = base["audit"]["loses"]
+            fresh_medians: dict[str, float] = {}
+            for fresh_arm, label_text, threads in (
+                ("readcon-con-fresh-default", "default threads", None),
+                ("readcon-con-fresh-serial", "serial", 1),
+            ):
+                samples = _fresh_reads(
+                    out, plain, threads, count, label, fresh_arm, base_loses
+                )
+                median, iqr = type7(samples)
+                fresh_medians[fresh_arm] = median
+                rows.append(
+                    {
+                        "structure": label,
+                        "atoms": n_atoms,
+                        "frames": n_frames,
+                        "tool": base["tool"],
+                        "format": base["format"],
+                        "arm": fresh_arm,
+                        "notes": (
+                            f"Fresh-process read of 1M readcon-con, {label_text}, "
+                            "outside the interleaved table. Same warmup and "
+                            "sample count as the table row."
+                        ),
+                        "op": "read",
+                        "cache": "warm",
+                        "median_s": median,
+                        "iqr_s": iqr,
+                        "samples_s": samples,
+                        "rss_bytes": None,
+                        "file_bytes": base["file_bytes"],
+                        "loses": base_loses,
+                        "position_error": base["audit"]["position_error"],
+                        "cell_error": base["audit"]["cell_error"],
+                        "precision": base["precision"],
+                        "checksum_ok": None,
+                        "n": len(samples),
+                    }
+                )
+                lines.append(
+                    f"read warm {label} {fresh_arm} {median:.6f} {iqr:.6f} "
+                    f"n {len(samples)}"
+                )
+                for sample in samples:
+                    lines.append(f"sample {sample:.9f}")
             notes.append(
                 "1M readcon-con serial fresh-process read "
-                f"{serial_note:.4f} s, default threads {default_read:.4f} s. "
-                "The table row is the interleaved serial measurement. "
-                "Default threads is one worker per core, same warmup and "
-                f"sample count ({count})."
+                f"{fresh_medians['readcon-con-fresh-serial']:.4f} s, default "
+                f"threads {fresh_medians['readcon-con-fresh-default']:.4f} s. "
+                "The table row is the interleaved serial measurement. Default "
+                "threads is one worker per core, same warmup and sample count "
+                f"({count}). Each median is the type-7 median of the samples "
+                "recorded for readcon-con-fresh-serial and "
+                "readcon-con-fresh-default."
             )
             lines.append(f"note {notes[-1]}")
         write_jobs = []
@@ -3137,10 +3274,7 @@ def run(
                     out=out,
                     structure=label,
                     op=f"read-{cache}",
-                    drops={
-                        arm["id"]: arm.get("audit", {}).get("loses", "")
-                        for arm in usable
-                    },
+                    drops={arm["id"]: arm.get("read_loses", "") for arm in usable},
                 )
         write_timed = None
         if "write" in ops:
@@ -3153,9 +3287,7 @@ def run(
                 out=out,
                 structure=label,
                 op="write",
-                drops={
-                    arm["id"]: arm.get("audit", {}).get("loses", "") for arm in usable
-                },
+                drops={arm["id"]: arm.get("write_loses", "") for arm in usable},
             )
         for arm in usable:
             if "read" in ops:
@@ -3194,7 +3326,7 @@ def run(
                         "samples_s": samples,
                         "rss_bytes": median_rss(rss_values),
                         "file_bytes": arm["file_bytes"],
-                        "loses": arm["audit"]["loses"],
+                        "loses": arm["read_loses"],
                         "position_error": arm["audit"]["position_error"],
                         "cell_error": arm["audit"]["cell_error"],
                         "precision": arm["precision"],
@@ -3273,7 +3405,7 @@ def run(
                 "samples_s": samples,
                 "rss_bytes": median_rss(rss_values),
                 "file_bytes": file_bytes,
-                "loses": arm["audit"]["loses"],
+                "loses": arm["write_loses"],
                 "position_error": arm["audit"]["position_error"],
                 "cell_error": arm["audit"]["cell_error"],
                 "precision": arm["precision"],
