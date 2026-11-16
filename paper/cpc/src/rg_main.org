@@ -753,7 +753,7 @@ NumPy has no cell, so that row fails the cell check.
 Table~\ref{tab:format-h2h} is the fair per-format comparison of the v0.23.3 cross-format campaign, measured on one commit and one host, \hhfHost, read from \path{bench/h2h/formats/v0.23.3/lscpu.txt}.
 readcon reads plain CON, binary CON and CON.zst; each other tool reads its supported formats, and readcon-chemfiles keeps its own row.
 For every arm the table reports the warm and cold median read, the peak resident set of the read, the file size, and the CON 3.1 fields the format drops.
-Each median is the type-7 median of \hhfSamplesSubOneM samples below one million atoms and \hhfSamplesOneM at one million, each read in a fresh process on one thread.
+Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.
 On the recorded host a fresh process reads one million atoms of CON in \hhfReadconConWarmOneM~s warm and \hhfReadconConColdOneM~s cold, from an \hhfReadconConBytesOneM-byte file, and peaks at \hhfReadconConPeakOneM~MiB, while the MDAnalysis mmCIF read of the same atoms takes \hhfMmcifWarmOneM~s and peaks at \hhfMmcifPeakOneM~MiB.
 
 \input{figures/generated/format_h2h}
