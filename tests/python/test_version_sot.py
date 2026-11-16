@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -64,3 +65,33 @@ def test_render_wrap_refuses_to_keep_the_previous_digest():
 def test_version_sot_tests_do_not_embed_the_package_version():
     source = Path(__file__).read_text(encoding="utf-8")
     assert read_version() not in source
+
+
+def test_lockstep_gate_catches_a_mismatched_real_manifest():
+    """Excluding bench/ records must not blind the gate to a package
+    manifest whose declared version drifts from VERSION."""
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    cargo = ROOT / "Cargo.toml"
+    version = read_version()
+    original = cargo.read_text(encoding="utf-8")
+    pin = f'version = "{version}"'
+    assert pin in original
+    major, minor, patch = version.split(".", 2)
+    patch_num = re.match(r"\d+", patch)
+    assert patch_num is not None
+    other = f"{major}.{minor}.{int(patch_num.group(0)) + 1}"
+    tampered = original.replace(pin, f'version = "{other}"', 1)
+    assert tampered != original
+    cargo.write_text(tampered, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        cargo.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, "gate passed a mismatched Cargo.toml version"
+    assert "Cargo.toml" in result.stdout + result.stderr

@@ -226,18 +226,17 @@ skip_dirs = {
     ".venv",
     "work",
 }
-# bench/h2h/work is generated campaign output. It is gitignored, and a
-# full-tree walk would still open it. The gate lists tracked files and
-# also skips this prefix.
-# Campaign logs and rows record the version they measured. They are not
-# package metadata. bench/h2h/work is generated output and is gitignored.
+# The bench/ tree is campaign harness, fixtures, and recorded rows. Its
+# paths and payloads name the release they were measured with, so they
+# are data, not package metadata. The library build and the cxx wrap
+# both drop this tree wholesale (Cargo.toml ``exclude = ["bench/**"]``
+# and scripts/package-cxx.sh), and the lockstep scan excludes it the
+# same way. Any recorded-result file under bench/ is still version
+# checked by the recorded_results walk below. bench/h2h/work is
+# generated, gitignored output; the gate lists tracked files, so it is
+# only reached by a stray walk, and this prefix drops it too.
 skip_prefixes = (
-    "bench/h2h/work/",
-    "bench/h2h/scaling/",
-    # These saved records name the release they measured.
-    "bench/h2h/formats/v0.23.3-partial/NOTES.txt",
-    "bench/h2h/million/v0.23.3/cross-format.json",
-    "bench/h2h/million/v0.23.3/cross-format.log",
+    "bench/",
     "paper/cpc/bench/results/r0174/million/SUPERSEDED.md",
     # version_map.tex names the library that wrote it. That is a measurement.
     "paper/cpc/src/figures/generated/version_map.tex",
