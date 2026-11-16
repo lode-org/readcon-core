@@ -89,6 +89,7 @@ FORMAT = [
     ["scripts/gen_tables.py"],
     ["scripts/r0174_tables.py"],
     ["scripts/h2h_tables.py"],
+    ["scripts/format_h2h_tables.py"],
     ["scripts/binary_formats_tables.py"],
     ["scripts/ordering_tests.py"],
     ["scripts/corpus31_results.py", "--tables"],
