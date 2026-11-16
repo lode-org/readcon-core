@@ -1,0 +1,14 @@
+{
+  "commit": "e17abe9d065ddd74be71618014f048ac29ece534",
+  "tree": "fcf411b82a544a4a5692f752e7f52cf209d09b1a",
+  "cpu_model": "Intel(R) Xeon(R) Processor",
+  "bench_disk": "build/bench",
+  "bench_disk_filesystem": "ext2/ext3",
+  "work": "bench/h2h/work/cross-format",
+  "work_filesystem": "ext2/ext3",
+  "record": "bench/h2h/formats/v0.23.3/traj",
+  "record_filesystem": "ext2/ext3",
+  "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "remote": "refs/heads/feat/release-0.23.0",
+  "measured_commit": "e17abe9d065ddd74be71618014f048ac29ece534"
+}

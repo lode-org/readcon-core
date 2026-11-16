@@ -1,0 +1,9 @@
+{
+    "arch": "x86_64",
+    "cpu": "Intel(R) Xeon(R) Processor model 207 at 2400.000 MHz (8 cores)",
+    "machine": "h2h15",
+    "num_cpu": "8",
+    "os": "Linux",
+    "ram": "47.1GB",
+    "version": 1
+}

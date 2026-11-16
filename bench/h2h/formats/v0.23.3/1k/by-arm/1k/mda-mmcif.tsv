@@ -1,0 +1,26 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+read-warm	0	0.001723	124260352	89503	masses,velocities,constraints,precision
+read-warm	1	0.001863	124125184	89503	masses,velocities,constraints,precision
+read-warm	2	0.001969	124088320	89503	masses,velocities,constraints,precision
+read-warm	3	0.001765	124162048	89503	masses,velocities,constraints,precision
+read-warm	4	0.001868	124145664	89503	masses,velocities,constraints,precision
+read-warm	5	0.001925	124121088	89503	masses,velocities,constraints,precision
+read-warm	6	0.001772	123908096	89503	masses,velocities,constraints,precision
+read-warm	7	0.001738	124071936	89503	masses,velocities,constraints,precision
+read-warm	8	0.001880	124104704	89503	masses,velocities,constraints,precision
+read-warm	9	0.001781	124092416	89503	masses,velocities,constraints,precision
+read-warm	10	0.001802	123887616	89503	masses,velocities,constraints,precision
+read-warm	11	0.001798	124076032	89503	masses,velocities,constraints,precision
+read-cold	0	0.003196	123817984	89503	masses,velocities,constraints,precision
+read-cold	1	0.003442	123875328	89503	masses,velocities,constraints,precision
+read-cold	2	0.002810	123658240	89503	masses,velocities,constraints,precision
+read-cold	3	0.002288	123703296	89503	masses,velocities,constraints,precision
+read-cold	4	0.002697	123949056	89503	masses,velocities,constraints,precision
+read-cold	5	0.002731	123551744	89503	masses,velocities,constraints,precision
+read-cold	6	0.002108	123719680	89503	masses,velocities,constraints,precision
+read-cold	7	0.002670	124076032	89503	masses,velocities,constraints,precision
+read-cold	8	0.002011	123506688	89503	masses,velocities,constraints,precision
+read-cold	9	0.003586	123809792	89503	masses,velocities,constraints,precision
+read-cold	10	0.003263	123736064	89503	masses,velocities,constraints,precision
+read-cold	11	0.002411	123940864	89503	masses,velocities,constraints,precision
+write		no writer			masses,velocities,constraints,precision

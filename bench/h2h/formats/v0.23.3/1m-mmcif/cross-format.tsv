@@ -1,0 +1,4 @@
+commit e17abe9d065ddd74be71618014f048ac29ece534
+structure	tool	format	op	median_s	iqr_s	n	rss_bytes	file_bytes	loses	position_error	cell_error	precision	cold_median_s	cold_iqr_s	cold_n	checksum_ok	notes
+1M	mdanalysis	mmcif	read	1246.27	6.84309	6	1432850432	100367167	masses,velocities,constraints,precision	3.81956e-06	0	0.001	1265.19	15.4212	6	True	MDAnalysis 2.11.0 MMCIFReader via gemmi 0.7.5. MDAnalysis has no mmCIF writer. The file is mmCIF text of the same columns, written before the read. The reader keeps the first model only Clock: no writer.
+1M	mdanalysis	mmcif	write	no writer		0			masses,velocities,constraints,precision	3.81956e-06	0	0.001					MDAnalysis 2.11.0 MMCIFReader via gemmi 0.7.5. MDAnalysis has no mmCIF writer. The file is mmCIF text of the same columns, written before the read. The reader keeps the first model only Clock: no writer.

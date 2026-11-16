@@ -1,0 +1,26 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+read-warm	0	0.000292	52400128	80495	masses,velocities,constraints
+read-warm	1	0.000299	52424704	80495	masses,velocities,constraints
+read-warm	2	0.000348	52408320	80495	masses,velocities,constraints
+read-warm	3	0.000302	52473856	80495	masses,velocities,constraints
+read-warm	4	0.000319	52436992	80495	masses,velocities,constraints
+read-warm	5	0.000299	52387840	80495	masses,velocities,constraints
+read-warm	6	0.000289	52391936	80495	masses,velocities,constraints
+read-warm	7	0.000290	52391936	80495	masses,velocities,constraints
+read-warm	8	0.000304	52436992	80495	masses,velocities,constraints
+read-warm	9	0.000315	52436992	80495	masses,velocities,constraints
+read-warm	10	0.000281	52330496	80495	masses,velocities,constraints
+read-warm	11	0.000284	52461568	80495	masses,velocities,constraints
+read-cold	0	0.000772	52535296	80495	masses,velocities,constraints
+read-cold	1	0.001287	52482048	80495	masses,velocities,constraints
+read-cold	2	0.000638	52547584	80495	masses,velocities,constraints
+read-cold	3	0.000621	52506624	80495	masses,velocities,constraints
+read-cold	4	0.000540	52580352	80495	masses,velocities,constraints
+read-cold	5	0.001255	52502528	80495	masses,velocities,constraints
+read-cold	6	0.001726	52502528	80495	masses,velocities,constraints
+read-cold	7	0.000610	52559872	80495	masses,velocities,constraints
+read-cold	8	0.001435	52551680	80495	masses,velocities,constraints
+read-cold	9	0.000912	52490240	80495	masses,velocities,constraints
+read-cold	10	0.001549	52531200	80495	masses,velocities,constraints
+read-cold	11	0.001520	52457472	80495	masses,velocities,constraints
+write		no writer			masses,velocities,constraints

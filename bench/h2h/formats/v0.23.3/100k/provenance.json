@@ -1,0 +1,8 @@
+{
+  "commit": "e17abe9d065ddd74be71618014f048ac29ece534",
+  "tree": "fcf411b82a544a4a5692f752e7f52cf209d09b1a",
+  "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "remote": "refs/heads/feat/release-0.23.0",
+  "readcon_version": "0.23.3",
+  "writer": "bench/h2h/h2h15.py"
+}

@@ -1,0 +1,26 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+read-warm	0	11.063618	312557568	9702361	masses,velocities,constraints,precision
+read-warm	1	11.303483	312782848	9702361	masses,velocities,constraints,precision
+read-warm	2	11.247624	312688640	9702361	masses,velocities,constraints,precision
+read-warm	3	11.774678	312520704	9702361	masses,velocities,constraints,precision
+read-warm	4	11.314254	312672256	9702361	masses,velocities,constraints,precision
+read-warm	5	11.109242	312463360	9702361	masses,velocities,constraints,precision
+read-warm	6	11.219685	312619008	9702361	masses,velocities,constraints,precision
+read-warm	7	11.068448	312594432	9702361	masses,velocities,constraints,precision
+read-warm	8	10.668599	312455168	9702361	masses,velocities,constraints,precision
+read-warm	9	11.351205	312360960	9702361	masses,velocities,constraints,precision
+read-warm	10	11.247144	312733696	9702361	masses,velocities,constraints,precision
+read-warm	11	11.125215	312778752	9702361	masses,velocities,constraints,precision
+read-cold	0	11.531830	309370880	9702361	masses,velocities,constraints,precision
+read-cold	1	11.036061	309469184	9702361	masses,velocities,constraints,precision
+read-cold	2	11.215336	309178368	9702361	masses,velocities,constraints,precision
+read-cold	3	11.328601	309207040	9702361	masses,velocities,constraints,precision
+read-cold	4	10.948018	309415936	9702361	masses,velocities,constraints,precision
+read-cold	5	11.220476	309469184	9702361	masses,velocities,constraints,precision
+read-cold	6	11.456378	309514240	9702361	masses,velocities,constraints,precision
+read-cold	7	11.323851	309460992	9702361	masses,velocities,constraints,precision
+read-cold	8	11.584035	309448704	9702361	masses,velocities,constraints,precision
+read-cold	9	11.136295	309485568	9702361	masses,velocities,constraints,precision
+read-cold	10	11.080816	309354496	9702361	masses,velocities,constraints,precision
+read-cold	11	11.446455	309542912	9702361	masses,velocities,constraints,precision
+write		no writer			masses,velocities,constraints,precision

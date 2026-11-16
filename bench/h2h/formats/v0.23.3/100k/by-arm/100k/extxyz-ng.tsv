@@ -1,0 +1,2 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+unsupported					unsupported: extxyz-ng 0.0.2 raises OSError past 128 atoms, including a standard Properties=species:S:1:pos:R:3 header. The extended XYZ columns were not changed

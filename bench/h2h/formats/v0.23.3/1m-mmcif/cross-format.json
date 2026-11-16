@@ -1,0 +1,224 @@
+{
+  "commit": "e17abe9d065ddd74be71618014f048ac29ece534",
+  "measured_commit": "e17abe9d065ddd74be71618014f048ac29ece534",
+  "tree": "fcf411b82a544a4a5692f752e7f52cf209d09b1a",
+  "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "remote": "refs/heads/feat/release-0.23.0",
+  "frames": [
+    {
+      "structure": "1M",
+      "n_atoms": 1000000,
+      "n_frames": 1,
+      "n_unique_frames": 1,
+      "unique_frame_hashes": 1,
+      "frame_sha256": [
+        "9f9197bd1ce591f6af407b59f7763608566b552d36e1580e94c4024088073dc7"
+      ]
+    }
+  ],
+  "host": {
+    "loadavg": "1.16 1.03 1.01 1/304 29442",
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "core": "0,1,2,3,4,5,6,7",
+    "governor": {
+      "0": "absent",
+      "1": "absent",
+      "2": "absent",
+      "3": "absent",
+      "4": "absent",
+      "5": "absent",
+      "6": "absent",
+      "7": "absent"
+    },
+    "cpu_mhz": 2400.0,
+    "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 57 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  8\nOn-line CPU(s) list:                     0-7\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Xeon(R) Processor\nCPU family:                              6\nModel:                                   207\nThread(s) per core:                      1\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                2\nBogoMIPS:                                4800.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc pebs bts rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq dtes64 vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd arat vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid bus_lock_detect cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 flush_l1d arch_capabilities\nVirtualization:                          VT-x\nHypervisor vendor:                       KVM\nVirtualization type:                     full\nL1d cache:                               384 KiB (8 instances)\nL1i cache:                               256 KiB (8 instances)\nL2 cache:                                16 MiB (8 instances)\nL3 cache:                                320 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-7\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Mitigation; TSX disabled\nVulnerability Vmscape:                   Not affected\n",
+    "cpu_model": "Intel(R) Xeon(R) Processor",
+    "tree": "fcf411b82a544a4a5692f752e7f52cf209d09b1a",
+    "bench_disk": "build/bench",
+    "bench_disk_filesystem": "ext2/ext3",
+    "work": "bench/h2h/work/cross-format",
+    "work_filesystem": "ext2/ext3",
+    "record": "bench/h2h/formats/v0.23.3/1m-mmcif",
+    "record_filesystem": "ext2/ext3"
+  },
+  "warmup": 1,
+  "repeats": {
+    "1k": 12,
+    "100k": 12,
+    "1M": 6,
+    "traj": 12
+  },
+  "repeats_by_structure": {
+    "1k": 12,
+    "100k": 12,
+    "1M": 6,
+    "traj": 12
+  },
+  "percentile": "type7",
+  "serial": true,
+  "process": "fresh subprocess per sample",
+  "interleave": "rotate-per-sample",
+  "affinity": "taskset -c 0,1,2,3,4,5,6,7",
+  "warm": "file read once before the clock",
+  "cold": "drop_caches after warmup, before the timed read",
+  "versions": {
+    "ase": "3.29.0",
+    "chemfiles": "0.10.4",
+    "MDAnalysis": "2.11.0",
+    "mdtraj": "1.11.2",
+    "numpy": "2.5.4",
+    "ovito": "3.17.2",
+    "readcon": "0.23.3",
+    "extxyz": "0.4.6",
+    "h5py": "3.16.0",
+    "gemmi": "0.7.5",
+    "extxyz-ng": "0.0.2",
+    "mdcompress": "2.0.5",
+    "chemfiles-0.12.0-dev": "0.12.0-dev fc1e93096b797ff4848dae57c03b7c9ef287cccd",
+    "mdcompress-tag": "v2.0.5",
+    "mdcompress-commit": "41b600313c1a8265dbaa639651ed0124610d1bbb"
+  },
+  "ovito_extxyz_check": {
+    "ovito": "3.17.2",
+    "frames": 2,
+    "file_pbc": [
+      true,
+      true,
+      false
+    ],
+    "read_pbc": [
+      [
+        true,
+        true,
+        false
+      ],
+      [
+        true,
+        true,
+        false
+      ]
+    ],
+    "pbc_matches": true,
+    "file_frame1": [
+      1.2,
+      6.4,
+      -0.3
+    ],
+    "read_frame1": [
+      1.2,
+      6.4,
+      -0.3
+    ],
+    "drift_max_abs": 0.0,
+    "wrapped_into_cell": false,
+    "stuck_on_frame0": false
+  },
+  "notes": [
+    "OVITO 3.17.2 reads extended XYZ periodicity and an out-of-cell second frame without wrapping or repeating frame 0.",
+    "A timed write is rejected unless its file is non-empty, inside that format's size range, and reads back at the full atom count. That check runs after the clock stops.",
+    "Every write sample, including 1M readcon-con, is the interleaved fresh-process measurement from this session. The sample count is 12 at 1k, 100k and traj, and 6 at 1M, for every tool. The clock is serialize and store of a structure that already exists: see each row's Clock note. Chemfiles has no CON writer, so its write cell is 'no writer'.",
+    "chemfiles has no native CON format; the chemfiles-con row copies positions and the cell out of a chemfiles Frame filled from readcon.",
+    "chemfiles compression library (bundled) opens {\"bz2\": true, \"gz\": true, \"trr\": true, \"xz\": true}",
+    "MDAnalysis 2.11.0 on DCD, XTC, NetCDF, TRR, XYZ, PDB, H5MD and mmCIF where those readers import. Cells are orthogonal, so the 2.11 triclinic wrap does not apply.",
+    "mdcompress 2.0.5 (refresh-bio). 1.0.0 is not on PyPI and this row is not relabeled as 1.0.0. Archive preset, one thread. The clock compresses a DCD that is already on disk, and the read queries one frame at a time. A one-frame trajectory cannot be read ('Cannot read first frame' on DCD, XTC and TRR), so those rows are unsupported. The binding views the float64 box as float32; the cell is read from those bytes as float64.",
+    "Every row in this directory was measured by bench/h2h/h2h15.py on e17abe9d065ddd74be71618014f048ac29ece534. No row is copied from another commit."
+  ],
+  "rows": [
+    {
+      "structure": "1M",
+      "atoms": 1000000,
+      "frames": 1,
+      "tool": "mdanalysis",
+      "format": "mmcif",
+      "arm": "mda-mmcif",
+      "notes": "MDAnalysis 2.11.0 MMCIFReader via gemmi 0.7.5. MDAnalysis has no mmCIF writer. The file is mmCIF text of the same columns, written before the read. The reader keeps the first model only Clock: no writer.",
+      "op": "read",
+      "cache": "warm",
+      "median_s": 1246.2711574930008,
+      "iqr_s": 6.843093996498737,
+      "samples_s": [
+        1239.6937246630005,
+        1249.8281557360006,
+        1246.7477449550006,
+        1227.822982779,
+        1245.794570031001,
+        1248.500125016999
+      ],
+      "rss_bytes": 1432850432,
+      "file_bytes": 100367167,
+      "loses": "masses,velocities,constraints,precision",
+      "position_error": 3.819561456452902e-06,
+      "cell_error": 0.0,
+      "precision": 0.001,
+      "checksum_ok": true,
+      "checksum": 148500592.3029816,
+      "n": 6
+    },
+    {
+      "structure": "1M",
+      "atoms": 1000000,
+      "frames": 1,
+      "tool": "mdanalysis",
+      "format": "mmcif",
+      "arm": "mda-mmcif",
+      "notes": "MDAnalysis 2.11.0 MMCIFReader via gemmi 0.7.5. MDAnalysis has no mmCIF writer. The file is mmCIF text of the same columns, written before the read. The reader keeps the first model only Clock: no writer.",
+      "op": "read",
+      "cache": "cold",
+      "median_s": 1265.1883301539983,
+      "iqr_s": 15.421204790250158,
+      "samples_s": [
+        1258.2959669230004,
+        1267.3360189699997,
+        1249.6974083890018,
+        1277.4257807659997,
+        1277.7835553490004,
+        1263.040641337997
+      ],
+      "rss_bytes": 1432709120,
+      "file_bytes": 100367167,
+      "loses": "masses,velocities,constraints,precision",
+      "position_error": 3.819561456452902e-06,
+      "cell_error": 0.0,
+      "precision": 0.001,
+      "checksum_ok": true,
+      "checksum": 148500592.3029816,
+      "n": 6
+    },
+    {
+      "structure": "1M",
+      "atoms": 1000000,
+      "frames": 1,
+      "tool": "mdanalysis",
+      "format": "mmcif",
+      "arm": "mda-mmcif",
+      "notes": "MDAnalysis 2.11.0 MMCIFReader via gemmi 0.7.5. MDAnalysis has no mmCIF writer. The file is mmCIF text of the same columns, written before the read. The reader keeps the first model only Clock: no writer.",
+      "op": "write",
+      "cache": "create",
+      "median_s": "no writer",
+      "iqr_s": null,
+      "samples_s": [],
+      "rss_bytes": null,
+      "file_bytes": null,
+      "loses": "masses,velocities,constraints,precision",
+      "position_error": 3.819561456452902e-06,
+      "cell_error": 0.0,
+      "precision": 0.001,
+      "checksum_ok": null,
+      "n": 0
+    }
+  ],
+  "readcon_version": "0.23.3",
+  "mdcompress_tag": "v2.0.5",
+  "mdcompress_commit": "41b600313c1a8265dbaa639651ed0124610d1bbb",
+  "chemfiles_012_version": "0.12.0-dev",
+  "chemfiles_012_commit": "fc1e93096b797ff4848dae57c03b7c9ef287cccd"
+}

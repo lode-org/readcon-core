@@ -1,0 +1,19 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+read-warm	0	0.068151	237674496	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-warm	1	0.066099	237621248	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-warm	2	0.065813	237600768	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-warm	3	0.067439	237580288	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-warm	4	0.067192	237572096	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-warm	5	0.067226	237518848	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	0	0.097944	237481984	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	1	0.086079	237432832	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	2	0.079422	237633536	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	3	0.078280	237436928	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	4	0.094000	237715456	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+read-cold	5	0.078255	237604864	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	0	0.019586	349478912	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	1	0.023554	349528064	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	2	0.019342	349495296	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	3	0.019788	349495296	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	4	0.020856	349548544	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
+write	5	0.021012	349491200	12000196	velocities,forces,energies,per-component mask,atom id,binary64 coordinates,interval unit: picoseconds
