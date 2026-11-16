@@ -4524,7 +4524,10 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
     let builder = unsafe { *Box::from_raw(builder_handle as *mut ConFrameBuilder) };
     match builder.build() {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
-        Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
+        Err(err) => {
+            let _ = note_located(&crate::error::LocatedParseError::new(err, 0, 0));
+            ptr::null_mut()
+        }
     }
 }
 /// Frees a frame builder without building.
