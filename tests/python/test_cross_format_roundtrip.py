@@ -386,7 +386,7 @@ def test_fresh_arms_pass_explicit_worker_counts() -> None:
     assert "readcon-con-fresh-serial" in sentence
     assert "readcon-con-fresh-ncpu" in sentence
     assert "1 worker" in sentence
-    assert f"{ncpu} workers" in sentence
+    assert cross_format._worker_label(ncpu) in sentence
 
 
 def test_interleave_keeps_one_sample_count(tmp_path: Path, monkeypatch) -> None:

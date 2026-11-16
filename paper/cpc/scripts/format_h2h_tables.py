@@ -62,6 +62,7 @@ ARMS = (
     ("readcon-chemfiles", "readcon-chemfiles", "XYZ"),
     ("ase-extxyz", "ASE", "ext XYZ"),
     ("ase-extxyz-gz", "ASE", "ext XYZ (gz)"),
+    ("extxyz-ng", "extxyz-ng", "ext XYZ"),
     ("chemfiles-pdb", "chemfiles", "PDB"),
     ("chemfiles-pdb-gz", "chemfiles", "PDB (gz)"),
     ("chemfiles-pdb-xz", "chemfiles", "PDB (xz)"),
@@ -84,6 +85,8 @@ ARMS = (
     ("mdtraj-xtc", "mdtraj", "XTC"),
     ("ovito-xyz", "OVITO", "XYZ"),
     ("ovito-xyz-gz", "OVITO", "XYZ (gz)"),
+    ("mdcompress-mdc", "MDCompress", "MDC"),
+    ("mdcompress-xtc", "MDCompress", "XTC"),
 )
 
 _TEX = {
@@ -128,6 +131,28 @@ def seconds(row: dict | None) -> str:
     return rf"\num{{{sig(row['median_s'])}}}"
 
 
+def cold_seconds(caches: dict[str, dict]) -> str:
+    """The cold median, from a cold row when there is one, otherwise from the
+    ``cold_median_s`` the warm row carries (the DCD and XTC arms record the
+    cold pass on the warm row rather than as a separate cold row)."""
+    cold = caches.get("cold")
+    if cold is not None and cold.get("median_s") is not None:
+        return rf"\num{{{sig(cold['median_s'])}}}"
+    warm = caches.get("warm")
+    if warm is not None and warm.get("cold_median_s") is not None:
+        return rf"\num{{{sig(warm['cold_median_s'])}}}"
+    return "--"
+
+
+def _reason(caches: dict[str, dict]) -> str:
+    """The recorded ``unsupported:`` reason of an arm that read nothing."""
+    for row in caches.values():
+        loses = row.get("loses") or ""
+        if loses.startswith("unsupported"):
+            return loses.split(":", 1)[1].strip() if ":" in loses else loses
+    return "unsupported"
+
+
 def mib(rows: list[dict]) -> str:
     peaks = [r["rss_bytes"] for r in rows if r.get("rss_bytes") is not None]
     if not peaks:
@@ -159,6 +184,9 @@ def drops(rows: list[dict]) -> str:
         if not loses or loses.startswith("unsupported"):
             continue
         if loses == "none":
+            residual = row.get("position_error") or 0.0
+            if residual and float(f"{residual:.1g}") != 0.0:
+                return rf"none; \num{{{sig(residual, 1)}}} residual"
             return "none"
         tokens = [part.strip() for part in loses.replace(";", ",").split(",")]
         return tex(", ".join(_DROP.get(t, t) for t in tokens if t))
@@ -180,14 +208,16 @@ def table() -> str:
         r"\setlength{\tabcolsep}{2pt}",
         r"\begin{longtable}{@{}llrrrrp{2.7cm}@{}}",
         r"\caption{Fair per-format read of the v0.23.3 cross-format campaign, "
-        r"one commit and one host (Intel Xeon Processor, x86\_64, 8 CPUs). "
-        r"readcon reads plain CON, binary CON and CON.zst; each competitor "
-        r"reads the format it does best. A time is the type-7 median of the "
-        r"recorded samples. Warm reads a file already in the page cache; cold "
-        r"drops the caches first. Peak is the resident set of the read, and "
-        r"Drops are the CON 3.1 fields the format cannot carry. "
-        r"The one-million CON row is the recorded warm read, not either "
-        r"serial or default-threads pass of \texttt{1m/ERRATA.md}. "
+        r"one commit and one host (\hhfHost). "
+        r"readcon reads plain CON, binary CON and CON.zst; each other tool "
+        r"reads its supported formats. A time is the type-7 median of "
+        r"\hhfSamplesSubOneM\ samples below one million atoms and "
+        r"\hhfSamplesOneM\ at one million, each read in a fresh process on one "
+        r"thread. Warm reads a file already in the page cache; cold reads it "
+        r"once untimed to warm it, then drops the caches before the timed "
+        r"read. Peak is the resident set of the read, and Drops are the CON "
+        r"3.1 fields the format cannot carry; an arm the reader cannot open "
+        r"shows the recorded reason in place of the measurements. "
         r"chemfiles-dev is chemfiles 0.12.0-dev at fc1e930.}"
         r"\label{tab:format-h2h}\\",
         r"\toprule",
@@ -218,10 +248,16 @@ def table() -> str:
             warm = caches.get("warm")
             cold = caches.get("cold")
             present = [r for r in (warm, cold) if r is not None]
-            if not present or all(r.get("median_s") is None for r in present):
+            if not any(r.get("median_s") is not None for r in present):
+                cell = (
+                    r"\multicolumn{5}{@{}p{\dimexpr\textwidth-4.6cm\relax}@{}}{"
+                    + tex(_reason(caches))
+                    + "}"
+                )
+                body.append(f"{tex(reader)} & {tex(fmt)} & {cell}\\\\")
                 continue
             body.append(
-                f"{tex(reader)} & {tex(fmt)} & {seconds(warm)} & {seconds(cold)} & "
+                f"{tex(reader)} & {tex(fmt)} & {seconds(warm)} & {cold_seconds(caches)} & "
                 f"{mib(present)} & {size_kib(present)} & {drops(present)}\\\\"
             )
         body.append(r"\addlinespace")
@@ -235,16 +271,53 @@ def _one_million_con() -> dict[str, dict]:
     return rows["readcon-con"]
 
 
+def _peak_mib(caches: dict[str, dict]) -> str:
+    """Peak resident set of the read, the maximum over the warm and cold rows,
+    the same definition the Peak column of the table uses."""
+    peaks = [r["rss_bytes"] for r in caches.values() if r.get("rss_bytes") is not None]
+    return f"{max(peaks) / 1048576:.1f}"
+
+
+def _host() -> str:
+    """The one-line host description, read from the campaign's ``lscpu.txt``."""
+    fields: dict[str, str] = {}
+    for line in (RECORDS / "lscpu.txt").read_text().splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            fields[key.strip()] = value.strip()
+    model = " ".join(
+        fields["Model name"].replace("(R)", "").replace("(TM)", "").split()
+    )
+    return tex(f"{model}, {fields['Architecture']}, {fields['CPU(s)']} CPUs")
+
+
+def _sample_counts() -> tuple[str, str]:
+    """``(below one million, at one million)`` sample counts, from the record's
+    per-structure repeat counts."""
+    meta = _load("1m")
+    if meta.get("serial") is not True or "fresh" not in (meta.get("process") or ""):
+        raise SystemExit("record is not the serial fresh-process campaign")
+    repeats = meta["repeats_by_structure"]
+    sub = {count for name, count in repeats.items() if name != "1M"}
+    if len(sub) != 1:
+        raise SystemExit(f"sub-one-million repeat counts differ: {repeats}")
+    return str(sub.pop()), str(repeats["1M"])
+
+
 def macros() -> str:
     con = _one_million_con()
     mmcif = _reads("1M", ("1m-mmcif",))["mda-mmcif"]
+    samples_sub, samples_one_m = _sample_counts()
     pairs = [
+        ("hhfHost", _host()),
+        ("hhfSamplesSubOneM", samples_sub),
+        ("hhfSamplesOneM", samples_one_m),
         ("hhfReadconConWarmOneM", sig(con["warm"]["median_s"])),
         ("hhfReadconConColdOneM", sig(con["cold"]["median_s"])),
         ("hhfReadconConBytesOneM", _grouped(con["warm"]["file_bytes"])),
-        ("hhfReadconConPeakOneM", f"{con['warm']['rss_bytes'] / 1048576:.1f}"),
+        ("hhfReadconConPeakOneM", _peak_mib(con)),
         ("hhfMmcifWarmOneM", sig(mmcif["warm"]["median_s"])),
-        ("hhfMmcifPeakOneM", f"{mmcif['warm']['rss_bytes'] / 1048576:.1f}"),
+        ("hhfMmcifPeakOneM", _peak_mib(mmcif)),
     ]
     names = [n for n, _ in pairs]
     if len(names) != len(set(names)):
