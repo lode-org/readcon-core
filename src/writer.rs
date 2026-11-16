@@ -1536,6 +1536,33 @@ fn encode_fixed_decimal(value: f64, out: &mut [u8; 32]) -> Option<usize> {
             return Some(write_fixed_digits(out, sign, n, 0));
         }
     }
+    // A fraction with at most six digits is exact at 1e6 as well. One
+    // check rejects the values that would miss every shorter scale.
+    // Larger magnitudes stay on the scale walk so a short fraction of a
+    // big integer keeps the spelling it already had.
+    // 2^53 covers every 6-digit fraction of a magnitude up to 1e6, so one
+    // multiply rejects a miss that the scale walk would also reject.
+    if mag <= 1e6 {
+        return encode_at_million(mag, sign, out);
+    }
+    encode_scale_walk(mag, sign, out)
+}
+
+fn encode_at_million(mag: f64, sign: bool, out: &mut [u8; 32]) -> Option<usize> {
+    let scale = 1_000_000.0;
+    let scaled = mag * scale;
+    if !scaled.is_finite() || scaled > 1e16 {
+        return None;
+    }
+    let nearest = scaled.round();
+    let n = nearest as u64;
+    if nearest != n as f64 || (n as f64) / scale != mag {
+        return None;
+    }
+    finish_fixed_digits(n, 6, sign, out)
+}
+
+fn encode_scale_walk(mag: f64, sign: bool, out: &mut [u8; 32]) -> Option<usize> {
     let mut scale = 10.0f64;
     for d in 1u32..=6 {
         let scaled = mag * scale;
@@ -1545,28 +1572,30 @@ fn encode_fixed_decimal(value: f64, out: &mut [u8; 32]) -> Option<usize> {
         let nearest = scaled.round();
         let n = nearest as u64;
         if nearest == n as f64 && (n as f64) / scale == mag {
-            let mut n = n;
-            let mut places = d;
-            while places > 0 && n.is_multiple_of(10) {
-                n /= 10;
-                places -= 1;
-            }
-            if places == 0 {
-                if n >= 10u64.pow(16) {
-                    return None;
-                }
-                return Some(write_fixed_digits(out, sign, n, 0));
-            }
-            let digits = count_digits(n);
-            let kk = digits as i32 - places as i32;
-            if !(kk > -5 && kk <= 16) {
-                return None;
-            }
-            return Some(write_fixed_digits(out, sign, n, places));
+            return finish_fixed_digits(n, d, sign, out);
         }
         scale *= 10.0;
     }
     None
+}
+
+fn finish_fixed_digits(mut n: u64, mut places: u32, sign: bool, out: &mut [u8; 32]) -> Option<usize> {
+    while places > 0 && n.is_multiple_of(10) {
+        n /= 10;
+        places -= 1;
+    }
+    if places == 0 {
+        if n >= 10u64.pow(16) {
+            return None;
+        }
+        return Some(write_fixed_digits(out, sign, n, 0));
+    }
+    let digits = count_digits(n);
+    let kk = digits as i32 - places as i32;
+    if !(kk > -5 && kk <= 16) {
+        return None;
+    }
+    Some(write_fixed_digits(out, sign, n, places))
 }
 
 fn count_digits(mut n: u64) -> u32 {
@@ -4043,12 +4072,35 @@ impl ConFrameWriter<zstd::stream::write::AutoFinishEncoder<'static, File>> {
 
 #[cfg(test)]
 mod float_format_tests {
-    use super::{encode_fixed_decimal_into, push_f64_prec, push_u64, write_finite};
+    use super::{
+        encode_at_million, encode_fixed_decimal_into, encode_scale_walk,
+        push_f64_prec, push_u64, write_finite,
+    };
 
     fn formatted(v: f64, prec: usize) -> String {
         let mut buf = Vec::new();
         push_f64_prec(&mut buf, v, prec);
         String::from_utf8(buf).expect("utf8")
+    }
+
+    #[test]
+    fn million_scale_matches_the_scale_walk_below_1e6() {
+        let mut left = [0u8; 32];
+        let mut right = [0u8; 32];
+        let mut bits = 1u64;
+        for _ in 0..300_000 {
+            bits = bits.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(0x6a09_e667);
+            let value = f64::from_bits(bits & 0x7fff_ffff_ffff_ffff);
+            if !value.is_finite() || value == 0.0 || value > 1e6 {
+                continue;
+            }
+            let a = encode_at_million(value, false, &mut left);
+            let b = encode_scale_walk(value, false, &mut right);
+            assert_eq!(a, b, "{value}");
+            if let Some(n) = a {
+                assert_eq!(&left[..n], &right[..n], "{value}");
+            }
+        }
     }
 
     #[test]
