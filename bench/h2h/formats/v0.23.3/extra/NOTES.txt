@@ -1,0 +1,16 @@
+h2h15
+commit e938ccf4fae892302ffe0b3a72a0361233b05970
+tree fcf411b82a544a4a5692f752e7f52cf209d09b1a
+diff_sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+remote refs/heads/feat/release-0.23.0
+writer bench/h2h/h2h15.py
+Every row comes from this run. host.json is written with the table.
+MDCompress 2.0.5 times DCD as mdcompress-mdc and XTC as mdcompress-xtc.
+chemfiles-dcd is 0.10.4. chemfiles-dcd-012 is 0.12.0-dev at fc1e930.
+The Drops column names the DCD interval unit.
+The sample count is 12 below one million atoms and 6 at one million, for every tool.
+Each finished sample is appended under by-arm before the next sample starts.
+extxyz-ng 0.0.2 fails past 128 atoms even with Properties=species:S:1:pos:R:3, so the extended XYZ columns were not changed.
+versions {"chemfiles-0.12.0-dev": "0.12.0-dev fc1e93096b797ff4848dae57c03b7c9ef287cccd", "mdcompress-commit": "41b600313c1a8265dbaa639651ed0124610d1bbb", "mdcompress-tag": "v2.0.5"}
+OVITO is 3.17.2. MDAnalysis is 2.11.0, with H5MD and the mmCIF reader where that reader imports.
+extxyz-ng 0.0.2 is a read arm only when its wheel sits in its own prefix. A default install replaces extxyz 0.4.6, and that install is not used.

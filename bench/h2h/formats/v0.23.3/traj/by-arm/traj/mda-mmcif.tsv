@@ -1,0 +1,2 @@
+op	sample	wall_s	rss_bytes	file_bytes	drops
+unsupported					unsupported: MDAnalysis 2.11.0 MMCIFReader reads the first model only

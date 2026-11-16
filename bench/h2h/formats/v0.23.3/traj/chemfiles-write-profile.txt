@@ -1,0 +1,41 @@
+== build ==
+         63005301 function calls (63005181 primitive calls) in 23.516 seconds
+
+   Ordered by: cumulative time
+   List reduced from 271 to 12 due to restriction <12>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    1.549    1.549   23.516   23.516 bench/h2h/cross_format.py:605(build_chemfiles_frames)
+9000013/9000009    2.415    0.000    9.334    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:32(__setattr__)
+  1000000    1.387    0.000    6.499    0.000 .venv/lib/python3.12/site-packages/chemfiles/frame.py:26(__getitem__)
+  1000119    0.351    0.000    4.853    0.000 {built-in method builtins.hasattr}
+  1000000    0.423    0.000    4.502    0.000 .venv/lib/python3.12/site-packages/chemfiles/atom.py:71(name)
+  1000000    0.998    0.000    4.079    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:98(_call_with_growing_buffer)
+  1000000    1.022    0.000    4.051    0.000 .venv/lib/python3.12/site-packages/chemfiles/frame.py:224(topology)
+  2000003    1.601    0.000    3.790    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:21(__init__)
+  1000001    0.545    0.000    2.600    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:39(from_mutable_ptr)
+  1000000    0.562    0.000    2.582    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:46(from_const_ptr)
+  7000008    1.872    0.000    2.502    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:68(ffi)
+  2000002    1.503    0.000    2.389    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:28(__del__)
+
+
+
+== write ==
+         50 function calls in 0.047 seconds
+
+   Ordered by: cumulative time
+   List reduced from 31 to 12 due to restriction <12>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.047    0.047 bench/h2h/cross_format.py:631(write_built_chemfiles)
+        1    0.000    0.000    0.028    0.028 .venv/lib/python3.12/site-packages/chemfiles/trajectory.py:25(__exit__)
+        1    0.028    0.028    0.028    0.028 .venv/lib/python3.12/site-packages/chemfiles/trajectory.py:109(close)
+        1    0.019    0.019    0.019    0.019 .venv/lib/python3.12/site-packages/chemfiles/trajectory.py:53(write)
+        1    0.000    0.000    0.000    0.000 .venv/lib/python3.12/site-packages/chemfiles/trajectory.py:125(__init__)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:1338(unlink)
+        1    0.000    0.000    0.000    0.000 {built-in method posix.unlink}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:447(__fspath__)
+        2    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:437(__str__)
+        8    0.000    0.000    0.000    0.000 .venv/lib/python3.12/site-packages/chemfiles/utils.py:32(__setattr__)
+        1    0.000    0.000    0.000    0.000 /usr/lib/python3.12/pathlib.py:429(_format_parsed_parts)
