@@ -430,19 +430,21 @@ def _median(values: list[float]) -> tuple[float, float]:
     return cross_format.type7(values)
 
 
-def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
+def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str], list[str]]:
     """MDCompress on XTC, and chemfiles DCD at fc1e930.
 
     The cross-format table already times MDCompress on DCD as
     ``mdcompress-mdc`` and chemfiles 0.10.4 DCD as ``chemfiles-dcd``.
     These two rows are measured here, in the same run, and stored in the
-    same files.
+    same files. Returns the rows, the log lines, and any shard-level
+    notes (such as a high load-average warning) for the record.
     """
     library = chemfiles_012_library()
     if library is None:
         raise SystemExit("chemfiles fc1e930 is not installed under the bench disk")
     rows: list[dict] = []
     lines: list[str] = []
+    notes: list[str] = []
     work = BENCH / "work" / "h2h15"
     for label, n_atoms, n_frames in cross_format.STRUCTURES:
         if not cross_format.arm_selected(label, "chemfiles-dcd-012") and not (
@@ -457,6 +459,7 @@ def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
                 "its samples may be contended"
             )
             lines.append(f"note {warning}")
+            notes.append(warning)
             print(f"  WARNING: {warning}", flush=True)
         repeats = cross_format.repeats_for(label)
         directory = work / label
@@ -622,7 +625,7 @@ def _extra_rows(out: Path, script: Path) -> tuple[list[dict], list[str]]:
                     "loses": loses,
                 }
             )
-    return rows, lines
+    return rows, lines, notes
 
 
 def _annotate_interval(rows: list[dict]) -> None:
@@ -678,8 +681,11 @@ def run(out: Path, repeats: int | None = None) -> None:
         cross_format.run(out, repeats)
     extra_rows: list[dict] = []
     extra_lines: list[str] = []
+    extra_notes: list[str] = []
     if part in ("all", "extra"):
-        extra_rows, extra_lines = _extra_rows(out, Path(__file__).resolve())
+        extra_rows, extra_lines, extra_notes = _extra_rows(
+            out, Path(__file__).resolve()
+        )
     if (out / "cross-format.json").is_file():
         payload = json.loads((out / "cross-format.json").read_text(encoding="utf-8"))
     else:
@@ -699,7 +705,10 @@ def run(out: Path, repeats: int | None = None) -> None:
     # The extra-only shard never runs the table, so the measurement
     # protocol the table writes at top level is absent. Record it here so
     # the shard JSON states its warmup, percentile, and sample count.
+    # unlink_create is campaign_protocol's own write invariant, not a
+    # stated guarantee of this shard, so it is dropped here.
     protocol_block = campaign_protocol.protocol(0)
+    protocol_block.pop("unlink_create", None)
     protocol_block["samples"] = (
         repeats
         if repeats is not None
@@ -715,6 +724,7 @@ def run(out: Path, repeats: int | None = None) -> None:
     versions["mdcompress-commit"] = MDC_COMMIT
     payload["versions"] = versions
     notes = list(payload.get("notes") or [])
+    notes.extend(extra_notes)
     notes.append(
         "Every row in this directory was measured by bench/h2h/h2h15.py "
         f"on {head}. No row is copied from another commit."

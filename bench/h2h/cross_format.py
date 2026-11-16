@@ -2920,21 +2920,61 @@ def _spread(samples: list[float]) -> float:
     return iqr / abs(median)
 
 
+def _fresh_read_arms() -> tuple[tuple[str, str, int], ...]:
+    """The two extra fresh-process read arms, each with the explicit worker
+    count it passes to read_con.
+
+    read_con keeps a plain CON read on the calling thread unless the count
+    is explicitly >= 2, so the parallel arm passes ``os.cpu_count()`` and
+    the serial arm passes 1. Neither passes ``None``, which would leave the
+    parallel arm the same single-thread read as serial.
+    """
+    ncpu = os.cpu_count() or 1
+    return (
+        ("readcon-con-fresh-ncpu", f"{ncpu} workers", ncpu),
+        ("readcon-con-fresh-serial", "1 worker", 1),
+    )
+
+
+def _fresh_summary(
+    arms: tuple[tuple[str, str, int], ...],
+    medians: dict[str, float],
+    count: int,
+) -> str:
+    """Summary sentence naming each fresh arm, the worker count it passed,
+    and its recorded median."""
+    clauses = "; ".join(
+        f"{arm_id} at {label_text} {medians[arm_id]:.4f} s"
+        for arm_id, label_text, _threads in arms
+    )
+    return (
+        "1M readcon-con fresh-process read: "
+        + clauses
+        + ". The table row is the interleaved serial measurement. Each arm "
+        "passes its worker count to read_con explicitly (a plain CON read "
+        "stays single-threaded unless the count is >= 2), same warmup and "
+        f"sample count ({count}). Each median is the type-7 median of the "
+        "recorded samples."
+    )
+
+
 def _fresh_reads(
     out: Path,
     path: Path,
-    n_threads: int | None,
+    n_threads: int,
     repeats: int,
     structure: str,
     arm_id: str,
     loses: str = "none",
-) -> list[float]:
-    """Fresh-process reads of one file, returning the raw samples.
+) -> dict[str, list]:
+    """Fresh-process reads of one file.
 
-    ``None`` is the default thread count. Each finished sample is appended
+    ``n_threads`` is the explicit worker count given to read_con; it is
+    never ``None``, so a parallel arm never falls to the single-thread
+    path by omission. Returns the raw samples together with the peak RSS
+    and checksum each worker reported, and appends every finished sample
     under by-arm as ``arm_id``, the same as every other arm, so the median
-    the summary sentence reports is backed by recorded samples rather than
-    a number with nothing behind it.
+    the summary sentence reports is backed by recorded samples.
     """
     script = Path(__file__).resolve()
     job = {
@@ -2946,10 +2986,15 @@ def _fresh_reads(
     }
     spawn_worker(script, job)  # one warmup, outside the record
     samples: list[float] = []
+    rss: list[int] = []
+    checksums: list[float] = []
     for index in range(repeats):
         result = spawn_worker(script, job)
         wall = float(result["wall_s"])
         samples.append(wall)
+        remember_rss(rss, result)
+        if result.get("checksum") is not None:
+            checksums.append(float(result["checksum"]))
         append_arm_row(
             out,
             structure,
@@ -2961,7 +3006,7 @@ def _fresh_reads(
             _file_bytes(os.fspath(path)),
             loses,
         )
-    return samples
+    return {"samples": samples, "rss": rss, "checksums": checksums}
 
 
 def run(
@@ -3169,16 +3214,21 @@ def run(
             plain = directory / "readcon.con"
             base = next(a for a in usable if a["id"] == "readcon-con")
             base_loses = base["audit"]["loses"]
+            expected = base["checksum"]
+            scale = max(1.0, abs(expected))
+            fresh_arms = _fresh_read_arms()
             fresh_medians: dict[str, float] = {}
-            for fresh_arm, label_text, threads in (
-                ("readcon-con-fresh-default", "default threads", None),
-                ("readcon-con-fresh-serial", "serial", 1),
-            ):
-                samples = _fresh_reads(
+            for fresh_arm, label_text, threads in fresh_arms:
+                result = _fresh_reads(
                     out, plain, threads, count, label, fresh_arm, base_loses
                 )
+                samples = result["samples"]
                 median, iqr = type7(samples)
                 fresh_medians[fresh_arm] = median
+                checks = result["checksums"]
+                checksum_ok = bool(checks) and all(
+                    abs(value - expected) / scale < 1e-6 for value in checks
+                )
                 rows.append(
                     {
                         "structure": label,
@@ -3188,7 +3238,7 @@ def run(
                         "format": base["format"],
                         "arm": fresh_arm,
                         "notes": (
-                            f"Fresh-process read of 1M readcon-con, {label_text}, "
+                            f"Fresh-process read of 1M readcon-con at {label_text}, "
                             "outside the interleaved table. Same warmup and "
                             "sample count as the table row."
                         ),
@@ -3197,13 +3247,14 @@ def run(
                         "median_s": median,
                         "iqr_s": iqr,
                         "samples_s": samples,
-                        "rss_bytes": None,
+                        "rss_bytes": median_rss(result["rss"]),
                         "file_bytes": base["file_bytes"],
                         "loses": base_loses,
                         "position_error": base["audit"]["position_error"],
                         "cell_error": base["audit"]["cell_error"],
                         "precision": base["precision"],
-                        "checksum_ok": None,
+                        "checksum_ok": checksum_ok,
+                        "checksum": expected,
                         "n": len(samples),
                     }
                 )
@@ -3213,16 +3264,7 @@ def run(
                 )
                 for sample in samples:
                     lines.append(f"sample {sample:.9f}")
-            notes.append(
-                "1M readcon-con serial fresh-process read "
-                f"{fresh_medians['readcon-con-fresh-serial']:.4f} s, default "
-                f"threads {fresh_medians['readcon-con-fresh-default']:.4f} s. "
-                "The table row is the interleaved serial measurement. Default "
-                "threads is one worker per core, same warmup and sample count "
-                f"({count}). Each median is the type-7 median of the samples "
-                "recorded for readcon-con-fresh-serial and "
-                "readcon-con-fresh-default."
-            )
+            notes.append(_fresh_summary(fresh_arms, fresh_medians, count))
             lines.append(f"note {notes[-1]}")
         write_jobs = []
         for arm in usable:

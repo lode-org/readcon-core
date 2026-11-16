@@ -27,7 +27,7 @@ def test_an_extra_only_run_writes_the_host(monkeypatch, tmp_path: Path) -> None:
     }
     monkeypatch.setattr(h2h15, "refuse_stale_build", lambda _root: ident)
     monkeypatch.setattr(h2h15, "pin_mdcompress", lambda: (tmp_path, tmp_path))
-    monkeypatch.setattr(h2h15, "_extra_rows", lambda *_args, **_kwargs: ([], []))
+    monkeypatch.setattr(h2h15, "_extra_rows", lambda *_args, **_kwargs: ([], [], []))
     monkeypatch.setattr(
         h2h15.cross_format,
         "campaign_host",
