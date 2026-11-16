@@ -3,7 +3,7 @@
 - Record: `bench/h2h/formats/v0.23.3/1m/cross-format.json`
 - Measured commit: `e17abe9d065ddd74be71618014f048ac29ece534`
 
-One sentence in the `notes` block of `cross-format.json` reads:
+One sentence in the `notes` block of `cross-format.json` (`cross-format.json:133`) reads:
 
 > 1M readcon-con serial fresh-process read 0.1223 s, default threads
 > 0.1251 s. The table row is the interleaved serial measurement. Default

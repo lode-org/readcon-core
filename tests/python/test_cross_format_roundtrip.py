@@ -339,18 +339,25 @@ def test_extxyz_ng_oserror_stores_the_actual_message() -> None:
 def test_fresh_reads_returns_and_records_its_samples(tmp_path, monkeypatch) -> None:
     calls = {"n": 0}
 
-    def fake(_script, _job):
+    def fake(_script, job):
         calls["n"] += 1
+        calls["threads"] = job["n_threads"]
         return {"wall_s": 0.01 * calls["n"], "rss_bytes": 7, "checksum": 1.0}
 
     monkeypatch.setattr(cross_format, "spawn_worker", fake)
     plain = tmp_path / "readcon.con"
     plain.write_bytes(b"x" * 64)
-    samples = cross_format._fresh_reads(
+    result = cross_format._fresh_reads(
         tmp_path, plain, 1, 6, "1M", "readcon-con-fresh-serial"
     )
+    samples = result["samples"]
     # The output carries one value per requested sample.
     assert len(samples) == 6
+    # The worker's RSS and checksum are carried back, not dropped.
+    assert result["rss"] == [7] * 6
+    assert result["checksums"] == [1.0] * 6
+    # The explicit worker count reaches the job, never None.
+    assert calls["threads"] == 1
     # One warmup read, then the six recorded samples.
     assert calls["n"] == 7
     tsv = tmp_path / "by-arm" / "1M" / "readcon-con-fresh-serial.tsv"
@@ -360,6 +367,26 @@ def test_fresh_reads_returns_and_records_its_samples(tmp_path, monkeypatch) -> N
     assert text.count("\n") == 7
     for sample in samples:
         assert f"{sample:.6f}" in text
+
+
+def test_fresh_arms_pass_explicit_worker_counts() -> None:
+    arms = cross_format._fresh_read_arms()
+    by_id = {arm_id: threads for arm_id, _label, threads in arms}
+    # Both arms pass an explicit int count; neither passes None.
+    assert all(isinstance(threads, int) for _a, _label, threads in arms)
+    assert by_id["readcon-con-fresh-serial"] == 1
+    ncpu = os.cpu_count() or 1
+    assert by_id["readcon-con-fresh-ncpu"] == ncpu
+    # On a multi-core host the parallel arm takes the >= 2 parallel path.
+    if ncpu >= 2:
+        assert by_id["readcon-con-fresh-ncpu"] >= 2
+    # The summary sentence names both arms and the exact counts passed.
+    medians = {arm_id: 0.1 for arm_id, _label, _threads in arms}
+    sentence = cross_format._fresh_summary(arms, medians, 6)
+    assert "readcon-con-fresh-serial" in sentence
+    assert "readcon-con-fresh-ncpu" in sentence
+    assert "1 worker" in sentence
+    assert f"{ncpu} workers" in sentence
 
 
 def test_interleave_keeps_one_sample_count(tmp_path: Path, monkeypatch) -> None:
