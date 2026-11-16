@@ -1997,6 +1997,37 @@ fn pack_frame_columns<'a>(
     })
 }
 
+fn copy_f64_in_order<D>(array: &numpy::PyReadonlyArray<'_, f64, D>) -> Vec<f64>
+where
+    D: ndarray::Dimension,
+{
+    let view = array.as_array();
+    // `as_slice` is the C-order fast path. A Fortran or sliced view is
+    // still contiguous in storage order, and reading that storage as C
+    // order scrambles the coordinates.
+    if let Some(slice) = view.as_slice() {
+        slice.to_vec()
+    } else {
+        view.iter().copied().collect()
+    }
+}
+
+fn require_f64<'py, D>(
+    value: &Bound<'py, PyAny>,
+    what: &str,
+    shape: &str,
+) -> PyResult<numpy::PyReadonlyArray<'py, f64, D>>
+where
+    D: ndarray::Dimension,
+{
+    let array = value.cast::<numpy::PyArray<f64, D>>().map_err(|_| {
+        PyValueError::new_err(format!(
+            "{what} must be a float64 array with shape {shape}"
+        ))
+    })?;
+    Ok(array.readonly())
+}
+
 /// Write one contiguous column dict, the shape returned by
 /// ``ConFrameList.columns``.
 ///
@@ -2020,31 +2051,43 @@ fn write_columns(
     let cell = columns
         .get_item("cell")?
         .ok_or_else(|| PyValueError::new_err("cell"))?;
-    let pos = positions.cast::<PyArray3<f64>>()?.readonly();
-    let mass = masses.cast::<PyArray2<f64>>()?.readonly();
-    let cell_arr = cell.cast::<PyArray2<f64>>()?.readonly();
+    let pos = require_f64::<ndarray::Ix3>(
+        &positions,
+        "positions",
+        "(n_frames, n_atoms, 3)",
+    )?;
+    let mass = require_f64::<ndarray::Ix2>(&masses, "masses", "(n_frames, n_atoms)")?;
+    let cell_arr = require_f64::<ndarray::Ix2>(&cell, "cell", "(n_frames, 6)")?;
     let shape = pos.dims();
     if shape[2] != 3 {
-        return Err(PyValueError::new_err("positions"));
+        return Err(PyValueError::new_err(
+            "positions must be a float64 array with shape (n_frames, n_atoms, 3)",
+        ));
     }
     let n_frames = shape[0];
     let n_atoms = shape[1];
-    let pos_slice = pos.as_slice()?;
-    let mass_slice = mass.as_slice()?;
-    let cell_slice = cell_arr.as_slice()?;
-    if mass_slice.len() != n_frames.saturating_mul(n_atoms)
-        || cell_slice.len() != n_frames.saturating_mul(6)
+    let pos_owned = copy_f64_in_order(&pos);
+    let mass_owned = copy_f64_in_order(&mass);
+    let cell_owned = copy_f64_in_order(&cell_arr);
+    if mass_owned.len() != n_frames.saturating_mul(n_atoms)
+        || cell_owned.len() != n_frames.saturating_mul(6)
     {
-        return Err(PyValueError::new_err("positions, masses and cell disagree"));
+        return Err(PyValueError::new_err(format!(
+            "positions shape ({n_frames}, {n_atoms}, 3) does not match masses length {} and cell length {}",
+            mass_owned.len(),
+            cell_owned.len()
+        )));
     }
     let fixed_owned = match columns.get_item("fixed")? {
         Some(value) if !value.is_none() => {
-            let arr = value.cast::<PyArray3<f64>>()?.readonly();
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames.saturating_mul(n_atoms).saturating_mul(3) {
-                return Err(PyValueError::new_err("fixed"));
+            let arr = require_f64::<ndarray::Ix3>(&value, "fixed", "(n_frames, n_atoms, 3)")?;
+            let values = copy_f64_in_order(&arr);
+            if values.len() != n_frames.saturating_mul(n_atoms).saturating_mul(3) {
+                return Err(PyValueError::new_err(
+                    "fixed must be a float64 array with shape (n_frames, n_atoms, 3)",
+                ));
             }
-            Some(slice.to_vec())
+            Some(values)
         }
         _ => None,
     };
@@ -2054,9 +2097,6 @@ fn write_columns(
     // across `detach`: another thread that already holds the GIL and
     // touches these arrays waits on the borrow, and this thread then
     // waits to reacquire the GIL.
-    let pos_owned = pos_slice.to_vec();
-    let mass_owned = mass_slice.to_vec();
-    let cell_owned = cell_slice.to_vec();
     drop(pos);
     drop(mass);
     drop(cell_arr);
@@ -2097,12 +2137,18 @@ fn optional_vec3(
 ) -> PyResult<Option<Vec<f64>>> {
     match columns.get_item(name)? {
         Some(value) if !value.is_none() => {
-            let arr = value.cast::<PyArray3<f64>>()?.readonly();
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames * n_atoms * 3 {
-                return Err(PyValueError::new_err(name.to_string()));
+            let arr = require_f64::<ndarray::Ix3>(
+                &value,
+                name,
+                "(n_frames, n_atoms, 3)",
+            )?;
+            let values = copy_f64_in_order(&arr);
+            if values.len() != n_frames * n_atoms * 3 {
+                return Err(PyValueError::new_err(format!(
+                    "{name} must be a float64 array with shape (n_frames, n_atoms, 3)"
+                )));
             }
-            Ok(Some(slice.to_vec()))
+            Ok(Some(values))
         }
         _ => Ok(None),
     }
@@ -2283,18 +2329,19 @@ fn write_coords(
     symbol: &str,
 ) -> PyResult<Py<PyDict>> {
     let copy_start = std::time::Instant::now();
-    let pos = positions.as_slice()?;
-    let mass = masses.as_slice()?;
-    let cell_s = cell.as_slice()?;
+    let pos_owned = copy_f64_in_order(&positions);
+    let mass_owned = copy_f64_in_order(&masses);
+    let cell_owned = copy_f64_in_order(&cell);
     let shape = positions.dims();
     let n_frames = shape[0];
     let n_atoms = shape[1];
-    if mass.len() != n_frames * n_atoms || cell_s.len() != n_frames * 6 {
-        return Err(PyValueError::new_err("positions, masses and cell disagree"));
+    if mass_owned.len() != n_frames * n_atoms || cell_owned.len() != n_frames * 6 {
+        return Err(PyValueError::new_err(format!(
+            "positions shape ({n_frames}, {n_atoms}, 3) does not match masses length {} and cell length {}",
+            mass_owned.len(),
+            cell_owned.len()
+        )));
     }
-    let pos_owned = pos.to_vec();
-    let mass_owned = mass.to_vec();
-    let cell_owned = cell_s.to_vec();
     let copy_s = copy_start.elapsed().as_secs_f64();
     let path_owned = path.to_owned();
     let symbol_owned = symbol.to_owned();
