@@ -2920,6 +2920,11 @@ def _spread(samples: list[float]) -> float:
     return iqr / abs(median)
 
 
+def _worker_label(n: int) -> str:
+    """``n workers`` for every count except one, which reads ``1 worker``."""
+    return f"{n} worker" if n == 1 else f"{n} workers"
+
+
 def _fresh_read_arms() -> tuple[tuple[str, str, int], ...]:
     """The two extra fresh-process read arms, each with the explicit worker
     count it passes to read_con.
@@ -2931,8 +2936,8 @@ def _fresh_read_arms() -> tuple[tuple[str, str, int], ...]:
     """
     ncpu = os.cpu_count() or 1
     return (
-        ("readcon-con-fresh-ncpu", f"{ncpu} workers", ncpu),
-        ("readcon-con-fresh-serial", "1 worker", 1),
+        ("readcon-con-fresh-ncpu", _worker_label(ncpu), ncpu),
+        ("readcon-con-fresh-serial", _worker_label(1), 1),
     )
 
 
