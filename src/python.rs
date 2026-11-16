@@ -2563,6 +2563,71 @@ impl ConFrameList {
             .map_err(|err| PyIOError::new_err(err.to_string()))
     }
 
+    fn index_is_cached(&self, index: usize) -> bool {
+        self.cache
+            .lock()
+            .expect("cache")
+            .get(index)
+            .and_then(|slot| slot.as_ref())
+            .is_some()
+    }
+
+    /// The header this built frame came from, and whether a later step with
+    /// that same header can overwrite rows instead of building again.
+    fn reuse_key(&self, index: usize, frame: &ConFrame) -> (u32, bool) {
+        let Some(columns) = &self.columns else {
+            return (0, false);
+        };
+        let header = columns.header_index[index];
+        if !columns.identity_shared || frame.atom_data.len() != columns.n_atoms {
+            return (header, false);
+        }
+        let same = (0..columns.n_atoms).all(|atom| {
+            let item = &frame.atom_data[atom];
+            item.symbol.as_ref() == columns.symbol_at(index, atom)
+                && item.atom_id == columns.id_at(index, atom)
+                && item.fixed() == columns.flag_at(index, atom)
+        });
+        (header, same)
+    }
+
+    /// Copy this step's numeric rows onto `frame` when the header matches.
+    fn refill_motion(
+        &self,
+        py: Python<'_>,
+        index: usize,
+        header: u32,
+        frame: &mut ConFrame,
+    ) -> PyResult<bool> {
+        let Some(columns) = &self.columns else {
+            return Ok(false);
+        };
+        if columns.header_index.get(index).copied() != Some(header) {
+            return Ok(false);
+        }
+        let n = columns.n_atoms;
+        let coords = slice_row3(py, self.slab.as_ref(), index, n)?.unwrap_or_else(|| vec![0.0; n * 3]);
+        let velocity = slice_row3(py, self.sections.velocities.as_ref(), index, n)?;
+        let force = slice_row3(py, self.sections.forces.as_ref(), index, n)?;
+        let magmom = slice_row3(py, self.sections.magmoms.as_ref(), index, n)?;
+        let displacement = slice_row3(py, self.sections.displacements.as_ref(), index, n)?;
+        let spread = slice_row3(py, self.sections.spreads.as_ref(), index, n)?;
+        let energy = slice_row1(py, self.sections.energies.as_ref(), index, n)?;
+        let charge = slice_row1(py, self.sections.charges.as_ref(), index, n)?;
+        let spin = slice_row1(py, self.sections.spins.as_ref(), index, n)?;
+        Ok(frame.overwrite_motion(
+            &coords,
+            velocity.as_deref(),
+            force.as_deref(),
+            energy.as_deref(),
+            charge.as_deref(),
+            spin.as_deref(),
+            magmom.as_deref(),
+            displacement.as_deref(),
+            spread.as_deref(),
+        ))
+    }
+
     fn frame_obj(&self, py: Python<'_>, index: usize) -> PyResult<Py<PyConFrame>> {
         {
             let cache = self.cache.lock().expect("cache");
@@ -4619,6 +4684,48 @@ fn slice_row1(
     ))
 }
 
+struct CarriedFrame {
+    frame: ConFrame,
+    header: u32,
+    reusable: bool,
+}
+
+/// Write a column list one frame at a time.
+///
+/// Repeated steps share a header, so the first built frame keeps its symbols
+/// and section tails. Later steps only overwrite the numeric rows.
+fn write_column_frames(
+    py: Python<'_>,
+    list: &Bound<'_, ConFrameList>,
+    mut emit: impl FnMut(&ConFrame) -> PyResult<()>,
+) -> PyResult<()> {
+    let n = list.borrow().len_frames();
+    let mut carried: Option<CarriedFrame> = None;
+    for index in 0..n {
+        if list.borrow().index_is_cached(index) {
+            let frame = column_frame_for_write(py, list, index)?;
+            emit(&frame)?;
+            continue;
+        }
+        if let Some(slot) = carried.as_mut() {
+            if slot.reusable && list.borrow().refill_motion(py, index, slot.header, &mut slot.frame)?
+            {
+                emit(&slot.frame)?;
+                continue;
+            }
+        }
+        let frame = column_frame_for_write(py, list, index)?;
+        let (header, reusable) = list.borrow().reuse_key(index, &frame);
+        emit(&frame)?;
+        carried = Some(CarriedFrame {
+            frame,
+            header,
+            reusable,
+        });
+    }
+    Ok(())
+}
+
 fn write_bound_frames<W: std::io::Write>(
     py: Python<'_>,
     frames: &Bound<'_, PyAny>,
@@ -4626,14 +4733,11 @@ fn write_bound_frames<W: std::io::Write>(
 ) -> PyResult<()> {
     if let Ok(list) = frames.cast::<ConFrameList>() {
         if list.borrow().columns.is_some() {
-            let n = list.borrow().len_frames();
-            for index in 0..n {
-                let frame = column_frame_for_write(py, list, index)?;
+            return write_column_frames(py, list, |frame| {
                 writer
-                    .write_frame_bound(&frame)
-                    .map_err(|err| write_err_to_py(py, err))?;
-            }
-            return Ok(());
+                    .write_frame_bound(frame)
+                    .map_err(|err| write_err_to_py(py, err))
+            });
         }
         let all_stored = {
             let borrowed = list.borrow();
@@ -5088,12 +5192,9 @@ fn write_con(
                             })?
                         }
                         .canonical(canonical);
-                        let n = list.borrow().len_frames();
-                        for index in 0..n {
-                            let frame = column_frame_for_write(py, &list, index)?;
-                            write_stamped_frame(&mut writer, &frame)
-                                .map_err(|e| write_err_to_py(py, e))?;
-                        }
+                        write_column_frames(py, &list, |frame| {
+                            write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
+                        })?;
                         flush_writer(&mut writer)?;
                     } else {
                         // Indexing a frame moves it into the Python cache.

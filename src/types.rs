@@ -1032,6 +1032,26 @@ const TAIL_OWNED: usize = 0b1000;
 const TAIL_EXTERNAL: usize = 0b1_0000;
 const TAIL_MASK: usize = 0b1_1111;
 
+enum TripleField {
+    Magmom,
+    Displacement,
+    Spread,
+}
+
+enum ScalarField {
+    Energy,
+    Charge,
+    Spin,
+}
+
+fn row_matches(want: bool, values: Option<&[f64]>, len: usize) -> bool {
+    match (want, values) {
+        (true, Some(values)) => values.len() == len,
+        (false, None) => true,
+        _ => false,
+    }
+}
+
 impl AtomDatum {
     fn tail_ptr(&self) -> *mut HeapTail {
         (self.tail & !TAIL_MASK) as *mut HeapTail
@@ -1098,6 +1118,68 @@ impl AtomDatum {
     pub fn set_z(&mut self, v: f64) {
         unsafe { *self.xyz.add(2) = v }
         crate::writer::invalidate_packed_lengths();
+    }
+
+    fn put_xyz(&mut self, value: [f64; 3]) {
+        self.set_x(value[0]);
+        self.set_y(value[1]);
+        self.set_z(value[2]);
+    }
+
+    fn velocity_slot_ready(&self) -> bool {
+        match self.heap() {
+            Some(HeapTail::Velocity(_)) => true,
+            Some(HeapTail::Full(full)) => full.velocity.is_some(),
+            _ => false,
+        }
+    }
+
+    fn force_slot_ready(&self) -> bool {
+        match self.heap() {
+            Some(HeapTail::Full(full)) => full.force.is_some(),
+            _ => false,
+        }
+    }
+
+    fn full_ready(&self, present: impl Fn(&AtomTail) -> bool) -> bool {
+        match self.heap() {
+            Some(HeapTail::Full(full)) => present(full),
+            _ => false,
+        }
+    }
+
+    fn put_velocity(&mut self, value: [f64; 3]) {
+        match self.heap_mut() {
+            Some(HeapTail::Velocity(slot)) => *slot = value,
+            Some(HeapTail::Full(full)) => full.velocity = Some(value),
+            _ => {}
+        }
+    }
+
+    fn put_force(&mut self, value: [f64; 3]) {
+        if let Some(HeapTail::Full(full)) = self.heap_mut() {
+            full.force = Some(value);
+        }
+    }
+
+    fn put_triple(&mut self, value: [f64; 3], field: TripleField) {
+        if let Some(HeapTail::Full(full)) = self.heap_mut() {
+            match field {
+                TripleField::Magmom => full.magmom = Some(value),
+                TripleField::Displacement => full.displacement = Some(value),
+                TripleField::Spread => full.spread = Some(value),
+            }
+        }
+    }
+
+    fn put_scalar(&mut self, value: f64, field: ScalarField) {
+        if let Some(HeapTail::Full(full)) = self.heap_mut() {
+            match field {
+                ScalarField::Energy => full.energy = Some(value),
+                ScalarField::Charge => full.charge = Some(value),
+                ScalarField::Spin => full.spin = Some(value),
+            }
+        }
     }
 
     fn owned_xyz(x: f64, y: f64, z: f64) -> *mut f64 {
@@ -2399,6 +2481,138 @@ impl ConFrame {
     pub fn has_energies(&self) -> bool {
         self.atom_energies.len() == self.positions.nrows() && self.positions.nrows() > 0
             || self.atom_data.first().is_some_and(|a| a.has_energy())
+    }
+
+    /// Replace numeric rows on a frame whose atoms are already the right shape.
+    ///
+    /// A column write meets the same header on every step of a repeated
+    /// trajectory. Building a new frame copies symbols and boxes the same
+    /// tails again. Returns false, and leaves this frame unchanged, when the
+    /// rows do not match the atoms already stored.
+    pub(crate) fn overwrite_motion(
+        &mut self,
+        coords: &[f64],
+        velocity: Option<&[f64]>,
+        force: Option<&[f64]>,
+        energy: Option<&[f64]>,
+        charge: Option<&[f64]>,
+        spin: Option<&[f64]>,
+        magmom: Option<&[f64]>,
+        displacement: Option<&[f64]>,
+        spread: Option<&[f64]>,
+    ) -> bool {
+        let n = self.atom_data.len();
+        if n == 0 || coords.len() != n.saturating_mul(3) {
+            return false;
+        }
+        let want_vel = self.atom_data.iter().all(|atom| atom.velocity_slot_ready());
+        let want_frc = self.atom_data.iter().all(|atom| atom.force_slot_ready());
+        let want_eng = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.energy.is_some()));
+        let want_chg = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.charge.is_some()));
+        let want_spn = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.spin.is_some()));
+        let want_mag = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.magmom.is_some()));
+        let want_dsp = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.displacement.is_some()));
+        let want_spr = self
+            .atom_data
+            .iter()
+            .all(|atom| atom.full_ready(|tail| tail.spread.is_some()));
+        if !row_matches(want_vel, velocity, n.saturating_mul(3))
+            || !row_matches(want_frc, force, n.saturating_mul(3))
+            || !row_matches(want_eng, energy, n)
+            || !row_matches(want_chg, charge, n)
+            || !row_matches(want_spn, spin, n)
+            || !row_matches(want_mag, magmom, n.saturating_mul(3))
+            || !row_matches(want_dsp, displacement, n.saturating_mul(3))
+            || !row_matches(want_spr, spread, n.saturating_mul(3))
+        {
+            return false;
+        }
+        if let Some(values) = spread {
+            for i in 0..n {
+                let at = i.saturating_mul(3);
+                if !spread_row_ok([values[at], values[at + 1], values[at + 2]]) {
+                    return false;
+                }
+            }
+        }
+        for i in 0..n {
+            let at = i.saturating_mul(3);
+            let xyz = [coords[at], coords[at + 1], coords[at + 2]];
+            self.atom_data[i].put_xyz(xyz);
+            if self.positions.nrows() == n {
+                self.positions.set_f64_row(i, xyz);
+            }
+            if let Some(values) = velocity {
+                let row = [values[at], values[at + 1], values[at + 2]];
+                self.atom_data[i].put_velocity(row);
+                if self.velocities.nrows() == n {
+                    self.velocities.set_f64_row(i, row);
+                }
+            }
+            if let Some(values) = force {
+                let row = [values[at], values[at + 1], values[at + 2]];
+                self.atom_data[i].put_force(row);
+                if self.forces.nrows() == n {
+                    self.forces.set_f64_row(i, row);
+                }
+            }
+            if let Some(values) = energy {
+                self.atom_data[i].put_scalar(values[i], ScalarField::Energy);
+                if self.atom_energies.len() == n {
+                    self.atom_energies.set_f64(i, values[i]);
+                }
+            }
+            if let Some(values) = charge {
+                self.atom_data[i].put_scalar(values[i], ScalarField::Charge);
+                if self.charges.len() == n {
+                    self.charges.set_f64(i, values[i]);
+                }
+            }
+            if let Some(values) = spin {
+                self.atom_data[i].put_scalar(values[i], ScalarField::Spin);
+                if self.spins.len() == n {
+                    self.spins.set_f64(i, values[i]);
+                }
+            }
+            if let Some(values) = magmom {
+                let row = [values[at], values[at + 1], values[at + 2]];
+                self.atom_data[i].put_triple(row, TripleField::Magmom);
+                if self.magmoms.nrows() == n {
+                    self.magmoms.set_f64_row(i, row);
+                }
+            }
+            if let Some(values) = displacement {
+                let row = [values[at], values[at + 1], values[at + 2]];
+                self.atom_data[i].put_triple(row, TripleField::Displacement);
+                if self.displacements.nrows() == n {
+                    self.displacements.set_f64_row(i, row);
+                }
+            }
+            if let Some(values) = spread {
+                let row = [values[at], values[at + 1], values[at + 2]];
+                self.atom_data[i].put_triple(row, TripleField::Spread);
+                if self.spreads.nrows() == n {
+                    self.spreads.set_f64_row(i, row);
+                }
+            }
+        }
+        crate::writer::invalidate_packed_lengths();
+        true
     }
 
     /// Builds an O(1) reverse index from `atom_id` to the position of
@@ -4652,6 +4866,49 @@ mod tests {
             })
             .unwrap();
         assert_eq!(plain.build().unwrap(), plain_bulk.build().unwrap());
+    }
+
+    #[test]
+    fn overwrite_motion_matches_a_rebuilt_frame() {
+        fn sample(coords: [f64; 3], velocity: [f64; 3], force: [f64; 3]) -> ConFrame {
+            let mut builder = ConFrameBuilder::new([10.0, 11.0, 12.0], [90.0, 90.0, 90.0]);
+            builder
+                .add_atom("Cu", coords[0], coords[1], coords[2], [false, true, false], 3, 63.546)
+                .with_velocity(velocity)
+                .with_force(force);
+            builder
+                .add_atom("H", coords[0] + 1.0, 0.0, 0.0, [false; 3], 4, 1.008)
+                .with_velocity([velocity[0] + 0.1, 0.0, 0.0])
+                .with_force([force[0] + 0.1, 0.0, 0.0]);
+            builder.build().unwrap()
+        }
+        let mut carried = sample([0.1, 0.2, 0.3], [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]);
+        let fresh = sample([0.4, 0.5, 0.6], [1.5, 2.5, 3.5], [4.5, 5.5, 6.5]);
+        assert!(carried.overwrite_motion(
+            &[0.4, 0.5, 0.6, 1.4, 0.0, 0.0],
+            Some(&[1.5, 2.5, 3.5, 1.6, 0.0, 0.0]),
+            Some(&[4.5, 5.5, 6.5, 4.6, 0.0, 0.0]),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+        assert_eq!(carried, fresh);
+        let before = carried.clone();
+        assert!(!carried.overwrite_motion(
+            &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            None,
+            Some(&[0.0; 6]),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+        assert_eq!(carried, before);
     }
 
     #[test]
