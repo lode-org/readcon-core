@@ -8,43 +8,43 @@
      - I refs
      - Notes
    * - ``parse_multi_2x4``
-     - 6,748,578
+     - 6,748,583
      - 2-frame multi CON (50×)
    * - ``forward_multi_2x4``
-     - 5,334,857
+     - 5,334,862
      - forward() skip (50×)
    * - ``convel_multi``
-     - 7,778,327
+     - 7,778,332
      - coords + velocities (50×)
    * - ``parse_100_frames``
-     - 22,094,092
+     - 22,094,097
      - 100× tiny_cuh2 (10×)
    * - ``forward_100_frames``
-     - 6,493,107
+     - 6,493,112
      - skip 100 frames (10×)
    * - ``parse_cuh2_218``
-     - 10,160,392
+     - 10,160,397
      - 218-atom frame (20×)
    * - ``float_fast_float2``
-     - 31,706,011
+     - 31,706,016
      - 5-col fast-float2 (10k)
    * - ``float_std_parse``
-     - 31,167,106
+     - 31,167,111
      - 5-col str::parse (10k)
    * - ``write_100_frames``
-     - 20,602,069
+     - 20,602,074
      - buffer writer (10×)
    * - ``chemfiles_xyz_path``
-     - 7,603,480
+     - 7,604,349
      - XYZ path → ConFrame (50×)
    * - ``chemfiles_xyz_memory``
-     - 7,398,153
+     - 7,399,022
      - XYZ memory → ConFrame (50×)
    * - ``chemfiles_select_name_O``
-     - 6,457,609
+     - 6,457,587
      - selection ``name O`` (50×)
 
-Generated **2026-11-15T17:50:47Z** from commit ``77159d7``
+Generated **2026-11-16T12:54:22Z** from commit ``25169dd``
 (Cargo features: ``chemfiles-from-sources``). Metric: Valgrind Cachegrind **I refs**.
 Lower is better for the same scenario. Comparable across commits on the same CI image/Valgrind.
 
