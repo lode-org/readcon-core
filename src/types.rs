@@ -2501,6 +2501,29 @@ impl ConFrame {
 /// from a DLPack export across `add_atom` invocations MUST refresh
 /// after the push (ndarray's `push` may reallocate the backing
 /// buffer when capacity is exceeded).
+/// One frame's atoms, already in builder order.
+///
+/// A column write gathers these from the stored slabs and installs them
+/// with [`ConFrameBuilder::set_recorded_atoms`] instead of one `add_atom`
+/// per row.
+pub(crate) struct RecordedAtoms {
+    pub symbols: Vec<String>,
+    pub fixed: Vec<[bool; 3]>,
+    /// Row-major `(N, 3)`.
+    pub positions: Vec<f64>,
+    pub atom_ids: Vec<u64>,
+    pub masses: Vec<f64>,
+    /// Row-major `(N, 3)` when the section is present.
+    pub velocities: Option<Vec<f64>>,
+    pub forces: Option<Vec<f64>>,
+    pub energies: Option<Vec<f64>>,
+    pub charges: Option<Vec<f64>>,
+    pub spins: Option<Vec<f64>>,
+    pub magmoms: Option<Vec<f64>>,
+    pub displacements: Option<Vec<f64>>,
+    pub spreads: Option<Vec<f64>>,
+}
+
 /// Helper: `push_row` on a 2D ArcArray. ArcArray (OwnedArcRepr) does not
 /// implement DataOwned (push_row requires DataOwned + DataMut), so the
 /// implementation detours through the owned Array variant. When the
@@ -2852,6 +2875,101 @@ impl ConFrameBuilder {
             arc_push_row(&mut self.spreads, array![0.0, 0.0, 0.0].view());
         }
         self
+    }
+
+    /// Replace the atom tables with values already gathered for one frame.
+    ///
+    /// `add_atom` pushes one row at a time, and each push rewraps the
+    /// shared array. A column read already holds the rows, so a write of
+    /// that frame installs them together. The installed values are the
+    /// ones `add_atom` and `with_*` would have stored.
+    pub(crate) fn set_recorded_atoms(&mut self, atoms: RecordedAtoms) -> Result<(), &'static str> {
+        let n = atoms.symbols.len();
+        let width = n.saturating_mul(3);
+        if atoms.fixed.len() != n
+            || atoms.positions.len() != width
+            || atoms.atom_ids.len() != n
+            || atoms.masses.len() != n
+        {
+            return Err("recorded atom tables disagree");
+        }
+        let row3 = |values: &Option<Vec<f64>>| match values {
+            Some(values) => values.len() == width,
+            None => true,
+        };
+        let row1 = |values: &Option<Vec<f64>>| match values {
+            Some(values) => values.len() == n,
+            None => true,
+        };
+        if !row3(&atoms.velocities)
+            || !row3(&atoms.forces)
+            || !row1(&atoms.energies)
+            || !row1(&atoms.charges)
+            || !row1(&atoms.spins)
+            || !row3(&atoms.magmoms)
+            || !row3(&atoms.displacements)
+            || !row3(&atoms.spreads)
+        {
+            return Err("recorded section length");
+        }
+        self.symbols = atoms.symbols;
+        self.fixed = atoms.fixed;
+        self.positions = ndarray::Array2::from_shape_vec((n, 3), atoms.positions)
+            .expect("positions length was checked")
+            .into_shared();
+        self.atom_ids = ndarray::Array1::from_vec(atoms.atom_ids).into_shared();
+        self.masses = ndarray::Array1::from_vec(atoms.masses).into_shared();
+        self.velocities = match atoms.velocities {
+            Some(values) => ndarray::Array2::from_shape_vec((n, 3), values)
+                .expect("velocity length was checked")
+                .into_shared(),
+            None => ndarray::ArcArray2::<f64>::zeros((0, 3)),
+        };
+        self.has_velocities = self.velocities.nrows() == n && n > 0;
+        self.forces = match atoms.forces {
+            Some(values) => ndarray::Array2::from_shape_vec((n, 3), values)
+                .expect("force length was checked")
+                .into_shared(),
+            None => ndarray::ArcArray2::<f64>::zeros((0, 3)),
+        };
+        self.has_forces = self.forces.nrows() == n && n > 0;
+        self.atom_energies = match atoms.energies {
+            Some(values) => ndarray::Array1::from_vec(values).into_shared(),
+            None => ndarray::ArcArray1::<f64>::zeros(0),
+        };
+        self.has_energies = self.atom_energies.len() == n && n > 0;
+        self.charges = match atoms.charges {
+            Some(values) => ndarray::Array1::from_vec(values).into_shared(),
+            None => ndarray::ArcArray1::<f64>::zeros(0),
+        };
+        self.has_charges = self.charges.len() == n && n > 0;
+        self.spins = match atoms.spins {
+            Some(values) => ndarray::Array1::from_vec(values).into_shared(),
+            None => ndarray::ArcArray1::<f64>::zeros(0),
+        };
+        self.has_spins = self.spins.len() == n && n > 0;
+        self.magmoms = match atoms.magmoms {
+            Some(values) => ndarray::Array2::from_shape_vec((n, 3), values)
+                .expect("magmom length was checked")
+                .into_shared(),
+            None => ndarray::ArcArray2::<f64>::zeros((0, 3)),
+        };
+        self.has_magmoms = self.magmoms.nrows() == n && n > 0;
+        self.displacements = match atoms.displacements {
+            Some(values) => ndarray::Array2::from_shape_vec((n, 3), values)
+                .expect("displacement length was checked")
+                .into_shared(),
+            None => ndarray::ArcArray2::<f64>::zeros((0, 3)),
+        };
+        self.has_displacements = self.displacements.nrows() == n && n > 0;
+        self.spreads = match atoms.spreads {
+            Some(values) => ndarray::Array2::from_shape_vec((n, 3), values)
+                .expect("spread length was checked")
+                .into_shared(),
+            None => ndarray::ArcArray2::<f64>::zeros((0, 3)),
+        };
+        self.has_spreads = self.spreads.nrows() == n && n > 0;
+        Ok(())
     }
 
     /// Attaches velocity data to the most recently added atom.
@@ -4470,6 +4588,71 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recorded_atoms_match_atoms_added_one_at_a_time() {
+        let cell = [10.0, 11.0, 12.0];
+        let angles = [90.0, 90.0, 90.0];
+        let mut one = ConFrameBuilder::new(cell, angles);
+        one.add_atom("Cu", 0.1, 0.2, 0.3, [false, true, false], 7, 63.546)
+            .with_velocity([1.0, 2.0, 3.0])
+            .with_force([4.0, 5.0, 6.0])
+            .with_energy(0.5)
+            .with_charge(-0.1)
+            .with_spin(0.25)
+            .with_magmom([0.0, 0.0, 1.0])
+            .with_displacement([0.01, 0.0, 0.0])
+            .with_spread([0.02, 0.02, 0.02]);
+        one.add_atom("H", 1.0, 1.5, 2.0, [true, false, false], 8, 1.008)
+            .with_velocity([0.1, 0.0, -0.1])
+            .with_force([0.0, 1.0, 0.0])
+            .with_energy(-0.25)
+            .with_charge(0.1)
+            .with_spin(0.5)
+            .with_magmom([0.0, 1.0, 0.0])
+            .with_displacement([0.0, 0.02, 0.0])
+            .with_spread([0.03, 0.03, 0.01]);
+        let mut bulk = ConFrameBuilder::new(cell, angles);
+        bulk.set_recorded_atoms(RecordedAtoms {
+            symbols: vec!["Cu".to_string(), "H".to_string()],
+            fixed: vec![[false, true, false], [true, false, false]],
+            positions: vec![0.1, 0.2, 0.3, 1.0, 1.5, 2.0],
+            atom_ids: vec![7, 8],
+            masses: vec![63.546, 1.008],
+            velocities: Some(vec![1.0, 2.0, 3.0, 0.1, 0.0, -0.1]),
+            forces: Some(vec![4.0, 5.0, 6.0, 0.0, 1.0, 0.0]),
+            energies: Some(vec![0.5, -0.25]),
+            charges: Some(vec![-0.1, 0.1]),
+            spins: Some(vec![0.25, 0.5]),
+            magmoms: Some(vec![0.0, 0.0, 1.0, 0.0, 1.0, 0.0]),
+            displacements: Some(vec![0.01, 0.0, 0.0, 0.0, 0.02, 0.0]),
+            spreads: Some(vec![0.02, 0.02, 0.02, 0.03, 0.03, 0.01]),
+        })
+        .unwrap();
+        assert_eq!(one.build().unwrap(), bulk.build().unwrap());
+
+        let mut plain = ConFrameBuilder::new(cell, angles);
+        plain.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+        let mut plain_bulk = ConFrameBuilder::new(cell, angles);
+        plain_bulk
+            .set_recorded_atoms(RecordedAtoms {
+                symbols: vec!["Cu".to_string()],
+                fixed: vec![[false; 3]],
+                positions: vec![0.0, 0.0, 0.0],
+                atom_ids: vec![0],
+                masses: vec![63.546],
+                velocities: None,
+                forces: None,
+                energies: None,
+                charges: None,
+                spins: None,
+                magmoms: None,
+                displacements: None,
+                spreads: None,
+            })
+            .unwrap();
+        assert_eq!(plain.build().unwrap(), plain_bulk.build().unwrap());
+    }
 
     #[test]
     fn test_x_only_is_one_under_spec_2() {

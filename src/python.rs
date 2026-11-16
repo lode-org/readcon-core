@@ -2528,47 +2528,36 @@ impl ConFrameList {
             header.spec_version,
             velocity.is_some(),
         );
+        let mut symbols = Vec::with_capacity(n);
+        let mut fixed = Vec::with_capacity(n);
+        let mut atom_ids = Vec::with_capacity(n);
+        for atom in 0..n {
+            symbols.push(columns.symbol_at(index, atom).to_string());
+            fixed.push(columns.flag_at(index, atom));
+            atom_ids.push(columns.id_at(index, atom));
+        }
         let mut builder = ConFrameBuilder::new(header.boxl, header.angles);
         builder
             .prebox_header(header.prebox_header.user.clone())
             .postbox_header(header.postbox_header.clone())
             .metadata(meta);
-        for atom in 0..n {
-            let at = atom.saturating_mul(3);
-            builder.add_atom(
-                columns.symbol_at(index, atom),
-                coords[at],
-                coords[at + 1],
-                coords[at + 2],
-                columns.flag_at(index, atom),
-                columns.id_at(index, atom),
-                masses[atom],
-            );
-            if let Some(values) = &velocity {
-                builder.with_velocity([values[at], values[at + 1], values[at + 2]]);
-            }
-            if let Some(values) = &force {
-                builder.with_force([values[at], values[at + 1], values[at + 2]]);
-            }
-            if let Some(values) = &energy {
-                builder.with_energy(values[atom]);
-            }
-            if let Some(values) = &charge {
-                builder.with_charge(values[atom]);
-            }
-            if let Some(values) = &spin {
-                builder.with_spin(values[atom]);
-            }
-            if let Some(values) = &magmom {
-                builder.with_magmom([values[at], values[at + 1], values[at + 2]]);
-            }
-            if let Some(values) = &displacement {
-                builder.with_displacement([values[at], values[at + 1], values[at + 2]]);
-            }
-            if let Some(values) = &spread {
-                builder.with_spread([values[at], values[at + 1], values[at + 2]]);
-            }
-        }
+        builder
+            .set_recorded_atoms(crate::types::RecordedAtoms {
+                symbols,
+                fixed,
+                positions: coords,
+                atom_ids,
+                masses,
+                velocities: velocity,
+                forces: force,
+                energies: energy,
+                charges: charge,
+                spins: spin,
+                magmoms: magmom,
+                displacements: displacement,
+                spreads: spread,
+            })
+            .map_err(PyIOError::new_err)?;
         builder
             .build()
             .map_err(|err| PyIOError::new_err(err.to_string()))
