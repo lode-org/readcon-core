@@ -1,6 +1,6 @@
 use ndarray::{Array1, Array2, Array3, ArrayView2};
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
+    IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods,
 };
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
@@ -1693,7 +1693,18 @@ fn frame_from_arrays(
     symbol: &str,
 ) -> Result<ConFrame, String> {
     let n = masses.len();
-    if positions.len() != n * 3 || cell.len() != 6 || n == 0 {
+    if n == 0 {
+        if !positions.is_empty() || cell.len() != 6 {
+            return Err("positions, masses and cell disagree".to_string());
+        }
+        return ConFrameBuilder::new(
+            [cell[0], cell[1], cell[2]],
+            [cell[3], cell[4], cell[5]],
+        )
+        .build()
+        .map_err(|err| err.to_string());
+    }
+    if positions.len() != n * 3 || cell.len() != 6 {
         return Err("positions, masses and cell disagree".to_string());
     }
     let shared: std::sync::Arc<str> = std::sync::Arc::from(symbol);
@@ -2193,7 +2204,21 @@ fn frame_from_column_slice(
     symbol: &str,
 ) -> Result<ConFrame, String> {
     let n = masses.len();
-    if positions.len() != n * 3 || cell.len() != 6 || n == 0 {
+    if n == 0 {
+        if !positions.is_empty() || cell.len() != 6 {
+            return Err("positions, masses and cell disagree".to_string());
+        }
+        if velocities.is_some() || forces.is_some() {
+            return Err("a zero-atom frame cannot include velocities or forces".to_string());
+        }
+        return ConFrameBuilder::new(
+            [cell[0], cell[1], cell[2]],
+            [cell[3], cell[4], cell[5]],
+        )
+        .build()
+        .map_err(|err| err.to_string());
+    }
+    if positions.len() != n * 3 || cell.len() != 6 {
         return Err("positions, masses and cell disagree".to_string());
     }
     let shared: std::sync::Arc<str> = std::sync::Arc::from(symbol);
@@ -2323,11 +2348,18 @@ fn mass_runs(masses: &[f64]) -> (Vec<usize>, Vec<f64>) {
 fn write_coords(
     py: Python<'_>,
     path: &str,
-    positions: PyReadonlyArray3<'_, f64>,
-    masses: PyReadonlyArray2<'_, f64>,
-    cell: PyReadonlyArray2<'_, f64>,
+    positions: &Bound<'_, PyAny>,
+    masses: &Bound<'_, PyAny>,
+    cell: &Bound<'_, PyAny>,
     symbol: &str,
 ) -> PyResult<Py<PyDict>> {
+    let positions = require_f64::<ndarray::Ix3>(
+        positions,
+        "positions",
+        "(n_frames, n_atoms, 3)",
+    )?;
+    let masses = require_f64::<ndarray::Ix2>(masses, "masses", "(n_frames, n_atoms)")?;
+    let cell = require_f64::<ndarray::Ix2>(cell, "cell", "(n_frames, 6)")?;
     let copy_start = std::time::Instant::now();
     let pos_owned = copy_f64_in_order(&positions);
     let mass_owned = copy_f64_in_order(&masses);
@@ -2335,6 +2367,14 @@ fn write_coords(
     let shape = positions.dims();
     let n_frames = shape[0];
     let n_atoms = shape[1];
+    if shape[2] != 3 {
+        return Err(PyValueError::new_err(
+            "positions must be a float64 array with shape (n_frames, n_atoms, 3)",
+        ));
+    }
+    drop(positions);
+    drop(masses);
+    drop(cell);
     if mass_owned.len() != n_frames * n_atoms || cell_owned.len() != n_frames * 6 {
         return Err(PyValueError::new_err(format!(
             "positions shape ({n_frames}, {n_atoms}, 3) does not match masses length {} and cell length {}",
@@ -7670,13 +7710,16 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
     let positions = data
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
-    let pos = positions.cast::<PyArray3<f64>>()?;
-    let shape = {
-        let view = pos.readonly();
-        view.as_array().shape().to_vec()
-    };
+    let pos = require_f64::<ndarray::Ix3>(
+        &positions,
+        "positions",
+        "(n_frames, n_atoms, 3)",
+    )?;
+    let shape = pos.as_array().shape().to_vec();
     if shape.len() != 3 || shape[2] != 3 {
-        return Err(PyValueError::new_err("positions"));
+        return Err(PyValueError::new_err(
+            "positions must be a float64 array with shape (n_frames, n_atoms, 3)",
+        ));
     }
     let n_frames = shape[0];
     let n_atoms = shape[1];
@@ -7686,7 +7729,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
     let cell_obj = data
         .get_item("cell")?
         .ok_or_else(|| PyValueError::new_err("cell"))?;
-    let cell_array = cell_obj.cast::<PyArray2<f64>>()?.clone();
+    let cell_array = require_f64::<ndarray::Ix2>(&cell_obj, "cell", "(n_frames, 6)")?;
     let arrays_obj = data
         .get_item("arrays")?
         .ok_or_else(|| PyValueError::new_err("arrays"))?;
@@ -7700,42 +7743,66 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
     let mut order = Vec::new();
     for (key, value) in arrays.iter() {
         let name: String = key.extract()?;
-        if let Ok(wide) = value.cast::<PyArray3<f64>>() {
-            let view = wide.readonly();
-            let width = *view.as_array().shape().get(2).unwrap_or(&1);
-            if view.as_slice().is_err() {
-                return Err(PyValueError::new_err(format!("column {name}")));
+        if value.cast::<numpy::PyUntypedArray>().is_ok() {
+            if let Ok(wide) = value.cast::<PyArray3<f64>>() {
+                let view = wide.readonly();
+                let width = *view.as_array().shape().get(2).unwrap_or(&1);
+                drop(view);
+                real3_meta.push((name, width));
+                real3_arrays.push(wide.clone());
+                order.push(1u8);
+            } else if let Ok(thin) = value.cast::<PyArray2<f64>>() {
+                real2_names.push(name);
+                real2_arrays.push(thin.clone());
+                order.push(2u8);
+            } else {
+                return Err(PyValueError::new_err(format!(
+                    "{name} must be a float64 array"
+                )));
             }
-            drop(view);
-            real3_meta.push((name, width));
-            real3_arrays.push(wide.clone());
-            order.push(1u8);
-        } else if let Ok(thin) = value.cast::<PyArray2<f64>>() {
-            let view = thin.readonly();
-            if view.as_slice().is_err() {
-                return Err(PyValueError::new_err(format!("column {name}")));
-            }
-            drop(view);
-            real2_names.push(name);
-            real2_arrays.push(thin.clone());
-            order.push(2u8);
         } else {
             text_names.push(name);
             text_items.push(intern_text_column(&value)?);
             order.push(0u8);
         }
     }
-    let cell_view = cell_array.readonly();
-    let cell = cell_view.as_slice()?;
+    let cell_owned = copy_f64_in_order(&cell_array);
+    let cell = cell_owned.as_slice();
     let real3_views: Vec<_> = real3_arrays.iter().map(|array| array.readonly()).collect();
     let real2_views: Vec<_> = real2_arrays.iter().map(|array| array.readonly()).collect();
-    let mut real3_slices = Vec::with_capacity(real3_views.len());
+    let mut real3_owned = Vec::with_capacity(real3_views.len());
     for view in &real3_views {
-        real3_slices.push(view.as_slice()?);
+        // C-order columns stay borrowed. Fortran storage is contiguous too,
+        // and walking that storage writes the columns in the wrong order.
+        if view.as_array().as_slice().is_some() {
+            real3_owned.push(None);
+        } else {
+            real3_owned.push(Some(view.as_array().iter().copied().collect::<Vec<f64>>()));
+        }
+    }
+    let mut real3_slices = Vec::with_capacity(real3_views.len());
+    for (view, owned) in real3_views.iter().zip(&real3_owned) {
+        if let Some(values) = owned {
+            real3_slices.push(values.as_slice());
+        } else {
+            real3_slices.push(view.as_slice().expect("c-order column"));
+        }
+    }
+    let mut real2_owned = Vec::with_capacity(real2_views.len());
+    for view in &real2_views {
+        if view.as_array().as_slice().is_some() {
+            real2_owned.push(None);
+        } else {
+            real2_owned.push(Some(view.as_array().iter().copied().collect::<Vec<f64>>()));
+        }
     }
     let mut real2_slices = Vec::with_capacity(real2_views.len());
-    for view in &real2_views {
-        real2_slices.push(view.as_slice()?);
+    for (view, owned) in real2_views.iter().zip(&real2_owned) {
+        if let Some(values) = owned {
+            real2_slices.push(values.as_slice());
+        } else {
+            real2_slices.push(view.as_slice().expect("c-order column"));
+        }
     }
     let mut texts = Vec::new();
     let mut reals = Vec::new();

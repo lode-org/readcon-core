@@ -2321,7 +2321,7 @@ pub fn extxyz_bytes_with_threads(
     workers: usize,
 ) -> Result<Vec<u8>, String> {
     if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
-        return Err("frames".to_string());
+        return Err("n_frames and n_atoms must be at least 1".to_string());
     }
     if cell.len() < n_frames * 6 {
         return Err("cell".to_string());
