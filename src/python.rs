@@ -5730,8 +5730,10 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         .is_some_and(|vels| vels.iter().any(|v| v.iter().any(|&c| c != 0.0)));
 
     // Extract forces from ASE (via calculator results, None if no calculator)
+    // get_forces zeros a constrained component. The calculator still
+    // holds the forces that were stored on the frame.
     let forces: Option<Vec<Vec<f64>>> = ase_atoms
-        .call_method0("get_forces")
+        .call_method1("get_forces", (false,))
         .ok()
         .and_then(|f| {
             if f.is_none() {
