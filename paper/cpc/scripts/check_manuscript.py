@@ -117,7 +117,7 @@ COMPETING = (
 )
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
 AI_STATEMENT = (
-    "During the preparation of this work the author used \\rcAITool{} in order to refine certain turns of "
+    "During the preparation of this work the author used \\rcAITool{} to refine certain turns of "
     "phrase in the manuscript."
 )
 AI_RESPONSIBILITY = (
