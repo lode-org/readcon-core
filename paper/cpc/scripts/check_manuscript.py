@@ -209,7 +209,9 @@ def check_front(main: str) -> str:
         line.strip() for line in HIGHLIGHTS.read_text().splitlines() if line.strip()
     ]
     if items != lines:
-        bad.append("the highlights in rg_main.tex differ from highlights.txt")
+        bad.append(
+            "the highlights in rg_main.tex differ from highlights.txt; gen_highlights.py writes it from rg_main.tex"
+        )
     if not 3 <= len(lines) <= 5:
         bad.append(f"{len(lines)} highlights; CPC asks for 3 to 5")
     bad += [
