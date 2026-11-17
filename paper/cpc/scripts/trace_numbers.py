@@ -23,10 +23,12 @@ Each printed number is one of
 
 The script writes ``data/trace/numbers.csv`` with one row per printed number
 and exits non-zero when a printed number has no rule, a rule does not match
-its record, or a rule names a number the manuscript no longer prints.  With
-``--check`` it writes nothing and also fails when the committed ledger differs
-from the one the records give now, so an edit to a record behind a headline
-fails until the ledger is rewritten.
+its record, or a rule names a number the manuscript no longer prints.  The
+ledger is gitignored, so ``--check`` builds it when it is missing (a clean
+clone gives no drift on the first run) and otherwise leaves it in place; it
+then fails when a ledger left from an earlier run differs from the one the
+records give now, so an edit to a record behind a headline fails until the
+ledger is rewritten.
 
     python3 paper/cpc/scripts/trace_numbers.py
     python3 paper/cpc/scripts/trace_numbers.py --check
@@ -543,7 +545,13 @@ def main() -> int:
     rows, problems = trace(only)
     text = render(rows)
     if args.check and not only:
-        committed = LEDGER.read_text() if LEDGER.is_file() else ""
+        # data/trace/ is gitignored, so a clean clone has no ledger. Build it
+        # before checking, so the first run on a clean tree reports no drift; a
+        # ledger left from an earlier run is still checked against the records.
+        if not LEDGER.is_file():
+            LEDGER.parent.mkdir(parents=True, exist_ok=True)
+            LEDGER.write_text(text)
+        committed = LEDGER.read_text()
         if committed != text:
             diff = list(
                 difflib.unified_diff(
