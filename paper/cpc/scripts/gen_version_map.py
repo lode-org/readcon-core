@@ -15,10 +15,19 @@ A record's build is the ``provenance`` block that ``provenance.record()``
 stored in it, in a record that lists it under ``outputs`` or ``csv`` or
 gives its SHA-256 under ``sha256``, in the JSON record of the same name next
 to it, or in the ``campaign_host.json`` (each session), ``host.json`` or
-``provenance.json`` of its directory.  A record that names only a commit gets the library digest of that
+``provenance.json`` of its directory.  A ``host.json`` carries a build only when it has the readcon-core build
+schema (``readcon_core``, ``readcon_sha``, ``rustc``, ``python``); one that holds the hardware alone is no
+carrier.  A record that names only a commit gets the library digest of that
 commit's tree; a record without a provenance block that names its commit and
 version (``tree_commit``, ``readcon_version``) names no host.  A record that
 measures published releases lists them in ``measures_release``.
+
+The records under ``EXTERNAL_RECORDS`` (the readcon-db campaigns ``data/db30``, ``data/db31`` and ``data/db32``)
+are copied verbatim from lode-org/readcon-db and carry no readcon-core build.  Each names the readcon-db commit
+it measured under ``commit`` (with its ``tree``) or ``head``, in the record or in the ``host.json`` beside it, and
+the host under ``host`` or in that ``host.json`` (``cpu``, ``ncpu``, ``cpuinfo_mhz``, ``kernel``).  Its heading
+names that commit, tree and host and no readcon-core version; one that names no commit is a problem that names
+the record.
 
 A result is a table, figure or listing written from the record, or a part of
 a document that prints a traced number taken from it or a macro written from
@@ -68,6 +77,9 @@ NO_BUILD = {
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
 }
+# Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
+EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/")
+HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
 PREFIXES = {
     "tab": "Table",
@@ -500,9 +512,17 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def has_build_schema(path: Path) -> bool:
+    """Whether a ``host.json`` names a readcon-core build, not the hardware alone."""
+    data = json.loads(path.read_text())
+    return isinstance(data, dict) and all(key in data for key in HOST_BUILD_KEYS)
+
+
 def carrier(rel: str) -> tuple[str, str] | None:
     """The record holding the build of ``rel``, and its kind: ``record``, ``commit``, ``campaign``, ``host`` or
-    ``directory`` (a ``provenance.json`` with a build and a host)."""
+    ``directory`` (a ``provenance.json`` with a build and a host), or ``external`` (a readcon-db record)."""
+    if rel.startswith(EXTERNAL_RECORDS):
+        return "external", rel
     if rel in provenance_records():
         return "record", rel
     paths, hashes = outputs()
@@ -529,7 +549,7 @@ def carrier(rel: str) -> tuple[str, str] | None:
             break
         if (parent / "campaign_host.json").is_file():
             return "campaign", cpc_rel(parent / "campaign_host.json")
-        if (parent / "host.json").is_file():
+        if (parent / "host.json").is_file() and has_build_schema(parent / "host.json"):
             return "host", cpc_rel(parent / "host.json")
         if (parent / "provenance.json").is_file():
             return "directory", cpc_rel(parent / "provenance.json")
@@ -538,7 +558,7 @@ def carrier(rel: str) -> tuple[str, str] | None:
 
 @dataclass(frozen=True)
 class Build:
-    readcon: str
+    readcon: str | None
     digest: str | None
     module: str | None
     module_sha256: str | None
@@ -548,6 +568,9 @@ class Build:
     extra: str = ""
     # Printed once, before the table, and left out of the heading that groups the records.
     note: str = field(default="", compare=False)
+    # The readcon-db commit and tree of an external record, which names no readcon-core build.
+    db_commit: str | None = None
+    db_tree: str | None = None
 
 
 def tex(text: str) -> str:
@@ -653,7 +676,67 @@ def from_provenance(prov: dict, data: dict) -> Build | None:
     )
 
 
+SHA1 = re.compile(r"[0-9a-f]{40}")
+
+
+def database_commit(data: object) -> str | None:
+    """The readcon-db commit a record names, as ``commit`` or ``head``; None when it names none."""
+    if isinstance(data, dict):
+        for key in ("commit", "head"):
+            value = data.get(key)
+            if isinstance(value, str) and SHA1.fullmatch(value):
+                return value
+    return None
+
+
+def database_host_text(host: dict) -> str | None:
+    """The host a readcon-db record names, as far as it names one."""
+    parts = []
+    if host.get("cpu"):
+        parts.append(str(host["cpu"]))
+    if host.get("ncpu"):
+        parts.append(f"{host['ncpu']} CPUs")
+    if host.get("cpuinfo_mhz"):
+        parts.append(f"{float(host['cpuinfo_mhz']):.0f} MHz")
+    if host.get("kernel"):
+        parts.append(f"kernel {host['kernel']}")
+    return ", ".join(parts) or None
+
+
+def from_external(rel: str) -> Build | None:
+    """The build of a readcon-db record: the commit and tree it names, in itself or in the ``host.json`` beside it."""
+    data = json.loads((CPC / rel).read_text())
+    beside = (CPC / rel).parent / "host.json"
+    sides = [json.loads(beside.read_text())] if beside.is_file() else []
+    named = next((d for d in (data, *sides) if database_commit(d)), None)
+    if named is None:
+        return None
+    host = next(
+        (
+            h
+            for d in (data, *sides)
+            for h in (d.get("host") if isinstance(d, dict) else None, d)
+            if isinstance(h, dict) and database_host_text(h)
+        ),
+        {},
+    )
+    tree = named.get("tree") or (named.get("host") or {}).get("tree")
+    return Build(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        database_host_text(host),
+        db_commit=database_commit(named),
+        db_tree=tree if isinstance(tree, str) else None,
+    )
+
+
 def build_of(kind: str, rel: str) -> Build | None:
+    if kind == "external":
+        return from_external(rel)
     data = json.loads((CPC / rel).read_text())
     if kind == "record":
         return from_provenance(data["provenance"], data)
@@ -724,10 +807,19 @@ def heading(build: Build) -> str:
     def code(value: str) -> str:
         return rf"\texttt{{{value[:12]}}}"
 
-    parts = [
-        rf"readcon-core {tex(build.readcon)}"
-        + (rf", library {code(build.digest)}" if build.digest else "")
-    ]
+    parts = (
+        [
+            rf"readcon-core {tex(build.readcon)}"
+            + (rf", library {code(build.digest)}" if build.digest else "")
+        ]
+        if build.readcon
+        else []
+    )
+    if build.db_commit:
+        parts.append(
+            rf"readcon-db commit {code(build.db_commit)}"
+            + (rf", tree {code(build.db_tree)}" if build.db_tree else "")
+        )
     if build.module:
         parts.append(
             rf"module \nolinkurl{{{build.module}}}"
@@ -757,6 +849,8 @@ def render() -> tuple[str, list[str]]:
                 problems.append(
                     f"{rel}: names no build"
                     if held is None
+                    else f"{rel}: names no readcon-db commit, in itself or in a host.json beside it"
+                    if held[0] == "external"
                     else f"{rel}: the sessions of {held[1]} do not name one build"
                 )
             continue
