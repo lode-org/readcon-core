@@ -116,7 +116,7 @@ pub fn positions_for_frames(bytes: &[u8]) -> Result<ConPositions, ParseError> {
 /// then the rows are parsed into one buffer. `workers < 2` is the
 /// serial walker.
 #[cfg(feature = "parallel")]
-pub(crate) fn positions_parallel(
+pub fn positions_parallel(
     bytes: &[u8],
     workers: usize,
     rich: bool,
@@ -169,12 +169,11 @@ fn positions_parallel_fast(
                 }
                 let cells0 = out.cells.clone();
                 let masses0 = out.masses.clone();
-                // Every tiled frame repeats frame 0's per-frame metadata at
-                // a fixed byte stride. The serial push loop that grew these
-                // seven vectors one frame at a time was the rest of the
-                // serial prologue on a 100k-frame trajectory. Size them
-                // once and fill frames `1..nframes` across the workers; the
-                // bytes written are identical to the push loop.
+                // Every tiled frame repeats frame 0's per-frame metadata,
+                // component runs included, at a fixed byte stride. The tail
+                // is reserved uninitialized and each worker writes its own
+                // frames once. Zeroing `masses` up front wrote one f64 per
+                // atom on the calling thread and the workers wrote it again.
                 fill_tiled_metadata(
                     &mut out, nframes, first_end, head0, count0, &cells0, &masses0, workers,
                 );
@@ -1136,11 +1135,14 @@ fn tiled_frame_count_parallel(
 /// Size and fill the per-frame metadata for a tiled trajectory.
 ///
 /// Frame 0 is already in `out`. Frames `1..nframes` repeat it at a fixed
-/// stride, so each vector is grown to its final length once and the new
-/// slots are written in parallel. The result is byte-for-byte the serial
-/// push loop: `counts` is `count0`, `spans` is `base..base + span`,
-/// `head_ends` is `head0 + base`, `cells` and `masses` repeat frame 0, and
-/// the two wide-plan vectors stay empty for an equal-width frame.
+/// stride. The new slots are reserved uninitialized and each worker writes
+/// the final value of its own frames: `counts` is `count0`, `spans` is
+/// `base..base + span`, `head_ends` is `head0 + base`, `cells` and `masses`
+/// repeat frame 0, `components` repeats frame 0's `(symbol, count)` runs
+/// once per frame, and the two wide-plan vectors stay empty. Those bytes
+/// match the serial push loop. Nothing is zeroed first: a `resize` of
+/// `masses` wrote one f64 per atom on the calling thread, and the workers
+/// overwrote every one of those zeros.
 #[cfg(feature = "parallel")]
 #[allow(clippy::too_many_arguments)]
 fn fill_tiled_metadata(
@@ -1153,70 +1155,170 @@ fn fill_tiled_metadata(
     masses0: &[f64],
     workers: usize,
 ) {
+    if nframes <= 1 {
+        return;
+    }
     let ncells = cells0.len();
     let nmass = masses0.len();
-    out.counts.resize(nframes, count0);
-    out.spans.resize(nframes, 0..0);
-    out.head_ends.resize(nframes, 0);
-    out.cells.resize(nframes.saturating_mul(ncells), 0.0);
-    out.masses.resize(nframes.saturating_mul(nmass), 0.0);
-    out.wide_breaks.resize_with(nframes, Vec::new);
-    out.wide_chunks.resize_with(nframes, Vec::new);
-    out.n_frames = nframes;
-    let fill = |spans: &mut [std::ops::Range<usize>],
-                heads: &mut [usize],
-                cells: &mut [f64],
-                masses: &mut [f64],
+    // Frame 0's runs. `rich == false` leaves this empty, and the serial
+    // walker does not invent runs either. Cloning the `Arc` repeats the
+    // symbol the per-frame parser would have allocated from the same text.
+    let comps0 = out.components.clone();
+    let ncomp = comps0.len();
+    let rest = nframes - 1;
+    let cell_total = nframes.saturating_mul(ncells);
+    let mass_total = nframes.saturating_mul(nmass);
+    let comp_total = nframes.saturating_mul(ncomp);
+    reserve_uninit(&mut out.counts, nframes);
+    reserve_uninit(&mut out.spans, nframes);
+    reserve_uninit(&mut out.head_ends, nframes);
+    reserve_uninit(&mut out.cells, cell_total);
+    reserve_uninit(&mut out.masses, mass_total);
+    reserve_uninit(&mut out.wide_breaks, nframes);
+    reserve_uninit(&mut out.wide_chunks, nframes);
+    reserve_uninit(&mut out.components, comp_total);
+
+    let fill = |counts: &mut [std::mem::MaybeUninit<usize>],
+                spans: &mut [std::mem::MaybeUninit<std::ops::Range<usize>>],
+                heads: &mut [std::mem::MaybeUninit<usize>],
+                cells: &mut [std::mem::MaybeUninit<f64>],
+                masses: &mut [std::mem::MaybeUninit<f64>],
+                breaks: &mut [std::mem::MaybeUninit<Vec<usize>>],
+                chunks: &mut [std::mem::MaybeUninit<Vec<(usize, usize)>>],
+                comps: &mut [std::mem::MaybeUninit<(Arc<str>, usize)>],
                 lo: usize| {
-        for (offset, span_slot) in spans.iter_mut().enumerate() {
+        for offset in 0..counts.len() {
             let frame = lo + offset;
             let base = frame * span;
-            *span_slot = base..base + span;
-            heads[offset] = head0 + base;
+            counts[offset].write(count0);
+            spans[offset].write(base..base + span);
+            heads[offset].write(head0 + base);
+            breaks[offset].write(Vec::new());
+            chunks[offset].write(Vec::new());
             if ncells > 0 {
-                cells[offset * ncells..(offset + 1) * ncells].copy_from_slice(cells0);
+                write_copied(&mut cells[offset * ncells..(offset + 1) * ncells], cells0);
             }
             if nmass > 0 {
-                masses[offset * nmass..(offset + 1) * nmass].copy_from_slice(masses0);
+                write_copied(&mut masses[offset * nmass..(offset + 1) * nmass], masses0);
+            }
+            if ncomp > 0 {
+                for (slot, (symbol, count)) in comps[offset * ncomp..(offset + 1) * ncomp]
+                    .iter_mut()
+                    .zip(comps0.iter())
+                {
+                    slot.write((Arc::clone(symbol), *count));
+                }
             }
         }
     };
-    // Frame 0 keeps the values `parse_con` wrote. Only `1..nframes` move.
-    let spans = &mut out.spans[1..];
-    let heads = &mut out.head_ends[1..];
-    let cells = &mut out.cells[ncells..];
-    let masses = &mut out.masses[nmass..];
-    let rest = nframes - 1;
-    if workers < 2 || rest < 1024 {
-        fill(spans, heads, cells, masses, 1);
-        return;
-    }
-    let pool_threads = workers.min(rest);
-    let share = rest.div_ceil(pool_threads);
-    std::thread::scope(|scope| {
-        let mut spans = spans;
-        let mut heads = heads;
-        let mut cells = cells;
-        let mut masses = masses;
-        let mut lo = 1usize;
-        for _ in 0..pool_threads {
-            if lo >= nframes {
-                break;
-            }
-            let take = share.min(nframes - lo);
-            let (sa, sb) = spans.split_at_mut(take);
-            let (ha, hb) = heads.split_at_mut(take);
-            let (ca, cb) = cells.split_at_mut(take * ncells);
-            let (ma, mb) = masses.split_at_mut(take * nmass);
-            spans = sb;
-            heads = hb;
-            cells = cb;
-            masses = mb;
-            let start = lo;
-            scope.spawn(move || fill(sa, ha, ca, ma, start));
-            lo += take;
+
+    // Frame 0 keeps the values `parse_con` wrote. The spare tail is frames
+    // `1..nframes`, and nothing in it is initialized yet.
+    {
+        let counts = &mut out.counts.spare_capacity_mut()[..rest];
+        let spans = &mut out.spans.spare_capacity_mut()[..rest];
+        let heads = &mut out.head_ends.spare_capacity_mut()[..rest];
+        let cells = &mut out.cells.spare_capacity_mut()[..rest.saturating_mul(ncells)];
+        let masses = &mut out.masses.spare_capacity_mut()[..rest.saturating_mul(nmass)];
+        let breaks = &mut out.wide_breaks.spare_capacity_mut()[..rest];
+        let chunks = &mut out.wide_chunks.spare_capacity_mut()[..rest];
+        let comps = &mut out.components.spare_capacity_mut()[..rest.saturating_mul(ncomp)];
+        if workers < 2 || rest < 1024 {
+            fill(
+                counts, spans, heads, cells, masses, breaks, chunks, comps, 1,
+            );
+        } else {
+            let pool_threads = workers.min(rest);
+            let share = rest.div_ceil(pool_threads);
+            std::thread::scope(|scope| {
+                let mut counts = counts;
+                let mut spans = spans;
+                let mut heads = heads;
+                let mut cells = cells;
+                let mut masses = masses;
+                let mut breaks = breaks;
+                let mut chunks = chunks;
+                let mut comps = comps;
+                let mut lo = 1usize;
+                for _ in 0..pool_threads {
+                    if lo >= nframes {
+                        break;
+                    }
+                    let take = share.min(nframes - lo);
+                    let (count_a, count_b) = counts.split_at_mut(take);
+                    let (span_a, span_b) = spans.split_at_mut(take);
+                    let (head_a, head_b) = heads.split_at_mut(take);
+                    let (cell_a, cell_b) = cells.split_at_mut(take.saturating_mul(ncells));
+                    let (mass_a, mass_b) = masses.split_at_mut(take.saturating_mul(nmass));
+                    let (break_a, break_b) = breaks.split_at_mut(take);
+                    let (chunk_a, chunk_b) = chunks.split_at_mut(take);
+                    let (comp_a, comp_b) = comps.split_at_mut(take.saturating_mul(ncomp));
+                    counts = count_b;
+                    spans = span_b;
+                    heads = head_b;
+                    cells = cell_b;
+                    masses = mass_b;
+                    breaks = break_b;
+                    chunks = chunk_b;
+                    comps = comp_b;
+                    let start = lo;
+                    scope.spawn(move || {
+                        fill(
+                            count_a, span_a, head_a, cell_a, mass_a, break_a, chunk_a, comp_a,
+                            start,
+                        );
+                    });
+                    lo += take;
+                }
+            });
         }
-    });
+    }
+    // SAFETY: the spare prefix written above is exactly the tail, and every
+    // slot of it was initialized. `counts` / `spans` / `head_ends` /
+    // `wide_breaks` / `wide_chunks` gained `nframes - 1` elements. `cells`,
+    // `masses`, and `components` gained `(nframes - 1)` repeats of frame 0.
+    // Workers covered those frames without a gap or an overlap, and
+    // `thread::scope` joined them before this point, so no slot is still
+    // uninitialized and none is written twice. `set_len` publishes that
+    // prefix and does not extend past the slots the workers stored. Frame 0
+    // was already inside `len` and is not touched.
+    unsafe {
+        out.counts.set_len(nframes);
+        out.spans.set_len(nframes);
+        out.head_ends.set_len(nframes);
+        out.cells.set_len(cell_total);
+        out.masses.set_len(mass_total);
+        out.wide_breaks.set_len(nframes);
+        out.wide_chunks.set_len(nframes);
+        out.components.set_len(comp_total);
+    }
+    out.n_frames = nframes;
+}
+
+/// Initialize `dst` with a copy of `src`.
+///
+/// `T: Copy`, so this does not clone a reference-counted value.
+#[cfg(feature = "parallel")]
+fn write_copied<T: Copy>(dst: &mut [std::mem::MaybeUninit<T>], src: &[T]) {
+    assert_eq!(dst.len(), src.len());
+    // SAFETY: `dst` and `src` have the same length and do not overlap
+    // (`dst` is spare capacity, `src` is an already-owned slice). `T: Copy`
+    // means a byte copy initializes each slot without dropping an old value
+    // or aliasing a reference count.
+    unsafe {
+        std::ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr().cast::<T>(), src.len());
+    }
+}
+
+/// Reserve `total` slots without writing them.
+///
+/// The initialized prefix (`len`) stays as it is. The new tail is
+/// `MaybeUninit` until the caller stores every slot and then `set_len`s.
+#[cfg(feature = "parallel")]
+fn reserve_uninit<T>(vec: &mut Vec<T>, total: usize) {
+    if vec.len() < total {
+        vec.reserve(total - vec.len());
+    }
 }
 
 fn parse_one_frame(
