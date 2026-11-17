@@ -22,8 +22,9 @@ def _assert_owned_array(array: np.ndarray, n_atoms: int) -> None:
     assert array.shape == (n_atoms, 3)
     assert array.flags.c_contiguous
     # A view into the frame slab would keep that slab alive. An owned
-    # array has no base, or its base is the data block it owns.
-    assert array.base is None or array.flags.owndata
+    # array has no base and owns its data block.
+    assert array.base is None
+    assert array.flags.owndata
 
 
 def _write_tiled(path: Path, n_frames: int, n_atoms: int) -> None:
@@ -90,7 +91,8 @@ def test_coords_array_stays_valid_after_the_frame_is_dropped(tmp_path: Path) -> 
     # The copy lives in the array. Dropping the frame must not free it.
     assert array.dtype == np.float64
     assert array.flags.c_contiguous
-    assert array.base is None or array.flags.owndata
+    assert array.base is None
+    assert array.flags.owndata
     assert array.tobytes() == oracle[0].tobytes()
 
 
