@@ -206,6 +206,12 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/db31/fair-db31/noise.json",
         "paper/cpc/data/db31/fair-db31/RESULTS.md",
         "paper/cpc/data/db31/fair-db31/tables.json",
+        # The readcon-db db30 campaign records that hold the one-million-atom
+        # warm-read medians the paper reports as a range, copied verbatim from
+        # lode-org/readcon-db ff1210e3. Each names the measured readcon-db
+        # commit, not a tag or a commit of this repository.
+        "paper/cpc/data/db30/db8/campaign.json",
+        "paper/cpc/data/db30/fair-db30/campaign.json",
     }
 )
 
