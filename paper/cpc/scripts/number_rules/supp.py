@@ -114,6 +114,13 @@ RULES: list[Rule] = [
         ),
     ),
     Rule(
+        "3.12",
+        float(grep(ENVIRONMENT, r"/python-(\d+\.\d+)")),
+        ENVIRONMENT,
+        "python minor version of the environment",
+        (f"{DOC}~Python 3\\.12",),
+    ),
+    Rule(
         "3.13",
         float(grep(ENVIRONMENT, r"/pandoc-([\d.]+)-")),
         ENVIRONMENT,

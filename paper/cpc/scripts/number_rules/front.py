@@ -16,6 +16,18 @@ RESTART_PY = "scripts/restart_formats.py"
 SURVEY_PY = "scripts/failure_matrix.py"
 SPEC = "/docs/orgmode/spec.org"
 IDS = "data/v31_large_ids.con"
+READERS_PY = "scripts/bench_readers.py"
+MPI_PY = "bench/run_mpi_v2.py"
+DB_TRACES_PY = "scripts/make_db_traces.py"
+DLPACK_INTERVAL_PY = "scripts/dlpack_interval.py"
+
+
+def ci_width(rel: str) -> float:
+    """Percentage span of the bootstrap interval a script prints: its high minus its low percentile."""
+    lo, hi = re.search(
+        r"np\.percentile\([^,]+, \[([\d.]+), ([\d.]+)\]", text(rel)
+    ).groups()
+    return float(hi) - float(lo)
 
 
 def param(name: str) -> float:
@@ -129,18 +141,6 @@ if ABOVE_2_53 - 1 != 2**53 or BIG_IDS[-1] != 2**U64_BITS - 1:
         f"{IDS}: expected the identifiers 2^53 + 1 and 2^64 - 1, found {BIG_IDS}"
     )
 
-GRIND = "bench/results/r0174/cachegrind/cachegrind_results.json"
-GRIND_FRAMES = int(
-    re.fullmatch(
-        r"parse_(\d+)_frames",
-        next(
-            k
-            for k in jget(GRIND, "scenarios")
-            if k.startswith("parse_") and k.endswith("_frames")
-        ),
-    ).group(1)
-)
-
 PEER_SHIFT = r"pos\[:, 0, 2\] \+= np\.arange\(n, dtype=np\.float64\) \* ([\d.e+-]+)$"
 
 
@@ -165,13 +165,6 @@ if grep("/src/stream.rs", r"pub const DEFAULT_READ_SIZE: usize = 1 << (\d+);") !
     raise SystemExit("the stream reader's DEFAULT_READ_SIZE is not 1 MiB")
 
 RULES: list[Rule] = [
-    Rule(
-        "95",
-        100 * CONTOURS[1],
-        "chemparseplot/plot/neb.py",
-        "upper dashed contour of plot_landscape_surface, percent of the variance range",
-        (f"{DOC}~dashed lines",),
-    ),
     Rule(
         "100",
         miller(RESTART_PY, "3, 3, 3"),
@@ -213,39 +206,6 @@ RULES: list[Rule] = [
         "/src/types.rs",
         "the largest u64 identifier is 2^64 - 1; this is the -1 of that expression",
         (f"{DOC}~2\\^\\{{64\\}}-1",),
-    ),
-    Rule(
-        "100",
-        GRIND_FRAMES,
-        GRIND,
-        "frame count of the parse_100_frames scenario",
-        (f"{SUPP}~Cachegrind",),
-    ),
-    Rule(
-        "10^{-6}",
-        float(
-            grep(
-                "/bench/h2h/frames_guard.py",
-                r"out\[atom, axis\] = sign \* steps \* ([\d.e+-]+)",
-            )
-        ),
-        "/bench/h2h/frames_guard.py",
-        "step by which ensure_peers moves the z coordinate of the first atom from one frame to the next, in angstrom",
-        (f"{SUPP}~moved along",),
-    ),
-    Rule(
-        "64",
-        int(grep("/src/conbin.rs", r"^const FIELD_BYTES: usize = (\d+);")),
-        "/src/conbin.rs",
-        "RCBIN_HEADER, bytes",
-        (f"{SUPP}~header of 64 bytes",),
-    ),
-    Rule(
-        "10^{6}",
-        float(grep("scripts/h2h_tables.py", r"return peak_bytes / ([\d.e+]+)$")),
-        "scripts/h2h_tables.py",
-        "bytes per MB in peak_mb",
-        (f"{SUPP}~The peak heap of a call",),
     ),
     Rule(
         "3.1",
@@ -322,6 +282,48 @@ RULES: list[Rule] = [
         param("step_cap"),
         RESTART,
         "parameters.step_cap",
-        (DOC, "rg_supp.tex", "figures/generated/restart_main.tex"),
+        (f"{DOC}~band step limit", "rg_supp.tex", "figures/generated/restart_main.tex"),
+    ),
+    Rule(
+        "95",
+        ci_width(DLPACK_INTERVAL_PY),
+        DLPACK_INTERVAL_PY,
+        "percentage span of the DLPack bootstrap interval: 97.5 minus 2.5 percent",
+        (f"{DOC}~bootstrap interval",),
+    ),
+    Rule(
+        "100000",
+        int(grep(READERS_PY, r'"LARGE_FRAMES", "(\d+)"')),
+        READERS_PY,
+        "N_FRAMES, the default frame count of the host trajectory",
+        (DOC, SUPP, "figures/generated/host_table.tex"),
+    ),
+    Rule(
+        "32",
+        int(grep(READERS_PY, r"^N_ATOMS = (\d+)")),
+        READERS_PY,
+        "N_ATOMS, the atom count of the host trajectory",
+        (f"{DOC}~32 copper atoms",),
+    ),
+    Rule(
+        "4000",
+        int(grep(MPI_PY, r"^N_FRAMES = (\d+)")),
+        MPI_PY,
+        "N_FRAMES of the distributed read",
+        (f"{DOC}~distributed read", "figures/generated/mpi_host_table.tex"),
+    ),
+    Rule(
+        "64",
+        int(grep(MPI_PY, r"^N_ATOMS = (\d+)")),
+        MPI_PY,
+        "N_ATOMS of the distributed read",
+        (f"{DOC}~distributed read", "figures/generated/mpi_host_table.tex"),
+    ),
+    Rule(
+        "1000",
+        int(grep(DB_TRACES_PY, r"^SCALE = \((\d+),")),
+        DB_TRACES_PY,
+        "SCALE[0], the smaller stored-copy frame count of the db traces",
+        (f"{DOC}~1000-frame copies",),
     ),
 ]
