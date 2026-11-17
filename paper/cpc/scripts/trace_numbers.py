@@ -30,8 +30,9 @@ clone gives no drift on the first run) and otherwise leaves it in place; it
 then fails when a ledger left from an earlier run differs from the one the
 records give now, so an edit to a record behind a headline fails until the
 ledger is rewritten.  The generated ``src/figures/generated/*.tex`` fragments
-the manuscript inputs are mostly gitignored; ``dlpack_macros.tex`` and
-``version_map.tex`` are tracked.  The steps of ``regen_paper.py`` that name them
+the manuscript inputs are mostly gitignored; ``dlpack_macros.tex``,
+``version_map.tex`` and ``library_macros.tex`` are tracked, the last two
+because ``gen_version_map.py`` writes them from this ledger.  The steps of ``regen_paper.py`` that name them
 run on a copy of the working tree, so no tracked file is written; no figure
 plotter runs, and ``clause_coverage.py`` runs as ``--macros``, which reads the
 committed record.  A fragment that is missing is copied from the copy, and

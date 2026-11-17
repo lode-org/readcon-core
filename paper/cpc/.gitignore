@@ -29,6 +29,7 @@ src/figures/generated/*
 !src/figures/generated/restart.pdf
 !src/figures/generated/dlpack_macros.tex
 !src/figures/generated/version_map.tex
+!src/figures/generated/library_macros.tex
 src/rg_main.pdf
 src/rg_supp.pdf
 src/figures/generated/work/

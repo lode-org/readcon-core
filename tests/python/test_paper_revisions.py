@@ -167,6 +167,8 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/evidence/results/e5_prefactor.json",
         # Names the library that wrote each row, including the measured 0.17.4 builds.
         "paper/cpc/src/figures/generated/version_map.tex",
+        # Names the readcon-core version of the library digest most of those records name.
+        "paper/cpc/src/figures/generated/library_macros.tex",
         # The readcon-db db31 campaign records, copied verbatim from
         # lode-org/readcon-db ff1210e3. Each names the measured readcon-db
         # commit a584a288 and the commits it was compared against, not a tag
