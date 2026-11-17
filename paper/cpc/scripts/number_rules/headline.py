@@ -1,33 +1,25 @@
 """Rules for the generated macros that the front matter and the Conclusions of ``rg_main.tex`` print.
 
-Each rule reads the record the macro's generator reads.  The timing rules take
-the cells of ``bench/results/r0174/reads.json``, the record ``r0174_tables.py``
-reads, and divide the medians themselves.
+Each rule reads the record the macro's generator reads.  The DLPack macros take
+the view and copy nanoseconds of ``data/dlpack_cost.txt``, the record the DLPack
+cost harness writes, and recompute the atom count and the median ratio.
 """
 
 from __future__ import annotations
 
-from numbers_lib import ROOT, Rule, jget
-from r0174_tables import RESULTS
+import re
+import statistics
 
-R0174 = RESULTS.resolve().relative_to(ROOT).as_posix()
-READS = f"{R0174}/reads.json"
+from numbers_lib import Rule, grep, jget, text
+
 CROSSCHECK = "data/corpus_crosscheck.json"
-SD = "evidence/results/e1_restart.json"
 E5 = "evidence/results/e5_prefactor.json"
+DLPACK = "data/dlpack_cost.txt"
 
 
-def read_ratio(name: str, reader: str) -> Rule:
-    cells = jget(READS, "cells")
-    value = (
-        cells["python:readcon:1"]["median_s"] / cells[f"python:{reader}:1"]["median_s"]
-    )
-    return Rule(
-        "\\" + name,
-        value,
-        READS,
-        f"cells python:readcon:1 median_s over cells python:{reader}:1 median_s",
-    )
+def dlpack_ns(column: str) -> list[int]:
+    """The nanoseconds of one column of the repeat lines in the DLPack cost record."""
+    return [int(n) for n in re.findall(rf"\b{column} (\d+)", text(DLPACK))]
 
 
 PREFACTORS = jget(E5, "prefactor_by_reading")
@@ -51,17 +43,22 @@ RULES = [
         "groups.all.files",
     ),
     Rule(
-        r"\eOneExtraCalls",
-        jget(SD, "neb.resume_roundtrip.extra_force_calls"),
-        SD,
-        "neb.resume_roundtrip.extra_force_calls",
-    ),
-    Rule(
         r"\eFivePrefactorRatioFree",
         PREFACTORS["free"]["prefactor_Hz"] / HELD_HZ,
         E5,
         "prefactor_by_reading.free.prefactor_Hz over prefactor_by_reading.correct.prefactor_Hz",
     ),
-    read_ratio("rcRatioAseExtxyz", "ase_extxyz"),
-    read_ratio("rcRatioHfivepy", "h5py"),
+    Rule(
+        r"\dlpackAtoms",
+        int(grep(DLPACK, r"^atoms (\d+)")),
+        DLPACK,
+        "atoms, the atom count of the DLPack cost record",
+    ),
+    Rule(
+        r"\dlpackRatio",
+        statistics.median(dlpack_ns("view_ns"))
+        / statistics.median(dlpack_ns("copy_ns")),
+        DLPACK,
+        "median view_ns over median copy_ns of the DLPack cost record",
+    ),
 ]
