@@ -2669,10 +2669,15 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
 ///
 /// A fresh pool on every file made each worker fault its frames again.
 /// Reusing the workers lets the allocator hand back the pages just freed.
+///
+/// A new pool is returned once every worker has started. Until then the
+/// only owner of a worker's thread handle is std's start box on the
+/// global allocator, which LeakSanitizer does not scan, so a process
+/// that exited first reported the handle as leaked.
 #[cfg(feature = "parallel")]
 #[allow(clippy::type_complexity)]
 fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
-    use std::sync::{Arc, Mutex, OnceLock};
+    use std::sync::{Arc, Condvar, Mutex, OnceLock};
     static CACHE: OnceLock<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(Vec::new()));
     let mut guard = cache.lock().ok()?;
@@ -2680,12 +2685,25 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
         return Some(Arc::clone(pool));
     }
     keep_parse_pages();
+    let started = Arc::new((Mutex::new(0usize), Condvar::new()));
+    let signal = Arc::clone(&started);
     let pool = Arc::new(
         rayon::ThreadPoolBuilder::new()
             .num_threads(workers)
+            .start_handler(move |_| {
+                let (count, ready) = &*signal;
+                *count.lock().unwrap_or_else(|err| err.into_inner()) += 1;
+                ready.notify_one();
+            })
             .build()
             .ok()?,
     );
+    let (count, ready) = &*started;
+    let mut seen = count.lock().unwrap_or_else(|err| err.into_inner());
+    while *seen < pool.current_num_threads() {
+        seen = ready.wait(seen).unwrap_or_else(|err| err.into_inner());
+    }
+    drop(seen);
     guard.push((workers, Arc::clone(&pool)));
     Some(pool)
 }
