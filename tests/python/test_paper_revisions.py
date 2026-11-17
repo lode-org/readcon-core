@@ -167,6 +167,45 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/evidence/results/e5_prefactor.json",
         # Names the library that wrote each row, including the measured 0.17.4 builds.
         "paper/cpc/src/figures/generated/version_map.tex",
+        # The readcon-db db31 campaign records, copied verbatim from
+        # lode-org/readcon-db ff1210e3. Each names the measured readcon-db
+        # commit a584a288 and the commits it was compared against, not a tag
+        # or a commit of this repository.
+        "paper/cpc/data/db31/ase/ase_db_bench.json",
+        "paper/cpc/data/db31/ase/host.json",
+        "paper/cpc/data/db31/ase/RESULTS.md",
+        "paper/cpc/data/db31/bisect/ab.json",
+        "paper/cpc/data/db31/bisect/host.json",
+        "paper/cpc/data/db31/bisect/RESULTS.md",
+        "paper/cpc/data/db31/bisect/samples.json",
+        "paper/cpc/data/db31/corpus-ops/readcon_db_bench.json",
+        "paper/cpc/data/db31/db24/ab.json",
+        "paper/cpc/data/db31/db24/campaign.log",
+        "paper/cpc/data/db31/db24/levers.json",
+        "paper/cpc/data/db31/db24/RESULTS.md",
+        "paper/cpc/data/db31/db24/tables.json",
+        "paper/cpc/data/db31/db25/ab.json",
+        "paper/cpc/data/db31/db25/campaign.log",
+        "paper/cpc/data/db31/db25/RESULTS.md",
+        "paper/cpc/data/db31/db25/tables.json",
+        "paper/cpc/data/db31/db26/ab.json",
+        "paper/cpc/data/db31/db26/campaign.log",
+        "paper/cpc/data/db31/db26/high_byte.json",
+        "paper/cpc/data/db31/db26/RESULTS.md",
+        "paper/cpc/data/db31/db26/tables.json",
+        "paper/cpc/data/db31/db28/ab.json",
+        "paper/cpc/data/db31/db28/campaign.log",
+        "paper/cpc/data/db31/db28/host.json",
+        "paper/cpc/data/db31/db28/RESULTS.md",
+        "paper/cpc/data/db31/db29/ab.json",
+        "paper/cpc/data/db31/db29/campaign.log",
+        "paper/cpc/data/db31/db29/host.json",
+        "paper/cpc/data/db31/db29/RESULTS.md",
+        "paper/cpc/data/db31/fair-db31/campaign.json",
+        "paper/cpc/data/db31/fair-db31/campaign.log",
+        "paper/cpc/data/db31/fair-db31/noise.json",
+        "paper/cpc/data/db31/fair-db31/RESULTS.md",
+        "paper/cpc/data/db31/fair-db31/tables.json",
     }
 )
 
