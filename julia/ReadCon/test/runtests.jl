@@ -238,6 +238,74 @@ end
         end
     end
 
+    @testset "Non-finite cell" begin
+        atom = Atom(
+            UInt64(29), 1.0, 2.0, 3.0, UInt64(0), 63.546,
+            false, (false, false, false),
+            0.0, 0.0, 0.0, false,
+            0.0, 0.0, 0.0, false,
+        )
+        finite = ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], false, ("", ""), ("", ""), false)
+        slots = [
+            ((NaN, 10.0, 10.0), (90.0, 90.0, 90.0), "cell field cell[0] is NaN"),
+            ((10.0, Inf, 10.0), (90.0, 90.0, 90.0), "cell field cell[1] is inf"),
+            ((10.0, 10.0, -Inf), (90.0, 90.0, 90.0), "cell field cell[2] is -inf"),
+            ((10.0, 10.0, 10.0), (NaN, 90.0, 90.0), "cell field angles[0] is NaN"),
+            ((10.0, 10.0, 10.0), (90.0, Inf, 90.0), "cell field angles[1] is inf"),
+            ((10.0, 10.0, 10.0), (90.0, 90.0, -Inf), "cell field angles[2] is -inf"),
+        ]
+        for (cell, angles, field) in slots
+            bad = ConFrame(cell, angles, [atom], false, ("", ""), ("", ""), false)
+            mktemp() do path, io
+                close(io)
+                err = try
+                    write_con(path, [finite, bad])
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa ReadCon.ReadConError
+                @test err.code == Int32(-14)
+                @test occursin("NonFiniteValue", err.message)
+                @test occursin(field, err.message)
+                @test filesize(path) == 0
+            end
+        end
+
+        mktemp() do path, io
+            close(io)
+            write_con(path, [finite])
+            reread = read_con(path)
+            @test reread[1].cell == finite.cell
+            @test reread[1].angles == finite.angles
+        end
+    end
+
+    @testset "Non-finite cell in a file" begin
+        text = read(joinpath(TEST_DIR, "tiny_multi_cuh2.con"), String)
+        lines = split(text, '\n'; keepempty=true)
+        mktemp() do path, io
+            close(io)
+            bad = copy(lines)
+            idx = findall(l -> startswith(l, "15.3456"), bad)
+            @test !isempty(idx)
+            bad[idx[end]] = "15.3456 NaN 15.3456"
+            write(path, join(bad, "\n"))
+            # read_con keeps its contract: a frame that fails to parse ends the
+            # read, the frames before it are returned, and the error stays on the
+            # C channel.
+            ReadCon.clear_error()
+            frames = read_con(path)
+            @test length(frames) == 1
+            err = ReadCon.last_error()
+            @test err !== nothing
+            @test err.code == Int32(-14)
+            @test err.frame_index == 1
+            @test occursin("NonFiniteValue", err.message)
+            @test occursin("cell field boxl[1] of frame 1 is NaN", err.message)
+        end
+    end
+
     @testset "Campaign index projection" begin
         frames = read_con(joinpath(TEST_DIR, "tiny_cuh2.con"))
         frame = frames[1]

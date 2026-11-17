@@ -26,6 +26,10 @@ st = bd%add_atom_full(symbol, x, y, z, fixed_x, fixed_y, fixed_z, atom_id, mass,
 
 `velocity` and `force` are optional `real(real64)` arrays of length 3. Omit `velocity` on `add_atom` when the atom has none.
 
+`new_builder` returns an invalid builder when `cell` or `angles` holds a NaN or an infinity. Test `bd%valid()`. `last_error_code()` is `rkr_status_parse_error` and `last_error_message()` names the field, for example `NonFiniteValue: non-finite value: cell field cell[1] is NaN`. Every later call on that builder returns `rkr_status_null_pointer`, and `bd%build()` returns an invalid frame. `bd%free()` is still safe.
+
+A file whose cell holds one makes `it%next()` and `read_first_frame` return an invalid frame. `last_error_code()` is `rkr_status_parse_error`, and `last_error_message()` names the field and the frame, for example `cell field boxl[1] of frame 0 is NaN`.
+
 `last_error_message()` is the underlying text from the most recent failing `extend_one` or writer flush on this thread. `status_message(-4)` stays the generic `I/O error`.
 
 ## Test
