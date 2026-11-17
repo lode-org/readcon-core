@@ -1484,6 +1484,16 @@ pub struct CoordColumns {
     pub partial_fixed: bool,
 }
 
+/// `true` when the column walker certified `bytes`.
+///
+/// With `identity`, the per-frame component runs must partition every
+/// frame. A short components vector makes this return `false`, and the
+/// reader then rebuilds the file with the frame parser.
+#[doc(hidden)]
+pub fn column_walk_certified(bytes: &[u8], num_threads: Option<usize>, identity: bool) -> bool {
+    matches!(certified_columns(bytes, num_threads, identity), Ok(Some(_)))
+}
+
 /// Positions, masses, and cells for a stock CON or convel file.
 ///
 /// A certified file is one coordinate pass. Anything else uses the frame
