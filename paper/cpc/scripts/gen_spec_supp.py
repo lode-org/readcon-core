@@ -10,7 +10,8 @@ packages rg_supp.tex loads. The informative sections in INFORMATIVE stay in
 spec.org, and so do the two sentences in ROUNDED, which round the parsed
 natural time unit and its difference from eOn, and the front-matter items in
 REPOSITORY_ITEMS, which name files of the repository. A source location of ASE,
-a path with a line, is printed as the line of the module. Citations are mapped to rg_main.bib keys through their DOI in
+a path with a line, is printed as the line of the module; any other file path in
+a code span is printed as the file name, with its line when it has one. Citations are mapped to rg_main.bib keys through their DOI in
 docs/source/references.bib; one without a match is dropped and printed.
 
 The cell formula of CON-cell.6 is inline code in spec.org. It is parsed and
@@ -97,6 +98,7 @@ ROUNDED = (
 # Front-matter items whose value is a file of the repository; the grammar they name is the appendix left out.
 REPOSITORY_ITEMS = ("Surface grammar", "Clause index")
 ASE_LOCATION = re.compile(r"=ase/([a-z_/]+)\.py:([0-9]+)(?:-([0-9]+))?=")
+FILE_PATH = re.compile(r"=(?:[\w.-]+/)+([\w.-]+\.[A-Za-z]+)(?::([0-9]+)(?:-([0-9]+))?)?=")
 CELL_CLAUSE = "CON-cell.6"
 LEVELS = r"MUST NOT|SHOULD NOT|MUST|SHOULD|MAY"
 GREEK = ("alpha", "beta", "gamma")
@@ -768,6 +770,14 @@ def location(match: re.Match) -> str:
     return f"{lines} of ={module}="
 
 
+def file_name(match: re.Match) -> str:
+    """``=include/eon/ParametersOptions.h:26=`` as ``line 26 of =ParametersOptions.h=``."""
+    if not match[2]:
+        return f"={match[1]}="
+    lines = f"lines {match[2]}-{match[3]}" if match[3] else f"line {match[2]}"
+    return f"{lines} of ={match[1]}="
+
+
 def org_source() -> tuple[str, list[str], str]:
     org = SPEC.read_text()
     kept, skip = [], False
@@ -789,6 +799,7 @@ def org_source() -> tuple[str, list[str], str]:
             raise SystemExit(f"{SPEC.relative_to(ROOT)} does not hold the item {item!r} once")
         org = line.sub("", org, count=1)
     org = ASE_LOCATION.sub(location, org)
+    org = FILE_PATH.sub(file_name, org)
     span, math_tex, cell_check = cell_equation(org)
     org = org.replace(span + ",", span, 1).replace(span, f"@@latex:{math_tex}@@", 1)
     org = re.sub(
