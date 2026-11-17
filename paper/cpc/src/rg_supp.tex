@@ -353,7 +353,7 @@ Lattice="5.5437171645025325 0.0 0.0 0.0 5.5437171645025325 0.0 0.0 0.0 20.0" Pro
 and rows \texttt{Pt 0.0 0.0 6.0 T T T 17}, \texttt{Pt 2.7718585822512662 0.0 6.0 T T T 3} and \texttt{Pt 1.3859292911256331 1.3859292911256331 7.8 F F T 41}.
 The variants drop the \texttt{pbc} key, replace the header by a plain comment and the rows by their first four fields, print the \(z\) value 6.0 as \texttt{6.0d0}, spell the booleans \texttt{True} and \texttt{False}, add \texttt{note="E=1.5 eV"}, and add \texttt{units="angstrom,eV,fs"}.
 The readers are ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package \cite{kermodeLibatomsExtxyzV0462026} through its C path and its Python path, chemfiles 0.10.4, the Open Visualization Tool (OVITO) 3.16.1, and the plain Cartesian coordinate (XYZ) readers of MDAnalysis 2.10.0 and Open Babel 3.2.1.
-On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals (\path{paper/cpc/data/failure/drift_extxyz.json}).
+On the reference file chemfiles moves \driftChemMoved{} coordinates, \driftChemCoords{}, by \driftChemUlps{} units in the last place from the binary64 values nearest their decimals.
 The binary64 value nearest \(\driftXOne\) has the bit pattern \texttt{\driftXOneBits}; chemfiles returns \texttt{\driftXOneChemBits}.
 
 \FloatBarrier \section{Records beside the checkpoint}\label{sec:supp-neighbors} Table~\ref{tab:compare} answers four questions for the checkpoint and for the other routes of Table~\ref{tab:survey}.
@@ -416,13 +416,13 @@ Each bar is the length of the displacement of one atom.}
 Frames 0 and 1 of one file are the public endpoints \cite{goswamiReproducibleOrchestrationBest2026} of hydrogen cyanide (HCN) and hydrogen isocyanide (HNC), the two minima of the HCN-{}-HNC system \cite{vanmourikAbInitioGlobal2001}.
 On both, readcon-core returns every atom free, the identifiers \texttt{0 1 2} and the declared natural unit.
 Frame 2 is a constructed probe with the identifiers \texttt{2 0 1} and hydrogen fixed on \(x\) alone.
-Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frames (\path{paper/cpc/bench/results/hcn_loss.csv}).
+Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frames.
 
 \input{figures/generated/hcn_table}
 
 \FloatBarrier \section{Timing}\label{sec:supp-timing} The candidate timing campaign is not reported.
 Section~\ref{sec:performance} of the main text uses the measurements in Section~\ref{sec:host}.
-Those logs are \path{paper/cpc/logs/reader-exchange.log}, \path{paper/cpc/logs/db.log}, \path{paper/cpc/logs/mpi.log} and \path{paper/cpc/logs/dlpack-exchange.log}.
+Their timing records are those of the reader exchange, the readcon-db ingest, the distributed read and the DLPack exchange.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 A fair rerun times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
 A fair rerun of the MDAnalysis readers times each of XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}, keeps the fastest, and records what that format loses.
@@ -451,11 +451,11 @@ The chemfiles row copies each frame out of the trajectory iterator, and that cop
 \input{figures/generated/format_context}
 
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
-chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both (\texttt{scripts/\allowbreak con\_\allowbreak openers.py}).
+chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
 The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
 
-\texttt{scripts/\allowbreak spec\_version\_drift.py} gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, each in its own process, and the four do not return the same outcome on every file (\path{paper/cpc/data/spec/version_drift.json}).
+The drift comparison gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, each in its own process, and the four do not return the same outcome on every file.
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
 Only the second refuses a file with a legacy velocity label in capitals or separated by tabs, which the other three read.
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.

@@ -38,7 +38,7 @@ DRIFT = "data/spec/version_drift.json"
 OPEN_NEITHER = (r"rg_supp.tex~open neither a version-1 CON file nor a CON 3.1 file",)
 DRIFT_LINE = (
     rf"{DOC}~published wheels of readcon-core",
-    r"rg_supp.tex~spec\\_version\\_drift\.py.*readcon wheels",
+    r"rg_supp.tex~The drift comparison gives the probe files to the published readcon wheels",
 )
 
 
