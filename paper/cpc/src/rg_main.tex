@@ -210,7 +210,7 @@ Two readers given the same bytes must then return the same fields, which needs a
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain Cartesian coordinate format (XYZ) and publishes a grammar \cite{kermodeLibatomsExtxyzV0462026}.
-The writer of the Atomic Simulation Environment (ASE) keeps the mask in a \texttt{move\_mask} column \cite{larsenAtomicSimulationEnvironmenta2017,aseSource3290}, identifiers live only in a column whose name each writer chooses, and a file declares neither a version nor a velocity unit.
+The writer of the Atomic Simulation Environment (ASE) keeps the mask in a \texttt{move\_mask} column \cite{aseSource3290}, identifiers live only in a column whose name each writer chooses, and a file declares neither a version nor a velocity unit.
 H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores particle identifiers, velocities and the box in HDF5, with units through an optional module, but it defines no element for a per-component constraint.
 In GROMACS, the compressed trajectory format (XTC) holds coordinates only, and the full-precision format (TRR) holds coordinates, velocities and forces \cite{gromacsFileFormats2026}.
 The binary trajectory (DCD) format of CHARMM, NAMD and X-PLOR holds coordinates, the unit cell and fixed atoms \cite{vmdDcdPlugin2026}.
@@ -285,7 +285,7 @@ A frame whose header is anything else is grammar version~1, the text written by 
 In Listing~\ref{lst:frame} the object names the major and minor version of the grammar, declares the slab periodic in \(x\) and \(y\) and open in \(z\), lists \texttt{velocities} as the only section after the coordinates, and gives the units of length, energy, mass and time.
 
 The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(c=\wkLengthC\,\text{\AA}\) and the angles \(\alpha\), \(\beta\) and \(\gamma\) in degrees.
-From these the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane, the restricted triclinic form of LAMMPS \cite{thompsonLammpsFlexibleSimulation2022},
+From these the reader rebuilds the cell \cite{bekkerUnificationBoxShapes1997} with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane, the restricted triclinic form of LAMMPS \cite{lammpsHowtoTriclinic2026},
 \begin{equation}
 \label{eq:cell}
 \begin{aligned}
@@ -658,7 +658,7 @@ With the slab fixed, the EMT force on the adatom at that height exceeds the band
 That height is not a stationary point of the free adsorbate, so a file that drops the hold resumes a different relaxation.
 A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force.
 That optimizer keeps no step history, so any difference after the restart comes from the file.
-The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017,aseSource3290}.
+The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{aseSource3290}.
 A force equal to the band tolerance moves an atom by \(2\times 10^{-4}\,\text{\AA}\) under that step.
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and \(\rfCallsUnint\) force calls, with barrier \(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the middle image.
 We interrupt it after \(K\) steps, write it, read it back and resume it to \(f_{\mathrm{band}}\), once per route of Table~\ref{tab:restartfmt}.
