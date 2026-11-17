@@ -824,8 +824,7 @@ The timing record of these launches and the record of a scatter run that takes t
 \label{fig:mpi-host} \end{figure}
 
 \FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn from the stored records of this paper (Data availability).
-The database and MPI figures in this section are earlier stored records.
-Section~\ref{sec:host} gives the repeats measured on this host.
+The database and MPI figures come from earlier campaigns, and Section~\ref{sec:host} gives the repeats measured on the host of this paper.
 
 \begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{An earlier stored ratio of readcon-core wall time to the peer wall time.}
 \label{fig:fairness} \end{figure}
@@ -879,12 +878,12 @@ Section~\ref{sec:host} gives the repeats measured on this host.
 \label{fig:supp-neb} \end{figure}
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
-A resumed saddle search reproduces an interrupted run only when the checkpoint preserves per-component constraints, atom identifiers, velocity time units, and binary64 coordinates as written.
-We have formalized the CON format as the versioned CON 3.1 grammar and implemented it in readcon-core, with a single Rust core behind C, C++, Python, Julia, and Fortran interfaces and borrowed DLPack coordinate views.
-Every Python and C read path in readcon-core matches the verdict of the corpus manifests on all \corpusFiles{} legal and illegal files of the two conformance corpora.
-On the held Pt(100) slab, a band resumed from CON 3.1 repeats the uninterrupted band bit for bit, and a reader that drops the hold sends the band to a saddle with a prefactor \sigfig{2}{\eFivePrefactorRatioFree} times larger.
-The reads measured on this branch are in Section~\ref{sec:host}.
-CON 3.1 separates the format specification and the conformance corpus from any single simulation engine, so any program can test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
+A resumed saddle search repeats an interrupted run only when the checkpoint keeps the per-component constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates as written.
+We have written the CON format down as the versioned CON 3.1 grammar and implemented it in readcon-core, one Rust core behind C, C++, Python, Julia and Fortran interfaces, with borrowed DLPack views of the coordinates.
+Every Python and C read path of readcon-core returns the verdict of the corpus manifests on all \corpusFiles{} legal and illegal files of the two conformance corpora.
+On the held Pt(100) slab, a band resumed from CON 3.1 repeats the uninterrupted band bit for bit, and a reader that drops the hold sends the band to a saddle whose prefactor is \sigfig{2}{\eFivePrefactorRatioFree} times larger.
+Section~\ref{sec:host} gives the measured reads.
+The specification and the conformance corpus of CON 3.1 belong to no single simulation engine, so any program can test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The source code of readcon-core is developed at \url{https://github.com/lode-org/readcon-core}, and its releases are archived under the Zenodo concept record \cite{goswamiReadconcoreConConvel2026} \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 The software described here is readcon-core~\readconversion{}.
