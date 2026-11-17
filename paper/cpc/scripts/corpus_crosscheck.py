@@ -654,7 +654,7 @@ def tex(record: dict) -> str:
         rf"readcon-core and the independent reader over the conformance corpus and the {name} corpus.",
         rf"Each entry of the {name} corpus manifest names acceptance with a frame count, or rejection with an error "
         rf"class and a line, and the basis of that outcome in the released {name} text "
-        rf"(\texttt{{{spec['doc']}}}, {spec['clauses']} clauses): explicit when clauses decide the outcome and the "
+        rf"({spec['clauses']} clauses): explicit when clauses decide the outcome and the "
         r"class, class-open when clauses require the rejection and name no class, optional when a clause permits "
         r"the outcome without requiring it, and open when no clause decides the file.",
         rf"The corpus has {basis['explicit']} explicit, {basis['class-open']} class-open, {basis['optional']} "
