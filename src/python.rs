@@ -1091,11 +1091,15 @@ impl PyConFrame {
     #[pyo3(signature = (path, *, canonical=false))]
     fn write_con(&self, py: Python<'_>, path: &str, canonical: bool) -> PyResult<()> {
         let frame = self.to_con_frame(py)?;
-        let mut writer = ConFrameWriter::from_path(Path::new(path))
-            .map_err(|e| PyIOError::new_err(e.to_string()))?
-            .canonical(canonical);
-        write_stamped_frame(&mut writer, &frame).map_err(|e| write_err_to_py(py, e))?;
-        Ok(())
+        let path_owned = path.to_owned();
+        py.detach(move || {
+            let mut writer = ConFrameWriter::from_path(Path::new(&path_owned))
+                .map_err(|e| e.to_string())?
+                .canonical(canonical);
+            write_stamped_frame(&mut writer, &frame).map_err(|e| e.to_string())?;
+            writer.flush().map_err(|e| e.to_string())
+        })
+        .map_err(PyIOError::new_err)
     }
 }
 
@@ -1788,24 +1792,26 @@ fn write_columns(
         }
         None => None,
     };
-    // The NumPy borrows stay on this thread. Copying them before the
-    // format was a second pass over every coordinate. `n_threads` of
-    // `None` uses one thread per physical core; `1` stays serial.
-    let _ = py;
+    // The readonly views stay on this stack. Formatting reads those
+    // slices directly; detach does not copy the columns.
     let workers = n_threads.unwrap_or(0);
-    crate::writer::write_binding_columns(
-        Path::new(path),
-        n_frames,
-        n_atoms,
-        pos_slice,
-        mass_slice,
-        cell_slice,
-        fixed_slice,
-        vel_slice,
-        force_slice,
-        symbol,
-        workers,
-    )
+    let path_owned = path.to_owned();
+    let symbol_owned = symbol.to_owned();
+    py.detach(|| {
+        crate::writer::write_binding_columns(
+            Path::new(&path_owned),
+            n_frames,
+            n_atoms,
+            pos_slice,
+            mass_slice,
+            cell_slice,
+            fixed_slice,
+            vel_slice,
+            force_slice,
+            &symbol_owned,
+            workers,
+        )
+    })
     .map_err(|err| PyIOError::new_err(err.to_string()))
 }
 
@@ -2246,7 +2252,6 @@ impl ConFrameList {
     /// The read walks the coordinate slab and each stored symbol. The
     /// returned seconds are that walk. A second call walks again.
     fn touch_checksum(&self, py: Python<'_>) -> PyResult<(u64, f64)> {
-        let frames = self.frames.lock().expect("frames");
         let Some(slab) = &self.slab else {
             return Err(PyIOError::new_err(
                 "touch_checksum needs the shared coordinate slab",
@@ -2254,21 +2259,46 @@ impl ConFrameList {
         };
         let values = slab.bind(py).readonly();
         let slice = values.as_slice()?;
+        // The walk reads the stored frames and the slab. Holding `frames`
+        // across `detach` deadlocks a thread that has the GIL and wants
+        // the same mutex. Take the slots, drop the lock, walk, then put
+        // the same frames back. The coordinate pointers address the slab
+        // or each frame's own buffer, so moving the `Vec` does not copy.
+        let taken = {
+            let mut slots = self.frames.lock().expect("frames");
+            std::mem::take(&mut *slots)
+        };
+        struct Restore<'a> {
+            slots: &'a std::sync::Mutex<Vec<Option<ConFrame>>>,
+            frames: Vec<Option<ConFrame>>,
+        }
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                if let Ok(mut slots) = self.slots.lock() {
+                    *slots = std::mem::take(&mut self.frames);
+                }
+            }
+        }
+        let restore = Restore {
+            slots: &self.frames,
+            frames: taken,
+        };
+        let workers = self.workers;
+        let pool = self.pool.lock().expect("pool").clone();
         let fault0 = crate::iterators::process_minflt();
         let t_touch = std::time::Instant::now();
-        let workers = self.workers;
-        let digest = {
-            let pool = self.pool.lock().expect("pool");
-            let run = || crate::iterators::touch_option_checksum(&frames, slice, workers);
+        let digest = py.detach(|| {
+            let run = || crate::iterators::touch_option_checksum(&restore.frames, slice, workers);
             match pool.as_ref() {
                 Some(pool) if workers >= 2 => pool.install(run),
                 _ => run(),
             }
-        }
-        .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
+        });
         let touch_s = t_touch.elapsed().as_secs_f64();
         let touch_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
-        drop(frames);
+        drop(restore);
+        let digest = digest
+            .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
         {
             let mut phases = self.phases.lock().expect("phases");
             phases.touch_s = touch_s;
@@ -2814,11 +2844,23 @@ fn read_con_phases(
 /// match the serial walk.
 #[pyfunction]
 #[pyo3(signature = (path, threads, chunked))]
-fn scan_probe(path: &str, threads: usize, chunked: bool) -> PyResult<(usize, f64, bool)> {
-    let text = std::fs::read_to_string(path).map_err(|err| PyIOError::new_err(err.to_string()))?;
-    let (offsets, seconds) = crate::iterators::measure_newline_scan(&text, threads, chunked);
-    let serial = crate::iterators::frame_start_offsets_serial(&text);
-    Ok((offsets.len(), seconds, offsets == serial))
+fn scan_probe(
+    py: Python<'_>,
+    path: &str,
+    threads: usize,
+    chunked: bool,
+) -> PyResult<(usize, f64, bool)> {
+    let path_owned = path.to_owned();
+    let measured = py
+        .detach(|| {
+            let text = std::fs::read_to_string(&path_owned).map_err(|err| err.to_string())?;
+            let (offsets, seconds) =
+                crate::iterators::measure_newline_scan(&text, threads, chunked);
+            let serial = crate::iterators::frame_start_offsets_serial(&text);
+            Ok::<_, String>((offsets.len(), seconds, offsets == serial))
+        })
+        .map_err(PyIOError::new_err)?;
+    Ok(measured)
 }
 
 /// Read frames from a .con or .convel file path.
@@ -3452,6 +3494,7 @@ fn convert_to_con(py: Python<'_>, input_path: &str, output_path: &str) -> PyResu
     Ok(dict.into())
 }
 
+#[derive(Clone, Copy)]
 enum OutputCodec {
     Plain,
     Gzip,
@@ -3825,6 +3868,352 @@ fn try_fused_members(
     Ok(true)
 }
 
+fn take_stored_frames(list: &Bound<'_, ConFrameList>) -> Option<Vec<Option<ConFrame>>> {
+    let borrowed = list.borrow();
+    let mut slots = borrowed.frames.lock().expect("frames");
+    if slots.iter().any(|slot| slot.is_none()) {
+        return None;
+    }
+    // Move the slot allocation itself. Copying each frame into a second
+    // `Vec` doubles the shell storage and blows the streaming-write budget.
+    Some(std::mem::take(&mut *slots))
+}
+
+fn restore_stored_frames(list: &Bound<'_, ConFrameList>, frames: Vec<Option<ConFrame>>) {
+    let borrowed = list.borrow();
+    let mut slots = borrowed.frames.lock().expect("frames");
+    *slots = frames;
+}
+
+fn stored_frame(slot: &Option<ConFrame>) -> &ConFrame {
+    slot.as_ref().expect("stored frame")
+}
+
+fn format_stamped(
+    frames: &[Option<ConFrame>],
+    precision: Option<usize>,
+    canonical: bool,
+) -> Result<Vec<u8>, crate::writer::WriteError> {
+    let mut buffer = Vec::new();
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+            None => ConFrameWriter::new(&mut buffer),
+        }
+        .canonical(canonical);
+        for frame in frames {
+            write_stamped_frame(&mut writer, stored_frame(frame))?;
+        }
+        writer.flush().map_err(crate::writer::WriteError::Io)?;
+    }
+    Ok(buffer)
+}
+
+fn binding_bytes_owned(
+    frames: &[Option<ConFrame>],
+    precision: Option<usize>,
+    canonical: bool,
+    n_threads: Option<usize>,
+) -> Result<Vec<u8>, crate::writer::WriteError> {
+    let workers = n_threads.filter(|count| *count >= 2).unwrap_or(1);
+    let mut buffer = Vec::new();
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+            None => ConFrameWriter::new(&mut buffer),
+        }
+        .canonical(canonical);
+        if workers >= 2 {
+            writer = writer.parallel_atoms(workers);
+        }
+        for frame in frames {
+            writer.write_frame_bound(stored_frame(frame))?;
+        }
+        writer.flush().map_err(crate::writer::WriteError::Io)?;
+    }
+    Ok(buffer)
+}
+
+fn owned_is_wide(frames: &[Option<ConFrame>], compression_members: Option<usize>) -> bool {
+    if matches!(compression_members, Some(1)) || frames.len() != 1 {
+        return false;
+    }
+    stored_frame(&frames[0]).atom_data.len() >= 4096
+        || compression_members.is_some_and(|count| count > 1)
+}
+
+fn try_fused_owned(
+    path: &Path,
+    frames: &[Option<ConFrame>],
+    compression_members: Option<usize>,
+    n_threads: Option<usize>,
+    gzip: bool,
+) -> Result<bool, crate::writer::WriteError> {
+    let Some(threads) = n_threads.filter(|count| *count >= 1) else {
+        return Ok(false);
+    };
+    if frames.len() != 1 {
+        return Ok(false);
+    }
+    let frame = stored_frame(&frames[0]);
+    if !frame_is_one_coord_block(frame) {
+        return Ok(false);
+    }
+    let mut members = compression_members.unwrap_or_else(|| {
+        crate::compression::compression_workers(frame.atom_data.len().saturating_mul(32))
+    });
+    if members <= 1 {
+        return Ok(false);
+    }
+    if threads > members {
+        members = threads;
+    }
+    if gzip {
+        crate::compression::write_fused_gzip_frame(path, frame, members, threads)
+            .map_err(crate::writer::WriteError::Io)?;
+    } else {
+        #[cfg(feature = "zstd")]
+        {
+            crate::compression::write_fused_zstd_frame(path, frame, members, threads)
+                .map_err(crate::writer::WriteError::Io)?;
+        }
+        #[cfg(not(feature = "zstd"))]
+        {
+            let _ = (path, frame, members, threads);
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn write_owned_compressed(
+    path: &Path,
+    frames: &[Option<ConFrame>],
+    precision: Option<usize>,
+    canonical: bool,
+    n_threads: Option<usize>,
+    compression_members: Option<usize>,
+    gzip: bool,
+) -> Result<(), crate::writer::WriteError> {
+    if owned_is_wide(frames, compression_members) {
+        if try_fused_owned(path, frames, compression_members, n_threads, gzip)? {
+            return Ok(());
+        }
+        let t_fmt = std::time::Instant::now();
+        let plain = binding_bytes_owned(frames, precision, canonical, n_threads)?;
+        if std::env::var_os("READCON_WRITE_TRACE").is_some() {
+            eprintln!(
+                "{}-format {:.4} plain_bytes={}",
+                if gzip { "gzip" } else { "zstd" },
+                t_fmt.elapsed().as_secs_f64(),
+                plain.len()
+            );
+        }
+        let members = compression_members
+            .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
+        let threads = n_threads
+            .filter(|count| *count >= 2)
+            .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
+        if gzip {
+            crate::compression::write_gzip_members_limited(path, &plain, members, threads)
+                .map_err(crate::writer::WriteError::Io)?;
+        } else {
+            #[cfg(feature = "zstd")]
+            {
+                crate::compression::write_zstd_members_limited(path, &plain, members, threads)
+                    .map_err(crate::writer::WriteError::Io)?;
+            }
+            #[cfg(not(feature = "zstd"))]
+            {
+                let _ = (path, plain, members, threads);
+                return Err(crate::writer::WriteError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "zstd compression requires readcon built with the zstd feature",
+                )));
+            }
+        }
+        return Ok(());
+    }
+    if gzip {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
+                .map_err(crate::writer::WriteError::Io)?,
+            None => ConFrameWriter::from_path_gzip(path).map_err(crate::writer::WriteError::Io)?,
+        }
+        .canonical(canonical);
+        for frame in frames {
+            writer.write_frame_bound(stored_frame(frame))?;
+        }
+        writer.flush().map_err(crate::writer::WriteError::Io)?;
+        return Ok(());
+    }
+    #[cfg(feature = "zstd")]
+    {
+        let mut writer = match precision {
+            Some(precision) => ConFrameWriter::from_path_zstd_with_precision(path, precision)
+                .map_err(crate::writer::WriteError::Io)?,
+            None => ConFrameWriter::from_path_zstd(path).map_err(crate::writer::WriteError::Io)?,
+        }
+        .canonical(canonical);
+        for frame in frames {
+            writer.write_frame_bound(stored_frame(frame))?;
+        }
+        writer.flush().map_err(crate::writer::WriteError::Io)?;
+        return Ok(());
+    }
+    #[cfg(not(feature = "zstd"))]
+    {
+        let _ = (path, frames, precision, canonical);
+        Err(crate::writer::WriteError::Io(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "zstd compression requires readcon built with the zstd feature",
+        )))
+    }
+}
+
+fn write_owned_frames(
+    path: &Path,
+    frames: &[Option<ConFrame>],
+    precision: Option<usize>,
+    codec: OutputCodec,
+    canonical: bool,
+    append: bool,
+    n_threads: Option<usize>,
+    compression_members: Option<usize>,
+    rewrite: bool,
+    keep_spare: bool,
+) -> Result<(), crate::writer::WriteError> {
+    match codec {
+        OutputCodec::Gzip => write_owned_compressed(
+            path,
+            frames,
+            precision,
+            canonical,
+            n_threads,
+            compression_members,
+            true,
+        ),
+        OutputCodec::Zstd => write_owned_compressed(
+            path,
+            frames,
+            precision,
+            canonical,
+            n_threads,
+            compression_members,
+            false,
+        ),
+        OutputCodec::Plain => {
+            let workers = n_threads.unwrap_or(1);
+            let refs: Vec<&ConFrame> = frames.iter().map(|slot| stored_frame(slot)).collect();
+            if rewrite {
+                return crate::writer::rewrite_frame_refs_to_path(
+                    path, &refs, workers, precision, canonical, true, keep_spare,
+                );
+            }
+            if !append {
+                return crate::writer::write_frame_refs_to_path(
+                    path, &refs, workers, precision, canonical, true,
+                );
+            }
+            let mut writer = match precision {
+                Some(precision) => ConFrameWriter::from_path_append_with_precision(path, precision)
+                    .map_err(crate::writer::WriteError::Io)?,
+                None => {
+                    ConFrameWriter::from_path_append(path).map_err(crate::writer::WriteError::Io)?
+                }
+            }
+            .canonical(canonical);
+            for frame in frames {
+                write_stamped_frame(&mut writer, stored_frame(frame))?;
+            }
+            writer.flush().map_err(crate::writer::WriteError::Io)
+        }
+    }
+}
+
+/// A `read_con` result still holds every frame. Move those frames out of
+/// the list mutex, format and write without the GIL, then put the same
+/// frames back. Nothing is cloned.
+fn write_stored_list(
+    py: Python<'_>,
+    path: &str,
+    frames: &Bound<'_, PyAny>,
+    precision: Option<usize>,
+    codec: OutputCodec,
+    canonical: bool,
+    append: bool,
+    n_threads: Option<usize>,
+    compression_members: Option<usize>,
+    rewrite: bool,
+    keep_spare: bool,
+) -> PyResult<Option<()>> {
+    #[cfg(not(feature = "zstd"))]
+    if matches!(codec, OutputCodec::Zstd) {
+        return Ok(None);
+    }
+    let Ok(list) = frames.cast::<ConFrameList>() else {
+        return Ok(None);
+    };
+    let Some(owned) = take_stored_frames(&list) else {
+        return Ok(None);
+    };
+    let path_buf = Path::new(path).to_path_buf();
+    let (owned, result) = py.detach(move || {
+        let result = write_owned_frames(
+            &path_buf,
+            &owned,
+            precision,
+            codec,
+            canonical,
+            append,
+            n_threads,
+            compression_members,
+            rewrite,
+            keep_spare,
+        );
+        (owned, result)
+    });
+    restore_stored_frames(&list, owned);
+    result.map_err(|err| write_err_to_py(py, err))?;
+    Ok(Some(()))
+}
+
+fn detach_frame_refs(
+    py: Python<'_>,
+    path: &str,
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    rewrite: bool,
+    keep_spare: bool,
+) -> PyResult<()> {
+    let path_buf = Path::new(path).to_path_buf();
+    // Addresses of frames that stay borrowed on this stack. `detach` runs
+    // the closure on this thread and the writer joins its workers before
+    // returning, so the pointers are not used after the borrow ends.
+    let addrs: Vec<usize> = frames
+        .iter()
+        .map(|frame| *frame as *const ConFrame as usize)
+        .collect();
+    py.detach(move || {
+        let refs: Vec<&ConFrame> = addrs
+            .iter()
+            .map(|addr| unsafe { &*(*addr as *const ConFrame) })
+            .collect();
+        if rewrite {
+            crate::writer::rewrite_frame_refs_to_path(
+                &path_buf, &refs, workers, precision, canonical, true, keep_spare,
+            )
+        } else {
+            crate::writer::write_frame_refs_to_path(
+                &path_buf, &refs, workers, precision, canonical, true,
+            )
+        }
+    })
+    .map_err(|err| write_err_to_py(py, err))
+}
+
 /// The `compression` argument controls output compression:
 /// - `None` (default): codec from the path extension (`.gz` gzip, `.zst` zstd)
 /// - `"gzip"`, `"zstd"`, or `"none"`
@@ -3905,6 +4294,21 @@ fn write_con(
         return Err(pyo3::exceptions::PyValueError::new_err(
             "append is only supported for an uncompressed file",
         ));
+    }
+    if let Some(()) = write_stored_list(
+        py,
+        path,
+        frames,
+        precision,
+        codec,
+        canonical,
+        append,
+        n_threads,
+        compression_members,
+        rewrite,
+        keep_spare,
+    )? {
+        return Ok(());
     }
 
     match codec {
@@ -4046,7 +4450,9 @@ fn write_con(
                 }
                 let rust_frames = py_frames_to_rust(py, frames)?;
                 let refs: Vec<&ConFrame> = rust_frames.iter().collect();
-                store(&refs)?;
+                detach_frame_refs(
+                    py, path, &refs, workers, precision, canonical, true, keep_spare,
+                )?;
                 return Ok(());
             }
             if !append {
@@ -4094,27 +4500,15 @@ fn write_con(
                     }
                 } else if let Some(held) = borrow_unmodified_frames(frames)? {
                     let refs = held.refs();
-                    crate::writer::write_frame_refs_to_path(
-                        Path::new(path),
-                        &refs,
-                        workers,
-                        precision,
-                        canonical,
-                        true,
-                    )
-                    .map_err(|err| write_err_to_py(py, err))?;
+                    detach_frame_refs(
+                        py, path, &refs, workers, precision, canonical, false, keep_spare,
+                    )?;
                 } else {
                     let rust_frames = py_frames_to_rust(py, frames)?;
                     let refs: Vec<&ConFrame> = rust_frames.iter().collect();
-                    crate::writer::write_frame_refs_to_path(
-                        Path::new(path),
-                        &refs,
-                        workers,
-                        precision,
-                        canonical,
-                        true,
-                    )
-                    .map_err(|err| write_err_to_py(py, err))?;
+                    detach_frame_refs(
+                        py, path, &refs, workers, precision, canonical, false, keep_spare,
+                    )?;
                 }
                 return Ok(());
             }
@@ -4214,6 +4608,9 @@ fn write_con_string(
     start: usize,
     stop: Option<usize>,
 ) -> PyResult<String> {
+    if let Some(text) = write_list_string(py, frames, precision, canonical, start, stop)? {
+        return Ok(text);
+    }
     let mut buffer: Vec<u8> = Vec::new();
     {
         let mut writer = match precision {
@@ -4221,17 +4618,124 @@ fn write_con_string(
             None => ConFrameWriter::new(&mut buffer),
         }
         .canonical(canonical);
-        stream_frames_range(py, frames, start, stop, |frame| {
-            write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
-        })?;
+        for (index, item) in PyIterator::from_object(frames)?.enumerate() {
+            if index < start {
+                continue;
+            }
+            if stop.is_some_and(|end| index >= end) {
+                break;
+            }
+            let item = item?;
+            let frame = item.extract::<PyRef<'_, PyConFrame>>().map_err(|_| {
+                PyTypeError::new_err("frames must be an iterable of readcon.ConFrame objects")
+            })?;
+            writer = detach_stamped_pyframe(py, writer, &frame)?;
+        }
+        flush_writer(&mut writer)?;
     }
     String::from_utf8(buffer).map_err(|e| PyIOError::new_err(format!("utf8 error: {e}")))
+}
+
+fn write_list_string(
+    py: Python<'_>,
+    frames: &Bound<'_, PyAny>,
+    precision: Option<usize>,
+    canonical: bool,
+    start: usize,
+    stop: Option<usize>,
+) -> PyResult<Option<String>> {
+    let Ok(list) = frames.cast::<ConFrameList>() else {
+        return Ok(None);
+    };
+    let n = list.borrow().len_frames();
+    let end = stop.unwrap_or(n).min(n);
+    let start = start.min(end);
+    if let Some(owned) = take_stored_frames(&list) {
+        let (owned, result) = py.detach(move || {
+            let result = format_stamped(&owned[start..end], precision, canonical);
+            (owned, result)
+        });
+        restore_stored_frames(&list, owned);
+        let buffer = result.map_err(|err| write_err_to_py(py, err))?;
+        let text = String::from_utf8(buffer)
+            .map_err(|err| PyIOError::new_err(format!("utf8 error: {err}")))?;
+        return Ok(Some(text));
+    }
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut writer = match precision {
+        Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
+        None => ConFrameWriter::new(&mut buffer),
+    }
+    .canonical(canonical);
+    for index in start..end {
+        let taken = {
+            let borrowed = list.borrow();
+            let mut slots = borrowed.frames.lock().expect("frames");
+            slots.get_mut(index).and_then(|slot| slot.take())
+        };
+        if let Some(frame) = taken {
+            let (next, frame, result) = py.detach(move || {
+                let result =
+                    write_stamped_frame(&mut writer, &frame).map_err(|err| err.to_string());
+                (writer, frame, result)
+            });
+            writer = next;
+            {
+                let borrowed = list.borrow();
+                let mut slots = borrowed.frames.lock().expect("frames");
+                if let Some(slot) = slots.get_mut(index) {
+                    *slot = Some(frame);
+                }
+            }
+            result.map_err(PyIOError::new_err)?;
+            continue;
+        }
+        let obj = list.borrow().frame_obj(py, index)?;
+        let view = obj.bind(py).borrow();
+        writer = detach_stamped_pyframe(py, writer, &view)?;
+    }
+    flush_writer(&mut writer)?;
+    drop(writer);
+    let text = String::from_utf8(buffer)
+        .map_err(|err| PyIOError::new_err(format!("utf8 error: {err}")))?;
+    Ok(Some(text))
+}
+
+fn detach_stamped_pyframe<W>(
+    py: Python<'_>,
+    mut writer: ConFrameWriter<W>,
+    frame: &PyConFrame,
+) -> PyResult<ConFrameWriter<W>>
+where
+    W: std::io::Write + Send,
+{
+    if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+        && let Some(inner) = frame.inner.as_ref()
+    {
+        let addr = inner as *const ConFrame as usize;
+        return py
+            .detach(move || {
+                let inner = unsafe { &*(addr as *const ConFrame) };
+                write_stamped_frame(&mut writer, inner).map_err(|err| err.to_string())?;
+                Ok::<_, String>(writer)
+            })
+            .map_err(PyIOError::new_err);
+    }
+    let owned = frame.to_con_frame(py)?;
+    py.detach(move || {
+        write_stamped_frame(&mut writer, &owned).map_err(|err| err.to_string())?;
+        Ok::<_, String>(writer)
+    })
+    .map_err(PyIOError::new_err)
 }
 
 /// Read a .con file and return a list of ASE Atoms objects.
 /// Requires the ase package.
 #[pyfunction]
 fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
+    // File IO and the parse run inside `read_con`'s detach. ASE `Atoms`
+    // are Python objects, so they are built after the GIL is back. The
+    // per-atom scaling that feeds them runs detached in `ase_from_pyconframe`.
     let frames = read_con(py, path, None, None, "auto", None)?;
     let n = frames.borrow(py).len_frames();
     let mut out = Vec::with_capacity(n);
@@ -4317,10 +4821,156 @@ fn py_frames_to_rust(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<
 
 // --- ASE conversion helpers (runtime import, no compile-time dep) ---
 
+struct AseColumns {
+    symbols: Vec<String>,
+    positions: Vec<[f64; 3]>,
+    atom_ids: Vec<u64>,
+    masses: Option<Vec<f64>>,
+    velocities: Option<Vec<[f64; 3]>>,
+    forces: Option<Vec<[f64; 3]>>,
+    fixed_indices: Vec<usize>,
+    partial_fixed: Vec<(usize, [bool; 3])>,
+}
+
+fn ase_columns_from_atoms(
+    atoms: &[PyAtomDatum],
+    length_scale: f64,
+    mass_scale: f64,
+    velocity_scale: f64,
+    force_scale: f64,
+) -> AseColumns {
+    let n = atoms.len();
+    let mut symbols = Vec::with_capacity(n);
+    let mut positions = Vec::with_capacity(n);
+    let mut atom_ids = Vec::with_capacity(n);
+    let mut fixed_indices = Vec::new();
+    let mut partial_fixed = Vec::new();
+    let want_mass = atoms.iter().any(|atom| atom.mass.is_some());
+    let want_vel = atoms.iter().any(PyAtomDatum::has_velocity);
+    let want_force = atoms.iter().any(PyAtomDatum::has_forces);
+    let mut masses = want_mass.then(|| Vec::with_capacity(n));
+    let mut velocities = want_vel.then(|| Vec::with_capacity(n));
+    let mut forces = want_force.then(|| Vec::with_capacity(n));
+    for (index, atom) in atoms.iter().enumerate() {
+        symbols.push(atom.symbol.clone());
+        positions.push([
+            atom.x * length_scale,
+            atom.y * length_scale,
+            atom.z * length_scale,
+        ]);
+        atom_ids.push(atom.atom_id);
+        if let Some(dest) = masses.as_mut() {
+            dest.push(atom.mass.unwrap_or(0.0) * mass_scale);
+        }
+        if atom.fixed == [true, true, true] {
+            fixed_indices.push(index);
+        } else if atom.is_fixed() {
+            partial_fixed.push((index, atom.fixed));
+        }
+        if let Some(dest) = velocities.as_mut() {
+            dest.push([
+                atom.vx.unwrap_or(0.0) * velocity_scale,
+                atom.vy.unwrap_or(0.0) * velocity_scale,
+                atom.vz.unwrap_or(0.0) * velocity_scale,
+            ]);
+        }
+        if let Some(dest) = forces.as_mut() {
+            dest.push([
+                atom.fx.unwrap_or(0.0) * force_scale,
+                atom.fy.unwrap_or(0.0) * force_scale,
+                atom.fz.unwrap_or(0.0) * force_scale,
+            ]);
+        }
+    }
+    AseColumns {
+        symbols,
+        positions,
+        atom_ids,
+        masses,
+        velocities,
+        forces,
+        fixed_indices,
+        partial_fixed,
+    }
+}
+
+fn ase_columns_from_frame(
+    frame: &ConFrame,
+    length_scale: f64,
+    mass_scale: f64,
+    velocity_scale: f64,
+    force_scale: f64,
+) -> AseColumns {
+    let n = frame.atom_data.len();
+    let mut per_atom_mass = Vec::with_capacity(n);
+    for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
+        let mass = frame
+            .header
+            .masses_per_type
+            .get(type_idx)
+            .copied()
+            .unwrap_or(0.0);
+        for _ in 0..count {
+            per_atom_mass.push(mass);
+        }
+    }
+    let mut symbols = Vec::with_capacity(n);
+    let mut positions = Vec::with_capacity(n);
+    let mut atom_ids = Vec::with_capacity(n);
+    let mut masses = Vec::with_capacity(n);
+    let mut fixed_indices = Vec::new();
+    let mut partial_fixed = Vec::new();
+    let want_vel = frame.has_velocities();
+    let want_force = frame.has_forces();
+    let mut velocities = want_vel.then(|| Vec::with_capacity(n));
+    let mut forces = want_force.then(|| Vec::with_capacity(n));
+    for (index, atom) in frame.atom_data.iter().enumerate() {
+        symbols.push(atom.symbol.to_string());
+        positions.push([
+            atom.x() * length_scale,
+            atom.y() * length_scale,
+            atom.z() * length_scale,
+        ]);
+        atom_ids.push(atom.atom_id);
+        masses.push(per_atom_mass.get(index).copied().unwrap_or(0.0) * mass_scale);
+        let fixed = atom.fixed();
+        if fixed == [true, true, true] {
+            fixed_indices.push(index);
+        } else if fixed[0] || fixed[1] || fixed[2] {
+            partial_fixed.push((index, fixed));
+        }
+        if let Some(dest) = velocities.as_mut() {
+            let value = atom.velocity().unwrap_or([0.0; 3]);
+            dest.push([
+                value[0] * velocity_scale,
+                value[1] * velocity_scale,
+                value[2] * velocity_scale,
+            ]);
+        }
+        if let Some(dest) = forces.as_mut() {
+            let value = atom.force().unwrap_or([0.0; 3]);
+            dest.push([
+                value[0] * force_scale,
+                value[1] * force_scale,
+                value[2] * force_scale,
+            ]);
+        }
+    }
+    AseColumns {
+        symbols,
+        positions,
+        atom_ids,
+        masses: Some(masses),
+        velocities,
+        forces,
+        fixed_indices,
+        partial_fixed,
+    }
+}
+
 fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>> {
     let ase = py.import("ase")?;
     let ase_atoms_cls = ase.getattr("Atoms")?;
-    let frame_atoms = frame.py_atoms(py)?;
     let metadata = frame.metadata_map(py)?;
     let scale = |quantity: &str, target: &str| -> PyResult<f64> {
         let source = metadata
@@ -4334,13 +4984,43 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     let length_scale = scale("length", "angstrom")?;
     let energy_scale = scale("energy", "eV")?;
     let mass_scale = scale("mass", "amu")?;
-
-    // Build symbols list and positions array
-    let symbols: Vec<&str> = frame_atoms.iter().map(|a| a.symbol.as_str()).collect();
-    let positions: Vec<[f64; 3]> = frame_atoms
-        .iter()
-        .map(|a| [a.x * length_scale, a.y * length_scale, a.z * length_scale])
-        .collect();
+    let force_scale = energy_scale / length_scale;
+    let velocity_scale = |have_velocities: bool| -> PyResult<f64> {
+        if !have_velocities {
+            return Ok(0.0);
+        }
+        let time_unit = crate::units::velocity_file_time_unit(
+            frame.spec_version,
+            &metadata.clone().into_iter().collect(),
+            None,
+        )
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(length_scale
+            * crate::units::velocity_scale_to_natural(&time_unit)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?)
+    };
+    let columns = if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+        && let Some(inner) = frame.inner.as_ref()
+    {
+        let velocity_scale = velocity_scale(inner.has_velocities())?;
+        let addr = inner as *const ConFrame as usize;
+        py.detach(move || {
+            let inner = unsafe { &*(addr as *const ConFrame) };
+            ase_columns_from_frame(inner, length_scale, mass_scale, velocity_scale, force_scale)
+        })
+    } else {
+        let frame_atoms = frame.py_atoms(py)?;
+        let velocity_scale = velocity_scale(frame_atoms.iter().any(PyAtomDatum::has_velocity))?;
+        py.detach(move || {
+            ase_columns_from_atoms(
+                &frame_atoms,
+                length_scale,
+                mass_scale,
+                velocity_scale,
+                force_scale,
+            )
+        })
+    };
 
     // Full row vectors retain the orientation of a triclinic cell.
     let cell = if let Some(vectors) = metadata.get(meta::LATTICE_VECTORS) {
@@ -4373,8 +5053,8 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         (),
         Some(
             &[
-                ("symbols", symbols.into_pyobject(py)?.into_any()),
-                ("positions", positions.into_pyobject(py)?.into_any()),
+                ("symbols", columns.symbols.into_pyobject(py)?.into_any()),
+                ("positions", columns.positions.into_pyobject(py)?.into_any()),
                 ("cell", cell.into_any()),
                 ("pbc", pbc.into_pyobject(py)?.into_any()),
             ]
@@ -4385,62 +5065,27 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     let np = py.import("numpy")?;
 
     // Store atom_id as a custom per-atom array (not tags, which may be in use)
-    let atom_ids: Vec<u64> = frame_atoms.iter().map(|a| a.atom_id).collect();
-    let atom_id_array = np.call_method1("array", (atom_ids,))?;
+    let atom_id_array = np.call_method1("array", (columns.atom_ids,))?;
     atoms.call_method1("set_array", ("atom_id", atom_id_array))?;
 
     // Set masses if present (overrides ASE's atomic-number defaults)
-    if frame_atoms.iter().any(|a| a.mass.is_some()) {
-        let masses: Vec<f64> = frame_atoms
-            .iter()
-            .map(|a| a.mass.unwrap_or(0.0) * mass_scale)
-            .collect();
+    if let Some(masses) = columns.masses {
         let mass_array = np.call_method1("array", (masses,))?;
         atoms.call_method1("set_masses", (mass_array,))?;
     }
 
     // Set velocities if present. ASE stores the natural time unit (D10).
-    if frame.has_velocities(py)? {
-        let time_unit = crate::units::velocity_file_time_unit(
-            frame.spec_version,
-            &metadata.clone().into_iter().collect(),
-            None,
-        )
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        let velocity_scale = length_scale
-            * crate::units::velocity_scale_to_natural(&time_unit)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        let velocities: Vec<[f64; 3]> = frame_atoms
-            .iter()
-            .map(|a| {
-                [
-                    a.vx.unwrap_or(0.0) * velocity_scale,
-                    a.vy.unwrap_or(0.0) * velocity_scale,
-                    a.vz.unwrap_or(0.0) * velocity_scale,
-                ]
-            })
-            .collect();
+    if let Some(velocities) = columns.velocities {
         let vel_array = np.call_method1("array", (velocities,))?;
         atoms.call_method1("set_velocities", (vel_array,))?;
     }
 
     // A stored energy is useful even when the frame has no force section.
     let energy = frame.energy(py)?.map(|value| value * energy_scale);
-    if frame.has_forces(py)? || energy.is_some() {
+    if columns.forces.is_some() || energy.is_some() {
         let ase_calc = py.import("ase.calculators.singlepoint")?;
         let kwargs = [("atoms", atoms.clone().into_any())].into_py_dict(py)?;
-        if frame.has_forces(py)? {
-            let force_scale = energy_scale / length_scale;
-            let forces: Vec<[f64; 3]> = frame_atoms
-                .iter()
-                .map(|a| {
-                    [
-                        a.fx.unwrap_or(0.0) * force_scale,
-                        a.fy.unwrap_or(0.0) * force_scale,
-                        a.fz.unwrap_or(0.0) * force_scale,
-                    ]
-                })
-                .collect();
+        if let Some(forces) = columns.forces {
             kwargs.set_item("forces", np.call_method1("array", (forces,))?)?;
         }
         if let Some(e) = energy {
@@ -4454,19 +5099,8 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
     }
 
     // Preserve all-fixed atoms and per-axis masks as native ASE constraints.
-    let fixed_indices: Vec<usize> = frame_atoms
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| a.fixed == [true, true, true])
-        .map(|(i, _)| i)
-        .collect();
-
-    let partial_fixed: Vec<(usize, [bool; 3])> = frame_atoms
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| a.is_fixed() && a.fixed != [true, true, true])
-        .map(|(i, a)| (i, a.fixed))
-        .collect();
+    let fixed_indices = columns.fixed_indices;
+    let partial_fixed = columns.partial_fixed;
 
     if !fixed_indices.is_empty() || !partial_fixed.is_empty() {
         let ase_constraints = py.import("ase.constraints")?;
@@ -5203,10 +5837,17 @@ fn atom_id_permutation(
     other: &PyConFrame,
     strict: bool,
 ) -> PyResult<Vec<usize>> {
-    let reference = reference.to_con_frame(py)?;
-    let other = other.to_con_frame(py)?;
-    crate::correspondence::atom_id_permutation(&reference, &other, identity_check(strict))
-        .map_err(correspondence_to_py)
+    let reference = frame_for_compute(py, reference)?;
+    let other = frame_for_compute(py, other)?;
+    let check = identity_check(strict);
+    let reference_addr = reference.as_ref() as *const ConFrame as usize;
+    let other_addr = other.as_ref() as *const ConFrame as usize;
+    py.detach(move || {
+        let reference = unsafe { &*(reference_addr as *const ConFrame) };
+        let other = unsafe { &*(other_addr as *const ConFrame) };
+        crate::correspondence::atom_id_permutation(reference, other, check)
+    })
+    .map_err(correspondence_to_py)
 }
 
 /// Return `other` with its atoms stored in `reference` order.
@@ -5221,9 +5862,17 @@ fn reorder_like(
     other: &PyConFrame,
     strict: bool,
 ) -> PyResult<PyConFrame> {
-    let reference = reference.to_con_frame(py)?;
-    let other = other.to_con_frame(py)?;
-    let frame = crate::correspondence::reorder_like(&reference, &other, identity_check(strict))
+    let reference = frame_for_compute(py, reference)?;
+    let other = frame_for_compute(py, other)?;
+    let check = identity_check(strict);
+    let reference_addr = reference.as_ref() as *const ConFrame as usize;
+    let other_addr = other.as_ref() as *const ConFrame as usize;
+    let frame = py
+        .detach(move || {
+            let reference = unsafe { &*(reference_addr as *const ConFrame) };
+            let other = unsafe { &*(other_addr as *const ConFrame) };
+            crate::correspondence::reorder_like(reference, other, check)
+        })
         .map_err(correspondence_to_py)?;
     PyConFrame::from_owned(py, frame)
 }
@@ -5239,9 +5888,60 @@ fn check_atom_id_consistency(
     frames: &Bound<'_, PyAny>,
     strict: bool,
 ) -> PyResult<()> {
+    let check = identity_check(strict);
+    if let Ok(list) = frames.cast::<ConFrameList>()
+        && let Some(owned) = take_stored_frames(&list)
+    {
+        let (owned, result) = py.detach(move || {
+            let refs: Vec<&ConFrame> = owned.iter().map(|slot| stored_frame(slot)).collect();
+            let result = crate::correspondence::check_atom_id_consistency_refs(&refs, check);
+            (owned, result)
+        });
+        restore_stored_frames(&list, owned);
+        return result.map_err(correspondence_to_py);
+    }
+    if let Ok(seq) = frames.extract::<Vec<PyRef<'_, PyConFrame>>>() {
+        let borrowed = seq.iter().all(|frame| {
+            !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) && frame.inner.is_some()
+        });
+        if borrowed {
+            let addrs: Vec<usize> = seq
+                .iter()
+                .map(|frame| frame.inner.as_ref().expect("inner") as *const ConFrame as usize)
+                .collect();
+            return py
+                .detach(move || {
+                    let refs: Vec<&ConFrame> = addrs
+                        .iter()
+                        .map(|addr| unsafe { &*(*addr as *const ConFrame) })
+                        .collect();
+                    crate::correspondence::check_atom_id_consistency_refs(&refs, check)
+                })
+                .map_err(correspondence_to_py);
+        }
+        let rust_frames = seq
+            .iter()
+            .map(|frame| frame.to_con_frame(py))
+            .collect::<PyResult<Vec<_>>>()?;
+        return py
+            .detach(move || crate::correspondence::check_atom_id_consistency(&rust_frames, check))
+            .map_err(correspondence_to_py);
+    }
     let rust_frames = py_frames_to_con(py, frames)?;
-    crate::correspondence::check_atom_id_consistency(&rust_frames, identity_check(strict))
+    py.detach(move || crate::correspondence::check_atom_id_consistency(&rust_frames, check))
         .map_err(correspondence_to_py)
+}
+
+fn frame_for_compute<'a>(
+    py: Python<'_>,
+    frame: &'a PyConFrame,
+) -> PyResult<std::borrow::Cow<'a, ConFrame>> {
+    if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
+        && let Some(inner) = frame.inner.as_ref()
+    {
+        return Ok(std::borrow::Cow::Borrowed(inner));
+    }
+    Ok(std::borrow::Cow::Owned(frame.to_con_frame(py)?))
 }
 
 /// Minimum-image displacement of each reference atom toward the atom in
@@ -5256,14 +5956,18 @@ fn minimum_image_displacements<'py>(
     other: &PyConFrame,
     strict: bool,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    let reference = reference.to_con_frame(py)?;
-    let other = other.to_con_frame(py)?;
-    let rows = crate::correspondence::minimum_image_displacements(
-        &reference,
-        &other,
-        identity_check(strict),
-    )
-    .map_err(correspondence_to_py)?;
+    let reference = frame_for_compute(py, reference)?;
+    let other = frame_for_compute(py, other)?;
+    let check = identity_check(strict);
+    let reference_addr = reference.as_ref() as *const ConFrame as usize;
+    let other_addr = other.as_ref() as *const ConFrame as usize;
+    let rows = py
+        .detach(move || {
+            let reference = unsafe { &*(reference_addr as *const ConFrame) };
+            let other = unsafe { &*(other_addr as *const ConFrame) };
+            crate::correspondence::minimum_image_displacements(reference, other, check)
+        })
+        .map_err(correspondence_to_py)?;
     let mut data = Vec::with_capacity(rows.len().saturating_mul(3));
     for row in rows {
         data.extend_from_slice(&row);
@@ -5568,7 +6272,7 @@ fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
 }
 
 /// readcon Python module implemented in Rust.
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("ConError", py.get_type::<ConError>())?;
@@ -6773,7 +7477,12 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
 /// caller's arrays. The binding does not allocate a second copy of them.
 #[pyfunction]
 #[pyo3(signature = (path, data, n_threads=None))]
-fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) -> PyResult<()> {
+fn write_extxyz(
+    py: Python<'_>,
+    path: &str,
+    data: &Bound<'_, PyDict>,
+    n_threads: Option<usize>,
+) -> PyResult<()> {
     let positions = data
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
@@ -6899,19 +7608,23 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
         {
             std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
         }
-        let bytes = crate::extxyz_scan::extxyz_bytes_with_threads(
-            n_frames, n_atoms, cell, &sources, workers,
-        )
-        .map_err(PyValueError::new_err)?;
+        let bytes = py
+            .detach(|| {
+                crate::extxyz_scan::extxyz_bytes_with_threads(
+                    n_frames, n_atoms, cell, &sources, workers,
+                )
+            })
+            .map_err(PyValueError::new_err)?;
         let members = crate::compression::compression_workers(bytes.len());
         let threads = match n_threads {
             Some(count) if count >= 1 => count,
             _ => crate::compression::default_deflate_threads(members),
         };
-        let written = match codec {
+        let path_owned = path.to_owned();
+        let written = py.detach(|| match codec {
             crate::compression::Compression::Gzip => {
                 crate::compression::write_gzip_members_limited(
-                    std::path::Path::new(path),
+                    std::path::Path::new(&path_owned),
                     &bytes,
                     members,
                     threads,
@@ -6921,7 +7634,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
                 #[cfg(feature = "zstd")]
                 {
                     crate::compression::write_zstd_members_limited(
-                        std::path::Path::new(path),
+                        std::path::Path::new(&path_owned),
                         &bytes,
                         members,
                         threads,
@@ -6937,7 +7650,7 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
                 }
             }
             crate::compression::Compression::None => unreachable!("plain extxyz already returned"),
-        };
+        });
         return written
             .map(|_| ())
             .map_err(|err| PyValueError::new_err(err.to_string()));
@@ -6948,25 +7661,34 @@ fn write_extxyz(path: &str, data: &Bound<'_, PyDict>, n_threads: Option<usize>) 
         {
             std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
         }
-        return crate::extxyz_scan::extxyz_path_with_threads(
-            std::path::Path::new(path),
-            n_frames,
-            n_atoms,
-            cell,
-            &sources,
-            workers,
-        )
-        .map_err(PyValueError::new_err);
+        let path_owned = path.to_owned();
+        return py
+            .detach(|| {
+                crate::extxyz_scan::extxyz_path_with_threads(
+                    std::path::Path::new(&path_owned),
+                    n_frames,
+                    n_atoms,
+                    cell,
+                    &sources,
+                    workers,
+                )
+            })
+            .map_err(PyValueError::new_err);
     }
-    let bytes =
-        crate::extxyz_scan::extxyz_bytes_with_threads(n_frames, n_atoms, cell, &sources, workers)
-            .map_err(PyValueError::new_err)?;
+    let bytes = py
+        .detach(|| {
+            crate::extxyz_scan::extxyz_bytes_with_threads(
+                n_frames, n_atoms, cell, &sources, workers,
+            )
+        })
+        .map_err(PyValueError::new_err)?;
     if let Some(parent) = std::path::Path::new(path).parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
     }
-    write_bytes_parallel(path, &bytes, n_threads.unwrap_or(1))
+    let path_owned = path.to_owned();
+    py.detach(|| write_bytes_parallel(&path_owned, &bytes, n_threads.unwrap_or(1)))
         .map_err(|_| PyValueError::new_err("write"))
 }
 
@@ -7062,7 +7784,9 @@ fn read_pdb<'py>(
     Bound<'py, numpy::PyArray2<f64>>,
     Bound<'py, numpy::PyArray2<f64>>,
 )> {
-    let tables = crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(path))
+    let path_owned = path.to_owned();
+    let tables = py
+        .detach(|| crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(&path_owned)))
         .map_err(pyo3::exceptions::PyValueError::new_err)?;
     let positions =
         ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
@@ -7106,7 +7830,9 @@ fn read_chemfiles(
 ) -> PyResult<Vec<PyConFrame>> {
     use crate::chemfiles_import::con_frames_from_trajectory_path_with;
     let opts = chemfiles_opts_from_kwargs(skip, step, stop, topology, format, guess_bonds);
-    let frames = con_frames_from_trajectory_path_with(Path::new(path), &opts)
+    let path_owned = path.to_owned();
+    let frames = py
+        .detach(|| con_frames_from_trajectory_path_with(Path::new(&path_owned), &opts))
         .map_err(chemfiles_err_to_py)?;
     // Move the frames. Cloning would box a coordinate triple per atom.
     frames
@@ -7121,7 +7847,10 @@ fn read_chemfiles(
 #[pyfunction]
 fn read_chemfiles_first(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
     use crate::chemfiles_import::con_frame_from_trajectory_path;
-    let frame = con_frame_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)?;
+    let path_owned = path.to_owned();
+    let frame = py
+        .detach(|| con_frame_from_trajectory_path(Path::new(&path_owned)))
+        .map_err(chemfiles_err_to_py)?;
     PyConFrame::from_owned(py, frame)
 }
 
@@ -7129,16 +7858,20 @@ fn read_chemfiles_first(py: Python<'_>, path: &str) -> PyResult<PyConFrame> {
 #[pyfunction]
 fn read_chemfiles_nth(py: Python<'_>, path: &str, index: usize) -> PyResult<PyConFrame> {
     use crate::chemfiles_import::con_frame_from_trajectory_path_nth;
-    let frame =
-        con_frame_from_trajectory_path_nth(Path::new(path), index).map_err(chemfiles_err_to_py)?;
+    let path_owned = path.to_owned();
+    let frame = py
+        .detach(|| con_frame_from_trajectory_path_nth(Path::new(&path_owned), index))
+        .map_err(chemfiles_err_to_py)?;
     PyConFrame::from_owned(py, frame)
 }
 
 /// Number of steps in a chemfiles trajectory (``Trajectory.nsteps``).
 #[pyfunction]
-fn read_chemfiles_nsteps(path: &str) -> PyResult<usize> {
+fn read_chemfiles_nsteps(py: Python<'_>, path: &str) -> PyResult<usize> {
     use crate::chemfiles_import::nsteps_from_trajectory_path;
-    nsteps_from_trajectory_path(Path::new(path)).map_err(chemfiles_err_to_py)
+    let path_owned = path.to_owned();
+    py.detach(|| nsteps_from_trajectory_path(Path::new(&path_owned)))
+        .map_err(chemfiles_err_to_py)
 }
 
 /// Read frames from an in-memory trajectory buffer.
@@ -7157,7 +7890,11 @@ fn read_chemfiles_memory(
 ) -> PyResult<Vec<PyConFrame>> {
     use crate::chemfiles_import::con_frames_from_memory_with;
     let opts = chemfiles_opts_from_kwargs(skip, step, stop, None, None, guess_bonds);
-    let frames = con_frames_from_memory_with(data, format, &opts).map_err(chemfiles_err_to_py)?;
+    let data_owned = data.to_owned();
+    let format_owned = format.to_owned();
+    let frames = py
+        .detach(|| con_frames_from_memory_with(&data_owned, &format_owned, &opts))
+        .map_err(chemfiles_err_to_py)?;
     frames
         .into_iter()
         .map(|frame| PyConFrame::from_owned(py, frame))
@@ -7177,8 +7914,10 @@ fn read_chemfiles_memory(
 fn select_on_frame(py: Python<'_>, frame: &PyConFrame, selection: &str) -> PyResult<Py<PyAny>> {
     use crate::chemfiles_selection::evaluate_selection_on_con_frame;
     let rust_frame = frame.to_con_frame(py)?;
-    let result =
-        evaluate_selection_on_con_frame(selection, &rust_frame).map_err(chemfiles_err_to_py)?;
+    let selection_owned = selection.to_owned();
+    let result = py
+        .detach(|| evaluate_selection_on_con_frame(&selection_owned, &rust_frame))
+        .map_err(chemfiles_err_to_py)?;
     selection_result_to_py(py, result)
 }
 
@@ -7193,7 +7932,9 @@ fn select_atom_indices(
 ) -> PyResult<Vec<usize>> {
     use crate::chemfiles_selection::select_atom_indices as rust_select;
     let rust_frame = frame.to_con_frame(py)?;
-    rust_select(selection, &rust_frame).map_err(chemfiles_err_to_py)
+    let selection_owned = selection.to_owned();
+    py.detach(|| rust_select(&selection_owned, &rust_frame))
+        .map_err(chemfiles_err_to_py)
 }
 
 fn multi_frame_selection_to_py(
@@ -7241,7 +7982,10 @@ fn evaluate_selection_on_frames(
 ) -> PyResult<Py<PyAny>> {
     use crate::chemfiles_selection::evaluate_selection_on_frames as rust_eval;
     let rust_frames = py_frames_to_con(py, frames)?;
-    let multi = rust_eval(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    let selection_owned = selection.to_owned();
+    let multi = py
+        .detach(|| rust_eval(&selection_owned, &rust_frames))
+        .map_err(chemfiles_err_to_py)?;
     multi_frame_selection_to_py(py, multi)
 }
 
@@ -7263,6 +8007,9 @@ fn select_atom_positions_on_frames(
 ) -> PyResult<Py<PyAny>> {
     use crate::chemfiles_selection::select_atom_positions_on_frames as rust_sel;
     let rust_frames = py_frames_to_con(py, frames)?;
-    let multi = rust_sel(selection, &rust_frames).map_err(chemfiles_err_to_py)?;
+    let selection_owned = selection.to_owned();
+    let multi = py
+        .detach(|| rust_sel(&selection_owned, &rust_frames))
+        .map_err(chemfiles_err_to_py)?;
     multi_frame_selection_to_py(py, multi)
 }
