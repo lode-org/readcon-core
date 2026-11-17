@@ -51,7 +51,14 @@ def _compress_zstd_bytes(raw: bytes) -> bytes:
         except ImportError:
             mod = None
         if mod is not None and hasattr(mod, "ZstdCompressor"):
-            return mod.ZstdCompressor(level=1).compress(raw)
+            compressor = mod.ZstdCompressor(level=1)
+            # The stdlib compressor returns an unfinished frame unless the
+            # call asks for FLUSH_FRAME. zstandard's compress() already
+            # returns one complete frame and has no such mode.
+            flush_frame = getattr(compressor, "FLUSH_FRAME", None)
+            if flush_frame is None:
+                return compressor.compress(raw)
+            return compressor.compress(raw, flush_frame)
     lib_name = ctypes.util.find_library("zstd")
     assert lib_name is not None, "libzstd is required to build test zstd payload"
     lib = ctypes.CDLL(lib_name)
