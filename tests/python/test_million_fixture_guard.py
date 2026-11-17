@@ -266,6 +266,16 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
 
     # Unsupported 1M rows in extra carry no measurement and may stay without frames.
     raw_extra = json.loads((records / "extra" / "cross-format.json").read_text())
+    committed_extra_mdcompress = [
+        row
+        for row in raw_extra["rows"]
+        if row.get("arm", "").startswith("mdcompress-")
+        and row.get("cache") == "unsupported"
+    ]
+    assert committed_extra_mdcompress
+    for row in committed_extra_mdcompress:
+        assert tables._is_unsupported_row(row)
+
     unsupported_only_extra = dict(raw_extra)
     unsupported_only_extra["rows"] = [
         row
@@ -278,8 +288,8 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
     assert r"\label{tab:format-h2h}" in tables.table()
     assert r"\hhfReadconConBytesOneM" in tables.macros()
 
-    # An 'unsupported' row carrying any measured field counts as measured and
-    # must be refused without pinned hashes.
+    # An 'unsupported' row carrying any non-allowlisted or measured field counts
+    # as measured and must be refused without pinned hashes.
     for field, value in (
         ("iqr_s", 0.001),
         ("n", 6),
@@ -295,6 +305,12 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
         ("cell_error", 0.0),
         ("checksum", 1.0),
         ("checksum_ok", True),
+        ("precision", 0.01),
+        ("unknown_key", "measured"),
+        ("errors", {"position": 1.0}),
+        ("nested_samples", [None, {"median": 0.1}]),
+        ("timing_ns", 1_000_000),
+        ("write_median_s", 0.05),
     ):
         spoofed_extra = json.loads(json.dumps(unsupported_only_extra))
         target = next(
@@ -306,6 +322,22 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
         (records / "extra" / "cross-format.json").write_text(json.dumps(spoofed_extra))
         with pytest.raises(SystemExit):
             tables.table()
+
+    # Restore clean unsupported extra and confirm committed 1M mdcompress-mdc
+    # unsupported rows also pass in a pinned 1m record.
+    (records / "extra" / "cross-format.json").write_text(
+        json.dumps(unsupported_only_extra)
+    )
+    valid_with_mdc = json.loads(json.dumps(valid_1m))
+    old_mdc = next(
+        row
+        for row in old_1m["rows"]
+        if row.get("structure") == "1M" and row.get("arm") == "mdcompress-mdc"
+    )
+    valid_with_mdc["rows"].append(old_mdc)
+    (records / "1m" / "cross-format.json").write_text(json.dumps(valid_with_mdc))
+    assert r"\label{tab:format-h2h}" in tables.table()
+    (records / "1m" / "cross-format.json").write_text(json.dumps(valid_1m))
 
     # Measured 1M rows in extra are allowed once extra carries the pinned 1M hashes.
     pinned_extra = dict(raw_extra)
