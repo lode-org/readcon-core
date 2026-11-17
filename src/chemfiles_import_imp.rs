@@ -17,7 +17,6 @@ use chemfiles::{BondOrder, CellShape, Frame, Property, Trajectory, UnitCell};
 use serde_json::{Value, json};
 
 use super::{ChemfilesReadOpts, chemfiles_internal_units_json};
-use crate::error::ParseError;
 use crate::storage_dtype::FloatArray2;
 use crate::types::{AtomDatum, Bond, ConFrame, FrameHeader, FrameMeta, PreboxHeader, meta};
 
@@ -397,21 +396,6 @@ fn frame_velocities(frame: &Frame) -> Result<&[[f64; 3]], ChemfilesImportError> 
     Ok(unsafe { std::slice::from_raw_parts(ptr, n) })
 }
 
-/// Name frame `index` of a trajectory in a non-finite cell error.
-///
-/// Any other error is returned as it was.
-fn name_cell_frame(error: ChemfilesImportError, index: usize) -> ChemfilesImportError {
-    match error {
-        ChemfilesImportError::InvalidFrame(message) => match ParseError::from_cell_text(&message) {
-            Some(cell) => {
-                ChemfilesImportError::InvalidFrame(cell.in_frame(index as u64).to_string())
-            }
-            None => ChemfilesImportError::InvalidFrame(message),
-        },
-        other => other,
-    }
-}
-
 /// Convert one chemfiles frame.
 ///
 /// # Errors
@@ -420,6 +404,15 @@ fn name_cell_frame(error: ChemfilesImportError, index: usize) -> ChemfilesImport
 /// infinity, naming the field (`boxl[i]` or `angles[i]`), and for a
 /// structural problem.
 pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImportError> {
+    con_frame_from_chemfiles_at(frame, None)
+}
+
+/// [`con_frame_from_chemfiles`] for frame `index` of a trajectory, which a
+/// non-finite cell error names.
+fn con_frame_from_chemfiles_at(
+    frame: &Frame,
+    index: Option<usize>,
+) -> Result<ConFrame, ChemfilesImportError> {
     let n = frame.size();
     let positions = frame_positions(frame)?;
     if positions.len() != n {
@@ -431,8 +424,13 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
 
     let cell_ref = frame.cell();
     let (boxl, angles, has_pbc) = cell_to_box_and_angles(&cell_ref);
-    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
-        .map_err(|error| ChemfilesImportError::InvalidFrame(error.to_string()))?;
+    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles").map_err(|error| {
+        let error = match index {
+            Some(index) => error.in_frame(index as u64),
+            None => error,
+        };
+        ChemfilesImportError::InvalidFrame(error.to_string())
+    })?;
     let velocities = if frame.has_velocities() {
         Some(frame_velocities(frame)?)
     } else {
@@ -1336,16 +1334,14 @@ pub fn con_frames_from_trajectory_path_with<P: AsRef<Path>>(
             traj.read(&mut chfl_frame)?;
             apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
             let index = frames.len();
-            frames.push(
-                con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, index))?,
-            );
+            frames.push(con_frame_from_chemfiles_at(&chfl_frame, Some(index))?);
         }
     } else {
         let mut i = start;
         while i < end {
             traj.read_step(i, &mut chfl_frame)?;
             apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
-            frames.push(con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, i))?);
+            frames.push(con_frame_from_chemfiles_at(&chfl_frame, Some(i))?);
             i = i.saturating_add(stride);
         }
     }
@@ -1374,7 +1370,7 @@ pub fn con_frame_from_trajectory_path_nth<P: AsRef<Path>>(
     }
     let mut chfl_frame = Frame::new();
     traj.read_step(index, &mut chfl_frame)?;
-    con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, index))
+    con_frame_from_chemfiles_at(&chfl_frame, Some(index))
 }
 
 /// Number of steps in a chemfiles trajectory ([`Trajectory::nsteps`]).
@@ -1413,7 +1409,7 @@ pub fn con_frames_from_memory_with(
             continue;
         }
         apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
-        frames.push(con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, i))?);
+        frames.push(con_frame_from_chemfiles_at(&chfl_frame, Some(i))?);
     }
     Ok(frames)
 }
@@ -1467,11 +1463,46 @@ mod tests {
 
     #[test]
     fn a_non_finite_cell_length_is_refused_with_its_field() {
-        // chemfiles itself refuses a non-finite angle or a NaN in the second
-        // or third length, so the first length is the one it can hold.
-        let mut frame = make_water_frame();
-        frame.set_cell(&UnitCell::new([f64::NAN, 10.0, 10.0]));
-        assert_invalid_frame(con_frame_from_chemfiles(&frame), &nan_length_error(None));
+        // A diagonal matrix is the one shape in which chemfiles holds a
+        // non-finite length in every slot. It refuses -inf in the first.
+        let cases = [
+            (0, f64::NAN, "NaN"),
+            (0, f64::INFINITY, "inf"),
+            (1, f64::NAN, "NaN"),
+            (1, f64::INFINITY, "inf"),
+            (1, f64::NEG_INFINITY, "-inf"),
+            (2, f64::NAN, "NaN"),
+            (2, f64::INFINITY, "inf"),
+            (2, f64::NEG_INFINITY, "-inf"),
+        ];
+        for (slot, value, token) in cases {
+            let mut matrix = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]];
+            matrix[slot][slot] = value;
+            let mut frame = make_water_frame();
+            frame.set_cell(&UnitCell::from_matrix(matrix));
+            assert_invalid_frame(
+                con_frame_from_chemfiles(&frame),
+                &format!("non-finite value: cell field boxl[{slot}] is {token}"),
+            );
+        }
+    }
+
+    #[test]
+    fn a_non_finite_angle_comes_with_a_non_finite_length_and_names_it() {
+        // chemfiles refuses a non-finite angle and a non-triangular matrix,
+        // so an angle is non-finite only when a length is. The length is the
+        // first non-finite field.
+        for (slot, value, token) in [(0, f64::NAN, "NaN"), (2, f64::INFINITY, "inf")] {
+            let mut lengths = [10.0, 10.0, 10.0];
+            lengths[slot] = value;
+            let mut frame = make_water_frame();
+            frame.set_cell(&UnitCell::triclinic(lengths, [80.0, 90.0, 100.0]));
+            assert!(frame.cell().angles().iter().any(|angle| angle.is_nan()));
+            assert_invalid_frame(
+                con_frame_from_chemfiles(&frame),
+                &format!("non-finite value: cell field boxl[{slot}] is {token}"),
+            );
+        }
     }
 
     #[test]

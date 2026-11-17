@@ -8,6 +8,8 @@ use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
+use crate::error::ConvertError;
+
 #[derive(Debug, Clone)]
 pub struct XyzColumn {
     pub name: String,
@@ -125,11 +127,11 @@ fn property_columns(properties: &[u8]) -> Result<Vec<ColumnSpec>, String> {
             .position(|byte| *byte == b':')
             .ok_or("properties")?;
         if kind_end != 1 {
-            return Err("properties".to_string());
+            return Err("properties".into());
         }
         let kind = rest[0];
         if !matches!(kind, b'S' | b'R' | b'I' | b'L') {
-            return Err("properties".to_string());
+            return Err("properties".into());
         }
         rest = &rest[kind_end + 1..];
         let count_end = rest
@@ -138,12 +140,12 @@ fn property_columns(properties: &[u8]) -> Result<Vec<ColumnSpec>, String> {
             .unwrap_or(rest.len());
         let count = usize_count(parse_f64(&rest[..count_end])?).ok_or("properties")?;
         if count == 0 || count > 4096 {
-            return Err("properties".to_string());
+            return Err("properties".into());
         }
         if name == "pos" {
             saw_pos = true;
             if count != 3 {
-                return Err("pos".to_string());
+                return Err("pos".into());
             }
         }
         columns.push(ColumnSpec {
@@ -159,7 +161,7 @@ fn property_columns(properties: &[u8]) -> Result<Vec<ColumnSpec>, String> {
         rest = &rest[count_end + 1..];
     }
     if !saw_pos {
-        return Err("pos".to_string());
+        return Err("pos".into());
     }
     Ok(columns)
 }
@@ -176,7 +178,7 @@ fn logical_value(token: &[u8]) -> f64 {
 /// A NaN or infinite lattice number is refused, naming `Lattice[i]` and the
 /// frame, as is a parameter that comes out NaN or infinite (a zero vector has
 /// no angle). The check is one test of fifteen numbers per frame.
-fn lattice_cell(lattice: &[u8], frame: usize) -> Result<[f64; 6], String> {
+fn lattice_cell(lattice: &[u8], frame: usize) -> Result<[f64; 6], ConvertError> {
     let mut values = [0.0; 9];
     let mut rest = trim(lattice);
     for slot in values.iter_mut() {
@@ -218,18 +220,17 @@ fn lattice_cell(lattice: &[u8], frame: usize) -> Result<[f64; 6], String> {
     Ok(cell)
 }
 
-/// The text of a non-finite cell error for a scan, which reports `String`.
+/// [`ParseError::non_finite_cell`](crate::error::ParseError::non_finite_cell)
+/// for a lattice or cell number.
 #[cold]
-fn non_finite_lattice(field: &str, value: f64) -> String {
-    crate::error::ParseError::non_finite_cell(field, value).to_string()
+fn non_finite_lattice(field: &str, value: f64) -> ConvertError {
+    crate::error::ParseError::non_finite_cell(field, value).into()
 }
 
 /// [`non_finite_lattice`] that names frame `frame`.
 #[cold]
-fn non_finite_lattice_in(field: &str, value: f64, frame: usize) -> String {
-    crate::error::ParseError::non_finite_cell(field, value)
-        .in_frame(frame as u64)
-        .to_string()
+fn non_finite_lattice_in(field: &str, value: f64, frame: usize) -> ConvertError {
+    non_finite_lattice(field, value).in_frame(frame as u64)
 }
 
 fn next_field<'a>(line: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
@@ -295,15 +296,10 @@ fn push_atom(
     Ok(())
 }
 
-pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, String> {
-    tables_from_extxyz_bytes_with_threads(bytes, 1)
+pub fn tables_from_extxyz_bytes(bytes: &[u8]) -> Result<XyzTables, ConvertError> {
+    scan_extxyz_bytes(bytes, 1)
 }
 
-/// [`tables_from_extxyz_bytes`] using `workers` for the atom rows.
-///
-/// `workers < 2` is the serial scan. Two or more workers split frames
-/// after the line index. The tables match the serial scan.
-///
 /// One worker's species rows, sent as that worker finishes so the binding
 /// can build frame tuples while the other workers are still scanning.
 /// `frames == 0` is one slice of a single frame: `n_atoms` is the slice
@@ -317,18 +313,35 @@ pub struct SpeciesBatch {
     pub ids: Vec<u32>,
 }
 
+/// [`tables_from_extxyz_bytes`] using `workers` for the atom rows.
+///
+/// `workers < 2` is the serial scan. Two or more workers split frames
+/// after the line index. The tables match the serial scan.
+///
+/// # Errors
+///
+/// [`ConvertError::Parse`] with [`crate::error::ParseError::NonFiniteValue`]
+/// for a NaN or infinite `Lattice` number or cell parameter, naming the field
+/// and the frame. [`ConvertError::Message`] for any other malformed input.
+pub fn scan_extxyz_bytes(bytes: &[u8], workers: usize) -> Result<XyzTables, ConvertError> {
+    tables_from_extxyz_bytes_reporting(bytes, workers, None)
+}
+
+/// [`scan_extxyz_bytes`] with the error as its text.
+/// [`ParseError::from_cell_text`](crate::error::ParseError::from_cell_text)
+/// recovers a non-finite cell error from that text.
 pub fn tables_from_extxyz_bytes_with_threads(
     bytes: &[u8],
     workers: usize,
 ) -> Result<XyzTables, String> {
-    tables_from_extxyz_bytes_reporting(bytes, workers, None)
+    scan_extxyz_bytes(bytes, workers).map_err(String::from)
 }
 
 pub fn tables_from_extxyz_bytes_reporting(
     bytes: &[u8],
     workers: usize,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
-) -> Result<XyzTables, String> {
+) -> Result<XyzTables, ConvertError> {
     if workers < 2 {
         return tables_serial(bytes);
     }
@@ -356,7 +369,7 @@ pub fn tables_from_extxyz_bytes_reporting(
         }
         let count = usize_count(parse_f64(count_line)?).ok_or("atoms")?;
         if mark + 1 >= lines.len() {
-            return Err("comment".to_string());
+            return Err("comment".into());
         }
         let comment = lines[mark + 1];
         let properties = quoted_after(comment, b"Properties=").ok_or("properties")?;
@@ -367,7 +380,7 @@ pub fn tables_from_extxyz_bytes_reporting(
         } else if count != n_atoms || properties != first_props {
             // Same property bytes as frame 0. Re-parsing the column list
             // allocated a fresh name string per column per frame.
-            return Err("properties".to_string());
+            return Err("properties".into());
         }
         mark += 2;
         if mark
@@ -375,14 +388,14 @@ pub fn tables_from_extxyz_bytes_reporting(
             .map(|end| end > lines.len())
             .unwrap_or(true)
         {
-            return Err("atoms".to_string());
+            return Err("atoms".into());
         }
         starts.push(mark);
         mark += count;
     }
     let n_frames = starts.len();
     if n_frames == 0 {
-        return Err("no frames".to_string());
+        return Err("no frames".into());
     }
     // Each stored number occupies at least one byte of the file. A width
     // times the atom count must not reserve more than that.
@@ -393,7 +406,7 @@ pub fn tables_from_extxyz_bytes_reporting(
         slots = slots.checked_add(lane).ok_or("atoms")?;
     }
     if slots > bytes.len() {
-        return Err("atoms".to_string());
+        return Err("atoms".into());
     }
     let fast_nfloat = species_pos_width(&specs);
     let mut cell = vec![0.0f64; n_frames * 6];
@@ -456,7 +469,7 @@ pub fn tables_from_extxyz_bytes_reporting(
     let line_ref = &lines;
     let wide_atoms = n_frames == 1 && n_atoms >= 4096 && workers >= 2;
     type WorkerSpecies = (Vec<String>, Vec<u32>);
-    let worker_species = std::thread::scope(|scope| -> Result<Vec<WorkerSpecies>, String> {
+    let worker_species = std::thread::scope(|scope| -> Result<Vec<WorkerSpecies>, ConvertError> {
         let mut handles = Vec::new();
         for worker in 0..workers {
             let (frame_from, frame_to, atom_from, atom_to) = if wide_atoms {
@@ -476,7 +489,7 @@ pub fn tables_from_extxyz_bytes_reporting(
             let column_ptrs = &column_ptrs;
             let starts = &starts;
             handles.push(
-                scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), String> {
+                scope.spawn(move || -> Result<(Vec<String>, Vec<u32>), ConvertError> {
                     let mut pool = Vec::new();
                     let mut ids = Vec::new();
                     for frame in frame_from..frame_to {
@@ -547,7 +560,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                     for column in &mut columns {
                         std::mem::forget(std::mem::take(&mut column.text));
                     }
-                    return Err("atom".to_string());
+                    return Err("atom".into());
                 }
             }
         }
@@ -775,7 +788,7 @@ fn fill_species_pos_parallel(
     mut cell: Vec<f64>,
     columns: Vec<XyzColumn>,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
-) -> Result<XyzTables, String> {
+) -> Result<XyzTables, ConvertError> {
     let XyzShape {
         frames: n_frames,
         atoms: n_atoms,
@@ -806,13 +819,13 @@ fn fill_species_pos_parallel(
                     break;
                 }
                 let to = (from + chunk).min(n_atoms);
-                handles.push(scope.spawn(move || -> Result<SpeciesChunk, String> {
+                handles.push(scope.spawn(move || -> Result<SpeciesChunk, ConvertError> {
                     let mut pool = Vec::new();
                     let mut ids = Vec::with_capacity(to - from);
                     for atom in from..to {
                         let line = lines[line0 + atom];
                         let Some((sym, xyz, mass)) = species_pos_fields(line, nfloat) else {
-                            return Err("atom".to_string());
+                            return Err("atom".into());
                         };
                         ids.push(intern_symbol(&mut pool, sym));
                         unsafe {
@@ -842,8 +855,8 @@ fn fill_species_pos_parallel(
             }
             handles
                 .into_iter()
-                .map(|handle| handle.join().unwrap_or_else(|_| Err("atom".to_string())))
-                .collect::<Result<Vec<_>, String>>()
+                .map(|handle| handle.join().unwrap_or_else(|_| Err("atom".into())))
+                .collect::<Result<Vec<_>, ConvertError>>()
         })?;
         let mut tables = assemble_tables(n_frames, n_atoms, cell, columns)?;
         let shared = match chunks.first() {
@@ -892,7 +905,7 @@ fn fill_species_pos_parallel(
                 break;
             }
             let to = (from + chunk).min(n_frames);
-            handles.push(scope.spawn(move || -> Result<SpeciesChunk, String> {
+            handles.push(scope.spawn(move || -> Result<SpeciesChunk, ConvertError> {
                 let mut pool = Vec::new();
                 let mut ids = Vec::with_capacity((to - from) * n_atoms);
                 for frame in from..to {
@@ -910,7 +923,7 @@ fn fill_species_pos_parallel(
                     for atom in 0..n_atoms {
                         let line = lines[starts[frame] + atom];
                         let Some((sym, xyz, mass)) = species_pos_fields(line, nfloat) else {
-                            return Err("atom".to_string());
+                            return Err("atom".into());
                         };
                         ids.push(intern_symbol(&mut pool, sym));
                         unsafe {
@@ -942,8 +955,8 @@ fn fill_species_pos_parallel(
         }
         handles
             .into_iter()
-            .map(|handle| handle.join().unwrap_or_else(|_| Err("atom".to_string())))
-            .collect::<Result<Vec<_>, String>>()
+            .map(|handle| handle.join().unwrap_or_else(|_| Err("atom".into())))
+            .collect::<Result<Vec<_>, ConvertError>>()
     })?;
     let mut tables = assemble_tables(n_frames, n_atoms, cell, columns)?;
     let shared = match chunks.first() {
@@ -1055,7 +1068,7 @@ fn assemble_tables(
     n_atoms: usize,
     cell: Vec<f64>,
     mut columns: Vec<XyzColumn>,
-) -> Result<XyzTables, String> {
+) -> Result<XyzTables, ConvertError> {
     for column in &mut columns {
         if column.kind == b'S' {
             continue;
@@ -1067,7 +1080,7 @@ fn assemble_tables(
             continue;
         }
         if column.real.capacity() < n {
-            return Err("pos".to_string());
+            return Err("pos".into());
         }
         // SAFETY: the workers finished writing this column. The length
         // stayed 0 so an error path drops an empty allocation.
@@ -1099,7 +1112,7 @@ fn assemble_tables(
         }
     }
     if positions.len() != n_frames * n_atoms * 3 {
-        return Err("pos".to_string());
+        return Err("pos".into());
     }
     Ok(XyzTables {
         n_frames,
@@ -1124,7 +1137,7 @@ fn tables_stream_parallel(
     bytes: &[u8],
     workers: usize,
     batches: Option<&std::sync::mpsc::SyncSender<SpeciesBatch>>,
-) -> Option<Result<XyzTables, String>> {
+) -> Option<Result<XyzTables, ConvertError>> {
     if workers < 2 || bytes.len() < (1 << 20) {
         return None;
     }
@@ -1728,7 +1741,7 @@ fn write_stream_line(
     index == line.len()
 }
 
-fn tables_serial(bytes: &[u8]) -> Result<XyzTables, String> {
+fn tables_serial(bytes: &[u8]) -> Result<XyzTables, ConvertError> {
     // One pass for species plus real columns, including mixed symbols and
     // a comment that changes every frame. The uniform-symbol walker is not
     // used: a file of one element must take the same path as an alloy.
@@ -2113,7 +2126,7 @@ fn next_float(line: &[u8], i: &mut usize) -> Option<f64> {
     Some(value)
 }
 
-fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
+fn tables_general(bytes: &[u8]) -> Result<XyzTables, ConvertError> {
     let mut cell = Vec::new();
     let mut columns: Vec<XyzColumn> = Vec::new();
     let mut specs: Vec<ColumnSpec> = Vec::new();
@@ -2135,10 +2148,10 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         // Each atom is at least one byte. A count larger than the file
         // cannot be allocated.
         if count > bytes.len() {
-            return Err("atoms".to_string());
+            return Err("atoms".into());
         }
         let Some((next, comment)) = line_span(bytes, cursor) else {
-            return Err("comment".to_string());
+            return Err("comment".into());
         };
         cursor = next;
         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
@@ -2158,7 +2171,7 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
                 slots = slots.checked_add(lane).ok_or("atoms")?;
             }
             if slots > bytes.len() {
-                return Err("atoms".to_string());
+                return Err("atoms".into());
             }
             columns = frame_specs
                 .iter()
@@ -2183,11 +2196,11 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
                 left.name != right.name || left.kind != right.kind || left.width != right.width
             })
         {
-            return Err("properties".to_string());
+            return Err("properties".into());
         }
         for index in 0..count {
             let Some((next, line)) = line_span(bytes, cursor) else {
-                return Err("atoms".to_string());
+                return Err("atoms".into());
             };
             cursor = next;
             if let Err(err) = push_atom(line, &specs, &mut columns, &mut pool, &mut ids) {
@@ -2207,16 +2220,16 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
                     }
                 }
                 if seen < count {
-                    return Err("atoms".to_string());
+                    return Err("atoms".into());
                 }
-                return Err(err);
+                return Err(err.into());
             }
         }
         cell.extend_from_slice(&frame_cell);
         n_frames += 1;
     }
     if n_frames == 0 {
-        return Err("no frames".to_string());
+        return Err("no frames".into());
     }
     let mut positions = Vec::new();
     let mut masses = vec![f64::NAN; n_frames * n_atoms];
@@ -2236,7 +2249,7 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         species = vec![String::new(); n_frames * n_atoms];
     }
     if positions.len() != n_frames * n_atoms * 3 {
-        return Err("pos".to_string());
+        return Err("pos".into());
     }
     Ok(XyzTables {
         n_frames,
@@ -2252,7 +2265,7 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
     })
 }
 
-pub fn tables_from_extxyz_path(path: &Path) -> Result<XyzTables, String> {
+pub fn tables_from_extxyz_path(path: &Path) -> Result<XyzTables, ConvertError> {
     let bytes = fs::read(path).map_err(|_| "read".to_string())?;
     tables_from_extxyz_bytes(&bytes)
 }
@@ -2305,11 +2318,11 @@ fn cos_sin(degrees: f64) -> (f64, f64) {
     (radians.cos(), radians.sin())
 }
 
-pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], String> {
+pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], ConvertError> {
     if cell.len() < 6 {
-        return Err("cell".to_string());
+        return Err("cell".into());
     }
-    crate::types::check_cellpar_finite(&cell[..6]).map_err(|error| error.to_string())?;
+    crate::types::check_cellpar_finite(&cell[..6])?;
     let (a, b, c) = (cell[0], cell[1], cell[2]);
     let (cos_a, _sin_a) = cos_sin(cell[3]);
     let (cos_b, _sin_b) = cos_sin(cell[4]);
@@ -2336,9 +2349,9 @@ pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], String> {
 
 /// Refuse the first non-finite value of the first `n_frames` cell rows,
 /// naming its field and frame, before any frame is formatted.
-fn check_cells(cell: &[f64], n_frames: usize) -> Result<(), String> {
+fn check_cells(cell: &[f64], n_frames: usize) -> Result<(), ConvertError> {
     let used = n_frames.saturating_mul(6).min(cell.len());
-    crate::types::check_cell_rows(&cell[..used]).map_err(|error| error.to_string())
+    Ok(crate::types::check_cell_rows(&cell[..used])?)
 }
 
 /// One per-atom column the writer can format without taking ownership.
@@ -2385,7 +2398,7 @@ pub fn extxyz_bytes(
     n_atoms: usize,
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, ConvertError> {
     extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, 1)
 }
 
@@ -2399,7 +2412,7 @@ pub fn extxyz_bytes_with_threads(
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, ConvertError> {
     let mut out = Vec::new();
     extxyz_append_with_threads(&mut out, n_frames, n_atoms, cell, columns, workers)?;
     Ok(out)
@@ -2416,12 +2429,12 @@ pub(crate) fn extxyz_append_with_threads(
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
-) -> Result<(), String> {
+) -> Result<(), ConvertError> {
     if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
-        return Err("frames".to_string());
+        return Err("frames".into());
     }
     if cell.len() < n_frames * 6 {
-        return Err("cell".to_string());
+        return Err("cell".into());
     }
     check_cells(cell, n_frames)?;
     let properties = columns
@@ -2505,7 +2518,7 @@ pub(crate) fn extxyz_append_with_threads(
                 match handle.join() {
                     Ok(Ok(buf)) => parts[index] = buf,
                     Ok(Err(err)) => return Err(err),
-                    Err(_) => return Err("write".to_string()),
+                    Err(_) => return Err("write".into()),
                 }
             }
             Ok(())
@@ -2569,16 +2582,16 @@ pub fn extxyz_path_with_threads(
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
-) -> Result<(), String> {
+) -> Result<(), ConvertError> {
     if workers >= 2 && n_frames >= 2 {
         return write_frame_batches(path, n_frames, n_atoms, cell, columns, workers);
     }
     if !(workers >= 2 && n_frames == 1 && n_atoms >= 4096) {
         let bytes = extxyz_bytes_with_threads(n_frames, n_atoms, cell, columns, workers)?;
-        return std::fs::write(path, bytes).map_err(|err| err.to_string());
+        return std::fs::write(path, bytes).map_err(|err| err.to_string().into());
     }
     if cell.len() < 6 {
-        return Err("cell".to_string());
+        return Err("cell".into());
     }
     check_cells(cell, 1)?;
     let properties = columns
@@ -2678,7 +2691,7 @@ fn push_frame_header(
     n_atoms: usize,
     cell: &[f64],
     properties: &str,
-) -> Result<(), String> {
+) -> Result<(), ConvertError> {
     let lattice = lattice_from_cell(cell)?;
     push_usize(out, n_atoms);
     out.extend_from_slice(b"\nLattice=\"");
@@ -2704,9 +2717,9 @@ fn write_frame_batches(
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
-) -> Result<(), String> {
+) -> Result<(), ConvertError> {
     if cell.len() < n_frames * 6 {
-        return Err("cell".to_string());
+        return Err("cell".into());
     }
     check_cells(cell, n_frames)?;
     let properties = columns
@@ -2725,7 +2738,7 @@ fn write_frame_batches(
     let chunk = n_frames.div_ceil(groups).max(1);
     let nparts = n_frames.div_ceil(chunk);
     let mut file = std::fs::File::create(path).map_err(|err| err.to_string())?;
-    let (tx, rx) = std::sync::mpsc::channel::<Result<(usize, Vec<u8>), String>>();
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(usize, Vec<u8>), ConvertError>>();
     let format_threads = workers.saturating_sub(1).max(1);
     let next_job = std::sync::atomic::AtomicUsize::new(0);
     let jobs = &next_job;
@@ -2774,7 +2787,7 @@ fn format_extxyz_range(
     cell: &[f64],
     columns: &[&(dyn ExtxyzSource + Sync)],
     properties: &str,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, ConvertError> {
     let frames = to.saturating_sub(from);
     let mut out =
         Vec::with_capacity(frames.saturating_mul(n_atoms.saturating_mul(48).saturating_add(96)));
@@ -2800,7 +2813,7 @@ fn format_extxyz_range(
 }
 
 /// Write species, the lattice, `pbc`, and every per-atom column.
-pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
+pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, ConvertError> {
     let mut species_text = None;
     if tables.species.is_empty() && !tables.species_ids.is_empty() {
         species_text = Some(
@@ -2835,12 +2848,12 @@ pub fn tables_to_extxyz_bytes(tables: &XyzTables) -> Result<Vec<u8>, String> {
     extxyz_bytes(tables.n_frames, tables.n_atoms, &tables.cell, &columns)
 }
 
-pub fn write_extxyz_path(path: &Path, tables: &XyzTables) -> Result<(), String> {
+pub fn write_extxyz_path(path: &Path, tables: &XyzTables) -> Result<(), ConvertError> {
     let bytes = tables_to_extxyz_bytes(tables)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|_| "write".to_string())?;
     }
-    fs::write(path, bytes).map_err(|_| "write".to_string())
+    fs::write(path, bytes).map_err(|_| "write".into())
 }
 
 #[cfg(test)]
@@ -3444,8 +3457,8 @@ Cu 0 0 0 63.546
 H 1 0 0 1.008
 ";
         let serial = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
-        let parallel = tables_from_extxyz_bytes_with_threads(text.as_bytes(), 8).unwrap_err();
-        assert_eq!(parallel, serial);
+        let parallel = scan_extxyz_bytes(text.as_bytes(), 8).unwrap_err();
+        assert_eq!(parallel, "properties");
         assert_eq!(serial, "properties");
     }
 
