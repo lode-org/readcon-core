@@ -50,7 +50,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 LEDGER = ROOT / "data" / "trace" / "numbers.csv"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
-RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions")
+RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db")
 COLUMNS = ("document", "line", "printed", "class", "source", "rule", "value", "macro")
 MACRO_DEF = re.compile(
     r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}"
