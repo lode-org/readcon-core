@@ -463,35 +463,34 @@ On a blank symbol line and on a symbol line that starts with \texttt{\{}, the th
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
 Each of them names its library by its digest, \texttt{\readcondigest}.
 Two of them also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
-\texttt{scripts/provenance.py} writes the digests of the readcon module and of the library sources into each record.
-The version history of Table~\ref{tab:versions}, \texttt{data/\allowbreak spec/\allowbreak versions.json}, is read from \texttt{spec.org} at each release tag by \texttt{gen\_spec\_supp.py -{}-measure}, which runs no readcon-core code, so the table does not list it.
-Nor does it list \texttt{data/\allowbreak spec/\allowbreak clause\_coverage.json}, which \texttt{clause\_coverage.py} reads from \texttt{spec.org}, the corpus manifests, the probes and the sources of the tests without running readcon-core.
+A provenance module of the paper scripts writes the digests of the readcon module and of the library sources into each record.
+The version history of Table~\ref{tab:versions} is read from the specification at each release tag without running readcon-core code, so the table does not list it.
+Nor does it list the clause-coverage record, which is read from the specification, the corpus manifests, the probes and the sources of the tests without running readcon-core.
 
 \input{figures/generated/version_map}
 
-The git bundle \path{readcon-core.bundle} of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and \path{paper-cpc.tar.gz} contains the directory \path{paper/cpc} with the scripts, the records and the TeX sources of both documents.
-That commit has no \path{paper} directory.
-Listing~\ref{lst:repro} clones that commit from the bundle without a network, unpacks \path{paper/cpc} into the checkout, installs the Python environment that ran the scripts, and rebuilds both documents.
+The git bundle readcon-core.bundle of the supplementary material carries commit \texttt{\readconcommitshort} with its whole history, and the archive paper-cpc.tar.gz contains the paper directory with the scripts, the records and the TeX sources of both documents.
+That commit has no paper directory.
+Listing~\ref{lst:repro} clones that commit from the bundle without a network, unpacks the paper directory into the checkout, installs the Python environment that ran the scripts, and rebuilds both documents.
 It needs git, conda and TeX Live or Tectonic.
-\texttt{scripts/\allowbreak build\_tex.sh} typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex -{}-version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
+The pdfTeX build script of the listing typesets both documents with pdfTeX and BibTeX, and on \texttt{Ubuntu 24.04.5 LTS} it runs the TeX Live of the distribution, whose \texttt{pdftex -{}-version} prints \texttt{pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian)}.
 Apart from the TeX sources of the two documents and the configuration, font map and format that the installation generates, every file that pdfTeX and BibTeX read for them belongs to one of nine Ubuntu packages.
 Seven of them have version \texttt{2023.20240207-1}: \texttt{texlive-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak base}, \texttt{texlive-\allowbreak latex-\allowbreak recommended}, \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers} and \texttt{texlive-\allowbreak plain-\allowbreak generic}.
 The other two are \texttt{texlive-\allowbreak binaries}, at version \texttt{2023.20230311.66589-9build3}, and \texttt{lmodern}, at version \texttt{2.005-1}.
 \texttt{apt install} with the arguments \texttt{texlive-\allowbreak latex-\allowbreak extra}, \texttt{texlive-\allowbreak science}, \texttt{texlive-\allowbreak publishers}, \texttt{texlive-\allowbreak plain-\allowbreak generic} and \texttt{lmodern} installs the nine with the packages they depend on.
-On a host without TeX Live, \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents with Tectonic~0.17.0 on the path, three rounds of each so that the labels of each document reach the other, and stops on an undefined reference, an overfull box or a float that fits on no page.
-\path{paper/cpc/environment/conda-linux-64.txt} lists the conda-forge packages of that environment with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and \path{requirements.txt} beside it the packages that pip adds; \texttt{scripts/\allowbreak export\_env.py} wrote both from the package records of the environment.
+On a host without TeX Live, the Tectonic build script named in the listing typesets both documents with Tectonic~0.17.0 on the path, three rounds of each so that the labels of each document reach the other, and stops on an undefined reference, an overfull box or a float that fits on no page.
+The conda package list of the listing names the conda-forge packages of that environment with the MD5 of each, among them Python 3.12, pandoc~3.13 and the rustc of the checkout, and the pip requirements file beside it names the packages that pip adds; a script of the paper wrote both from the package records of the environment.
 \texttt{pip install .} builds the readcon module from the checkout.
-\texttt{scripts/\allowbreak regen\_paper.py} rewrites every table, figure and macro from the records without timing anything, and \texttt{scripts/\allowbreak build\_tex.sh} or \texttt{scripts/\allowbreak build\_tex\_tectonic.sh} typesets both documents.
-\texttt{scripts/\allowbreak trace\_numbers.py} then traces every printed number to its record and writes \path{paper/cpc/data/trace/numbers.csv}.
+The regeneration script rewrites every table, figure and macro from the records without timing anything, and either build script typesets both documents.
+The number trace then traces every printed number to its record and writes a ledger of the record and the rule behind each one.
 
 The measurements are separate steps, each of which rewrites its own records.
-\texttt{regen\_paper.py -{}-measure} reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
-\texttt{scripts/\allowbreak test\_run.py -{}-checkout} runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
-\texttt{evidence/\allowbreak e1\_restart.py} reruns the eOn band, \texttt{scripts/\allowbreak run\_restart\_walls.py} the wall times of Table~\ref{tab:restartfmt}, and \texttt{scripts/\allowbreak file\_sizes.py} the sizes of Table~\ref{tab:sizes}.
-For the performance records, \texttt{bench/\allowbreak make\_payloads.py} writes the timed files, \texttt{bench/\allowbreak r0174.py} the provenance record, \texttt{bench/\allowbreak cpp\_reads.py} builds and checks the C++ programs, and \texttt{bench/\allowbreak reads.py}, \texttt{bench/\allowbreak memray\_peaks.py} and \texttt{bench/\allowbreak cachegrind.py} write the timing, heap and Cachegrind records; \texttt{bench/\allowbreak build\_chemfiles.sh} and then \texttt{bench/\allowbreak h2h.py} write the head-to-head records, and \texttt{bench/\allowbreak settle\_period.py} and \texttt{bench/\allowbreak binary\_formats.py} the records of the native readers.
-For the conformance records, \texttt{scripts/\allowbreak corpus31\_results.py} runs \texttt{examples/\allowbreak corpus31\_report} of readcon-core over the CON 3.1 corpus, \texttt{scripts/\allowbreak corpus\_paths.py} reads both corpora through the readcon module and through the C library that \texttt{cargo build -{}-release} builds and that \texttt{cargo build -{}-release -{}-features parallel} builds into \path{target/clib-parallel}, \texttt{scripts/\allowbreak every\_path\_count.py} runs the reader-path tests of readcon-core and counts their inputs, \texttt{scripts/\allowbreak corpus\_crosscheck.py} runs the three readers of Table~\ref{tab:corpus-crosscheck}, \texttt{scripts/\allowbreak referee\_probes.py} runs the probes of \path{paper/cpc/data/referee_probes.json}, \texttt{scripts/\allowbreak mutant\_differential.py} reads the mutants of Section~\ref{sec:supp-corpus31} with the independent reader and the readcon module, and \texttt{scripts/\allowbreak clause\_coverage.py} lists what names each clause.
-Listing~\ref{lst:measure} gives the command line of each of these performance and conformance scripts, the environment variables it reads with their defaults, and the command lines it runs for each cell, file or build, among them those of memray, Valgrind and cargo.
-The comparison of the earlier releases of CON 3.1 reads each of four published wheels in its own process: \texttt{scripts/\allowbreak spec\_version\_drift.py} takes the readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{} and rewrites \texttt{data/\allowbreak spec/\allowbreak version\_drift.json}.
+The measure mode of the regeneration script reruns the survey, the survey listing, the worked example of Listing~\ref{lst:frame}, the drift files, the toolkits that open CON, the version-safety check, the corpus recount, the restart routes, the prefactors, the velocity case, the HCN case and the version history before it formats.
+A further script runs the example program of Listing~\ref{lst:testrun} in a clone of the bundle.
+Each other measurement is a named task of the pixi environment of the paper, and the description of each task says what it reruns.
+The tasks rerun the eOn band, the wall times of Table~\ref{tab:restartfmt} and the sizes of Table~\ref{tab:sizes}; the timed files, the provenance record, the C++ programs and the timing, heap and Cachegrind records; the chemfiles builds, the head-to-head records and the records of the native readers; and, for the conformance records, the CON 3.1 corpus at each thread count, both corpora through the readcon module and through the default and parallel builds of the C library, the reader-path tests, the three readers of Table~\ref{tab:corpus-crosscheck}, the reader probes, the mutants of Section~\ref{sec:supp-corpus31} and the clause list.
+The scripts of those tasks hold the command lines that they run for each cell, file or build, among them those of memray, Valgrind and cargo, and the environment variables that they read, with their defaults.
+The comparison of the earlier releases of CON 3.1 reads each of the four published wheels of Section~\ref{sec:supp-versions} in its own process and rewrites its record.
 
 \begin{lstlisting}[caption={Rebuild of the paper in a checkout of the \readconcommitrole.},label={lst:repro},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
 git clone readcon-core.bundle readcon-core
@@ -506,122 +505,6 @@ python3 paper/cpc/scripts/regen_paper.py
 bash paper/cpc/scripts/build_tex.sh    # or bash paper/cpc/scripts/build_tex_tectonic.sh
 python3 paper/cpc/scripts/trace_numbers.py -{}-check
 \end{lstlisting}
-
-\iffalse
-# proseguard:off rgoswami.Headings
-\fi
-\begin{lstlisting}[caption={The commands of the performance and conformance records, run from the checkout of Listing~\ref{lst:repro}. The comment after a command names the task of \texttt{paper/cpc/pixi.toml} that runs it. The comments at the top and under each command give the environment variables that the script reads, each with its default, and the command lines that the script runs for each cell, file or build.},label={lst:measure},basicstyle=\ttfamily\scriptsize,breaklines=false,escapeinside={(*}{*)}]
-# NAME=value: a variable the script reads, with its default; after env, the environment
-# of the command that follows. $ENV is the environment of the python3 that runs the
-# script, $TMP a temporary directory the script makes. Each bench/*.py script below
-# reads BENCH_RESULTS=paper/cpc/bench/results/r0174, the directory of its records;
-# make_payloads.py, cpp_reads.py, cachegrind.py, h2h.py and binary_formats.py read
-# READCON_SRC=., the readcon-core tree whose files they read and build. reads.py,
-# memray_peaks.py, cachegrind.py, h2h.py and binary_formats.py run their cells through
-# bench/interleave.py, which reads BENCH_SEED=20261104 and BENCH_ROUNDS=11: one untimed
-# round and then BENCH_ROUNDS rounds, each a new shuffle of the cells by that seed, each
-# run of a cell a new process.
-python3 paper/cpc/bench/make_payloads.py                        # cpc-bench-payloads
-#   BENCH_WORK=paper/cpc/bench/work/r0174 BENCH_N_FRAMES=10000 BENCH_SIZE_ROWS=1e6
-#   BENCH_SIZES=1e3,1e4,1e5,1e6
-python3 paper/cpc/bench/r0174.py                                # cpc-bench-provenance
-python3 paper/cpc/bench/cpp_reads.py                            # cpc-bench-cpp
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174 CHEMFILES_PREFIX=$ENV
-#   BENCH_NATIVE_OUT=paper/cpc/bench/work/native0174
-#   CXX=$ENV/bin/x86_64-conda-linux-gnu-c++;
-#   env CARGO_TARGET_DIR=$BENCH_NATIVE_OUT/target-capi cargo build -{}-release -{}-lib \
-#     -{}-features parallel -{}-manifest-path $READCON_SRC/Cargo.toml, then builds
-#   readcon_read and chemfiles_read with $CXX -O3 -std=c++17 -DNDEBUG and runs each of
-#   the five cells once, as reads.py does, against the checksums of payloads.json
-python3 paper/cpc/bench/reads.py                                # cpc-bench-reads
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174; per run of a Python cell:
-#   python3 paper/cpc/bench/bench_child.py READER THREADS
-#   and per run of a C++ cell, with RAYON_NUM_THREADS, OMP_NUM_THREADS,
-#   OPENBLAS_NUM_THREADS and MKL_NUM_THREADS at THREADS:
-#   taskset -c CORES $BENCH_NATIVE_OUT/PROGRAM CONTRACT $RC_PAYLOADS/PAYLOAD \
-#     $RC_PAYLOADS/WARMUP THREADS
-#   CORES is 0 for a cell at one thread and 0-7 for a cell at eight; a run prints READY,
-#   and the line that starts its clock follows once the payload is in the page cache
-python3 paper/cpc/bench/memray_peaks.py                         # cpc-bench-memray
-#   RC_PAYLOADS=paper/cpc/bench/work/r0174; per run of a cell:
-#   python3 paper/cpc/bench/memray_peaks.py -{}-child READER THREADS $TMP/read.bin
-#   reads the warm-up file of READER, then its payload inside memray.Tracker
-python3 paper/cpc/bench/cachegrind.py                           # cpc-bench-cachegrind
-#   in $READCON_SRC: env CARGO_TARGET_DIR=target/cachegrind cargo build -{}-release \
-#     -{}-example cachegrind_harness -{}-features chemfiles-from-sources; per run of each
-#   scenario NAME that the program lists:
-#   valgrind -{}-tool=cachegrind -{}-cachegrind-out-file=$TMP/NAME.out -{}-branch-sim=no \
-#     -{}-error-exitcode=0 target/cachegrind/release/examples/cachegrind_harness NAME
-bash paper/cpc/bench/build_chemfiles.sh                         # cpc-bench-chemfiles
-#   CHEMFILES_BUILDS=paper/cpc/bench/work/chemfiles CHEMFILES_JOBS=4 GCC=/usr/bin/gcc
-#   GXX=/usr/bin/g++ CLANG=/usr/bin/clang CLANGXX=/usr/bin/clang++
-python3 paper/cpc/bench/h2h.py                                  # cpc-bench-h2h
-#   -{}-steps payloads,python,cpp by default;
-#   BENCH_WORK=paper/cpc/bench/work/r0174 (its files go to $BENCH_WORK/h2h),
-#   CHEMFILES_BUILDS as for build_chemfiles.sh, CARGO_TARGET_DIR=$BENCH_WORK/h2h/target
-#   GXX=/usr/bin/g++ CLANGXX=/usr/bin/clang++;
-#   per campaign, with its CON file, its .rcbin image RCBIN and its peer files in PEERS,
-#   per run of each call NAME:
-#   python3 paper/cpc/bench/h2h_child.py NAME CON RCBIN PEERS 10000
-#   and per run of each call NAME whose peak it records:
-#   python3 -m memray run -q -o $TMP/NAME.bin -f -{}-native $TMP/NAME.py
-#   the C++ step runs cargo build -{}-release -{}-features parallel -{}-lib in $READCON_SRC,
-#   builds $TMP/cpp_ratio_gccO2, _gccO3, _clangO2 and _clangO3 with the build_cell of
-#   $READCON_SRC/benches/cpp_peer_matrix.py, and per run of each cell:
-#   BINARY MODE FILE
-python3 paper/cpc/bench/binary_formats.py                       # cpc-bench-binary-formats
-#   -{}-steps build,payloads,check,time by default; BENCH_WORK as for h2h.py
-#   (its files go to $W=$BENCH_WORK/binary_formats), GCC=/usr/bin/gcc GXX=/usr/bin/g++;
-#   build fetches the sources of build.json, checks their SHA-256, runs the compiler
-#   commands that build.json lists and, in $W/readcon_read with the Cargo.lock of
-#   $READCON_SRC, env CARGO_TARGET_DIR=$W/target cargo build -{}-release; payloads runs
-#   $W/build/bin/gen DIR, then for each CON file and its decimals D (roundtrip, 6, 2)
-#   readcon_read write-con REF BOX FILE D and readcon_read write-rcbin CON RCBIN, twice;
-#   check runs DRIVER dump MODE THREADS FILE POS BOX for each cell, and time runs
-#   DRIVER time MODE THREADS FILE per run of each cell, after interleave.settle for
-#   the settle_ms of $BENCH_RESULTS/binary_formats/settle.json
-python3 paper/cpc/bench/settle_period.py                        # cpc-bench-settle
-#   -{}-record $BENCH_RESULTS/binary_formats/timings.json by default; BENCH_WORK and
-#   READCON_SRC as for binary_formats.py, whose readcon_read it hashes; BENCH_ROUNDS
-#   trials; binary_formats.py -{}-steps time then times the cells after the new period
-
-cargo build -{}-release -{}-features zstd,parallel -{}-example corpus31_report
-python3 paper/cpc/scripts/corpus31_results.py                   # cpc-corpus31
-#   target/release/examples/corpus31_report [-{}-threads N] paper/cpc/data/corpus31
-#   at the default thread count and at N = 1, 2 and 8
-cargo build -{}-release                                # cpc-clib, then cpc-clib-parallel:
-env CARGO_TARGET_DIR=target/clib-parallel cargo build -{}-release -{}-features parallel
-python3 paper/cpc/scripts/corpus_paths.py                       # cpc-corpus-paths
-#   READCON_LIB=target/release/libreadcon_core.so
-#   READCON_LIB_PARALLEL=target/clib-parallel/release/libreadcon_core.so; for BUILD
-#   wheel, clib and clib_parallel, the module and the two libraries:
-#   python3 paper/cpc/scripts/corpus_paths.py -{}-child BUILD $TMP/jobs.json
-python3 paper/cpc/scripts/every_path_count.py                   # cpc-every-path
-#   for each test file NAME that declares mod every_path:
-#   env CARGO_TARGET_DIR=target/every_path EVERY_PATH_LOG=$TMP/NAME.log \
-#     cargo test -{}-release -{}-features zstd,parallel -{}-test NAME
-python3 paper/cpc/scripts/corpus_crosscheck.py                  # cpc-crosscheck
-#   for each file: python3 paper/cpc/scripts/corpus_crosscheck.py -{}-child read_con FILE,
-#   with -{}-rewrite where its entry marks the rewrite, and -{}-child iter_con FILE
-env CARGO_TARGET_DIR=target/cli cargo build -{}-release -{}-features zstd \
-  -{}-bin readcon-core                                            # cpc-cli
-python3 paper/cpc/scripts/referee_probes.py -{}-check             # cpc-probes
-#   READCON_CLI=target/cli/release/readcon-core
-#   READCON_LIB=target/release/libreadcon_core.so; -{}-check compares the reads with
-#   paper/cpc/data/referee_probes.json and writes nothing, and the run without -{}-check
-#   writes that record. It runs $READCON_CLI FILE [OUT] in $TMP, and each read of a
-#   probe that has a time and memory limit in a child:
-#   python3 paper/cpc/scripts/referee_probes.py -{}-child READER
-python3 paper/cpc/scripts/mutant_differential.py                # cpc-mutants
-#   -{}-seeds 1-7 -{}-cases 3000 by default; reads each mutant in this process with
-#   indep_reader.read_text and readcon.read_con_string
-python3 paper/cpc/scripts/clause_coverage.py                    # cpc-clauses
-#   reads docs/orgmode/spec.org, both corpus manifests, the probes of
-#   paper/cpc/data/referee_probes.json and the tests under tests/ and src/
-\end{lstlisting}
-\iffalse
-# proseguard:on rgoswami.Headings
-\fi
 
 % A digital object identifier in the reference list stays on one line.
 \DeclareUrlCommand\path{\def\UrlFont{\footnotesize\ttfamily}\mathchardef\UrlBreakPenalty=10000 \mathchardef\UrlBigBreakPenalty=10000 }
