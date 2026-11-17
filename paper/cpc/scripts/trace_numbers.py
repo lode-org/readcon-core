@@ -79,7 +79,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 LEDGER = ROOT / "data" / "trace" / "numbers.csv"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
-RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db")
+RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db", "identifiers")
 # Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
 # Not copied into the tree the generators write into; build and target hold the scratch and the compiled library.
@@ -159,7 +159,7 @@ VERSION = re.compile(r"(?<![\w.])v?\d+\.\d+\.\d+(?:\.\d+)?(?![\w])")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 CODE_POINT = re.compile(r"(?<![\w+])U\+[0-9A-F]{4,6}(?![\w])")
 STANDARD = re.compile(
-    r"(?:Fortran|CODATA|ISO|IEEE|RFC|ECMA|C\+\+|C|POSIX|PEP)\)?[~ ]?\d{2,5}\b"
+    r"(?<![\w])(?:Fortran|CODATA|ISO|IEEE|RFC|ECMA|C\+\+|C|POSIX|PEP)\)?[~ ]?\d{2,5}\b"
 )
 GRAMMAR_WORDS = re.compile(r"CON|[Vv]ersion|grammar|reader|writer|header|spec|eOn")
 
@@ -184,6 +184,10 @@ def _blank(m: re.Match[str]) -> str:
 
 
 def _mask_args(line: str) -> str:
+    # The option of an environment such as algorithmic[1] and the precision of
+    # \sigfig{2}{...} are typesetting arguments; neither is printed.
+    line = re.sub(r"\\begin\{\w+\*?\}\[[^\]]*\]", _blank, line)
+    line = re.sub(r"\\sigfig\{\d+\}", _blank, line)
     for cmd in SKIP_ARGS:
         line = re.sub(
             r"\\" + cmd + r"\*?(\[[^\]]*\])?\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}",
