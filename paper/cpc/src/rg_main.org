@@ -246,9 +246,10 @@ Sections~\ref{sec:implementation} and~\ref{sec:conformance} describe the impleme
 Section~\ref{sec:cases} resumes saddle searches from checkpoints written and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} compares read times with ASE, eOn, chemfiles, MDAnalysis, OVITO, pymatgen, h5py and NumPy.
 Of the formats in this comparison, only CON 3.1 specifies all four checkpoint fields, and readcon-core is the only reader here that returns the constraint mask, the atom identifier and the velocity time unit from fields its own specification defines, while accepting later minor revisions.
 
-\section{One frame, line by line}\label{sec:worked} Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of a Pt(100) slab of two layers of four atoms with one adatom, written by readcon-core with velocities.
-The left panel of Figure~\ref{fig:structures} shows the slab, and Table~\ref{tab:frame} gives the content of each line and the rule that reads it.
-We read the fields in file order, and at each we give what a reader returns when it gets that field wrong.
+\section{One frame, line by line}\label{sec:worked} Listing~\ref{lst:frame} is a complete CON 3.1 file written by readcon-core with velocities.
+It holds the survey frame, a Pt(100) slab of two layers of four atoms with one adatom, shown in the left panel of Figure~\ref{fig:structures}.
+Table~\ref{tab:frame} gives the content of each line and the rule that reads it.
+We go through the fields in file order, and for each we state what a reader returns when it gets that field wrong.
 
 \input{figures/generated/survey_listing}
 
@@ -284,10 +285,12 @@ Line & Content & Rule \\
 \end{tabular}
 \end{table}
 
-The header line is one JSON object \cite{brayJavascriptObjectNotation2017}, recognized by its first non-blank character, \texttt{\{}, and a frame whose header is anything else is grammar version~1, the text that earlier eOn releases write.
-The object of Listing~\ref{lst:frame} names the major and the minor of the grammar, declares the slab periodic in \(x\) and \(y\) and open in \(z\), lists \texttt{velocities} as the one section after the coordinates, and states the units of length, energy, mass and time.
+The header line is one JSON object \cite{brayJavascriptObjectNotation2017}, recognized by its first non-blank character, \texttt{\{}.
+A frame whose header is anything else is grammar version~1, the text written by earlier eOn releases.
+In Listing~\ref{lst:frame} the object names the major and minor version of the grammar, declares the slab periodic in \(x\) and \(y\) and open in \(z\), lists \texttt{velocities} as the only section after the coordinates, and gives the units of length, energy, mass and time.
 
-The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(c=\wkLengthC\,\text{\AA}\) and the angles \(\alpha\), \(\beta\) and \(\gamma\) in degrees, from which the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane \cite{bekkerUnificationBoxShapes1997},
+The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(c=\wkLengthC\,\text{\AA}\) and the angles \(\alpha\), \(\beta\) and \(\gamma\) in degrees.
+From these the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane \cite{bekkerUnificationBoxShapes1997},
 \begin{equation}
 \label{eq:cell}
 \begin{aligned}
@@ -297,11 +300,11 @@ The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(
 \kappa&=\frac{\cos\alpha-\cos\beta\cos\gamma}{\sin\gamma},\qquad \rho=1-\cos^2\beta-\kappa^2.
 \end{aligned}
 \end{equation}
-In binary64 the cosine of the double nearest \(\pi/2\) is \(\num{\wkCosRight}\), so Eq.~\eqref{eq:cell} gives this cell \(b_x=\num{\wkBx}\,\text{\AA}\) and \(c_x=c_y=\num{\wkCxy}\,\text{\AA}\).
-ASE~\wkAseVersion{} returns \(b_x=\wkAseRightBx\), because it sets the cosine of an angle within two units in the last place of a right angle to zero \cite{larsenAtomicSimulationEnvironmenta2017}.
+In binary64 the cosine of the double nearest \(\pi/2\) is \(\num{\wkCosRight}\), so for this cell Eq.~\eqref{eq:cell} gives \(b_x=\num{\wkBx}\,\text{\AA}\) and \(c_x=c_y=\num{\wkCxy}\,\text{\AA}\).
+ASE~\wkAseVersion{} instead returns \(b_x=\wkAseRightBx\), since it sets to zero the cosine of any angle within two units in the last place of a right angle \cite{larsenAtomicSimulationEnvironmenta2017}.
 
-The radicand \(\rho\) decides whether three angles describe a cell at all.
-The volume of the cell of Eq.~\eqref{eq:cell} is \(V=a\cdot b\sin\gamma\cdot c\sqrt{\rho}\), and \(V^2\) is the determinant of the Gram matrix \(G\) of the three vectors, so
+Whether three angles describe a cell at all depends on the radicand \(\rho\).
+The volume of the cell of Eq.~\eqref{eq:cell} is \(V=a\cdot b\sin\gamma\cdot c\sqrt{\rho}\), and \(V^2\) is the determinant of the Gram matrix \(G\) of the three vectors, so that
 \begin{equation}
 \label{eq:gram}
 \begin{aligned}
@@ -311,13 +314,14 @@ The volume of the cell of Eq.~\eqref{eq:cell} is \(V=a\cdot b\sin\gamma\cdot c\s
 \end{equation}
 No three vectors in space have angles with \(D<0\), and \(D=0\) is a flat cell.
 Two variants of the angle line show both cases.
-The exact \(\rho\) is zero for angles of \(\wkFlatAlpha\), \(\wkFlatBeta\) and \(\wkFlatGamma\) degrees, since \(\mathbf{c}\) then lies in the plane of \(\mathbf{a}\) and \(\mathbf{b}\), and binary64 gives \(\hat\rho=\num{\wkFlatRadicand}\).
-readcon-core accepts that frame with \(c_z=0\), because \(\hat\rho\) lies inside the window of \(\num{\wkWindow}\) that Section~\ref{sec:format} gives for the roundoff of a zero radicand, and ASE stops on its own assertion that \(\hat\rho\ge0\).
+For angles of \(\wkFlatAlpha\), \(\wkFlatBeta\) and \(\wkFlatGamma\) degrees the exact \(\rho\) is zero, since \(\mathbf{c}\) then lies in the plane of \(\mathbf{a}\) and \(\mathbf{b}\), while binary64 gives \(\hat\rho=\num{\wkFlatRadicand}\).
+readcon-core accepts that frame with \(c_z=0\), because \(\hat\rho\) lies inside the window of \(\num{\wkWindow}\) that Section~\ref{sec:format} allows for the roundoff of a zero radicand, whereas ASE stops on its own assertion that \(\hat\rho\ge0\).
 With \(\wkNoneAlpha\), \(\wkNoneAlpha\) and \(\wkNoneGamma\) degrees, \(D=\wkNoneGram\) and \(\rho=\wkNoneRadicand\).
 readcon-core rejects that frame with an error that names line~\trCellLine, and ASE fails the same assertion without naming a line.
-ASE also refuses Listing~\ref{lst:frame} itself: its eon reader takes the blank line~\wkLineBlank{} for the first line of a second frame and stops when line~\wkLineVelocities{} fails to parse as three cell lengths.
+ASE also refuses Listing~\ref{lst:frame} itself, because its eon reader takes the blank line~\wkLineBlank{} for the first line of a second frame and stops when line~\wkLineVelocities{} does not parse as three cell lengths.
 
-After two free lines come the counts, one atom type, nine atoms of that type and the mass of the type, and then a block for each type: its symbol, a label, and one row of \(x\), \(y\), \(z\), the mask and the identifier per atom.
+Two free lines follow, then the counts: one atom type, nine atoms of that type and the mass of the type.
+Each type then has a block with its symbol, a label, and one row per atom of \(x\), \(y\), \(z\), the mask and the identifier.
 
 For a frame of major \(M\), with \(M=1\) when the header is not JSON, the mask is the integer
 \begin{equation}
@@ -330,18 +334,20 @@ b_x = b_y = b_z, & M = 1,
 \qquad b_\alpha\in\{0,1\},
 \end{equation}
 with \(b_\alpha=1\) when component \(\alpha\) is fixed.
-The bottom rows of Listing~\ref{lst:frame} are fixed in every component, the top layer is free, and the adatom is held in \(z\) alone.
-A reader that applies the version-1 rule of Table~\ref{tab:clauses} to this frame rejects the mask of the adatom as an illegal flag, and one that applies the CON 3.1 rule to a version-1 file frees \(y\) and \(z\) of every atom held there.
-Section~\ref{sec:prefactor} measures what a lost hold of the adatom changes: the band crosses another saddle, with a larger prefactor.
+In Listing~\ref{lst:frame} the bottom rows are fixed in every component, the top layer is free, and the adatom is held in \(z\) alone.
+A reader that applies the version-1 rule of Table~\ref{tab:clauses} to this frame rejects the mask of the adatom as an illegal flag.
+Conversely, a reader that applies the CON 3.1 rule to a version-1 file frees \(y\) and \(z\) of every atom held there.
+Section~\ref{sec:prefactor} shows what is lost with the hold of the adatom: the band crosses a different saddle, with a larger prefactor.
 
-The identifier is the index of the atom in the numbering of the writer, from \wkIdFirst{} on the first row to \wkIdLast{} on the last, and between \wkIdLow{} and \wkIdHigh{} in all.
-Grouping by type has permuted that numbering, and ascending identifier restores it.
-A reader returns the identifiers in file order and exactly, up to \(2^{64}-1\), and a row without an identifier takes its zero-based position in the frame.
-Of the cross-library round trips of Section~\ref{sec:cases}, one returns no identifiers at all.
+The identifier is the index of the atom in the numbering of the writer, from \wkIdFirst{} on the first row to \wkIdLast{} on the last, and between \wkIdLow{} and \wkIdHigh{} overall.
+Grouping the atoms by type has permuted that numbering, and sorting by identifier restores it.
+A reader returns the identifiers exactly and in file order, up to \(2^{64}-1\), and a row without an identifier takes its zero-based position in the frame.
+One of the cross-library round trips of Section~\ref{sec:cases} returns no identifiers at all.
 
-The blank line~\wkLineBlank{} opens the velocity section that the header declared, and the section repeats the block shape with one row of \(v_x\), \(v_y\), \(v_z\), mask and identifier per atom.
+The blank line~\wkLineBlank{} opens the velocity section declared in the header.
+The section repeats the shape of the coordinate block, with one row of \(v_x\), \(v_y\), \(v_z\), mask and identifier per atom.
 The held atoms have zero velocity and the adatom has \(v_z=0\), so \wkMovingAtoms{} atoms move.
-Their unit is the one the header names, eOn's natural unit,
+The velocities are in the unit named in the header, the natural unit of eOn,
 \begin{equation}
 \label{eq:tau}
 \tau=\left(\frac{m_{\mathrm{u}}\,\text{\AA}^{2}}{\mathrm{eV}}\right)^{1/2}
@@ -350,12 +356,12 @@ Their unit is the one the header names, eOn's natural unit,
 \end{equation}
 with the CODATA 2018 values of the atomic mass constant \(m_{\mathrm{u}}\) and the electronvolt \cite{tiesingaCodataRecommendedValues2021}.
 In that unit the frame has a kinetic energy \(\tfrac{1}{2}\sum_i m_i\lvert\mathbf{v}_i\rvert^2\) of \(\wkKinetic\,\mathrm{eV}\).
-A reader that takes the same numbers as \(\text{\AA}/\mathrm{fs}\) returns \(\wkKineticMisread\,\mathrm{eV}\), larger by \((\tau/\mathrm{fs})^2=\velFactorSq\).
+A reader that takes the same numbers as \(\text{\AA}/\mathrm{fs}\) returns \(\wkKineticMisread\,\mathrm{eV}\), which is larger by \((\tau/\mathrm{fs})^2=\velFactorSq\).
 
-The coordinates are printed in the shortest form that reads back as the same binary64 value \cite{steeleHowPrintFloatingpoint1990,adamsRyFastFloattostring2018}, here \wkDigitsMin{} to \wkDigitsMax{} significant digits, and the reader rounds each decimal to the nearest binary64 value \cite{clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
+The coordinates are printed in the shortest form that reads back as the same binary64 value \cite{steeleHowPrintFloatingpoint1990,adamsRyFastFloattostring2018}, here with \wkDigitsMin{} to \wkDigitsMax{} significant digits, and the reader rounds each decimal to the nearest binary64 value \cite{clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
 A writer that prints six decimals instead puts \(x=\wkFirstXRounded\) in line~\wkLineFirstRow, a shift of \(\num{\wkShiftFirst}\,\text{\AA}\), and moves the \wkCoordinates{} coordinates by up to \(\num{\wkShiftMax}\,\text{\AA}\).
-Resumed from six decimals, the climbing-image band of Section~\ref{sec:cases} converges in the same step count with its barrier moved by \(\num{\rfDeSixNum}\,\mathrm{eV}\).
-The frame ends after line~\wkLineLastVelocity, and the next line, if any, opens the next frame.
+When the climbing-image band of Section~\ref{sec:cases} is resumed from six decimals, it converges in the same number of steps, but its barrier moves by \(\num{\rfDeSixNum}\,\mathrm{eV}\).
+The frame ends after line~\wkLineLastVelocity, and the next line, if there is one, opens the next frame.
 Listing~\ref*{lst:testrun} of the supplementary material runs the example program of the release on this file and on the two variants of the angle line.
 
 \section{The grammar of CON 3.1}\label{sec:format} Section~\ref*{sec:spec-normative} of the supplementary material is the normative specification, \clauseTotal{} numbered clauses, and this section states the rules that Section~\ref{sec:worked} used, with the clauses behind them in Table~\ref{tab:clauses}.
