@@ -17,6 +17,71 @@ pub enum WriteError {
     Format(crate::error::ParseError),
 }
 
+#[cfg(all(test, loom))]
+mod loom_protocol_tests {
+    use loom::sync::atomic::{AtomicU64, Ordering};
+    use loom::sync::{Arc, Mutex};
+    use loom::thread;
+
+    #[test]
+    fn relaxed_snapshot_load_is_one_complete_element() {
+        loom::model(|| {
+            let source = Arc::new(AtomicU64::new(0x3ff0_0000_0000_0000));
+            let writer = Arc::clone(&source);
+            let store = thread::spawn(move || {
+                writer.store(0x4000_0000_0000_0000, Ordering::Relaxed);
+            });
+            let observed = source.load(Ordering::Relaxed);
+            store.join().unwrap();
+            assert!(observed == 0x3ff0_0000_0000_0000 || observed == 0x4000_0000_0000_0000);
+        });
+    }
+
+    #[derive(Clone)]
+    struct ModelCache {
+        generation: u64,
+        identities: Arc<Vec<usize>>,
+    }
+
+    #[test]
+    fn invalidation_cannot_leave_a_stale_cache_entry() {
+        loom::model(|| {
+            let generation = Arc::new(AtomicU64::new(1));
+            let cache = Arc::new(Mutex::new(None::<ModelCache>));
+
+            let price_generation = Arc::clone(&generation);
+            let price_cache = Arc::clone(&cache);
+            let pricing = thread::spawn(move || {
+                let before = price_generation.load(Ordering::Acquire);
+                thread::yield_now();
+                let mut slot = price_cache.lock().unwrap();
+                let after = price_generation.load(Ordering::Acquire);
+                if before == after {
+                    *slot = Some(ModelCache {
+                        generation: after,
+                        identities: Arc::new(vec![11usize, 22, 33]),
+                    });
+                }
+            });
+
+            let invalidate_generation = Arc::clone(&generation);
+            let invalidate_cache = Arc::clone(&cache);
+            let invalidating = thread::spawn(move || {
+                invalidate_generation.fetch_add(1, Ordering::Release);
+                invalidate_cache.lock().unwrap().take();
+            });
+
+            pricing.join().unwrap();
+            invalidating.join().unwrap();
+            let current = generation.load(Ordering::Acquire);
+            if let Some(entry) = cache.lock().unwrap().as_ref() {
+                assert_eq!(entry.generation, current);
+                assert_eq!(entry.identities.as_ref(), &[11, 22, 33]);
+            }
+        });
+    }
+}
+
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1366,6 +1431,15 @@ fn closest_decimal(mag: f64, scaled: f64, scale: u64) -> Option<u64> {
     // `scale / 2` in these units. The f64 product can sit two integers off
     // the closer spelling.
     let limit = (scale as u128) / 2;
+    let metric = DecimalMetric::new(mag, scale);
+    // Parsed short decimals very often become an integer again at their
+    // original scale. Below 2^52 the rounded product is less than half an
+    // integer from the exact product, so this is its nearest integer. Avoid
+    // probing four neighbours in this common coordinate path.
+    if scaled.fract() == 0.0 && scaled < 4_503_599_627_370_496.0 && metric.distance(center) < limit
+    {
+        return Some(center);
+    }
     let mut best: Option<(u64, u128)> = None;
     for delta in -2i64..=2 {
         let k = center as i64 + delta;
@@ -1373,7 +1447,7 @@ fn closest_decimal(mag: f64, scaled: f64, scale: u64) -> Option<u64> {
             continue;
         }
         let k = k as u64;
-        let dist = decimal_distance(mag, scale, k);
+        let dist = metric.distance(k);
         if dist >= limit {
             continue;
         }
@@ -1391,30 +1465,45 @@ fn closest_decimal(mag: f64, scaled: f64, scale: u64) -> Option<u64> {
     best.map(|(k, _)| k)
 }
 
-/// `|mag * scale - k|` in units of the binary place of `mag`.
-fn decimal_distance(mag: f64, scale: u64, k: u64) -> u128 {
-    let bits = mag.to_bits();
-    let field = ((bits >> 52) & 0x7ff) as i32;
-    let (sig, exp) = if field == 0 {
-        ((bits & ((1u64 << 52) - 1)) as u128, -1022 - 52)
-    } else {
-        (
-            ((bits & ((1u64 << 52) - 1)) | (1u64 << 52)) as u128,
-            field - 1023 - 52,
-        )
-    };
-    let num = sig * scale as u128;
-    if exp >= 0 {
-        if exp >= 128 {
-            return u128::MAX;
+/// Exact `mag * scale`, retained while nearby decimal candidates are tested.
+struct DecimalMetric {
+    num: u128,
+    exp: i32,
+}
+
+impl DecimalMetric {
+    fn new(mag: f64, scale: u64) -> Self {
+        let bits = mag.to_bits();
+        let field = ((bits >> 52) & 0x7ff) as i32;
+        let (sig, exp) = if field == 0 {
+            ((bits & ((1u64 << 52) - 1)) as u128, -1022 - 52)
+        } else {
+            (
+                ((bits & ((1u64 << 52) - 1)) | (1u64 << 52)) as u128,
+                field - 1023 - 52,
+            )
+        };
+        Self {
+            num: sig * scale as u128,
+            exp,
         }
-        return (num << exp).abs_diff(k as u128);
     }
-    let shift = (-exp) as u32;
-    if shift >= 128 {
-        return if k == 0 { num } else { u128::MAX };
+
+    /// `|mag * scale - k|` in units of the binary place of `mag`.
+    #[inline]
+    fn distance(&self, k: u64) -> u128 {
+        if self.exp >= 0 {
+            if self.exp >= 128 {
+                return u128::MAX;
+            }
+            return (self.num << self.exp).abs_diff(k as u128);
+        }
+        let shift = (-self.exp) as u32;
+        if shift >= 128 {
+            return if k == 0 { self.num } else { u128::MAX };
+        }
+        self.num.abs_diff((k as u128) << shift)
     }
-    num.abs_diff((k as u128) << shift)
 }
 
 /// Round a non-negative finite `scaled` half away from zero.
@@ -1509,9 +1598,10 @@ fn shorten(mag: f64, mut n: u64, mut places: u32) -> (u64, u32) {
         let scale = 10u64.pow(places - 1);
         let base = n / 10;
         let limit = (scale as u128) / 2;
+        let metric = DecimalMetric::new(mag, scale);
         let mut best: Option<(u64, u128)> = None;
         for k in [base.saturating_sub(1), base, base.saturating_add(1)] {
-            let dist = decimal_distance(mag, scale, k);
+            let dist = metric.distance(k);
             if dist >= limit {
                 continue;
             }
@@ -3682,6 +3772,19 @@ fn format_column_span(
     } else {
         Vec::new()
     };
+    append_column_span(&mut coord, &mut side, positions, extra, fixed, start, end);
+    (coord, side)
+}
+
+fn append_column_span(
+    coord: &mut Vec<u8>,
+    side: &mut Vec<u8>,
+    positions: &[f64],
+    extra: Option<&[f64]>,
+    fixed: Option<&[f64]>,
+    start: usize,
+    end: usize,
+) {
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
     let mut side_slots = [FmtSlot::new(); 3];
@@ -3694,7 +3797,7 @@ fn format_column_span(
         id_buf[..id_len].copy_from_slice(ids.text());
         let id = &id_buf[..id_len];
         push_column_line(
-            &mut coord,
+            coord,
             &mut ryu,
             &mut slots,
             [positions[base], positions[base + 1], positions[base + 2]],
@@ -3703,7 +3806,7 @@ fn format_column_span(
         );
         if let Some(values) = extra {
             push_column_line(
-                &mut side,
+                side,
                 &mut ryu,
                 &mut side_slots,
                 [values[base], values[base + 1], values[base + 2]],
@@ -3713,7 +3816,6 @@ fn format_column_span(
         }
         ids.bump();
     }
-    (coord, side)
 }
 
 fn format_column_parallel(
@@ -3887,14 +3989,44 @@ pub(crate) fn format_binding_columns(
                 push_str_line(&mut force_block, symbol);
                 push_component_line(&mut force_block, "Forces of Component", type_idx);
             }
-            let (coord, side) =
-                format_column_parallel(pos, vel, flags, offset, offset + count, workers);
-            file_bytes.extend_from_slice(&coord);
-            velocity_block.extend_from_slice(&side);
+            if workers < 2 || count < WIDE_ATOM_GRAIN {
+                append_column_span(
+                    file_bytes,
+                    &mut velocity_block,
+                    pos,
+                    vel,
+                    flags,
+                    offset,
+                    offset + count,
+                );
+            } else {
+                let (coord, side) =
+                    format_column_parallel(pos, vel, flags, offset, offset + count, workers);
+                file_bytes.extend_from_slice(&coord);
+                velocity_block.extend_from_slice(&side);
+            }
             if let Some(values) = force {
-                let (rows, _) =
-                    format_column_parallel(values, None, flags, offset, offset + count, workers);
-                force_block.extend_from_slice(&rows);
+                if workers < 2 || count < WIDE_ATOM_GRAIN {
+                    append_column_span(
+                        &mut force_block,
+                        &mut Vec::new(),
+                        values,
+                        None,
+                        flags,
+                        offset,
+                        offset + count,
+                    );
+                } else {
+                    let (rows, _) = format_column_parallel(
+                        values,
+                        None,
+                        flags,
+                        offset,
+                        offset + count,
+                        workers,
+                    );
+                    force_block.extend_from_slice(&rows);
+                }
             }
             offset += count;
         }
@@ -4095,10 +4227,10 @@ fn store_pipeline_in(
         let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
         std::thread::scope(|scope| {
             let mut guards = Vec::with_capacity(frames.len());
-            for (index, frame) in frames.iter().enumerate() {
+            for (_index, frame) in frames.iter().enumerate() {
                 guards.push(scope.spawn(move || {
                     #[cfg(feature = "parallel")]
-                    crate::parser::pin_worker(index);
+                    crate::parser::pin_worker(_index);
                     format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
                 }));
             }
@@ -4283,10 +4415,10 @@ fn format_frames_apart(
     let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(frames.len());
-        for (index, frame) in frames.iter().enumerate() {
+        for (_index, frame) in frames.iter().enumerate() {
             guards.push(scope.spawn(move || {
                 #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(index);
+                crate::parser::pin_worker(_index);
                 format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
             }));
         }
@@ -4331,12 +4463,12 @@ fn format_packed_buffers(
     let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(ranges.len());
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
-        for (thread, &(start, end)) in ranges.iter().enumerate() {
+        for (_thread, &(start, end)) in ranges.iter().enumerate() {
             let span = prefix[end] - prefix[start];
             let piece = &frames[start..end];
             guards.push(scope.spawn(move || -> Result<Vec<u8>, WriteError> {
                 #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(thread);
+                crate::parser::pin_worker(_thread);
                 if span == 0 {
                     return Ok(Vec::new());
                 }
@@ -4954,14 +5086,14 @@ fn place_packed(
     // 184 MB map was a serial tail after the formatters had finished.
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
-        for (thread, &(start, end)) in ranges.iter().enumerate() {
+        for (_thread, &(start, end)) in ranges.iter().enumerate() {
             let offset = prefix[start];
             let span = prefix[end] - prefix[start];
             let piece = &frames[start..end];
             let cloned = file.try_clone().map_err(WriteError::Io)?;
             guards.push(scope.spawn(move || -> Result<(), WriteError> {
                 #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(thread);
+                crate::parser::pin_worker(_thread);
                 if span == 0 {
                     return Ok(());
                 }
@@ -5044,10 +5176,10 @@ fn pipeline_frame_groups(
         let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
         std::thread::scope(|scope| {
             let mut guards = Vec::with_capacity(frames.len());
-            for (index, frame) in frames.iter().enumerate() {
+            for (_index, frame) in frames.iter().enumerate() {
                 guards.push(scope.spawn(move || {
                     #[cfg(feature = "parallel")]
-                    crate::parser::pin_worker(index);
+                    crate::parser::pin_worker(_index);
                     format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
                 }));
             }
@@ -5134,8 +5266,7 @@ fn pipeline_frame_groups(
 }
 
 struct PackedCache {
-    first: usize,
-    last: usize,
+    identities: std::sync::Arc<[usize]>,
     count: usize,
     precision: Option<usize>,
     canonical: bool,
@@ -5155,10 +5286,8 @@ struct PackedCache {
 /// a setter that retires the price.
 #[cfg(feature = "python")]
 pub(crate) struct PriceKey {
-    pub(crate) first: usize,
-    pub(crate) last: usize,
-    pub(crate) view_first: usize,
-    pub(crate) view_last: usize,
+    pub(crate) identities: std::sync::Arc<[usize]>,
+    pub(crate) view_identities: std::sync::Arc<[usize]>,
     pub(crate) coords: std::sync::Arc<Vec<f64>>,
 }
 
@@ -5182,18 +5311,26 @@ pub(crate) fn with_price_key<R>(key: Option<PriceKey>, f: impl FnOnce() -> R) ->
     f()
 }
 
-/// The source ends and coordinates for `frames`, if they are the snapshot
-/// the current key names.
-fn snapshot_key(frames: &[&ConFrame]) -> Option<(usize, usize, std::sync::Arc<Vec<f64>>)> {
+fn frame_identities(frames: &[&ConFrame]) -> std::sync::Arc<[usize]> {
+    frames
+        .iter()
+        .map(|frame| *frame as *const ConFrame as usize)
+        .collect()
+}
+
+/// The complete source identity and coordinates for `frames`, if they are the
+/// snapshot the current thread-local key names.
+type SnapshotKey = (std::sync::Arc<[usize]>, std::sync::Arc<Vec<f64>>);
+
+fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
     #[cfg(feature = "python")]
     {
-        let first = frames[0] as *const ConFrame as usize;
-        let last = *frames.last()? as *const ConFrame as usize;
+        let views = frame_identities(frames);
         PRICE_KEY.with(|slot| {
             slot.borrow()
                 .as_ref()
-                .filter(|key| key.view_first == first && key.view_last == last)
-                .map(|key| (key.first, key.last, key.coords.clone()))
+                .filter(|key| key.view_identities.as_ref() == views.as_ref())
+                .map(|key| (key.identities.clone(), key.coords.clone()))
         })
     }
     #[cfg(not(feature = "python"))]
@@ -5203,16 +5340,15 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<(usize, usize, std::sync::Arc<Ve
     }
 }
 
-/// The coordinates last priced for the snapshot of `first..=last`, if
-/// that price still stands.
+/// The coordinates last priced for the exact source-frame sequence, if that
+/// price still stands.
 #[cfg(feature = "python")]
-pub(crate) fn priced_coords(first: usize, last: usize) -> Option<std::sync::Arc<Vec<f64>>> {
-    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
-    PACKED_CACHE
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
+pub(crate) fn priced_coords(identities: &[usize]) -> Option<std::sync::Arc<Vec<f64>>> {
+    let cache = PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    cache
         .as_ref()
-        .filter(|hit| hit.generation == generation && hit.first == first && hit.last == last)
+        .filter(|hit| hit.generation == generation && hit.identities.as_ref() == identities)
         .and_then(|hit| hit.coords.clone())
 }
 
@@ -5226,23 +5362,27 @@ fn same_bits(a: &[f64], b: &[f64]) -> bool {
 
 static PACKED_CACHE: std::sync::Mutex<Option<PackedCache>> = std::sync::Mutex::new(None);
 static PACKED_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-static PACKED_FIRST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-static PACKED_LAST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
 
 /// A coordinate edit changes the spelled length. The next write prices again.
 pub(crate) fn invalidate_packed_lengths() {
-    PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Release);
+    PACKED_CACHE
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .take();
 }
 
-/// Dropping a frame that anchors the priced lengths retires that price.
+/// Dropping any frame named by the full cache key retires that price.
 /// A later allocation at the same address must not reuse it.
 pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
-    let first = PACKED_FIRST.load(std::sync::atomic::Ordering::Relaxed);
-    if first != 0
-        && (frame == first || frame == PACKED_LAST.load(std::sync::atomic::Ordering::Relaxed))
+    let mut cache = PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    if cache
+        .as_ref()
+        .is_some_and(|entry| entry.identities.contains(&frame))
     {
-        invalidate_packed_lengths();
-        PACKED_FIRST.store(0, std::sync::atomic::Ordering::Relaxed);
+        PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Release);
+        cache.take();
     }
 }
 
@@ -5254,24 +5394,21 @@ pub(crate) fn cached_packed_lengths(
     bind: bool,
 ) -> Option<Vec<usize>> {
     let snapshot = snapshot_key(frames);
-    let (first, last, coords) = match snapshot {
-        Some((first, last, coords)) => (first, last, Some(coords)),
-        None => (
-            frames[0] as *const ConFrame as usize,
-            *frames.last()? as *const ConFrame as usize,
-            None,
-        ),
+    let (identities, coords) = match snapshot {
+        Some((identities, coords)) => (identities, Some(coords)),
+        None => {
+            frames.last()?;
+            (frame_identities(frames), None)
+        }
     };
     let count = frames.len();
-    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
-    let hit = PACKED_CACHE
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
+    let cache = PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    let hit = cache
         .as_ref()
         .filter(|hit| {
             hit.generation == generation
-                && hit.first == first
-                && hit.last == last
+                && hit.identities.as_ref() == identities.as_ref()
                 && hit.count == count
                 && hit.precision == precision
                 && hit.canonical == canonical
@@ -5279,6 +5416,7 @@ pub(crate) fn cached_packed_lengths(
                 && hit.coords.is_some() == coords.is_some()
         })
         .map(|hit| (hit.lengths.clone(), hit.coords.clone()));
+    drop(cache);
     if let Some((lengths, priced)) = hit {
         let same = match (&priced, &coords) {
             (Some(priced), Some(coords)) => {
@@ -5290,15 +5428,19 @@ pub(crate) fn cached_packed_lengths(
             return Some(lengths);
         }
     }
-    let generation_before = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
+    let generation_before = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
     let lengths = packed_frame_lengths(frames, workers, precision, canonical, bind)?;
-    let generation_after = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
-    if generation_before == generation_after {
-        PACKED_FIRST.store(first, std::sync::atomic::Ordering::Relaxed);
-        PACKED_LAST.store(last, std::sync::atomic::Ordering::Relaxed);
-        *PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner()) = Some(PackedCache {
-            first,
-            last,
+    let coords_bytes = coords
+        .as_ref()
+        .map_or(0, |buf| std::mem::size_of_val(buf.as_slice()));
+    let cache_bytes = coords_bytes
+        .saturating_add(std::mem::size_of_val(lengths.as_slice()))
+        .saturating_add(std::mem::size_of_val(identities.as_ref()));
+    let mut cache = PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    let generation_after = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    if generation_before == generation_after && cache_bytes <= MAX_PACKED_CACHE_BYTES {
+        *cache = Some(PackedCache {
+            identities,
             count,
             precision,
             canonical,
@@ -5307,6 +5449,8 @@ pub(crate) fn cached_packed_lengths(
             lengths: lengths.clone(),
             coords,
         });
+    } else if generation_before == generation_after {
+        cache.take();
     }
     Some(lengths)
 }
@@ -6408,6 +6552,79 @@ mod parallel_write_tests {
                 .unwrap();
         assert_ne!(old, formatted.len());
         assert_eq!(after[2], formatted.len());
+    }
+
+    #[test]
+    fn replacing_an_interior_frame_reprices_the_cache() {
+        use crate::types::ConFrameBuilder;
+        let mut frames = Vec::new();
+        for i in 0..4 {
+            let mut builder = ConFrameBuilder::new([20.0, 20.0, 20.0], [90.0, 90.0, 90.0]);
+            builder
+                .set_units(serde_json::json!({
+                    "length": "angstrom",
+                    "energy": "eV",
+                    "mass": "amu",
+                    "time": crate::units::NATURAL_TIME_UNIT,
+                }))
+                .unwrap();
+            builder
+                .add_atom("Cu", i as f64, 0.25, 0.5, [false; 3], 0, 63.546)
+                .with_velocity([0.1, 0.0, 0.0]);
+            builder
+                .add_atom("Cu", 1.5, -2.0, 0.0, [false; 3], 1, 63.546)
+                .with_velocity([0.0, 0.2, 0.0]);
+            frames.push(builder.build().unwrap());
+        }
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let before = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
+        let old = before[1];
+        let mut replacement = ConFrameBuilder::new([20.0, 20.0, 20.0], [90.0, 90.0, 90.0]);
+        replacement
+            .set_units(serde_json::json!({
+                "length": "angstrom",
+                "energy": "eV",
+                "mass": "amu",
+                "time": crate::units::NATURAL_TIME_UNIT,
+            }))
+            .unwrap();
+        replacement
+            .add_atom("Cu", 1.0e22, 0.25, 0.5, [false; 3], 0, 63.546)
+            .with_velocity([0.0, 0.0, 0.0]);
+        replacement
+            .add_atom("Cu", -1.0e-20, -2.0, 0.0, [false; 3], 1, 63.546)
+            .with_velocity([0.0, 0.0, 0.0]);
+        frames[1] = replacement.build().unwrap();
+        let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
+        let after = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
+        let formatted =
+            super::format_group_bytes(std::slice::from_ref(&refs[1]), 1, None, false, true)
+                .unwrap();
+        assert_ne!(old, formatted.len());
+        assert_eq!(after[1], formatted.len());
+    }
+
+    #[test]
+    fn invalidation_clears_the_cached_lengths_slot() {
+        use crate::types::ConFrameBuilder;
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+        let frame = builder.build().unwrap();
+        let refs = vec![&frame, &frame];
+        let _ = super::cached_packed_lengths(&refs, 1, None, false, true);
+        assert!(
+            super::PACKED_CACHE
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .is_some()
+        );
+        super::invalidate_packed_lengths();
+        assert!(
+            super::PACKED_CACHE
+                .lock()
+                .unwrap_or_else(|err| err.into_inner())
+                .is_none()
+        );
     }
 }
 

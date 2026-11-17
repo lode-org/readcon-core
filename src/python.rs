@@ -1,7 +1,7 @@
 use ndarray::{Array1, Array2, Array3, ArrayView1, ArrayView2};
 use numpy::{
     IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyReadonlyArray2, PyReadonlyArray3,
-    ToPyArray,
+    PyUntypedArrayMethods, ToPyArray,
 };
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyIOError;
@@ -1177,14 +1177,12 @@ impl PyConFrame {
             // parse buffer is dropped. Otherwise the first coordinate read
             // back is freed memory.
             if n_atoms > 0 {
-                let base = {
-                    let contiguous = unsafe { xyz.as_slice() }.map_err(|err| {
-                        pyo3::exceptions::PyValueError::new_err(format!(
-                            "frame coordinates are not contiguous: {err}"
-                        ))
-                    })?;
-                    contiguous.as_ptr() as *mut f64
-                };
+                if !xyz.is_c_contiguous() {
+                    return Err(PyValueError::new_err(
+                        "frame coordinates are not contiguous",
+                    ));
+                }
+                let base = xyz.data();
                 let already = frame
                     .atom_data
                     .first()
@@ -1247,13 +1245,11 @@ impl PyConFrame {
         if n_atoms > 0 {
             let origin = {
                 let bound = slab.bind(py);
-                let contiguous = unsafe { bound.as_slice() }.map_err(|err| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "coordinate slab is not contiguous: {err}"
-                    ))
-                })?;
+                if !bound.is_c_contiguous() {
+                    return Err(PyValueError::new_err("coordinate slab is not contiguous"));
+                }
                 let stride = n_atoms.saturating_mul(3);
-                unsafe { contiguous.as_ptr().add(index.saturating_mul(stride)) as *mut f64 }
+                unsafe { bound.data().add(index.saturating_mul(stride)) }
             };
             retarget_frames_to_slab(std::slice::from_mut(&mut frame), origin, n_atoms);
         }
@@ -1279,11 +1275,18 @@ impl PyConFrame {
         if self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(());
         }
-        let Some(frame) = self.inner.as_ref() else {
+        let Some(source) = self.inner.as_ref() else {
             self.atoms_ready
                 .store(true, std::sync::atomic::Ordering::Release);
             return Ok(());
         };
+        let snapshot = self
+            .coords_shared()
+            .then(|| crate::types::CoordSnapshot::copy_of(&[Some(source)]));
+        let frame = snapshot
+            .as_ref()
+            .and_then(|copy| copy.slots()[0].as_ref())
+            .unwrap_or(source);
         let mut per_atom_mass: Vec<f64> = Vec::with_capacity(frame.atom_data.len());
         for (type_idx, &count) in frame.header.natms_per_type.iter().enumerate() {
             let mass = frame
@@ -1742,17 +1745,18 @@ fn staged_frames(per_frame: usize) -> usize {
     (STAGE_VALUES / per_frame.max(1)).max(1)
 }
 
-/// A frame-major NumPy column that is read only while attached.
+/// A frame-major contiguous NumPy column kept alive by the calling binding.
 ///
-/// Python can store into the array once the thread detaches. A column
-/// writer copies one run at a time into a buffer it reuses and formats
-/// that copy detached, so no Rust slice of the array is live while a
-/// store can run, and the copy stays in cache instead of costing a second
-/// trajectory of fresh pages. A store between two runs shows up in the
-/// later runs only.
+/// Python can store into the array concurrently on a free-threaded build.
+/// A column writer therefore never forms an `f64` reference or slice over
+/// this pointer. It copies runs of about 4 MiB with relaxed `AtomicU64`
+/// loads into a private buffer and formats that buffer detached. Every
+/// copied double is untorn; there is deliberately no cross-element
+/// atomicity, so stores between loads can appear in the same snapshot.
 #[derive(Clone, Copy)]
 struct SharedColumn {
     ptr: *const f64,
+    len: usize,
     per_frame: usize,
 }
 
@@ -1761,11 +1765,25 @@ struct SharedColumn {
 unsafe impl Send for SharedColumn {}
 
 impl SharedColumn {
-    fn new(values: &[f64], per_frame: usize) -> Self {
-        Self {
-            ptr: values.as_ptr(),
-            per_frame,
+    fn from_array(
+        value: &Bound<'_, PyAny>,
+        name: &str,
+        per_frame: usize,
+        expected: usize,
+    ) -> PyResult<Self> {
+        let array = value.cast::<numpy::PyArrayDyn<f64>>()?;
+        if !array.is_c_contiguous() || array.len() != expected {
+            return Err(PyValueError::new_err(name.to_owned()));
         }
+        let ptr = array.data().cast_const();
+        if expected > 0 {
+            crate::types::assert_atomic_f64_alignment(ptr);
+        }
+        Ok(Self {
+            ptr,
+            len: expected,
+            per_frame,
+        })
     }
 
     /// Copy the values of `frames` into `into`.
@@ -1774,14 +1792,40 @@ impl SharedColumn {
         self.stage_values(py, frames.start * per_frame..frames.end * per_frame, into);
     }
 
-    /// Copy `values` into `into`. The token is the proof that this runs
-    /// attached; the writer that built this column keeps the array alive
-    /// and checked the range against its length.
+    fn snapshot(&self, py: Python<'_>) -> Vec<f64> {
+        let mut out: Vec<f64> = Vec::with_capacity(self.len);
+        let mut start = 0;
+        while start < self.len {
+            let end = (start + STAGE_VALUES).min(self.len);
+            let old_len = out.len();
+            unsafe {
+                crate::types::atomic_copy_f64(
+                    self.ptr.add(start),
+                    out.as_mut_ptr().add(old_len),
+                    end - start,
+                );
+                out.set_len(old_len + end - start);
+            }
+            start = end;
+        }
+        let _ = py;
+        out
+    }
+
+    /// Copy `values` into `into` while the binding keeps the NumPy allocation
+    /// alive. `_py` proves the caller has not returned the owning arguments.
     fn stage_values(&self, _py: Python<'_>, values: std::ops::Range<usize>, into: &mut Vec<f64>) {
+        let len = values.len();
+        assert!(values.end <= self.len);
         into.clear();
-        into.extend_from_slice(unsafe {
-            std::slice::from_raw_parts(self.ptr.add(values.start), values.len())
-        });
+        if len == 0 {
+            return;
+        }
+        into.reserve(len);
+        unsafe {
+            crate::types::atomic_copy_f64(self.ptr.add(values.start), into.as_mut_ptr(), len);
+            into.set_len(len);
+        }
     }
 }
 
@@ -1789,7 +1833,10 @@ impl SharedColumn {
 /// ``ConFrameList.columns``.
 ///
 /// Runs of frames are copied with the GIL held and formatted with it
-/// released. There is no per-atom Python loop.
+/// released. There is no per-atom Python loop. If another thread stores
+/// into the same NumPy arrays during a call, each output float is one
+/// untorn value from that array, but different elements can come from
+/// different stores.
 #[pyfunction]
 #[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
 fn write_columns(
@@ -1808,84 +1855,90 @@ fn write_columns(
     let cell = columns
         .get_item("cell")?
         .ok_or_else(|| PyValueError::new_err("cell"))?;
-    let pos = positions.cast::<PyArray3<f64>>()?.readonly();
-    let mass = masses.cast::<PyArray2<f64>>()?.readonly();
-    let cell_arr = cell.cast::<PyArray2<f64>>()?.readonly();
+    let pos = positions.cast::<PyArray3<f64>>()?;
+    let mass = masses.cast::<PyArray2<f64>>()?;
+    let cell_arr = cell.cast::<PyArray2<f64>>()?;
     let shape = pos.dims();
     if shape[2] != 3 {
         return Err(PyValueError::new_err("positions"));
     }
     let n_frames = shape[0];
     let n_atoms = shape[1];
-    let pos_slice = pos.as_slice()?;
-    let mass_slice = mass.as_slice()?;
-    let cell_slice = cell_arr.as_slice()?;
-    if mass_slice.len() != n_frames.saturating_mul(n_atoms)
-        || cell_slice.len() != n_frames.saturating_mul(6)
-    {
+    let n_values = n_frames.saturating_mul(n_atoms);
+    if mass.len() != n_values || cell_arr.len() != n_frames.saturating_mul(6) {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
-    check_cell_array(py, cell_slice)?;
+    let cell_owned =
+        SharedColumn::from_array(&cell, "cell", 6, n_frames.saturating_mul(6))?.snapshot(py);
+    check_cell_array(py, &cell_owned)?;
     let fixed_value = columns.get_item("fixed")?;
     let fixed_arr = match fixed_value.as_ref() {
-        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?),
         _ => None,
     };
-    let fixed_slice = match fixed_arr.as_ref() {
-        Some(arr) => {
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames.saturating_mul(n_atoms).saturating_mul(3) {
-                return Err(PyValueError::new_err("fixed"));
-            }
-            Some(slice)
-        }
+    let fixed_column = match fixed_arr.as_ref() {
+        Some(arr) => Some(SharedColumn::from_array(
+            arr.as_any(),
+            "fixed",
+            n_atoms * 3,
+            n_values.saturating_mul(3),
+        )?),
         None => None,
     };
     let vel_value = columns.get_item("velocities")?;
     let vel_arr = match vel_value.as_ref() {
-        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?),
         _ => None,
     };
-    let vel_slice = match vel_arr.as_ref() {
-        Some(arr) => {
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames * n_atoms * 3 {
-                return Err(PyValueError::new_err("velocities"));
-            }
-            Some(slice)
-        }
+    let vel_column = match vel_arr.as_ref() {
+        Some(arr) => Some(SharedColumn::from_array(
+            arr.as_any(),
+            "velocities",
+            n_atoms * 3,
+            n_values.saturating_mul(3),
+        )?),
         None => None,
     };
     let force_value = columns.get_item("forces")?;
     let force_arr = match force_value.as_ref() {
-        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
+        Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?),
         _ => None,
     };
-    let force_slice = match force_arr.as_ref() {
-        Some(arr) => {
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames * n_atoms * 3 {
-                return Err(PyValueError::new_err("forces"));
-            }
-            Some(slice)
-        }
+    let force_column = match force_arr.as_ref() {
+        Some(arr) => Some(SharedColumn::from_array(
+            arr.as_any(),
+            "forces",
+            n_atoms * 3,
+            n_values.saturating_mul(3),
+        )?),
         None => None,
     };
     let xyz = n_atoms * 3;
     let columns = [
-        Some(SharedColumn::new(pos_slice, xyz)),
-        Some(SharedColumn::new(mass_slice, n_atoms)),
-        Some(SharedColumn::new(cell_slice, 6)),
-        fixed_slice.map(|values| SharedColumn::new(values, xyz)),
-        vel_slice.map(|values| SharedColumn::new(values, xyz)),
-        force_slice.map(|values| SharedColumn::new(values, xyz)),
+        Some(SharedColumn::from_array(
+            &positions,
+            "positions",
+            xyz,
+            n_values.saturating_mul(3),
+        )?),
+        Some(SharedColumn::from_array(
+            &masses, "masses", n_atoms, n_values,
+        )?),
+        Some(SharedColumn {
+            ptr: cell_owned.as_ptr(),
+            len: cell_owned.len(),
+            per_frame: 6,
+        }),
+        fixed_column,
+        vel_column,
+        force_column,
     ];
     let per_frame = columns
         .iter()
         .flatten()
         .map(|column| column.per_frame)
         .sum();
-    let step = staged_frames(per_frame);
+    let step = staged_frames(per_frame).max(2);
     let workers = n_threads.unwrap_or(0);
     let mut file_bytes = Vec::new();
     let mut staged: [Vec<f64>; 6] = Default::default();
@@ -1938,12 +1991,12 @@ fn optional_vec3(
 ) -> PyResult<Option<Vec<f64>>> {
     match columns.get_item(name)? {
         Some(value) if !value.is_none() => {
-            let arr = value.cast::<PyArray3<f64>>()?.readonly();
-            let slice = arr.as_slice()?;
-            if slice.len() != n_frames * n_atoms * 3 {
-                return Err(PyValueError::new_err(name.to_string()));
-            }
-            Ok(Some(slice.to_vec()))
+            let expected = n_frames * n_atoms * 3;
+            let arr = value.cast::<PyArray3<f64>>()?;
+            Ok(Some(
+                SharedColumn::from_array(arr.as_any(), name, n_atoms * 3, expected)?
+                    .snapshot(value.py()),
+            ))
         }
         _ => Ok(None),
     }
@@ -2102,19 +2155,29 @@ fn write_coords(
     symbol: &str,
 ) -> PyResult<Py<PyDict>> {
     let copy_start = std::time::Instant::now();
-    let pos = positions.as_slice()?;
-    let mass = masses.as_slice()?;
-    let cell_s = cell.as_slice()?;
     let shape = positions.dims();
     let n_frames = shape[0];
     let n_atoms = shape[1];
-    if mass.len() != n_frames * n_atoms || cell_s.len() != n_frames * 6 {
+    let n_values = n_frames.saturating_mul(n_atoms);
+    if positions.len() != n_values.saturating_mul(3)
+        || masses.len() != n_values
+        || cell.len() != n_frames.saturating_mul(6)
+    {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
-    check_cell_array(py, cell_s)?;
-    let pos_owned = pos.to_vec();
-    let mass_owned = mass.to_vec();
-    let cell_owned = cell_s.to_vec();
+    let pos_owned = SharedColumn::from_array(
+        positions.as_any(),
+        "positions",
+        n_atoms * 3,
+        n_values.saturating_mul(3),
+    )?
+    .snapshot(py);
+    let mass_owned =
+        SharedColumn::from_array(masses.as_any(), "masses", n_atoms, n_values)?.snapshot(py);
+    let cell_owned =
+        SharedColumn::from_array(cell.as_any(), "cell", 6, n_frames.saturating_mul(6))?
+            .snapshot(py);
+    check_cell_array(py, &cell_owned)?;
     let copy_s = copy_start.elapsed().as_secs_f64();
     let path_owned = path.to_owned();
     let symbol_owned = symbol.to_owned();
@@ -2464,25 +2527,41 @@ impl ConFrameList {
 
     /// XOR of every frame's positions, cell lengths, and atom-type symbols.
     ///
-    /// The read walks the coordinate slab and each stored symbol. The
-    /// returned seconds are that walk. A second call walks again.
+    /// The read walks a copy of the coordinate slab and each stored
+    /// symbol. The returned seconds are that walk. A second call walks
+    /// again.
     fn touch_checksum(&self, py: Python<'_>) -> PyResult<(u64, f64)> {
         let Some(slab) = &self.slab else {
             return Err(PyIOError::new_err(
                 "touch_checksum needs the shared coordinate slab",
             ));
         };
-        let values = slab.bind(py).readonly();
-        let slice = values.as_slice()?;
+        let array = slab.bind(py);
+        let shape = array.shape();
+        let len = shape
+            .iter()
+            .try_fold(1usize, |acc, dim| acc.checked_mul(*dim))
+            .ok_or_else(|| PyIOError::new_err("touch_checksum slab size overflow"))?;
+        let mut copied = vec![0.0f64; len];
+        if len > 0 {
+            if !array.is_c_contiguous() {
+                return Err(PyIOError::new_err("touch_checksum slab is not contiguous"));
+            }
+            let base = array.data().cast_const();
+            crate::types::assert_atomic_f64_alignment(base);
+            unsafe {
+                crate::types::atomic_copy_f64(base, copied.as_mut_ptr(), len);
+            }
+        }
         let workers = self.workers;
         let pool = lock_attached(py, &self.pool).clone();
         let slots = self.slots(py);
-        let positions = slice;
+        let positions = copied;
         let frames: &[Option<ConFrame>] = &slots;
         let walk = move || {
             let fault0 = crate::iterators::process_minflt();
             let t_touch = std::time::Instant::now();
-            let run = || crate::iterators::touch_option_checksum(frames, positions, workers);
+            let run = || crate::iterators::touch_option_checksum(frames, &positions, workers);
             let digest = match pool.as_ref() {
                 Some(pool) if workers >= 2 => pool.install(run),
                 _ => run(),
@@ -2491,15 +2570,8 @@ impl ConFrameList {
             let touch_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
             (digest, touch_s, touch_minflt)
         };
-        // Once Python holds the slab it can store into it whenever this
-        // thread is detached. The walk then stays attached: it reads the
-        // slab itself, as the timing means, and is short next to a copy.
-        let (digest, touch_s, touch_minflt) =
-            if self.slab_shared.load(std::sync::atomic::Ordering::Acquire) {
-                walk()
-            } else {
-                py.detach(walk)
-            };
+        // The walk is pure Rust over `positions`, so it can run detached.
+        let (digest, touch_s, touch_minflt) = py.detach(walk);
         drop(slots);
         let digest = digest
             .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
@@ -2846,12 +2918,11 @@ fn con_frame_list(
     // slots have to address the slab before the parse buffer is freed.
     // An adopted buffer already has that address, so the walk is skipped.
     if let Some(slab) = &slab {
-        let contiguous = unsafe { slab.bind(py).as_slice() }.map_err(|err| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "coordinate slab is not contiguous: {err}"
-            ))
-        })?;
-        let new_ptr = contiguous.as_ptr() as *mut f64;
+        let bound = slab.bind(py);
+        if !bound.is_c_contiguous() {
+            return Err(PyValueError::new_err("coordinate slab is not contiguous"));
+        }
+        let new_ptr = bound.data();
         if adopted_ptr != Some(new_ptr as *const f64) {
             retarget_frames_to_slab(&mut frames, new_ptr, n_atoms);
         }
@@ -3858,16 +3929,50 @@ fn con_frame_list_stored(
     list: &Bound<'_, ConFrameList>,
 ) -> PyResult<Vec<ConFrame>> {
     let borrowed = list.borrow();
-    let n = borrowed.len_frames(py);
+    let cache = lock_attached(py, &borrowed.cache);
+    let slots = borrowed.slots(py);
+    let n = slots.len();
+    let refs: Vec<Option<&ConFrame>> = slots
+        .iter()
+        .enumerate()
+        .map(|(index, slot)| {
+            slot.as_ref().or_else(|| {
+                let frame = cache.get(index)?.as_ref()?.borrow(py);
+                if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+                    return None;
+                }
+                // `PyRef` cannot escape this closure, but `inner` belongs to
+                // the cached Python object held by `cache` for the whole copy.
+                frame
+                    .inner
+                    .as_ref()
+                    .map(|inner| unsafe { &*(inner as *const ConFrame) })
+            })
+        })
+        .collect();
+    let snapshot = crate::types::CoordSnapshot::copy_of(&refs);
     let mut out = Vec::with_capacity(n);
     for index in 0..n {
-        let cloned = borrowed.slots(py).get(index).and_then(|slot| slot.clone());
-        if let Some(frame) = cloned {
-            out.push(frame);
+        if let Some(frame) = snapshot.slots()[index].as_ref() {
+            // The clone reads only the private atomic snapshot.
+            out.push(frame.clone());
             continue;
         }
-        let obj = borrowed.frame_obj(py, index)?;
-        out.push(obj.borrow(py).to_con_frame(py)?);
+        if let Some(frame) = cache.get(index).and_then(Option::as_ref) {
+            let frame = frame.borrow(py);
+            if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+                out.push(frame.to_con_frame(py)?);
+                continue;
+            }
+        }
+        if let Some(frame) = slots[index].as_ref() {
+            // Empty-coordinate frames need no snapshot slot.
+            out.push(frame.clone());
+            continue;
+        }
+        return Err(PyIOError::new_err(format!(
+            "frame {index} is unavailable during snapshot"
+        )));
     }
     Ok(out)
 }
@@ -4404,6 +4509,59 @@ fn detach_frame_refs(
     .map_err(|err| write_err_to_py(py, err))
 }
 
+fn detach_append_frame_refs(
+    py: Python<'_>,
+    path: &str,
+    frames: &[&ConFrame],
+    precision: Option<usize>,
+    canonical: bool,
+    shared: bool,
+) -> PyResult<()> {
+    let path_buf = Path::new(path).to_path_buf();
+    detach_refs(py, frames, shared, move |refs| {
+        let mut writer = match precision {
+            Some(precision) => {
+                ConFrameWriter::from_path_append_with_precision(&path_buf, precision)
+            }
+            None => ConFrameWriter::from_path_append(&path_buf),
+        }
+        .map_err(crate::writer::WriteError::Io)?
+        .canonical(canonical);
+        for frame in refs {
+            write_stamped_frame(&mut writer, frame)?;
+        }
+        writer.flush().map_err(crate::writer::WriteError::Io)
+    })
+    .map_err(|err| write_err_to_py(py, err))
+}
+
+fn detach_compressed_frame_refs(
+    py: Python<'_>,
+    path: &str,
+    frames: &[&ConFrame],
+    precision: Option<usize>,
+    canonical: bool,
+    n_threads: Option<usize>,
+    compression_members: Option<usize>,
+    gzip: bool,
+) -> PyResult<()> {
+    let refs: Vec<Option<&ConFrame>> = frames.iter().copied().map(Some).collect();
+    let snapshot = crate::types::CoordSnapshot::copy_of(&refs);
+    let path_buf = Path::new(path).to_path_buf();
+    py.detach(move || {
+        write_owned_compressed(
+            &path_buf,
+            snapshot.slots(),
+            precision,
+            canonical,
+            n_threads,
+            compression_members,
+            gzip,
+        )
+    })
+    .map_err(|err| write_err_to_py(py, err))
+}
+
 /// The `compression` argument controls output compression:
 /// - `None` (default): codec from the path extension (`.gz` gzip, `.zst` zstd)
 /// - `"gzip"`, `"zstd"`, or `"none"`
@@ -4500,101 +4658,75 @@ fn write_con(
     )? {
         return Ok(());
     }
+    #[cfg(not(feature = "zstd"))]
+    if matches!(codec, OutputCodec::Zstd) {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "zstd compression requires readcon built with the zstd feature",
+        ));
+    }
 
     match codec {
         OutputCodec::Gzip => {
-            if chunk_wide_frame(frames, compression_members) {
-                if try_fused_members(path, frames, compression_members, n_threads, true)? {
-                    return Ok(());
-                }
-                let t_fmt = std::time::Instant::now();
-                let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-                if std::env::var_os("READCON_WRITE_TRACE").is_some() {
-                    eprintln!(
-                        "gzip-format {:.4} plain_bytes={}",
-                        t_fmt.elapsed().as_secs_f64(),
-                        plain.len()
-                    );
-                }
-                let members = compression_members
-                    .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                // `n_threads` formats the text. One deflate thread on every
-                // member of a 45 MB frame is the slow gzip path (about 0.37 s
-                // of encode). Members stay independent, so deflate uses one
-                // worker per core unless the caller asked for two or more.
-                let threads = n_threads
-                    .filter(|count| *count >= 2)
-                    .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
-                crate::compression::write_gzip_members_limited(
-                    Path::new(path),
-                    &plain,
-                    members,
-                    threads,
+            if let Some(held) = borrow_unmodified_frames(frames)? {
+                let refs = held.refs();
+                return detach_compressed_frame_refs(
+                    py,
+                    path,
+                    &refs,
+                    precision,
+                    canonical,
+                    n_threads,
+                    compression_members,
+                    true,
+                );
+            }
+            let path_buf = Path::new(path).to_path_buf();
+            let owned = owned_frames_from_binding(py, frames)?;
+            let slots: Vec<Option<ConFrame>> = owned.into_iter().map(Some).collect();
+            py.detach(move || {
+                write_owned_compressed(
+                    &path_buf,
+                    &slots,
+                    precision,
+                    canonical,
+                    n_threads,
+                    compression_members,
+                    true,
                 )
-                .map_err(|err| {
-                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
-                })?;
-                return Ok(());
-            }
-            let mut writer = match precision {
-                Some(precision) => ConFrameWriter::from_path_gzip_with_precision(path, precision)
-                    .map_err(|err| {
-                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
-                })?,
-                None => ConFrameWriter::from_path_gzip(path).map_err(|err| {
-                    PyIOError::new_err(format!("failed to create gzip writer: {err}"))
-                })?,
-            }
-            .canonical(canonical);
-            write_bound_frames(py, frames, &mut writer)?;
-            flush_writer(&mut writer)
+            })
+            .map_err(|err| write_err_to_py(py, err))
         }
         OutputCodec::Zstd => {
             #[cfg(feature = "zstd")]
             {
-                if chunk_wide_frame(frames, compression_members) {
-                    if try_fused_members(path, frames, compression_members, n_threads, false)? {
-                        return Ok(());
-                    }
-                    let t_fmt = std::time::Instant::now();
-                    let plain = plain_binding_bytes(py, frames, precision, canonical, n_threads)?;
-                    if std::env::var_os("READCON_WRITE_TRACE").is_some() {
-                        eprintln!(
-                            "zstd-format {:.4} plain_bytes={}",
-                            t_fmt.elapsed().as_secs_f64(),
-                            plain.len()
-                        );
-                    }
-                    let members = compression_members
-                        .unwrap_or_else(|| crate::compression::compression_workers(plain.len()));
-                    let threads = n_threads
-                        .filter(|count| *count >= 2)
-                        .unwrap_or_else(|| crate::compression::default_deflate_threads(members));
-                    crate::compression::write_zstd_members_limited(
-                        Path::new(path),
-                        &plain,
-                        members,
-                        threads,
-                    )
-                    .map_err(|err| {
-                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                    })?;
-                    return Ok(());
+                if let Some(held) = borrow_unmodified_frames(frames)? {
+                    let refs = held.refs();
+                    return detach_compressed_frame_refs(
+                        py,
+                        path,
+                        &refs,
+                        precision,
+                        canonical,
+                        n_threads,
+                        compression_members,
+                        false,
+                    );
                 }
-                let mut writer = match precision {
-                    Some(precision) => ConFrameWriter::from_path_zstd_with_precision(
-                        path, precision,
+                let path_buf = Path::new(path).to_path_buf();
+                let owned = owned_frames_from_binding(py, frames)?;
+                let slots: Vec<Option<ConFrame>> = owned.into_iter().map(Some).collect();
+                py.detach(move || {
+                    write_owned_compressed(
+                        &path_buf,
+                        &slots,
+                        precision,
+                        canonical,
+                        n_threads,
+                        compression_members,
+                        false,
                     )
-                    .map_err(|err| {
-                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                    })?,
-                    None => ConFrameWriter::from_path_zstd(path).map_err(|err| {
-                        PyIOError::new_err(format!("failed to create zstd writer: {err}"))
-                    })?,
-                }
-                .canonical(canonical);
-                write_bound_frames(py, frames, &mut writer)?;
-                flush_writer(&mut writer)
+                })
+                .map_err(|err| write_err_to_py(py, err))
             }
             #[cfg(not(feature = "zstd"))]
             {
@@ -4606,9 +4738,7 @@ fn write_con(
                     n_threads,
                     compression_members,
                 );
-                Err(pyo3::exceptions::PyValueError::new_err(
-                    "zstd compression requires readcon built with the zstd feature",
-                ))
+                unreachable!("checked above")
             }
         }
         OutputCodec::Plain => {
@@ -4656,24 +4786,16 @@ fn write_con(
                     if let Some(result) = written {
                         result.map_err(|err| write_err_to_py(py, err))?;
                     } else {
-                        // Indexing a frame moves it into the Python cache.
-                        // The write then uses that object instead of the slot.
-                        let mut writer = if let Some(precision) = precision {
-                            crate::writer::ConFrameWriter::from_path_with_precision(path, precision)
-                                .map_err(|e| {
-                                    PyIOError::new_err(format!("failed to create writer: {e}"))
-                                })?
-                        } else {
-                            crate::writer::ConFrameWriter::from_path(path).map_err(|e| {
-                                PyIOError::new_err(format!("failed to create writer: {e}"))
-                            })?
-                        }
-                        .canonical(canonical);
-                        stream_frames(py, frames, |frame| {
-                            write_stamped_frame(&mut writer, frame)
-                                .map_err(|e| write_err_to_py(py, e))
-                        })?;
-                        flush_writer(&mut writer)?;
+                        // Indexing can move slots into Python objects.
+                        // Rebuild owned frames attached, then write detached.
+                        let owned = con_frame_list_stored(py, list)?;
+                        let refs: Vec<&ConFrame> = owned.iter().collect();
+                        let flags = RefWrite {
+                            rewrite: false,
+                            keep_spare,
+                            shared: false,
+                        };
+                        detach_frame_refs(py, path, &refs, workers, precision, canonical, flags)?;
                     }
                 } else if let Some(held) = borrow_unmodified_frames(frames)? {
                     let refs = held.refs();
@@ -4695,28 +4817,20 @@ fn write_con(
                 }
                 return Ok(());
             }
-            let mut writer = if append {
-                match precision {
-                    Some(precision) => {
-                        ConFrameWriter::from_path_append_with_precision(path, precision)
-                            .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?
-                    }
-                    None => ConFrameWriter::from_path_append(path)
-                        .map_err(|e| PyIOError::new_err(format!("failed to append: {e}")))?,
-                }
-            } else {
-                match precision {
-                    Some(precision) => ConFrameWriter::from_path_with_precision(path, precision)
-                        .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
-                    None => ConFrameWriter::from_path(path)
-                        .map_err(|e| PyIOError::new_err(format!("failed to create writer: {e}")))?,
-                }
+            if let Some(held) = borrow_unmodified_frames(frames)? {
+                let refs = held.refs();
+                return detach_append_frame_refs(
+                    py,
+                    path,
+                    &refs,
+                    precision,
+                    canonical,
+                    held.coords_shared(),
+                );
             }
-            .canonical(canonical);
-            stream_frames(py, frames, |frame| {
-                write_stamped_frame(&mut writer, frame).map_err(|e| write_err_to_py(py, e))
-            })?;
-            flush_writer(&mut writer)
+            let owned = owned_frames_from_binding(py, frames)?;
+            let refs: Vec<&ConFrame> = owned.iter().collect();
+            detach_append_frame_refs(py, path, &refs, precision, canonical, false)
         }
     }
 }
@@ -4994,6 +5108,13 @@ fn py_frames_to_rust(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<
         rust_frames.push(frame.to_con_frame(py)?);
     }
     Ok(rust_frames)
+}
+
+fn owned_frames_from_binding(py: Python<'_>, frames: &Bound<'_, PyAny>) -> PyResult<Vec<ConFrame>> {
+    if let Ok(list) = frames.cast::<ConFrameList>() {
+        return con_frame_list_stored(py, list);
+    }
+    py_frames_to_rust(py, frames)
 }
 
 // --- ASE conversion helpers (runtime import, no compile-time dep) ---
@@ -5731,16 +5852,25 @@ fn write_conbin(
                 binary32,
                 n_threads,
             )
-            .map_err(|e| e.to_string())
         })
-        .map_err(PyIOError::new_err)?;
+        .map_err(|err| {
+            if err.is_non_finite_cell() {
+                Python::attach(|py| cell_err_to_py(py, &err))
+            } else {
+                PyIOError::new_err(err.to_string())
+            }
+        })?;
     Ok((header.n_frames, header.n_atoms))
 }
 
 /// Write a version-2 CON-bin from arrays already in memory.
 ///
 /// `fixed` is `(frames, atoms, 3)` with a non-zero entry meaning that axis
-/// is constrained. Atom ids are the index within the frame.
+/// is constrained. Atom ids are the index within the frame. On little-endian
+/// Numeric payload columns are snapshotted into a private buffer with
+/// relaxed atomic loads. Concurrent mutation during the call can therefore
+/// produce a file that mixes versions across elements, but each element is
+/// copied untorn before it is formatted.
 #[pyfunction]
 #[pyo3(signature = (path, positions, velocities, masses, cell, fixed))]
 fn write_conbin_columns(
@@ -5752,11 +5882,6 @@ fn write_conbin_columns(
     cell: PyReadonlyArray2<f64>,
     fixed: PyReadonlyArray3<f64>,
 ) -> PyResult<()> {
-    let pos = positions.as_slice()?;
-    let vel = velocities.as_slice()?;
-    let mass = masses.as_slice()?;
-    let box_cell = cell.as_slice()?;
-    let flags = fixed.as_slice()?;
     let shape = positions.dims();
     let n_frames = shape[0] as u64;
     let n_atoms = shape[1] as u64;
@@ -5766,27 +5891,47 @@ fn write_conbin_columns(
     let xyz = n
         .checked_mul(3)
         .ok_or_else(|| PyValueError::new_err("CON-bin column length overflows"))?;
+    let atoms = n_atoms as usize;
     if shape[2] != 3
-        || pos.len() != xyz
-        || vel.len() != xyz
-        || mass.len() != n
-        || box_cell.len() != (n_frames as usize).saturating_mul(6)
-        || flags.len() != xyz
+        || positions.len() != xyz
+        || velocities.len() != xyz
+        || masses.len() != n
+        || cell.len() != (n_frames as usize).saturating_mul(6)
+        || fixed.len() != xyz
     {
         return Err(PyValueError::new_err("CON-bin columns disagree"));
     }
-    check_cell_array(py, box_cell)?;
+    let cell_owned =
+        SharedColumn::from_array(cell.as_any(), "cell", 6, (n_frames as usize) * 6)?.snapshot(py);
+    check_cell_array(py, &cell_owned)?;
+    let columns = [
+        SharedColumn::from_array(positions.as_any(), "positions", atoms * 3, xyz)?,
+        SharedColumn::from_array(velocities.as_any(), "velocities", atoms * 3, xyz)?,
+        SharedColumn::from_array(masses.as_any(), "masses", atoms, n)?,
+        SharedColumn {
+            ptr: cell_owned.as_ptr(),
+            len: cell_owned.len(),
+            per_frame: 6,
+        },
+    ];
+    let fixed_column = SharedColumn::from_array(fixed.as_any(), "fixed", atoms * 3, xyz)?;
     // One buffer for the masks and one for the ids. The loops only store
     // bytes; they do not allocate per atom.
     let mut masks = vec![0u8; n];
-    for (index, mask) in masks.iter_mut().enumerate() {
-        let base = index * 3;
-        *mask = u8::from(flags[base] != 0.0)
-            | (u8::from(flags[base + 1] != 0.0) << 1)
-            | (u8::from(flags[base + 2] != 0.0) << 2);
+    let mut staged_flags = Vec::new();
+    let mut flag_start = 0;
+    while flag_start < xyz {
+        let flag_end = (flag_start + STAGE_VALUES - STAGE_VALUES % 3).min(xyz);
+        fixed_column.stage_values(py, flag_start..flag_end, &mut staged_flags);
+        for (offset, flag) in staged_flags.chunks_exact(3).enumerate() {
+            let index = flag_start / 3 + offset;
+            masks[index] = u8::from(flag[0] != 0.0)
+                | (u8::from(flag[1] != 0.0) << 1)
+                | (u8::from(flag[2] != 0.0) << 2);
+        }
+        flag_start = flag_end;
     }
     let mut ids = vec![0u64; n];
-    let atoms = n_atoms as usize;
     if atoms > 0 {
         for chunk in ids.chunks_mut(atoms) {
             for (atom, slot) in chunk.iter_mut().enumerate() {
@@ -5794,40 +5939,30 @@ fn write_conbin_columns(
             }
         }
     }
-    let columns = [
-        SharedColumn::new(pos, atoms * 3),
-        SharedColumn::new(vel, atoms * 3),
-        SharedColumn::new(mass, atoms),
-        SharedColumn::new(box_cell, 6),
-    ];
-    let lengths = (pos.len(), vel.len(), mass.len(), box_cell.len());
+    let lengths = (
+        columns[0].len,
+        columns[1].len,
+        columns[2].len,
+        columns[3].len,
+    );
     let path_owned = path.to_owned();
     py.detach(move || {
-        // A little-endian file is the arrays' own bytes, which the kernel
-        // copies straight from them. Elsewhere each run is copied attached
-        // and swapped here.
-        #[cfg(all(unix, target_endian = "little"))]
+        let _cell_owned = cell_owned;
+        let mut staged = Vec::new();
         let (run, emit) = (
-            usize::MAX,
-            |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| unsafe {
-                crate::conbin::write_f64_raw(
-                    file,
-                    columns[column].ptr.add(values.start),
-                    values.len(),
-                )
+            STAGE_VALUES,
+            move |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| {
+                Python::attach(|py| columns[column].stage_values(py, values, &mut staged));
+                #[cfg(all(unix, target_endian = "little"))]
+                unsafe {
+                    crate::conbin::write_f64_raw(file, staged.as_ptr(), staged.len())
+                }
+                #[cfg(not(all(unix, target_endian = "little")))]
+                {
+                    crate::conbin::write_f64_le(file, &staged)
+                }
             },
         );
-        #[cfg(not(all(unix, target_endian = "little")))]
-        let (run, emit) = {
-            let mut staged = Vec::new();
-            (
-                STAGE_VALUES,
-                move |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| {
-                    Python::attach(|py| columns[column].stage_values(py, values, &mut staged));
-                    crate::conbin::write_f64_le(file, &staged)
-                },
-            )
-        };
         crate::conbin::write_f64_columns_staged(
             Path::new(&path_owned),
             n_frames,
@@ -5899,7 +6034,6 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
         Some(masks) => Some((masks.as_ptr() as usize, masks.len())),
         None => None,
     };
-    drop(pos);
     let owner = Py::new(py, ConBinMapping { map: mapped.map })?;
     let base = owner.bind(py).clone();
     let dict = PyDict::new(py);
@@ -6264,6 +6398,14 @@ fn scan_err_to_py(message: String) -> PyErr {
     match ParseError::from_cell_text(&message) {
         Some(err) => Python::attach(|py| cell_err_to_py(py, &err)),
         None => PyValueError::new_err(message),
+    }
+}
+
+/// Preserve a scanner's typed parse errors at the Python boundary.
+fn convert_err_to_py(err: crate::error::ConvertError) -> PyErr {
+    match err {
+        crate::error::ConvertError::Parse(err) => Python::attach(|py| cell_err_to_py(py, &err)),
+        crate::error::ConvertError::Message(message) => PyValueError::new_err(message),
     }
 }
 
@@ -6644,6 +6786,7 @@ fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyEr
         }
         ChemfilesImportError::Io(io) => PyIOError::new_err(io.to_string()),
         ChemfilesImportError::InvalidFrame(msg) => scan_err_to_py(msg),
+        ChemfilesImportError::NonFiniteValue(err) => Python::attach(|py| cell_err_to_py(py, &err)),
         #[cfg(feature = "chemfiles")]
         ChemfilesImportError::Chemfiles(ch) => PyValueError::new_err(format!("chemfiles: {ch}")),
     }
@@ -7410,21 +7553,26 @@ fn read_extxyz<'py>(
     let path_owned = path.to_string();
     let workers = n_threads.unwrap_or(1);
     let mut tables = py
-        .detach(move || -> Result<_, String> {
+        .detach(move || -> Result<_, crate::error::ConvertError> {
             use std::io::Read;
-            let mut file = std::fs::File::open(&path_owned).map_err(|_| "read".to_string())?;
+            let mut file = std::fs::File::open(&path_owned)
+                .map_err(|_| crate::error::ConvertError::from("read"))?;
             let mut magic = [0u8; 4];
-            let nmagic = file.read(&mut magic).map_err(|_| "read".to_string())?;
+            let nmagic = file
+                .read(&mut magic)
+                .map_err(|_| crate::error::ConvertError::from("read"))?;
             if !matches!(
                 crate::compression::detect_compression(&magic[..nmagic]),
                 crate::compression::Compression::None
             ) {
                 drop(file);
                 let bytes = crate::compression::read_file_bytes(std::path::Path::new(&path_owned))
-                    .map_err(|err| err.to_string())?;
-                return crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers);
+                    .map_err(|err| crate::error::ConvertError::from(err.to_string()))?;
+                return crate::extxyz_scan::scan_extxyz_bytes(&bytes, workers);
             }
-            let meta = file.metadata().map_err(|_| "read".to_string())?;
+            let meta = file
+                .metadata()
+                .map_err(|_| crate::error::ConvertError::from("read"))?;
             // A pipe has no map. A proc file can report size 0 and still
             // return bytes from read; mapping it fails or yields an empty
             // slice. A regular file with a size is mapped. Truncating that
@@ -7433,18 +7581,16 @@ fn read_extxyz<'py>(
                 // SAFETY: `file` is a regular file of nonzero length. The
                 // slice is the parse input and is dropped before return.
                 if let Ok(bytes) = unsafe { memmap2::Mmap::map(&file) } {
-                    return crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(
-                        &bytes, workers,
-                    );
+                    return crate::extxyz_scan::scan_extxyz_bytes(&bytes, workers);
                 }
             }
             let mut bytes = Vec::new();
             bytes.extend_from_slice(&magic[..nmagic]);
             file.read_to_end(&mut bytes)
-                .map_err(|_| "read".to_string())?;
-            crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
+                .map_err(|_| crate::error::ConvertError::from("read"))?;
+            crate::extxyz_scan::scan_extxyz_bytes(&bytes, workers)
         })
-        .map_err(scan_err_to_py)?;
+        .map_err(convert_err_to_py)?;
     let n_frames = tables.n_frames;
     let n_atoms = tables.n_atoms;
     let positions = ndarray::Array3::from_shape_vec(
@@ -7659,7 +7805,42 @@ struct TextColumn<'a> {
 struct RealColumn<'a> {
     name: &'a str,
     width: usize,
-    values: &'a [f64],
+    bytes: Vec<u8>,
+    spans: Vec<(u32, u8)>,
+    ids: Vec<u32>,
+}
+
+impl<'a> RealColumn<'a> {
+    fn format(name: &'a str, width: usize, values: &[f64]) -> Self {
+        let mut bytes = Vec::new();
+        let mut spans = Vec::new();
+        let mut ids = Vec::with_capacity(values.len());
+        let mut known = std::collections::HashMap::<u64, u32>::new();
+        for &value in values {
+            let bits = value.to_bits();
+            let id = match known.entry(bits) {
+                std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    let start = bytes.len();
+                    crate::extxyz_scan::append_extxyz_number(&mut bytes, value);
+                    let len = bytes.len() - start;
+                    debug_assert!(u32::try_from(start).is_ok() && u8::try_from(len).is_ok());
+                    let id = spans.len() as u32;
+                    spans.push((start as u32, len as u8));
+                    entry.insert(id);
+                    id
+                }
+            };
+            ids.push(id);
+        }
+        Self {
+            name,
+            width,
+            bytes,
+            spans,
+            ids,
+        }
+    }
 }
 
 impl crate::extxyz_scan::ExtxyzSource for TextColumn<'_> {
@@ -7703,7 +7884,8 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
             if slot > 0 {
                 out.push(b' ');
             }
-            crate::extxyz_scan::append_extxyz_number(out, self.values[base + slot]);
+            let (start, len) = self.spans[self.ids[base + slot] as usize];
+            out.extend_from_slice(&self.bytes[start as usize..start as usize + len as usize]);
         }
     }
 }
@@ -7712,7 +7894,10 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
 ///
 /// Species, positions, the lattice, ``pbc`` and every per-atom column,
 /// including forces, are written. Numeric columns are copied from the
-/// caller's arrays before the GIL is released.
+/// caller's arrays before the GIL is released. If another thread stores
+/// into those arrays during a call, each output float is one untorn value
+/// from an element load, but different elements can come from different
+/// stores.
 #[pyfunction]
 #[pyo3(signature = (path, data, n_threads=None))]
 fn write_extxyz(
@@ -7725,10 +7910,7 @@ fn write_extxyz(
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
     let pos = positions.cast::<PyArray3<f64>>()?;
-    let shape = {
-        let view = pos.readonly();
-        view.as_array().shape().to_vec()
-    };
+    let shape = pos.shape();
     if shape.len() != 3 || shape[2] != 3 {
         return Err(PyValueError::new_err("positions"));
     }
@@ -7755,21 +7937,17 @@ fn write_extxyz(
     for (key, value) in arrays.iter() {
         let name: String = key.extract()?;
         if let Ok(wide) = value.cast::<PyArray3<f64>>() {
-            let view = wide.readonly();
-            let width = *view.as_array().shape().get(2).unwrap_or(&1);
-            if view.as_slice().is_err() {
+            let width = *wide.shape().get(2).unwrap_or(&1);
+            if !wide.is_c_contiguous() {
                 return Err(PyValueError::new_err(format!("column {name}")));
             }
-            drop(view);
             real3_meta.push((name, width));
             real3_arrays.push(wide.clone());
             order.push(1u8);
         } else if let Ok(thin) = value.cast::<PyArray2<f64>>() {
-            let view = thin.readonly();
-            if view.as_slice().is_err() {
+            if !thin.is_c_contiguous() {
                 return Err(PyValueError::new_err(format!("column {name}")));
             }
-            drop(view);
             real2_names.push(name);
             real2_arrays.push(thin.clone());
             order.push(2u8);
@@ -7784,21 +7962,28 @@ fn write_extxyz(
     if n_frames == 0 || n_atoms == 0 || order.is_empty() {
         return Err(PyValueError::new_err("frames"));
     }
-    let cell_view = cell_array.readonly();
-    let cell_slice = cell_view.as_slice()?;
-    if cell_slice.len() < n_frames * 6 {
+    if cell_array.len() < n_frames * 6 {
         return Err(PyValueError::new_err("cell"));
     }
-    check_cell_array(py, &cell_slice[..n_frames * 6])?;
-    let cell = SharedColumn::new(cell_slice, 6);
+    let cell_owned =
+        SharedColumn::from_array(cell_array.as_any(), "cell", 6, cell_array.len())?.snapshot(py);
+    check_cell_array(py, &cell_owned[..n_frames * 6])?;
+    let cell = SharedColumn {
+        ptr: cell_owned.as_ptr(),
+        len: cell_owned.len(),
+        per_frame: 6,
+    };
     let shared_real =
         |name: &str, array: &Bound<'_, PyAny>, width: usize| -> PyResult<SharedColumn> {
-            let values = array.cast::<numpy::PyArrayDyn<f64>>()?.readonly();
-            let slice = values.as_slice()?;
-            if slice.len() < n_frames * n_atoms * width {
+            let values = array.cast::<numpy::PyArrayDyn<f64>>()?;
+            let expected = n_frames
+                .checked_mul(n_atoms)
+                .and_then(|count| count.checked_mul(width))
+                .ok_or_else(|| PyValueError::new_err(format!("column {name}")))?;
+            if values.len() != expected {
                 return Err(PyValueError::new_err(format!("column {name}")));
             }
-            Ok(SharedColumn::new(slice, n_atoms * width))
+            SharedColumn::from_array(array, name, n_atoms * width, expected)
         };
     let mut reals = Vec::with_capacity(real3_arrays.len() + real2_arrays.len());
     let mut texts = Vec::with_capacity(text_items.len());
@@ -7931,26 +8116,26 @@ fn staged_extxyz_bytes(
                 }
             })
             .collect();
-        let real_columns: Vec<RealColumn<'_>> = reals
+        let real_specs: Vec<(&str, usize)> = reals
             .iter()
-            .zip(&real_runs)
-            .map(|((name, width, _), values)| RealColumn {
-                name,
-                width: *width,
-                values,
-            })
-            .collect();
-        let sources: Vec<&(dyn crate::extxyz_scan::ExtxyzSource + Sync)> = plan
-            .iter()
-            .map(|(kind, index)| {
-                if *kind == 0 {
-                    &text_runs[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
-                } else {
-                    &real_columns[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
-                }
-            })
+            .map(|(name, width, _)| (*name, *width))
             .collect();
         py.detach(|| {
+            let real_columns: Vec<RealColumn<'_>> = real_specs
+                .iter()
+                .zip(&real_runs)
+                .map(|((name, width), values)| RealColumn::format(name, *width, values))
+                .collect();
+            let sources: Vec<&(dyn crate::extxyz_scan::ExtxyzSource + Sync)> = plan
+                .iter()
+                .map(|(kind, index)| {
+                    if *kind == 0 {
+                        &text_runs[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
+                    } else {
+                        &real_columns[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
+                    }
+                })
+                .collect();
             crate::extxyz_scan::extxyz_append_with_threads(
                 &mut out,
                 end - start,
@@ -8059,8 +8244,8 @@ fn read_pdb<'py>(
 )> {
     let path_owned = path.to_owned();
     let tables = py
-        .detach(|| crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(&path_owned)))
-        .map_err(scan_err_to_py)?;
+        .detach(|| crate::pdb_scan::scan_pdb_path(std::path::Path::new(&path_owned)))
+        .map_err(convert_err_to_py)?;
     let positions =
         ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
             .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;

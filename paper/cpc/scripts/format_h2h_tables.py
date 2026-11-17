@@ -108,12 +108,14 @@ def tex(text: str) -> str:
     return "".join(_TEX.get(ch, ch) for ch in text)
 
 
-MILLION_CON_SHA256 = "a307700ffaca1f0427ab232569d43f9eca8e4ef4bda7081585c16fdf5c16c910"
-MILLION_CON_BYTES = 48_378_118
-MILLION_CON_GZ_MAX_BYTES = 10_000_000
+MILLION_CON_SHA256 = "51654ae0b729a25f0f23d7c7f3218a64cccf549eedee7102d8408642caa46068"
+MILLION_CON_BYTES = 85_299_756
+MILLION_CON_GZ_MAX_BYTES = 32_000_000
 MILLION_FRAME_SHA256 = (
-    "f4fc5dd40c97e7a067255ebe60bcb811d09b0a81710ee8ec4e593ba23d738fb4"
+    "9f9197bd1ce591f6af407b59f7763608566b552d36e1580e94c4024088073dc7"
 )
+MILLION_CAMPAIGN_COMMIT = "e938ccf4fae892302ffe0b3a72a0361233b05970"
+MILLION_CAMPAIGN_TREE = "fcf411b82a544a4a5692f752e7f52cf209d09b1a"
 
 
 def _load(name: str) -> dict:
@@ -175,9 +177,17 @@ def _is_unsupported_row(row: dict) -> bool:
 
 
 def _validate_one_million(name: str, data: dict) -> None:
-    """Refuse a 1M record that was not measured on the pinned thermal_shift fixture."""
+    """Refuse a 1M record outside the pinned uniform-noise campaign."""
     rows = [row for row in data.get("rows", []) if row.get("structure") == "1M"]
     measured_rows = [row for row in rows if not _is_unsupported_row(row)]
+    if measured_rows and (
+        data.get("measured_commit") != MILLION_CAMPAIGN_COMMIT
+        or data.get("tree") != MILLION_CAMPAIGN_TREE
+    ):
+        raise SystemExit(
+            f"{name}/cross-format.json 1M rows are not the pinned "
+            f"{MILLION_CAMPAIGN_COMMIT[:8]} campaign"
+        )
     needs_frame_pin = "frames" in data or bool(measured_rows)
     if needs_frame_pin:
         frames = data.get("frames")
@@ -190,16 +200,23 @@ def _validate_one_million(name: str, data: dict) -> None:
                     entry = item
                     break
         if entry is None:
-            raise SystemExit(
-                f"{name}/cross-format.json has no 1M frame hash; expected pinned "
-                f"{MILLION_FRAME_SHA256} (CON {MILLION_CON_SHA256})"
+            historical_extra = (
+                name == "extra"
+                and data.get("measured_commit") == MILLION_CAMPAIGN_COMMIT
+                and data.get("tree") == MILLION_CAMPAIGN_TREE
+                and all(row.get("arm") == "chemfiles-dcd-012" for row in measured_rows)
             )
-        if entry.get("frame_sha256") != [MILLION_FRAME_SHA256]:
+            if not historical_extra:
+                raise SystemExit(
+                    f"{name}/cross-format.json has no 1M frame hash; expected pinned "
+                    f"{MILLION_FRAME_SHA256} (CON {MILLION_CON_SHA256})"
+                )
+        elif entry.get("frame_sha256") != [MILLION_FRAME_SHA256]:
             raise SystemExit(
                 f"{name}/cross-format.json 1M frame hash {entry.get('frame_sha256')} "
                 f"is not pinned {MILLION_FRAME_SHA256} (CON {MILLION_CON_SHA256})"
             )
-        for container in (entry, data):
+        for container in (entry, data) if entry is not None else (data,):
             for key in ("con_sha256", "input_sha256", "plain_con_sha256"):
                 if key in container and container[key] != MILLION_CON_SHA256:
                     raise SystemExit(
@@ -438,8 +455,9 @@ def _sample_counts() -> tuple[str, str]:
 
 
 def macros() -> str:
+    one_million = _reads("1M", ("1m", "1m-mmcif", "extra"))
     con = _one_million_con()
-    mmcif = _reads("1M", ("1m-mmcif",))["mda-mmcif"]
+    mmcif = one_million["mda-mmcif"]
     samples_sub, samples_one_m = _sample_counts()
     pairs = [
         ("hhfHost", _host()),

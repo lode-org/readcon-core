@@ -113,7 +113,7 @@ def _disable_zstd_decoders(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_wrong_gzip_and_zstd_million_con_are_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned_million_spec: dict
 ) -> None:
-    """Compressed 1M CON variants must enforce the pinned thermal SHA-256."""
+    """Compressed 1M CON variants enforce the cross-format fixture SHA-256."""
     wrong_spec = _wrong_million_spec(pinned_million_spec)
     with pytest.raises(SystemExit, match="pinned"):
         cross_format.write_readcon(tmp_path / "wrong.con.gz", wrong_spec, "gzip")
@@ -125,7 +125,7 @@ def test_wrong_gzip_and_zstd_million_con_are_refused(
     raw_gz = gzip.decompress(ok_gz.read_bytes())
     assert len(raw_gz) == cross_format.MILLION_CON_BYTES
     assert hashlib.sha256(raw_gz).hexdigest() == cross_format.MILLION_CON_SHA256
-    assert ok_gz.stat().st_size < 10_000_000
+    assert ok_gz.stat().st_size < 32_000_000
 
     ok_zst = tmp_path / "ok.con.zst"
     cross_format.write_readcon(ok_zst, pinned_million_spec, "zstd")
@@ -155,9 +155,9 @@ def test_zstd_hashes_raw_bytes_and_refuses_missing_decoder(
     plain = tmp_path / "pinned.con"
     cross_format.write_readcon(plain, pinned_million_spec, None)
     raw = plain.read_bytes()
-    needle = b"0.02 -0.03 0.04 7 0"
+    needle = b"0.03522115048934541 -0.03713679817953356 -0.033990805681918694 7 0"
     assert needle in raw
-    alt_raw = raw.replace(needle, b"2e-2 -0.03 0.04 7 0", 1)
+    alt_raw = raw.replace(needle, needle.replace(b"0.035", b"0.036", 1), 1)
     assert len(alt_raw) == len(raw)
 
     ok_zst = tmp_path / "ok.con.zst"
@@ -243,36 +243,30 @@ def test_corrupted_cached_plain_con_is_refused(
 def test_format_h2h_tables_refuses_stale_one_million_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The table builder refuses stale 1M records in any group, including extra."""
+    """The table builder pins the exact historical 1M campaign and fixture."""
     tables = _load_format_h2h_tables()
-    with pytest.raises(SystemExit):
-        tables.table()
-    with pytest.raises(SystemExit):
-        tables.macros()
+    assert r"\label{tab:format-h2h}" in tables.table()
+    assert r"\hhfReadconConBytesOneM" in tables.macros()
 
     records = tmp_path / "v0.23.3"
     shutil.copytree(ROOT / "bench" / "h2h" / "formats" / "v0.23.3", records)
     old_1m = json.loads((records / "1m" / "cross-format.json").read_text())
-    valid_1m = json.loads(
-        (
-            ROOT / "bench" / "h2h" / "million" / "v0.23.3" / "cross-format.json"
-        ).read_text()
-    )
-    valid_1m["repeats_by_structure"] = old_1m["repeats_by_structure"]
-    (records / "1m" / "cross-format.json").write_text(json.dumps(valid_1m))
-    mmcif = json.loads((records / "1m-mmcif" / "cross-format.json").read_text())
-    mmcif["frames"][0]["frame_sha256"] = [tables.MILLION_FRAME_SHA256]
-    (records / "1m-mmcif" / "cross-format.json").write_text(json.dumps(mmcif))
+    valid_1m = json.loads(json.dumps(old_1m))
 
     monkeypatch.setattr(tables, "RECORDS", records)
 
-    # The committed extra/cross-format.json carries measured 1M chemfiles-dcd-012 rows
-    # with no pinned input hash and must be refused.
+    # `extra` has no frame payload, but its exact campaign commit and tree tie
+    # those DCD rows to the same immutable input. Altered provenance is refused.
+    assert r"\label{tab:format-h2h}" in tables.table()
+    raw_extra = json.loads((records / "extra" / "cross-format.json").read_text())
+    wrong_campaign = json.loads(json.dumps(raw_extra))
+    wrong_campaign["measured_commit"] = "0" * 40
+    (records / "extra" / "cross-format.json").write_text(json.dumps(wrong_campaign))
     with pytest.raises(SystemExit):
         tables.table()
+    (records / "extra" / "cross-format.json").write_text(json.dumps(raw_extra))
 
     # Unsupported 1M rows in extra carry no measurement and may stay without frames.
-    raw_extra = json.loads((records / "extra" / "cross-format.json").read_text())
     committed_extra_mdcompress = [
         row
         for row in raw_extra["rows"]
@@ -387,7 +381,7 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
     bad_bytes = json.loads(json.dumps(valid_1m))
     for row in bad_bytes["rows"]:
         if row.get("arm") == "readcon-con":
-            row["file_bytes"] = 85_299_756
+            row["file_bytes"] = 48_378_118
     (records / "1m" / "cross-format.json").write_text(json.dumps(bad_bytes))
     with pytest.raises(SystemExit):
         tables.table()

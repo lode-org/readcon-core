@@ -84,6 +84,9 @@ pub enum ChemfilesImportError {
     Chemfiles(chemfiles::Error),
     /// Atom / property count mismatch or other structural problem.
     InvalidFrame(String),
+    /// A NaN or infinite cell length or angle. The error names the field
+    /// and, for a frame of a trajectory, its index.
+    NonFiniteValue(crate::error::ParseError),
     /// I/O while reading a trajectory path.
     Io(std::io::Error),
     /// This build was compiled without the `chemfiles` Cargo feature.
@@ -95,6 +98,7 @@ impl fmt::Display for ChemfilesImportError {
         match self {
             ChemfilesImportError::Chemfiles(e) => write!(f, "chemfiles error: {e}"),
             ChemfilesImportError::InvalidFrame(msg) => write!(f, "invalid chemfiles frame: {msg}"),
+            ChemfilesImportError::NonFiniteValue(e) => write!(f, "invalid chemfiles frame: {e}"),
             ChemfilesImportError::Io(e) => write!(f, "I/O error: {e}"),
             ChemfilesImportError::FeatureDisabled => write!(
                 f,
@@ -109,6 +113,7 @@ impl std::error::Error for ChemfilesImportError {
         match self {
             ChemfilesImportError::Chemfiles(e) => Some(e),
             ChemfilesImportError::Io(e) => Some(e),
+            ChemfilesImportError::NonFiniteValue(e) => Some(e),
             ChemfilesImportError::InvalidFrame(_) => None,
             ChemfilesImportError::FeatureDisabled => None,
         }
@@ -429,7 +434,7 @@ fn con_frame_from_chemfiles_at(
             Some(index) => error.in_frame(index as u64),
             None => error,
         };
-        ChemfilesImportError::InvalidFrame(error.to_string())
+        ChemfilesImportError::NonFiniteValue(error)
     })?;
     let velocities = if frame.has_velocities() {
         Some(frame_velocities(frame)?)
@@ -1445,8 +1450,11 @@ mod tests {
         expected: &str,
     ) {
         match result {
-            Err(ChemfilesImportError::InvalidFrame(message)) => assert_eq!(message, expected),
-            other => panic!("expected InvalidFrame({expected:?}), got {other:?}"),
+            Err(ChemfilesImportError::NonFiniteValue(error)) => {
+                assert!(error.is_non_finite_cell(), "{error:?}");
+                assert_eq!(error.to_string(), expected);
+            }
+            other => panic!("expected NonFiniteValue({expected:?}), got {other:?}"),
         }
     }
 

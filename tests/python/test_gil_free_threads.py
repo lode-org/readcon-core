@@ -398,12 +398,60 @@ def test_write_conbin_columns_while_positions_change(tmp_path: Path) -> None:
                 str(out), positions, velocities, masses, cell, fixed
             )
             written = readcon.read_conbin_columns(str(out))
-            # The kernel copies the arrays with the GIL released, as
-            # `ndarray.tofile` does, so a GIL build orders nothing either.
+            # Each staged element is atomic, but elements have no shared
+            # snapshot instant, so a free-threaded sweep can mix versions.
             _assert_swept(np.array(written["positions"]), *shape, ordered=False)
             del written
 
     _with_sweep(positions, body)
+
+
+def test_write_conbin_columns_validates_the_atomic_cell_snapshot(
+    tmp_path: Path,
+) -> None:
+    import numpy as np
+    import readcon
+
+    if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
+        pytest.skip("requires a free-threaded interpreter")
+    assert not _gil_enabled()
+
+    n_frames = 4096
+    positions = np.zeros((n_frames, 1, 3))
+    velocities = np.zeros_like(positions)
+    masses = np.ones((n_frames, 1))
+    cell = np.tile([10.0, 10.0, 10.0, 90.0, 90.0, 90.0], (n_frames, 1))
+    fixed = np.zeros_like(positions)
+    out = tmp_path / "cell-race.conbin"
+    started = threading.Event()
+    stop = threading.Event()
+
+    def mutate() -> None:
+        started.set()
+        while not stop.is_set():
+            cell[:, 0] = np.nan
+            cell[:, 0] = 10.0
+
+    thread = threading.Thread(target=mutate, daemon=True)
+    thread.start()
+    started.wait()
+    rejected = 0
+    try:
+        for _ in range(80):
+            try:
+                readcon.write_conbin_columns(
+                    str(out), positions, velocities, masses, cell, fixed
+                )
+            except readcon.NonFiniteValue:
+                rejected += 1
+                continue
+            stored = readcon.read_conbin_columns(str(out))
+            assert np.isfinite(np.asarray(stored["cell"])).all()
+            del stored
+    finally:
+        stop.set()
+        thread.join(timeout=60.0)
+    assert rejected > 0
 
 
 def test_write_extxyz_while_positions_change(tmp_path: Path) -> None:

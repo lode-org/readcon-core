@@ -102,6 +102,8 @@ mod stubs {
     pub enum ChemfilesImportError {
         /// Atom / property count mismatch or other structural problem.
         InvalidFrame(String),
+        /// A NaN or infinite cell length or angle.
+        NonFiniteValue(crate::error::ParseError),
         /// I/O while reading a trajectory path.
         Io(std::io::Error),
         /// This build was compiled without the `chemfiles` Cargo feature.
@@ -113,6 +115,9 @@ mod stubs {
             match self {
                 ChemfilesImportError::InvalidFrame(msg) => {
                     write!(f, "invalid chemfiles frame: {msg}")
+                }
+                ChemfilesImportError::NonFiniteValue(e) => {
+                    write!(f, "invalid chemfiles frame: {e}")
                 }
                 ChemfilesImportError::Io(e) => write!(f, "I/O error: {e}"),
                 ChemfilesImportError::FeatureDisabled => write!(
@@ -128,6 +133,7 @@ mod stubs {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
                 ChemfilesImportError::Io(e) => Some(e),
+                ChemfilesImportError::NonFiniteValue(e) => Some(e),
                 ChemfilesImportError::InvalidFrame(_) | ChemfilesImportError::FeatureDisabled => {
                     None
                 }
