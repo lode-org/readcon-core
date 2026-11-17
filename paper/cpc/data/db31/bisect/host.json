@@ -1,0 +1,34 @@
+{
+  "commit": "a584a28816c2f603c8c94759fdf45d86fc20f069",
+  "tree": "c1c761697b9aa9e57f3f1943868811285c5d8d03",
+  "hostname": "host",
+  "cpu": "Intel(R) Xeon(R) Processor",
+  "ncpu": 8,
+  "n": 30,
+  "serial": true,
+  "kernel": "6.12.113+",
+  "quantile": "type-7",
+  "omp_num_threads": "1",
+  "openblas_num_threads": "1",
+  "mkl_num_threads": "1",
+  "numexpr_num_threads": "1",
+  "cpuinfo_mhz": 2700.0,
+  "measured": [
+    {
+      "label": "aedcbda4",
+      "sha": "aedcbda468d208278b8699b80c6db743edcdc21e"
+    },
+    {
+      "label": "750b197",
+      "sha": "750b1970b2ddc9cc0bb4547d3918024d67d7f6a6"
+    },
+    {
+      "label": "d671c32",
+      "sha": "d671c327375f588044b6f4953314cd80ddddf356"
+    },
+    {
+      "label": "20a5f64",
+      "sha": "20a5f64e37d9a0892e913289d39bcbe71d7718f8"
+    }
+  ]
+}
