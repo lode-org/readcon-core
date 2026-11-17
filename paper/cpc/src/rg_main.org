@@ -905,7 +905,8 @@ Section~\ref*{sec:supp-repro} gives the commands that install readcon-core and r
 
 \FloatBarrier \section*{CRediT authorship contribution statement}\label{sec:credit} Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing -{}- original draft, Writing -{}- review and editing.
 
-\section*{Declaration of competing interest}\label{sec:competing} The author declares no competing interests.
+\section*{Declaration of competing interest}\label{sec:competing}
+The author declares that he has no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
 \section*{Funding}\label{sec:funding}
 This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors.
