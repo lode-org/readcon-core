@@ -1298,9 +1298,15 @@ fn arc_str_strong(symbol: &std::sync::Arc<str>) -> *const std::sync::atomic::Ato
 }
 
 fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
-    unsafe {
-        (*arc_str_strong(symbol)).fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
+    if n == 0 {
+        return;
     }
+    unsafe {
+        (*arc_str_strong(symbol)).fetch_sub(n - 1, std::sync::atomic::Ordering::Release);
+    }
+    // The atoms can hold the last references. The final count is an `Arc`
+    // drop, so the string is freed when no other owner remains.
+    drop(share_arc_str(symbol));
 }
 
 /// Add `extra` strong references to `symbol` in one atomic add.
@@ -4953,6 +4959,36 @@ mod tests {
             );
             assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
         }
+    }
+
+    #[test]
+    fn bulk_symbol_drop_frees_a_symbol_the_atoms_held_last() {
+        let n = 2048;
+        let symbol: Arc<str> = Arc::from("O");
+        let weak = Arc::downgrade(&symbol);
+        let mut flat = vec![0.0f64; n * 3];
+        bump_arc_str(&symbol, n);
+        let mut atoms: Vec<AtomDatum> = (0..n)
+            .map(|i| {
+                AtomDatum::at_slot(
+                    share_arc_str(&symbol),
+                    unsafe { flat.as_mut_ptr().add(i * 3) },
+                    [false; 3],
+                    i as u64,
+                )
+            })
+            .collect();
+        mark_uniform_symbol_drop(&atoms);
+        drop(symbol);
+        bulk_drop_uniform_symbols(&mut atoms);
+        assert!(atoms.is_empty(), "the bulk path did not run");
+        assert!(weak.upgrade().is_none());
+        // `weak` keeps the allocation. Its weak count is 1 once the last
+        // strong reference has released the implicit one.
+        let probe = std::mem::ManuallyDrop::new(unsafe { Arc::from_raw(weak.as_ptr()) });
+        let strong = arc_str_strong(&probe);
+        let weak_count = unsafe { (*strong.add(1)).load(std::sync::atomic::Ordering::Relaxed) };
+        assert_eq!(weak_count, 1, "the last symbol reference was not dropped");
     }
 
     #[test]
