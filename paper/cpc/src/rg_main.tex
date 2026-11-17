@@ -118,8 +118,8 @@ belowskip=0.4em
 \begin{abstract}
 Saddle-point and rare-event searches are often stopped and resumed, sometimes in a different code from the one that started them.
 The geometry file used for the restart then has to keep the per-component atomic constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates.
-CON is the text geometry format of the eOn code, and it has had no specification.
-Here, we present the CON 3.1 specification and readcon-core, its reference reader and writer.
+CON is a text geometry format used in eOn, ASE and other codes, and it has had no specification.
+The CON 3.1 specification formalizes and extends it, and readcon-core is its reference reader and writer.
 A JSON header on the second line of each frame declares the grammar version and the physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and a reader of a given major version accepts later minor revisions.
 Two conformance corpora of \corpusFiles{} legal and illegal files fix what a conforming reader returns, and every Python and C read path in readcon-core returns the verdict of every corpus file.
 On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the height constraint of the adatom changes the prefactor by a factor of \sigfig{2}{\eFivePrefactorRatioFree}.
@@ -166,9 +166,9 @@ A resumed surface search has to know which Cartesian components of each atom are
 It also needs the identifier on each row, since events and band images are matched by atom identity, and the time unit of the velocities, since a misread unit scales the kinetic energy by the square of the conversion factor.
 A restart that repeats the interrupted run to roundoff must further read back the binary64 coordinates as they were written.
 Of the formats in common use, H5MD defines no mask element, the POSCAR structure file defines no atom identifier, and extended XYZ keeps both in column names chosen by one library and names no time unit.
-CON, the geometry format of eOn, had no specification, so each reader decided for itself which files are legal and what each column means.
+CON is a geometry format used in eOn, ASE and other codes, and it had no specification, so each reader decided for itself which files are legal and what each column means.
 
-\textit{Solution method:} CON 3.1 is a versioned grammar for the CON text, and readcon-core is its reference reader and writer.
+\textit{Solution method:} CON 3.1 is a versioned grammar that formalizes and extends the CON text, and readcon-core is its reference reader and writer.
 The second line of a frame is a JSON object that declares the major and minor version, the units, the periodic flags and the per-atom sections that follow the coordinates.
 The fourth column of a coordinate row is a three-bit mask of the fixed components, and the fifth is an atom identifier.
 From minor 1 onwards, a velocity section declares its time unit.
@@ -234,12 +234,10 @@ Electronic structure has done the same for densities and wavefunctions with the 
 A computed barrier can be reproduced from a file only when every reader returns the same fields from it.
 A versioned specification together with a corpus of files of known verdicts makes that condition a test that any reader can run.
 
-In this paper, we present the CON 3.1 specification and readcon-core, its reference implementation.
-CON 3.1 adds a JSON header line that declares the format version, the physical units and the periodic flags, stores a three-bit constraint mask and an atom identifier on each coordinate row, allows declared per-atom sections, and reads each coordinate back as the binary64 value that was written.
+CON 3.1 formalizes the CON format and extends it.
+It adds a JSON header line that declares the format version, the physical units and the periodic flags, stores a three-bit constraint mask and an atom identifier on each coordinate row, allows declared per-atom sections, and reads each coordinate back as the binary64 value that was written.
 The parser is one Rust core with C, C++, Python, Julia and Fortran interfaces, similar in layout to chemfiles \cite{frauxChemfileschemfilesVersion01042023}, and it provides borrowed DLPack views of the positions at \dlpackRatio{} times the cost of an explicit copy (Section~\ref{sec:dlpack}).
-Section~\ref{sec:worked} steps through a reference frame and gives the effect of each field on a restart, and Section~\ref{sec:format} states the normative grammar and the version rules.
-Sections~\ref{sec:implementation} and~\ref{sec:conformance} describe the implementation and test it against both conformance corpora.
-Section~\ref{sec:cases} resumes saddle searches from checkpoints written and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} compares read times with ASE, eOn, chemfiles, MDAnalysis, OVITO, pymatgen, h5py and NumPy.
+We compare its read times with those of ASE, MDAnalysis, OVITO, pymatgen and pure Python (Section~\ref{sec:performance}).
 Of the formats in this comparison, only CON 3.1 specifies all four checkpoint fields, and readcon-core is the only reader here that returns the constraint mask, the atom identifier and the velocity time unit from fields its own specification defines, while accepting later minor revisions.
 
 \section{One frame, line by line}\label{sec:worked} Listing~\ref{lst:frame} is a complete CON 3.1 file written by readcon-core with velocities.
@@ -877,7 +875,7 @@ The database and MPI figures come from earlier campaigns, and Section~\ref{sec:h
 
 \FloatBarrier \section{Conclusions}\label{sec:conclusions}
 A resumed saddle search repeats an interrupted run only when the checkpoint keeps the per-component constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates as written.
-We have written the CON format down as the versioned CON 3.1 grammar and implemented it in readcon-core, one Rust core behind C, C++, Python, Julia and Fortran interfaces, with borrowed DLPack views of the coordinates.
+We have formalized and extended the CON format as the versioned CON 3.1 grammar and implemented it in readcon-core, one Rust core behind C, C++, Python, Julia and Fortran interfaces, with borrowed DLPack views of the coordinates.
 Every Python and C read path of readcon-core returns the verdict of the corpus manifests on all \corpusFiles{} legal and illegal files of the two conformance corpora.
 On the held Pt(100) slab, a band resumed from CON 3.1 repeats the uninterrupted band bit for bit, and a reader that drops the hold sends the band to a saddle whose prefactor is \sigfig{2}{\eFivePrefactorRatioFree} times larger.
 Section~\ref{sec:host} gives the measured reads.
