@@ -1,6 +1,8 @@
 """Rules for the readcon-db campaign-store subsection of ``rg_main.tex``.
 
-Every number in that subsection is recomputed from the reviewed db31 records
+The counts printed in that subsection are recomputed here, and its other
+numbers are macros that readcon_db_macros.py writes with the helpers of this
+module.  All of them come from the reviewed db31 records
 (lode-org/readcon-db ``ff1210e3``) and the fair-store rerun in the db32 records
 (lode-org/readcon-db ``227e45cf``, measured code ``d8bf1cb5``) that now holds
 the fair-store numbers, with the one-million-atom warm-read range taken across
@@ -80,123 +82,11 @@ RULES = [
         (f"{MAIN}~copper atoms",),
     ),
     Rule(
-        "2.2603e-3",
-        INGEST_RDB["median_s"],
-        FAIRDB32,
-        "fair paper40x8 insert cold-file readcon-db rayon=1 median_s",
-        (f"{MAIN}~takes a median",),
-    ),
-    Rule(
-        "5.7336e-3",
-        INGEST_ASE["median_s"],
-        FAIRDB32,
-        "fair paper40x8 insert cold-file ase.db rayon=1 median_s",
-        (f"{MAIN}~takes a median",),
-    ),
-    Rule(
         "500",
         CORPUS500["n_frames"],
         CORPUS,
         "readcon-db corpus row n_frames",
         (f"{MAIN}~reads every frame",),
-    ),
-    Rule(
-        "5.22",
-        CORPUS500["extract_all_mean_s"] * 1000,
-        CORPUS,
-        "readcon-db corpus n_frames=500 extract_all_mean_s in ms",
-        (f"{MAIN}~reads every frame",),
-    ),
-    Rule(
-        "0.6440",
-        ratio(DB24, "ops_rayon_num_threads_1.full_read:warm"),
-        DB24,
-        "db24 ops_rayon_num_threads_1 full_read:warm shuffle median_s over raw median_s",
-        (f"{MAIN}~lattice trajectory",),
-    ),
-    Rule(
-        "0.6401",
-        ratio(DB25, "ops_rayon_num_threads_1.full_read:warm"),
-        DB25,
-        "db25 ops_rayon_num_threads_1 full_read:warm shuffle median_s over raw median_s",
-        (f"{MAIN}~lattice trajectory",),
-    ),
-    Rule(
-        "0.6220",
-        jget(DB25, "ops_rayon_num_threads_1.full_read:warm.paired.ci95.0"),
-        DB25,
-        "db25 ops_rayon_num_threads_1 full_read:warm paired ci95 low",
-        (f"{MAIN}~lattice trajectory",),
-    ),
-    Rule(
-        "0.7668",
-        jget(DB25, "ops_rayon_num_threads_1.full_read:warm.paired.ci95.1"),
-        DB25,
-        "db25 ops_rayon_num_threads_1 full_read:warm paired ci95 high",
-        (f"{MAIN}~lattice trajectory",),
-    ),
-    Rule(
-        "1.0231",
-        jget(DB26, "raw_tip_vs_aedcbda4_rayon_1.full_read:warm.paired.median"),
-        DB26,
-        "db26 raw_tip_vs_aedcbda4_rayon_1 full_read:warm paired median",
-        (f"{MAIN}~A third campaign compares the raw read",),
-    ),
-    Rule(
-        "0.8372",
-        jget(DB26, "raw_tip_vs_aedcbda4_rayon_1.full_read:warm.paired.ci95.0"),
-        DB26,
-        "db26 raw_tip_vs_aedcbda4_rayon_1 full_read:warm paired ci95 low",
-        (f"{MAIN}~A third campaign compares the raw read",),
-    ),
-    Rule(
-        "1.2127",
-        jget(DB26, "raw_tip_vs_aedcbda4_rayon_1.full_read:warm.paired.ci95.1"),
-        DB26,
-        "db26 raw_tip_vs_aedcbda4_rayon_1 full_read:warm paired ci95 high",
-        (f"{MAIN}~A third campaign compares the raw read",),
-    ),
-    Rule(
-        "0.684",
-        jget(DB28, "reads.lattice.threads_1.full_read:warm.ratio_shuffle_over_raw"),
-        DB28,
-        "db28 reads lattice threads_1 full_read:warm ratio_shuffle_over_raw",
-        (f"{MAIN}~lattice best case",),
-    ),
-    Rule(
-        "0.7903",
-        jget(DB29, "reads.lattice.threads_1.full_read:warm.paired.median"),
-        DB29,
-        "db29 reads lattice threads_1 full_read:warm paired median",
-        (f"{MAIN}~lattice best case",),
-    ),
-    Rule(
-        "1.179",
-        jget(DB28, "reads.md.threads_1.full_read:warm.ratio_shuffle_over_raw"),
-        DB28,
-        "db28 reads md threads_1 full_read:warm ratio_shuffle_over_raw",
-        (f"{MAIN}~lattice best case",),
-    ),
-    Rule(
-        "1.7261e-2",
-        READ1M_FAIR["median_s"],
-        FAIRDB32,
-        "fair atoms-1000000 full_read warm readcon-db rayon=1 median_s",
-        (f"{MAIN}~million-atom",),
-    ),
-    Rule(
-        "1.726e-2",
-        min(ONE_MILLION_MEDIANS),
-        FAIRDB32,
-        "min over fair-db32, fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
-        (f"{MAIN}~million-atom",),
-    ),
-    Rule(
-        "3.447e-2",
-        max(ONE_MILLION_MEDIANS),
-        FAIRDB30,
-        "max over fair-db32, fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
-        (f"{MAIN}~million-atom",),
     ),
     Rule(
         "50",

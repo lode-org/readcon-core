@@ -112,7 +112,8 @@ RECORD_NAMES = (
     (r"evidence/results/e5_prefactor\.json", "Evidence E5, prefactor"),
     (r"data/db31/(db\d+)/ab\.json", "readcon-db campaign {campaign}"),
     (r"data/db31/corpus-ops/readcon_db_bench\.json", "readcon-db campaign db31, corpus operations"),
-    (r"data/db3[02]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
+    (r"data/db3[0-2]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
+    (r"data/db30/(db\d+)/campaign\.json", "readcon-db campaign {campaign}"),
 )
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
 PREFIXES = {

@@ -87,6 +87,7 @@ FORMAT = [
     ["evidence/e5_prefactor.py", "--tables"],
     ["scripts/velocity_case.py", "--tables"],
     ["scripts/gen_case_macros.py"],
+    ["scripts/readcon_db_macros.py"],
     ["scripts/gen_tables.py"],
     ["scripts/r0174_tables.py"],
     ["scripts/h2h_tables.py"],

@@ -54,6 +54,16 @@ rule db_macros:
     shell:
         "python3 scripts/db_from_log.py"
 
+rule readcon_db_macros:
+    input:
+        "data/db30",
+        "data/db31",
+        "data/db32",
+    output:
+        "src/figures/generated/readcon_db_macros.tex",
+    shell:
+        "python3 scripts/readcon_db_macros.py"
+
 rule mpi_log:
     output:
         "logs/mpi.log",
@@ -112,6 +122,7 @@ rule manuscript:
         "src/figures/generated/memory.pdf",
         "src/figures/generated/mpi_macros.tex",
         "src/figures/generated/db_macros.tex",
+        "src/figures/generated/readcon_db_macros.tex",
         "scripts/build_tex.sh",
         "scripts/build_tex_tectonic.sh",
     output:
