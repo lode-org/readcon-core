@@ -118,13 +118,14 @@ belowskip=0.4em
 
 \input{authors.tex}
 
-\begin{abstract} CON is a geometry file format used in many codes.
-readcon-core formalizes that text as CON 3.1 and improves the fields a restart reads back.
-A JSON line states the version and the units.
-Each coordinate row carries a mask of fixed components and an atom identifier, and a reader of a known major accepts any later minor.
-Two corpora of \corpusFiles{} files fix the verdict of a conforming reader, and every Python and C read path returns that verdict.
-On a platinum slab, a climbing-image band resumed from CON 3.1 repeats the uninterrupted band, and a lost hold changes the prefactor by a factor \sigfig{2}{\eFivePrefactorRatioFree}.
-A borrowed DLPack view of \dlpackAtoms{} positions costs \dlpackRatio{} times an explicit copy, the median of six repeats.
+\begin{abstract}
+Resuming saddle-point and rare-event searches across atomistic simulation codes requires checkpoints that preserve per-component atomic constraints, atom identifiers, velocity time units, and binary64 coordinates.
+CON is a text geometry format used across many codes.
+Here, we present readcon-core and the CON 3.1 specification, which formalize and extend it.
+On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the adatom height constraint changes the prefactor by a factor of \sigfig{2}{\eFivePrefactorRatioFree}.
+A borrowed DLPack view of \dlpackAtoms{} atomic positions takes \dlpackRatio{} times the cost of an explicit copy, the median of six runs.
+A second-line JSON header declares the grammar version and physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and readers for a given major version accept later minor revisions.
+Two conformance corpora of \corpusFiles{} legal and illegal files specify reader behavior, and every Python and C read path in readcon-core matches every corpus verdict.
 \end{abstract}
 
 
@@ -183,7 +184,7 @@ A path writer replaces the destination only after the last frame is accepted.
 \textit{Additional comments including restrictions and unusual features:} The release described is readcon-core~\readconversion{} (Data availability).
 Every build reads gzip input; zstd input and parallel parsing are build features, and the Python wheel enables both.
 A frame stores Cartesian coordinates, the cell, the periodic flags, the mask, one identifier per atom, and optional per-atom velocities, forces, energies, charges, spins, magnetic moments, displacements and spreads.
-It stores no optimiser history, so an optimiser with memory takes a different path after a restart.
+It stores no optimizer history, so an optimizer with memory takes a different path after a restart.
 Files that earlier eOn releases wrote are grammar version 1 and read as such.
 The velocities of a file of an earlier version are read in the natural unit of eOn whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listing~\ref{lst:py}).
@@ -230,16 +231,12 @@ Electronic structure has done the same for densities and wavefunctions with the 
 A computed barrier is reproducible from a file only when every reader returns the same fields from it.
 A versioned specification and a corpus of files with known verdicts turn that condition into a test of any reader.
 
-Here, we describe CON 3.1 and readcon-core.
-CON is a file format used in many places.
-CON 3.1 formalizes that text, and readcon-core improves it with a JSON header line that declares a version, the units and the periodic flags, a three-bit mask of fixed components and an atom identifier on each coordinate row, declared per-atom sections, and coordinates that read back as the binary64 values written.
-A borrowed DLPack view of the positions costs \dlpackRatio{} times an explicit copy (Section~\ref{sec:dlpack}).
-readcon-core is its reference reader and writer, one Rust core behind C, C++, Python, Julia and Fortran interfaces, a layout that it takes from chemfiles \cite{frauxChemfileschemfilesVersion01042023}.
-Section~\ref{sec:worked} reads one frame line by line and measures what each field changes when a reader gets it wrong, and Section~\ref{sec:format} states the grammar and its version rule.
-Sections~\ref{sec:implementation} and~\ref{sec:conformance} give the reader and test it against the corpora, Section~\ref{sec:cases} resumes saddle searches from checkpoints that we wrote and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} times readcon-core against ASE, MDAnalysis, OVITO, pymatgen and a pure Python parse of the same CON file.
-Unlike H5MD, TNG and extended XYZ, the CON 3.1 specification defines all four fields that a restart reads, and its corpus of legal and illegal files decides the verdict of any reader on each clause.
-readcon-core is the only reader in this comparison that returns the fixed-component mask, the atom identifier and the velocity time unit from places that specification defines.
-No other reader both accepts a later minor of a known major and decides each file of the conformance corpus.
+Here, we introduce the CON 3.1 specification and its reference implementation readcon-core to formalize and extend the widely used CON format.
+CON 3.1 adds a JSON header line declaring the format version, physical units, and periodicity flags, stores a three-bit constraint mask and atom identifier on each coordinate row, supports declared per-atom sections, and reads each coordinate back as the binary64 value written.
+We expose this parser from a single Rust core behind C, C++, Python, Julia, and Fortran interfaces, following the architecture of chemfiles \cite{frauxChemfileschemfilesVersion01042023}, and provide borrowed DLPack position views at \dlpackRatio{} times the cost of an explicit copy (Section~\ref{sec:dlpack}).
+Section~\ref{sec:worked} steps through a reference frame to quantify the impact of each field on a restart, and Section~\ref{sec:format} states the normative grammar and version rules.
+Sections~\ref{sec:implementation} and~\ref{sec:conformance} describe the implementation and test it against both conformance corpora, Section~\ref{sec:cases} resumes saddle searches from checkpoints that we wrote and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} compares read performance against ASE, MDAnalysis, OVITO, pymatgen, and pure Python.
+Unlike H5MD, TNG, and extended XYZ, CON 3.1 specifies all four checkpoint fields explicitly, and readcon-core is the only reader in this comparison that recovers the constraint mask, atom identifier, and velocity time unit from standardized fields while remaining forward-compatible across minor revisions.
 
 \section{One frame, line by line}\label{sec:worked} Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of a Pt(100) slab of two layers of four atoms with one adatom, written by readcon-core with velocities.
 The left panel of Figure~\ref{fig:structures} shows the slab, and Table~\ref{tab:frame} gives the content of each line and the rule that reads it.
@@ -251,7 +248,7 @@ We read the fields in file order, and at each we give what a reader returns when
 Left: the survey frame of Listing~\ref{lst:frame} and Table~\ref{tab:survey}, a Pt(100) slab with one adatom.
 Middle: the CuH\(_2\) slab used as a structure in the measurements.
 Right: the middle image of the uninterrupted climbing-image band of the EMT Pt(100) adatom hop of Section~\ref{sec:cases}.
-The colours are the Ruhi palette.}
+The colors are the Ruhi palette.}
 \label{fig:structures} \end{figure}
 
 \begin{table}[tbp] \centering \footnotesize \caption{The lines of Listing~\ref{lst:frame} and the rule that reads each.}
@@ -279,7 +276,7 @@ Line & Content & Rule \\
 \end{tabular}
 \end{table}
 
-The header line is one JSON object \cite{brayJavascriptObjectNotation2017}, recognised by its first non-blank character, \texttt{\{}, and a frame whose header is anything else is grammar version~1, the text that earlier eOn releases write.
+The header line is one JSON object \cite{brayJavascriptObjectNotation2017}, recognized by its first non-blank character, \texttt{\{}, and a frame whose header is anything else is grammar version~1, the text that earlier eOn releases write.
 The object of Listing~\ref{lst:frame} names the major and the minor of the grammar, declares the slab periodic in \(x\) and \(y\) and open in \(z\), lists \texttt{velocities} as the one section after the coordinates, and states the units of length, energy, mass and time.
 
 The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(c=\wkLengthC\,\text{\AA}\) and the angles \(\alpha\), \(\beta\) and \(\gamma\) in degrees, from which the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane \cite{bekkerUnificationBoxShapes1997},
@@ -366,7 +363,7 @@ With \(T\) atom types of \(N_k\) atoms each, a frame \(\mathcal{F}\) is
 \mathcal{V}_k&\to s_k\ \ (S\ \text{\texttt{of Component}}\ k)\ \ \bigl(v_1\cdots v_w\ m\ \iota\bigr)^{N_k},
 \end{aligned}
 \end{equation}
-where each symbol or parenthesised group is one line, a superscript repeats a line, \(\lambda_1\), \(\lambda_5\) and \(\lambda_6\) are free lines, \(\lambda_2\) is the header, \(M_k\) and \(s_k\) are the mass and symbol of type \(k\), \(\iota\) is the identifier, \(\varnothing\) is a blank line and \(S\) is the name of a section of width \(w\).
+where each symbol or parenthesized group is one line, a superscript repeats a line, \(\lambda_1\), \(\lambda_5\) and \(\lambda_6\) are free lines, \(\lambda_2\) is the header, \(M_k\) and \(s_k\) are the mass and symbol of type \(k\), \(\iota\) is the identifier, \(\varnothing\) is a blank line and \(S\) is the name of a section of width \(w\).
 A type count of zero is a frame without atoms.
 The release includes this shape as an informative parsing expression grammar (PEG) \cite{fordParsingExpressionGrammars2004}, and where the PEG admits a token that a clause rejects, the clause decides.
 
@@ -404,7 +401,7 @@ The readcon-core writer refuses a frame that repeats an identifier, and no claus
 
 Each number is a finite decimal that the reader rounds to the nearest binary64 value, ties to even \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
 The default writer prints the shortest decimal that rounds back to the same value \cite{steeleHowPrintFloatingpoint1990,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}, so writing a frame and reading it back returns every coordinate unchanged, and a setting prints six fixed decimals instead.
-A gzip or zstd envelope wraps the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and a reader recognises it by content.
+A gzip or zstd envelope wraps the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and a reader recognizes it by content.
 readcon-core decodes zstd when built with that feature and otherwise refuses the file by name.
 
 Table~\ref{tab:keys} lists the reserved keys of the JSON line.
@@ -581,7 +578,7 @@ readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
 On the Rust builder the methods for positions, velocities, forces, per-atom energies and masses return a borrowed float64 tensor, and the method for atom identifiers returns a borrowed uint64 tensor.
 The lifetime of each borrowed tensor is the builder, and the default build places it on the CPU.
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
-Python materialises a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
+Python materializes a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
 The measured exchange is a NumPy DLPack view against an explicit copy of the same positions, for \dlpackAtoms{} copper atoms.
 The record holds six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
@@ -648,11 +645,11 @@ MDAnalysis 2.11.0 still writes the H5MD position, velocity and force values as \
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
 \subsection{A climbing-image band through every route} The restart study uses a larger slab, Pt(100) under the effective-medium theory (EMT) potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three layers of \(3\times3\) atoms with the bottom layer held in every component and one adatom held in \(z\) at the height of Table~\ref{tab:params} (Figure~\ref{fig:structures}, right).
-The adatom hops between neighbouring fourfold hollows along \(x\).
+The adatom hops between neighboring fourfold hollows along \(x\).
 With the slab fixed, the EMT force on the adatom at that height exceeds the band tolerance.
 That height is no stationary point of the free adsorbate, so a file that drops the hold resumes another relaxation.
 A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force, which keeps no step history, so a difference after the restart comes from the file.
-The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimiser divided by the five movable images, and each endpoint is minimised to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017}.
+The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017}.
 A force equal to the band tolerance moves an atom by \(2\times 10^{-4}\,\text{\AA}\) under that step.
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and \(\rfCallsUnint\) force calls, with barrier \(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the middle image.
 We interrupt it after \(K\) steps, write it, read it back and resume it to \(f_{\mathrm{band}}\), once per route of Table~\ref{tab:restartfmt}.
@@ -665,7 +662,7 @@ Symbol & Meaning & Configuration key & Value \\
 \midrule
 \(L_{\mathrm{vac}}\) & vacuum on each side of the slab & slab \texttt{vacuum} & \(6.0\,\text{\AA}\) \\
 \(z_{\mathrm{ad}}\) & adatom height above the top layer & adsorbate height & \(1.75\,\text{\AA}\) \\
-\(f_{\mathrm{end}}\) & endpoint force tolerance & minimise \texttt{fmax} & \(0.002\,\mathrm{eV/\text{\AA}}\) \\
+\(f_{\mathrm{end}}\) & endpoint force tolerance & minimize \texttt{fmax} & \(0.002\,\mathrm{eV/\text{\AA}}\) \\
 \(f_{\mathrm{band}}\) & band force tolerance & band \texttt{fmax} & \(0.01\,\mathrm{eV/\text{\AA}}\) \\
 \(N_{\mathrm{img}}\) & movable images & band images & 5 \\
 \(k_{\mathrm{sp}}\) & spring constant & band \texttt{k} & \(0.1\,\mathrm{eV/\text{\AA}^2}\) \\
@@ -711,7 +708,7 @@ With the height free, the problem a reader solves when the file has lost the hol
 Section~\ref{sec:host} times that client on every frame, through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} on the frames \texttt{ConFileIO} reads.
 ASE ase.io (format eon) is the independent CON reader timed beside it.
 The candidate band counts are not reported.
-The default band optimiser of eOn is the limited-memory form, L-BFGS, of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and its memory vectors are stored in no geometry file.
+The default band optimizer of eOn is the limited-memory form, L-BFGS, of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and its memory vectors are stored in no geometry file.
 A restart therefore cannot repeat an L-BFGS path from the geometry alone.
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart.pdf} \caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
@@ -746,28 +743,15 @@ A point above the line means the tip is that many times as fast.}
 \FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames and 32 copper atoms, six times for each arm, interleaved, each sample a fresh process.
 Each library is imported before the clock starts.
 The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor, and the log names commit \texttt{\rcHostCommit}.
-CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file.
-readcon does not read XYZ.
-readcon does not read HDF5.
+CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file, and readcon reads neither XYZ nor HDF5.
 Memory is the VmHWM after the read minus the VmHWM after the import.
 
-\subsection{Results}\label{sec:results} On the coordinate file, readcon at the tip takes \rcTipMedian~s.
-readcon-core \rcReleaseVersion{} takes \rcReleaseMedian~s.
-The tip reads the file \rcTipOverRelease{} times faster than readcon-core \rcReleaseVersion{}.
-ASE ase.io (format eon) takes \rcAseMedian~s, and the tip is \rcTipOverAse{} times as fast.
-eOn 3.6.0 \texttt{loadcons} takes \rcEonMedian~s, and the tip is \rcTipOverEon{} times as fast.
-The row labelled readcon through the eOn C++ API is readcon's own parser called from that API.
-It takes \rcApiMedian~s.
-readcon-db ingests the same file in \rcDbMedian~s, and the read is \rcTipOverDb{} times as fast as that ingest.
-Every all-frame arm matches 100000 of 100000 frames, and the failure count is 0.
-The read adds \rcTipMib~MiB at the tip.
-ASE ase.io (format eon) adds \rcAseMib~MiB.
-chemfiles adds \rcChemMib~MiB and OVITO adds \rcOvitoMib~MiB, and those two figures read XYZ.
+\subsection{Results}\label{sec:results}
+On the 100000-frame coordinate file, the development tip of readcon-core completes the read in \rcTipMedian~s, which is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s), \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s), and \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
+Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, while ingesting the same file into the readcon-db store takes \rcDbMedian~s (\rcTipOverDb{} times slower than the direct read).
+Every all-frame reader matches all 100000 frames with zero failures; the read adds \rcTipMib~MiB to resident memory in readcon-core, compared with \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles (reading XYZ), and \rcOvitoMib~MiB for OVITO (reading XYZ).
 
-The first-frame rows read one frame of the same file.
-\texttt{Matter.con2matter} takes \rcMatterMedian~s and matches 1 of 1 frame.
-readcon's first-frame read takes \rcFirstMedian~s and matches 1 of 1 frame.
-The eOn build log is \path{paper/cpc/logs/eon-build.log}, and it names eOn commit \texttt{579738a}.
+For single-frame initialization on the first frame, \texttt{Matter.con2matter} requires \rcMatterMedian~s whereas readcon takes \rcFirstMedian~s, with both matching 1 of 1 frame.
 
 \subsection{Same-file and nearest-native panel}\label{sec:h2h}
 The same-file comparison reads one con file.
@@ -799,21 +783,20 @@ The mapped binary file reads them in \rcConbinMedian~s.
 
 \input{figures/generated/host_table}
 
-\subsection{readcon-db campaign store}\label{sec:readcon-db} readcon-db is the companion campaign store, and this paper reports its reviewed records.
-Those records are readcon-db commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}, copied to \path{paper/cpc/data/db31}, and the fair-store rerun is readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5} on the same branch, copied to \path{paper/cpc/data/db32}.
+\subsection{readcon-db campaign store}\label{sec:readcon-db}
+readcon-db is the companion campaign store (\url{https://github.com/lode-org/readcon-db}), and this paper reports its reviewed records, whose commit pins and fidelity test are in Data availability.
 The fair store comparison ingests the same 40 frames of 8 copper atoms into readcon-db and into the ASE database on one thread, twelve samples each, each insert one transaction and one commit, and each sample the mean of a 2~s span.
 readcon-db takes a median of \num{2.2603e-3}~s and the ASE database takes \num{5.7336e-3}~s.
 Type, positions, the cell lengths, angles and matrix on a triclinic cell, periodic boundary conditions, masses, fixed flags, velocities, the frame index and the unset energy (zero, with \texttt{energy\_set} false) are bit-exact in both stores, while atom ids, units and the \texttt{velocities\_set} and \texttt{pbc\_set} flags are kept only by readcon-db.
 Both stores keep the force array bit-exact, including the explicit zeros on odd frames; the ASE database keeps it on the row, and \texttt{Atoms.get\_forces()} then zeros the components on fixed axes.
 CON stores one mass per type.
-The fidelity test is \path{python/tests/test_two_store_fidelity.py} in lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied to \path{paper/cpc/data/db32/fair-fidelity/FIELDS.md}.
-This equal comparison is the fair-db32 campaign; the legacy copper-dimer bench under \path{paper/cpc/data/db31/ase} is an unequal-workload stand-in and is not this comparison.
 On a 500-frame corpus readcon-db reads every frame in a mean of \num{5.22}~ms.
+
 readcon-db also keeps a derived cache of the same CON text with each coordinate column byte-shuffled and compressed with zstd.
-On one thread the warm full read of the shuffled cache on the lattice trajectory divided by the raw read is \num{0.6440} in the db24 campaign and \num{0.6401} in db25, and the db25 paired interval runs from \num{0.6220} to \num{0.7668}, so the shuffled read is the faster of the two.
-The db26 campaign compares the raw read of \texttt{a584a288} with an earlier commit, its paired median on one thread is \num{1.0231} with an interval from \num{0.8372} to \num{1.2127}, and a commit bisect of the raw read returns a paired interval at each stored step; every stored bisect interval and this db26 interval include 1.
-On one thread the lattice best case reads the shuffled cache in \num{0.684} of the raw time in db28 and the db29 paired median of that read is \num{0.7903}, while the db28 membrane-protein trajectory reads it in \num{1.179} of the raw time, so the shuffled cache is not always the faster read.
-The fair one-million-atom warm read on one thread runs from \num{1.726e-2}~s to \num{3.447e-2}~s across the readcon-db campaigns on this host and is \num{1.7261e-2}~s in fair-db32, each under a 50~ms sampling window.
+On one thread the warm full read of the shuffled cache on the lattice trajectory divided by the raw read is \num{0.6440} in the first campaign and \num{0.6401} in the second, and the paired interval of the second runs from \num{0.6220} to \num{0.7668}, so the shuffled read is the faster of the two.
+A third campaign compares the raw read of the measured code with an earlier commit; its paired median on one thread is \num{1.0231} with an interval from \num{0.8372} to \num{1.2127}, and a commit bisect of the raw read returns a paired interval at each stored step; every stored bisect interval and this interval include 1.
+In a fourth campaign the lattice best case reads the shuffled cache in \num{0.684} of the raw time, and the paired median of that read in a fifth is \num{0.7903}, while the membrane-protein trajectory of the fourth reads it in \num{1.179} of the raw time, so the shuffled cache is not always the faster read.
+The fair one-million-atom warm read on one thread runs from \num{1.726e-2}~s to \num{3.447e-2}~s across the readcon-db campaigns on this host and is \num{1.7261e-2}~s in the fair-store rerun, each under a 50~ms sampling window.
 
 \input{figures/generated/mpi_macros}
 
@@ -887,14 +870,13 @@ Section~\ref{sec:host} gives the repeats measured on this host.
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/neb_multiples.pdf} \caption{The five stored EMT bands, as energy above the first image.}
 \label{fig:supp-neb} \end{figure}
 
-\FloatBarrier \section{Conclusions}\label{sec:conclusions} A resumed saddle search repeats the interrupted one only when its checkpoint returns the fixed components, the identifiers, the time unit and the binary64 coordinates as written.
-CON 3.1 states these fields as a versioned grammar for the CON format, which many codes already write and read.
-readcon-core is the reference implementation of that grammar, in Rust, with C, C++, Python, Julia and Fortran interfaces.
-Every read path of the readcon-core Python module and C library returns the verdict of the corpus manifests on all \corpusFiles{} legal and illegal files.
+\FloatBarrier \section{Conclusions}\label{sec:conclusions}
+A resumed saddle search reproduces an interrupted run only when the checkpoint preserves per-component constraints, atom identifiers, velocity time units, and binary64 coordinates as written.
+We have formalized the CON format as the versioned CON 3.1 grammar and implemented it in readcon-core, with a single Rust core behind C, C++, Python, Julia, and Fortran interfaces and borrowed DLPack coordinate views.
+Every Python and C read path in readcon-core matches the verdict of the corpus manifests on all \corpusFiles{} legal and illegal files of the two conformance corpora.
 On the held Pt(100) slab, a band resumed from CON 3.1 repeats the uninterrupted band bit for bit, and a reader that drops the hold sends the band to a saddle with a prefactor \sigfig{2}{\eFivePrefactorRatioFree} times larger.
 The reads measured on this branch are in Section~\ref{sec:host}.
-A format that defines no place for the mask cannot return that field.
-Unlike a format whose meaning lives in the code of one reader, CON 3.1 lets any program test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
+CON 3.1 separates the format specification and the conformance corpus from any single simulation engine, so any program can test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
@@ -908,12 +890,17 @@ Two earlier commits of the main branch carry parts of the reader used here: \tex
 In a checkout of the candidate commit, \texttt{cargo build -{}-release} builds the Rust library, the shared and static C libraries and the command-line program \texttt{readcon-core}, and \texttt{-{}-features zstd,parallel} adds the two features.
 \texttt{meson setup build} and \texttt{meson compile -C build} build the C libraries with their headers and a pkg-config file, and \texttt{python3 -m pip install .} builds and installs the Python module with both features.
 Cargo, pip and conda fetch the dependencies that \path{Cargo.lock} and \path{paper/cpc/pixi.lock} pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
-readcon-core is distributed under the Massachusetts Institute of Technology (MIT) licence, and \path{addl/referenceImpls/eon_cpp} contains the CON reader of eOn under the BSD 3-clause licence of the eOn Development Team, which no build uses.
+readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and \path{addl/referenceImpls/eon_cpp} contains the CON reader of eOn under the BSD 3-clause license of the eOn Development Team, which no build uses.
 The library of a commit is its files \path{src}, \path{include}, \path{build.rs}, \path{Cargo.toml}, \path{Cargo.lock} and \path{pyproject.toml}.
 Its digest, the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, begins \texttt{\readcondigest} for that commit, and every record names its library by that digest.
 The scripts, records and sources of this paper are the directory \path{paper/cpc}.
 The scripts in \path{paper/cpc/scripts} regenerate every table, figure and printed number from the records, each generated table names its script, and \path{paper/cpc/data/trace/numbers.csv} names the record and the rule behind each number printed in the text and the captions.
 The specification and the conformance corpus are \path{docs/orgmode/spec.org} and \path{resources/conformance} of that commit, the CON 3.1 corpus is \path{paper/cpc/data/corpus31}, and the timing records of this branch are in \path{paper/cpc/logs}.
+The eOn build log is \path{paper/cpc/logs/eon-build.log}, and it names eOn commit \texttt{579738a}.
+The readcon-db records are the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}, copied to \path{paper/cpc/data/db31}, and the fair-store rerun at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5} on the same branch, copied to \path{paper/cpc/data/db32}.
+The fidelity test is \path{python/tests/test_two_store_fidelity.py} in lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied to \path{paper/cpc/data/db32/fair-fidelity/FIELDS.md}.
+The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench under \path{paper/cpc/data/db31/ase} is an unequal-workload stand-in and is not that comparison.
+The five shuffled-cache campaigns of Section~\ref*{sec:readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
 Section~\ref*{sec:supp-repro} gives the commands that install readcon-core, rebuild the paper with TeX Live or Tectonic and rerun each measurement, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
 
 \FloatBarrier \section*{CRediT authorship contribution statement}\label{sec:credit} Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing -{}- original draft, Writing -{}- review and editing.
@@ -921,7 +908,7 @@ Section~\ref*{sec:supp-repro} gives the commands that install readcon-core, rebu
 \section*{Declaration of competing interest}\label{sec:competing} The author declares no competing interests.
 
 \section*{Acknowledgements}\label{sec:acknowledgements} The author thanks his family, Amrita Goswami, Ruhila Goswami, Sonaly Goswami, Debabrata Goswami, Moritz Sallermann, and Nagaselvamani and Sankaranarayan, for their love and patience.
-Ruhila Goswami designed the colour palette used for every figure.
+Ruhila Goswami designed the color palette used for every figure.
 He thanks Arí, Yoda, Jude, Crystee, Thor, Loki and the garden cats for their company, and TuiTui and Snoopy in memoriam.
 Dedicated, with love, to the memory of Cosmo, a baby bird.
 He also thanks Ami the cactus.
