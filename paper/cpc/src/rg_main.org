@@ -584,12 +584,13 @@ When a shared list is written again and no frame has changed, the writer reuses 
 No Rust slice is ever formed over numeric memory that Python owns and can change.
 
 
-\section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
-readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
-On the Rust builder the methods for positions, velocities, forces, per-atom energies and masses return a borrowed float64 tensor, and the method for atom identifiers returns a borrowed uint64 tensor.
-The lifetime of each borrowed tensor is the builder, and the default build places it on the CPU.
+\section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already holds a frame should be able to read its coordinates as a tensor without a copy.
+readcon-core exposes such tensors through DLPack \cite{dlpackDLPack2026}.
+On the Rust builder, the methods for positions, velocities, forces, per-atom energies and masses return a borrowed float64 tensor, and the method for atom identifiers returns a borrowed uint64 tensor.
+Each borrowed tensor lives as long as the builder, and the default build places it on the CPU.
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
-Python materializes a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
+Python materializes a contiguous NumPy array, which implements the DLPack protocol, so PyTorch and JAX take the array without a second copy.
+CuPy accepts only device memory and needs one copy from the host.
 The measured exchange is a NumPy DLPack view against an explicit copy of the same positions, for \dlpackAtoms{} copper atoms.
 The record holds six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
