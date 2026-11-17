@@ -200,7 +200,8 @@ A search that stops on one machine is resumed on another from a geometry file, w
 
 Such a checkpoint has to return four fields that a trajectory reader can ignore.
 First, mobility belongs to each Cartesian component.
-A surface search fixes the slab and may hold an adatom at a set height while it crosses the surface, and losing that hold changes the saddle the search converges to (Section~\ref{sec:prefactor}).
+A surface search fixes the slab.
+When the search also holds an adatom at a set height while the adatom crosses the surface, losing that hold changes the saddle the search converges to (Section~\ref{sec:prefactor}).
 Second, mode following and the bookkeeping of AKMC match atoms across frames and events by an identifier on each row, so a reader has to return that identifier as written rather than the row order.
 Third, dynamical steps read velocities.
 The natural time unit of eOn is \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}=\wkTimeFs\,\mathrm{fs}\), and a reader that takes the same numbers as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\).
@@ -413,7 +414,7 @@ The readcon-core writer refuses a frame that repeats an identifier, and no claus
 
 Each number is a finite decimal that the reader rounds to the nearest binary64 value, with ties to even \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
 By default the writer prints the shortest decimal that rounds back to the same value \cite{steeleHowPrintFloatingpoint1990,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}, so a frame that is written and read back has every coordinate unchanged; an option prints six fixed decimals instead.
-A gzip or zstd envelope may wrap the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and the reader recognizes it by its content.
+A gzip or zstd envelope wraps the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and the reader recognizes it by its content.
 readcon-core decodes zstd when built with that feature and otherwise refuses the file with an error that names zstd.
 
 Table~\ref{tab:keys} lists the reserved keys of the JSON line.
@@ -458,7 +459,7 @@ Key & Type & Key & Type \\
 The sections listed in \texttt{sections} follow the coordinate blocks in that order, each after one blank line (Table~\ref{tab:sections}).
 A reader skips a section it does not know only when the minor of the frame is later than its own and \texttt{section\_arity} gives the width \(w\ge1\) of the section.
 Each skipped row then has \(w+1\) or \(w+2\) tokens, which the reader counts without parsing them, and any other unknown section makes the frame illegal.
-A frame without a \texttt{sections} key, which includes every version-1 frame, may end with a legacy velocity block: a blank line followed by a complete block of the shape of lines \wkLineVelocitySymbol{} through \wkLineLastVelocity{} of Listing~\ref{lst:frame}.
+A frame without a \texttt{sections} key, including every version-1 frame, ends with a legacy velocity block when a blank line and a complete block of the shape of lines \wkLineVelocitySymbol{} through \wkLineLastVelocity{} of Listing~\ref{lst:frame} follow.
 Any other blank line in that place is the first line of the next frame.
 The specification does not define a blank line, and readcon-core takes it to be a line that holds only Unicode white space.
 After the last frame, it ignores one such line followed by spaces, tabs, form feeds and line ends.
@@ -485,7 +486,7 @@ Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
 
 From minor 1 onwards, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
 Frames of earlier versions are read in the natural unit, whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
-This rule exists because producers of that period wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
+Producers of that period wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
 That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and since its velocity writer sets no time unit, the library writes its default label of fs.
 After that release, the development line of eOn writes velocity files with \texttt{units.time} set to the natural unit \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}\), which corrects the label \cite{goswamiTheochemuieonCommit624f4592026}, and it links readcon-core 0.20.0 \cite{goswamiTheochemuieonCommitBf5d3282026}.
 The tables of this paper use eOn~\eOneEonVersion{}.
@@ -585,7 +586,7 @@ From the first frame that differs, the writer makes a fresh copy.
 No Rust slice is ever formed over numeric memory that Python owns and can change.
 
 
-\section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already holds a frame should be able to read its coordinates as a tensor without a copy.
+\section{Tensor exchange through DLPack}\label{sec:dlpack} A caller that already holds a frame reads its coordinates as a tensor without a copy.
 readcon-core exposes such tensors through DLPack \cite{dlpackDLPack2026}.
 On the Rust builder, the methods for positions, velocities, forces, per-atom energies and masses return a borrowed float64 tensor, and the method for atom identifiers returns a borrowed uint64 tensor.
 Each borrowed tensor lives as long as the builder, and the default build places it on the CPU.
@@ -605,7 +606,7 @@ The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
 \section{Conformance}\label{sec:conformance} A specification settles a dispute between readers only when each reader can be tested against it.
-JSONTestSuite did this for JSON parsers, with files that a parser must accept, must reject, or may decide either way \cite{seriotParsingJsonMinefield2016}.
+JSONTestSuite did this for JSON parsers, with files that a parser must accept, must reject, or treat as implementation-defined \cite{seriotParsingJsonMinefield2016}.
 The conformance corpus shipped with readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus} of the supplementary material), and its manifest names the error class of each illegal file.
 Read through the Python module of the release, all \(\corpusConfAgree\) files return the verdict and error class of their manifest entries, and the release checks the same files from Rust, Python, C, Fortran and Julia.
 
@@ -774,7 +775,7 @@ That Protein Data Bank row was measured with MDAnalysis 2.10.0.
 Release 2.11.0 adds read benchmarks for XYZ and the Protein Data Bank, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, Protein Data Bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
 This panel is separate from the CON table.
 A row passes only when the atom count, the cell and the coordinates match, so the NumPy row fails the cell check.
-Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign labelled v0.23.3, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
+Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign labeled v0.23.3, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
 readcon reads plain CON, binary CON and CON.zst, each other tool reads the formats it supports, and readcon-chemfiles has its own row.
 For every reader the table gives the warm and cold median read, the peak resident set of the read, the file size and the CON 3.1 fields that the format drops.
 Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.

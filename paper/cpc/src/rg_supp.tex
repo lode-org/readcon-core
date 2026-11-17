@@ -117,11 +117,12 @@ The last sections give the records beside a checkpoint with what the specificati
 \end{abstract} \end{frontmatter}
 
 The source of each generated table names the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
-A reader rule is stated as an input and the outcome that follows from it.
-A wall time is the median of at least six repeats, given with its type 7 interquartile range, and each reader is compared with the others on the same file and the same host, one cell at a time.
+Each reader rule gives an input and the outcome that follows from it.
+We take a wall time as the median of at least six repeats and report the type 7 interquartile range.
+We compare the readers on the same file and the same host, one cell at a time.
 Two reads are equal when their coordinates match, and we count the frames that a reader returns and the bytes that it keeps.
-Every figure drawn from an earlier campaign comes from its stored record.
-The library is built from the commit named in Data availability of the manuscript, and no version deposit is named before its record exists.
+We draw each restored figure from a stored record.
+We build the library from the commit named in Data availability of the manuscript, and we name no version deposit before its record exists.
 The machine line of a record gives only the architecture, the processor count and the processor string.
 
 \section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), the specification source of that commit at git blob \texttt{\rcMeasuredSpecBlob}.
@@ -432,7 +433,7 @@ memray records the peak heap of a cell \cite{memrayBloomberg}, and libxtc reads 
 Resumed bands are drawn on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after alignment by iterative rotations and assignments (IRA) \cite{gundeIRAShapeMatching2021}.
 MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen2015}.
 Software is cited by version, following the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
-The DLPack export of readcon-core is a dense tensor without labels, and labelled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
+The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
 
 Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
 \input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
