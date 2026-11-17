@@ -503,6 +503,103 @@ def _is_million_one_frame(spec: dict | None, path: Path | None = None) -> bool:
     return False
 
 
+class _ZstdInBuffer(ctypes.Structure):
+    _fields_ = [
+        ("src", ctypes.c_void_p),
+        ("size", ctypes.c_size_t),
+        ("pos", ctypes.c_size_t),
+    ]
+
+
+class _ZstdOutBuffer(ctypes.Structure):
+    _fields_ = [
+        ("dst", ctypes.c_void_p),
+        ("size", ctypes.c_size_t),
+        ("pos", ctypes.c_size_t),
+    ]
+
+
+def _load_libzstd():
+    import ctypes.util
+
+    candidate = ctypes.util.find_library("zstd")
+    if not candidate:
+        return None
+    try:
+        lib = ctypes.CDLL(candidate)
+        lib.ZSTD_createDStream.restype = ctypes.c_void_p
+        lib.ZSTD_freeDStream.argtypes = [ctypes.c_void_p]
+        lib.ZSTD_freeDStream.restype = ctypes.c_size_t
+        lib.ZSTD_initDStream.argtypes = [ctypes.c_void_p]
+        lib.ZSTD_initDStream.restype = ctypes.c_size_t
+        lib.ZSTD_decompressStream.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(_ZstdOutBuffer),
+            ctypes.POINTER(_ZstdInBuffer),
+        ]
+        lib.ZSTD_decompressStream.restype = ctypes.c_size_t
+        lib.ZSTD_isError.argtypes = [ctypes.c_size_t]
+        lib.ZSTD_isError.restype = ctypes.c_uint
+        lib.ZSTD_getErrorName.argtypes = [ctypes.c_size_t]
+        lib.ZSTD_getErrorName.restype = ctypes.c_char_p
+    except (OSError, AttributeError):
+        return None
+    return lib
+
+
+def _zstd_lib_sha256_and_bytes(path: Path, lib) -> tuple[int, str]:
+    dstream = lib.ZSTD_createDStream()
+    if not dstream:
+        raise SystemExit(f"1M zstd CON input {path} decoder initialization failed")
+    try:
+        rc = lib.ZSTD_initDStream(dstream)
+        if lib.ZSTD_isError(rc):
+            detail = lib.ZSTD_getErrorName(rc).decode("utf-8", errors="replace")
+            raise SystemExit(
+                f"1M zstd CON input {path} could not be decompressed: {detail}"
+            )
+        out_cap = 1 << 20
+        out_buf = (ctypes.c_ubyte * out_cap)()
+        out_ptr = ctypes.cast(out_buf, ctypes.c_void_p)
+        hasher = hashlib.sha256()
+        size = 0
+        last_rc = 0
+        try:
+            with path.open("rb") as handle:
+                while chunk := handle.read(1 << 20):
+                    in_buf = (ctypes.c_ubyte * len(chunk)).from_buffer_copy(chunk)
+                    inp = _ZstdInBuffer(
+                        ctypes.cast(in_buf, ctypes.c_void_p), len(chunk), 0
+                    )
+                    while inp.pos < inp.size:
+                        out = _ZstdOutBuffer(out_ptr, out_cap, 0)
+                        last_rc = lib.ZSTD_decompressStream(
+                            dstream, ctypes.byref(out), ctypes.byref(inp)
+                        )
+                        if lib.ZSTD_isError(last_rc):
+                            detail = lib.ZSTD_getErrorName(last_rc).decode(
+                                "utf-8", errors="replace"
+                            )
+                            raise SystemExit(
+                                f"1M zstd CON input {path} could not be decompressed: "
+                                f"{detail}"
+                            )
+                        if out.pos:
+                            size += out.pos
+                            hasher.update(memoryview(out_buf)[: out.pos])
+        except OSError as exc:
+            raise SystemExit(
+                f"1M zstd CON input {path} could not be decompressed: {exc}"
+            ) from exc
+        if last_rc != 0:
+            raise SystemExit(
+                f"1M zstd CON input {path} could not be decompressed: truncated stream"
+            )
+        return size, hasher.hexdigest()
+    finally:
+        lib.ZSTD_freeDStream(dstream)
+
+
 def _compressed_con_sha256_and_bytes(path: Path, compression: str) -> tuple[int, str]:
     if compression == "gzip":
         import gzip
@@ -563,16 +660,13 @@ def _compressed_con_sha256_and_bytes(path: Path, compression: str) -> tuple[int,
                     f"1M zstd CON input {path} could not be decompressed: {stderr}"
                 )
             return size, hasher.hexdigest()
-        import readcon
-
-        try:
-            frames = readcon.read_con(os.fspath(path), n_threads=1)
-            raw = readcon.write_con_string(frames).encode("utf-8")
-        except Exception as exc:
-            raise SystemExit(
-                f"1M zstd CON input {path} could not be decoded: {exc}"
-            ) from exc
-        return len(raw), hashlib.sha256(raw).hexdigest()
+        lib = _load_libzstd()
+        if lib is not None:
+            return _zstd_lib_sha256_and_bytes(path, lib)
+        raise SystemExit(
+            f"1M zstd CON input {path} cannot be verified: no raw zstd decoder "
+            "(compression.zstd, zstandard, zstd CLI, or libzstd) is available"
+        )
     raise SystemExit(f"unsupported CON compression for 1M check: {compression}")
 
 
