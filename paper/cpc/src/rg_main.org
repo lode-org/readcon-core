@@ -748,7 +748,8 @@ CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers r
 Memory is the VmHWM after the read minus the VmHWM after the import.
 
 \subsection{Results}\label{sec:results}
-On the 100000-frame coordinate file, the development tip of readcon-core completes the read in \rcTipMedian~s, which is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s), \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s), and \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
+On the 100000-frame coordinate file, the development tip of readcon-core completes the read in \rcTipMedian~s, which is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
+The tip is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
 Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, while ingesting the same file into the readcon-db store takes \rcDbMedian~s (\rcTipOverDb{} times slower than the direct read).
 Every all-frame reader matches all 100000 frames with zero failures; the read adds \rcTipMib~MiB to resident memory in readcon-core, compared with \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles (reading XYZ), and \rcOvitoMib~MiB for OVITO (reading XYZ).
 
