@@ -155,6 +155,9 @@ jobs:
   pytest-free-threaded:
     name: pytest free-threaded (${{ matrix.python-version }})
     runs-on: ubuntu-22.04
+    env:
+      # Free-threaded builds still start with the GIL unless this is set.
+      PYTHON_GIL: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -175,7 +178,19 @@ jobs:
           echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install -U pip
-          .venv/bin/python -m pip install maturin pytest numpy
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends emacs-nox zlib1g-dev libjpeg-dev libhdf5-dev pkg-config
+          .venv/bin/python -m pip install maturin pytest numpy ase chemfiles 'MDAnalysis==2.11.0' 'h5py==3.16.0'
+          .venv/bin/python -m pip install -e ase-readcon
+          # A current rpds-py wheel installs on 3.13t. The version pip would
+          # otherwise build does not: its PyO3 refuses a free-threaded
+          # interpreter below 3.14, and that takes snakemake with it.
+          .venv/bin/python -m pip install --only-binary=:all: rpds-py
+          .venv/bin/python -m pip install 'snakemake==8.30.0'
+          # gemmi 0.7.5 publishes a 3.14t wheel and no 3.13t wheel, and the
+          # source build rejects the nanobind it is given. The suite still
+          # runs; mda-mmcif is then absent and test_required_arms_are_offered fails.
+          .venv/bin/python -m pip install 'gemmi==0.7.5' || echo "gemmi==0.7.5 did not install on this interpreter"
 
       - name: maturin develop
         env:
@@ -183,9 +198,21 @@ jobs:
         run: |
           maturin develop --features 'python,zstd'
 
-      - name: free-threaded pytest smoke
+      - name: pytest tests/python
+        env:
+          # extxyz-ng 0.0.2 publishes only a cp310-abi3 wheel. Pip on a
+          # free-threaded interpreter rejects it, and loading that extension
+          # aborts the process. The other arms are the same set as the 3.12 job.
+          READCON_REQUIRE_ARMS: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md,mda-mmcif
         run: |
-          python -m pytest tests/python/test_gil_free_threads.py tests/python/test_readcon.py::TestReadCon::test_read_con_file -q --tb=short
+          test "$PYTHON_GIL" = 0
+          python - <<'PY'
+          import sys
+          probe = getattr(sys, "_is_gil_enabled", None)
+          if probe is None or probe():
+              raise SystemExit(f"GIL is enabled at runtime: {probe}")
+          PY
+          python -m pytest tests/python/ -q --tb=short
 
   paper-tags:
     name: paper tags
