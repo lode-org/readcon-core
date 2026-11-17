@@ -122,13 +122,14 @@ belowskip=0.4em
 \input{authors.tex}
 
 \begin{abstract}
-Resuming saddle-point and rare-event searches across atomistic simulation codes requires checkpoints that preserve per-component atomic constraints, atom identifiers, velocity time units, and binary64 coordinates.
-CON is a text geometry format used across many codes.
-Here, we present readcon-core and the CON 3.1 specification, which formalize and extend it.
-On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the adatom height constraint changes the prefactor by a factor of \sigfig{2}{\eFivePrefactorRatioFree}.
-A borrowed DLPack view of \dlpackAtoms{} atomic positions takes \dlpackRatio{} times the cost of an explicit copy, the median of six runs.
-A second-line JSON header declares the grammar version and physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and readers for a given major version accept later minor revisions.
-Two conformance corpora of \corpusFiles{} legal and illegal files specify reader behavior, and every Python and C read path in readcon-core matches every corpus verdict.
+Saddle-point and rare-event searches are often stopped and resumed, sometimes in a different code from the one that started them.
+The geometry file used for the restart then has to keep the per-component atomic constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates.
+CON is the text geometry format of the eOn code, and it has had no specification.
+Here, we present the CON 3.1 specification and readcon-core, its reference reader and writer.
+A JSON header on the second line of each frame declares the grammar version and the physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and a reader of a given major version accepts later minor revisions.
+Two conformance corpora of \corpusFiles{} legal and illegal files fix what a conforming reader returns, and every Python and C read path in readcon-core returns the verdict of every corpus file.
+On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the height constraint of the adatom changes the prefactor by a factor of \sigfig{2}{\eFivePrefactorRatioFree}.
+A borrowed DLPack view of \dlpackAtoms{} atomic positions costs \dlpackRatio{} times an explicit copy, the median of six runs.
 \end{abstract}
 
 
@@ -166,30 +167,30 @@ Two conformance corpora of \corpusFiles{} legal and illegal files specify reader
 
 % proseguard on structure.subject-verb-distance.
 % proseguard on rgoswami.Acronyms.
-\textit{Nature of problem:} Rare-event campaigns stop and resume saddle searches from a stored geometry.
-A resumed surface search reads which Cartesian components of each atom are fixed, because a held component removes a mode from the harmonic prefactor and can move the saddle.
-It reads an identifier on each row, because events and band images are matched by atom identity, and the time unit of the velocities, because a misread unit scales the kinetic energy by the square of the conversion factor.
-A restart that repeats the interrupted run to roundoff also reads back the binary64 coordinates as written.
-Of the formats in common use, H5MD defines no mask element, the POSCAR structure file defines no atom identifier, and extended XYZ keeps both in column names that one library chose and names no time unit.
-CON is a geometry format used in many codes, and it had no specification, so each reader decided for itself which files are legal and what each column means.
+\textit{Nature of problem:} Rare-event campaigns stop saddle searches and resume them from a stored geometry, often on another machine.
+A resumed surface search has to know which Cartesian components of each atom are fixed, since a held component removes a mode from the harmonic prefactor and can move the saddle.
+It also needs the identifier on each row, since events and band images are matched by atom identity, and the time unit of the velocities, since a misread unit scales the kinetic energy by the square of the conversion factor.
+A restart that repeats the interrupted run to roundoff must further read back the binary64 coordinates as they were written.
+Of the formats in common use, H5MD defines no mask element, the POSCAR structure file defines no atom identifier, and extended XYZ keeps both in column names chosen by one library and names no time unit.
+CON, the geometry format of eOn, had no specification, so each reader decided for itself which files are legal and what each column means.
 
-\textit{Solution method:} CON 3.1 is a versioned grammar for that text, and readcon-core is the reference reader and writer that formalizes and improves it.
-The second line of a frame is a JSON object that declares the major and minor version, the units, the periodic flags and the per-atom sections after the coordinates.
-The fourth column of a coordinate row is a three-bit mask of fixed components and the fifth an atom identifier.
-From minor 1 a velocity section declares its time unit.
-A reader of a known major accepts any later minor, keeps unknown keys and skips a later section by its declared width.
+\textit{Solution method:} CON 3.1 is a versioned grammar for the CON text, and readcon-core is its reference reader and writer.
+The second line of a frame is a JSON object that declares the major and minor version, the units, the periodic flags and the per-atom sections that follow the coordinates.
+The fourth column of a coordinate row is a three-bit mask of the fixed components, and the fifth is an atom identifier.
+From minor 1 onwards, a velocity section declares its time unit.
+A reader of a known major accepts any later minor, keeps unknown keys and skips a section of a later minor by its declared width.
 The writer prints the shortest decimal that reads back as the same binary64 value, and the reader rounds each decimal to the nearest binary64 value.
 Two corpora of legal and illegal files fix the verdict of a conforming reader on the clauses of the specification.
-readcon-core implements the grammar once in Rust, behind a C interface for C++, Julia and Fortran and a PyO3 binding for Python.
-On more than one thread it walks the frame boundaries serially by the counts in each header, parses the frames in parallel and returns them in file order.
-A path writer replaces the destination only after the last frame is accepted.
+readcon-core implements the grammar once in Rust, with a C interface for C++, Julia and Fortran and a PyO3 binding for Python.
+With more than one thread, it walks the frame boundaries serially using the counts in each header, parses the frames in parallel and returns them in file order.
+A writer given a path replaces the destination only after the last frame has been accepted.
 
-\textit{Additional comments including restrictions and unusual features:} The release described is readcon-core~\readconversion{} (Data availability).
-Every build reads gzip input; zstd input and parallel parsing are build features, and the Python wheel enables both.
+\textit{Additional comments including restrictions and unusual features:} The release described here is readcon-core~\readconversion{} (Data availability).
+Every build reads gzip input, while zstd input and parallel parsing are build features, both enabled in the Python wheel.
 A frame stores Cartesian coordinates, the cell, the periodic flags, the mask, one identifier per atom, and optional per-atom velocities, forces, energies, charges, spins, magnetic moments, displacements and spreads.
 It stores no optimizer history, so an optimizer with memory takes a different path after a restart.
-Files that earlier eOn releases wrote are grammar version 1 and read as such.
-The velocities of a file of an earlier version are read in the natural unit of eOn whatever time unit the file names.
+Files written by earlier eOn releases are grammar version 1 and are read as such.
+Velocities in a file of an earlier version are read in the natural time unit of eOn, whatever time unit the file names.
 In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listing~\ref{lst:py}).
 
 \textit{References:} eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026}; readcon-core releases \cite{goswamiReadconcoreConConvel2026}.
