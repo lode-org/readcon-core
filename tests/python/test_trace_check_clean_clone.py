@@ -10,6 +10,7 @@ differently from the TeX it exports to.
 from __future__ import annotations
 
 import csv
+import difflib
 import importlib.util
 import json
 import os
@@ -604,3 +605,28 @@ def test_a_version_map_that_cannot_be_built_is_reported_not_skipped(
         for p in problems
     ), problems
     assert version_map.read_text() == kept
+
+
+def test_a_full_regeneration_writes_the_committed_version_map(clone: Path) -> None:
+    done = subprocess.run(
+        [sys.executable, str(clone / CPC / "scripts" / "regen_paper.py")],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, "\n".join(done.stderr.splitlines()[-3:])
+    name = (GENERATED / VERSION_MAP).as_posix()
+    committed = _git(clone, "show", f"HEAD:{name}")
+    written = (clone / name).read_text()
+    diff = "\n".join(
+        difflib.unified_diff(
+            committed.splitlines(),
+            written.splitlines(),
+            "committed",
+            "regenerated",
+            n=0,
+            lineterm="",
+        )
+    )
+    assert written == committed, diff
