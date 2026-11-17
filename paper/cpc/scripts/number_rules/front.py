@@ -3,8 +3,10 @@ that the differential and timing paragraphs of ``rg_supp.tex`` print."""
 
 from __future__ import annotations
 
-import inspect
+import ast
+import importlib.util
 import re
+from pathlib import Path
 
 import scipy.constants
 from numbers_lib import Rule, grep, jget, text
@@ -91,9 +93,20 @@ def spec_version(version: str) -> float:
 
 def variance_contours() -> list[float]:
     """Fractions of the variance range that plot_landscape_surface draws as dashed lines."""
-    import chemparseplot.plot.neb
-
-    source = inspect.getsource(chemparseplot.plot.neb.plot_landscape_surface)
+    # chemparseplot.plot.neb imports ASE, so the function is read from the file, not imported.
+    package = importlib.util.find_spec("chemparseplot")
+    if package is None or not package.submodule_search_locations:
+        raise SystemExit(
+            "chemparseplot is not installed; it names the variance contours"
+        )
+    neb = Path(package.submodule_search_locations[0]) / "plot" / "neb.py"
+    module = neb.read_text()
+    function = next(
+        node
+        for node in ast.parse(module).body
+        if isinstance(node, ast.FunctionDef) and node.name == "plot_landscape_surface"
+    )
+    source = ast.get_source_segment(module, function)
     threshold = float(re.search(r"variance_threshold=([\d.]+)", source).group(1))
     fixed = [float(f) for f in re.findall(r"v_min \+ ([\d.]+) \* v_range", source)]
     return sorted({threshold, *fixed})

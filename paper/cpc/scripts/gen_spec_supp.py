@@ -310,10 +310,41 @@ def value(node, env: dict[str, float]) -> float:
     raise SystemExit(f"{CELL_CLAUSE}: cannot evaluate {kind}")
 
 
-def cell_equation(org: str) -> tuple[str, str, int]:
-    """The CON-cell.6 vectors as one LaTeX equation, checked against ASE."""
-    from ase.geometry import cellpar_to_cell
+def _cos_sin(angle: float) -> tuple[float, float]:
+    eps = 2 * math.ulp(90.0)
+    if abs(abs(angle) - 90) < eps:
+        return 0.0, math.copysign(1.0, angle)
+    radians = angle * math.pi / 180
+    return math.cos(radians), math.sin(radians)
 
+
+def cellpar_to_cell(cellpar: list[float]) -> list[list[float]]:
+    """``ase.geometry.cellpar_to_cell`` for its default orientation, with ``a`` along x and ``b`` in the xy plane.
+
+    The check uses ASE's own function when ASE imports; this is its construction
+    for a host without ASE, so the check, the table and the macros do not need ASE.
+    """
+    try:
+        from ase.geometry import cellpar_to_cell as ase_cell
+    except ImportError:
+        pass
+    else:
+        return [list(row) for row in ase_cell(cellpar)]
+    a, b, c, alpha, beta, gamma = cellpar
+    cos_alpha = _cos_sin(alpha)[0]
+    cos_beta = _cos_sin(beta)[0]
+    cos_gamma, sin_gamma = _cos_sin(gamma)
+    cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma
+    cz = math.sqrt(1 - cos_beta**2 - cy**2)
+    return [
+        [a, 0.0, 0.0],
+        [b * cos_gamma, b * sin_gamma, 0.0],
+        [c * cos_beta, c * cy, c * cz],
+    ]
+
+
+def cell_equation(org: str) -> tuple[str, str, int]:
+    """The CON-cell.6 vectors as one LaTeX equation, checked against ASE's cell construction."""
     line = next(
         (ln for ln in org.splitlines() if ln.startswith(f"- {CELL_CLAUSE} ::")), None
     )

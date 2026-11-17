@@ -26,6 +26,20 @@ CPC = Path("paper") / "cpc"
 GENERATED = CPC / "src" / "figures" / "generated"
 IDENTITY = ("-c", "user.name=trace test", "-c", "user.email=trace@test.invalid")
 
+BLOCK_ASE = """\
+import importlib.abc
+import sys
+
+
+class BlockAse(importlib.abc.MetaPathFinder):
+    def find_spec(self, name, path, target=None):
+        if name == "ase" or name.startswith("ase."):
+            raise ImportError("ase is blocked for this test")
+
+
+sys.meta_path.insert(0, BlockAse())
+"""
+
 
 def _git(cwd: Path, *args: str) -> str:
     done = subprocess.run(
@@ -207,3 +221,26 @@ def test_check_fails_when_the_tex_is_not_the_org_export(clone: Path) -> None:
     done = _check(clone)
     assert done.returncode != 0, done.stdout + done.stderr
     assert "rg_main.tex is not the Org export of rg_main.org" in done.stdout
+
+
+def test_check_needs_no_ase(clone: Path, tmp_path: Path) -> None:
+    blocker = tmp_path / "blocker"
+    blocker.mkdir()
+    (blocker / "sitecustomize.py").write_text(BLOCK_ASE)
+    inherited = os.environ.get("PYTHONPATH")
+    env = {"PYTHONPATH": os.pathsep.join([p for p in (str(blocker), inherited) if p])}
+    probe = subprocess.run(
+        [sys.executable, "-c", "import ase"],
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert probe.returncode != 0 and "ase is blocked" in probe.stderr, probe.stderr
+    done = _check(clone, env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "0 problems" in done.stdout, done.stdout
+    assert "ModuleNotFoundError" not in done.stderr + done.stdout
+    for name in ("spec_macros.tex", "versions_table.tex", "sizes_table.tex"):
+        assert (clone / GENERATED / name).is_file(), name
+    assert _status(clone) == "", _status(clone)
