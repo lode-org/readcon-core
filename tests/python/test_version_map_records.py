@@ -97,3 +97,47 @@ def test_a_host_json_with_the_build_schema_is_a_carrier(
     version_map.provenance_records.cache_clear()
     version_map.outputs.cache_clear()
     assert version_map.carrier("data/run/result.json") == ("host", "data/run/host.json")
+
+
+def test_a_db33_record_without_a_build_key_names_its_readcon_db_commit(
+    version_map, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A db33 copy has a provenance block and no readcon-core build.
+
+    Classifying it as a campaign session reports that the sessions do not
+    name one build. It is a readcon-db record, and the heading names that
+    commit.
+    """
+    commit = "ab" * 20
+    tree = "cd" * 20
+    record = {
+        "commit": commit,
+        "tree": tree,
+        "host": {
+            "cpu": "Intel(R) Xeon(R) Processor",
+            "ncpu": 8,
+            "cpuinfo_mhz": 2700.0,
+            "kernel": "6.12.113+",
+        },
+        "provenance": {"host": {"cpu": "Intel(R) Xeon(R) Processor"}},
+    }
+    cpc = tmp_path / "cpc"
+    path = cpc / "data" / "db33" / "fair-db33" / "campaign.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    monkeypatch.setattr(version_map, "CPC", cpc)
+    version_map.provenance_records.cache_clear()
+    version_map.outputs.cache_clear()
+    rel = "data/db33/fair-db33/campaign.json"
+    assert "data/db33/" in version_map.EXTERNAL_RECORDS
+    assert version_map.carrier(rel) == ("external", rel)
+    build = version_map.build_of("external", rel)
+    assert build is not None
+    assert build.readcon is None
+    assert build.db_commit == commit
+    heading = version_map.heading(build)
+    assert heading.startswith(
+        f"readcon-db commit \\texttt{{{commit[:12]}}}, tree \\texttt{{{tree[:12]}}}"
+    )
+    assert "readcon-core" not in heading
+    assert version_map.from_provenance(record["provenance"], record) is None
