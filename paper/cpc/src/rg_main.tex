@@ -539,6 +539,7 @@ readcon.write_con("band.con", frames)
 The PyO3 module sets \texttt{gil\_used = false}.
 Continuous integration tests run on free-threaded Python \texttt{3.13t} and \texttt{3.14t} alongside standard builds.
 Parsing, formatting, file writes, and correspondence checks detach the Python thread state with \texttt{py.detach}.
+Every Python write path snapshots or converts Python-reachable input while attached, then performs formatting, compression and file I/O while detached; this includes compressed writes of non-stored frame lists, plain writes after indexing and appends of \texttt{ConFrame} lists.
 Calling \texttt{touch\_checksum()} detaches while the coordinate slab is private, and stays attached once Python holds the shared slab.
 On an unindexed frame, \texttt{coords\_array()} copies coordinates straight from the parsed frame buffer into an owned NumPy array without building per-atom Python objects.
 When the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
@@ -554,13 +555,14 @@ Under the list write lock, indexing also marks any shared coordinate slab as rea
 Calling \texttt{columns()} takes the write lock so active detached readers finish before Python receives the shared coordinate array.
 
 When coordinates are reachable from Python through a shared slab or a frame's \texttt{xyz} array, the attached thread copies them into a private buffer (\texttt{CoordSnapshot}) and borrows all remaining fields from the source frames while detached work runs.
+Following the atomic snapshot model of Bos \cite{bosRustAtomicsLocks2023}, each aligned double is read by a relaxed \texttt{AtomicU64} element load and reconstructed from its bits in private storage.
+Each copied double is therefore untorn, but the loads have no cross-element atomicity: a concurrent writer can make one snapshot contain elements from different instants.
 Frames whose coordinates are unreachable from Python keep the zero-copy detached path.
 Repeat writes of a shared list retain the last priced coordinate buffer and reuse its packed frame lengths while every frame matches that buffer bit for bit.
 If a frame differs, the writer switches to a fresh copy from that frame onward.
 
-\texttt{write\_columns} and \texttt{write\_extxyz} copy NumPy input arrays in bounded runs into a reused staging buffer while attached and format each run detached.
-On little-endian Unix systems, \texttt{write\_conbin\_columns} passes NumPy column pointers directly to \texttt{libc::write} (\texttt{write(2)}) inside \texttt{py.detach} without forming a Rust slice in the detached write.
-Other targets stage bounded runs while attached and write them detached, copying raw bytes on little-endian non-Unix targets and byte-swapping to little-endian on big-endian targets.
+\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} apply the same element-load contract to NumPy arrays in private staging runs of about \(4\) MiB.
+Each run is copied and, where required, validated while attached, then formatted or written while detached; no Rust slice is formed over live Python-owned numeric memory.
 
 
 \section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
