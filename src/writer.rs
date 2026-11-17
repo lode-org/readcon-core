@@ -5451,8 +5451,7 @@ impl PackedLengthsCache {
 }
 
 fn packed_lengths() -> &'static PackedLengthsCache {
-    static CACHE: crate::parser::PerProcess<PackedLengthsCache> =
-        crate::parser::PerProcess::new();
+    static CACHE: crate::parser::PerProcess<PackedLengthsCache> = crate::parser::PerProcess::new();
     CACHE.get_or_init(PackedLengthsCache::new)
 }
 const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
@@ -5525,13 +5524,8 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
 #[cfg(feature = "python")]
 pub(crate) fn priced_coords(identities: &[usize]) -> Option<std::sync::Arc<Vec<f64>>> {
     let packed = packed_lengths();
-    let cache = packed
-        .entry
-        .lock()
-        .unwrap_or_else(|err| err.into_inner());
-    let generation = packed
-        .generation
-        .load(std::sync::atomic::Ordering::Acquire);
+    let cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
+    let generation = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     cache
         .as_ref()
         .filter(|hit| hit.generation == generation && hit.identities.as_ref() == identities)
@@ -5563,7 +5557,7 @@ pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
 /// from every temporary view address.
 #[cfg(feature = "python")]
 pub(crate) fn invalidate_packed_lengths_if_any(frames: impl IntoIterator<Item = usize>) {
-    PACKED_LENGTHS.invalidate_any(frames);
+    packed_lengths().invalidate_any(frames);
 }
 
 pub(crate) fn cached_packed_lengths(
