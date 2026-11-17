@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import gzip
 import hashlib
+import importlib
 import importlib.util
 import json
 import shutil
@@ -39,6 +42,65 @@ def _wrong_million_spec(pinned_million_spec: dict) -> dict:
         **pinned_million_spec,
         "positions": wrong_positions,
     }
+
+
+def _compress_zstd_bytes(raw: bytes) -> bytes:
+    for mod_name in ("compression.zstd", "zstandard"):
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            mod = None
+        if mod is not None and hasattr(mod, "ZstdCompressor"):
+            return mod.ZstdCompressor(level=1).compress(raw)
+    lib_name = ctypes.util.find_library("zstd")
+    assert lib_name is not None, "libzstd is required to build test zstd payload"
+    lib = ctypes.CDLL(lib_name)
+    lib.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_compressBound.restype = ctypes.c_size_t
+    lib.ZSTD_compress.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int,
+    ]
+    lib.ZSTD_compress.restype = ctypes.c_size_t
+    lib.ZSTD_isError.argtypes = [ctypes.c_size_t]
+    lib.ZSTD_isError.restype = ctypes.c_uint
+    bound = lib.ZSTD_compressBound(len(raw))
+    dst = (ctypes.c_ubyte * bound)()
+    written = lib.ZSTD_compress(
+        ctypes.cast(dst, ctypes.c_void_p), bound, raw, len(raw), 1
+    )
+    assert not lib.ZSTD_isError(written)
+    return bytes(memoryview(dst)[:written])
+
+
+def _disable_zstd_decoders(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = importlib.import_module
+
+    def no_zstd_import(name: str, package: str | None = None):
+        if name in ("compression.zstd", "zstandard"):
+            raise ImportError(name)
+        return real_import(name, package)
+
+    real_which = shutil.which
+
+    def no_zstd_which(cmd, *args, **kwargs):
+        if cmd == "zstd":
+            return None
+        return real_which(cmd, *args, **kwargs)
+
+    real_find_library = ctypes.util.find_library
+
+    def no_zstd_library(name: str):
+        if name == "zstd":
+            return None
+        return real_find_library(name)
+
+    monkeypatch.setattr(importlib, "import_module", no_zstd_import)
+    monkeypatch.setattr(shutil, "which", no_zstd_which)
+    monkeypatch.setattr(ctypes.util, "find_library", no_zstd_library)
 
 
 def test_wrong_gzip_and_zstd_million_con_are_refused(
@@ -77,6 +139,35 @@ def test_wrong_gzip_and_zstd_million_con_are_refused(
         cross_format.write_readcon(
             tmp_path / "tampered.con.gz", pinned_million_spec, "gzip"
         )
+
+
+def test_zstd_hashes_raw_bytes_and_refuses_missing_decoder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned_million_spec: dict
+) -> None:
+    """Zstd validation hashes raw decompressed bytes and never normalizes."""
+    plain = tmp_path / "pinned.con"
+    cross_format.write_readcon(plain, pinned_million_spec, None)
+    raw = plain.read_bytes()
+    needle = b"0.02 -0.03 0.04 7 0"
+    assert needle in raw
+    alt_raw = raw.replace(needle, b"2e-2 -0.03 0.04 7 0", 1)
+    assert len(alt_raw) == len(raw)
+
+    ok_zst = tmp_path / "ok.con.zst"
+    ok_zst.write_bytes(_compress_zstd_bytes(raw))
+    alt_zst = tmp_path / "alt.con.zst"
+    alt_zst.write_bytes(_compress_zstd_bytes(alt_raw))
+
+    # Byte-different representation of the same floats must be refused, not normalized.
+    with pytest.raises(SystemExit, match="pinned"):
+        cross_format._require_pinned_million_con(alt_zst, compression="zstd")
+
+    # Without any raw zstd decoder, both pinned and byte-different zstd files are refused.
+    _disable_zstd_decoders(monkeypatch)
+    with pytest.raises(SystemExit, match="decoder"):
+        cross_format._require_pinned_million_con(ok_zst, compression="zstd")
+    with pytest.raises(SystemExit, match="decoder"):
+        cross_format._require_pinned_million_con(alt_zst, compression="zstd")
 
 
 def test_lying_n_atoms_does_not_bypass_million_con_guard(
@@ -145,15 +236,13 @@ def test_corrupted_cached_plain_con_is_refused(
 def test_format_h2h_tables_refuses_stale_one_million_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The table builder refuses stale 1M records whose input hash is not pinned."""
+    """The table builder refuses stale 1M records in any group, including extra."""
     tables = _load_format_h2h_tables()
     with pytest.raises(SystemExit):
         tables.table()
     with pytest.raises(SystemExit):
         tables.macros()
 
-    # Validating against a clean 1M record derived from million/v0.23.3 succeeds,
-    # while changing its input hash or file bytes is refused.
     records = tmp_path / "v0.23.3"
     shutil.copytree(ROOT / "bench" / "h2h" / "formats" / "v0.23.3", records)
     old_1m = json.loads((records / "1m" / "cross-format.json").read_text())
@@ -169,9 +258,41 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
     (records / "1m-mmcif" / "cross-format.json").write_text(json.dumps(mmcif))
 
     monkeypatch.setattr(tables, "RECORDS", records)
+
+    # The committed extra/cross-format.json carries measured 1M chemfiles-dcd-012 rows
+    # with no pinned input hash and must be refused.
+    with pytest.raises(SystemExit):
+        tables.table()
+
+    # Unsupported 1M rows in extra carry no measurement and may stay without frames.
+    raw_extra = json.loads((records / "extra" / "cross-format.json").read_text())
+    unsupported_only_extra = dict(raw_extra)
+    unsupported_only_extra["rows"] = [
+        row
+        for row in raw_extra["rows"]
+        if not (row.get("structure") == "1M" and row.get("arm") == "chemfiles-dcd-012")
+    ]
+    (records / "extra" / "cross-format.json").write_text(
+        json.dumps(unsupported_only_extra)
+    )
     assert r"\label{tab:format-h2h}" in tables.table()
     assert r"\hhfReadconConBytesOneM" in tables.macros()
 
+    # Measured 1M rows in extra are allowed once extra carries the pinned 1M hashes.
+    pinned_extra = dict(raw_extra)
+    pinned_extra["frames"] = [
+        {
+            "structure": "1M",
+            "n_atoms": 1_000_000,
+            "n_frames": 1,
+            "frame_sha256": [tables.MILLION_FRAME_SHA256],
+            "con_sha256": tables.MILLION_CON_SHA256,
+        }
+    ]
+    (records / "extra" / "cross-format.json").write_text(json.dumps(pinned_extra))
+    assert r"\label{tab:format-h2h}" in tables.table()
+
+    # Mismatched input hash or byte count in 1m is still refused.
     bad_con_sha = json.loads(json.dumps(valid_1m))
     bad_con_sha["frames"][0]["con_sha256"] = "0" * 64
     (records / "1m" / "cross-format.json").write_text(json.dumps(bad_con_sha))
