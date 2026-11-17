@@ -107,6 +107,77 @@ fn parallel_reads_match_serial_frames() {
     assert_error("truncated vel+force", &truncated_vel);
 }
 
+/// One equal-width frame of `n_atoms`, with coordinates that depend on
+/// the frame index. Every frame is the same byte length, so a trajectory
+/// of these takes the tiled column fast path, and the differing bytes mean
+/// a wrong per-frame offset in the metadata fill would show up as a
+/// coordinate mismatch rather than a copy of frame zero.
+fn tiled_frame(frame: usize, n_atoms: usize) -> String {
+    let mut body = String::with_capacity(n_atoms * 40 + 128);
+    body.push_str(
+        "\n{\"con_spec_version\":3,\"con_spec_minor\":1,\
+\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"}}\n\
+20.000000 20.000000 20.000000\n90.000000 90.000000 90.000000\n\n\n1\n",
+    );
+    body.push_str(&format!(
+        "{n_atoms}\n63.546000\nCu\nCoordinates of Component 1\n"
+    ));
+    for atom in 0..n_atoms {
+        // Each coordinate stays in `[0, 10)` and prints to a fixed eight
+        // fractional digits, so the field width never changes.
+        let x = ((frame + atom) % 9) as f64 + 0.111_111;
+        let y = ((frame * 3 + atom) % 9) as f64 + 0.222_222;
+        let z = ((frame + atom * 7) % 9) as f64 + 0.333_333;
+        body.push_str(&format!("{x:.8} {y:.8} {z:.8} 0 {atom}\n"));
+    }
+    body
+}
+
+/// Regression test for the parallel tiled-column prologue. A long
+/// trajectory of small frames certifies tiling and plans every frame's
+/// metadata across the workers. Serial and every worker count must return
+/// the same coordinates, frame count and atom count, bit for bit.
+#[test]
+fn tiled_trajectory_positions_match_serial_at_every_width() {
+    // Over 1024 frames so the metadata fill crosses its parallel
+    // threshold, and small frames so the header scan dominates.
+    let n_frames = 3000usize;
+    let n_atoms = 16usize;
+    let mut text = String::new();
+    for frame in 0..n_frames {
+        text.push_str(&tiled_frame(frame, n_atoms));
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_frames(dir.path(), "tiled.con", &text);
+
+    let serial = read_positions_with_threads(&path, Some(1)).unwrap();
+    assert_eq!(serial.n_frames, n_frames);
+    assert_eq!(serial.n_atoms, n_atoms);
+    for threads in [2usize, 4, 8] {
+        let parallel = read_positions_with_threads(&path, Some(threads)).unwrap();
+        assert_eq!(parallel.n_frames, serial.n_frames, "n_frames at {threads}");
+        assert_eq!(parallel.n_atoms, serial.n_atoms, "n_atoms at {threads}");
+        assert_eq!(
+            parallel.values.len(),
+            serial.values.len(),
+            "value count at {threads}"
+        );
+        let mismatch = parallel
+            .values
+            .iter()
+            .zip(&serial.values)
+            .position(|(a, b)| a.to_bits() != b.to_bits());
+        assert_eq!(
+            mismatch, None,
+            "coordinate bits differ at {threads} threads"
+        );
+    }
+
+    // The full-frame reader shares the equal-span boundary scan, so it must
+    // agree with the serial walk on the same file too.
+    assert_frames("tiled trajectory", &path);
+}
+
 fn one_atom_frame(token: &str) -> String {
     format!(
         "seed\n{{\"con_spec_version\":2}}\n10 10 10\n90 90 90\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n{token} 0 0 0 0\n"

@@ -160,7 +160,7 @@ fn positions_parallel_fast(
         let first_end = first.end;
         let head0 = out.head_ends.first().copied().unwrap_or(0);
         if first_end > 0 && first_end < bytes.len() {
-            if let Some(nframes) = tiled_frame_count(bytes, first_end, head0) {
+            if let Some(nframes) = tiled_frame_count_parallel(bytes, first_end, head0, workers) {
                 let count0 = out.counts[0];
                 let spec = frame_spec(bytes, frame_start)?;
                 let block_lines = header_block_lines(bytes, frame_start)?;
@@ -169,26 +169,15 @@ fn positions_parallel_fast(
                 }
                 let cells0 = out.cells.clone();
                 let masses0 = out.masses.clone();
-                out.counts.reserve(nframes);
-                out.spans.reserve(nframes);
-                out.head_ends.reserve(nframes);
-                out.cells.reserve(nframes.saturating_mul(6));
-                out.masses.reserve(nframes.saturating_mul(masses0.len()));
-                out.wide_breaks.reserve(nframes);
-                out.wide_chunks.reserve(nframes);
-                for frame in 1..nframes {
-                    let base = frame * first_end;
-                    out.counts.push(count0);
-                    out.spans.push(base..base + first_end);
-                    out.head_ends.push(head0 + base);
-                    out.cells.extend_from_slice(&cells0);
-                    out.masses.extend_from_slice(&masses0);
-                    out.wide_breaks.push(Vec::new());
-                    // Planned on the worker. Shifted chunk offsets are only
-                    // valid when every line has the same width.
-                    out.wide_chunks.push(Vec::new());
-                    out.n_frames += 1;
-                }
+                // Every tiled frame repeats frame 0's per-frame metadata at
+                // a fixed byte stride. The serial push loop that grew these
+                // seven vectors one frame at a time was the rest of the
+                // serial prologue on a 100k-frame trajectory. Size them
+                // once and fill frames `1..nframes` across the workers; the
+                // bytes written are identical to the push loop.
+                fill_tiled_metadata(
+                    &mut out, nframes, first_end, head0, count0, &cells0, &masses0, workers,
+                );
             } else {
                 out = parse_con(bytes, rich, false, false, workers, None)?;
             }
@@ -1079,6 +1068,155 @@ fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize
         }
     }
     Some(n)
+}
+
+/// [`tiled_frame_count`], with the per-frame header check split across
+/// `workers` threads. The result is the same `Option<usize>` the serial
+/// walk returns: every frame boundary is a newline and every header is a
+/// byte copy of the first. On a long trajectory of small frames this
+/// header scan is the serial prologue before the parallel row fill, so
+/// splitting it keeps that prologue off the critical path.
+#[cfg(feature = "parallel")]
+fn tiled_frame_count_parallel(
+    bytes: &[u8],
+    span: usize,
+    head_end: usize,
+    workers: usize,
+) -> Option<usize> {
+    if span < 16 || head_end == 0 || head_end > span {
+        return None;
+    }
+    let n = bytes.len() / span;
+    if n < 2 {
+        return None;
+    }
+    let tail = &bytes[n * span..];
+    if !tail.iter().all(u8::is_ascii_whitespace) {
+        return None;
+    }
+    // Frame 0 is the header itself, so only frames `1..n` are checked.
+    let frames = n - 1;
+    // A short trajectory does not pay for threads. The serial walk keeps
+    // the same answer and avoids the scope spin-up.
+    if workers < 2 || frames < 2 {
+        return tiled_frame_count(bytes, span, head_end);
+    }
+    let header = &bytes[..head_end];
+    let pool_threads = workers.min(frames);
+    let share = frames.div_ceil(pool_threads);
+    let ok = std::sync::atomic::AtomicBool::new(true);
+    let ok_ref = &ok;
+    std::thread::scope(|scope| {
+        for worker in 0..pool_threads {
+            scope.spawn(move || {
+                let lo = 1 + worker * share;
+                let hi = (lo + share).min(n);
+                for frame in lo..hi {
+                    if !ok_ref.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
+                    let start = frame * span;
+                    if bytes.get(start - 1) != Some(&b'\n')
+                        || bytes.get(start..start + head_end) != Some(header)
+                    {
+                        ok_ref.store(false, std::sync::atomic::Ordering::Relaxed);
+                        return;
+                    }
+                }
+            });
+        }
+    });
+    if ok.load(std::sync::atomic::Ordering::Relaxed) {
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// Size and fill the per-frame metadata for a tiled trajectory.
+///
+/// Frame 0 is already in `out`. Frames `1..nframes` repeat it at a fixed
+/// stride, so each vector is grown to its final length once and the new
+/// slots are written in parallel. The result is byte-for-byte the serial
+/// push loop: `counts` is `count0`, `spans` is `base..base + span`,
+/// `head_ends` is `head0 + base`, `cells` and `masses` repeat frame 0, and
+/// the two wide-plan vectors stay empty for an equal-width frame.
+#[cfg(feature = "parallel")]
+#[allow(clippy::too_many_arguments)]
+fn fill_tiled_metadata(
+    out: &mut ConPositions,
+    nframes: usize,
+    span: usize,
+    head0: usize,
+    count0: usize,
+    cells0: &[f64],
+    masses0: &[f64],
+    workers: usize,
+) {
+    let ncells = cells0.len();
+    let nmass = masses0.len();
+    out.counts.resize(nframes, count0);
+    out.spans.resize(nframes, 0..0);
+    out.head_ends.resize(nframes, 0);
+    out.cells.resize(nframes.saturating_mul(ncells), 0.0);
+    out.masses.resize(nframes.saturating_mul(nmass), 0.0);
+    out.wide_breaks.resize_with(nframes, Vec::new);
+    out.wide_chunks.resize_with(nframes, Vec::new);
+    out.n_frames = nframes;
+    let fill = |spans: &mut [std::ops::Range<usize>],
+                heads: &mut [usize],
+                cells: &mut [f64],
+                masses: &mut [f64],
+                lo: usize| {
+        for (offset, span_slot) in spans.iter_mut().enumerate() {
+            let frame = lo + offset;
+            let base = frame * span;
+            *span_slot = base..base + span;
+            heads[offset] = head0 + base;
+            if ncells > 0 {
+                cells[offset * ncells..(offset + 1) * ncells].copy_from_slice(cells0);
+            }
+            if nmass > 0 {
+                masses[offset * nmass..(offset + 1) * nmass].copy_from_slice(masses0);
+            }
+        }
+    };
+    // Frame 0 keeps the values `parse_con` wrote. Only `1..nframes` move.
+    let spans = &mut out.spans[1..];
+    let heads = &mut out.head_ends[1..];
+    let cells = &mut out.cells[ncells..];
+    let masses = &mut out.masses[nmass..];
+    let rest = nframes - 1;
+    if workers < 2 || rest < 1024 {
+        fill(spans, heads, cells, masses, 1);
+        return;
+    }
+    let pool_threads = workers.min(rest);
+    let share = rest.div_ceil(pool_threads);
+    std::thread::scope(|scope| {
+        let mut spans = spans;
+        let mut heads = heads;
+        let mut cells = cells;
+        let mut masses = masses;
+        let mut lo = 1usize;
+        for _ in 0..pool_threads {
+            if lo >= nframes {
+                break;
+            }
+            let take = share.min(nframes - lo);
+            let (sa, sb) = spans.split_at_mut(take);
+            let (ha, hb) = heads.split_at_mut(take);
+            let (ca, cb) = cells.split_at_mut(take * ncells);
+            let (ma, mb) = masses.split_at_mut(take * nmass);
+            spans = sb;
+            heads = hb;
+            cells = cb;
+            masses = mb;
+            let start = lo;
+            scope.spawn(move || fill(sa, ha, ca, ma, start));
+            lo += take;
+        }
+    });
 }
 
 fn parse_one_frame(
