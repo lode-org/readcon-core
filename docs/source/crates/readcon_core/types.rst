@@ -655,9 +655,11 @@
          .. rust:function:: readcon_core::types::FrameHeader::set_lattice_vectors
             :index: -1
             :vis: pub
-            :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"set_lattice_vectors"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"mut"},{"type":"space"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"vecs"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"["},{"type":"punctuation","value":"["},{"type":"link","value":"f64","target":"f64"},{"type":"punctuation","value":"; "},{"type":"literal","value":"3"},{"type":"punctuation","value":"]"},{"type":"punctuation","value":"; "},{"type":"literal","value":"3"},{"type":"punctuation","value":"]"},{"type":"punctuation","value":")"}]
+            :layout: [{"type":"keyword","value":"fn"},{"type":"space"},{"type":"name","value":"set_lattice_vectors"},{"type":"punctuation","value":"("},{"type":"punctuation","value":"&"},{"type":"keyword","value":"mut"},{"type":"space"},{"type":"keyword","value":"self"},{"type":"punctuation","value":", "},{"type":"name","value":"vecs"},{"type":"punctuation","value":": "},{"type":"punctuation","value":"["},{"type":"punctuation","value":"["},{"type":"link","value":"f64","target":"f64"},{"type":"punctuation","value":"; "},{"type":"literal","value":"3"},{"type":"punctuation","value":"]"},{"type":"punctuation","value":"; "},{"type":"literal","value":"3"},{"type":"punctuation","value":"]"},{"type":"punctuation","value":")"},{"type":"space"},{"type":"returns"},{"type":"space"},{"type":"link","value":"Result","target":"Result"},{"type":"punctuation","value":"<"},{"type":"punctuation","value":"("},{"type":"punctuation","value":")"},{"type":"punctuation","value":", "},{"type":"link","value":"ParseError","target":"ParseError"},{"type":"punctuation","value":">"}]
 
             Sets the exact lattice vector matrix.
+
+            Returns ``NonFiniteValue`` for a NaN or infinite component and leaves the header as it was.
 
          .. rust:function:: readcon_core::types::FrameHeader::set_neb_band
             :index: -1

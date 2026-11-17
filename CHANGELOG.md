@@ -7,6 +7,23 @@ All notable changes to this project will be documented in this file. See [conven
 
 ## v0.23.3 - 2026-11-14
 
+### Breaking
+
+- **Rust API:** `FrameHeader::set_lattice_vectors` now returns
+  `Result<(), ParseError>` instead of `()`. It returns
+  `ParseError::NonFiniteValue` for a NaN or infinite component and leaves the
+  header as it was. Every caller must handle or `unwrap` the result. A call
+  that ignored the old unit return still compiles, but `#[must_use]` on
+  `Result` warns, and the error is dropped.
+- **C API:** `rkr_frame_new` returns NULL, with `RKR_STATUS_PARSE_ERROR` in
+  `rkr_last_error`, for a NaN or infinite `cell` or `angles` entry. It used to
+  return a builder that carried the value. Check the pointer before
+  `rkr_frame_add_atom`.
+- **Python:** `ConFrame(...)`, `from_ase`, the column writers, and `write_con`
+  raise `readcon.NonFiniteValue` (a `ValueError`) for a NaN or infinite cell
+  where they used to accept it. `NonFiniteValue` is already the error for a
+  non-finite number in a `.con` file.
+
 ### Features
 
 - A ranked write gathers each rank's byte length and frame count in one
@@ -46,16 +63,15 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bugfixes
 
 - A NaN or infinite cell length, angle, or lattice component passed through
-  every reader, builder, and writer that took one. The `.con` text, CON-bin,
-  extended XYZ, and PDB readers, the Python, C, and C++ constructors,
-  `set_lattice_vectors`, `from_ase`, and every writer now refuse it with
-  `NonFiniteValue` (`readcon.NonFiniteValue` in Python, a parse error with
-  `RKR_STATUS_PARSE_ERROR` in C). The message names the field and, when the
-  entry point knows it, the frame: `cell field boxl[1] of frame 1 is NaN`.
-  CON-bin also refuses a cell that is finite in binary64 and infinite in
-  binary32. `rkr_frame_new` returns NULL, and `set_lattice_vectors` returns a
-  `Result`. Reading a finite cell costs nothing, and a finite cell round-trips
-  bit for bit.
+  every constructor and writer that took one. The `.con` text, CON-bin,
+  extended XYZ, PDB, chemfiles, and rpc paths, the Python, C, C++, Fortran,
+  and Julia builders and writers, `set_lattice_vectors`, and `from_ase` now
+  refuse it with `NonFiniteValue` (`readcon.NonFiniteValue` in Python, a parse
+  error with `RKR_STATUS_PARSE_ERROR` in C, `ReadConError` in Julia, an invalid
+  builder in Fortran). The message names the field and, when the entry point
+  knows it, the frame: `cell field boxl[1] of frame 1 is NaN`. CON-bin also
+  refuses a cell that is finite in binary64 and infinite in binary32. Reading
+  a finite cell costs nothing, and a finite cell round-trips bit for bit.
 - A packed `write_con` of a frame list reused the first frame's header
   whenever the atom skeleton matched. Later frames came back with that
   frame's energy, bead, and any other metadata key. The header is reused
