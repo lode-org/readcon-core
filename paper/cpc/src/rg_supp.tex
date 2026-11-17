@@ -424,13 +424,13 @@ A fair rerun of the MDAnalysis readers times each format of the trajectory-reade
 The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 measurement.
 A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
 That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
-The newer extended-XYZ reader extxyz-ng 0.0.2 is timed beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
+We time the newer extended-XYZ reader extxyz-ng 0.0.2 beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
 A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions as well as within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
 The ordering table tests those ratios with the rank-sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the estimate of the shift by Hodges and Lehmann with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014} and the step-down rule of Holm \cite{holmSimpleSequentiallyRejective1979}.
 
 \input{figures/generated/ordering_table}
 memray records the peak heap of a cell \cite{memrayBloomberg}, and libxtc reads the XTC trajectory \cite{krylovLibxtcEfficientLibrary2021}.
-Resumed bands are drawn on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after alignment by iterative rotations and assignments (IRA) \cite{gundeIRAShapeMatching2021}.
+We draw the resumed bands on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after alignment by iterative rotations and assignments (IRA) \cite{gundeIRAShapeMatching2021}.
 MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen2015}.
 Software is cited by version, following the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
 The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
