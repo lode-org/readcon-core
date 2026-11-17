@@ -22,7 +22,7 @@ commit's tree; a record without a provenance block that names its commit and
 version (``tree_commit``, ``readcon_version``) names no host.  A record that
 measures published releases lists them in ``measures_release``.
 
-The records under ``EXTERNAL_RECORDS`` (the readcon-db campaigns ``data/db30``, ``data/db31`` and ``data/db32``)
+The records under ``EXTERNAL_RECORDS`` (the readcon-db campaigns ``data/db30``, ``data/db31``, ``data/db32`` and ``data/db33``)
 are copied verbatim from lode-org/readcon-db and carry no readcon-core build.  Each names the readcon-db commit
 it measured under ``commit`` (with its ``tree``) or ``head``, in the record or in the ``host.json`` beside it, and
 the host under ``host`` or in that ``host.json`` (``cpu``, ``ncpu``, ``cpuinfo_mhz``, ``kernel``).  Its heading
@@ -78,7 +78,7 @@ NO_BUILD = {
     "data/novel/velocity.json",
 }
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
-EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/")
+EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
 PREFIXES = {
