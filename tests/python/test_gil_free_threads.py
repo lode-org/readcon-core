@@ -3,6 +3,7 @@ from __future__ import annotations
 import concurrent.futures
 import hashlib
 import sys
+import sysconfig
 import threading
 import time
 from pathlib import Path
@@ -73,26 +74,45 @@ def _gil_enabled() -> bool:
 def test_read_con_releases_gil(tmp_path: Path) -> None:
     import readcon
 
+    if not _gil_enabled():
+        # A free-threaded interpreter has no GIL to hold. The module must
+        # not have turned it back on at import.
+        assert sysconfig.get_config_var("Py_GIL_DISABLED") == 1
+        return
+
     path = tmp_path / "gil-read.con"
     _write_large_con(path, n_frames=20, n_atoms=5000)
-    ticks = 0
-    stop = threading.Event()
+    # With a huge switch interval the interpreter never preempts a thread
+    # that holds the GIL. The probe can then only run inside read_con if
+    # the call released it, however slow or loaded the machine is.
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1000.0)
+    try:
+        for _ in range(20):
+            in_call = threading.Event()
+            ran_inside = threading.Event()
+            stop = threading.Event()
 
-    def counter() -> None:
-        nonlocal ticks
-        while not stop.is_set():
-            ticks += 1
+            def probe() -> None:
+                while not stop.is_set():
+                    if in_call.is_set():
+                        ran_inside.set()
+                        return
+                    # Blocks without the GIL, so the main thread starts.
+                    time.sleep(0)
 
-    t = threading.Thread(target=counter, daemon=True)
-    t.start()
-    time.sleep(0.05)
-    before = ticks
-    _ = readcon.read_con(str(path), n_threads=1)
-    after = ticks
-    stop.set()
-    t.join(timeout=1.0)
-
-    assert after - before > 50_000
+            thread = threading.Thread(target=probe, daemon=True)
+            thread.start()
+            in_call.set()
+            _ = readcon.read_con(str(path), n_threads=1)
+            in_call.clear()
+            stop.set()
+            thread.join(timeout=60.0)
+            if ran_inside.is_set():
+                break
+    finally:
+        sys.setswitchinterval(old_interval)
+    assert ran_inside.is_set()
 
 
 def _read_shared(path: Path, n_frames: int, n_atoms: int):
