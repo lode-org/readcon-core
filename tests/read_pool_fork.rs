@@ -5,8 +5,12 @@
 //! built queued its job for workers it does not have and never returned.
 //! The reads below use the pools behind `shared_pool`, and the threaded
 //! write uses the one behind `on_pool`.
+//!
+//! TSan refuses a thread started after a multi-threaded fork, so the
+//! binary is empty under `tsan_run`. It passes under TSan with
+//! `TSAN_OPTIONS=die_after_fork=0` without `--cfg tsan_run`.
 
-#![cfg(all(unix, feature = "parallel"))]
+#![cfg(all(unix, feature = "parallel", not(tsan_run)))]
 
 use readcon_core::ffi::{free_rkr_frame_array, rkr_read_all_frames_n_threads};
 use readcon_core::iterators::{

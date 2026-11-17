@@ -3,13 +3,20 @@
 // lets those shells allocate on the thread that parses them.
 // `asan_run` is set only for `-Zsanitizer=address`. mimalloc's `mi_free`
 // ignores the size Rust passes, so that run uses the system allocator.
+// `tsan_run` is set only for `-Zsanitizer=thread`. mimalloc is not built
+// with TSan, so TSan cannot see a block freed on one thread and reused on
+// another, and reports the reuse as a race. That run uses the system
+// allocator too.
 // Miri cannot execute mimalloc either, so it uses the system allocator too.
 // `static_system_alloc` is the static archive. A C host links that archive
 // beside another Rust staticlib (readcon-db). Each archive carries its own
 // std, and mimalloc in one copy is freed with glibc by the other. The
 // cdylib is one shared object and keeps mimalloc.
 #![allow(unexpected_cfgs)]
-#[cfg(all(not(any(asan_run, miri)), not(feature = "static_system_alloc")))]
+#[cfg(all(
+    not(any(asan_run, tsan_run, miri)),
+    not(feature = "static_system_alloc")
+))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -22,7 +29,10 @@ mod allocator_link_tests {
     /// Rust, C, and Python builds all link this crate, so they all use
     /// this allocator. `mi_usable_size` is only meaningful for mimalloc.
     /// The static archive opts out (`static_system_alloc`).
-    #[cfg(all(not(any(asan_run, miri)), not(feature = "static_system_alloc")))]
+    #[cfg(all(
+        not(any(asan_run, tsan_run, miri)),
+        not(feature = "static_system_alloc")
+    ))]
     #[test]
     fn the_shipped_allocator_is_mimalloc() {
         let boxed = Box::new([0u8; 32]);
