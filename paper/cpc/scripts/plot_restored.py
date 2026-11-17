@@ -108,25 +108,26 @@ def dlpack() -> None:
 
 
 def toc() -> None:
+    """The graphical abstract: the uninterrupted climbing-image band and its CON 3.1 resume."""
+    bands = DATA / "failure" / "bands"
+    full = band_energy(bands / "uninterrupted.npz")
+    resumed = band_energy(bands / "CON_3_1__shortest_round_trip.npz")
     fig, ax = plt.subplots(figsize=(5, 5))
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 4)
-    ax.axis("off")
-    labels = ("mask", "identifier", "time unit", "coordinates")
-    for i, (label, color) in enumerate(zip(labels, CYCLE)):
-        ax.add_patch(
-            plt.Rectangle(
-                (0.4, 3.1 - i * 0.8), 3.2, 0.6, facecolor=color, edgecolor=BLACK
-            )
-        )
-        ax.text(
-            2.0,
-            3.4 - i * 0.8,
-            label,
-            ha="center",
-            va="center",
-            color="white" if color != SUNSHINE else BLACK,
-        )
+    ax.plot(range(len(full)), full - full[0], color=TEAL, marker="o", label="uninterrupted band")
+    ax.plot(
+        range(len(resumed)),
+        resumed - resumed[0],
+        linestyle="none",
+        marker="x",
+        markersize=9,
+        color=CORAL,
+        label="resumed from CON 3.1",
+    )
+    ax.set_xlabel("image")
+    ax.set_ylabel("energy above the first image (eV)")
+    ax.legend(frameon=False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     save(fig, "toc")
 
 
