@@ -212,6 +212,11 @@ MEASUREMENT_RECORDS = frozenset(
         # commit, not a tag or a commit of this repository.
         "paper/cpc/data/db30/db8/campaign.json",
         "paper/cpc/data/db30/fair-db30/campaign.json",
+        # The readcon-db fair-db32 campaign store, the fair-ladder rerun that
+        # moves the paper's fair-store numbers off fair-db31, copied verbatim
+        # from lode-org/readcon-db 227e45cf. It names the measured readcon-db
+        # commit d8bf1cb5, not a tag or a commit of this repository.
+        "paper/cpc/data/db32/fair-db32/campaign.json",
     }
 )
 

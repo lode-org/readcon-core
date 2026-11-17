@@ -1,8 +1,10 @@
 """Rules for the readcon-db campaign-store subsection of ``rg_main.tex``.
 
 Every number in that subsection is recomputed from the reviewed db31 records
-(lode-org/readcon-db ``ff1210e3``), and the one-million-atom warm-read range
-from the db30 records that hold the campaign medians.  Each rule is scoped to its
+(lode-org/readcon-db ``ff1210e3``) and the fair-store rerun in the db32 records
+(lode-org/readcon-db ``227e45cf``, measured code ``d8bf1cb5``) that now holds
+the fair-store numbers, with the one-million-atom warm-read range taken across
+the one-thread campaigns in db30, db31 and db32.  Each rule is scoped to its
 sentence in ``rg_main.tex`` so it ties to one record and one printed number.
 """
 
@@ -11,6 +13,7 @@ from __future__ import annotations
 from numbers_lib import Rule, jget, load_json
 
 FAIR = "data/db31/fair-db31/campaign.json"
+FAIRDB32 = "data/db32/fair-db32/campaign.json"
 CORPUS = "data/db31/corpus-ops/readcon_db_bench.json"
 DB24 = "data/db31/db24/ab.json"
 DB25 = "data/db31/db25/ab.json"
@@ -60,31 +63,33 @@ READ1M = dict(
     rayon_num_threads="1",
 )
 
-INGEST_RDB = fair_row(FAIR, **INGEST, tool="readcon-db")
-INGEST_ASE = fair_row(FAIR, **INGEST, tool="ase.db")
-READ1M_FAIR = fair_row(FAIR, **READ1M)
-ONE_MILLION_MEDIANS = [fair_row(p, **READ1M)["median_s"] for p in (FAIR, DB8, FAIRDB30)]
+INGEST_RDB = fair_row(FAIRDB32, **INGEST, tool="readcon-db")
+INGEST_ASE = fair_row(FAIRDB32, **INGEST, tool="ase.db")
+READ1M_FAIR = fair_row(FAIRDB32, **READ1M)
+ONE_MILLION_MEDIANS = [
+    fair_row(p, **READ1M)["median_s"] for p in (FAIRDB32, FAIR, DB8, FAIRDB30)
+]
 CORPUS500 = corpus_row(500)
 
 RULES = [
     Rule(
         "40",
         INGEST_RDB["n_frames"],
-        FAIR,
+        FAIRDB32,
         "fair paper40x8 insert cold-file readcon-db rayon=1 n_frames",
         (f"{MAIN}~copper atoms",),
     ),
     Rule(
-        "2.2606e-3",
+        "2.2603e-3",
         INGEST_RDB["median_s"],
-        FAIR,
+        FAIRDB32,
         "fair paper40x8 insert cold-file readcon-db rayon=1 median_s",
         (f"{MAIN}~takes a median",),
     ),
     Rule(
-        "5.5270e-3",
+        "5.7336e-3",
         INGEST_ASE["median_s"],
-        FAIR,
+        FAIRDB32,
         "fair paper40x8 insert cold-file ase.db rayon=1 median_s",
         (f"{MAIN}~takes a median",),
     ),
@@ -173,30 +178,30 @@ RULES = [
         (f"{MAIN}~lattice best case",),
     ),
     Rule(
-        "1.9523e-2",
+        "1.7261e-2",
         READ1M_FAIR["median_s"],
-        FAIR,
+        FAIRDB32,
         "fair atoms-1000000 full_read warm readcon-db rayon=1 median_s",
         (f"{MAIN}~million-atom",),
     ),
     Rule(
-        "1.939e-2",
+        "1.726e-2",
         min(ONE_MILLION_MEDIANS),
-        DB8,
-        "min over fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
+        FAIRDB32,
+        "min over fair-db32, fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
         (f"{MAIN}~million-atom",),
     ),
     Rule(
         "3.447e-2",
         max(ONE_MILLION_MEDIANS),
         FAIRDB30,
-        "max over fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
+        "max over fair-db32, fair-db31, db30/db8, fair-db30 atoms-1000000 full_read warm readcon-db rayon=1 median_s",
         (f"{MAIN}~million-atom",),
     ),
     Rule(
         "50",
         READ1M_FAIR["span_s"] * 1000,
-        FAIR,
+        FAIRDB32,
         "fair atoms-1000000 full_read warm readcon-db rayon=1 span_s in ms",
         (f"{MAIN}~million-atom",),
     ),
