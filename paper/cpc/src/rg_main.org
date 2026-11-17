@@ -582,8 +582,7 @@ The record holds six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
 A 95 percent bootstrap interval for that ratio, drawn from those six samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds.
-Figure~\ref{fig:dlpack} shows the six repeats.
-The record is \path{paper/cpc/data/dlpack_cost.txt}.
+Figure~\ref{fig:dlpack} shows the six repeats, and the timing record of both arms is part of the records of this paper (Data availability).
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
 Six repeats on \dlpackAtoms{} atoms.
@@ -727,7 +726,7 @@ The candidate timing campaign is not reported.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time of the all-frame CON readers on one 100000-frame file, six interleaved repeats.
 The bar is the type 7 median.
-The log is \texttt{paper/cpc/logs/reader-exchange.log}.}
+The repeats ran on the host of Section~\ref{sec:host} at commit \texttt{\rcHostCommit}.}
 \label{fig:timing} \end{figure*}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{CON reader time divided by the readcon tip time, six repeats.
@@ -740,7 +739,7 @@ A point above the line means the tip is that many times as fast.}
 
 \FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames and 32 copper atoms, six times for each arm, interleaved, each sample a fresh process.
 Each library is imported before the clock starts.
-The machine line is \texttt{x86\_64}, 8 cores, Intel Xeon Processor, and the log names commit \texttt{\rcHostCommit}.
+The host is an \texttt{x86\_64} machine with 8 cores whose processor reports itself as Intel Xeon Processor, and the timing record names commit \texttt{\rcHostCommit}.
 CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file, and readcon reads neither XYZ nor HDF5.
 Memory is the VmHWM after the read minus the VmHWM after the import.
 
@@ -768,7 +767,7 @@ Release 2.11.0 adds XYZ and protein data bank read benchmarks, and its trajector
 That panel is separate from the con table.
 A row passes only when the atom count, the cell, and the coordinates match.
 NumPy has no cell, so that row fails the cell check.
-Table~\ref{tab:format-h2h} is the fair per-format comparison of the v0.23.3 cross-format campaign, measured on one commit and one host, \hhfHost, read from \path{bench/h2h/formats/v0.23.3/lscpu.txt}.
+Table~\ref{tab:format-h2h} is the fair per-format comparison of the v0.23.3 cross-format campaign, measured on one commit and one host, \hhfHost, as the processor listing stored with that campaign reports it.
 readcon reads plain CON, binary CON and CON.zst; each other tool reads its supported formats, and readcon-chemfiles keeps its own row.
 For every arm the table reports the warm and cold median read, the peak resident set of the read, the file size, and the CON 3.1 fields the format drops.
 Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.
@@ -806,15 +805,14 @@ We time a distributed read of 4000 frames of 64 copper atoms at 1, 2, 4 and 8 ra
 \mpiScatterIqrLine.
 Rank 0 reads the file once to build the index, and every other rank reads only its own byte range.
 In scatter mode the waiting ranks sleep on a file lock, which needs a filesystem with coherent flock across the ranks, and where flock is not coherent they fall back to the blocking broadcast.
-The log is \path{paper/cpc/logs/mpi.log}.
-The fallback log is \path{paper/cpc/logs/mpi-fallback.log}.
+The timing record of these launches and the record of a scatter run that takes the fallback are part of the records of this paper (Data availability).
 
 \input{figures/generated/mpi_host_table}
 
 \begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-host} \end{figure}
 
-\FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn by \path{scripts/plot_restored.py} from the records under \path{paper/cpc/data}.
+\FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn from the stored records of this paper (Data availability).
 The database and MPI figures in this section are earlier stored records.
 Section~\ref{sec:host} gives the repeats measured on this host.
 
