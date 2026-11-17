@@ -1209,6 +1209,19 @@ pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     });
 }
 
+/// Drop this atom buffer atom by atom. Call before an atom takes a box.
+fn clear_uniform_symbol_drop(atoms: &[AtomDatum]) {
+    SYMBOL_DROP_HINT.with(|hint| {
+        if hint.get().atoms == atoms.as_ptr() as usize {
+            hint.set(SymbolDropHint {
+                atoms: 0,
+                symbol: std::ptr::null(),
+                n: 0,
+            });
+        }
+    });
+}
+
 fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
     let n = atoms.len();
     if n < 1024 {
@@ -1610,6 +1623,14 @@ impl AtomDatum {
     pub(crate) fn retarget(&mut self, slot: *mut f64) {
         if self.tail & TAIL_OWNED == 0 {
             self.xyz = slot;
+        }
+    }
+
+    /// Copy the coordinates into an owned box that outlives the frame buffer.
+    fn own_coords(&mut self) {
+        if self.tail & TAIL_OWNED == 0 {
+            self.xyz = Self::owned_xyz(self.x(), self.y(), self.z());
+            self.tail |= TAIL_OWNED;
         }
     }
 
@@ -2298,8 +2319,15 @@ impl ConFrame {
     /// Apply [`crate::storage_dtype::StorageDtypes`] from metadata (or argument) to SoA fields.
     pub fn project_storage_dtypes(&mut self, dtypes: &crate::storage_dtype::StorageDtypes) {
         // Projection replaces the column allocation. Copy slot values into
-        // owned tails first so the atoms do not keep the old pointer.
+        // owned tails and coordinates into owned boxes first so the atoms do
+        // not keep the old pointer.
+        clear_uniform_symbol_drop(&self.atom_data);
         self.materialise_section_slots();
+        if self.positions.kind() != dtypes.positions {
+            for atom in &mut self.atom_data {
+                atom.own_coords();
+            }
+        }
         self.positions.project_to(dtypes.positions);
         if self.velocities.nrows() > 0 {
             self.velocities.project_to(dtypes.velocities);
@@ -4881,6 +4909,45 @@ impl ConFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn projected_positions_leave_no_atom_in_the_freed_column() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let column = frame
+            .positions
+            .f64_slice()
+            .expect("f64 positions")
+            .as_ptr_range();
+        let column = column.start as usize..column.end as usize;
+        assert!(
+            frame
+                .atom_data
+                .iter()
+                .any(|atom| column.contains(&(atom.coord_ptr() as usize))),
+            "a parsed frame should address its position column"
+        );
+        let expect: Vec<[f64; 3]> = frame
+            .atom_data
+            .iter()
+            .map(|atom| [atom.x(), atom.y(), atom.z()].map(|v| v as f32 as f64))
+            .collect();
+        let dtypes = crate::storage_dtype::StorageDtypes {
+            positions: crate::storage_dtype::ElementKind::Float32,
+            ..Default::default()
+        };
+        frame.project_storage_dtypes(&dtypes);
+        for (i, atom) in frame.atom_data.iter().enumerate() {
+            assert!(
+                !column.contains(&(atom.coord_ptr() as usize)),
+                "atom {i} still points into the freed f64 column"
+            );
+            assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
+        }
+    }
 
     #[test]
     fn test_x_only_is_one_under_spec_2() {
