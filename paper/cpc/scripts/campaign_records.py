@@ -67,6 +67,11 @@ CAMPAIGNS = {
         "driver": "scripts/campaign_records.py:write_million_hold, write_peers_n1e6",
         "rule": None,
     },
+    "readcon-db db26 paired protocol": {
+        "records": ("data/db31/db26/paired_protocol.json",),
+        "driver": "scripts/db26_protocol.py",
+        "rule": None,
+    },
     "readcon-db tables": {
         "records": (
             "data/db/summary.csv",

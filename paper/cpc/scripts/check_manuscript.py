@@ -1245,6 +1245,10 @@ def main() -> int:
         ),
         ("version map", check_version_map),
         (
+            "db26 paired protocol",
+            lambda: script_check("db26_protocol.py", "db26 paired protocol"),
+        ),
+        (
             "manuscript rule",
             lambda: script_check("manuscript_inputs.py", "TeX inputs of the manuscript rule"),
         ),

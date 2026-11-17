@@ -111,6 +111,8 @@ RECORD_NAMES = (
     (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),
     (r"evidence/results/e5_prefactor\.json", "Evidence E5, prefactor"),
     (r"data/db31/(db\d+)/ab\.json", "readcon-db campaign {campaign}"),
+    (r"data/db31/(db\d+)/paired_protocol\.json", "readcon-db campaign {campaign}, paired protocol"),
+    (r"data/db31/(db\d+)/", "readcon-db campaign {campaign}"),
     (r"data/db31/corpus-ops/readcon_db_bench\.json", "readcon-db campaign db31, corpus operations"),
     (r"data/db3[0-2]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
     (r"data/db30/(db\d+)/campaign\.json", "readcon-db campaign {campaign}"),
