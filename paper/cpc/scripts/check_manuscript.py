@@ -795,7 +795,11 @@ def check_version_map() -> str:
         )
     if problems:
         fail(listed("version map", problems))
-    rows = sum(1 for line in text.splitlines() if line.startswith(r"\nolinkurl{"))
+    rows = sum(
+        1
+        for line in text.splitlines()
+        if line.endswith(r" \\") and " & " in line and not line.startswith(("\\", "Record & "))
+    )
     return f"version map current, {rows} records, each naming its build"
 
 
