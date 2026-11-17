@@ -165,10 +165,16 @@ def listing(record: dict) -> str:
     body = ["$ " + line for line in record["commands"]] + record["stdout"].rstrip(
         "\n"
     ).split("\n")
+    # The frame file is printed by its name; its directory in the archive is a repository path.
+    folder = record["commands"][-1].split(" -- ", 1)[1].rpartition("/")[0] + "/"
+    if sum(folder in line for line in body) != 2:
+        raise SystemExit(f"test_run.json: the frame directory {folder} is not in the command and the output once each")
+    body = [line.replace(folder, "") for line in body]
     caption = (
         f"Test run. The example program of readcon-core {record['readcon_version']}, built with "
         f"{record['rustc'].split(' (')[0]}, reads Listing~\\ref{{lst:frame}} and prints its cell, "
-        "its counts and its first five atoms with their fixed flags, identifiers and velocities."
+        "its counts and its first five atoms with their fixed flags, identifiers and velocities. "
+        "The listing names the frame file without its directory."
     )
     return (
         "% Written by paper/cpc/scripts/test_run.py from data/test_run.json.\n"
