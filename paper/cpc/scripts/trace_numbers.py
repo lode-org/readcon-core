@@ -28,7 +28,10 @@ ledger is gitignored, so ``--check`` builds it when it is missing (a clean
 clone gives no drift on the first run) and otherwise leaves it in place; it
 then fails when a ledger left from an earlier run differs from the one the
 records give now, so an edit to a record behind a headline fails until the
-ledger is rewritten.
+ledger is rewritten.  The generated ``src/figures/generated/*.tex`` fragments
+the manuscript inputs are gitignored too; a clean checkout rebuilds them from
+the committed records with the format steps of ``regen_paper.py`` (tables and
+macros only, not figures) before scanning.
 
     python3 paper/cpc/scripts/trace_numbers.py
     python3 paper/cpc/scripts/trace_numbers.py --check
@@ -42,7 +45,9 @@ import csv
 import difflib
 import importlib
 import io
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from decimal import Decimal
@@ -53,6 +58,8 @@ SRC = ROOT / "src"
 LEDGER = ROOT / "data" / "trace" / "numbers.csv"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db")
+# Format steps that write PDFs only; table and macro fragments come from the rest.
+_FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
 COLUMNS = ("document", "line", "printed", "class", "source", "rule", "value", "macro")
 MACRO_DEF = re.compile(
     r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}"
@@ -290,13 +297,89 @@ def scan_lines(
     return printed, identifiers
 
 
+def tex_input_path(target: str) -> Path:
+    return SRC / (target if target.endswith(".tex") else f"{target}.tex")
+
+
+def generated_tex_inputs() -> list[Path]:
+    """Every ``\\input{figures/generated/...}`` fragment the scan may read."""
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for document in DOCUMENTS:
+        text = _strip_comment_all((SRC / document).read_text())
+        for target in re.findall(r"\\input\{(figures/generated/[^}]+)\}", text):
+            path = tex_input_path(target)
+            if path not in seen:
+                seen.add(path)
+                paths.append(path)
+    return paths
+
+
+def _format_pythons() -> list[str]:
+    paper = ROOT / ".pixi" / "envs" / "default" / "bin" / "python"
+    pythons = [sys.executable]
+    if paper.is_file():
+        pythons.append(str(paper))
+    return list(dict.fromkeys(pythons))
+
+
+def _run_format_steps(python: str, env: dict[str, str]) -> None:
+    import regen_paper
+
+    repo = ROOT.parents[1]
+    step_env = env
+    if python != sys.executable:
+        bindir = str(Path(python).resolve().parent)
+        step_env = dict(env)
+        step_env["PATH"] = os.pathsep.join([bindir, env.get("PATH", "")])
+    for step in regen_paper.FORMAT:
+        script = step[0]
+        if script.startswith("scripts/plot_") or script in _FORMAT_SKIP:
+            continue
+        command = [python, str(ROOT / script), *step[1:]]
+        subprocess.run(
+            command,
+            cwd=repo,
+            env=step_env,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def ensure_generated() -> None:
+    """Rewrite missing table and macro fragments from the committed records."""
+    missing = [path for path in generated_tex_inputs() if not path.is_file()]
+    if not missing:
+        return
+    import regen_paper
+
+    repo = ROOT.parents[1]
+    env = dict(
+        os.environ,
+        SOURCE_DATE_EPOCH=regen_paper.SOURCE_DATE_EPOCH,
+        FORCE_SOURCE_DATE="1",
+    )
+    env["PATH"] = os.pathsep.join([str(Path(sys.prefix) / "bin"), env.get("PATH", "")])
+    env.setdefault(
+        "READCON_LIB", str(repo / "target" / "release" / "libreadcon_core.so")
+    )
+    for python in _format_pythons():
+        _run_format_steps(python, env)
+        if not [path for path in missing if not path.is_file()]:
+            return
+    still = [path for path in missing if not path.is_file()]
+    if still:
+        names = ", ".join(path.relative_to(SRC).as_posix() for path in still)
+        raise SystemExit(f"missing generated fragments after format: {names}")
+
+
 def generated_macros(text: str) -> dict[str, str]:
     """The macros that the generated files input before ``\\begin{document}`` define, and their expansions."""
     preamble = _strip_comment_all(text.split(r"\begin{document}", 1)[0])
     found: dict[str, str] = {}
     for target in re.findall(r"\\input\{(figures/generated/[^}]+)\}", preamble):
-        path = SRC / (target if target.endswith(".tex") else target + ".tex")
-        found.update(MACRO_DEF.findall(path.read_text()))
+        found.update(MACRO_DEF.findall(tex_input_path(target).read_text()))
     return found
 
 
@@ -362,6 +445,7 @@ def scan_macros(
 
 
 def scan() -> tuple[list[Printed], list[Identifier]]:
+    ensure_generated()
     printed: list[Printed] = []
     identifiers: list[Identifier] = []
     for document in DOCUMENTS:
@@ -376,7 +460,7 @@ def scan() -> tuple[list[Printed], list[Identifier]]:
         for target in re.findall(
             r"\\input\{(figures/generated/[^}]+)\}", _strip_comment_all(text)
         ):
-            path = SRC / (target if target.endswith(".tex") else target + ".tex")
+            path = tex_input_path(target)
             if path.name.endswith("macros.tex"):
                 continue
             rel = str(path.relative_to(SRC))
