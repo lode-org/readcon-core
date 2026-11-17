@@ -9,8 +9,11 @@ differently from the TeX it exports to.
 
 from __future__ import annotations
 
+import csv
 import importlib.util
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -100,6 +103,23 @@ def _check(
         text=True,
         check=False,
     )
+
+
+def _path_without_emacs(directory: Path) -> str:
+    """A ``PATH`` of one directory that links every program of the current ``PATH`` but ``emacs``."""
+    directory.mkdir()
+    for entry in os.environ["PATH"].split(os.pathsep):
+        if not entry or not Path(entry).is_dir():
+            continue
+        for program in Path(entry).iterdir():
+            link = directory / program.name
+            if (
+                not program.name.startswith("emacs")
+                and not link.exists()
+                and os.access(program, os.X_OK)
+            ):
+                link.symlink_to(program)
+    return str(directory)
 
 
 def _status(clone: Path) -> str:
@@ -202,10 +222,9 @@ def test_check_fails_on_an_org_number_without_emacs(
     first = _check(clone)
     assert first.returncode == 0, first.stdout + first.stderr
     line = _edit_first_org_number(clone, "rg_main.org")
-    bare = tmp_path / "bare"
-    bare.mkdir()
-    done = _check(clone, {"PATH": str(bare)})
-    assert shutil.which("emacs", path=str(bare)) is None
+    bare = _path_without_emacs(tmp_path / "bare")
+    done = _check(clone, {"PATH": bare})
+    assert shutil.which("emacs", path=bare) is None
     assert done.returncode != 0, done.stdout + done.stderr
     assert f"rg_main.org:{line}:" in done.stdout, done.stdout
     assert "rg_main.tex is not the Org export" not in done.stdout
@@ -244,3 +263,156 @@ def test_check_needs_no_ase(clone: Path, tmp_path: Path) -> None:
     for name in ("spec_macros.tex", "versions_table.tex", "sizes_table.tex"):
         assert (clone / GENERATED / name).is_file(), name
     assert _status(clone) == "", _status(clone)
+
+
+DRIVER = """\
+import json
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import trace_numbers
+
+keep = set(sys.argv[2:])
+every = trace_numbers.generated_tex_inputs
+trace_numbers.generated_tex_inputs = lambda: [p for p in every() if p.name in keep]
+print(json.dumps(trace_numbers.ensure_generated() or []))
+"""
+SIZES = ("sizes_macros.tex", "sizes_table.tex")
+TABLE = Path("src") / "figures" / "generated" / "sizes_table.tex"
+MACROS = Path("src") / "figures" / "generated" / "sizes_macros.tex"
+FILE_SIZES = Path("scripts") / "file_sizes.py"
+SIZES_CSV = Path("data") / "sizes.csv"
+
+
+def _ensure(clone: Path) -> subprocess.CompletedProcess[str]:
+    """``ensure_generated`` of the clone, limited to the fragments of ``file_sizes.py --table``.
+
+    The fragments of the other generators do not matter to what it does with
+    these two, and a record elsewhere that a generator refuses does not stop it.
+    """
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            DRIVER,
+            str(clone / CPC / "scripts"),
+            *SIZES,
+        ],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _problems(done: subprocess.CompletedProcess[str]) -> list[str]:
+    assert done.returncode == 0, done.stdout + done.stderr
+    value = json.loads(done.stdout.strip().splitlines()[-1])
+    return value
+
+
+def _bump_a_cell(text: str) -> str:
+    """The first two-decimal number of the table with its last digit raised."""
+    cell = re.search(r"(?<![\d.])\d+\.\d(\d)(?!\d)", text)
+    assert cell is not None
+    digit = str((int(cell.group(1)) + 1) % 10)
+    return text[: cell.end() - 1] + digit + text[cell.end() :]
+
+
+def _generated(clone: Path) -> Path:
+    first = _problems(_ensure(clone))
+    assert first == []
+    return clone / CPC / TABLE
+
+
+def test_a_stale_table_cell_is_reported_with_a_diff(clone: Path) -> None:
+    table = _generated(clone)
+    macros = clone / CPC / MACROS
+    kept = macros.read_bytes()
+    edited = _bump_a_cell(table.read_text())
+    table.write_text(edited)
+    problems = _problems(_ensure(clone))
+    assert len(problems) == 1, problems
+    assert problems[0].startswith("figures/generated/sizes_table.tex: differs"), (
+        problems
+    )
+    assert "file_sizes.py" in problems[0], problems
+    removed = [ln for ln in problems[0].splitlines() if ln.startswith("  -")]
+    added = [ln for ln in problems[0].splitlines() if ln.startswith("  +")]
+    assert len(removed) > 1 and len(added) > 1, problems[0]
+    assert table.read_text() == edited
+    assert macros.read_bytes() == kept
+    assert _status(clone) == "", _status(clone)
+
+
+def test_a_stale_csv_leaves_its_fragments_reported(clone: Path) -> None:
+    table = _generated(clone)
+    macros = clone / CPC / MACROS
+    before = (table.read_bytes(), macros.read_bytes())
+    csv_path = clone / CPC / SIZES_CSV
+    with csv_path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    fields = list(rows[0])
+    rows[0]["bytes_per_atom"] = f"{float(rows[0]['bytes_per_atom']) + 1:.2f}"
+    with csv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    dirty = _status(clone)
+    assert dirty.strip() == f"M {(CPC / SIZES_CSV).as_posix()}", dirty
+    problems = _problems(_ensure(clone))
+    assert any(
+        p.startswith("figures/generated/sizes_macros.tex: differs") for p in problems
+    ), problems
+    assert (table.read_bytes(), macros.read_bytes()) == before
+    assert _status(clone) == dirty
+
+
+def test_a_present_sibling_is_not_overwritten_when_one_output_is_missing(
+    clone: Path,
+) -> None:
+    table = _generated(clone)
+    macros = clone / CPC / MACROS
+    original = macros.read_bytes()
+    edited = _bump_a_cell(table.read_text())
+    table.write_text(edited)
+    macros.unlink()
+    problems = _problems(_ensure(clone))
+    assert macros.read_bytes() == original
+    assert table.read_text() == edited
+    assert [p.split(":")[0] for p in problems] == ["figures/generated/sizes_table.tex"]
+    assert _status(clone) == "", _status(clone)
+
+
+def _fail_after_writing(clone: Path, junk: bool) -> None:
+    """Make ``file_sizes.py --table`` exit 3 after it has written its outputs, and optionally after a wrong one."""
+    script = clone / CPC / FILE_SIZES
+    text = script.read_text()
+    assert text.endswith("    table()\n")
+    extra = (
+        '    (GENERATED / "sizes_table.tex").write_text("% wrong\\n")\n' if junk else ""
+    )
+    script.write_text(text + extra + "    sys.exit(3)\n")
+
+
+def test_the_outputs_of_a_failing_generator_are_not_kept(clone: Path) -> None:
+    _fail_after_writing(clone, junk=False)
+    done = _ensure(clone)
+    assert done.returncode != 0, done.stdout
+    assert "scripts/file_sizes.py --table exited 3" in done.stderr, done.stderr
+    for name in SIZES:
+        assert not (clone / GENERATED / name).exists(), name
+
+
+def test_a_failing_generator_is_reported_and_leaves_present_fragments(
+    clone: Path,
+) -> None:
+    table = _generated(clone)
+    kept = (table.read_bytes(), (clone / CPC / MACROS).read_bytes())
+    _fail_after_writing(clone, junk=True)
+    problems = _problems(_ensure(clone))
+    assert any("scripts/file_sizes.py --table exited 3" in p for p in problems), (
+        problems
+    )
+    assert not any("wrong" in p for p in problems), problems
+    assert (table.read_bytes(), (clone / CPC / MACROS).read_bytes()) == kept
