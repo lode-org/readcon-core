@@ -82,6 +82,7 @@ Elsevier%
 \input{figures/generated/host_macros}
 \input{figures/generated/db_macros}
 \input{figures/generated/readcon_db_macros}
+\input{figures/generated/library_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
 \newcommand{\DOIPENDING}{The version DOI for the candidate commit is not minted.}
@@ -899,7 +900,7 @@ In a checkout of the candidate commit, \texttt{cargo build -{}-release} builds t
 Cargo, pip and conda fetch the dependencies that the lock files of the library and of the paper environment pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
 readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and the repository also carries the CON reader of eOn as a reference under the BSD 3-clause license of the eOn Development Team, which no build uses.
 The library of a commit is its Rust sources, its C headers, its Cargo build script, its Cargo manifest and lock file and its Python package manifest.
-Its digest, the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, begins \texttt{\readcondigest} for that commit, and every record names its library by that digest.
+Its digest is the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, and a record names the library it ran by that digest: \rcRecordDigestCount{} of the \rcDigestRecordCount{} records that name a library name readcon-core~\rcRecordDigestVersion{}, whose digest begins \texttt{\rcRecordDigest}, and Table~\ref*{tab:versionmap} gives the library of each record.
 The scripts of this paper regenerate every table, figure and printed number from the records, each generated table names its script, and a ledger names the record and the rule behind each number printed in the text and the captions.
 The specification and the conformance corpus are part of that commit, and the CON 3.1 corpus and the timing records measured on this branch are part of the records of this paper.
 The eOn build record names eOn commit \texttt{579738a}.
