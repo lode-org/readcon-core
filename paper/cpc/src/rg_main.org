@@ -604,35 +604,34 @@ The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
 \section{Conformance}\label{sec:conformance} A specification settles a dispute between readers only when each reader can be tested against it.
-The conformance corpus shipped with readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus}), and its manifest names the error class of each illegal file.
+The conformance corpus shipped with readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus} of the supplementary material), and its manifest names the error class of each illegal file.
 Read through the Python module of the release, all \(\corpusConfAgree\) files return the verdict and error class of their manifest entries, and the release checks the same files from Rust, Python, C, Fortran and Julia.
 
-Table~\ref{tab:corpus} is in the supplement.
-
 That corpus has few files for the header, the sections and the units, so we wrote a second corpus of \(\cthreeoneFiles\) CON 3.1 files, \(\cthreeoneAccepted\) legal and \(\cthreeoneRejected\) illegal.
-Its manifest names for each file the clauses that decide it and the outcome, the frame count and periodic flags of a legal file or the error class and line of an illegal one.
-For \(\cthreeoneExplicit\) entries the outcome follows from the text of a clause, and the others record a reading where the text leaves a case open (Section~\ref*{sec:supp-corpus31}).
+For each file, its manifest names the clauses that decide it and the outcome: the frame count and periodic flags of a legal file, or the error class and line of an illegal one.
+For \(\cthreeoneExplicit\) entries the outcome follows from the text of a clause, and the others record a reading where the text leaves the case open (Section~\ref*{sec:supp-corpus31}).
 All \(\cthreeoneMatch\) files return the outcome of their entry at one, two and eight threads and at the default.
 Both corpora also go through every read path of the Python module and the C library, in the default and the parallel build at each of those thread counts, and all \(\cpathsReads\) reads return the outcome that the manifests name (Table~\ref*{tab:corpus-paths}).
 
-We also wrote an independent reader in \(\corpusIndepLines\) Python source lines that import nothing from readcon.
+We also wrote an independent reader in \(\corpusIndepLines\) lines of Python that import nothing from readcon.
 It follows the clauses of the specification, and where a clause requires a rejection without naming its class, or no clause decides a case, it follows the reading of the corpus manifest.
-Of the \(\corpusFiles\) files of both corpora, the frame list and the frame iterator of readcon and the independent reader each return the manifest outcome on all \(\corpusIndepAgree\).
+On all \(\corpusIndepAgree\) of the \(\corpusFiles\) files of both corpora, the frame list and the frame iterator of readcon and the independent reader each return the manifest outcome.
 On the \(\corpusBoth\) files that both readers accept, all \(\corpusFieldIdentical\) carry the same bits in every coordinate, velocity and cell entry and equal masks, identifiers, units and periodic flags (Table~\ref*{tab:corpus-crosscheck}).
-The two readers also read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds, each made by inserting, deleting or replacing characters and tokens at one to three random places.
-They agree on \(\mutantSame\) of them, with the same frame count or error class.
-The other \(\mutantDiffer\) fall in \(\mutantGroups\) cases that no clause decides: a count line that breaks two clauses at once, a number in the header past the binary64 range, and a carriage return as the last byte of the input.
-A variant of the independent reader that follows readcon-core on each of those cases returns its verdict on all of them.
+The two readers also read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds.
+Each mutant inserts, deletes or replaces characters and tokens at one to three random places.
+The readers agree on \(\mutantSame\) of them, with the same frame count or error class.
+The other \(\mutantDiffer\) fall in \(\mutantGroups\) cases that no clause decides: a count line that breaks two clauses at once, a number in the header beyond the binary64 range, and a carriage return as the last byte of the input.
+A variant of the independent reader that follows readcon-core on those three cases returns the readcon-core verdict on all of them.
 
 Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library, and the other \(\clauseUncovered\) state no duty of a reader, such as the rules for revising the specification.
 
-One name must mean one language for every reader that carries it.
+A format name should mean the same language to every reader that claims it, and versions of one reader are the first test.
 The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{} do not return the same outcome on every probe file.
 On files of two frames whose first line is empty, the oldest refuses the file and the later three read two frames, and on a blank symbol line the newest two refuse a file that the earlier two read (Section~\ref*{sec:supp-versions}).
 Each of those changes decided a case that the text of its release left open, and Table~\ref{tab:versions} lists the clauses involved.
 
-Extended XYZ is the text format to set beside CON on this test, because it has a published grammar, the specification of the libAtoms extxyz package \cite{kermodeLibatomsExtxyzV0462026}, and parsers in C, C++ and Python.
-Table~\ref{tab:drift} gives seven three-atom files to \(\driftAllPaths\) reader paths from \(\driftAllLibraries\) libraries.
+Extended XYZ is the text format to compare with CON on this test, because it has a published grammar, the specification of the libAtoms extxyz package \cite{kermodeLibatomsExtxyzV0462026}, and parsers in C, C++ and Python.
+We gave seven three-atom files (Table~\ref{tab:drift} of the supplementary material) to \(\driftAllPaths\) reader paths from \(\driftAllLibraries\) libraries.
 On the reference frame the \(\driftXyzPaths\) extended XYZ paths, from \(\driftXyzLibraries\) libraries, return \(\driftXyzOutcomes\) different outcomes.
 That grammar admits a \texttt{d} or \texttt{D} exponent and reads \texttt{T}, \texttt{true}, \texttt{True} and \texttt{TRUE} as true, and the paths split on both files.
 It leaves open whether a comment line that is not key-value pairs makes a file plain XYZ or an error, and on such a file the C parser of libAtoms departs from the default periodicity while its Python parser fails.
