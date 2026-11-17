@@ -284,11 +284,13 @@ FILE_SIZES = Path("scripts") / "file_sizes.py"
 SIZES_CSV = Path("data") / "sizes.csv"
 
 
-def _ensure(clone: Path) -> subprocess.CompletedProcess[str]:
-    """``ensure_generated`` of the clone, limited to the fragments of ``file_sizes.py --table``.
+def _ensure(
+    clone: Path, names: tuple[str, ...] = SIZES
+) -> subprocess.CompletedProcess[str]:
+    """``ensure_generated`` of the clone, limited to the named fragments, by default those of ``file_sizes.py --table``.
 
     The fragments of the other generators do not matter to what it does with
-    these two, and a record elsewhere that a generator refuses does not stop it.
+    these, and a record elsewhere that a generator refuses does not stop it.
     """
     return subprocess.run(
         [
@@ -296,7 +298,7 @@ def _ensure(clone: Path) -> subprocess.CompletedProcess[str]:
             "-c",
             DRIVER,
             str(clone / CPC / "scripts"),
-            *SIZES,
+            *names,
         ],
         cwd=clone,
         capture_output=True,
@@ -416,3 +418,189 @@ def test_a_failing_generator_is_reported_and_leaves_present_fragments(
     )
     assert not any("wrong" in p for p in problems), problems
     assert (table.read_bytes(), (clone / CPC / MACROS).read_bytes()) == kept
+
+
+DLPACK = "dlpack_macros.tex"
+DLPACK_RECORD = Path("data") / "dlpack_cost.txt"
+VERSION_MAP = "version_map.tex"
+STUB_VERSION_MAP = Path("scripts") / "stub_version_map.py"
+
+STUB = """\
+#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+CPC = Path(__file__).resolve().parents[1]
+steps = json.loads((CPC / "data" / "trace" / "reads.json").read_text())["steps"]
+rows = "".join(f"readcon-core 0.17.4: {step['step']}\\n" for step in steps)
+(CPC / "src" / "figures" / "generated" / "version_map.tex").write_text(rows)
+sys.exit(EXIT_CODE)
+"""
+
+
+def _fragment(clone: Path, name: str) -> Path:
+    return clone / CPC / "src" / "figures" / "generated" / name
+
+
+def _stub_exits(clone: Path, code: int) -> None:
+    (clone / CPC / STUB_VERSION_MAP).write_text(STUB.replace("EXIT_CODE", str(code)))
+
+
+def _version_map_from_a_stub(clone: Path) -> None:
+    """Point ``regen_paper.py`` of the clone at one format step and a stand-in for ``gen_version_map.py``.
+
+    The records of the readcon-db campaigns name no build, so the real map is
+    refused here whatever is traced; the stand-in writes ``version_map.tex``
+    from the ledger of the steps, as the real one does, and exits zero.
+    """
+    _stub_exits(clone, 0)
+    path = clone / CPC / "scripts" / "regen_paper.py"
+    text = path.read_text()
+    steps, count = re.subn(
+        r"^FORMAT = \[\n.*?^\]\n",
+        'FORMAT = [\n    ["scripts/file_sizes.py", "--table"],\n]\n',
+        text,
+        count=1,
+        flags=re.M | re.S,
+    )
+    assert count == 1
+    swapped = steps.replace(
+        'VERSION_MAP = ["scripts/gen_version_map.py"]',
+        f'VERSION_MAP = ["{STUB_VERSION_MAP.as_posix()}"]',
+    )
+    assert swapped != steps
+    path.write_text(swapped)
+
+
+def _regenerate_version_map(clone: Path) -> Path:
+    done = subprocess.run(
+        [sys.executable, str(clone / CPC / "scripts" / "regen_paper.py")],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    return _fragment(clone, VERSION_MAP)
+
+
+def test_the_tracked_dlpack_macros_equal_their_generator(clone: Path) -> None:
+    macros = _fragment(clone, DLPACK)
+    before = macros.read_bytes()
+    assert _problems(_ensure(clone, (DLPACK,))) == []
+    assert macros.read_bytes() == before
+    assert _status(clone) == "", _status(clone)
+
+
+def test_an_edited_dlpack_macros_file_is_reported_with_a_diff(clone: Path) -> None:
+    macros = _fragment(clone, DLPACK)
+    text = macros.read_text()
+    assert r"\newcommand{\dlpackViewUs}{98.523}" in text
+    edited = text.replace("{98.523}", "{98.524}", 1)
+    macros.write_text(edited)
+    problems = _problems(_ensure(clone, (DLPACK,)))
+    assert len(problems) == 1, problems
+    assert problems[0].startswith("figures/generated/dlpack_macros.tex: differs"), (
+        problems
+    )
+    assert "gen_dlpack_macros.py" in problems[0], problems
+    assert r"-\newcommand{\dlpackViewUs}{98.524}" in problems[0], problems[0]
+    assert r"+\newcommand{\dlpackViewUs}{98.523}" in problems[0], problems[0]
+    assert macros.read_text() == edited
+    assert _status(clone).strip() == f"M {(GENERATED / DLPACK).as_posix()}"
+
+
+def test_a_dlpack_record_that_changed_leaves_the_macros_reported(clone: Path) -> None:
+    record = clone / CPC / DLPACK_RECORD
+    text = record.read_text()
+    assert "repeat 3 view_ns 98521 copy_ns" in text
+    record.write_text(
+        text.replace("repeat 3 view_ns 98521", "repeat 3 view_ns 98999", 1)
+    )
+    problems = _problems(_ensure(clone, (DLPACK,)))
+    assert [p.split(":")[0] for p in problems] == [
+        "figures/generated/dlpack_macros.tex"
+    ]
+    assert _status(clone).strip() == f"M {(CPC / DLPACK_RECORD).as_posix()}"
+
+
+def _input_a_stray_fragment(clone: Path) -> None:
+    """Make ``rg_supp.tex`` input ``stray_fragment.tex``, which no step of ``regen_paper.py`` writes."""
+    supp = clone / CPC / "src" / "rg_supp.tex"
+    text = supp.read_text()
+    anchor = "\\input{figures/generated/dlpack_macros}\n"
+    assert anchor in text
+    supp.write_text(
+        text.replace(anchor, anchor + "\\input{figures/generated/stray_fragment}\n", 1)
+    )
+
+
+def test_a_generated_input_that_no_step_writes_is_reported_by_name(
+    clone: Path,
+) -> None:
+    _input_a_stray_fragment(clone)
+    stray = _fragment(clone, "stray_fragment.tex")
+    stray.write_text("\\newcommand{\\strayValue}{42}\n")
+    problems = _problems(_ensure(clone, ("stray_fragment.tex",)))
+    assert len(problems) == 1, problems
+    assert problems[0].startswith("figures/generated/stray_fragment.tex:"), problems
+    assert "no format step" in problems[0] and "cannot be validated" in problems[0]
+    assert stray.read_text() == "\\newcommand{\\strayValue}{42}\n"
+
+
+def test_a_missing_generated_input_that_no_step_writes_is_refused(
+    clone: Path,
+) -> None:
+    _input_a_stray_fragment(clone)
+    done = _ensure(clone, ("stray_fragment.tex",))
+    assert done.returncode != 0, done.stdout
+    assert "no format step writes figures/generated/stray_fragment.tex" in done.stderr
+
+
+def test_an_edited_version_map_is_reported_with_a_diff(clone: Path) -> None:
+    _version_map_from_a_stub(clone)
+    version_map = _regenerate_version_map(clone)
+    assert "readcon-core 0.17.4" in version_map.read_text()
+    assert _problems(_ensure(clone, (VERSION_MAP,))) == []
+    edited = version_map.read_text().replace("0.17.4", "0.17.5", 1)
+    version_map.write_text(edited)
+    problems = _problems(_ensure(clone, (VERSION_MAP,)))
+    assert len(problems) == 1, problems
+    assert problems[0].startswith("figures/generated/version_map.tex: differs"), (
+        problems
+    )
+    assert "-readcon-core 0.17.5:" in problems[0], problems[0]
+    assert "+readcon-core 0.17.4:" in problems[0], problems[0]
+    assert version_map.read_text() == edited
+
+
+def test_the_version_map_is_checked_without_writing_a_tracked_file(
+    clone: Path,
+) -> None:
+    _version_map_from_a_stub(clone)
+    _regenerate_version_map(clone)
+    before = _status(clone)
+    assert _problems(_ensure(clone, (VERSION_MAP,))) == []
+    assert _status(clone) == before
+    assert (clone / CPC / "data" / "trace" / "reads.json").is_file()
+
+
+def test_a_version_map_that_cannot_be_built_is_reported_not_skipped(
+    clone: Path,
+) -> None:
+    _version_map_from_a_stub(clone)
+    version_map = _regenerate_version_map(clone)
+    kept = version_map.read_text()
+    _stub_exits(clone, 4)
+    problems = _problems(_ensure(clone, (VERSION_MAP,)))
+    assert any(
+        p.startswith("figures/generated/version_map.tex: no successful format step")
+        for p in problems
+    ), problems
+    assert any(
+        p.startswith("scripts/regen_paper.py exited")
+        and "stub_version_map.py exited 4" in p
+        for p in problems
+    ), problems
+    assert version_map.read_text() == kept
