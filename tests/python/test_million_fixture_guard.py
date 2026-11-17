@@ -278,6 +278,35 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
     assert r"\label{tab:format-h2h}" in tables.table()
     assert r"\hhfReadconConBytesOneM" in tables.macros()
 
+    # An 'unsupported' row carrying any measured field counts as measured and
+    # must be refused without pinned hashes.
+    for field, value in (
+        ("iqr_s", 0.001),
+        ("n", 6),
+        ("rss_bytes", 1024),
+        ("samples_s", [0.05]),
+        ("median_s", 0.05),
+        ("file_bytes", 1234),
+        ("cold_median_s", 0.05),
+        ("cold_iqr_s", 0.001),
+        ("cold_n", 6),
+        ("cold_samples_s", [0.05]),
+        ("position_error", 0.0),
+        ("cell_error", 0.0),
+        ("checksum", 1.0),
+        ("checksum_ok", True),
+    ):
+        spoofed_extra = json.loads(json.dumps(unsupported_only_extra))
+        target = next(
+            row
+            for row in spoofed_extra["rows"]
+            if row.get("structure") == "1M" and row.get("cache") == "unsupported"
+        )
+        target[field] = value
+        (records / "extra" / "cross-format.json").write_text(json.dumps(spoofed_extra))
+        with pytest.raises(SystemExit):
+            tables.table()
+
     # Measured 1M rows in extra are allowed once extra carries the pinned 1M hashes.
     pinned_extra = dict(raw_extra)
     pinned_extra["frames"] = [
