@@ -28,15 +28,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import numeric_pins  # noqa: E402,F401
 import numpy as np  # noqa: E402
-from ase import units
-from ase.calculators.emt import EMT
-from ase.constraints import FixAtoms, FixCartesian, FixScaled
-from ase.geometry import find_mic
-from ase.mep import NEB
-from ase.optimize import BFGS, FIRE
-from ase.utils.forcecurve import fit_images
 
-import ase
+_TABLES_ONLY = __name__ == "__main__" and "--tables" in sys.argv
+if not _TABLES_ONLY:
+    from ase import units
+    from ase.calculators.emt import EMT
+    from ase.constraints import FixAtoms, FixCartesian, FixScaled
+    from ase.geometry import find_mic
+    from ase.mep import NEB
+    from ase.optimize import BFGS, FIRE
+    from ase.utils.forcecurve import fit_images
+
+    import ase
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "scripts"))
