@@ -10,9 +10,20 @@ paths, and :func:`readcon.read_positions`, must agree bit for bit.
 
 from __future__ import annotations
 
+import gc
 from pathlib import Path
 
 import numpy as np
+
+
+def _assert_owned_array(array: np.ndarray, n_atoms: int) -> None:
+    """The array is a fresh float64 block the caller owns."""
+    assert array.dtype == np.float64
+    assert array.shape == (n_atoms, 3)
+    assert array.flags.c_contiguous
+    # A view into the frame slab would keep that slab alive. An owned
+    # array has no base, or its base is the data block it owns.
+    assert array.base is None or array.flags.owndata
 
 
 def _write_tiled(path: Path, n_frames: int, n_atoms: int) -> None:
@@ -48,7 +59,7 @@ def test_coords_array_matches_positions_and_atom_walk(tmp_path: Path) -> None:
         # Fast path: atoms have not been built yet.
         for index, frame in enumerate(frames):
             fast = np.asarray(frame.coords_array())
-            assert fast.shape == (n_atoms, 3)
+            _assert_owned_array(fast, n_atoms)
             assert fast.tobytes() == oracle[index].tobytes(), (
                 f"fast coords_array differ at threads={threads} frame={index}"
             )
@@ -62,6 +73,25 @@ def test_coords_array_matches_positions_and_atom_walk(tmp_path: Path) -> None:
             assert slow.tobytes() == oracle[index].tobytes(), (
                 f"slow coords_array differ at threads={threads} frame={index}"
             )
+
+
+def test_coords_array_stays_valid_after_the_frame_is_dropped(tmp_path: Path) -> None:
+    import readcon
+
+    path = tmp_path / "tiled.con"
+    _write_tiled(path, 3, 8)
+    oracle = np.asarray(readcon.read_positions(str(path), n_threads=1))
+    frames = readcon.read_con(str(path), n_threads=4)
+    array = frames[0].coords_array()
+    _assert_owned_array(array, 8)
+    assert array.tobytes() == oracle[0].tobytes()
+    del frames
+    gc.collect()
+    # The copy lives in the array. Dropping the frame must not free it.
+    assert array.dtype == np.float64
+    assert array.flags.c_contiguous
+    assert array.base is None or array.flags.owndata
+    assert array.tobytes() == oracle[0].tobytes()
 
 
 def test_coords_array_reflects_atom_edits(tmp_path: Path) -> None:

@@ -701,9 +701,11 @@ impl PyConFrame {
     /// `[N, 3] float64` array, in the type-grouped order used by the
     /// underlying frame.
     ///
-    /// Always allocates a **fresh** array from the current Python atom list so
-    /// in-place mutation of a previous return value cannot corrupt later
-    /// calls, and edits to `atoms` are reflected immediately.
+    /// Always allocates a **fresh** owned array, so mutating a previous
+    /// return value cannot affect a later call. Before the Python atom list
+    /// exists the doubles are copied from the parsed frame. Once that list
+    /// exists they are read from it, and an in-place edit of `atoms` shows
+    /// up on the next call.
     fn coords_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
         // A frame from `read_con` has not built its Python atom list yet:
         // `atoms_ready` is false and the parsed frame still owns the rows,
@@ -724,7 +726,9 @@ impl PyConFrame {
                 }
                 let array = Array2::from_shape_vec((n, 3), data)
                     .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-                return Ok(array.into_pyarray(py));
+                // NumPy allocates this buffer (`OWNDATA`, no base). The
+                // frame can be dropped and the array stays valid.
+                return Ok(array.to_pyarray(py));
             }
         }
         // The Python atom list exists (it was accessed or edited). Walk it
@@ -736,7 +740,7 @@ impl PyConFrame {
         }
         let array = Array2::from_shape_vec((atoms.len(), 3), data)
             .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
-        Ok(array.into_pyarray(py))
+        Ok(array.to_pyarray(py))
     }
 
     /// Returns the per-atom velocity vectors as a contiguous numpy
