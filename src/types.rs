@@ -5089,13 +5089,45 @@ impl ConFrame {
 mod tests {
     use super::*;
 
+    /// One copper component of `n` atoms, each with its own coordinates.
+    fn uniform_frame_text(n: usize) -> String {
+        let mut text = String::from(
+            "Random Number Seed\n{\"con_spec_version\":2}\n15.0 15.0 15.0\n\
+             90.0 90.0 90.0\n0 0\n218 0 1\n1\n",
+        );
+        text.push_str(&format!("{n}\n63.546\nCu\nCoordinates of Component 1\n"));
+        for i in 0..n {
+            let x = 0.1234567 + i as f64 * 0.01;
+            text.push_str(&format!("{x} {} {} 0 {i}\n", x + 1.0, x + 2.0));
+        }
+        text
+    }
+
+    fn bulk_drop_is_marked(atoms: &[AtomDatum]) -> bool {
+        SYMBOL_DROP_HINT.with(|hint| {
+            let hint = hint.get();
+            hint.atoms == atoms.as_ptr() as usize && hint.n == atoms.len()
+        })
+    }
+
     #[test]
     fn projected_positions_leave_no_atom_in_the_freed_column() {
-        let text = include_str!("../resources/test/tiny_cuh2.con");
-        let mut frame = crate::iterators::ConFrameIterator::new(text)
+        // The bulk symbol drop needs 1024 atoms, so a smaller frame never
+        // has the hint the projection must clear.
+        let text = uniform_frame_text(1100);
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
             .next()
             .expect("frame")
             .expect("parse");
+        assert_eq!(frame.atom_data.len(), 1100);
+        let symbol = Arc::as_ptr(&frame.atom_data[0].symbol);
+        assert!(
+            frame
+                .atom_data
+                .iter()
+                .all(|atom| std::ptr::eq(Arc::as_ptr(&atom.symbol), symbol)),
+            "the frame should share one symbol"
+        );
         let column = frame
             .positions
             .f64_slice()
@@ -5106,9 +5138,12 @@ mod tests {
             frame
                 .atom_data
                 .iter()
-                .any(|atom| column.contains(&(atom.coord_ptr() as usize))),
+                .all(|atom| column.contains(&(atom.coord_ptr() as usize))),
             "a parsed frame should address its position column"
         );
+        // The piped reader and the chemfiles import mark a buffer like this.
+        mark_uniform_symbol_drop(&frame.atom_data);
+        assert!(bulk_drop_is_marked(&frame.atom_data));
         let expect: Vec<[f64; 3]> = frame
             .atom_data
             .iter()
@@ -5119,6 +5154,11 @@ mod tests {
             ..Default::default()
         };
         frame.project_storage_dtypes(&dtypes);
+        // The atoms own coordinate boxes now. The bulk drop would skip them.
+        assert!(
+            !bulk_drop_is_marked(&frame.atom_data),
+            "the projection left the bulk drop armed"
+        );
         for (i, atom) in frame.atom_data.iter().enumerate() {
             assert!(
                 !column.contains(&(atom.coord_ptr() as usize)),
