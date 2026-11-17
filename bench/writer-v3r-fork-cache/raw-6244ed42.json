@@ -1,0 +1,3130 @@
+{
+  "protocol": {
+    "fresh_process_per_observation": true,
+    "paired_interleaved": true,
+    "pairs": 21,
+    "cpu": 0,
+    "bootstrap_draws": 50000
+  },
+  "commits": {
+    "baseline": "6244ed42985235be8c5c393db5fd6c531e33dc14",
+    "current": "61a07dfd75659274a711fd3655129266d0964d1f"
+  },
+  "host": {
+    "platform": "Linux-6.12.113+-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "driver": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]"
+  },
+  "summaries": [
+    {
+      "operation": "write_con_shared",
+      "comparison": "current/baseline",
+      "n_pairs": 21,
+      "left_median_s": 0.081185727,
+      "right_median_s": 0.081589901,
+      "paired_median_percent": 0.49783873956072977,
+      "paired_bootstrap_95_percent": [
+        -0.18219981193368096,
+        1.0244991115033963
+      ],
+      "paired_percent": [
+        -5.084460398460711,
+        1.0244991115033963,
+        0.5650841077430524,
+        0.7813988527647142,
+        -1.419976687269553,
+        6.268559389130002,
+        -11.217312303741922,
+        -2.8181401012002727,
+        -0.08499894283137133,
+        0.6271787623690628,
+        0.2537216747218629,
+        1.4176597576922356,
+        0.2935728978044283,
+        3.618034452565677,
+        -0.19247621449405283,
+        0.49783873956072977,
+        2.7135276333929648,
+        4.759052075708392,
+        -0.18219981193368096,
+        2.70272223124961,
+        -0.7316065251514292
+      ]
+    },
+    {
+      "operation": "write_con_shared",
+      "comparison": "A/A current/current",
+      "n_pairs": 21,
+      "left_median_s": 0.080830472,
+      "right_median_s": 0.081013283,
+      "paired_median_percent": -0.09877438997649701,
+      "paired_bootstrap_95_percent": [
+        -1.069238158889807,
+        0.5866109507329131
+      ],
+      "paired_percent": [
+        0.05121524510660613,
+        -1.201540676392432,
+        -0.09877438997649701,
+        0.19760300935873776,
+        1.430972070224601,
+        5.665389015894373,
+        -1.8303471707670882,
+        -3.122644415634279,
+        -1.069238158889807,
+        -0.06253675915842694,
+        -1.4108545888044888,
+        -1.2321387547892582,
+        2.246023979491718,
+        4.33027652584328,
+        0.5866109507329131,
+        1.6422952723142092,
+        -1.8968908681702423,
+        1.1663140451552367,
+        -0.7509329737051762,
+        -0.3084105992873343,
+        -0.5720260157657364
+      ]
+    },
+    {
+      "operation": "write_columns",
+      "comparison": "current/baseline",
+      "n_pairs": 21,
+      "left_median_s": 0.037801655,
+      "right_median_s": 0.037827519,
+      "paired_median_percent": -0.30659041042236934,
+      "paired_bootstrap_95_percent": [
+        -1.0044031140964749,
+        1.3022474888491287
+      ],
+      "paired_percent": [
+        -4.645403778758017,
+        1.3022474888491287,
+        -0.5341192187942823,
+        -3.1815274462514864,
+        4.667613071195542,
+        5.154177872661192,
+        -0.9797311981194934,
+        -0.30659041042236934,
+        -2.253016095435345,
+        -1.5748213732799776,
+        3.6238407423554886,
+        1.4026246168961976,
+        0.5741808334553955,
+        -2.4685075099243337,
+        3.506393448137235,
+        -0.0063911477807820916,
+        -0.4760857640797478,
+        1.6829518997962145,
+        -1.0044031140964749,
+        0.63004343542572,
+        -3.610795623626828
+      ]
+    },
+    {
+      "operation": "write_columns",
+      "comparison": "A/A current/current",
+      "n_pairs": 21,
+      "left_median_s": 0.037695496,
+      "right_median_s": 0.038080559,
+      "paired_median_percent": -0.9699207357662387,
+      "paired_bootstrap_95_percent": [
+        -1.7987688994088091,
+        0.888267354222827
+      ],
+      "paired_percent": [
+        -0.9699207357662387,
+        3.2622298305369,
+        1.5985968191000621,
+        -3.1977987892840565,
+        7.214232455901826,
+        -4.9888800222108625,
+        -5.776010545459631,
+        -0.939705255399248,
+        -4.965725210752369,
+        -1.2798304073943112,
+        -1.4587401515477327,
+        -1.7987688994088091,
+        -1.1719219861939911,
+        0.888267354222827,
+        1.6280824513430936,
+        0.7899577831838256,
+        3.2080526276042187,
+        -5.817927088950336,
+        -6.007775375833524,
+        3.2526828900019122,
+        0.8342144220070624
+      ]
+    },
+    {
+      "operation": "write_extxyz",
+      "comparison": "current/baseline",
+      "n_pairs": 21,
+      "left_median_s": 0.028448963,
+      "right_median_s": 0.027654581,
+      "paired_median_percent": -0.9457232641692959,
+      "paired_bootstrap_95_percent": [
+        -2.2932464098430416,
+        0.0347815841301502
+      ],
+      "paired_percent": [
+        -2.301847429594206,
+        -0.9041988338732487,
+        0.028275652198428425,
+        1.9156829413578214,
+        -0.9903423012031176,
+        -6.275761506662237,
+        -2.2395978173045172,
+        2.686600105308834,
+        9.415864782086402,
+        -10.694312630941539,
+        -2.2932464098430416,
+        -2.649508184102134,
+        -0.9457232641692959,
+        0.0347815841301502,
+        24.174567124704183,
+        2.143151615093597,
+        -0.613796104682196,
+        4.461642671774446,
+        -11.437654143416276,
+        -1.5415323679017767,
+        -3.1763148984824685
+      ]
+    },
+    {
+      "operation": "write_extxyz",
+      "comparison": "A/A current/current",
+      "n_pairs": 21,
+      "left_median_s": 0.027337445,
+      "right_median_s": 0.027276442,
+      "paired_median_percent": -0.47698806734504107,
+      "paired_bootstrap_95_percent": [
+        -0.8846308944500891,
+        0.40126898377350617
+      ],
+      "paired_percent": [
+        -0.7213145549466726,
+        0.07841109641579802,
+        -1.1944998670499474,
+        3.5715269258349336,
+        17.521204886463295,
+        9.726501351006412,
+        -1.401814405158197,
+        2.118376842297387,
+        4.680802874062695,
+        0.40126898377350617,
+        -0.8846308944500891,
+        -0.305332118638002,
+        -0.47698806734504107,
+        -1.5857110245704908,
+        -0.4851635373162022,
+        -0.5648890789235472,
+        0.3917602922751895,
+        -0.9510809526916297,
+        0.8964976978833361,
+        -1.2348741965847565,
+        -0.8877294149626347
+      ]
+    }
+  ],
+  "pairs": [
+    {
+      "index": 0,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.082588469,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.078389291,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 0,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.08023978,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080280875,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 0,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.039163291,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037343998,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 0,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.036787336,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036430528,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 0,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.027585625,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026950646,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 0,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027106482,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026910959,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.079948532,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080767604,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.080830472,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.079859261,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.037702434,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038193413,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.037662889,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038891539,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.027906915,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027654581,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 1,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.027255071,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027276442,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.079916245,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080367839,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.080585666,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080506068,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.038030648,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037827519,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.037695496,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038298095,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.028437894,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.028445935,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 2,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.026479869,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026163567,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.080621823,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081251801,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.079364682,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.079521509,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.037805363,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036602575,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.037565872,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036364591,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.02916041,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.029719031,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 3,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.027270185,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.028244147,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.087319673,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.086079754,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.084488721,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.085697731,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.040469657,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.042358624,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.040912405,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.043863921,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.032422527,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.032101433,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 4,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.030901368,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.03631566,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.084681195,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.089989486,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.08308478,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.087791856,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.038646726,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.040638647,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.040221753,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038215138,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.029498954,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.02764767,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 5,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.028462115,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.031230483,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.095825352,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.085076323,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.087082332,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.085488423,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.039526658,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.039139403,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.041334187,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.03894672,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.032557542,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.031828384,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 6,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.030578727,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.03015007,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.085818551,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.083400064,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.085289346,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.082626063,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.041023788,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.040898013,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.041233461,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.040845988,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.030293753,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.031107625,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 7,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.029488521,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.030113199,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.082030432,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081960707,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.082240705,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081361356,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.04030708,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.039398955,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.040796458,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038770618,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.028465755,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.031146052,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 8,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027930358,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.029237723,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.081233618,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081743098,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.081727932,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081676822,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.038930066,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038316987,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.037193131,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036717122,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.029809583,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026621653,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 9,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.026243992,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026349301,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.079969912,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080172813,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.08042792,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.079293199,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.0371574,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038503925,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.037508051,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036960906,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.027997035,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027354994,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 10,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027096951,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026857243,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.080687132,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081831001,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.080768095,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.07977292,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.037132886,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037653721,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.037206058,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036536807,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.027956396,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027215689,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 11,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.027337445,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027253975,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.080535704,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080772135,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.081049758,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.082870155,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.037589029,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037804858,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.037203415,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.03676742,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.027801156,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027538234,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 12,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027347225,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027216782,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.082224065,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.08519896,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.079396015,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.082834082,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.037656438,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036726886,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.03774528,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038080559,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.028448963,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.028458858,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 13,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.028009454,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027565305,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.081617877,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081460782,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.080080503,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080550264,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.03745866,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038772108,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.038154333,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038775517,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.028880604,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.035862365,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 14,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027419002,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027285975,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.081185727,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081589901,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.079704303,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081013283,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.036910428,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036908069,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.036624742,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036914062,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.026885872,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027462077,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 15,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.026986891,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026834445,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.081315295,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.083521808,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.082439798,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080876005,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.037440523,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037262274,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.037062983,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038251983,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.027652994,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027483261,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 16,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.027006055,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027111854,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.080455497,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.084284416,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.079908152,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080840132,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.036876455,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037497068,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.038742029,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036488046,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.027705827,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.028941962,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 17,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.027926014,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027660415,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.081002279,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080854693,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.082740274,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.08211895,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.037801655,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037421974,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.040441775,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038012124,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.031036032,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027486238,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 18,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.026912841,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027154114,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.079301786,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081445093,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.078738539,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.078495701,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.036820636,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.037052622,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.035604516,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.036762618,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "current",
+        "baseline"
+      ],
+      "left": {
+        "elapsed_s": 0.026718414,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026306541,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 19,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "b",
+        "a"
+      ],
+      "left": {
+        "elapsed_s": 0.02648537,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.026158309,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_con_shared",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.080978228,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.080385786,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_con_shared",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.082361289,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.081890161,
+        "bytes": 7194484,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_columns",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.039686378,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.038253384,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_columns",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.038888443,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.039212856,
+        "bytes": 7193908,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_extxyz",
+      "control": false,
+      "execution_order": [
+        "baseline",
+        "current"
+      ],
+      "left": {
+        "elapsed_s": 0.029925276,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.028974755,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    },
+    {
+      "index": 20,
+      "operation": "write_extxyz",
+      "control": true,
+      "execution_order": [
+        "a",
+        "b"
+      ],
+      "left": {
+        "elapsed_s": 0.028202062,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      },
+      "right": {
+        "elapsed_s": 0.027951704,
+        "bytes": 10120525,
+        "python": "3.13.18 (main, Nov 11 2026, 00:17:48) [Clang 23.1.3 ]",
+        "readcon": "0.24.0",
+        "numpy": "2.5.5"
+      }
+    }
+  ]
+}
