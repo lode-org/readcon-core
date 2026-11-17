@@ -64,21 +64,26 @@ def hardware_line() -> str:
     return f"hardware {model} uname_m {machine} nproc {nproc} memory_kib {memory}"
 
 
-def pinned_to_cpu0() -> bool:
+def pinned_to_serial() -> bool:
+    from sample_protocol import serial_cpu
+
+    target = serial_cpu()
     for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
         if line.startswith("Cpus_allowed_list:"):
-            return line.split(":", 1)[1].strip() == "0"
+            return line.split(":", 1)[1].strip() == target
     return False
 
 
 def ensure_pinned() -> None:
-    if os.environ.get("H2H_PINNED") == "1" and pinned_to_cpu0():
+    from sample_protocol import serial_cpu
+
+    if os.environ.get("H2H_PINNED") == "1" and pinned_to_serial():
         return
-    if pinned_to_cpu0():
+    if pinned_to_serial():
         os.environ["H2H_PINNED"] = "1"
         return
     os.environ["H2H_PINNED"] = "1"
-    os.execvp("taskset", ["taskset", "-c", "0", sys.executable, *sys.argv])
+    os.execvp("taskset", ["taskset", "-c", serial_cpu(), sys.executable, *sys.argv])
 
 
 def thread_env() -> dict[str, str]:
@@ -195,6 +200,8 @@ def git_line(args: list[str]) -> str:
 
 
 def log_text(command: list[str], body: str, code: int) -> str:
+    from sample_protocol import core_list, serial_cpu
+
     rev = git_line(["rev-parse", "HEAD"])
     tree = git_line(["rev-parse", "HEAD^{tree}"])
     src_tree = git_line(["rev-parse", "HEAD:src"])
@@ -209,7 +216,8 @@ def log_text(command: list[str], body: str, code: int) -> str:
         "command\n"
         f"{shown}\n"
         f"{hardware_line()}\n"
-        "pinned taskset -c 0\n"
+        f"pinned taskset -c {serial_cpu()}\n"
+        f"cpus {core_list()}\n"
         f"{sanitize(body)}"
     )
     if not text.endswith("\n"):
@@ -616,7 +624,9 @@ def c_read_samples(path: Path, repeats: int = REPEATS) -> list[float]:
 
 
 def run_binary(binary: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    command = ["taskset", "-c", "0", str(binary), *args]
+    from sample_protocol import serial_cpu
+
+    command = ["taskset", "-c", serial_cpu(), str(binary), *args]
     return subprocess.run(
         command, cwd=ROOT, env=thread_env(), capture_output=True, text=True, check=False
     )

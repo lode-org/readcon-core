@@ -16,6 +16,7 @@ measurement (65536 atoms, six repeats), and this run does not replace them.
 
 from __future__ import annotations
 
+import os
 import platform
 import subprocess
 import sys
@@ -143,7 +144,13 @@ def main() -> int:
 
     emit(f"rev_parse {run(['git', 'rev-parse', 'HEAD'])}")
     emit(f"tree {run(['git', 'rev-parse', 'HEAD^{tree}'])}")
-    emit("command taskset -c 0 python3 paper/cpc/scripts/bench_dlpack.py")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "bench" / "h2h"))
+    from sample_protocol import core_list, serial_cpu
+
+    pin = serial_cpu()
+    os.sched_setaffinity(0, {int(pin)})
+    emit(f"command taskset -c {pin} python3 paper/cpc/scripts/bench_dlpack.py")
+    emit(f"cpus {core_list()}")
     emit(f"date_utc {run(['date', '-u', '+%Y-%m-%dT%H:%M:%SZ'])}")
     emit(f"uname_m {run(['uname', '-m'])}")
     emit(f"nproc {run(['nproc', '--all'])}")

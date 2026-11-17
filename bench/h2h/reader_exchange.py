@@ -217,11 +217,10 @@ def _drop_until_cold(path: Path) -> None:
 
 
 def _physical_core() -> int:
-    """One physical core. This guest has no SMT, so the lowest allowed cpu is one."""
-    allowed = sorted(os.sched_getaffinity(0))
-    if not allowed:
-        raise SystemExit("this process has an empty CPU affinity set")
-    return allowed[0]
+    """One physical core: the lowest CPU in the chosen affinity set."""
+    from sample_protocol import serial_cpu
+
+    return int(serial_cpu())
 
 
 def _cpu_mhz(core: int) -> str:
@@ -418,7 +417,9 @@ def sample_arm(arm: str, path: Path, cache: str, core: int) -> dict:
 def run(out: Path, frames: int, repeats: int) -> None:
     if frames < 1 or repeats < 1:
         raise SystemExit("frames and repeats must be positive")
-    allowed = sorted(os.sched_getaffinity(0))
+    from sample_protocol import core_list
+
+    allowed_text = core_list()
     core = _physical_core()
     os.sched_setaffinity(0, {core})
     clock = _clock_note(core)
@@ -444,7 +445,8 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "schedule each arm warmup then its repeats back-to-back; warm phase then cold phase",
         "settle drop_caches plus 2 s after any arm whose sample is at least 5 s",
         "process fresh",
-        f"affinity_allowed {','.join(str(cpu) for cpu in allowed)}",
+        f"affinity_allowed {allowed_text}",
+        f"cpus {allowed_text}",
         f"affinity taskset -c {core}",
         clock,
         "threads 1; read_positions n_threads None stays on the calling thread",
@@ -712,6 +714,7 @@ def run(out: Path, frames: int, repeats: int) -> None:
         "warmup": 1,
         "serial": True,
         "pinned": f"taskset -c {core}",
+        "cpus": [int(cpu) for cpu in allowed_text.split(",") if cpu],
         "percentile": "numpy linear (type-7)",
         "memory": "VmHWM after the read minus VmHWM after the import, MiB",
         "arms": payload_arms,

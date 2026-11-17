@@ -5,11 +5,13 @@ Measures:
 1. Concurrent Python ``ThreadPoolExecutor`` ``read_con(..., n_threads=1)`` reads
    across 1, 2, 4, and 8 Python threads with a background heartbeat thread
    proving the GIL is released.
-2. Strong scaling of ``read_con``, ``read_positions``, ``coords_array``, and
-   ``write_con`` at 1, 2, 4, and 8 threads on ``HEAD`` ("after") and, unless
-   ``--skip-before`` is passed, on the pre-threadfix commit ``--before-commit``.
+2. Strong scaling of ``read_con``, ``read_positions``, and ``coords_array``
+   at 1, 2, 4, and 8 threads on ``HEAD`` ("after") and on the pre-threadfix
+   commit ``--before-commit``.
 
 One warmup, then ``--repeats`` (>= 6) serial samples. Type-7 median and IQR.
+Both phases are required. ``--cpus`` overrides the affinity mask
+(``os.sched_getaffinity``), and each record names the CPUs that were used.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from pathlib import Path
 from bench_disk import bench_disk
 from campaign_protocol import head_sha, stamp_file, type7
 from frames_guard import write_distinct_copies
-from sample_protocol import pin_cores
+from sample_protocol import affinity_set, pin_cores, use_cpus
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
@@ -92,7 +94,11 @@ def run_gil_concurrent(out: Path, repeats: int, sha: str) -> dict:
     pin_cores()
     paths = _ensure_concurrent_inputs()
     rows: list[dict] = []
-    log_lines = [f"commit {sha}", f"repeats {repeats}"]
+    log_lines = [
+        f"commit {sha}",
+        f"repeats {repeats}",
+        f"cpus {','.join(str(cpu) for cpu in sorted(affinity_set()))}",
+    ]
 
     # Measure Python heartbeat ticks while a single read_con runs.
     ticks = 0
@@ -153,6 +159,7 @@ def run_gil_concurrent(out: Path, repeats: int, sha: str) -> dict:
     payload = {
         "commit": sha,
         "gil_released_ticks": gil_ticks,
+        "cpus": sorted(affinity_set()),
         "rows": rows,
     }
     json_path = out / "gil-concurrent.json"
@@ -258,7 +265,7 @@ def _time_threadfix_arm(
         [
             "taskset",
             "-c",
-            "0-7",
+            ",".join(str(cpu) for cpu in sorted(affinity_set())),
             sys.executable,
             "-c",
             _WORKER_CODE,
@@ -286,21 +293,72 @@ def _time_threadfix_arm(
     }
 
 
+def threadfix_record_error(payload: object) -> str | None:
+    """Why ``payload`` is not a before-and-after threadfix record."""
+    if not isinstance(payload, dict):
+        return "threadfix record is not an object"
+    before = payload.get("before_commit")
+    after = payload.get("after_commit")
+    if not isinstance(before, str) or not before.strip():
+        return "threadfix record is after-only: before_commit is null"
+    if not isinstance(after, str) or not after.strip():
+        return "threadfix record is missing after_commit"
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return "threadfix record has no rows"
+    phases: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            return "threadfix record row is not an object"
+        phase = row.get("phase")
+        if phase not in {"before", "after"}:
+            return f"threadfix record row has phase {phase!r}"
+        phases.add(phase)
+    if phases != {"before", "after"}:
+        missing = "before" if "before" not in phases else "after"
+        return f"threadfix record is after-only: missing {missing} phase"
+    return None
+
+
+def require_threadfix_payload(payload: object) -> dict:
+    error = threadfix_record_error(payload)
+    if error:
+        raise SystemExit(error)
+    assert isinstance(payload, dict)
+    return payload
+
+
+def require_threadfix_record(path: Path) -> dict:
+    record = Path(path)
+    if not record.is_file():
+        raise SystemExit(f"missing threadfix record {record}")
+    return require_threadfix_payload(json.loads(record.read_text(encoding="utf-8")))
+
+
 def run_threadfix(
     out: Path,
     repeats: int,
     sha: str,
     before_commit: str | None,
 ) -> dict:
+    if not isinstance(before_commit, str) or not before_commit.strip():
+        raise SystemExit(
+            "refusing an after-only threadfix record: before_commit is required"
+        )
     con_100k, con_1m = _ensure_scale_inputs()
-    phases: list[tuple[str, str, Path | None]] = [("after", sha, None)]
-    if before_commit is not None:
-        before_dir = bench_disk() / f"threadfix-wheel-{before_commit[:12]}"
-        _ensure_pinned_wheel(before_commit, before_dir)
-        phases.insert(0, ("before", before_commit, before_dir))
+    before_dir = bench_disk() / f"threadfix-wheel-{before_commit[:12]}"
+    _ensure_pinned_wheel(before_commit, before_dir)
+    phases: list[tuple[str, str, Path | None]] = [
+        ("before", before_commit, before_dir),
+        ("after", sha, None),
+    ]
 
     rows: list[dict] = []
-    log_lines = [f"commit {sha}", f"repeats {repeats}"]
+    log_lines = [
+        f"commit {sha}",
+        f"repeats {repeats}",
+        f"cpus {','.join(str(cpu) for cpu in sorted(affinity_set()))}",
+    ]
     targets = (
         ("read_con", con_100k),
         ("read_positions", con_100k),
@@ -322,8 +380,10 @@ def run_threadfix(
         "commit": sha,
         "before_commit": before_commit,
         "after_commit": sha,
+        "cpus": sorted(affinity_set()),
         "rows": rows,
     }
+    require_threadfix_payload(payload)
     json_path = out / "threadfix-before-after.json"
     log_path = out / "threadfix-before-after.log"
     json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -335,19 +395,34 @@ def run_threadfix(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
     parser.add_argument("--repeats", type=int, default=6)
     parser.add_argument("--before-commit", default=BEFORE_DEFAULT)
     parser.add_argument("--skip-before", action="store_true")
+    parser.add_argument("--require-record", type=Path)
+    parser.add_argument(
+        "--cpus",
+        default=None,
+        help="CPU list or range inside the affinity mask (default: the mask)",
+    )
     args = parser.parse_args()
+    if args.require_record is not None:
+        require_threadfix_record(args.require_record)
+        return
     if args.repeats < 6:
         raise SystemExit(f"repeats must be at least 6, got {args.repeats}")
+    if args.out is None:
+        raise SystemExit("--out is required")
+    use_cpus(args.cpus)
+    if args.skip_before:
+        raise SystemExit(
+            "refusing --skip-before: a threadfix record must include the before phase"
+        )
     out = args.out if args.out.is_absolute() else ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
     sha = head_sha(ROOT)
     run_gil_concurrent(out, args.repeats, sha)
-    before = None if args.skip_before else args.before_commit
-    run_threadfix(out, args.repeats, sha, before)
+    run_threadfix(out, args.repeats, sha, args.before_commit)
 
 
 if __name__ == "__main__":

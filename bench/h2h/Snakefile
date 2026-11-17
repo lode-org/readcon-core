@@ -770,7 +770,7 @@ def _refuse_release_target(targets):
             f"refusing release rerun: repeats must be >= 6, got {FINAL_REPEATS}"
         )
     status = _git_output(
-        ["git", "-C", _REPO, "status", "--porcelain", "--untracked-files=no"],
+        ["git", "-C", _REPO, "status", "--porcelain", "--untracked-files=all"],
         "refusing release rerun: could not read git status",
     ).strip()
     if status:
@@ -1345,7 +1345,10 @@ rule rerun_gil_threadfix:
         repeats=FINAL_REPEATS,
     threads: 999
     shell:
-        "python3 bench/h2h/gil_threadfix_bench.py --out {params.out} --repeats {params.repeats}"
+        """
+        python3 bench/h2h/gil_threadfix_bench.py --out {params.out} --repeats {params.repeats}
+        python3 bench/h2h/gil_threadfix_bench.py --require-record {params.out}/threadfix-before-after.json
+        """
 
 
 rule rerun_parse_limiter:

@@ -25,6 +25,15 @@ N_FRAMES = 4000
 N_ATOMS = 64
 
 
+def _cpu_list() -> str:
+    import sys
+
+    sys.path.insert(0, str(ROOT / "bench" / "h2h"))
+    from sample_protocol import core_list
+
+    return core_list()
+
+
 def write_con(path: Path) -> None:
     import sys
 
@@ -59,6 +68,49 @@ def write_con(path: Path) -> None:
     path.write_text("\n".join(lines))
 
 
+def _rank_exit(line: str) -> int | None:
+    """The last ``exit``/``status`` integer on a rank line, if one is present."""
+    parts = line.split()
+    code: int | None = None
+    for index, token in enumerate(parts[:-1]):
+        if token not in {"exit", "exited", "status"}:
+            continue
+        try:
+            code = int(parts[index + 1])
+        except ValueError:
+            continue
+    return code
+
+
+def launch_record(
+    proc: subprocess.CompletedProcess[str],
+    *,
+    repeat: int,
+    mode: str,
+    ranks: int,
+) -> str:
+    """One log line. Any nonzero launcher or rank exit is fatal."""
+    stdout = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    detail = proc.stderr.strip() or proc.stdout.strip()
+    if proc.returncode != 0:
+        raise SystemExit(
+            f"mpirun exited {proc.returncode} for {mode} ranks {ranks} "
+            f"repeat {repeat}: {detail}"
+        )
+    if not stdout:
+        raise SystemExit(
+            f"mpirun produced no rank output for {mode} ranks {ranks} "
+            f"repeat {repeat}: {detail}"
+        )
+    for line in stdout:
+        code = _rank_exit(line)
+        if code not in (None, 0):
+            raise SystemExit(
+                f"rank exited {code} for {mode} ranks {ranks} repeat {repeat}: {line}"
+            )
+    return f"repeat {repeat} mode {mode} launch {stdout[-1]} exit {proc.returncode}"
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
@@ -84,6 +136,7 @@ def main() -> None:
         f"date_utc {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
         f"uname_m {os.uname().machine}",
         f"nproc {os.cpu_count()}",
+        f"cpus {_cpu_list()}",
         f"cpu_model {cpu}",
         "pwd .",
         "tmpdir paper/cpc/bench/work/v2",
@@ -107,14 +160,7 @@ def main() -> None:
                     text=True,
                     capture_output=True,
                 )
-                text = (
-                    proc.stdout.strip().splitlines()[-1]
-                    if proc.stdout.strip()
-                    else proc.stderr[-300:]
-                )
-                lines.append(
-                    f"repeat {repeat} mode {mode} launch {text} exit {proc.returncode}"
-                )
+                lines.append(launch_record(proc, repeat=repeat, mode=mode, ranks=ranks))
     lines.append("exit_code 0")
     text = "\n".join(lines) + "\n"
     (OUT / "mpi.log").write_text(text)
