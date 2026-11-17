@@ -1394,7 +1394,11 @@ pub(crate) struct CoordSnapshot<'a> {
     frames: Vec<Option<ConFrame>>,
     /// Per view: its metadata map belongs to the source frame.
     shared_maps: Vec<bool>,
-    _coords: Vec<f64>,
+    /// The writer may keep this buffer past the snapshot to check a later
+    /// one against it, so it is shared and never written after the copy.
+    coords: Arc<Vec<f64>>,
+    /// First and last source frame.
+    ends: Option<(usize, usize)>,
     _sources: std::marker::PhantomData<&'a ConFrame>,
 }
 
@@ -1406,32 +1410,73 @@ impl<'a> CoordSnapshot<'a> {
             .flatten()
             .map(|frame| frame.atom_data.len())
             .sum();
-        let mut coords: Vec<f64> = Vec::with_capacity(total * 3);
-        let base = coords.as_mut_ptr();
+        let mut sources = frames.iter().flatten();
+        let ends = sources.next().map(|first| {
+            let last = sources.last().unwrap_or(first);
+            (
+                *first as *const ConFrame as usize,
+                *last as *const ConFrame as usize,
+            )
+        });
+        // Coordinates the writer last priced for these frames serve again
+        // while every bit still matches; nothing writes that buffer. The
+        // first frame that differs moves the views to a fresh copy.
+        let priced = ends
+            .and_then(|(first, last)| crate::writer::priced_coords(first, last))
+            .filter(|priced| priced.len() == total * 3);
+        let mut fill = priced.is_none();
+        let mut fresh: Vec<f64> = Vec::new();
+        let mut base = match &priced {
+            Some(priced) => priced.as_ptr().cast_mut(),
+            None => {
+                fresh.reserve_exact(total * 3);
+                fresh.as_mut_ptr()
+            }
+        };
         let mut offset = 0usize;
+        let mut views: Vec<Option<ConFrame>> = Vec::with_capacity(frames.len());
         let mut shared_maps = Vec::with_capacity(frames.len());
-        let frames = frames
-            .iter()
-            .map(|slot| {
-                let view = slot.map(|frame| {
-                    let (view, shared) = unsafe { frame.view_onto(base.add(offset), true) };
-                    offset += frame.atom_data.len() * 3;
-                    shared_maps.push(shared);
-                    view
-                });
-                if view.is_none() {
-                    shared_maps.push(false);
+        for slot in frames {
+            let Some(frame) = slot else {
+                views.push(None);
+                shared_maps.push(false);
+                continue;
+            };
+            let at = unsafe { base.add(offset) };
+            if !fill && !coords_match(frame, at) {
+                fresh.reserve_exact(total * 3);
+                let to = fresh.as_mut_ptr();
+                unsafe {
+                    std::ptr::copy_nonoverlapping(base, to, offset);
+                    for view in views.iter_mut().flatten() {
+                        for atom in &mut view.atom_data {
+                            atom.retarget(to.offset(atom.xyz.offset_from(base)));
+                        }
+                    }
                 }
-                view
-            })
-            .collect();
-        // Every slot was written above, and the buffer never grows, so the
-        // views keep pointing into it.
-        unsafe { coords.set_len(total * 3) };
+                base = to;
+                fill = true;
+            }
+            let (view, shared) = unsafe { frame.view_onto(base.add(offset), fill) };
+            offset += frame.atom_data.len() * 3;
+            views.push(Some(view));
+            shared_maps.push(shared);
+        }
+        let frames = views;
+        let coords = match priced {
+            Some(priced) if !fill => priced,
+            _ => {
+                // Every slot was written above. Moving the vector into the
+                // Arc keeps its buffer where the views point.
+                unsafe { fresh.set_len(total * 3) };
+                Arc::new(fresh)
+            }
+        };
         CoordSnapshot {
             frames,
             shared_maps,
-            _coords: coords,
+            coords,
+            ends,
             _sources: std::marker::PhantomData,
         }
     }
@@ -1439,6 +1484,39 @@ impl<'a> CoordSnapshot<'a> {
     pub(crate) fn slots(&self) -> &[Option<ConFrame>] {
         &self.frames
     }
+
+    /// Lets the writer reuse lengths priced for the same source frames
+    /// while the coordinates are bit-for-bit the same.
+    pub(crate) fn price_key(&self) -> Option<crate::writer::PriceKey> {
+        let (first, last) = self.ends?;
+        let mut views = self.frames.iter().flatten();
+        let view_first = views.next()?;
+        let view_last = views.last().unwrap_or(view_first);
+        Some(crate::writer::PriceKey {
+            first,
+            last,
+            view_first: view_first as *const ConFrame as usize,
+            view_last: view_last as *const ConFrame as usize,
+            coords: self.coords.clone(),
+        })
+    }
+}
+
+/// Whether the doubles at `priced` hold the coordinates of `frame` bit
+/// for bit.
+#[cfg(feature = "python")]
+fn coords_match(frame: &ConFrame, priced: *const f64) -> bool {
+    let priced = unsafe { std::slice::from_raw_parts(priced, frame.atom_data.len() * 3) };
+    frame
+        .atom_data
+        .iter()
+        .zip(priced.as_chunks::<3>().0)
+        .all(|(atom, xyz)| {
+            (atom.x().to_bits() ^ xyz[0].to_bits())
+                | (atom.y().to_bits() ^ xyz[1].to_bits())
+                | (atom.z().to_bits() ^ xyz[2].to_bits())
+                == 0
+        })
 }
 
 #[cfg(feature = "python")]
