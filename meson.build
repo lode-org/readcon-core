@@ -228,6 +228,20 @@ if get_option('with_tests')
             env: {'LD_LIBRARY_PATH': meson.project_build_root()},
             timeout: 180,
         )
+        cpp_cell_finite = executable(
+            'test_cell_finite',
+            files('tests/c/test_cell_finite.cpp'),
+            dependencies: readcon_dep,
+            include_directories: _incdir,
+            build_rpath: meson.project_build_root(),
+        )
+        test(
+            'cpp-cell-finite',
+            cpp_cell_finite,
+            args: [meson.current_build_dir() / 'cell_finite_scratch'],
+            env: {'LD_LIBRARY_PATH': meson.project_build_root()},
+            timeout: 120,
+        )
     endif
 endif
 

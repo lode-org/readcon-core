@@ -374,3 +374,28 @@ class TestLegacyVelocityLabel:
         assert '"time":"fs"' not in header
         again = readcon.read_con(str(out))[0]
         assert again.atoms[0].vx == pytest.approx(src.atoms[0].vx, rel=0, abs=0)
+
+
+class TestAseNonFiniteCell:
+    """A NaN or infinite ASE cell is refused with NonFiniteValue."""
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_from_ase_names_the_lattice_entry(self, value):
+        from ase import Atoms
+
+        atoms = Atoms("Cu", positions=[[0.0, 0.0, 0.0]], cell=np.eye(3) * 4.0, pbc=True)
+        cell = np.array(atoms.cell)
+        cell[1, 2] = value
+        atoms.set_cell(cell, scale_atoms=False)
+        with pytest.raises(readcon.NonFiniteValue) as info:
+            readcon.ConFrame.from_ase(atoms)
+        assert "cell field lattice_vectors[1][2]" in str(info.value)
+
+    def test_from_ase_refuses_a_cell_whose_length_overflows(self):
+        from ase import Atoms
+
+        atoms = Atoms("Cu", positions=[[0.0, 0.0, 0.0]], pbc=True)
+        atoms.set_cell(np.diag([1e200, 1.0, 1.0]), scale_atoms=False)
+        with pytest.raises(readcon.NonFiniteValue) as info:
+            readcon.ConFrame.from_ase(atoms)
+        assert "cell field cell[0] is inf" in str(info.value)

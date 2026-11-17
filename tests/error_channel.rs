@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use readcon_core::ffi::{
     RKRStatus, con_frame_iterator_forward, con_frame_iterator_next, con_frame_iterator_skip,
     free_con_frame_iterator, free_rkr_frame, read_con_string_iterator, rkr_clear_error,
-    rkr_count_frames, rkr_last_error, rkr_read_first_frame, rkr_read_nth_frame,
+    rkr_count_frames, rkr_frame_new, rkr_last_error, rkr_read_first_frame, rkr_read_nth_frame,
 };
 use readcon_core::iterators::{
     ConFrameIterator, LoadError, count_frames, frames_from_bytes, frames_from_text_located,
@@ -102,6 +102,84 @@ fn a_signed_count_is_invalid_count() {
     assert!(!message.contains("InvalidNumberFormat"), "{message}");
     assert_eq!(err.line, 8);
     let _ = fs::remove_file(path_for("neg"));
+}
+
+fn frame_with_box(box_line: &str) -> String {
+    one_atom("0 0 0 0 0").replacen("10 10 10", box_line, 1)
+}
+
+#[test]
+fn a_non_finite_cell_names_its_field_and_frame_on_the_c_channel() {
+    for (box_line, field, token) in [
+        ("10 nan 10", "boxl[1]", "nan"),
+        ("10 10 -inf", "boxl[2]", "-inf"),
+        ("inf 10 10", "boxl[0]", "inf"),
+    ] {
+        rkr_clear_error();
+        let text = format!("{}{}", frame_with_box("10 10 10"), frame_with_box(box_line));
+        let path = write("cell-nan", &text);
+        let frame = unsafe { rkr_read_nth_frame(path.as_ptr(), 1) };
+        assert!(frame.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
+        assert_eq!(err.frame_index, 1);
+        let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(message.contains("NonFiniteValue"), "{message}");
+        assert!(
+            message.contains(&format!("cell field {field} of frame 1 is {token}")),
+            "{message}"
+        );
+        let _ = fs::remove_file(path_for("cell-nan"));
+    }
+}
+
+#[test]
+fn a_non_finite_cell_is_refused_by_the_c_builder() {
+    let angles = [90.0f64; 3];
+    for (cell, field, token) in [
+        ([10.0, f64::NAN, 10.0], "cell[1]", "NaN"),
+        ([f64::INFINITY, 10.0, 10.0], "cell[0]", "inf"),
+        ([10.0, 10.0, f64::NEG_INFINITY], "cell[2]", "-inf"),
+    ] {
+        rkr_clear_error();
+        let builder = unsafe {
+            rkr_frame_new(
+                cell.as_ptr(),
+                angles.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        };
+        assert!(builder.is_null());
+        let err = unsafe { &*rkr_last_error() };
+        assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
+        assert_eq!(err.frame_index, 0);
+        let message = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
+        assert!(
+            message.ends_with(&format!(
+                "NonFiniteValue: non-finite value: cell field {field} is {token}"
+            )),
+            "{message}"
+        );
+    }
+    let angles = [90.0, f64::NAN, 90.0];
+    let cell = [10.0f64; 3];
+    let builder = unsafe {
+        rkr_frame_new(
+            cell.as_ptr(),
+            angles.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    assert!(builder.is_null());
+    let message = unsafe { CStr::from_ptr((*rkr_last_error()).message) }.to_string_lossy();
+    assert!(message.contains("angles[1] is NaN"), "{message}");
+    rkr_clear_error();
 }
 
 /// CON-error.4. The count token on line 8 wins at 1, 2, 3, and 8 threads.
