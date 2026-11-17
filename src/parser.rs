@@ -919,6 +919,25 @@ pub fn parse_line_of_n_f64(line: &str, n: usize) -> Result<Vec<f64>, ParseError>
     }
 }
 
+/// Parses the three numbers of a cell line (box lengths, or box angles).
+///
+/// The values are those of [`parse_line_of_n_f64`]. A NaN, an infinity, or a
+/// number too large for binary64 is [`ParseError::NonFiniteValue`] naming the
+/// field `name[i]` and the token, where plain [`parse_line_of_n_f64`] names
+/// only the token. The check costs nothing on a finite line: it runs on the
+/// failing path only, and the frame is named by whoever knows its index.
+pub(crate) fn parse_cell_line(line: &str, name: &str) -> Result<Vec<f64>, ParseError> {
+    parse_line_of_n_f64(line, 3).map_err(|error| match error {
+        ParseError::NonFiniteValue(token) => {
+            match line.split_ascii_whitespace().position(|t| t == token) {
+                Some(index) => ParseError::non_finite_cell(&format!("{name}[{index}]"), token),
+                None => ParseError::NonFiniteValue(token),
+            }
+        }
+        other => other,
+    })
+}
+
 /// Parses a line of whitespace-separated f64 values, accepting between `min`
 /// and `max` values (inclusive). Returns a vector of exactly `max` elements,
 /// padding with values from `defaults` when fewer than `max` are present.
@@ -2026,8 +2045,8 @@ pub fn parse_frame_header<'a>(
         };
     let prebox2 = prebox2_raw.to_string();
 
-    let boxl_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
-    let angles_vec = parse_line_of_n_f64(lines.next().ok_or(ParseError::IncompleteHeader)?, 3)?;
+    let boxl_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "boxl")?;
+    let angles_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "angles")?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?

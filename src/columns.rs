@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 use crate::error::ParseError;
 use crate::parser::{
-    line_has_component_label, parse_coord_row_at, parse_count_line, parse_line_of_n_f64,
+    line_has_component_label, parse_cell_line, parse_coord_row_at, parse_count_line,
+    parse_line_of_n_f64,
 };
 
 /// The two metadata lines this walker certifies without a second parse.
@@ -1530,9 +1531,9 @@ fn parse_one_frame(
     let spec = spec_version(meta)?;
     let mut stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, pos)?)?;
-    let boxl = parse_line_of_n_f64(box_line, 3)?;
+    let boxl = parse_cell_line(box_line, "boxl")?;
     let ang_line = utf8_line(read_line(bytes, pos)?)?;
-    let angles = parse_line_of_n_f64(ang_line, 3)?;
+    let angles = parse_cell_line(ang_line, "angles")?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
     skip_line(bytes, pos)?;
