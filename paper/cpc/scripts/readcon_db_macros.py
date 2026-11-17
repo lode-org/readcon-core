@@ -12,7 +12,9 @@ them.  Until it does, the macro of a missing field prints a bold bracket that
 names the record and the field, and ``--contract`` lists them and fails.
 
 The db26 campaign compares the raw read with an earlier commit and prints only
-the interval of its paired median, which must include 1. 
+the interval of its paired median, which must include 1.  The db28 campaign
+forces the opt-in shuffle-zstd codec on every read, and the subsection prints
+its storage and its paired time intervals as a tradeoff.
 
     python3 paper/cpc/scripts/readcon_db_macros.py
     python3 paper/cpc/scripts/readcon_db_macros.py --contract
@@ -50,6 +52,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "figures" / "generated" / "readcon_db_macros.tex"
 DB26_RAW = "raw_tip_vs_aedcbda4_rayon_1.full_read:warm.paired"
 DB25_WARM = "ops_rayon_num_threads_1.full_read:warm"
+DB28_MD = "reads.md.threads_1"
 
 # (record, dotted field, what the field holds): written by the release rerun.
 CONTRACT = [
@@ -109,6 +112,32 @@ def db26() -> list[tuple[str, str]]:
     ]
 
 
+def db28() -> list[tuple[str, str]]:
+    codecs = jget(DB28, "codecs.md")
+    if (codecs["raw"]["codec_requested"], codecs["shuffle"]["codec_requested"]) != ("raw", "shuffle-zstd"):
+        raise SystemExit(f"{DB28}: the membrane arms do not request raw and shuffle-zstd")
+    cold, warm = (jget(DB28, f"{DB28_MD}.full_read:{cache}.paired") for cache in ("cold", "warm"))
+    if cold["ci_method"] != warm["ci_method"] or cold["n"] != warm["n"]:
+        raise SystemExit(f"{DB28}: the cold and warm membrane reads differ in protocol")
+    if not (cold["ci95"][1] < 1 < warm["ci95"][0]):
+        raise SystemExit(f"{DB28}: the membrane intervals do not show a faster cold and a slower warm shuffled read")
+    cold_lo, cold_hi = interval(DB28, f"{DB28_MD}.full_read:cold.paired", 4)
+    warm_lo, warm_hi = interval(DB28, f"{DB28_MD}.full_read:warm.paired", 4)
+    share = {
+        key: codecs["shuffle"][key] / codecs["raw"][key]
+        for key in ("frames_soa_value_bytes", "corpus_bytes")
+    }
+    return [
+        ("rdbMembraneFrameShare", fixed(share["frames_soa_value_bytes"], 3)),
+        ("rdbMembraneCorpusShare", fixed(share["corpus_bytes"], 3)),
+        ("rdbMembranePairs", str(cold["n"])),
+        ("rdbMembraneColdLo", cold_lo),
+        ("rdbMembraneColdHi", cold_hi),
+        ("rdbMembraneWarmLo", warm_lo),
+        ("rdbMembraneWarmHi", warm_hi),
+        ("rdbMembraneCIMethod", tex(cold["ci_method"])),
+    ]
+
 
 def fixed(value: float, decimals: int) -> str:
     return f"{value:.{decimals}f}"
@@ -147,10 +176,7 @@ GROUPS = [
                 "rdbLatticeBest",
                 fixed(jget(DB28, "reads.lattice.threads_1.full_read:warm.ratio_shuffle_over_raw"), 3),
             ),
-            (
-                "rdbMembraneRatio",
-                fixed(jget(DB28, "reads.md.threads_1.full_read:warm.ratio_shuffle_over_raw"), 3),
-            ),
+            *db28(),
         ],
     ),
     (
