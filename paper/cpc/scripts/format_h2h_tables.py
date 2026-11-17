@@ -103,15 +103,88 @@ def tex(text: str) -> str:
     return "".join(_TEX.get(ch, ch) for ch in text)
 
 
+MILLION_CON_SHA256 = "a307700ffaca1f0427ab232569d43f9eca8e4ef4bda7081585c16fdf5c16c910"
+MILLION_CON_BYTES = 48_378_118
+MILLION_CON_GZ_MAX_BYTES = 10_000_000
+MILLION_FRAME_SHA256 = (
+    "f4fc5dd40c97e7a067255ebe60bcb811d09b0a81710ee8ec4e593ba23d738fb4"
+)
+_ONE_MILLION_CON_ARMS = frozenset(
+    {
+        "readcon-con",
+        "readcon-con-gz",
+        "readcon-con-zst",
+        "readcon-conbin",
+        "chemfiles-con",
+        "mda-mmcif",
+    }
+)
+
+
 def _load(name: str) -> dict:
     return json.loads((RECORDS / name / "cross-format.json").read_text())
+
+
+def _validate_one_million(name: str, data: dict) -> None:
+    """Refuse a 1M record that was not measured on the pinned thermal_shift fixture."""
+    rows = [row for row in data.get("rows", []) if row.get("structure") == "1M"]
+    needs_frame_pin = (
+        name != "extra"
+        or "frames" in data
+        or any(row.get("arm") in _ONE_MILLION_CON_ARMS for row in rows)
+    )
+    if needs_frame_pin:
+        frames = data.get("frames")
+        entry = None
+        if isinstance(frames, list):
+            for item in frames:
+                if item.get("structure") == "1M" or (
+                    item.get("n_atoms") == 1_000_000 and item.get("n_frames") == 1
+                ):
+                    entry = item
+                    break
+        if entry is None:
+            raise SystemExit(
+                f"{name}/cross-format.json has no 1M frame hash; expected pinned "
+                f"{MILLION_FRAME_SHA256} (CON {MILLION_CON_SHA256})"
+            )
+        if entry.get("frame_sha256") != [MILLION_FRAME_SHA256]:
+            raise SystemExit(
+                f"{name}/cross-format.json 1M frame hash {entry.get('frame_sha256')} "
+                f"is not pinned {MILLION_FRAME_SHA256} (CON {MILLION_CON_SHA256})"
+            )
+        for container in (entry, data):
+            for key in ("con_sha256", "input_sha256", "plain_con_sha256"):
+                if key in container and container[key] != MILLION_CON_SHA256:
+                    raise SystemExit(
+                        f"{name}/cross-format.json 1M {key}={container[key]} "
+                        f"is not pinned {MILLION_CON_SHA256}"
+                    )
+    for row in rows:
+        arm = row.get("arm")
+        file_bytes = row.get("file_bytes")
+        if file_bytes is None:
+            continue
+        if arm in ("readcon-con", "chemfiles-con") and file_bytes != MILLION_CON_BYTES:
+            raise SystemExit(
+                f"{name}/cross-format.json 1M {arm} is {file_bytes} bytes, "
+                f"not pinned {MILLION_CON_BYTES}"
+            )
+        if arm == "readcon-con-gz" and file_bytes >= MILLION_CON_GZ_MAX_BYTES:
+            raise SystemExit(
+                f"{name}/cross-format.json 1M {arm} is {file_bytes} bytes, "
+                f"expected under {MILLION_CON_GZ_MAX_BYTES}"
+            )
 
 
 def _reads(structure: str, dirs: tuple[str, ...]) -> dict[str, dict[str, dict]]:
     """``arm -> cache -> row`` for every read row of this structure's records."""
     found: dict[str, dict[str, dict]] = {}
     for name in dirs:
-        for row in _load(name)["rows"]:
+        data = _load(name)
+        if structure == "1M":
+            _validate_one_million(name, data)
+        for row in data["rows"]:
             if row["op"] != "read" or row["structure"] != structure:
                 continue
             found.setdefault(row["arm"], {})[row["cache"]] = row
