@@ -358,7 +358,8 @@ When the climbing-image band of Section~\ref{sec:cases} is resumed from six deci
 The frame ends after line~\wkLineLastVelocity, and the next line, if there is one, opens the next frame.
 Listing~\ref*{lst:testrun} of the supplementary material runs the example program of the release on this file and on the two variants of the angle line.
 
-\section{The grammar of CON 3.1}\label{sec:format} Section~\ref*{sec:spec-normative} of the supplementary material is the normative specification, \clauseTotal{} numbered clauses, and this section states the rules that Section~\ref{sec:worked} used, with the clauses behind them in Table~\ref{tab:clauses}.
+\section{The grammar of CON 3.1}\label{sec:format} The normative specification, with \clauseTotal{} numbered clauses, is Section~\ref*{sec:spec-normative} of the supplementary material.
+Here we state the rules used in Section~\ref{sec:worked}, and Table~\ref{tab:clauses} lists the clauses behind them.
 A CON file is one or more frames with no marker between them, followed only by lines of white space.
 With \(T\) atom types of \(N_k\) atoms each, a frame \(\mathcal{F}\) is
 \begin{equation}
@@ -372,8 +373,8 @@ With \(T\) atom types of \(N_k\) atoms each, a frame \(\mathcal{F}\) is
 \end{aligned}
 \end{equation}
 where each symbol or parenthesized group is one line, a superscript repeats a line, \(\lambda_1\), \(\lambda_5\) and \(\lambda_6\) are free lines, \(\lambda_2\) is the header, \(M_k\) and \(s_k\) are the mass and symbol of type \(k\), \(\iota\) is the identifier, \(\varnothing\) is a blank line and \(S\) is the name of a section of width \(w\).
-A type count of zero is a frame without atoms.
-The release includes this shape as an informative parsing expression grammar (PEG) \cite{fordParsingExpressionGrammars2004}, and where the PEG admits a token that a clause rejects, the clause decides.
+A type count of zero gives a frame without atoms.
+The release also ships this shape as an informative parsing expression grammar (PEG) \cite{fordParsingExpressionGrammars2004}, and where the PEG admits a token that a clause rejects, the clause decides.
 
 \begin{table}[tbp] \centering \footnotesize \caption{Clauses of the specification that Sections~\ref{sec:worked} and~\ref{sec:format} apply.
 Section~\ref*{sec:spec-normative} of the supplementary material gives their normative text.}
@@ -401,19 +402,20 @@ CON-mask.5 & A float spelling, a sign or a value outside the set of the version 
 \end{table}
 
 The cell rule rests on Eq.~\eqref{eq:gram}.
-readcon-core evaluates Eq.~\eqref{eq:cell} in binary64, accepts the angles when the computed radicand satisfies \(\hat\rho>-\num{\wkWindow}\), sets \(c_z=0\) when such a \(\hat\rho\) is negative, and otherwise rejects the frame as a validation error, a class that the specification leaves open.
-The window is fixed, so it accepts as flat a cell whose exact radicand lies between \(-\num{\wkWindow}\) and zero, and it rejects every set of angles that misses a real cell by more.
+readcon-core evaluates Eq.~\eqref{eq:cell} in binary64 and accepts the angles when the computed radicand satisfies \(\hat\rho>-\num{\wkWindow}\), setting \(c_z=0\) when such a \(\hat\rho\) is negative.
+Otherwise it rejects the frame with a validation error, an error class that the specification leaves open.
+Since the window is fixed, a cell whose exact radicand lies between \(-\num{\wkWindow}\) and zero is accepted as flat, and every set of angles that misses a real cell by more is rejected.
 
-Table~\ref{tab:clauses} gives the masks that each version admits and the range of the identifier.
-The readcon-core writer refuses a frame that repeats an identifier, and no clause binds the identifiers of one frame to those of another.
+Table~\ref{tab:clauses} also gives the masks that each version admits and the range of the identifier.
+The readcon-core writer refuses a frame that repeats an identifier, and no clause ties the identifiers of one frame to those of another.
 
-Each number is a finite decimal that the reader rounds to the nearest binary64 value, ties to even \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
-The default writer prints the shortest decimal that rounds back to the same value \cite{steeleHowPrintFloatingpoint1990,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}, so writing a frame and reading it back returns every coordinate unchanged, and a setting prints six fixed decimals instead.
-A gzip or zstd envelope wraps the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and a reader recognizes it by content.
-readcon-core decodes zstd when built with that feature and otherwise refuses the file by name.
+Each number is a finite decimal that the reader rounds to the nearest binary64 value, with ties to even \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019,clingerHowReadFloating1990,lemireNumberParsingGigabytes2021}.
+By default the writer prints the shortest decimal that rounds back to the same value \cite{steeleHowPrintFloatingpoint1990,loitschPrintingFloatingpointNumbers2010,andryscoPrintingFloatingpointNumbers2016,adamsRyFastFloattostring2018}, so a frame that is written and read back has every coordinate unchanged; an option prints six fixed decimals instead.
+A gzip or zstd envelope may wrap the same text \cite{deutschGzipFileFormat1996,colletZstandardCompressionApplicationzstd2021}, and the reader recognizes it by its content.
+readcon-core decodes zstd when built with that feature and otherwise refuses the file with an error that names zstd.
 
 Table~\ref{tab:keys} lists the reserved keys of the JSON line.
-The major is \texttt{con\_spec\_version}, and the minor is \texttt{con\_spec\_minor}, zero when absent.
+The major version is \texttt{con\_spec\_version}, and the minor version is \texttt{con\_spec\_minor}, which is zero when absent.
 For a frame whose header is a JSON object, let \(\mu\) be its minor, \(U\) the set of keys of its \texttt{units} object, and \(V\) true when the frame has a velocity section.
 The reader accepts that header only when
 \begin{equation}
@@ -424,9 +426,9 @@ The reader accepts that header only when
 &\wedge\ \bigl(M=3\wedge\mu\ge1\wedge V\Rightarrow \mathrm{time}\in U\bigr).
 \end{aligned}
 \end{equation}
-For \(M=3\) it also rejects a unit whose dimension is not that of its quantity.
+For \(M=3\) it also rejects a unit whose dimension does not match its quantity.
 A reader accepts a later minor of a known major, keeps an unknown key on rewrite with its digits as read, and rejects any other major as an unsupported version.
-H5MD splits its version into the same pair \cite{buylH5mdStructuredEfficient2014}.
+H5MD stores its version as the same pair of major and minor numbers, with the same meaning for a change of the minor \cite{buylH5mdStructuredEfficient2014}.
 
 \begin{table}[tbp] \centering \footnotesize \caption{Reserved metadata keys of the JSON header line.}
 \label{tab:keys}
@@ -451,14 +453,14 @@ Key & Type & Key & Type \\
 \end{tabular}
 \end{table}
 
-The sections that \texttt{sections} lists follow the coordinate blocks in that order, each after one blank line (Table~\ref{tab:sections}).
-A section the reader does not know is skipped only when the frame's minor is later than the reader's and \texttt{section\_arity} gives its width \(w\ge1\).
-Each skipped row has \(w+1\) or \(w+2\) tokens, which the reader counts without parsing, and any other unknown section rejects the frame.
-A frame with no \texttt{sections} key, which includes every version-1 frame, admits a legacy velocity block at its end, a blank line followed by a complete block of the shape of lines \wkLineVelocitySymbol{} through \wkLineLastVelocity{} of Listing~\ref{lst:frame}.
-Any other blank line there is the first line of the next frame.
-The text does not define a blank line, and readcon-core takes it to be a line of Unicode white space only.
-After the last frame it ignores one such line followed by spaces, tabs, form feeds and line ends.
-Table~\ref*{tab:rules-framing} of the supplementary material gives the other cases.
+The sections listed in \texttt{sections} follow the coordinate blocks in that order, each after one blank line (Table~\ref{tab:sections}).
+A reader skips a section it does not know only when the minor of the frame is later than its own and \texttt{section\_arity} gives the width \(w\ge1\) of the section.
+Each skipped row then has \(w+1\) or \(w+2\) tokens, which the reader counts without parsing them, and any other unknown section makes the frame illegal.
+A frame without a \texttt{sections} key, which includes every version-1 frame, may end with a legacy velocity block: a blank line followed by a complete block of the shape of lines \wkLineVelocitySymbol{} through \wkLineLastVelocity{} of Listing~\ref{lst:frame}.
+Any other blank line in that place is the first line of the next frame.
+The specification does not define a blank line, and readcon-core takes it to be a line that holds only Unicode white space.
+After the last frame, it ignores one such line followed by spaces, tabs, form feeds and line ends.
+Table~\ref*{tab:rules-framing} of the supplementary material gives the remaining cases.
 
 \begin{table}[tbp] \centering \small \caption{Reserved sections at minor 1.
 Each data row carries its values, then the mask and the identifier.}
@@ -479,18 +481,18 @@ Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
 \end{tabular}
 \end{table}
 
-From minor 1, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
-Frames of earlier versions are read in the natural unit whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
-Producers of that era wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} does so too \cite{rohitgoswamiTheochemuieonV3602026}.
-That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and its velocity writer sets no time unit, so the library writes its default label of fs.
-The development line of eOn after that release writes velocity files with \texttt{units.time} set to the natural unit \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}\) \cite{goswamiTheochemuieonCommit624f4592026} and links readcon-core 0.20.0 \cite{goswamiTheochemuieonCommitBf5d3282026}, which fixes the label.
+From minor 1 onwards, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
+Frames of earlier versions are read in the natural unit, whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
+This rule exists because producers of that period wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
+That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and since its velocity writer sets no time unit, the library writes its default label of fs.
+After that release, the development line of eOn writes velocity files with \texttt{units.time} set to the natural unit \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}\), which corrects the label \cite{goswamiTheochemuieonCommit624f4592026}, and it links readcon-core 0.20.0 \cite{goswamiTheochemuieonCommitBf5d3282026}.
 The tables of this paper use eOn~\eOneEonVersion{}.
-The reader keeps such a label without applying it, and a rewrite keeps the frame at its minor with its label, so the next reader again applies the natural unit.
+The reader keeps such a label without applying it, and a rewrite keeps the frame at its minor and with its label, so the next reader again applies the natural unit.
 
-Table~\ref{tab:versions} is the history of the grammar.
-A change to the text either decides a case that the earlier text left open, for every version, or adds a requirement under a new minor, which applies from that minor on.
+Table~\ref{tab:versions} gives the history of the grammar.
+A change to the text either decides, for every version, a case that the earlier text left open, or adds a requirement under a new minor that applies from that minor on.
 A later minor therefore never makes a reader reject a file that an earlier minor requires it to accept.
-We take changes through issues and pull requests on the repository, and each change adds the corpus files that test it.
+Changes are proposed through issues and pull requests on the repository, and each change adds the corpus files that test it.
 
 {\small
 \begin{longtable}{@{}lllp{0.44\linewidth}@{}}
