@@ -1,0 +1,12 @@
+{
+  "hostname": "host",
+  "kernel": "6.12.113+",
+  "cpu": "Intel(R) Xeon(R) Processor",
+  "serial": true,
+  "quantile": "type-7",
+  "omp_num_threads": "1",
+  "openblas_num_threads": "1",
+  "mkl_num_threads": "1",
+  "numexpr_num_threads": "1",
+  "cpuinfo_mhz": 2700.0
+}

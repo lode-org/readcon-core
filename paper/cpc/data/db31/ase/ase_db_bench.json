@@ -1,0 +1,57 @@
+[
+  {
+    "backend": "ase.db",
+    "n_frames": 10,
+    "insert_s": 0.017678166994301137,
+    "extract_all_mean_s": 0.0017794895997212735,
+    "select_cu_mean_s": 0.0011899102400639095,
+    "concurrent_8readers_extract_s": 0.02246536400343757,
+    "insert_frames_per_s": 565.6695065287976,
+    "extract_frames_per_s": 5619.5888987304725,
+    "note": "ASE Atoms Cu2 stand-in; full scan select (no symbol index)"
+  },
+  {
+    "backend": "ase.db",
+    "n_frames": 50,
+    "insert_s": 0.018886783000198193,
+    "extract_all_mean_s": 0.007046709799760719,
+    "select_cu_mean_s": 0.005563764199905563,
+    "concurrent_8readers_extract_s": 0.12062824700115016,
+    "insert_frames_per_s": 2647.3539723242075,
+    "extract_frames_per_s": 7095.510021102021,
+    "note": "ASE Atoms Cu2 stand-in; full scan select (no symbol index)"
+  },
+  {
+    "backend": "ase.db",
+    "n_frames": 100,
+    "insert_s": 0.019106544001260772,
+    "extract_all_mean_s": 0.01403468505013734,
+    "select_cu_mean_s": 0.011197072700015269,
+    "concurrent_8readers_extract_s": 0.20816615800140426,
+    "insert_frames_per_s": 5233.808897799694,
+    "extract_frames_per_s": 7125.204423381159,
+    "note": "ASE Atoms Cu2 stand-in; full scan select (no symbol index)"
+  },
+  {
+    "backend": "ase.db",
+    "n_frames": 200,
+    "insert_s": 0.03263465000054566,
+    "extract_all_mean_s": 0.028301140349867637,
+    "select_cu_mean_s": 0.022366825560020516,
+    "concurrent_8readers_extract_s": 0.452582447003806,
+    "insert_frames_per_s": 6128.455491223467,
+    "extract_frames_per_s": 7066.853050002113,
+    "note": "ASE Atoms Cu2 stand-in; full scan select (no symbol index)"
+  },
+  {
+    "backend": "ase.db",
+    "n_frames": 500,
+    "insert_s": 0.0661311990043032,
+    "extract_all_mean_s": 0.06996188960001745,
+    "select_cu_mean_s": 0.05600131978004356,
+    "concurrent_8readers_extract_s": 1.103499570999702,
+    "insert_frames_per_s": 7560.727879249017,
+    "extract_frames_per_s": 7146.748077540136,
+    "note": "ASE Atoms Cu2 stand-in; full scan select (no symbol index)"
+  }
+]
