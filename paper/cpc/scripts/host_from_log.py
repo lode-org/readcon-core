@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LOG = ROOT / "logs" / "reader-exchange.log"
+LOG = Path(
+    os.environ.get("READER_EXCHANGE_LOG", str(ROOT / "logs" / "reader-exchange.log"))
+)
 GEN = ROOT / "src" / "figures" / "generated"
 
 LABELS = {

@@ -73,7 +73,8 @@ def bars(name: str, labels, values, ylabel: str, colors=None) -> None:
 
 def dlpack() -> None:
     view, copy = [], []
-    for line in (DATA / "dlpack_cost.txt").read_text().splitlines():
+    record = Path(os.environ.get("DLPACK_COST_RECORD", str(DATA / "dlpack_cost.txt")))
+    for line in record.read_text().splitlines():
         if line.startswith("repeat "):
             parts = line.split()
             view.append(int(parts[3]) / 1e3)

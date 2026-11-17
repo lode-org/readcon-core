@@ -11,6 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BIN = Path(__file__).resolve().parent / "mpi_cost" / "target" / "release" / "mpi_cost"
 OUT = Path(__file__).resolve().parent / "results" / "v2"
+LOG = Path(
+    os.environ.get(
+        "MPI_LOG",
+        str(Path(__file__).resolve().parents[1] / "logs" / "mpi.log"),
+    )
+)
 WORK = Path(__file__).resolve().parent / "work" / "v2"
 RANKS = (1, 2, 4, 8)
 MODES = ("shared", "scatter")
@@ -112,9 +118,8 @@ def main() -> None:
     lines.append("exit_code 0")
     text = "\n".join(lines) + "\n"
     (OUT / "mpi.log").write_text(text)
-    log = Path(__file__).resolve().parents[1] / "logs" / "mpi.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    log.write_text(text)
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    LOG.write_text(text)
     print("\n".join(lines[-8:]))
 
 

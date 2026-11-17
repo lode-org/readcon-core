@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-LOG = ROOT / "logs" / "mpi.log"
+LOG = Path(os.environ.get("MPI_LOG", str(ROOT / "logs" / "mpi.log")))
 GEN = ROOT / "src" / "figures" / "generated"
 RANKS = (1, 2, 4, 8)
 MODES = ("shared", "scatter")
