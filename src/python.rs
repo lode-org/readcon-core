@@ -586,6 +586,30 @@ impl PyConFrame {
     /// in-place mutation of a previous return value cannot corrupt later
     /// calls, and edits to `atoms` are reflected immediately.
     fn coords_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
+        // A frame from `read_con` has not built its Python atom list yet:
+        // `atoms_ready` is false and the parsed frame still owns the rows,
+        // whose coordinate slots view the trajectory slab. Read those
+        // doubles straight into the array. Building a Python `Atom` per row
+        // just to read x/y/z back was the whole cost of this call on a
+        // million-atom frame, and it ran under the GIL, so a threaded
+        // `read_con` saw no speedup from the parse it parallelised. The
+        // doubles written here are the ones the per-atom walk would read.
+        if !self.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+            if let Some(frame) = self.inner.as_ref() {
+                let n = frame.atom_data.len();
+                let mut data: Vec<f64> = Vec::with_capacity(n * 3);
+                for atom in &frame.atom_data {
+                    data.push(atom.x());
+                    data.push(atom.y());
+                    data.push(atom.z());
+                }
+                let array = Array2::from_shape_vec((n, 3), data)
+                    .map_err(|e| PyValueError::new_err(format!("coords_array shape error: {e}")))?;
+                return Ok(array.into_pyarray(py));
+            }
+        }
+        // The Python atom list exists (it was accessed or edited). Walk it
+        // so in-place edits to `atoms` are reflected.
         let atoms = self.py_atoms(py)?;
         let mut data: Vec<f64> = Vec::with_capacity(atoms.len() * 3);
         for atom in &atoms {
