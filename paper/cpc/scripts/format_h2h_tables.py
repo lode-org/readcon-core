@@ -109,30 +109,26 @@ MILLION_CON_GZ_MAX_BYTES = 10_000_000
 MILLION_FRAME_SHA256 = (
     "f4fc5dd40c97e7a067255ebe60bcb811d09b0a81710ee8ec4e593ba23d738fb4"
 )
-_ONE_MILLION_CON_ARMS = frozenset(
-    {
-        "readcon-con",
-        "readcon-con-gz",
-        "readcon-con-zst",
-        "readcon-conbin",
-        "chemfiles-con",
-        "mda-mmcif",
-    }
-)
 
 
 def _load(name: str) -> dict:
     return json.loads((RECORDS / name / "cross-format.json").read_text())
 
 
+def _is_unsupported_row(row: dict) -> bool:
+    return (
+        row.get("cache") == "unsupported"
+        and str(row.get("loses") or "").startswith("unsupported")
+        and row.get("median_s") is None
+        and row.get("file_bytes") is None
+    )
+
+
 def _validate_one_million(name: str, data: dict) -> None:
     """Refuse a 1M record that was not measured on the pinned thermal_shift fixture."""
     rows = [row for row in data.get("rows", []) if row.get("structure") == "1M"]
-    needs_frame_pin = (
-        name != "extra"
-        or "frames" in data
-        or any(row.get("arm") in _ONE_MILLION_CON_ARMS for row in rows)
-    )
+    measured_rows = [row for row in rows if not _is_unsupported_row(row)]
+    needs_frame_pin = "frames" in data or bool(measured_rows)
     if needs_frame_pin:
         frames = data.get("frames")
         entry = None
@@ -161,6 +157,20 @@ def _validate_one_million(name: str, data: dict) -> None:
                         f"is not pinned {MILLION_CON_SHA256}"
                     )
     for row in rows:
+        for key in ("con_sha256", "input_sha256", "plain_con_sha256"):
+            if key in row and row[key] != MILLION_CON_SHA256:
+                raise SystemExit(
+                    f"{name}/cross-format.json 1M {key}={row[key]} "
+                    f"is not pinned {MILLION_CON_SHA256}"
+                )
+        if "frame_sha256" in row and row["frame_sha256"] not in (
+            MILLION_FRAME_SHA256,
+            [MILLION_FRAME_SHA256],
+        ):
+            raise SystemExit(
+                f"{name}/cross-format.json 1M frame hash {row['frame_sha256']} "
+                f"is not pinned {MILLION_FRAME_SHA256}"
+            )
         arm = row.get("arm")
         file_bytes = row.get("file_bytes")
         if file_bytes is None:
