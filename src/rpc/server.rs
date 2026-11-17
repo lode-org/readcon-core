@@ -5,7 +5,7 @@ use futures::AsyncReadExt;
 use crate::iterators::ConFrameIterator;
 use crate::writer::ConFrameWriter;
 
-use super::convert::{fill_frame_builder, frame_from_reader, name_frame};
+use super::convert::{fill_frame_builder, frame_from_reader};
 use super::read_con_capnp::read_con_service;
 use super::{set_compatibility_stamp, validate_compatibility_stamp};
 
@@ -28,7 +28,10 @@ impl read_con_service::Server for ReadConServiceImpl {
             Err(e) => return Promise::err(capnp::Error::failed(e.to_string())),
         };
 
-        let frames: Result<Vec<_>, _> = ConFrameIterator::new(file_str).collect();
+        let frames: Result<Vec<_>, _> = ConFrameIterator::new(file_str)
+            .enumerate()
+            .map(|(i, frame)| frame.map_err(|e| e.in_frame(i as u64)))
+            .collect();
         let frames = match frames {
             Ok(f) => f,
             Err(e) => return Promise::err(capnp::Error::failed(e.to_string())),
@@ -41,7 +44,7 @@ impl read_con_service::Server for ReadConServiceImpl {
         for (i, frame) in frames.iter().enumerate() {
             let fb = frames_builder.reborrow().get(i as u32);
             if let Err(e) = fill_frame_builder(fb, frame) {
-                return Promise::err(capnp::Error::failed(name_frame(e, i)));
+                return Promise::err(capnp::Error::failed(e.in_frame(i as u64).to_string()));
             }
         }
 
@@ -65,7 +68,11 @@ impl read_con_service::Server for ReadConServiceImpl {
             let fd = frame_data_list.get(i);
             match frame_from_reader(fd) {
                 Ok(f) => frames.push(f),
-                Err(e) => return Promise::err(capnp::Error::failed(name_frame(e, i as usize))),
+                Err(e) => {
+                    return Promise::err(capnp::Error::failed(
+                        e.in_frame(u64::from(i)).to_string(),
+                    ));
+                }
             }
         }
 

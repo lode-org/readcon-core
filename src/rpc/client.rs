@@ -1,11 +1,26 @@
 use capnp_rpc::{RpcSystem, rpc_twoparty_capnp, twoparty};
 use futures::AsyncReadExt;
 
-use super::convert::{fill_frame_builder, frame_from_reader, name_frame};
+use super::convert::{fill_frame_builder, frame_from_reader};
 use super::endpoint::Endpoint;
 use super::read_con_capnp::read_con_service;
 use super::{set_compatibility_stamp, validate_compatibility_stamp};
+use crate::error::{ConvertError, ParseError};
 use crate::types::ConFrame;
+
+/// A failure the server reported. Cap'n Proto carries only its text, so a
+/// non-finite cell or atom value is rebuilt as the typed
+/// [`ConvertError::Parse`]; any other failure stays the [`capnp::Error`].
+fn remote_error(error: capnp::Error) -> Box<dyn std::error::Error> {
+    let reason = error
+        .extra
+        .strip_prefix("remote exception: ")
+        .unwrap_or(&error.extra);
+    match ParseError::from_non_finite_text(reason) {
+        Some(cell) => Box::new(ConvertError::Parse(cell)),
+        None => Box::new(error),
+    }
+}
 
 /// A synchronous RPC client that wraps the Cap'n Proto async transport.
 pub struct RpcClient {
@@ -69,6 +84,12 @@ impl RpcClient {
     }
 
     /// Parses raw file bytes via the RPC server and rebuilds frames from Cap'n Proto.
+    ///
+    /// # Errors
+    ///
+    /// A NaN or infinite number that the server refused, in a cell or an atom
+    /// row, is a boxed [`ConvertError::Parse`] holding
+    /// [`ParseError::NonFiniteValue`]; downcast to read it.
     pub fn parse_bytes(&self, data: &[u8]) -> Result<Vec<ConFrame>, Box<dyn std::error::Error>> {
         self.runtime.block_on(async {
             let local = tokio::task::LocalSet::new();
@@ -82,7 +103,7 @@ impl RpcClient {
                         set_compatibility_stamp(parse_request.reborrow().init_compatibility());
                         parse_request.set_file_contents(data);
                     }
-                    let response = request.send().promise.await?;
+                    let response = request.send().promise.await.map_err(remote_error)?;
                     let result = response.get()?.get_result()?;
                     validate_compatibility_stamp(result.get_compatibility()?)?;
                     let frame_data_list = result.get_frames()?;
@@ -91,7 +112,7 @@ impl RpcClient {
                     for i in 0..frame_data_list.len() {
                         frames.push(
                             frame_from_reader(frame_data_list.get(i))
-                                .map_err(|e| name_frame(e, i as usize))?,
+                                .map_err(|e| e.in_frame(u64::from(i)))?,
                         );
                     }
                     Ok(frames)
@@ -101,6 +122,12 @@ impl RpcClient {
     }
 
     /// Writes frames by sending Cap'n Proto `ConFrameData` to the server.
+    ///
+    /// # Errors
+    ///
+    /// A frame with a NaN or infinite cell is refused before anything is sent,
+    /// as a boxed [`ConvertError::Parse`] holding
+    /// [`ParseError::NonFiniteValue`] that names the field and the frame.
     pub fn write_frames(&self, frames: &[ConFrame]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         self.runtime.block_on(async {
             let local = tokio::task::LocalSet::new();
@@ -114,12 +141,11 @@ impl RpcClient {
                         set_compatibility_stamp(wr.reborrow().init_compatibility());
                         let mut list = wr.reborrow().init_frames(frames.len() as u32);
                         for (i, frame) in frames.iter().enumerate() {
-                            fill_frame_builder(list.reborrow().get(i as u32), frame).map_err(
-                                |e| -> Box<dyn std::error::Error> { name_frame(e, i).into() },
-                            )?;
+                            fill_frame_builder(list.reborrow().get(i as u32), frame)
+                                .map_err(|e| e.in_frame(i as u64))?;
                         }
                     }
-                    let response = request.send().promise.await?;
+                    let response = request.send().promise.await.map_err(remote_error)?;
                     let result = response.get()?.get_result()?;
                     validate_compatibility_stamp(result.get_compatibility()?)?;
                     let bytes = result.get_file_contents()?;

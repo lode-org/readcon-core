@@ -6,16 +6,17 @@
 use std::path::{Path, PathBuf};
 
 use readcon_core::conbin;
-use readcon_core::error::ParseError;
+use readcon_core::error::{ConvertError, ParseError};
 use readcon_core::extxyz_scan::{
     ExtxyzSource, XyzColumn, extxyz_bytes, extxyz_bytes_with_threads, extxyz_path_with_threads,
-    tables_from_extxyz_bytes, tables_from_extxyz_bytes_with_threads, write_extxyz_path,
+    lattice_from_cell, scan_extxyz_bytes, tables_from_extxyz_bytes,
+    tables_from_extxyz_bytes_with_threads, write_extxyz_path,
 };
 use readcon_core::iterators::{
     ConFrameIterator, LoadError, read_all_frames_located, read_coord_columns,
     read_first_frame_located, read_nth_frame_located, read_positions_with_threads,
 };
-use readcon_core::pdb_scan::tables_from_pdb_bytes;
+use readcon_core::pdb_scan::{scan_pdb_path, tables_from_pdb_bytes, tables_from_pdb_path};
 use readcon_core::types::{
     ConFrame, ConFrameBuilder, check_cell_finite, check_cell_rows, check_cell_rows_f32,
     check_cellpar_finite, check_lattice_finite,
@@ -74,6 +75,22 @@ fn assert_cell_error(error: &ParseError, field: &str, frame: Option<u64>, token:
     };
     assert!(error.to_string().contains(&text), "{error}");
 }
+
+/// The typed cell error a converter returned. A message fails the test.
+fn typed_cell(error: &ConvertError) -> &ParseError {
+    assert!(
+        error.is_non_finite_cell(),
+        "not a typed cell error: {error:?}"
+    );
+    error.parse_error().unwrap()
+}
+
+/// NaN, +Inf, and -Inf, with the spelling a cell error gives each.
+const NON_FINITE: [(f64, &str); 3] = [
+    (f64::NAN, "NaN"),
+    (f64::INFINITY, "inf"),
+    (f64::NEG_INFINITY, "-inf"),
+];
 
 fn write_text(dir: &tempfile::TempDir, name: &str, text: &str) -> PathBuf {
     let path = dir.path().join(name);
@@ -567,41 +584,75 @@ fn extxyz_trajectory(bad_lattice: &str, atoms: usize) -> String {
 
 #[test]
 fn the_extxyz_scan_names_the_lattice_field_and_the_frame() {
-    for (lattice, field, token) in [
-        ("4 0 0 0 nan 0 0 0 6", "Lattice[4]", "NaN"),
-        ("4 0 0 0 5 0 0 0 inf", "Lattice[8]", "inf"),
-        ("-inf 0 0 0 5 0 0 0 6", "Lattice[0]", "-inf"),
-        ("4 0 0 0 5 0 0 0 6e999", "Lattice[8]", "inf"),
-    ] {
-        let text = extxyz_trajectory(lattice, 3);
-        for workers in [1, 2, 4] {
-            let message =
-                tables_from_extxyz_bytes_with_threads(text.as_bytes(), workers).unwrap_err();
-            let error = ParseError::from_cell_text(&message)
-                .unwrap_or_else(|| panic!("not a cell error: {message}"));
-            assert_cell_error(&error, field, Some(1), token);
+    let finite = ["4", "0", "0", "0", "5", "0", "0", "0", "6"];
+    for slot in 0..9 {
+        for (spelling, shown) in [
+            ("nan", "NaN"),
+            ("inf", "inf"),
+            ("-inf", "-inf"),
+            ("6e999", "inf"),
+        ] {
+            let mut lattice = finite;
+            lattice[slot] = spelling;
+            let text = extxyz_trajectory(&lattice.join(" "), 3);
+            let field = format!("Lattice[{slot}]");
+            for workers in [1, 2, 4] {
+                let error = scan_extxyz_bytes(text.as_bytes(), workers).unwrap_err();
+                assert_cell_error(typed_cell(&error), &field, Some(1), shown);
+            }
+            let error = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
+            assert_cell_error(typed_cell(&error), &field, Some(1), shown);
         }
-        let message = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
-        assert!(ParseError::from_cell_text(&message).is_some(), "{message}");
     }
+}
+
+#[test]
+fn the_text_form_of_the_extxyz_and_pdb_scans_still_recovers_the_cell_error() {
+    let text = extxyz_trajectory("4 0 0 0 inf 0 0 0 6", 3);
+    for workers in [1, 2] {
+        let message = tables_from_extxyz_bytes_with_threads(text.as_bytes(), workers).unwrap_err();
+        let error = ParseError::from_cell_text(&message)
+            .unwrap_or_else(|| panic!("not a cell error: {message}"));
+        assert_cell_error(&error, "Lattice[4]", Some(1), "inf");
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_text(
+        &dir,
+        "bad.pdb",
+        &format!("CRYST1   10.000   12.000   -inf  90.00  90.00  90.00 P 1\n{PDB_ATOM}END\n"),
+    );
+    let typed = scan_pdb_path(&path).unwrap_err();
+    assert_cell_error(typed_cell(&typed), "cell[2]", Some(0), "-inf");
+    let message = tables_from_pdb_path(&path).unwrap_err();
+    assert_eq!(message, typed.to_string());
+    let error = ParseError::from_cell_text(&message).unwrap();
+    assert_cell_error(&error, "cell[2]", Some(0), "-inf");
+    assert!(tables_from_pdb_path(&dir.path().join("missing.pdb")).unwrap_err() == "read");
 }
 
 #[test]
 fn the_extxyz_scan_refuses_a_lattice_that_has_no_angle() {
     let text = extxyz_trajectory("0 0 0 0 5 0 0 0 6", 3);
-    let message = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
-    let error = ParseError::from_cell_text(&message).unwrap();
-    assert_cell_error(&error, "cell[4]", Some(1), "NaN");
+    let error = tables_from_extxyz_bytes(text.as_bytes()).unwrap_err();
+    assert_cell_error(typed_cell(&error), "cell[4]", Some(1), "NaN");
 }
 
 #[test]
 fn a_wide_extxyz_frame_names_its_lattice_field_on_many_workers() {
-    let text = extxyz_frame("4 0 0 0 nan 0 0 0 6", 5000);
-    for workers in [1, 2, 4] {
-        let message = tables_from_extxyz_bytes_with_threads(text.as_bytes(), workers).unwrap_err();
-        let error = ParseError::from_cell_text(&message).unwrap();
-        assert_cell_error(&error, "Lattice[4]", Some(0), "NaN");
+    for (spelling, shown) in [("nan", "NaN"), ("inf", "inf"), ("-inf", "-inf")] {
+        let text = extxyz_frame(&format!("4 0 0 0 {spelling} 0 0 0 6"), 5000);
+        for workers in [1, 2, 4] {
+            let error = scan_extxyz_bytes(text.as_bytes(), workers).unwrap_err();
+            assert_cell_error(typed_cell(&error), "Lattice[4]", Some(0), shown);
+        }
     }
+}
+
+#[test]
+fn a_malformed_extxyz_file_is_still_a_message() {
+    let error = tables_from_extxyz_bytes(b"1\nnote\nH 0 0 0\n").unwrap_err();
+    assert!(error.parse_error().is_none(), "{error:?}");
+    assert_eq!(error, "lattice");
 }
 
 #[test]
@@ -644,29 +695,31 @@ fn the_extxyz_writers_refuse_a_non_finite_cell_and_create_no_file() {
     for (n_frames, n_atoms) in [(3usize, 2usize), (1, 5000)] {
         let (species, positions) = extxyz_columns(n_frames, n_atoms);
         let columns: [&(dyn ExtxyzSource + Sync); 2] = [&species, &positions];
-        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            let mut cell = [4.0, 5.0, 6.0, 90.0, 90.0, 90.0].repeat(n_frames);
-            let row = n_frames - 1;
-            cell[row * 6 + 1] = bad;
-            let frame = row as u64;
-            let token = bad.to_string();
-            let check = |message: String| {
-                let error = ParseError::from_cell_text(&message)
-                    .unwrap_or_else(|| panic!("not a cell error: {message}"));
-                assert_cell_error(&error, "cell[1]", Some(frame), &token);
-            };
-            check(extxyz_bytes(n_frames, n_atoms, &cell, &columns).unwrap_err());
-            for workers in [0, 1, 2, 4] {
-                check(
-                    extxyz_bytes_with_threads(n_frames, n_atoms, &cell, &columns, workers)
+        for slot in 0..6 {
+            for (bad, token) in NON_FINITE {
+                let mut cell = [4.0, 5.0, 6.0, 90.0, 90.0, 90.0].repeat(n_frames);
+                let row = n_frames - 1;
+                cell[row * 6 + slot] = bad;
+                let frame = Some(row as u64);
+                let field = format!("cell[{slot}]");
+                let check = |error: ConvertError| {
+                    assert_cell_error(typed_cell(&error), &field, frame, token);
+                };
+                check(extxyz_bytes(n_frames, n_atoms, &cell, &columns).unwrap_err());
+                for workers in [0, 1, 2, 4] {
+                    check(
+                        extxyz_bytes_with_threads(n_frames, n_atoms, &cell, &columns, workers)
+                            .unwrap_err(),
+                    );
+                    let path = dir.path().join(format!("out-{n_frames}-{workers}.xyz"));
+                    check(
+                        extxyz_path_with_threads(
+                            &path, n_frames, n_atoms, &cell, &columns, workers,
+                        )
                         .unwrap_err(),
-                );
-                let path = dir.path().join(format!("out-{n_frames}-{workers}.xyz"));
-                check(
-                    extxyz_path_with_threads(&path, n_frames, n_atoms, &cell, &columns, workers)
-                        .unwrap_err(),
-                );
-                assert!(!path.exists(), "a refused write created {path:?}");
+                    );
+                    assert!(!path.exists(), "a refused write created {path:?}");
+                }
             }
         }
     }
@@ -676,13 +729,17 @@ fn the_extxyz_writers_refuse_a_non_finite_cell_and_create_no_file() {
 fn the_extxyz_table_writer_refuses_a_non_finite_cell() {
     let dir = tempfile::tempdir().unwrap();
     let text = extxyz_trajectory("4 0 0 0 5 0 0 0 6", 2);
-    let mut tables = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
-    tables.cell[6 + 3] = f64::NAN;
-    let path = dir.path().join("tables.xyz");
-    let message = write_extxyz_path(&path, &tables).unwrap_err();
-    let error = ParseError::from_cell_text(&message).unwrap();
-    assert_cell_error(&error, "cell[3]", Some(1), "NaN");
-    assert!(!path.exists());
+    let finite = tables_from_extxyz_bytes(text.as_bytes()).unwrap();
+    for slot in 0..6 {
+        for (bad, token) in NON_FINITE {
+            let mut tables = finite.clone();
+            tables.cell[6 + slot] = bad;
+            let path = dir.path().join("tables.xyz");
+            let error = write_extxyz_path(&path, &tables).unwrap_err();
+            assert_cell_error(typed_cell(&error), &format!("cell[{slot}]"), Some(1), token);
+            assert!(!path.exists());
+        }
+    }
 }
 
 #[test]
@@ -704,25 +761,26 @@ const PDB_ATOM: &str =
 
 #[test]
 fn the_pdb_scan_names_the_cryst_field_and_the_frame() {
-    for token in BAD_TOKENS {
-        let text =
-            format!("CRYST1   10.000 {token} 14.000  90.00  90.00  90.00 P 1\n{PDB_ATOM}END\n");
-        let message = tables_from_pdb_bytes(text.as_bytes()).unwrap_err();
-        let error = ParseError::from_cell_text(&message)
-            .unwrap_or_else(|| panic!("not a cell error: {message}"));
-        let shown = match token {
-            "NaN" | "nan" => "NaN",
-            "inf" | "Infinity" => "inf",
-            _ => "-inf",
-        };
-        assert_cell_error(&error, "cell[1]", Some(0), shown);
+    let finite = ["10.000", "12.000", "14.000", "90.00", "90.00", "90.00"];
+    for slot in 0..6 {
+        for token in BAD_TOKENS {
+            let mut cryst = finite;
+            cryst[slot] = token;
+            let text = format!("CRYST1 {} P 1\n{PDB_ATOM}END\n", cryst.join(" "));
+            let error = tables_from_pdb_bytes(text.as_bytes()).unwrap_err();
+            let shown = match token {
+                "NaN" | "nan" => "NaN",
+                "inf" | "Infinity" => "inf",
+                _ => "-inf",
+            };
+            assert_cell_error(typed_cell(&error), &format!("cell[{slot}]"), Some(0), shown);
+        }
     }
     let later = format!(
         "CRYST1   10.000   12.000   14.000  90.00  90.00  90.00 P 1\n{PDB_ATOM}ENDMDL\nCRYST1   10.000   12.000   14.000  90.00  nan  90.00 P 1\n{PDB_ATOM}ENDMDL\n"
     );
-    let message = tables_from_pdb_bytes(later.as_bytes()).unwrap_err();
-    let error = ParseError::from_cell_text(&message).unwrap();
-    assert_cell_error(&error, "cell[4]", Some(1), "NaN");
+    let error = tables_from_pdb_bytes(later.as_bytes()).unwrap_err();
+    assert_cell_error(typed_cell(&error), "cell[4]", Some(1), "NaN");
 
     let good =
         format!("CRYST1   10.000   12.000   14.000  90.00  91.50  90.00 P 1\n{PDB_ATOM}END\n");
@@ -741,4 +799,21 @@ fn from_cell_text_only_recovers_cell_errors() {
     assert_eq!(again.named_frame(), Some(3));
     let named_twice = again.in_frame(9);
     assert_eq!(named_twice.named_frame(), Some(3));
+}
+
+#[test]
+fn lattice_from_cell_refuses_a_non_finite_cell_parameter_and_an_overflowing_lattice() {
+    for slot in 0..6 {
+        for (value, token) in NON_FINITE {
+            let mut cell = [10.0, 11.0, 12.0, 90.0, 91.0, 92.0];
+            cell[slot] = value;
+            let error = lattice_from_cell(&cell).expect_err("non-finite cell parameter");
+            assert_cell_error(typed_cell(&error), &format!("cell[{slot}]"), None, token);
+        }
+    }
+    let error =
+        lattice_from_cell(&[1.0, 1.0, 1e200, 90.0, 90.0, 90.0]).expect_err("c * c overflows");
+    assert_cell_error(typed_cell(&error), "Lattice[8]", None, "inf");
+    let lattice = lattice_from_cell(&[10.0, 11.0, 12.0, 90.0, 90.0, 90.0]).unwrap();
+    assert_eq!(lattice, [10.0, 0.0, 0.0, 0.0, 11.0, 0.0, 0.0, 0.0, 12.0]);
 }

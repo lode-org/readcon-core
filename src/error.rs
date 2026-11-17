@@ -156,14 +156,23 @@ impl ParseError {
 
     /// Recover the typed error from the text a `String`-error layer carries.
     ///
-    /// The extended-XYZ and PDB scanners report errors as text. A message
-    /// made by `to_string` on a cell error comes back as the same error; any
-    /// other message gives `None`.
+    /// For a layer that can carry only text: a Cap'n Proto failure, or the
+    /// `String` form of a [`ConvertError`]. A message made by `to_string` on
+    /// a cell error comes back as the same error; any other message gives
+    /// `None`.
     #[must_use]
     pub fn from_cell_text(message: &str) -> Option<Self> {
         let rest = message.strip_prefix("non-finite value: ")?;
         rest.starts_with(CELL_FIELD)
             .then(|| ParseError::NonFiniteValue(rest.to_string()))
+    }
+
+    /// Recover any [`ParseError::NonFiniteValue`], of a cell or of an atom
+    /// row, from its `to_string` text. Any other message gives `None`.
+    #[must_use]
+    pub fn from_non_finite_text(message: &str) -> Option<Self> {
+        let rest = message.strip_prefix("non-finite value: ")?;
+        (!rest.is_empty()).then(|| ParseError::NonFiniteValue(rest.to_string()))
     }
 
     /// True for the error [`Self::non_finite_cell`] makes.
@@ -261,6 +270,103 @@ impl From<ParseIntError> for ParseError {
 impl From<serde_json::Error> for ParseError {
     fn from(e: serde_json::Error) -> Self {
         ParseError::InvalidMetadataJson(e.to_string())
+    }
+}
+
+/// Error of a reader, writer, or converter for a format other than CON text:
+/// the extended-XYZ and PDB scanners and the Cap'n Proto frame converters.
+///
+/// A failure with a CON error class, such as a non-finite cell, is
+/// [`ConvertError::Parse`] and keeps its [`ParseError`]. The format's own
+/// diagnostics are [`ConvertError::Message`]. `Display` is the inner text in
+/// both cases.
+#[derive(Debug, Clone)]
+pub enum ConvertError {
+    Parse(ParseError),
+    Message(String),
+}
+
+impl ConvertError {
+    /// The typed error, when this failure has a CON error class.
+    pub fn parse_error(&self) -> Option<&ParseError> {
+        match self {
+            ConvertError::Parse(error) => Some(error),
+            ConvertError::Message(_) => None,
+        }
+    }
+
+    /// True for the error [`ParseError::non_finite_cell`] makes.
+    pub fn is_non_finite_cell(&self) -> bool {
+        self.parse_error()
+            .is_some_and(ParseError::is_non_finite_cell)
+    }
+
+    /// [`ParseError::in_frame`] on a typed error. A message is returned as
+    /// it was.
+    #[must_use]
+    pub fn in_frame(self, frame: u64) -> Self {
+        match self {
+            ConvertError::Parse(error) => ConvertError::Parse(error.in_frame(frame)),
+            message => message,
+        }
+    }
+}
+
+impl fmt::Display for ConvertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConvertError::Parse(error) => write!(f, "{error}"),
+            ConvertError::Message(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ConvertError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConvertError::Parse(error) => Some(error),
+            ConvertError::Message(_) => None,
+        }
+    }
+}
+
+/// A [`ConvertError::Message`] equals its text. A typed error equals no
+/// string.
+impl PartialEq<str> for ConvertError {
+    fn eq(&self, other: &str) -> bool {
+        matches!(self, ConvertError::Message(message) if message == other)
+    }
+}
+
+impl PartialEq<&str> for ConvertError {
+    fn eq(&self, other: &&str) -> bool {
+        self == *other
+    }
+}
+
+impl From<ParseError> for ConvertError {
+    fn from(error: ParseError) -> Self {
+        ConvertError::Parse(error)
+    }
+}
+
+impl From<String> for ConvertError {
+    fn from(message: String) -> Self {
+        ConvertError::Message(message)
+    }
+}
+
+impl From<&str> for ConvertError {
+    fn from(message: &str) -> Self {
+        ConvertError::Message(message.to_string())
+    }
+}
+
+/// The text of the error. [`ParseError::from_cell_text`] recovers a
+/// non-finite cell error from it.
+impl From<ConvertError> for String {
+    fn from(error: ConvertError) -> Self {
+        error.to_string()
     }
 }
 

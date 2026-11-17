@@ -4,29 +4,24 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use super::read_con_capnp::con_frame_data;
+use crate::error::ConvertError;
 use crate::types::{
     AtomDatum, ConFrame, FrameHeader, FrameMeta, PreboxHeader, con_frame_from_atom_data,
     decode_fixed_bitmask_for_spec, encode_fixed_bitmask,
 };
 
-/// Name frame `index` in the message of a non-finite cell error. Any other
-/// message is returned as it was.
-pub fn name_frame(message: String, index: usize) -> String {
-    match crate::error::ParseError::from_cell_text(&message) {
-        Some(error) => error.in_frame(index as u64).to_string(),
-        None => message,
-    }
-}
-
 /// Fill one `ConFrameData` builder from a [`ConFrame`].
+///
+/// # Errors
+///
+/// [`ConvertError::Parse`] with [`crate::error::ParseError::NonFiniteValue`]
+/// for a NaN or infinite cell length or angle, naming `boxl[i]` or
+/// `angles[i]`. [`ConvertError::in_frame`] adds the frame.
 pub fn fill_frame_builder(
     mut fb: con_frame_data::Builder<'_>,
     frame: &ConFrame,
-) -> Result<(), String> {
-    frame
-        .header
-        .check_cell_finite()
-        .map_err(|error| error.to_string())?;
+) -> Result<(), ConvertError> {
+    frame.header.check_cell_finite()?;
     let mut cell = fb.reborrow().init_cell(3);
     for (j, &v) in frame.header.boxl.iter().enumerate() {
         cell.set(j as u32, v);
@@ -154,7 +149,13 @@ pub fn fill_frame_builder(
 }
 
 /// Rebuild a [`ConFrame`] from a Cap'n Proto reader.
-pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, String> {
+///
+/// # Errors
+///
+/// [`ConvertError::Parse`] with [`crate::error::ParseError::NonFiniteValue`]
+/// for a NaN or infinite cell on the wire, naming `boxl[i]` or `angles[i]`.
+/// [`ConvertError::Message`] for a malformed message.
+pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, ConvertError> {
     let cell_list = fd.get_cell().map_err(|e| e.to_string())?;
     let angles_list = fd.get_angles().map_err(|e| e.to_string())?;
     if cell_list.len() < 3 || angles_list.len() < 3 {
@@ -162,8 +163,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
     }
     let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
     let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
-    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
-        .map_err(|error| error.to_string())?;
+    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")?;
 
     let prebox_list = fd.get_prebox_header().map_err(|e| e.to_string())?;
     let postbox_list = fd.get_postbox_header().map_err(|e| e.to_string())?;

@@ -6,6 +6,8 @@
 use std::fs;
 use std::path::Path;
 
+use crate::error::ConvertError;
+
 /// Positions are `n_frames * n_atoms * 3` in frame-major order.
 /// Masses are `n_frames * n_atoms`. Cell is `n_frames * 6` (lengths, then angles).
 #[derive(Debug, Clone)]
@@ -35,7 +37,7 @@ fn parse_f64(bytes: &[u8]) -> Result<f64, String> {
     let (value, consumed) =
         fast_float2::parse_partial::<f64, _>(token).map_err(|_| "float".to_string())?;
     if consumed == 0 {
-        return Err("float".to_string());
+        return Err("float".into());
     }
     Ok(value)
 }
@@ -65,14 +67,14 @@ fn element_symbol(line: &[u8]) -> &[u8] {
 
 /// Parse a `CRYST1` record of the frame number `frame`. A NaN or infinite
 /// number is refused, naming `cell[i]` and the frame.
-fn parse_cryst(line: &[u8], cell: &mut [f64; 6], frame: usize) -> Result<(), String> {
+fn parse_cryst(line: &[u8], cell: &mut [f64; 6], frame: usize) -> Result<(), ConvertError> {
     let mut rest = trim(line.get(6..).unwrap_or(b""));
     for (index, slot) in cell.iter_mut().enumerate() {
         rest = trim(rest);
         let (value, consumed) =
             fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "cryst".to_string())?;
         if consumed == 0 {
-            return Err("cryst".to_string());
+            return Err("cryst".into());
         }
         if !value.is_finite() {
             return Err(crate::error::ParseError::non_finite_cell(
@@ -80,7 +82,7 @@ fn parse_cryst(line: &[u8], cell: &mut [f64; 6], frame: usize) -> Result<(), Str
                 value,
             )
             .in_frame(frame as u64)
-            .to_string());
+            .into());
         }
         *slot = value;
         rest = rest.get(consumed..).unwrap_or(b"");
@@ -90,7 +92,7 @@ fn parse_cryst(line: &[u8], cell: &mut [f64; 6], frame: usize) -> Result<(), Str
 
 fn push_atom(line: &[u8], pos: &mut Vec<f64>, mass: &mut Vec<f64>) -> Result<(), String> {
     if line.len() < 54 {
-        return Err("atom".to_string());
+        return Err("atom".into());
     }
     pos.push(parse_f64(&line[30..38])?);
     pos.push(parse_f64(&line[38..46])?);
@@ -114,7 +116,7 @@ fn push_atom(line: &[u8], pos: &mut Vec<f64>, mass: &mut Vec<f64>) -> Result<(),
 /// assert!((tables.masses[0] - 63.546).abs() < 1e-9);
 /// assert_eq!(&tables.cell[..3], &[10.0, 12.0, 14.0]);
 /// ```
-pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
+pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, ConvertError> {
     let mut cell = [0.0; 6];
     let mut positions = Vec::new();
     let mut masses = Vec::new();
@@ -149,7 +151,7 @@ pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
         frame_masses.push(current_mass);
     }
     if frame_positions.is_empty() {
-        return Err("no atoms".to_string());
+        return Err("no atoms".into());
     }
     let n_atoms = frame_positions[0].len() / 3;
     if n_atoms == 0
@@ -157,7 +159,7 @@ pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
             .iter()
             .any(|frame| frame.len() != n_atoms * 3)
     {
-        return Err("frame size".to_string());
+        return Err("frame size".into());
     }
     let n_frames = frame_positions.len();
     positions.reserve(n_frames * n_atoms * 3);
@@ -177,9 +179,23 @@ pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
     })
 }
 
-pub fn tables_from_pdb_path(path: &Path) -> Result<PdbTables, String> {
+/// The tables of the PDB file at `path`.
+///
+/// # Errors
+///
+/// [`ConvertError::Parse`] with [`crate::error::ParseError::NonFiniteValue`]
+/// for a NaN or infinite `CRYST1` number, naming `cell[i]` and the frame.
+/// [`ConvertError::Message`] for an unreadable file or a malformed record.
+pub fn scan_pdb_path(path: &Path) -> Result<PdbTables, ConvertError> {
     let bytes = fs::read(path).map_err(|_| "read".to_string())?;
     tables_from_pdb_bytes(&bytes)
+}
+
+/// [`scan_pdb_path`] with the error as its text.
+/// [`ParseError::from_cell_text`](crate::error::ParseError::from_cell_text)
+/// recovers a non-finite cell error from that text.
+pub fn tables_from_pdb_path(path: &Path) -> Result<PdbTables, String> {
+    scan_pdb_path(path).map_err(String::from)
 }
 
 #[cfg(test)]
