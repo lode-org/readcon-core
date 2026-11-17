@@ -3822,6 +3822,7 @@ pub struct PhasedFrames {
 /// that many workers. Every other count parses on the calling thread.
 /// The frame list matches [`frames_from_bytes`].
 ///
+#[cfg(feature = "parallel")]
 type PipedFrames = (Vec<types::ConFrame>, f64, f64);
 
 /// A parse failure is the [`error::LocatedParseError`] from the parse
@@ -4081,6 +4082,7 @@ mod spare_capacity {
     }
 }
 
+#[cfg(feature = "parallel")]
 type StockHead = (types::FrameHeader, Vec<(std::sync::Arc<str>, usize)>, usize);
 
 #[cfg(feature = "parallel")]
@@ -4140,6 +4142,7 @@ fn read_compressed_phased(
     let file = std::fs::read(path)?;
     let open_s = t_open.elapsed().as_secs_f64();
     let t_all = std::time::Instant::now();
+    #[cfg(feature = "parallel")]
     let piped_threads = match num_threads {
         Some(n) if n >= 2 => n,
         _ => {

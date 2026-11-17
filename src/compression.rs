@@ -813,6 +813,7 @@ pub fn write_gzip_members_limited(
 
 /// `RC` extra-field payload: `RCZ1`, member count, compressed starts,
 /// then each member's plain length.
+#[cfg(feature = "parallel")]
 fn row_table(data: &[u8], count: usize) -> Option<Vec<(u32, u32)>> {
     let at = 6 + 16 * count;
     if data.len() < at + 8 * count {
@@ -871,6 +872,7 @@ struct MemberPlan {
     plain: Option<Vec<usize>>,
     /// `(first coordinate row, row count)` per member, when the payload is
     /// one coordinate block after a single header.
+    #[cfg(feature = "parallel")]
     rows: Option<Vec<(u32, u32)>>,
 }
 
@@ -910,10 +912,12 @@ fn gzip_member_starts(bytes: &[u8]) -> Option<MemberPlan> {
             } else {
                 None
             };
+            #[cfg(feature = "parallel")]
             let rows = row_table(data, count);
             return Some(MemberPlan {
                 starts,
                 plain,
+                #[cfg(feature = "parallel")]
                 rows,
             });
         }
@@ -1471,10 +1475,12 @@ fn zstd_frame_starts(bytes: &[u8]) -> Option<MemberPlan> {
     } else {
         None
     };
+    #[cfg(feature = "parallel")]
     let rows = row_table(payload, count);
     Some(MemberPlan {
         starts,
         plain,
+        #[cfg(feature = "parallel")]
         rows,
     })
 }
@@ -1629,6 +1635,7 @@ pub fn codec_deflate(
 }
 
 /// Indexed members whose plain lengths and coordinate-row spans are known.
+#[cfg(feature = "parallel")]
 pub(crate) struct IndexedMembers {
     pub starts: Vec<usize>,
     pub plain: Vec<usize>,
@@ -1636,6 +1643,7 @@ pub(crate) struct IndexedMembers {
     pub gzip: bool,
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn indexed_members(bytes: &[u8]) -> Option<IndexedMembers> {
     if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
         let plan = gzip_member_starts(bytes)?;
@@ -1669,6 +1677,7 @@ pub(crate) fn indexed_members(bytes: &[u8]) -> Option<IndexedMembers> {
     None
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn inflate_member(gzip: bool, src: &[u8], dst: &mut [u8]) -> io::Result<()> {
     if gzip {
         gzip_into(src, dst)

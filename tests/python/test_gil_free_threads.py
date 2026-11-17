@@ -209,6 +209,27 @@ def test_shared_list_index_while_writing(tmp_path: Path) -> None:
             assert frame.coords_array().tobytes() == oracle[index].tobytes()
 
 
+def test_concurrent_first_atom_materialization_is_exactly_once(tmp_path: Path) -> None:
+    import readcon
+
+    if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
+        pytest.skip("requires a free-threaded interpreter")
+    assert not _gil_enabled()
+
+    n_atoms = 2000
+    frame = _read_shared(tmp_path / "atoms-once.con", 1, n_atoms)[0]
+
+    def task(_worker: int) -> tuple[int, tuple[int, ...]]:
+        atoms = frame.atoms
+        return len(atoms), tuple(atom.atom_id for atom in atoms)
+
+    results = _run_together(12, task)
+    expected_ids = tuple(range(n_atoms))
+    assert all(length == n_atoms for length, _ in results)
+    assert all(atom_ids == expected_ids for _, atom_ids in results)
+    assert len(frame.atoms) == n_atoms
+
+
 def test_writer_panic_keeps_every_frame(tmp_path: Path) -> None:
     import readcon
 
@@ -376,6 +397,23 @@ def test_write_con_list_while_slab_changes(tmp_path: Path) -> None:
             )
             _assert_swept(written, _SWEEP_FRAMES, _SWEEP_ATOMS)
             assert frames.touch_checksum()[1] >= 0.0
+
+    _with_sweep(slab, body)
+
+
+def test_coords_array_while_shared_slab_changes(tmp_path: Path) -> None:
+    import readcon
+
+    frames = _read_shared(
+        tmp_path / "coords-array-sweep.con", _SWEEP_FRAMES, _SWEEP_ATOMS
+    )
+    slab = frames.columns()["positions"]
+
+    def body() -> None:
+        for _ in range(_SWEEP_WRITES):
+            for frame in frames:
+                copied = frame.coords_array()
+                _assert_swept(copied, 1, _SWEEP_ATOMS, ordered=False)
 
     _with_sweep(slab, body)
 

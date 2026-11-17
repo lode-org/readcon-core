@@ -474,8 +474,12 @@ struct ParsedMetaLine {
 const META_LINE_CACHE_CAP: usize = 4;
 
 std::thread_local! {
-    static META_LINE_CACHE: std::cell::RefCell<Vec<ParsedMetaLine>> =
-        const { std::cell::RefCell::new(Vec::new()) };
+    // Keep the bounded cache alive until process exit. Free-threaded CPython
+    // can tear worker TLS down while libc is still running other TLS
+    // destructors; dropping the cached Arcs there produces a TSan-visible
+    // libc TLS-dtor race. At most four parsed lines remain per exited thread.
+    static META_LINE_CACHE: std::mem::ManuallyDrop<std::cell::RefCell<Vec<ParsedMetaLine>>> =
+        const { std::mem::ManuallyDrop::new(std::cell::RefCell::new(Vec::new())) };
 }
 
 pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json::Value> {
@@ -1102,6 +1106,24 @@ impl AtomDatum {
         crate::writer::invalidate_packed_lengths();
     }
 
+    /// Copy coordinates that may live in Python-writable storage.
+    ///
+    /// Each element is one relaxed, untorn atomic load. The three elements
+    /// are not one transaction and may therefore come from different
+    /// instants while another thread writes the source.
+    #[cfg(feature = "python")]
+    pub(crate) fn atomic_coords(&self) -> [f64; 3] {
+        let source = self.xyz.cast_const();
+        assert_atomic_f64_alignment(source);
+        unsafe {
+            [
+                atomic_load_f64(source),
+                atomic_load_f64(source.add(1)),
+                atomic_load_f64(source.add(2)),
+            ]
+        }
+    }
+
     fn owned_xyz(x: f64, y: f64, z: f64) -> *mut f64 {
         Box::into_raw(Box::new([x, y, z])).cast()
     }
@@ -1195,6 +1217,7 @@ thread_local! {
 /// The next drop of this atom buffer releases its symbol counts in one step.
 ///
 /// The buffer must be one shared symbol and no owned coordinate boxes.
+#[cfg(any(feature = "parallel", feature = "chemfiles", test))]
 pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     if atoms.is_empty() {
         return;
@@ -1264,6 +1287,7 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn take_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
     ATOM_SPARE.with(|cell| {
         let spare = cell.replace(Vec::new());
@@ -1411,7 +1435,7 @@ impl ConFrame {
             );
             raw.set_len(n_atoms);
         }
-        let mut atom_data = unsafe {
+        let atom_data = unsafe {
             Vec::from_raw_parts(
                 raw.as_mut_ptr().cast::<AtomDatum>(),
                 raw.len(),
@@ -1419,6 +1443,7 @@ impl ConFrame {
             )
         };
         std::mem::forget(raw);
+        let mut atom_data = SnapshotAtomGuard(atom_data);
         let base_address = base as usize;
         let contiguous_address = contiguous.map(|ptr| ptr as usize);
         let retarget = |index: usize, atom: &mut AtomDatum| {
@@ -1434,7 +1459,7 @@ impl ConFrame {
             atom.xyz = slot;
             atom.tail &= !TAIL_OWNED;
         };
-        for (index, atom) in atom_data.iter_mut().enumerate() {
+        for (index, atom) in atom_data.0.iter_mut().enumerate() {
             retarget(index, atom);
         }
         let source = &self.header;
@@ -1469,7 +1494,7 @@ impl ConFrame {
         let view = unsafe {
             ConFrame {
                 header,
-                atom_data,
+                atom_data: std::mem::take(&mut atom_data.0),
                 column_tails: read(&self.column_tails),
                 positions: read(&self.positions),
                 velocities: read(&self.velocities),
@@ -1486,6 +1511,37 @@ impl ConFrame {
             }
         };
         (view, shared_map)
+    }
+}
+
+#[cfg(feature = "python")]
+fn recycle_snapshot_atoms(atoms: &mut Vec<AtomDatum>) {
+    let mut atoms = std::mem::take(atoms);
+    let capacity = atoms.capacity();
+    if capacity == 0 {
+        return;
+    }
+    let pointer = atoms.as_mut_ptr();
+    std::mem::forget(atoms);
+    let spare = unsafe {
+        Vec::from_raw_parts(
+            pointer.cast::<std::mem::MaybeUninit<AtomDatum>>(),
+            0,
+            capacity,
+        )
+    };
+    stash_snapshot_atom_spare(spare);
+}
+
+#[cfg(feature = "python")]
+struct SnapshotAtomGuard(Vec<AtomDatum>);
+
+#[cfg(feature = "python")]
+impl Drop for SnapshotAtomGuard {
+    fn drop(&mut self) {
+        // The shells were copied bit-for-bit from a live source. On unwind,
+        // free only their vector allocation, never their borrowed fields.
+        recycle_snapshot_atoms(&mut self.0);
     }
 }
 
@@ -1511,6 +1567,41 @@ pub(crate) struct CoordSnapshot<'a> {
     /// Identity of every source frame in order.
     identities: Arc<[usize]>,
     _sources: std::marker::PhantomData<&'a ConFrame>,
+}
+
+#[cfg(feature = "python")]
+struct SnapshotViewGuard {
+    frames: Vec<Option<ConFrame>>,
+    shared_maps: Vec<bool>,
+}
+
+#[cfg(feature = "python")]
+impl SnapshotViewGuard {
+    fn dismantle(&mut self) {
+        for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
+            let Some(frame) = slot else { continue };
+            recycle_snapshot_atoms(&mut frame.atom_data);
+            // A map parsed into the view is owned by it. A copied map is
+            // still owned by the source and must not be dropped here.
+            let map = frame.header.metadata.map.take();
+            if *shared {
+                std::mem::forget(map);
+            }
+        }
+        // Every other field in each raw view belongs to its source.
+        unsafe { self.frames.set_len(0) };
+        self.shared_maps.clear();
+    }
+}
+
+#[cfg(feature = "python")]
+impl Drop for SnapshotViewGuard {
+    fn drop(&mut self) {
+        // `copy_of` can unwind after earlier views were built. Dismantling
+        // those views prevents their pointer-read fields from double-freeing
+        // the live source frames.
+        self.dismantle();
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1552,12 +1643,14 @@ impl<'a> CoordSnapshot<'a> {
             }
         };
         let mut offset = 0usize;
-        let mut views: Vec<Option<ConFrame>> = Vec::with_capacity(frames.len());
-        let mut shared_maps = Vec::with_capacity(frames.len());
+        let mut views = SnapshotViewGuard {
+            frames: Vec::with_capacity(frames.len()),
+            shared_maps: Vec::with_capacity(frames.len()),
+        };
         for slot in frames {
             let Some(frame) = slot else {
-                views.push(None);
-                shared_maps.push(false);
+                views.frames.push(None);
+                views.shared_maps.push(false);
                 continue;
             };
             let at = unsafe { base.add(offset) };
@@ -1566,7 +1659,7 @@ impl<'a> CoordSnapshot<'a> {
                 let to = fresh.as_mut_ptr();
                 unsafe {
                     std::ptr::copy_nonoverlapping(base, to, offset);
-                    for view in views.iter_mut().flatten() {
+                    for view in views.frames.iter_mut().flatten() {
                         for atom in &mut view.atom_data {
                             atom.retarget(to.offset(atom.xyz.offset_from(base)));
                         }
@@ -1577,10 +1670,11 @@ impl<'a> CoordSnapshot<'a> {
             }
             let (view, shared) = unsafe { frame.view_onto(base.add(offset), fill) };
             offset += frame.atom_data.len() * 3;
-            views.push(Some(view));
-            shared_maps.push(shared);
+            views.frames.push(Some(view));
+            views.shared_maps.push(shared);
         }
-        let frames = views;
+        let frames = std::mem::take(&mut views.frames);
+        let shared_maps = std::mem::take(&mut views.shared_maps);
         let coords = match priced {
             Some(priced) if !fill => priced,
             _ => {
@@ -1727,31 +1821,17 @@ unsafe fn atomic_copy_f64_serial(src: *const f64, dst: *mut f64, len: usize) {
 #[cfg(feature = "python")]
 impl Drop for CoordSnapshot<'_> {
     fn drop(&mut self) {
-        for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
-            let Some(frame) = slot else { continue };
-            // A later snapshot can reuse these addresses.
-            crate::writer::invalidate_packed_lengths_if(frame as *const ConFrame as usize);
-            let mut atoms = std::mem::take(&mut frame.atom_data);
-            // The atoms are views; only their vector is ours to free.
-            let capacity = atoms.capacity();
-            let pointer = atoms.as_mut_ptr();
-            std::mem::forget(atoms);
-            let spare = unsafe {
-                Vec::from_raw_parts(
-                    pointer.cast::<std::mem::MaybeUninit<AtomDatum>>(),
-                    0,
-                    capacity,
-                )
-            };
-            stash_snapshot_atom_spare(spare);
-            // A map the writer parsed into the view is the view's own.
-            let map = frame.header.metadata.map.take();
-            if *shared {
-                std::mem::forget(map);
-            }
-        }
-        // Every other field of a view belongs to its source frame.
-        unsafe { self.frames.set_len(0) };
+        crate::writer::invalidate_packed_lengths_if_any(
+            self.frames
+                .iter()
+                .flatten()
+                .map(|frame| frame as *const ConFrame as usize),
+        );
+        let mut views = SnapshotViewGuard {
+            frames: std::mem::take(&mut self.frames),
+            shared_maps: std::mem::take(&mut self.shared_maps),
+        };
+        views.dismantle();
     }
 }
 
@@ -5105,6 +5185,42 @@ mod tests {
             let hint = hint.get();
             hint.atoms == atoms.as_ptr() as usize && hint.n == atoms.len()
         })
+    }
+
+    #[cfg(feature = "python")]
+    #[test]
+    fn coordinate_snapshot_unwind_does_not_drop_source_fields() {
+        let mut first = crate::iterators::ConFrameIterator::new(&uniform_frame_text(1))
+            .next()
+            .expect("first frame")
+            .expect("parse first");
+        let mut second = crate::iterators::ConFrameIterator::new(&uniform_frame_text(1))
+            .next()
+            .expect("second frame")
+            .expect("parse second");
+
+        // Force the per-atom path and make its source deliberately unsuitable
+        // for AtomicU64. The first view has already pointer-read its source
+        // fields when construction of the second view panics.
+        let mut unaligned = [0_u8; 32];
+        second.atom_data[0].xyz = unsafe { unaligned.as_mut_ptr().add(1).cast::<f64>() };
+        second.atom_data[0].tail &= !TAIL_OWNED;
+        second.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = CoordSnapshot::copy_of(&[Some(&first), Some(&second)]);
+        }));
+        assert!(result.is_err(), "misaligned atomic source should panic");
+
+        // Restore an owned coordinate before dropping the deliberately
+        // malformed source. The first source must still own and use all of
+        // its fields; without the unwind guard the partial view drops them.
+        second.atom_data[0].xyz = AtomDatum::owned_xyz(4.0, 5.0, 6.0);
+        second.atom_data[0].tail |= TAIL_OWNED;
+        assert_eq!(first.atom_data[0].x(), 0.1234567);
+        first.header.prebox_header.user.push_str("still owned");
+        drop(first);
+        drop(second);
     }
 
     #[test]

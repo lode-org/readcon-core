@@ -36,6 +36,7 @@ pub(crate) fn wide_workers() -> usize {
     WIDE_WORKERS.with(|slot| slot.get())
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn set_wide_workers(n: usize) {
     WIDE_WORKERS.with(|slot| slot.set(n.max(1)));
 }
@@ -46,6 +47,7 @@ std::thread_local! {
 
 /// Output columns for a parallel coordinate fill.
 #[derive(Clone, Copy)]
+#[cfg(feature = "parallel")]
 pub(crate) struct CoordPtrs {
     pub xyz: *mut f64,
     pub ids: *mut u64,
@@ -54,6 +56,7 @@ pub(crate) struct CoordPtrs {
 
 /// Output columns for one indexed member, including the atom records.
 #[derive(Clone, Copy)]
+#[cfg(feature = "parallel")]
 pub(crate) struct CoordRunOut {
     pub xyz: *mut f64,
     pub ids: *mut u64,
@@ -2444,6 +2447,7 @@ thread_local! {
 /// One tight reservation, then each frame takes a shell. Doing the
 /// reservations inside the parse mixed the allocator with the float
 /// parse and made eight threads slower than the bytes they write.
+#[cfg(feature = "parallel")]
 pub(crate) fn prestash_coord_shells(n_frames: usize, n_atoms: usize) {
     // Small frames (the 32-atom strong-scaling files) are cheaper to
     // allocate inside the parse. A burst of shells ahead of those frames
@@ -2465,6 +2469,7 @@ pub(crate) fn prestash_coord_shells(n_frames: usize, n_atoms: usize) {
     });
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) fn clear_coord_shells() {
     COORD_SHELLS.with(|pool| pool.borrow_mut().clear());
 }

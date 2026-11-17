@@ -1,0 +1,3 @@
+# Internal free-threaded CPython race with no readcon frames, reproduced on
+# CPython 3.14.10t. See python/cpython#116910, #112536, and #108219.
+race:^_Py_HandlePending$

@@ -2077,7 +2077,7 @@ fn write_le<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError>
     let bytes = view_bytes(values);
     #[cfg(target_endian = "big")]
     let bytes = le_bytes(values);
-    file.write_all(&bytes)
+    file.write_all(bytes.as_ref())
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
