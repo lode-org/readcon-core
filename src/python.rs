@@ -2445,7 +2445,7 @@ where
     let refs: Vec<Option<&ConFrame>> = slots.iter().map(Option::as_ref).collect();
     let snapshot = crate::types::CoordSnapshot::copy_of(&refs);
     drop(refs);
-    py.detach(move || f(snapshot.slots()))
+    py.detach(move || crate::writer::with_price_key(snapshot.price_key(), || f(snapshot.slots())))
 }
 
 /// [`detach_slots`] for frames held one by one.
@@ -2462,7 +2462,7 @@ where
     drop(refs);
     py.detach(move || {
         let copies: Vec<&ConFrame> = snapshot.slots().iter().flatten().collect();
-        f(&copies)
+        crate::writer::with_price_key(snapshot.price_key(), || f(&copies))
     })
 }
 

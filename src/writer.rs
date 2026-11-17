@@ -5109,8 +5109,89 @@ struct PackedCache {
     bind: bool,
     generation: u64,
     lengths: Vec<usize>,
+    /// Set when the lengths were priced from a coordinate snapshot.
+    coords: Option<std::sync::Arc<Vec<f64>>>,
 }
 
+/// Names the frames a coordinate snapshot was taken from.
+///
+/// Each snapshot puts its views at new addresses, so the address key alone
+/// would price every write again. Under this key a later snapshot of the
+/// same source frames reuses the lengths when its coordinates match the
+/// priced ones bit for bit; nothing else in a stored frame changes without
+/// a setter that retires the price.
+#[cfg(feature = "python")]
+pub(crate) struct PriceKey {
+    pub(crate) first: usize,
+    pub(crate) last: usize,
+    pub(crate) view_first: usize,
+    pub(crate) view_last: usize,
+    pub(crate) coords: std::sync::Arc<Vec<f64>>,
+}
+
+#[cfg(feature = "python")]
+thread_local! {
+    static PRICE_KEY: std::cell::RefCell<Option<PriceKey>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` with `key` naming the snapshot frames it writes.
+#[cfg(feature = "python")]
+pub(crate) fn with_price_key<R>(key: Option<PriceKey>, f: impl FnOnce() -> R) -> R {
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            PRICE_KEY.with(|slot| slot.borrow_mut().take());
+        }
+    }
+    PRICE_KEY.with(|slot| *slot.borrow_mut() = key);
+    let _clear = Clear;
+    f()
+}
+
+/// The source ends and coordinates for `frames`, if they are the snapshot
+/// the current key names.
+fn snapshot_key(frames: &[&ConFrame]) -> Option<(usize, usize, std::sync::Arc<Vec<f64>>)> {
+    #[cfg(feature = "python")]
+    {
+        let first = frames[0] as *const ConFrame as usize;
+        let last = *frames.last()? as *const ConFrame as usize;
+        PRICE_KEY.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .filter(|key| key.view_first == first && key.view_last == last)
+                .map(|key| (key.first, key.last, key.coords.clone()))
+        })
+    }
+    #[cfg(not(feature = "python"))]
+    {
+        let _ = frames;
+        None
+    }
+}
+
+/// The coordinates last priced for the snapshot of `first..=last`, if
+/// that price still stands.
+#[cfg(feature = "python")]
+pub(crate) fn priced_coords(first: usize, last: usize) -> Option<std::sync::Arc<Vec<f64>>> {
+    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
+    PACKED_CACHE
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .as_ref()
+        .filter(|hit| hit.generation == generation && hit.first == first && hit.last == last)
+        .and_then(|hit| hit.coords.clone())
+}
+
+fn same_bits(a: &[f64], b: &[f64]) -> bool {
+    a.len() == b.len()
+        && unsafe {
+            std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), std::mem::size_of_val(a))
+                == std::slice::from_raw_parts(b.as_ptr().cast::<u8>(), std::mem::size_of_val(b))
+        }
+}
+
+static PACKED_CACHE: std::sync::Mutex<Option<PackedCache>> = std::sync::Mutex::new(None);
 static PACKED_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 static PACKED_FIRST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static PACKED_LAST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -5139,21 +5220,42 @@ pub(crate) fn cached_packed_lengths(
     canonical: bool,
     bind: bool,
 ) -> Option<Vec<usize>> {
-    let first = frames[0] as *const ConFrame as usize;
-    let last = *frames.last()? as *const ConFrame as usize;
+    let snapshot = snapshot_key(frames);
+    let (first, last, coords) = match snapshot {
+        Some((first, last, coords)) => (first, last, Some(coords)),
+        None => (
+            frames[0] as *const ConFrame as usize,
+            *frames.last()? as *const ConFrame as usize,
+            None,
+        ),
+    };
     let count = frames.len();
-    static CACHE: std::sync::Mutex<Option<PackedCache>> = std::sync::Mutex::new(None);
     let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
-    if let Some(hit) = CACHE.lock().unwrap_or_else(|err| err.into_inner()).as_ref()
-        && hit.generation == generation
-        && hit.first == first
-        && hit.last == last
-        && hit.count == count
-        && hit.precision == precision
-        && hit.canonical == canonical
-        && hit.bind == bind
-    {
-        return Some(hit.lengths.clone());
+    let hit = PACKED_CACHE
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .as_ref()
+        .filter(|hit| {
+            hit.generation == generation
+                && hit.first == first
+                && hit.last == last
+                && hit.count == count
+                && hit.precision == precision
+                && hit.canonical == canonical
+                && hit.bind == bind
+                && hit.coords.is_some() == coords.is_some()
+        })
+        .map(|hit| (hit.lengths.clone(), hit.coords.clone()));
+    if let Some((lengths, priced)) = hit {
+        let same = match (&priced, &coords) {
+            (Some(priced), Some(coords)) => {
+                std::sync::Arc::ptr_eq(priced, coords) || same_bits(priced, coords)
+            }
+            _ => true,
+        };
+        if same {
+            return Some(lengths);
+        }
     }
     let generation_before = PACKED_GEN.load(std::sync::atomic::Ordering::Relaxed);
     let lengths = packed_frame_lengths(frames, workers, precision, canonical, bind)?;
@@ -5161,7 +5263,7 @@ pub(crate) fn cached_packed_lengths(
     if generation_before == generation_after {
         PACKED_FIRST.store(first, std::sync::atomic::Ordering::Relaxed);
         PACKED_LAST.store(last, std::sync::atomic::Ordering::Relaxed);
-        *CACHE.lock().unwrap_or_else(|err| err.into_inner()) = Some(PackedCache {
+        *PACKED_CACHE.lock().unwrap_or_else(|err| err.into_inner()) = Some(PackedCache {
             first,
             last,
             count,
@@ -5170,6 +5272,7 @@ pub(crate) fn cached_packed_lengths(
             bind,
             generation: generation_after,
             lengths: lengths.clone(),
+            coords,
         });
     }
     Some(lengths)

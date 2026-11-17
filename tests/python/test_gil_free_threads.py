@@ -218,6 +218,20 @@ def test_write_after_a_numpy_store_into_the_slab(tmp_path: Path) -> None:
         text = readcon.write_con_string(frames)
         assert text == out.read_text(encoding="utf-8")
 
+    # Repeat writes of the shared list reuse the priced lengths only while
+    # the slab holds the same bits. 0.0 and -0.0 compare equal as floats
+    # but spell differently. A store into one later frame keeps the frames
+    # before it.
+    stores = [(..., v) for v in (7.5, 7.5, 1234567.125, 0.0, -0.0, -0.0, 0.0)]
+    stores += [(n_frames // 2, 99.125), ((-1, -1, -1), -0.0), ((-1, -1, -1), 0.0)]
+    for index, value in stores:
+        slab[index] = value
+        for n_threads in (1, 4):
+            readcon.write_con(str(out), frames, n_threads=n_threads)
+            written = np.asarray(readcon.read_positions(str(out), n_threads=1))
+            assert written.tobytes() == slab.tobytes()
+            assert readcon.write_con_string(frames) == out.read_text(encoding="utf-8")
+
     others = _read_shared(tmp_path / "held.con", n_frames, n_atoms)
     held = [others[index] for index in range(n_frames)]
     readcon.write_con(str(out), held)
