@@ -566,22 +566,27 @@ The PyO3 module declares that it does not need the global interpreter lock (\tex
 Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t} as well as on the standard builds.
 Parsing, formatting, file writes and correspondence checks detach the Python thread state with \texttt{py.detach}, so other Python threads run while they do.
 Each write path first copies or converts whatever input Python can reach, while still attached, and only then formats, compresses and writes while detached.
+This includes compressed writes of frame lists that do not keep their parsed frames, plain writes after indexing, and appends of \texttt{ConFrame} lists.
+\texttt{touch\_checksum()} needs the shared coordinate slab, so it copies the slab element by element while attached and then walks the frames detached.
 On a frame that Python has not indexed, \texttt{coords\_array()} copies the coordinates from the parsed buffer into a new NumPy array without building a Python object for each atom.
 Once the atom list of a frame exists, \texttt{coords\_array()} reads that list, so edits made in place remain visible.
 
 \texttt{ConFrameList} keeps its parsed frames behind a read-write lock of its own.
-When every frame is still in the list, the writers and \texttt{touch\_checksum()} hold one read lock across the detached call instead of moving frames out, so other threads see the full list and a panic leaves the frames intact.
+When every frame is still in the list, plain writes, compressed writes, string output, identifier checks and \texttt{touch\_checksum()} hold one read lock across the detached call instead of moving frames out, so other threads see the full list and a panic leaves the frames intact.
 When indexing has moved a frame out into a Python object, the writers go through the list frame by frame.
-A thread that waits for the lock detaches before it blocks, so a detached holder can attach again without deadlock.
+A thread that waits for the list lock or the frame cache detaches before it blocks, so a detached holder can attach again without deadlock.
+Indexing a frame locks the cache before the list and caches the indexed frame object.
+Under the write lock of the list, indexing also marks any shared coordinate slab as reachable from Python before it moves that slot out.
 \texttt{columns()} takes the write lock, so detached readers finish before Python receives the shared coordinate array.
 
 When Python can reach the coordinates of a frame, through the shared array of \texttt{columns()} or the \texttt{xyz} array of the frame, the attached thread copies them into a private buffer before the detached work starts, and the other fields are borrowed from the frames.
 Each aligned double is copied with one relaxed \texttt{AtomicU64} load \cite{bosRustAtomicsLocks2023}, so no single value is torn.
 The loads are not atomic across elements, and a thread that writes during the copy can leave the buffer holding elements from different instants.
 Frames whose coordinates Python cannot reach are written without the copy.
-When a shared list is written again and no frame has changed, the writer reuses the buffer of the previous write.
+When a shared list is written again, the writer keeps the copied buffer of the previous write and reuses its packed frame lengths while every frame matches that buffer bit for bit.
+From the first frame that differs, the writer makes a fresh copy.
 
-\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} treat NumPy arrays the same way, copying them in runs of about \(4\) MiB while attached and formatting or writing each run while detached.
+\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} treat NumPy arrays the same way, copying them in runs of about \(4\) MiB while attached, validating each run there where the format requires it, and formatting or writing each run while detached.
 No Rust slice is ever formed over numeric memory that Python owns and can change.
 
 
