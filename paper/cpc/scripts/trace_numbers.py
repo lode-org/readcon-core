@@ -3,8 +3,9 @@
 
 The scan covers the prose of ``rg_main.tex`` and ``rg_supp.tex`` and the
 captions of every generated table they input.  Table cells and figures are
-written by the generator scripts from the committed records, so the scan
-skips them; so are macros, except in the front matter (title, abstract,
+written by the generator scripts from the committed records; the scan skips
+them and instead requires every generated fragment to equal its generator's
+output.  It skips macros, except in the front matter (title, abstract,
 Program Summary, highlights) and the Conclusions, where every macro of a
 generated file is expanded and traced like a printed number.
 
@@ -29,10 +30,14 @@ clone gives no drift on the first run) and otherwise leaves it in place; it
 then fails when a ledger left from an earlier run differs from the one the
 records give now, so an edit to a record behind a headline fails until the
 ledger is rewritten.  The generated ``src/figures/generated/*.tex`` fragments
-the manuscript inputs are gitignored too; a clean checkout writes the ones that
-are missing, and only those, from the committed records, with the steps of
-``regen_paper.py`` that name them, before scanning.  No figure plotter runs, and
-``clause_coverage.py`` runs as ``--macros``, so no tracked record is rewritten.
+the manuscript inputs are gitignored too.  The steps of ``regen_paper.py`` that
+name them run on a copy of the working tree, so no tracked file is written; no
+figure plotter runs, and ``clause_coverage.py`` runs as ``--macros``, which reads
+the committed record.  A fragment that is missing is copied from the copy, and
+only a missing one is written.  A fragment that is present must equal what its
+generator wrote byte for byte, so a table cell or a macro edited by hand, or
+left from a record that has changed since, fails with a diff that names the
+fragment; a step that exits non-zero fails too, and its outputs are discarded.
 
 ``rg_main.tex`` is the Org export of ``rg_main.org``, byte for byte.  The scan
 therefore also reads the body of ``rg_main.org`` and fails when it prints a
@@ -70,6 +75,9 @@ DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db")
 # Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
+# Not copied into the tree the generators write into; build and target hold the scratch and the compiled library.
+_COPY_SKIP = frozenset({".git", ".pixi", "__pycache__", "node_modules", ".venv"})
+_COPY_SKIP_TOP = frozenset({"build", "target"})
 # A step that rewrites a tracked record when it runs bare runs with these arguments here, so it writes its fragment only.
 _FRAGMENT_ARGS = {"scripts/clause_coverage.py": ["--macros"]}
 ORG = "rg_main.org"
@@ -356,19 +364,93 @@ def _tail(text: str) -> str:
     return lines[-1] if lines else "no output"
 
 
-def ensure_generated() -> None:
-    """Write the missing fragments, and no other file, from the committed records.
+def _ignored(path: Path) -> bool:
+    """Whether git ignores the path: a tracked file is not ignored, and outside a repository nothing is tracked."""
+    done = subprocess.run(
+        ["git", "-C", str(ROOT.parents[1]), "check-ignore", "-q", str(path)],
+        check=False,
+        capture_output=True,
+    )
+    return done.returncode in (0, 128)
 
-    Only the format steps that name a missing fragment run, in the order of
-    ``regen_paper.FORMAT`` and not once the fragments they name exist.  A
-    figure plotter or a step that writes a tracked record never runs.
+
+def _copy_tree(repo: Path, tree: Path, scratch: Path) -> None:
+    """A copy of the working tree, ignored files included, for the generators to write into."""
+    aside = scratch.resolve()
+
+    def skip(directory: str, names: list[str]) -> list[str]:
+        top = Path(directory) == repo
+        return [
+            name
+            for name in names
+            if name in _COPY_SKIP
+            or (top and name in _COPY_SKIP_TOP)
+            or aside.is_relative_to((Path(directory) / name).resolve())
+        ]
+
+    shutil.copytree(repo, tree, ignore=skip, symlinks=True)
+
+
+def _tex_state(directory: Path) -> dict[str, bytes]:
+    return {path.name: path.read_bytes() for path in directory.glob("*.tex")}
+
+
+def _restore_tex(directory: Path, state: dict[str, bytes]) -> None:
+    for path in directory.glob("*.tex"):
+        if path.name not in state:
+            path.unlink()
+    for name, data in state.items():
+        if not (directory / name).is_file() or (directory / name).read_bytes() != data:
+            (directory / name).write_bytes(data)
+
+
+def _step_env(python: str, env: dict[str, str]) -> dict[str, str]:
+    if python == sys.executable:
+        return env
+    return dict(
+        env,
+        PATH=os.pathsep.join([str(Path(python).resolve().parent), env.get("PATH", "")]),
+    )
+
+
+def ensure_generated(validate: bool = True) -> list[str]:
+    """Write the missing fragments and report the stale ones, from the committed records.
+
+    The format steps that name a fragment run on a copy of the working tree, so
+    no tracked file is written and no file of the tree is rewritten.  Only the
+    fragments that are missing are copied back.  With ``validate``, every
+    fragment a step names is regenerated on the copy, and a fragment present
+    that differs byte for byte from what its generator wrote is a problem, as
+    is a step that exits non-zero: its outputs are discarded and the fragments
+    it names cannot be validated.  Without ``validate``, only the steps for the
+    missing fragments run.
     """
-    missing = [path for path in generated_tex_inputs() if not path.is_file()]
-    if not missing:
-        return
+    inputs = generated_tex_inputs()
+    missing = [path for path in inputs if not path.is_file()]
+    if not missing and not validate:
+        return []
     import regen_paper
 
     repo = ROOT.parents[1]
+    steps = [
+        step
+        for step in regen_paper.FORMAT
+        if not step[0].startswith("scripts/plot_") and step[0] not in _FORMAT_SKIP
+    ]
+    producers = {
+        path: [step for step in steps if names_fragment(step[0], path)]
+        for path in inputs
+    }
+    orphans = [path for path in missing if not producers[path]]
+    if orphans:
+        names = ", ".join(path.relative_to(SRC).as_posix() for path in orphans)
+        raise SystemExit(
+            f"no format step writes {names}; restore it from the repository"
+        )
+    targets = [path for path in (inputs if validate else missing) if producers[path]]
+    wanted = [
+        step for step in steps if any(step in producers[path] for path in targets)
+    ]
     env = dict(
         os.environ,
         SOURCE_DATE_EPOCH=regen_paper.SOURCE_DATE_EPOCH,
@@ -378,57 +460,83 @@ def ensure_generated() -> None:
     env.setdefault(
         "READCON_LIB", str(repo / "target" / "release" / "libreadcon_core.so")
     )
-    steps = [
-        step
-        for step in regen_paper.FORMAT
-        if not step[0].startswith("scripts/plot_") and step[0] not in _FORMAT_SKIP
-    ]
-    orphans = [
-        path
-        for path in missing
-        if not any(names_fragment(step[0], path) for step in steps)
-    ]
-    if orphans:
-        names = ", ".join(path.relative_to(SRC).as_posix() for path in orphans)
-        raise SystemExit(
-            f"no format step writes {names}; restore it from the repository"
-        )
+    problems: list[str] = []
     failures: list[str] = []
-    for python in _format_pythons():
-        step_env = env
-        if python != sys.executable:
-            step_env = dict(env)
-            step_env["PATH"] = os.pathsep.join(
-                [str(Path(python).resolve().parent), env.get("PATH", "")]
-            )
-        for step in steps:
-            if not any(
-                not path.is_file() and names_fragment(step[0], path) for path in missing
-            ):
-                continue
+    with regen_paper.bench_scratch("scratch") as scratch:
+        tree = Path(scratch) / "tree"
+        _copy_tree(repo, tree, Path(scratch))
+        git_dir = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--absolute-git-dir"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if git_dir.returncode == 0:
+            env = dict(env, GIT_DIR=git_dir.stdout.strip(), GIT_WORK_TREE=str(tree))
+        copied = {path: tree / path.relative_to(repo) for path in targets}
+        for path in copied.values():
+            path.unlink(missing_ok=True)
+        generated = tree / SRC.relative_to(repo) / "figures" / "generated"
+        for step in wanted:
             args = _FRAGMENT_ARGS.get(step[0], step[1:])
-            done = subprocess.run(
-                [python, str(ROOT / step[0]), *args],
-                cwd=repo,
-                env=step_env,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            if done.returncode:
-                failures.append(
-                    f"{' '.join([step[0], *args])} exited {done.returncode}: {_tail(done.stderr)}"
+            failure = None
+            for python in _format_pythons():
+                before = _tex_state(generated)
+                done = subprocess.run(
+                    [python, str(tree / ROOT.relative_to(repo) / step[0]), *args],
+                    cwd=tree,
+                    env=_step_env(python, env),
+                    check=False,
+                    capture_output=True,
+                    text=True,
                 )
-        if all(path.is_file() for path in missing):
-            return
-    names = ", ".join(
-        path.relative_to(SRC).as_posix() for path in missing if not path.is_file()
-    )
-    raise SystemExit(
-        "missing generated fragments after the format steps that name them: "
-        + names
-        + "".join(f"\n  {line}" for line in failures)
-    )
+                if done.returncode == 0:
+                    failure = None
+                    break
+                _restore_tex(generated, before)
+                failure = f"{' '.join([step[0], *args])} exited {done.returncode}: {_tail(done.stderr)}"
+            if failure:
+                failures.append(failure)
+        unwritten = []
+        for path, made in copied.items():
+            rel = path.relative_to(SRC).as_posix()
+            if not made.is_file():
+                if path.is_file():
+                    problems.append(
+                        f"{rel}: no format step wrote it, so it cannot be validated"
+                    )
+                else:
+                    unwritten.append(rel)
+                continue
+            new = made.read_bytes()
+            if not path.is_file():
+                if not _ignored(path):
+                    raise SystemExit(
+                        f"{rel} is tracked and missing; restore it from the repository"
+                    )
+                path.write_bytes(new)
+            elif path.read_bytes() != new:
+                diff = difflib.unified_diff(
+                    path.read_text().splitlines(),
+                    new.decode(errors="replace").splitlines(),
+                    f"{rel} (present)",
+                    f"{rel} (generated)",
+                    n=0,
+                    lineterm="",
+                )
+                scripts = ", ".join(sorted({step[0] for step in producers[path]}))
+                problems.append(
+                    f"{rel}: differs from what its generator ({scripts}) writes from the committed "
+                    "records; regenerate it with regen_paper.py:\n  "
+                    + "\n  ".join(list(diff)[:10])
+                )
+    if unwritten:
+        raise SystemExit(
+            "missing generated fragments after the format steps that name them: "
+            + ", ".join(unwritten)
+            + "".join(f"\n  {line}" for line in failures)
+        )
+    return problems + failures
 
 
 def generated_macros(text: str) -> dict[str, str]:
@@ -643,7 +751,6 @@ def export_problems() -> list[str]:
 
 
 def scan() -> tuple[list[Printed], list[Identifier]]:
-    ensure_generated()
     printed: list[Printed] = []
     identifiers: list[Identifier] = []
     for document in DOCUMENTS:
@@ -706,10 +813,15 @@ def in_range(item_doc: str, item_line: int, only: list[tuple[str, int, int]]) ->
 
 
 def trace(
-    only: list[tuple[str, int, int]] | None = None,
+    only: list[tuple[str, int, int]] | None = None, validate: bool = True
 ) -> tuple[list[list], list[str]]:
-    """The ledger rows and the problems: printed numbers without a matching rule, and unused rules."""
+    """The ledger rows and the problems: printed numbers without a matching rule, and unused rules.
+
+    ``validate`` also reports the generated fragments that differ from what
+    their generators write now; ``only`` ranges leave that out.
+    """
     only = only or []
+    stale = ensure_generated(validate and not only)
     printed, identifiers = scan()
     rules = load_rules()
     by_text: dict[str, list[Rule]] = {}
@@ -719,7 +831,7 @@ def trace(
             rule.normal, []
         ).append(rule)
 
-    problems = []
+    problems = list(stale)
     used: set[int] = set()
     rows = []
     for item in printed:
@@ -802,7 +914,7 @@ def render(rows: list[list]) -> str:
 
 def ledger() -> list[dict[str, str]]:
     """The rows the records give now, as the ledger's dictionaries."""
-    return list(csv.DictReader(io.StringIO(render(trace()[0]))))
+    return list(csv.DictReader(io.StringIO(render(trace(validate=False)[0]))))
 
 
 def main() -> int:
