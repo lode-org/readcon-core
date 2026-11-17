@@ -5811,12 +5811,19 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let frame = unsafe { &mut *(frame_handle as *mut ConFrame) };
-    let dl = unsafe { &(*tensor).dl_tensor };
+    let managed = unsafe { &*tensor };
+    if managed.version.major != 1 {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
+    let dl = &managed.dl_tensor;
     if dl.device.device_type != dlpk::sys::DLDeviceType::kDLCPU {
         return note(RKRStatus::RKR_STATUS_FEATURE_DISABLED);
     }
     let n = frame.atom_data.len();
     let need = n.saturating_mul(3);
+    if dl.ndim != 1 && dl.ndim != 2 {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
     let ndim = dl.ndim as usize;
     let shape = if dl.shape.is_null() {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
@@ -5828,6 +5835,20 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     if !shape_ok {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
+    if dl.strides.is_null() {
+        if managed.version.minor >= 2 {
+            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        }
+    } else {
+        let strides = unsafe { std::slice::from_raw_parts(dl.strides, ndim) };
+        let strides_ok = matches!(strides, [1] | [3, 1]);
+        if !strides_ok {
+            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        }
+    }
+    if dl.byte_offset != 0 || dl.dtype.lanes != 1 {
+        return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+    }
     let nelem = need;
     let code = dl.dtype.code as u8;
     let bits = dl.dtype.bits;
@@ -5835,9 +5856,15 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
         return note(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
     let vals: Vec<f64> = if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 64 {
+        if !(dl.data as usize).is_multiple_of(std::mem::align_of::<f64>()) {
+            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        }
         let s = unsafe { std::slice::from_raw_parts(dl.data as *const f64, nelem) };
         s.to_vec()
     } else if code == rkr_dl_type_code::RKR_DL_FLOAT && bits == 32 {
+        if !(dl.data as usize).is_multiple_of(std::mem::align_of::<f32>()) {
+            return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
+        }
         let s = unsafe { std::slice::from_raw_parts(dl.data as *const f32, nelem) };
         s.iter().map(|&x| x as f64).collect()
     } else {
@@ -5849,24 +5876,43 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     // An exported tensor can share this column. The first row write then
     // copies it, and the atoms that address the old column, which the
     // tensor frees, move to the copy.
-    let old = frame.positions.f64_slice().map(|s| s.as_ptr_range());
+    let old = frame
+        .positions
+        .f64_slice()
+        .map(|s| s.as_ptr_range())
+        .map(|range| range.start as usize..range.end as usize);
+    let offsets: Vec<Option<usize>> = frame
+        .atom_data
+        .iter()
+        .map(|atom| {
+            let at = atom.coord_ptr() as usize;
+            old.as_ref()
+                .filter(|range| range.contains(&at))
+                .map(|range| (at - range.start) / std::mem::size_of::<f64>())
+        })
+        .collect();
     for i in 0..n {
         frame
             .positions
             .set_f64_row(i, [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]]);
     }
-    if let (Some(old), Some(new)) = (old, frame.positions.f64_slice().map(|s| s.as_ptr())) {
-        if old.start != new {
-            for atom in &mut frame.atom_data {
-                let at = atom.coord_ptr();
-                if old.contains(&at) {
-                    let offset = unsafe { at.offset_from(old.start) };
-                    atom.retarget(unsafe { new.offset(offset) }.cast_mut());
-                }
+    let rows: Vec<[f64; 3]> = (0..n).map(|i| frame.positions.as_f64_row(i)).collect();
+    if let Some(new) = frame
+        .positions
+        .f64_mut_slice()
+        .map(|slice| slice.as_mut_ptr())
+    {
+        for (atom, offset) in frame.atom_data.iter_mut().zip(offsets) {
+            if let Some(offset) = offset {
+                atom.retarget(unsafe { new.add(offset) });
             }
         }
     }
-    frame.sync_atom_data_from_arrays();
+    for (atom, row) in frame.atom_data.iter_mut().zip(rows) {
+        atom.set_x(row[0]);
+        atom.set_y(row[1]);
+        atom.set_z(row[2]);
+    }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
 

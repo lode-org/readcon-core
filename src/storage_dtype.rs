@@ -420,6 +420,18 @@ impl Array2Storage {
         }
     }
 
+    /// Contiguous mutable f64 row-major slice when storage is float64.
+    ///
+    /// Shared `ArcArray` storage is copied before the mutable slice is
+    /// returned, so pointers derived here carry writable provenance for this
+    /// storage's allocation.
+    pub fn f64_mut_slice(&mut self) -> Option<&mut [f64]> {
+        match self {
+            Self::F64(a) => a.as_slice_memory_order_mut(),
+            _ => None,
+        }
+    }
+
     /// Take the contiguous f64 allocation, leaving an empty matrix.
     ///
     /// `None` when the storage is shared or not a packed f64 block. The
