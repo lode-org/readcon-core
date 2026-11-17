@@ -114,8 +114,8 @@ SCI = re.compile(
     r"(?<![\w.\\])" + SIGN + BODY + r"\s*\\times\s*10\^\{?(?P<e>[-+]?\d+)\}?"
 )
 POWER = re.compile(r"(?<![\w.\\])" + SIGN + r"(?P<base>\d+)\^\{?(?P<e>[-+]?\d+)\}?")
-# The e-notation of a siunitx macro (scripts/sinum.py), read only as a whole macro expansion.
-ENOT = re.compile(SIGN + BODY + r"e(?P<e>[-+]?\d+)")
+# The e-notation of a siunitx macro (scripts/sinum.py): a whole macro expansion, or a \num{...} in prose.
+ENOT = re.compile(r"(?<![\w.\\])" + SIGN + BODY + r"e(?P<e>[-+]?\d+)")
 PLAIN = re.compile(r"(?<![\w.\\])" + SIGN + BODY + r"(?![\w])")
 VERSION = re.compile(r"(?<![\w.])v?\d+\.\d+\.\d+(?:\.\d+)?(?![\w])")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
@@ -277,6 +277,7 @@ def scan_lines(
 
         line = SCI.sub(lambda m: keep_number(m, "sci"), line)
         line = POWER.sub(lambda m: keep_number(m, "power"), line)
+        line = ENOT.sub(lambda m: keep_number(m, "sci"), line)
         line = re.sub(r"\b\w*[A-Za-z_]\d+\w*", _blank, line)
         line = re.sub(
             r"\\[A-Za-z@]+\*?",
