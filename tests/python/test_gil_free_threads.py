@@ -210,8 +210,6 @@ def test_shared_list_index_while_writing(tmp_path: Path) -> None:
 
 
 def test_concurrent_first_atom_materialization_is_exactly_once(tmp_path: Path) -> None:
-    import readcon
-
     if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
         pytest.skip("requires a free-threaded interpreter")
     assert not _gil_enabled()
@@ -402,8 +400,6 @@ def test_write_con_list_while_slab_changes(tmp_path: Path) -> None:
 
 
 def test_coords_array_while_shared_slab_changes(tmp_path: Path) -> None:
-    import readcon
-
     frames = _read_shared(
         tmp_path / "coords-array-sweep.con", _SWEEP_FRAMES, _SWEEP_ATOMS
     )
