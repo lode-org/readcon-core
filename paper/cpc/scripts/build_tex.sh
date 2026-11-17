@@ -20,7 +20,7 @@ for pass in 1 2 3; do
 done
 for doc in rg_main rg_supp; do
   if grep -E "undefined|Overfull|Rerun to get|Float too large|Package xr Warning|multiply-defined" "$doc.log"; then
-    echo "$doc.log: unresolved references, overfull boxes or oversized floats" >&2
+    echo "$doc.log: unresolved references, overfull boxes, oversized floats, xr warnings or multiply-defined labels" >&2
     exit 1
   fi
   grep "Output written" "$doc.log"
