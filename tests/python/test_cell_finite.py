@@ -260,9 +260,12 @@ def test_write_conbin_from_text_names_the_frame(tmp_path):
     src.write_text(_trajectory(angles="90 nan 92"))
     out = tmp_path / "bad.conbin"
     for n_threads in (1, 2, 4):
-        with pytest.raises((readcon.NonFiniteValue, OSError)) as info:
+        with pytest.raises(OSError) as info:
             readcon.write_conbin(str(src), str(out), False, n_threads)
-        assert "angles[1] of frame 1 is nan" in str(info.value)
+        assert type(info.value) is OSError
+        assert str(info.value) == (
+            "non-finite value: cell field angles[1] of frame 1 is nan"
+        )
         assert not out.exists()
 
 
