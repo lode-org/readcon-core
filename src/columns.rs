@@ -762,12 +762,14 @@ struct PeekedHeader {
     symbol: Arc<str>,
 }
 
+#[cfg(feature = "parallel")]
 struct CopiedSpan {
     start: usize,
     end: usize,
     head: usize,
 }
 
+#[cfg(feature = "parallel")]
 struct CopiedCols {
     positions: usize,
     masses: usize,
@@ -1066,10 +1068,12 @@ fn fill_one_tiled_frame(
 /// The serial walker treats a blank line after the coordinates as line 1 of
 /// the next frame. Whitespace is not part of this span unless it runs through
 /// the end of the file, which is where that walker stops.
+#[cfg(feature = "parallel")]
 fn remainder_is_whitespace(file: &[u8], at: usize) -> bool {
     at <= file.len() && file[at..].iter().all(u8::is_ascii_whitespace)
 }
 
+#[cfg(feature = "parallel")]
 fn span_matches_serial_frame(
     file: &[u8],
     frame_start: usize,
@@ -1131,6 +1135,7 @@ fn later_component_headers(
 
 /// Every range of frame 0's `later` headers is repeated at the same offset
 /// from `start`.
+#[cfg(feature = "parallel")]
 fn later_headers_match(bytes: &[u8], start: usize, later: &[std::ops::Range<usize>]) -> bool {
     later.iter().all(|range| {
         bytes.get(start + range.start..start + range.end) == Some(&bytes[range.clone()])
@@ -1140,6 +1145,7 @@ fn later_headers_match(bytes: &[u8], start: usize, later: &[std::ops::Range<usiz
 /// `bytes` is `n` copies of a frame of `span` bytes, each starting with
 /// the same header and repeating the `later` component headers of frame 0
 /// at the same offsets. Later frames can then be planned on their own core.
+#[cfg(feature = "parallel")]
 fn tiled_frame_count(
     bytes: &[u8],
     span: usize,

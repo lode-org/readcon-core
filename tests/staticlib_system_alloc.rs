@@ -5,6 +5,16 @@
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(target_os = "linux")]
+static BUILD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(target_os = "linux")]
+fn lock_build() -> std::sync::MutexGuard<'static, ()> {
+    BUILD_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn defined_mimalloc(archive: &Path) -> String {
     let output = Command::new("nm")
         .args(["--defined-only"])
@@ -39,6 +49,7 @@ fn alloc_work(name: &str) -> std::path::PathBuf {
 #[cfg(target_os = "linux")]
 #[test]
 fn static_archive_does_not_install_mimalloc() {
+    let _build = lock_build();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let work = alloc_work("staticlib-system-alloc");
     let _ = std::fs::remove_dir_all(&work);
@@ -69,6 +80,7 @@ fn static_archive_does_not_install_mimalloc() {
 #[cfg(target_os = "linux")]
 #[test]
 fn cmake_static_archive_does_not_install_mimalloc() {
+    let _build = lock_build();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let work = alloc_work("cmake-static-system-alloc");
     let _ = std::fs::remove_dir_all(&work);
@@ -108,6 +120,7 @@ fn cmake_static_archive_does_not_install_mimalloc() {
 #[cfg(target_os = "linux")]
 #[test]
 fn cmake_both_libraries_archive_does_not_install_mimalloc() {
+    let _build = lock_build();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let work = alloc_work("cmake-both-system-alloc");
     let _ = std::fs::remove_dir_all(&work);

@@ -41,25 +41,56 @@ mod loom_protocol_tests {
     struct ModelCache {
         generation: u64,
         identities: Arc<Vec<usize>>,
+        retire_identities: Arc<Vec<usize>>,
+        coords: bool,
+    }
+
+    fn invalidate_if(generation: &AtomicU64, cache: &Mutex<Option<ModelCache>>, identity: usize) {
+        generation.fetch_add(1, Ordering::Release);
+        let mut slot = cache.lock().unwrap();
+        if slot
+            .as_ref()
+            .is_some_and(|entry| entry.retire_identities.contains(&identity))
+        {
+            slot.take();
+        } else if let Some(entry) = slot.as_mut() {
+            entry.generation = generation.load(Ordering::Acquire);
+        }
+    }
+
+    fn priced_coords(
+        generation: &AtomicU64,
+        cache: &Mutex<Option<ModelCache>>,
+        identities: &[usize],
+    ) -> bool {
+        let slot = cache.lock().unwrap();
+        let current = generation.load(Ordering::Acquire);
+        slot.as_ref().is_some_and(|entry| {
+            entry.generation == current && entry.identities.as_slice() == identities && entry.coords
+        })
     }
 
     #[test]
-    fn invalidation_cannot_leave_a_stale_cache_entry() {
+    fn conditional_invalidation_while_pricing_cannot_publish_stale_lengths() {
         loom::model(|| {
             let generation = Arc::new(AtomicU64::new(1));
             let cache = Arc::new(Mutex::new(None::<ModelCache>));
+            let (started, wait_started) = loom::sync::mpsc::channel();
 
             let price_generation = Arc::clone(&generation);
             let price_cache = Arc::clone(&cache);
             let pricing = thread::spawn(move || {
                 let before = price_generation.load(Ordering::Acquire);
+                started.send(()).unwrap();
                 thread::yield_now();
                 let mut slot = price_cache.lock().unwrap();
                 let after = price_generation.load(Ordering::Acquire);
                 if before == after {
                     *slot = Some(ModelCache {
                         generation: after,
-                        identities: Arc::new(vec![11usize, 22, 33]),
+                        identities: Arc::new(vec![11]),
+                        retire_identities: Arc::new(vec![11]),
+                        coords: true,
                     });
                 }
             });
@@ -67,17 +98,65 @@ mod loom_protocol_tests {
             let invalidate_generation = Arc::clone(&generation);
             let invalidate_cache = Arc::clone(&cache);
             let invalidating = thread::spawn(move || {
-                invalidate_generation.fetch_add(1, Ordering::Release);
-                invalidate_cache.lock().unwrap().take();
+                wait_started.recv().unwrap();
+                invalidate_if(&invalidate_generation, &invalidate_cache, 11);
             });
 
             pricing.join().unwrap();
             invalidating.join().unwrap();
+            assert!(!priced_coords(&generation, &cache, &[11]));
+        });
+    }
+
+    #[test]
+    fn priced_coordinates_require_current_generation_and_full_identity() {
+        loom::model(|| {
+            let generation = AtomicU64::new(7);
+            let cache = Mutex::new(Some(ModelCache {
+                generation: 7,
+                identities: Arc::new(vec![11, 22]),
+                retire_identities: Arc::new(vec![11, 22]),
+                coords: true,
+            }));
+            assert!(priced_coords(&generation, &cache, &[11, 22]));
+            assert!(!priced_coords(&generation, &cache, &[11]));
+            assert!(!priced_coords(&generation, &cache, &[22, 11]));
+            generation.fetch_add(1, Ordering::Release);
+            assert!(!priced_coords(&generation, &cache, &[11, 22]));
+        });
+    }
+
+    #[test]
+    fn view_and_source_identities_retire_the_right_entry() {
+        loom::model(|| {
+            const SOURCE: usize = 11;
+            const VIEW: usize = 99;
+            let generation = AtomicU64::new(1);
+            let cache = Mutex::new(Some(ModelCache {
+                generation: 1,
+                identities: Arc::new(vec![SOURCE]),
+                retire_identities: Arc::new(vec![SOURCE]),
+                coords: true,
+            }));
+
+            // A source-keyed price survives destruction of its temporary
+            // snapshot view, at the new generation.
+            invalidate_if(&generation, &cache, VIEW);
+            assert!(priced_coords(&generation, &cache, &[SOURCE]));
+            invalidate_if(&generation, &cache, SOURCE);
+            assert!(!priced_coords(&generation, &cache, &[SOURCE]));
+
+            // Without a source PriceKey, the view itself is the retirement
+            // identity and dropping it clears the entry.
             let current = generation.load(Ordering::Acquire);
-            if let Some(entry) = cache.lock().unwrap().as_ref() {
-                assert_eq!(entry.generation, current);
-                assert_eq!(entry.identities.as_ref(), &[11, 22, 33]);
-            }
+            *cache.lock().unwrap() = Some(ModelCache {
+                generation: current,
+                identities: Arc::new(vec![VIEW]),
+                retire_identities: Arc::new(vec![VIEW]),
+                coords: false,
+            });
+            invalidate_if(&generation, &cache, VIEW);
+            assert!(cache.lock().unwrap().is_none());
         });
     }
 }
@@ -3502,11 +3581,11 @@ fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "scratch"))?;
         let dest_c = std::ffi::CString::new(dest.as_os_str().as_encoded_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dest"))?;
-        let pid = unsafe { libc::fork() };
-        if pid < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if pid == 0 {
+        #[cfg(tsan_run)]
+        {
+            // TSan cannot safely continue in a child of this multithreaded
+            // CPython process: its inherited runtime exits with code 66.
+            // Exercise the same link-and-rename publication in the parent.
             let linked = unsafe {
                 libc::linkat(
                     libc::AT_FDCWD,
@@ -3517,32 +3596,61 @@ fn publish_unnamed(file: &File, dest: &Path) -> io::Result<()> {
                 )
             };
             if linked != 0 {
-                unsafe { libc::_exit(1) };
+                return Err(io::Error::last_os_error());
             }
             let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
-            unsafe { libc::_exit(if renamed == 0 { 0 } else { 1 }) };
-        }
-        let mut status = 0;
-        loop {
-            let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
-            if waited >= 0 {
-                break;
-            }
-            let err = io::Error::last_os_error();
-            if err.kind() != io::ErrorKind::Interrupted {
-                return Err(err);
-            }
-        }
-        // The child has finished, so a leftover scratch is this publish's
-        // name and not a concurrent writer's.
-        let published = libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0;
-        if !published {
-            if scratch.exists() {
+            if renamed != 0 {
+                let error = io::Error::last_os_error();
                 let _ = std::fs::remove_file(&scratch);
+                return Err(error);
             }
-            return Err(io::Error::other("publish did not replace the destination"));
+            return Ok(());
         }
-        Ok(())
+
+        #[cfg(not(tsan_run))]
+        {
+            let pid = unsafe { libc::fork() };
+            if pid < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if pid == 0 {
+                let linked = unsafe {
+                    libc::linkat(
+                        libc::AT_FDCWD,
+                        proc.as_ptr(),
+                        libc::AT_FDCWD,
+                        scratch_c.as_ptr(),
+                        libc::AT_SYMLINK_FOLLOW,
+                    )
+                };
+                if linked != 0 {
+                    unsafe { libc::_exit(1) };
+                }
+                let renamed = unsafe { libc::rename(scratch_c.as_ptr(), dest_c.as_ptr()) };
+                unsafe { libc::_exit(if renamed == 0 { 0 } else { 1 }) };
+            }
+            let mut status = 0;
+            loop {
+                let waited = unsafe { libc::waitpid(pid, &mut status, 0) };
+                if waited >= 0 {
+                    break;
+                }
+                let err = io::Error::last_os_error();
+                if err.kind() != io::ErrorKind::Interrupted {
+                    return Err(err);
+                }
+            }
+            // The child has finished, so a leftover scratch is this publish's
+            // name and not a concurrent writer's.
+            let published = libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0;
+            if !published {
+                if scratch.exists() {
+                    let _ = std::fs::remove_file(&scratch);
+                }
+                return Err(io::Error::other("publish did not replace the destination"));
+            }
+            Ok(())
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -4218,6 +4326,14 @@ fn store_frames_in(
     store_disjoint_parts(file, &parts).map_err(WriteError::Io)
 }
 
+#[inline]
+fn pin_writer_worker(index: usize) {
+    #[cfg(feature = "parallel")]
+    crate::parser::pin_worker(index);
+    #[cfg(not(feature = "parallel"))]
+    let _ = index;
+}
+
 fn store_pipeline_in(
     file: &File,
     frames: &[&ConFrame],
@@ -4230,10 +4346,9 @@ fn store_pipeline_in(
         let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
         std::thread::scope(|scope| {
             let mut guards = Vec::with_capacity(frames.len());
-            for (_index, frame) in frames.iter().enumerate() {
+            for (index, frame) in frames.iter().enumerate() {
                 guards.push(scope.spawn(move || {
-                    #[cfg(feature = "parallel")]
-                    crate::parser::pin_worker(_index);
+                    pin_writer_worker(index);
                     format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
                 }));
             }
@@ -4418,10 +4533,9 @@ fn format_frames_apart(
     let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(frames.len());
-        for (_index, frame) in frames.iter().enumerate() {
+        for (index, frame) in frames.iter().enumerate() {
             guards.push(scope.spawn(move || {
-                #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(_index);
+                pin_writer_worker(index);
                 format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
             }));
         }
@@ -4466,12 +4580,11 @@ fn format_packed_buffers(
     let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(ranges.len());
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
-        for (_thread, &(start, end)) in ranges.iter().enumerate() {
+        for (thread, &(start, end)) in ranges.iter().enumerate() {
             let span = prefix[end] - prefix[start];
             let piece = &frames[start..end];
             guards.push(scope.spawn(move || -> Result<Vec<u8>, WriteError> {
-                #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(_thread);
+                pin_writer_worker(thread);
                 if span == 0 {
                     return Ok(Vec::new());
                 }
@@ -5090,14 +5203,13 @@ fn place_packed(
 
     std::thread::scope(|scope| {
         let mut guards = Vec::with_capacity(ranges.len());
-        for (_thread, &(start, end)) in ranges.iter().enumerate() {
+        for (thread, &(start, end)) in ranges.iter().enumerate() {
             let offset = prefix[start];
             let span = prefix[end] - prefix[start];
             let piece = &frames[start..end];
             let cloned = file.try_clone().map_err(WriteError::Io)?;
             guards.push(scope.spawn(move || -> Result<(), WriteError> {
-                #[cfg(feature = "parallel")]
-                crate::parser::pin_worker(_thread);
+                pin_writer_worker(thread);
                 if span == 0 {
                     return Ok(());
                 }
@@ -5180,10 +5292,9 @@ fn pipeline_frame_groups(
         let mut parts: Vec<Result<Vec<u8>, WriteError>> = Vec::with_capacity(frames.len());
         std::thread::scope(|scope| {
             let mut guards = Vec::with_capacity(frames.len());
-            for (_index, frame) in frames.iter().enumerate() {
+            for (index, frame) in frames.iter().enumerate() {
                 guards.push(scope.spawn(move || {
-                    #[cfg(feature = "parallel")]
-                    crate::parser::pin_worker(_index);
+                    pin_writer_worker(index);
                     format_group_bytes(std::slice::from_ref(frame), 1, precision, canonical, bind)
                 }));
             }
@@ -5271,6 +5382,11 @@ fn pipeline_frame_groups(
 
 struct PackedCache {
     identities: std::sync::Arc<[usize]>,
+    /// Frame addresses whose retirement makes this entry stale.
+    ///
+    /// Snapshot entries are looked up and retired by source identities;
+    /// ordinary entries use the view/frame identities for both.
+    retire_identities: std::sync::Arc<[usize]>,
     count: usize,
     precision: Option<usize>,
     canonical: bool,
@@ -5309,14 +5425,27 @@ impl PackedLengthsCache {
     }
 
     fn invalidate_if(&self, frame: usize) {
+        self.invalidate_any(std::iter::once(frame));
+    }
+
+    fn invalidate_any(&self, frames: impl IntoIterator<Item = usize>) {
+        // Bump even while the slot is empty: a pricing operation may be in
+        // flight and must not publish lengths for a frame that just died.
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
         let mut entry = self.entry.lock().unwrap_or_else(|err| err.into_inner());
-        if entry
-            .as_ref()
-            .is_some_and(|cached| cached.identities.contains(&frame))
-        {
-            self.generation
-                .fetch_add(1, std::sync::atomic::Ordering::Release);
+        let retire = entry.as_ref().is_some_and(|cached| {
+            frames
+                .into_iter()
+                .any(|frame| cached.retire_identities.contains(&frame))
+        });
+        if retire {
             entry.take();
+        } else if let Some(cached) = entry.as_mut() {
+            // Preserve an unrelated entry while bringing it forward to the
+            // generation after this retirement. This is what lets a source-
+            // keyed snapshot price survive destruction of its temporary view.
+            cached.generation = self.generation.load(std::sync::atomic::Ordering::Acquire);
         }
     }
 }
@@ -5428,6 +5557,15 @@ pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
     packed_lengths().invalidate_if(frame);
 }
 
+/// Retire temporary snapshot views with one generation change and one lock.
+///
+/// Source-keyed entries survive because their retirement identities differ
+/// from every temporary view address.
+#[cfg(feature = "python")]
+pub(crate) fn invalidate_packed_lengths_if_any(frames: impl IntoIterator<Item = usize>) {
+    PACKED_LENGTHS.invalidate_any(frames);
+}
+
 pub(crate) fn cached_packed_lengths(
     frames: &[&ConFrame],
     workers: usize,
@@ -5454,11 +5592,12 @@ fn cached_packed_lengths_in(
     bind: bool,
 ) -> Option<Vec<usize>> {
     let snapshot = snapshot_key(frames);
-    let (identities, coords) = match snapshot {
-        Some((identities, coords)) => (identities, Some(coords)),
+    let (identities, retire_identities, coords) = match snapshot {
+        Some((identities, coords)) => (identities.clone(), identities, Some(coords)),
         None => {
             frames.last()?;
-            (frame_identities(frames), None)
+            let identities = frame_identities(frames);
+            (identities.clone(), identities, None)
         }
     };
     let count = frames.len();
@@ -5495,12 +5634,18 @@ fn cached_packed_lengths_in(
         .map_or(0, |buf| std::mem::size_of_val(buf.as_slice()));
     let cache_bytes = coords_bytes
         .saturating_add(std::mem::size_of_val(lengths.as_slice()))
-        .saturating_add(std::mem::size_of_val(identities.as_ref()));
+        .saturating_add(std::mem::size_of_val(identities.as_ref()))
+        .saturating_add(if std::sync::Arc::ptr_eq(&identities, &retire_identities) {
+            0
+        } else {
+            std::mem::size_of_val(retire_identities.as_ref())
+        });
     let mut cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
     let generation_after = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     if generation_before == generation_after && cache_bytes <= MAX_PACKED_CACHE_BYTES {
         *cache = Some(PackedCache {
             identities,
+            retire_identities,
             count,
             precision,
             canonical,
