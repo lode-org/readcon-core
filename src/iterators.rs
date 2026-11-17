@@ -2545,7 +2545,7 @@ struct TimedParse {
     /// `None` when the call stayed on the calling thread.
     pool: Option<std::sync::Arc<rayon::ThreadPool>>,
     pool_s: f64,
-    /// Zero while `pool` is still alive. The owner times the join.
+    /// Zero here. The owner times the drop of its `pool` handle.
     pool_join_s: f64,
     scan_s: f64,
     scan_minflt: i64,
@@ -2667,7 +2667,11 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
 /// A fresh pool on every file made each worker fault its frames again.
 /// Reusing the workers lets the allocator hand back the pages just freed.
 ///
-/// A forked child builds its own pools; see [`crate::parser::PerProcess`].
+/// The pools are never dropped, so their workers are never joined. They
+/// park between jobs and end with the process. Rayon has no way to wait
+/// for a pool's workers to exit; dropping a `ThreadPool` only tells them
+/// to. A forked child builds its own pools; see
+/// [`crate::parser::PerProcess`].
 ///
 /// A new pool is returned once every worker has started. Until then the
 /// only owner of a worker's thread handle is std's start box on the
@@ -2959,8 +2963,9 @@ fn parallel_boundaries(bytes: &[u8], workers: usize) -> (Vec<usize>, u8) {
 ///
 /// `Some(n)` with `n >= 2` uses a pool of that size. Every other count
 /// stays on the calling thread. `None` follows [`scan_thread_count`].
-/// The pool build is `pool_s`. The pool join is `pool_join_s`.
-/// Neither one is inside the scan or the parse.
+/// The pool lookup or build is `pool_s`. `pool_join_s` is zero, and the
+/// caller that drops the pool handle times that drop. Neither one is
+/// inside the scan or the parse.
 #[cfg(feature = "parallel")]
 fn parse_bytes_timed(bytes: &[u8], num_threads: Option<usize>) -> TimedParse {
     let parse_workers = match num_threads {
@@ -3680,10 +3685,13 @@ pub fn parse_frames_at_offsets(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReadPhaseTimes {
     pub open_mmap_s: f64,
-    /// Rayon pool construction. Zero when the call stays on one thread.
+    /// Finding the shared pool, and building it on the first read at this
+    /// width. Zero when the call stays on one thread.
     pub pool_s: f64,
-    /// Joining the local pool after the scan and the parse. Zero when
-    /// the call stays on one thread.
+    /// Dropping this read's handle to the shared pool after the scan and
+    /// the parse. The pool stays for the process and its workers are not
+    /// joined, so this is the handle drop only. Zero when the call stays
+    /// on one thread.
     pub pool_join_s: f64,
     pub scan_s: f64,
     pub slot_alloc_s: f64,
