@@ -11,7 +11,6 @@ import random
 import statistics
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -179,7 +178,8 @@ def main() -> None:
         parser.error("both interpreters, both commits, and --output are required")
 
     cpu = min(os.sched_getaffinity(0))
-    work = Path(tempfile.mkdtemp(prefix="readcon-writer-v3-perf-"))
+    work = Path("build/scratch") / f"writer-v3-perf-{os.getpid()}"
+    work.mkdir(parents=True, exist_ok=False)
     source = work / "source.con"
     write_fixture(source)
     rows: list[dict] = []
