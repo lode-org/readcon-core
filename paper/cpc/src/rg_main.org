@@ -133,7 +133,7 @@ Two conformance corpora of \corpusFiles{} legal and illegal files specify reader
 
 \begin{keyword} geometry checkpoint \sep file format specification \sep saddle search \sep conformance corpus \sep nudged elastic band \end{keyword}
 
-\begin{highlights} \item CON 3.1 is a versioned grammar for the CON geometry format.
+\begin{highlights} \item CON 3.1 states the eOn saddle-search checkpoint as a versioned text grammar.
 \item The format defines per-component masks, atom identifiers and velocity time units.
 \item Two corpora of legal and illegal files decide what a conforming reader accepts.
 \item A climbing-image band resumed from CON 3.1 repeats the uninterrupted run bit for bit.
