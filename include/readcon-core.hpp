@@ -604,8 +604,8 @@ class ConFrame {
     void cache_data() const;
     mutable bool is_cached_ = false;
     mutable std::vector<Atom> atoms_cache_;
-    mutable std::array<double, 3> cell_cache_;
-    mutable std::array<double, 3> angles_cache_;
+    mutable std::array<double, 3> cell_cache_{};
+    mutable std::array<double, 3> angles_cache_{};
     mutable std::array<std::string, 2> prebox_header_cache_;
     mutable std::array<std::string, 2> postbox_header_cache_;
     mutable bool has_velocities_cache_ = false;
