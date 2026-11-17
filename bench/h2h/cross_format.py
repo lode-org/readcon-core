@@ -32,6 +32,7 @@ inside that format's size range, and reads back at the full atom count.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import shutil
@@ -42,7 +43,7 @@ import time
 from pathlib import Path
 
 from bench_disk import bench_dir, bench_disk, release
-from frames_guard import require_distinct_frames
+from frames_guard import require_distinct_frames, thermal_shift
 from measured_commit import measurement, record_path, refuse_stale_build
 
 import numpy as np
@@ -436,8 +437,43 @@ def _frame_delta(n_atoms: int, frame: int) -> np.ndarray:
     return rng.uniform(-0.04, 0.04, size=(n_atoms, 3))
 
 
+# Published 1M CON (bench/h2h/million/v0.23.3). One frame, one million
+# atoms: the integer lattice plus thermal_shift(..., seed=1), so each
+# coordinate moves by 0.01 to 0.05 angstrom. Velocities are 0.05 on x,
+# except every tenth atom, which is fixed and still. write_columns of
+# that spec is 48,378,118 bytes; its gzip is 8,733,663. The frame hash
+# in that record is this thermal frame. e10d9a9dc replaced the
+# 0.01-per-frame shift in make_spec with _frame_delta, uniform noise
+# from -0.04 to 0.04. Those values are not multiples of 0.01, so ryu
+# spells them in full and the same columns are 85,299,756 bytes
+# (gzip 29,614,341). Atom count, frame count, velocities, and the
+# fixed mask did not change. The paper fixture stays the thermal
+# file. Every rewrite checks this sha256.
+MILLION_CON_SHA256 = "a307700ffaca1f0427ab232569d43f9eca8e4ef4bda7081585c16fdf5c16c910"
+MILLION_CON_BYTES = 48_378_118
+MILLION_FRAME_SHA256 = (
+    "f4fc5dd40c97e7a067255ebe60bcb811d09b0a81710ee8ec4e593ba23d738fb4"
+)
+
+
+def _require_pinned_million_con(path: Path) -> None:
+    """Refuse a 1M CON that is not the published thermal file."""
+    size = path.stat().st_size
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if size != MILLION_CON_BYTES or digest != MILLION_CON_SHA256:
+        raise SystemExit(
+            f"1M CON input is {size} bytes {digest}, not the pinned "
+            f"{MILLION_CON_BYTES} bytes {MILLION_CON_SHA256}"
+        )
+
+
 def make_spec(n_atoms: int, n_frames: int) -> dict:
-    """One orthogonal Cu lattice, one seeded perturbation per frame."""
+    """One orthogonal Cu lattice, one seeded perturbation per frame.
+
+    The one-frame million-atom input uses thermal_shift seed 1. Every
+    other size keeps _frame_delta, so a multi-frame file is not a copy
+    of one frame.
+    """
     side = 1
     while side * side * side < n_atoms:
         side += 1
@@ -466,11 +502,18 @@ def make_spec(n_atoms: int, n_frames: int) -> dict:
             break
     base = np.asarray(grid, dtype=np.float64)
     for frame in range(n_frames):
-        coords[frame] = base + _frame_delta(n_atoms, frame)
+        if n_atoms == 1_000_000 and n_frames == 1:
+            coords[frame] = base + thermal_shift(n_atoms, frame, seed=1)
+        else:
+            coords[frame] = base + _frame_delta(n_atoms, frame)
         velocities[frame, :, 0] = 0.05
         fixed[frame, ::10, :] = 1.0
         velocities[frame, ::10, :] = 0.0
     hashes = require_distinct_frames(coords)
+    if n_atoms == 1_000_000 and n_frames == 1 and hashes != [MILLION_FRAME_SHA256]:
+        raise SystemExit(
+            f"1M frame hash {hashes} is not the pinned {MILLION_FRAME_SHA256}"
+        )
     return {
         "n_atoms": n_atoms,
         "n_frames": n_frames,
@@ -561,6 +604,8 @@ def write_readcon(path: Path, spec: dict, compression: str | None) -> None:
     path.unlink(missing_ok=True)
     if compression is None:
         readcon.write_columns(os.fspath(path), _columns(spec), n_threads=1)
+        if spec["n_atoms"] == 1_000_000 and spec["n_frames"] == 1:
+            _require_pinned_million_con(path)
         return
     plain = path.with_suffix("")
     if plain.suffix == "":

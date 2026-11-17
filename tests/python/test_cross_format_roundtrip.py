@@ -453,3 +453,12 @@ def test_required_arms_are_offered() -> None:
     arms, notes = cross_format.arm_table(4)
     missing = sorted(set(required) - {arm["id"] for arm in arms})
     assert not missing, (missing, notes)
+
+
+def test_million_con_input_is_the_pinned_thermal_file(tmp_path: Path) -> None:
+    """The 1M fixture stays the published thermal file, not full-precision noise."""
+    spec = cross_format.make_spec(1_000_000, 1)
+    assert list(spec["frame_sha256"]) == [cross_format.MILLION_FRAME_SHA256]
+    path = tmp_path / "readcon.con"
+    cross_format.write_readcon(path, spec, None)
+    assert path.stat().st_size == cross_format.MILLION_CON_BYTES
