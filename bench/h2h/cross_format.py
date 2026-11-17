@@ -456,13 +456,136 @@ MILLION_FRAME_SHA256 = (
 )
 
 
-def _require_pinned_million_con(path: Path) -> None:
-    """Refuse a 1M CON that is not the published thermal file."""
-    size = path.stat().st_size
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+def _con_sha256_and_bytes(path: Path) -> tuple[int, str]:
+    hasher = hashlib.sha256()
+    size = 0
+    with path.open("rb") as handle:
+        while chunk := handle.read(1 << 20):
+            size += len(chunk)
+            hasher.update(chunk)
+    return size, hasher.hexdigest()
+
+
+def _con_file_is_million_one_frame(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        with path.open("r", encoding="utf-8", errors="strict") as handle:
+            lines = [handle.readline() for _ in range(8)]
+    except (OSError, UnicodeDecodeError):
+        return False
+    if len(lines) < 8 or not lines[7].strip():
+        return False
+    try:
+        atom_count = sum(int(token) for token in lines[7].split())
+    except ValueError:
+        return False
+    if atom_count != 1_000_000:
+        return False
+    import readcon
+
+    try:
+        return readcon.count_frames(os.fspath(path)) == 1
+    except Exception:
+        return False
+
+
+def _is_million_one_frame(spec: dict | None, path: Path | None = None) -> bool:
+    """True when the actual coordinates or CON file hold 1 frame x 1M atoms."""
+    if spec is not None:
+        positions = spec.get("positions")
+        if positions is not None:
+            arr = np.asarray(positions)
+            if arr.ndim == 3 and arr.shape[:2] == (1, 1_000_000):
+                return True
+    if path is not None:
+        return _con_file_is_million_one_frame(path)
+    return False
+
+
+def _compressed_con_sha256_and_bytes(path: Path, compression: str) -> tuple[int, str]:
+    if compression == "gzip":
+        import gzip
+
+        hasher = hashlib.sha256()
+        size = 0
+        try:
+            with gzip.open(path, "rb") as handle:
+                while chunk := handle.read(1 << 20):
+                    size += len(chunk)
+                    hasher.update(chunk)
+        except (OSError, EOFError, ValueError) as exc:
+            raise SystemExit(
+                f"1M gzip CON input {path} could not be decompressed: {exc}"
+            ) from exc
+        return size, hasher.hexdigest()
+    if compression == "zstd":
+        import importlib
+
+        for mod_name in ("compression.zstd", "zstandard"):
+            try:
+                zstd_mod = importlib.import_module(mod_name)
+            except ImportError:
+                zstd_mod = None
+            if zstd_mod is not None and hasattr(zstd_mod, "ZstdDecompressor"):
+                hasher = hashlib.sha256()
+                size = 0
+                try:
+                    with (
+                        path.open("rb") as raw,
+                        zstd_mod.ZstdDecompressor().stream_reader(raw) as reader,
+                    ):
+                        while chunk := reader.read(1 << 20):
+                            size += len(chunk)
+                            hasher.update(chunk)
+                except Exception as exc:
+                    raise SystemExit(
+                        f"1M zstd CON input {path} could not be decompressed: {exc}"
+                    ) from exc
+                return size, hasher.hexdigest()
+        zstd_bin = shutil.which("zstd")
+        if zstd_bin is not None:
+            proc = subprocess.Popen(
+                [zstd_bin, "-dc", os.fspath(path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            assert proc.stdout is not None
+            assert proc.stderr is not None
+            hasher = hashlib.sha256()
+            size = 0
+            while chunk := proc.stdout.read(1 << 20):
+                size += len(chunk)
+                hasher.update(chunk)
+            stderr = proc.stderr.read().decode("utf-8", errors="replace")
+            if proc.wait() != 0:
+                raise SystemExit(
+                    f"1M zstd CON input {path} could not be decompressed: {stderr}"
+                )
+            return size, hasher.hexdigest()
+        import readcon
+
+        try:
+            frames = readcon.read_con(os.fspath(path), n_threads=1)
+            raw = readcon.write_con_string(frames).encode("utf-8")
+        except Exception as exc:
+            raise SystemExit(
+                f"1M zstd CON input {path} could not be decoded: {exc}"
+            ) from exc
+        return len(raw), hashlib.sha256(raw).hexdigest()
+    raise SystemExit(f"unsupported CON compression for 1M check: {compression}")
+
+
+def _require_pinned_million_con(path: Path, compression: str | None = None) -> None:
+    """Refuse a 1M CON (plain or compressed) that is not the published thermal file."""
+    if compression is None:
+        size, digest = _con_sha256_and_bytes(path)
+    else:
+        size, digest = _compressed_con_sha256_and_bytes(path, compression)
     if size != MILLION_CON_BYTES or digest != MILLION_CON_SHA256:
+        label = "1M CON" if compression is None else f"1M {compression} CON"
         raise SystemExit(
-            f"1M CON input is {size} bytes {digest}, not the pinned "
+            f"{label} input is {size} bytes {digest}, not the pinned "
             f"{MILLION_CON_BYTES} bytes {MILLION_CON_SHA256}"
         )
 
@@ -604,15 +727,39 @@ def write_readcon(path: Path, spec: dict, compression: str | None) -> None:
     path.unlink(missing_ok=True)
     if compression is None:
         readcon.write_columns(os.fspath(path), _columns(spec), n_threads=1)
-        if spec["n_atoms"] == 1_000_000 and spec["n_frames"] == 1:
-            _require_pinned_million_con(path)
+        if _is_million_one_frame(spec, path):
+            try:
+                _require_pinned_million_con(path)
+            except SystemExit:
+                path.unlink(missing_ok=True)
+                raise
         return
     plain = path.with_suffix("")
     if plain.suffix == "":
         plain = path.parent / (path.name + ".plain.con")
     readcon.write_columns(os.fspath(plain), _columns(spec), n_threads=1)
+    is_million = _is_million_one_frame(spec, plain)
+    if is_million:
+        try:
+            _require_pinned_million_con(plain)
+        except SystemExit:
+            plain.unlink(missing_ok=True)
+            raise
     frames = readcon.read_con(os.fspath(plain), n_threads=1)
+    if len(frames) == 1 and len(frames[0]) == 1_000_000:
+        is_million = True
+        try:
+            _require_pinned_million_con(plain)
+        except SystemExit:
+            plain.unlink(missing_ok=True)
+            raise
     readcon.write_con(os.fspath(path), frames, compression=compression, n_threads=1)
+    if is_million:
+        try:
+            _require_pinned_million_con(path, compression=compression)
+        except SystemExit:
+            path.unlink(missing_ok=True)
+            raise
 
 
 def read_readcon_conbin(path: str) -> dict:
@@ -1687,6 +1834,16 @@ def expect_written_roundtrip(
     reader = "readcon-con" if arm_id == "readcon-chemfiles" else arm_id
     got = read_arm(reader, os.fspath(written))
     expect_full_read(got, n_atoms, n_frames, arm_id)
+    if arm_id in ("readcon-con", "readcon-con-gz", "readcon-con-zst") and (
+        (n_frames == 1 and n_atoms == 1_000_000)
+        or tuple(np.asarray(got["positions"]).shape[:2]) == (1, 1_000_000)
+    ):
+        comp = (
+            "gzip"
+            if arm_id == "readcon-con-gz"
+            else ("zstd" if arm_id == "readcon-con-zst" else None)
+        )
+        _require_pinned_million_con(written, compression=comp)
 
 
 def write_clock(arm_id: str) -> str:
@@ -2307,6 +2464,45 @@ def write_mdcompress(dest: Path, src: Path, desc: Path) -> int:
     return rss
 
 
+def _expected_plain_con_sha256(spec: dict, scratch_dir: Path) -> tuple[int, str]:
+    import readcon
+
+    scratch = scratch_dir / ".readcon.con.verify"
+    try:
+        readcon.write_columns(os.fspath(scratch), _columns(spec), n_threads=1)
+        return _con_sha256_and_bytes(scratch)
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+def _cached_plain_con(directory: Path, spec: dict) -> Path:
+    path = directory / "readcon.con"
+    if not path.is_file():
+        write_readcon(path, spec, None)
+        return path
+    if _is_million_one_frame(spec, path):
+        _require_pinned_million_con(path)
+        positions = np.asarray(spec["positions"])
+        if positions.ndim != 3 or positions.shape[:2] != (1, 1_000_000):
+            raise SystemExit(
+                f"cached 1M CON {path} does not match spec shape {positions.shape}"
+            )
+        hashes = require_distinct_frames(positions)
+        if hashes != [MILLION_FRAME_SHA256]:
+            raise SystemExit(
+                f"1M frame hash {hashes} is not the pinned {MILLION_FRAME_SHA256}"
+            )
+        return path
+    actual = _con_sha256_and_bytes(path)
+    expected = _expected_plain_con_sha256(spec, directory)
+    if actual != expected:
+        raise SystemExit(
+            f"cached CON {path} is {actual[0]} bytes {actual[1]}, "
+            f"expected {expected[0]} bytes {expected[1]}"
+        )
+    return path
+
+
 def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
     """Write one native file. Called once, outside the clock."""
     directory.mkdir(parents=True, exist_ok=True)
@@ -2323,10 +2519,7 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
         write_readcon(path, spec, "zstd")
         return path
     if arm_id == "chemfiles-con":
-        path = directory / "readcon.con"
-        if not path.is_file():
-            write_readcon(path, spec, None)
-        return path
+        return _cached_plain_con(directory, spec)
     if arm_id == "chemfiles-xyz":
         path = directory / "chemfiles.xyz"
         if not path.is_file():
@@ -2392,9 +2585,7 @@ def convert_arm(arm_id: str, spec: dict, directory: Path) -> Path:
                 write_chemfiles_xyz(path, spec)
         return path
     if arm_id == "readcon-conbin":
-        plain = directory / "readcon.con"
-        if not plain.is_file():
-            write_readcon(plain, spec, None)
+        plain = _cached_plain_con(directory, spec)
         path = directory / "readcon.conbin"
         import readcon
 
@@ -2789,6 +2980,9 @@ def worker_main() -> None:
             if arm == "readcon-chemfiles":
                 con_frames = readcon.read_chemfiles(job["xyz"], format="XYZ")
             else:
+                plain_path = Path(job["plain"])
+                if _is_million_one_frame(spec, plain_path):
+                    _require_pinned_million_con(plain_path)
                 con_frames = readcon.read_con(job["plain"], n_threads=1)
                 compression = "gzip" if arm.endswith("-gz") else "zstd"
         # The per-atom name loop is outside the clock. The sample is
@@ -3149,16 +3343,17 @@ def run(
         directory = WORK / label
         directory.mkdir(parents=True, exist_ok=True)
         spec = make_spec(n_atoms, n_frames)
-        frame_log.append(
-            {
-                "structure": label,
-                "n_atoms": int(spec["n_atoms"]),
-                "n_frames": int(spec["n_frames"]),
-                "n_unique_frames": int(spec["n_unique_frames"]),
-                "unique_frame_hashes": int(spec["unique_frame_hashes"]),
-                "frame_sha256": [str(item) for item in spec["frame_sha256"]],
-            }
-        )
+        frame_entry = {
+            "structure": label,
+            "n_atoms": int(spec["n_atoms"]),
+            "n_frames": int(spec["n_frames"]),
+            "n_unique_frames": int(spec["n_unique_frames"]),
+            "unique_frame_hashes": int(spec["unique_frame_hashes"]),
+            "frame_sha256": [str(item) for item in spec["frame_sha256"]],
+        }
+        if _is_million_one_frame(spec):
+            frame_entry["con_sha256"] = MILLION_CON_SHA256
+        frame_log.append(frame_entry)
         lines.append(
             f"frames {label} n_frames {spec['n_frames']} "
             f"unique {spec['n_unique_frames']}"
@@ -3262,6 +3457,7 @@ def run(
             usable.append(arm)
         if label == "1M" and any(arm["id"] == "readcon-con" for arm in usable):
             plain = directory / "readcon.con"
+            _require_pinned_million_con(plain)
             base = next(a for a in usable if a["id"] == "readcon-con")
             base_loses = base["audit"]["loses"]
             expected = base["checksum"]
