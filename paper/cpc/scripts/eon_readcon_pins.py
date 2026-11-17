@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) readcon-core developers
-"""Write the readcon-core pins of eOn, release v3.6.0 and development commit bf5d328, as a record.
+"""Write the readcon-core pins of eOn, a release and a development commit, as a record.
 
 eOn builds readcon-core from the Meson wrap ``subprojects/readcon-core.wrap``,
 whose ``revision`` names a readcon-core tag.  This script fetches that wrap at
@@ -29,8 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 OUT = ROOT / "data" / "eon" / "readcon_pins.json"
 EON = "TheochemUI/eOn"
-TAG = "v3.6.0"
-DEV = "bf5d328359457c4f8e724c2f411e340b802466e3"
+RELEASE = "3.6.0"
+EON_COMMIT = "bf5d328359457c4f8e724c2f411e340b802466e3"
 WRAP = "subprojects/readcon-core.wrap"
 NOTES = "bench/readcon-v020/after/meta.txt"
 
@@ -56,20 +56,26 @@ def revision(wrap: str) -> str:
 
 
 def build() -> dict:
-    ref = api(f"git/ref/tags/{TAG}")["object"]
+    tag = f"v{RELEASE}"
+    ref = api(f"git/ref/tags/{tag}")["object"]
     commit = api(f"git/tags/{ref['sha']}")["object"]["sha"] if ref["type"] == "tag" else ref["sha"]
-    compare = api(f"compare/{TAG}...{DEV}")
-    tag_wrap, dev_wrap = raw(TAG, WRAP), raw(DEV, WRAP)
+    compare = api(f"compare/{tag}...{EON_COMMIT}")
+    tag_wrap, dev_wrap = raw(tag, WRAP), raw(EON_COMMIT, WRAP)
     return {
         "repository": f"https://github.com/{EON}",
-        "release": {"tag": TAG, "commit": commit, "wrap": tag_wrap, "readcon_revision": revision(tag_wrap)},
+        "release": {
+            "eon_release": RELEASE,
+            "eon_commit": commit,
+            "wrap": tag_wrap,
+            "readcon_revision": revision(tag_wrap),
+        },
         "development": {
-            "commit": DEV,
+            "eon_commit": EON_COMMIT,
             "in_release": compare["status"] in ("behind", "identical"),
             "ahead_of_release_by": compare["ahead_by"],
             "wrap": dev_wrap,
             "readcon_revision": revision(dev_wrap),
-            "notes": {"path": NOTES, "text": raw(DEV, NOTES)},
+            "notes": {"path": NOTES, "text": raw(EON_COMMIT, NOTES)},
         },
     }
 
@@ -97,7 +103,7 @@ def check(record: dict) -> list[str]:
     if notes.get("readcon_commit") != tag_commit(dev["readcon_revision"]):
         bad.append(f"{NOTES}: readcon_commit is not the commit of readcon-core {dev['readcon_revision']}")
     if dev["in_release"]:
-        bad.append(f"the development commit is in eOn {record['release']['tag']}")
+        bad.append(f"the development commit is in eOn {record['release']['eon_release']}")
     return bad
 
 

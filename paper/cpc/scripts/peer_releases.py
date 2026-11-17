@@ -28,9 +28,10 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "peers" / "releases.json"
 OVITO = "https://www.ovito.org/docs/current/new_features.html"
 OVITO_VERSIONS = ("3.17.0",)
+# Each GitHub release tag is its prefix followed by the version.
 GITHUB = {
-    "MDAnalysis": ("MDAnalysis/mdanalysis", "package-2.11.0"),
-    "ase-extxyz": ("libAtoms/extxyz", "ase-extxyz-v0.1.2"),
+    "MDAnalysis": ("MDAnalysis/mdanalysis", "package-", "2.11.0"),
+    "ase-extxyz": ("libAtoms/extxyz", "ase-extxyz-v", "0.1.2"),
 }
 PYPI = {"extxyz-ng": "0.0.2"}
 OVITO_HEADING = re.compile(r"Version (\d+\.\d+\.\d+) \((\d{2}-[A-Z][a-z]{2}-\d{4})\)")
@@ -47,8 +48,10 @@ def ovito_release(heading: str) -> dict:
     return {"version": version, "date": datetime.datetime.strptime(day, "%d-%b-%Y").date().isoformat()}
 
 
-def github_release(tag: str, published: str) -> dict:
-    return {"version": re.search(r"(\d+\.\d+\.\d+)$", tag).group(1), "date": published[:10]}
+def github_release(prefix: str, tag: str, published: str) -> dict:
+    if not tag.startswith(prefix):
+        raise SystemExit(f"GitHub release tag {tag} does not start with {prefix}")
+    return {"version": tag.removeprefix(prefix), "date": published[:10]}
 
 
 def build() -> dict:
@@ -62,14 +65,15 @@ def build() -> dict:
             for v, d in headings.items()
         ]
     }
-    for name, (repo, tag) in GITHUB.items():
-        data = json.loads(fetch(f"https://api.github.com/repos/{repo}/releases/tags/{tag}"))
+    for name, (repo, prefix, version) in GITHUB.items():
+        data = json.loads(fetch(f"https://api.github.com/repos/{repo}/releases/tags/{prefix}{version}"))
         releases[name] = [
             {
-                "url": data["html_url"],
-                "tag": data["tag_name"],
+                "url": data["url"],
+                "tag_prefix": prefix,
+                "tag_version": data["tag_name"].removeprefix(prefix),
                 "published_at": data["published_at"],
-                **github_release(data["tag_name"], data["published_at"]),
+                **github_release(prefix, data["tag_name"], data["published_at"]),
             }
         ]
     for name, version in PYPI.items():
@@ -93,8 +97,10 @@ def check(releases: dict) -> list[str]:
         for entry in entries:
             if "heading" in entry:
                 want = ovito_release(entry["heading"])
-            elif "tag" in entry:
-                want = github_release(entry["tag"], entry["published_at"])
+            elif "tag_prefix" in entry:
+                want = github_release(
+                    entry["tag_prefix"], entry["tag_prefix"] + entry["tag_version"], entry["published_at"]
+                )
             else:
                 want = {"version": entry["pypi_version"], "date": entry["first_upload"][:10]}
             got = {"version": entry["version"], "date": entry["date"]}

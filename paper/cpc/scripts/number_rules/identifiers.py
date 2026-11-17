@@ -126,6 +126,8 @@ SPEC_LINES = (
 )
 LAYOUT_ROW = r"^[1-9](?:, [1-9])? & "
 
+formats_version = jget(f"{FORMATS}/provenance.json", "readcon_version")
+crosscheck_version = jget(CROSSCHECK, "provenance.build.readcon_version")
 survey_ids = jget(SURVEY, "ids")
 hcn = row(HCN, file="hcn_v31.con", frame="2", reader="readcon-core")["ids"].split()
 mpi_ranks = sorted({int(r) for r in re.findall(r" launch ranks (\d+) ", text(MPI_LOG))})
@@ -160,18 +162,18 @@ RULES = [
         for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
     Rule(
-        "0.17.4",
-        jget(CROSSCHECK, "provenance.build.readcon_version"),
+        crosscheck_version,
+        crosscheck_version,
         CROSSCHECK,
         "readcon-core version of the cross-check",
-        (f"{GEN}corpus_crosscheck.tex~readcon-core 0\\.17\\.4",),
+        (f"{GEN}corpus_crosscheck.tex~readcon-core {re.escape(crosscheck_version)}",),
     ),
     Rule(
-        "v0.23.3",
-        jget(f"{FORMATS}/provenance.json", "readcon_version"),
+        f"v{formats_version}",
+        formats_version,
         f"{FORMATS}/provenance.json",
         "readcon_version of the cross-format campaign",
-        lines(r"v0\.23\.3 cross-format campaign", (MAIN, f"{GEN}format_h2h.tex")),
+        lines(rf"v{re.escape(formats_version)} cross-format campaign", (MAIN, f"{GEN}format_h2h.tex")),
     ),
     Rule(
         "0.12.0",
