@@ -869,30 +869,29 @@ On the held Pt(100) slab, a band resumed from CON 3.1 repeats the uninterrupted 
 The reads measured on this branch are in Section~\ref{sec:host}.
 CON 3.1 separates the format specification and the conformance corpus from any single simulation engine, so any program can test its reader against the corpus, add a section under a later minor without breaking older readers, and resume a search from the files of another code.
 
-\FloatBarrier \section*{Data availability}\label{sec:data} The software described here is readcon-core~\readconversion{}.
+\FloatBarrier \section*{Data availability}\label{sec:data} The source code of readcon-core is developed at \url{https://github.com/lode-org/readcon-core}, and its releases are archived under the Zenodo concept record \cite{goswamiReadconcoreConConvel2026} \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
+The software described here is readcon-core~\readconversion{}.
 The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
 The deposited timing records name the candidate commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
 That candidate is readcon-core~\rcMeasuredVersion{} and is not a release tag.
-The git bundle readcon-core.bundle of the supplementary material holds that commit with its whole history, together with the directory paper/cpc.
+The supplementary material holds that commit with its whole history as the git bundle readcon-core.bundle, and the scripts, records and TeX sources of this paper as the archive paper-cpc.tar.gz.
 Rebuild the library from the candidate commit with \texttt{cargo build -{}-release}.
-The concept record of readcon-core \cite{goswamiReadconcoreConConvel2026} is \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 
 Two earlier commits of the main branch carry parts of the reader used here: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
 In a checkout of the candidate commit, \texttt{cargo build -{}-release} builds the Rust library, the shared and static C libraries and the command-line program \texttt{readcon-core}, and \texttt{-{}-features zstd,parallel} adds the two features.
 \texttt{meson setup build} and \texttt{meson compile -C build} build the C libraries with their headers and a pkg-config file, and \texttt{python3 -m pip install .} builds and installs the Python module with both features.
-Cargo, pip and conda fetch the dependencies that \path{Cargo.lock} and \path{paper/cpc/pixi.lock} pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
-readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and \path{addl/referenceImpls/eon_cpp} contains the CON reader of eOn under the BSD 3-clause license of the eOn Development Team, which no build uses.
-The library of a commit is its files \path{src}, \path{include}, \path{build.rs}, \path{Cargo.toml}, \path{Cargo.lock} and \path{pyproject.toml}.
+Cargo, pip and conda fetch the dependencies that the lock files of the library and of the paper environment pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
+readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and the repository also carries the CON reader of eOn as a reference under the BSD 3-clause license of the eOn Development Team, which no build uses.
+The library of a commit is its Rust sources, its C headers, its Cargo build script, its Cargo manifest and lock file and its Python package manifest.
 Its digest, the SHA-256 over their \texttt{sha256sum} lines in byte order of their paths, begins \texttt{\readcondigest} for that commit, and every record names its library by that digest.
-The scripts, records and sources of this paper are the directory \path{paper/cpc}.
-The scripts in \path{paper/cpc/scripts} regenerate every table, figure and printed number from the records, each generated table names its script, and \path{paper/cpc/data/trace/numbers.csv} names the record and the rule behind each number printed in the text and the captions.
-The specification and the conformance corpus are \path{docs/orgmode/spec.org} and \path{resources/conformance} of that commit, the CON 3.1 corpus is \path{paper/cpc/data/corpus31}, and the timing records of this branch are in \path{paper/cpc/logs}.
-The eOn build log is \path{paper/cpc/logs/eon-build.log}, and it names eOn commit \texttt{579738a}.
-The readcon-db records are the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}, copied to \path{paper/cpc/data/db31}, and the fair-store rerun at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5} on the same branch, copied to \path{paper/cpc/data/db32}.
-The fidelity test is \path{python/tests/test_two_store_fidelity.py} in lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied to \path{paper/cpc/data/db32/fair-fidelity/FIELDS.md}.
-The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench under \path{paper/cpc/data/db31/ase} is an unequal-workload stand-in and is not that comparison.
+The scripts of this paper regenerate every table, figure and printed number from the records, each generated table names its script, and a ledger names the record and the rule behind each number printed in the text and the captions.
+The specification and the conformance corpus are part of that commit, and the CON 3.1 corpus and the timing records measured on this branch are part of the records of this paper.
+The eOn build record names eOn commit \texttt{579738a}.
+The readcon-db records are copied verbatim from two commits on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}: the reviewed commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, and the fair-store rerun at readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5}.
+The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied with the fair-store records.
+The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench of the reviewed records is an unequal-workload stand-in and is not that comparison.
 The five shuffled-cache campaigns of Section~\ref*{sec:readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
-Section~\ref*{sec:supp-repro} gives the commands that install readcon-core, rebuild the paper with TeX Live or Tectonic and rerun each measurement, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
+Section~\ref*{sec:supp-repro} gives the commands that install readcon-core and rebuild the paper with TeX Live or Tectonic, and says how each measurement is rerun, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
 
 \FloatBarrier \section*{CRediT authorship contribution statement}\label{sec:credit} Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing -{}- original draft, Writing -{}- review and editing.
 

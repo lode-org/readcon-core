@@ -232,7 +232,7 @@ def data_availability(
     main: str, values: dict[str, str], labels: dict[str, str]
 ) -> tuple[str, list[str]]:
     """The concept DOI and the links of section Data availability, which names the version, the commit, the bundle
-    and paper/cpc and links one DOI."""
+    and the archive of the paper directory and links one DOI."""
     text = section(main, "Data availability")
     links = [
         url
@@ -247,7 +247,7 @@ def data_availability(
         ("the version \\readconversion", r"\\readconversion\b"),
         ("the commit \\readconcommit", r"\\readconcommit\b"),
         ("readcon-core.bundle", r"readcon-core\.bundle"),
-        ("paper/cpc", r"paper/cpc\b"),
+        ("paper-cpc.tar.gz", r"paper-cpc\.tar\.gz"),
     )
     bad = [
         f"section Data availability does not name {what}"
