@@ -1,4 +1,14 @@
 use File::Basename;
+# The SOURCE_DATE_EPOCH of regen_paper.py, as the build scripts set it, so a bare latexmk gives the same PDF.
+{
+    my $regen = dirname(__FILE__) . '/../scripts/regen_paper.py';
+    open(my $fh, '<', $regen) or die "latexmkrc: cannot read $regen\n";
+    my ($epoch) = map { /^SOURCE_DATE_EPOCH = "([0-9]+)"$/ ? $1 : () } <$fh>;
+    close($fh);
+    die "latexmkrc: $regen sets no SOURCE_DATE_EPOCH\n" unless defined $epoch;
+    $ENV{SOURCE_DATE_EPOCH} = $epoch;
+    $ENV{FORCE_SOURCE_DATE} = 1;
+}
 $pdf_mode = 1;
 @default_files = ('rg_supp.tex', 'rg_main.tex');
 $bibtex = 'if grep -q "\\\\citation" %S; then bibtexu %O %S || test $? -eq 1; else exit 0; fi';
