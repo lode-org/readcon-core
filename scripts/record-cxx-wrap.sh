@@ -16,8 +16,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-epoch="$(bash "$ROOT/scripts/source-date-epoch.sh" --fresh "$ROOT")"
-printf '%s\n' "$epoch" > "$ROOT/packaging/wrapdb/source-date-epoch"
+epoch="$(bash "$ROOT/scripts/source-date-epoch.sh" "$ROOT")"
 export SOURCE_DATE_EPOCH="$epoch"
 
 out="$(scratch_dir)"
@@ -32,6 +31,7 @@ if [[ ! "$sha" =~ ^[0-9a-f]{64}$ ]]; then
     exit 1
 fi
 
+printf '%s\n' "$epoch" > "$ROOT/packaging/wrapdb/source-date-epoch"
 printf '%s\n' "$sha" > "$ROOT/packaging/wrapdb/readcon-core.sha256"
 python3 - <<'PY'
 import sys
