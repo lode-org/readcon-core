@@ -116,12 +116,16 @@ COMPETING = (
     "could have appeared to influence the work reported in this paper."
 )
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
+AI_TOOL = (
+    "Cursor, routing between Claude Opus 5.5, Claude Sonnet 5.5, GPT-5.6 Sol, GPT-5.3 Codex, Gemini 4 "
+    "and Grok 4.7"
+)
 AI_STATEMENT = (
-    "During the preparation of this work the author used \\rcAITool{} to refine certain turns of "
-    "phrase in the manuscript."
+    "During the preparation of this work the author used \\rcAITool{}, to help write code, run the tests "
+    "and benchmarks, and draft and edit the text."
 )
 AI_RESPONSIBILITY = (
-    "After using this tool/service, the author reviewed and edited the content as needed and takes full "
+    "After using this tool, the author reviewed and edited the content as needed and takes full "
     "responsibility for the content of the published article."
 )
 NOT_IN_PAPER = {
@@ -280,6 +284,8 @@ def check_front(main: str) -> str:
         bad.append(
             "the generative-AI declaration is not the last section before the references"
         )
+    if main.count("\\newcommand{\\rcAITool}{" + AI_TOOL + "}\n") != 1:
+        bad.append("\\rcAITool does not name the tool of the generative-AI declaration")
     for document in (MAIN, SUPP):
         body = document.read_text().split(r"\begin{document}", 1)[1]
         if document == MAIN and ai:
