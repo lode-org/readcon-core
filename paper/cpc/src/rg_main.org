@@ -537,8 +537,9 @@ A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is read whole
 One thread parses frame after frame.
 At the default thread count, the global thread pool parses a text of at least \(B_{\mathrm{par}}=\wkParallelBytes\) bytes, and an explicit count above one parses in a pool of that size.
 The parallel path finds the frame boundaries in one thread, since the start of each frame depends on the counts before it, and then parses the frames independently and returns them in file order.
-When the columnar reader fills frames of equal length in parallel, it checks every frame against the header and the component layout of frame~0.
-A worker that panics leaves no partly filled frame in the result.
+When the columnar reader fills frames of equal length in parallel, it checks the header of every later component at its frame~0 byte offset in every frame.
+A parallel fill of frames with several components also checks the component runs of each frame against frame~0.
+Workers that fill the tiled metadata write into spare capacity behind a drop guard and join before the panic unwinds, so a worker that panics drops the unpublished slots without leaking symbols.
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step.
 
 % snapper:off.
