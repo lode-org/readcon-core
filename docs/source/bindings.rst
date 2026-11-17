@@ -601,8 +601,11 @@ the message (also ``rkr_last_error_message``) ends with
 the frame too: ``cell field boxl[1] of frame 1 is NaN``, and ``frame_index``
 of the error is 1. C++ ``readcon::ConFrameBuilder`` throws ``readcon::Error`` with the same
 code and text. Fortran ``new_builder`` returns an invalid builder, so test
-``bd%valid()``, and the later calls return ``rkr_status_null_pointer``. Julia
-``write_con`` throws ``ReadConError``.
+``bd%valid()``, and the later calls return ``rkr_status_null_pointer``. Every
+Julia ``ConFrame`` constructor throws ``ReadCon.NonFiniteValue``, whose ``field``
+names the entry with a 1-based index (``cell[2]``). Julia ``read_con`` does not
+throw: it returns the frames before the bad one and leaves the error for
+``ReadCon.last_error()``.
 
 Path iterator + compression + in-memory buffers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

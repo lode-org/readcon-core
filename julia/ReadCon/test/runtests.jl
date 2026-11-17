@@ -238,71 +238,98 @@ end
         end
     end
 
-    @testset "Non-finite cell" begin
+    @testset "Non-finite cell in a constructor" begin
         atom = Atom(
             UInt64(29), 1.0, 2.0, 3.0, UInt64(0), 63.546,
             false, (false, false, false),
             0.0, 0.0, 0.0, false,
             0.0, 0.0, 0.0, false,
         )
-        finite = ConFrame((10.0, 10.0, 10.0), (90.0, 90.0, 90.0), [atom], false, ("", ""), ("", ""), false)
-        slots = [
-            ((NaN, 10.0, 10.0), (90.0, 90.0, 90.0), "cell field cell[0] is NaN"),
-            ((10.0, Inf, 10.0), (90.0, 90.0, 90.0), "cell field cell[1] is inf"),
-            ((10.0, 10.0, -Inf), (90.0, 90.0, 90.0), "cell field cell[2] is -inf"),
-            ((10.0, 10.0, 10.0), (NaN, 90.0, 90.0), "cell field angles[0] is NaN"),
-            ((10.0, 10.0, 10.0), (90.0, Inf, 90.0), "cell field angles[1] is inf"),
-            ((10.0, 10.0, 10.0), (90.0, 90.0, -Inf), "cell field angles[2] is -inf"),
+        finite_cell = (10.0, 11.0, 12.0)
+        finite_angles = (90.0, 91.0, 92.0)
+        constructors = [
+            (cell, angles) -> ConFrame(cell, angles, [atom], false, ("", ""), ("", "")),
+            (cell, angles) -> ConFrame(cell, angles, [atom], false, ("", ""), ("", ""), false),
+            (cell, angles) -> ConFrame(
+                cell, angles, [atom], false, ("", ""), ("", ""), false, false,
+                UInt32(2), "", nothing, nothing, nothing, nothing, nothing, nothing,
+            ),
         ]
-        for (cell, angles, field) in slots
-            bad = ConFrame(cell, angles, [atom], false, ("", ""), ("", ""), false)
-            mktemp() do path, io
-                close(io)
-                err = try
-                    write_con(path, [finite, bad])
-                    nothing
-                catch e
-                    e
-                end
-                @test err isa ReadCon.ReadConError
-                @test err.code == Int32(-14)
-                @test occursin("NonFiniteValue", err.message)
-                @test occursin(field, err.message)
-                @test filesize(path) == 0
+        for make in constructors, (name, slot) in [("cell", 1), ("cell", 2), ("cell", 3),
+                                                  ("angles", 1), ("angles", 2), ("angles", 3)],
+            value in (NaN, Inf, -Inf)
+
+            cell = collect(finite_cell)
+            angles = collect(finite_angles)
+            (name == "cell" ? cell : angles)[slot] = value
+            err = try
+                make(Tuple(cell), Tuple(angles))
+                nothing
+            catch e
+                e
             end
+            @test err isa NonFiniteValue
+            @test err.field == "$name[$slot]"
+            @test isequal(err.value, value)
+            @test sprint(showerror, err) ==
+                  "NonFiniteValue: non-finite value: cell field $name[$slot] is $value"
+        end
+        for make in constructors
+            frame = make(finite_cell, finite_angles)
+            @test frame.cell == finite_cell
+            @test frame.angles == finite_angles
         end
 
+        frame = constructors[2](finite_cell, finite_angles)
         mktemp() do path, io
             close(io)
-            write_con(path, [finite])
+            write_con(path, [frame, frame])
             reread = read_con(path)
-            @test reread[1].cell == finite.cell
-            @test reread[1].angles == finite.angles
+            @test length(reread) == 2
+            @test reread[2].cell == finite_cell
+            @test reread[2].angles == finite_angles
         end
     end
 
-    @testset "Non-finite cell in a file" begin
+    @testset "Non-finite value in a file" begin
         text = read(joinpath(TEST_DIR, "tiny_multi_cuh2.con"), String)
         lines = split(text, '\n'; keepempty=true)
-        mktemp() do path, io
-            close(io)
+        frame_starts = findall(==("Random Number Seed"), lines)
+        @test length(frame_starts) >= 2
+        second = frame_starts[2]
+        box_line = second + 2
+        angle_line = second + 3
+        first_atom = second + 11
+        @test startswith(lines[box_line], "15.3456")
+        @test startswith(lines[angle_line], "90.0")
+        @test startswith(strip(lines[first_atom]), "0.6394")
+        cases = []
+        for token in ("NaN", "inf", "-inf"), slot in 1:3
+            push!(cases, (box_line, slot, token, "cell field boxl[$(slot - 1)] of frame 1 is $token"))
+            push!(cases, (angle_line, slot, token, "cell field angles[$(slot - 1)] of frame 1 is $token"))
+            push!(cases, (first_atom, slot, token, "non-finite value: $token"))
+        end
+        for (line, slot, token, expected) in cases
             bad = copy(lines)
-            idx = findall(l -> startswith(l, "15.3456"), bad)
-            @test !isempty(idx)
-            bad[idx[end]] = "15.3456 NaN 15.3456"
-            write(path, join(bad, "\n"))
-            # read_con keeps its contract: a frame that fails to parse ends the
-            # read, the frames before it are returned, and the error stays on the
-            # C channel.
-            ReadCon.clear_error()
-            frames = read_con(path)
-            @test length(frames) == 1
-            err = ReadCon.last_error()
-            @test err !== nothing
-            @test err.code == Int32(-14)
-            @test err.frame_index == 1
-            @test occursin("NonFiniteValue", err.message)
-            @test occursin("cell field boxl[1] of frame 1 is NaN", err.message)
+            fields = split(strip(bad[line]))
+            fields[slot] = token
+            bad[line] = join(fields, " ")
+            mktemp() do path, io
+                close(io)
+                write(path, join(bad, "\n"))
+                # read_con keeps its contract: a frame that fails to parse ends the
+                # read, the frames before it are returned, and the error stays on the
+                # C channel.
+                ReadCon.clear_error()
+                frames = read_con(path)
+                @test length(frames) == 1
+                err = ReadCon.last_error()
+                @test err !== nothing
+                @test err.code == Int32(-14)
+                @test err.frame_index == 1
+                @test occursin("NonFiniteValue", err.message)
+                @test occursin(expected, err.message)
+            end
         end
     end
 

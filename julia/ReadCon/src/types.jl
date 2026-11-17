@@ -146,7 +146,36 @@ struct Atom
 end
 
 """
+    NonFiniteValue(field, value)
+
+Thrown by every `ConFrame` constructor for a NaN or infinite entry of `cell`
+or `angles`. `field` names the entry with the 1-based index Julia uses, for
+example `"cell[2]"` or `"angles[3]"`, and `value` is the entry. No frame is
+built.
+"""
+struct NonFiniteValue <: Exception
+    field::String
+    value::Float64
+end
+
+function Base.showerror(io::IO, err::NonFiniteValue)
+    print(io, "NonFiniteValue: non-finite value: cell field ", err.field, " is ", err.value)
+end
+
+function _check_cell_finite(cell::NTuple{3, Float64}, angles::NTuple{3, Float64})
+    for (name, values) in (("cell", cell), ("angles", angles))
+        for (i, value) in enumerate(values)
+            isfinite(value) || throw(NonFiniteValue("$name[$i]", value))
+        end
+    end
+    return nothing
+end
+
+"""
 High-level Julia representation of a simulation frame.
+
+Every constructor throws [`NonFiniteValue`](@ref) for a NaN or infinite
+`cell` or `angles` entry.
 """
 struct ConFrame
     cell::NTuple{3, Float64}
@@ -174,6 +203,7 @@ struct ConFrame
         prebox_header::NTuple{2, String},
         postbox_header::NTuple{2, String},
     )
+        _check_cell_finite(cell, angles)
         new(
             cell, angles, atoms, has_velocities,
             prebox_header, postbox_header, false, false,
@@ -190,6 +220,7 @@ struct ConFrame
         postbox_header::NTuple{2, String},
         has_forces::Bool,
     )
+        _check_cell_finite(cell, angles)
         new(
             cell, angles, atoms, has_velocities,
             prebox_header, postbox_header, has_forces, false,
@@ -215,6 +246,7 @@ struct ConFrame
         neb_bead::Union{Nothing, UInt64},
         neb_band::Union{Nothing, UInt64},
     )
+        _check_cell_finite(cell, angles)
         new(
             cell, angles, atoms, has_velocities,
             prebox_header, postbox_header, has_forces, has_energies,
