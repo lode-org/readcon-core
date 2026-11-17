@@ -467,7 +467,10 @@ Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
 
 From minor 1, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
 Frames of earlier versions are read in the natural unit whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
-Producers of that era wrote natural-unit numbers under an fs label, and eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
+Producers of that era wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} does so too \cite{rohitgoswamiTheochemuieonV3602026}.
+That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and its velocity writer sets no time unit, so the library writes its default label of fs.
+The development line of eOn after that release writes velocity files with \texttt{units.time} set to the natural unit \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}\) \cite{goswamiTheochemuieonCommit624f4592026} and links readcon-core 0.20.0 \cite{goswamiTheochemuieonCommitBf5d3282026}, which fixes the label.
+We leave a head-to-head comparison with that line for its release, and the tables of this paper use eOn~\eOneEonVersion{}.
 The reader keeps such a label without applying it, and a rewrite keeps the frame at its minor with its label, so the next reader again applies the natural unit.
 
 Table~\ref{tab:versions} is the history of the grammar.
