@@ -8,7 +8,9 @@ longtable becomes tabular, example blocks become listings that wrap long
 lines, and \\tightlist is defined in the fragment: it compiles with the
 packages rg_supp.tex loads. The informative sections in INFORMATIVE stay in
 spec.org, and so do the two sentences in ROUNDED, which round the parsed
-natural time unit and its difference from eOn. Citations are mapped to rg_main.bib keys through their DOI in
+natural time unit and its difference from eOn, and the front-matter items in
+REPOSITORY_ITEMS, which name files of the repository. A source location of ASE,
+a path with a line, is printed as the line of the module. Citations are mapped to rg_main.bib keys through their DOI in
 docs/source/references.bib; one without a match is dropped and printed.
 
 The cell formula of CON-cell.6 is inline code in spec.org. It is parsed and
@@ -92,6 +94,9 @@ ROUNDED = (
     " =units.rs= parses it as about 10.180505710759414 fs.",
     "\nThe relative difference is about 2e-8.",
 )
+# Front-matter items whose value is a file of the repository; the grammar they name is the appendix left out.
+REPOSITORY_ITEMS = ("Surface grammar", "Clause index")
+ASE_LOCATION = re.compile(r"=ase/([a-z_/]+)\.py:([0-9]+)(?:-([0-9]+))?=")
 CELL_CLAUSE = "CON-cell.6"
 LEVELS = r"MUST NOT|SHOULD NOT|MUST|SHOULD|MAY"
 GREEK = ("alpha", "beta", "gamma")
@@ -756,6 +761,13 @@ def measure() -> None:
     )
 
 
+def location(match: re.Match) -> str:
+    """``=ase/io/eon.py:277-307=`` as ``lines 277-307 of =ase.io.eon=``."""
+    module = "ase." + match[1].replace("/", ".")
+    lines = f"lines {match[2]}-{match[3]}" if match[3] else f"line {match[2]}"
+    return f"{lines} of ={module}="
+
+
 def org_source() -> tuple[str, list[str], str]:
     org = SPEC.read_text()
     kept, skip = [], False
@@ -771,6 +783,12 @@ def org_source() -> tuple[str, list[str], str]:
                 f"{SPEC.relative_to(ROOT)} does not hold {sentence.strip()!r} once"
             )
         org = org.replace(sentence, "", 1)
+    for item in REPOSITORY_ITEMS:
+        line = re.compile(rf"^- {item} :: .*\n", re.M)
+        if len(line.findall(org)) != 1:
+            raise SystemExit(f"{SPEC.relative_to(ROOT)} does not hold the item {item!r} once")
+        org = line.sub("", org, count=1)
+    org = ASE_LOCATION.sub(location, org)
     span, math_tex, cell_check = cell_equation(org)
     org = org.replace(span + ",", span, 1).replace(span, f"@@latex:{math_tex}@@", 1)
     org = re.sub(
