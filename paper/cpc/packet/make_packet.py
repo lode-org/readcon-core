@@ -16,7 +16,13 @@ check_manuscript.py, a build output is older than a source, a file that the prea
 defines a macro a second time, the release metadata disagrees with commit.tex, release.tex or Data availability, or the
 filled-in text carries TeX, an absolute path or a TODO, TBD, FIXME or XXX.
 
+The form's ``Packet state`` field is ``final`` when release.tex gives the commit's role as a release commit or a
+release candidate commit.  A commit that is only a candidate commit refuses, unless ``--draft`` is given; the
+form is then written with every other check in place and ``Packet state: draft``, and only a run on release
+metadata makes it final.
+
     python3 paper/cpc/packet/make_packet.py            # after build_tex.sh
+    python3 paper/cpc/packet/make_packet.py --draft    # a form for a candidate commit
     python3 paper/cpc/packet/make_packet.py --check    # exit 1 unless CPC-FORM.md is what a run writes
 """
 
@@ -72,6 +78,7 @@ RELEASE = {
     "readconpublished": r"\d+\.\d+\.\d+",
     "readconpublishedcommit": r"[0-9a-f]{7,40}",
 }
+DRAFT_ROLE = "candidate commit"
 DOI_URL = re.compile(r"https://doi\.org/(10\.\d{4,}/\S+)")
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -144,6 +151,7 @@ def plain(tex: str, values: dict[str, str], labels: dict[str, str]) -> str:
         ("~", " "),
         ("---", "\u2014"),
         ("--", "\u2013"),
+        ("-{}-", "--"),
         ("\\\\", " "),
         (r"\_", "_"),
         (r"\&", "&"),
@@ -185,7 +193,8 @@ def summary_fields(main: str) -> dict[str, str]:
 
 
 def preamble_macros(main: str) -> dict[str, str]:
-    """The ``\\newcommand`` values of the files that the preamble of rg_main.tex inputs, which pdfTeX typesets."""
+    """The ``\\newcommand`` values of the preamble of rg_main.tex and of the files it inputs, which pdfTeX
+    typesets."""
     preamble = "\n".join(
         re.sub(r"(?<!\\)%.*", "", line)
         for line in main.split(r"\begin{document}", 1)[0].splitlines()
@@ -202,20 +211,29 @@ def preamble_macros(main: str) -> dict[str, str]:
             if macro in values:
                 bad.append(f"{rel} defines \\{macro} a second time")
             values[macro] = value
+    for macro, value in NEWCOMMAND.findall(preamble):
+        if macro in values:
+            bad.append(f"the preamble of rg_main.tex defines \\{macro} a second time")
+        values[macro] = value
     if bad:
         refuse(bad)
     return values
 
 
-def release() -> dict[str, str]:
+def release(draft: bool = False) -> dict[str, str]:
     """The commit of commit.tex, and the version, the commit's role, tag and library digest, and the main-branch
-    commit and pull request it descends from and the published release before them, as release.tex gives them."""
+    commit and pull request it descends from and the published release before them, as release.tex gives them.
+    With ``draft``, a role of candidate commit is accepted as well."""
     values: dict[str, str] = {}
     for name in ("commit.tex", "release.tex"):
         values.update(NEWCOMMAND.findall((SRC / name).read_text()))
+    accepted = dict(RELEASE)
+    if draft:
+        accepted["readconcommitrole"] = rf"{RELEASE['readconcommitrole']}|{DRAFT_ROLE}"
     bad = [
         f"commit.tex and release.tex give \\{name} as {values.get(name)!r}"
-        for name, pattern in RELEASE.items()
+        + ("; run with --draft for a form marked draft" if name == "readconcommitrole" else "")
+        for name, pattern in accepted.items()
         if not re.fullmatch(pattern, values.get(name, ""))
     ]
     if not bad and not values["readconcommit"].startswith(values["readconcommitshort"]):
@@ -381,7 +399,7 @@ def check_release(version: str, concept: str) -> list[str]:
     return bad
 
 
-def render() -> tuple[dict[str, str], str]:
+def render(draft: bool = False) -> tuple[dict[str, str], str]:
     """The text of each form and a line that sums up what it counts."""
     problems = stale()
     if problems:
@@ -393,7 +411,7 @@ def render() -> tuple[dict[str, str], str]:
         refuse(str(exc).splitlines())
 
     values = preamble_macros(main_tex)
-    named = release()
+    named = release(draft)
     aux = (SRC / "rg_main.aux").read_text()
     labels = dict(re.findall(r"\\newlabel\{([^}]+)\}\{\{([^}]*)\}", aux))
     logs = {
@@ -459,6 +477,9 @@ def render() -> tuple[dict[str, str], str]:
     summary_words = [cm.words(fields[name], values) for name in LONG_FIELDS]
     repository = plain(fields["Developer's repository link"], values, labels)
     fill = {
+        "packet_state": (
+            "final" if re.fullmatch(RELEASE["readconcommitrole"], named["readconcommitrole"]) else "draft"
+        ),
         "title": title,
         "version": version,
         "commit": named["readconcommit"],
@@ -555,7 +576,7 @@ def render() -> tuple[dict[str, str], str]:
     if leaked:
         refuse(leaked)
     summary = (
-        f"readcon-core {version}, {fill['commit_role']} {fill['commit'][:12]}; abstract {len(abstract)} characters, "
+        f"{fill['packet_state']} packet; readcon-core {version}, {fill['commit_role']} {fill['commit'][:12]}; abstract {len(abstract)} characters, "
         f"{len(abstract.split())} words (TeX count {fill['abstract_words']}); {main_pages}+{supp_pages} pages, "
         f"{n_fig} figures, {n_tab} tables, {n_lst} listings, {n_refs}+{n_refs_supp} references; "
         f"summary words {summary_words}; highlights {[len(h) for h in highlights]}"
@@ -570,8 +591,13 @@ def main() -> int:
         action="store_true",
         help="write nothing; exit 1 unless CPC-FORM.md is what a run writes now",
     )
+    parser.add_argument(
+        "--draft",
+        action="store_true",
+        help=f"accept a {DRAFT_ROLE} and write the form with Packet state: draft",
+    )
     args = parser.parse_args()
-    texts, summary = render()
+    texts, summary = render(args.draft)
     if args.check:
         differ = [
             name
@@ -581,7 +607,7 @@ def main() -> int:
         if differ:
             print(
                 f"make_packet: {', '.join(differ)} differs from what the sources give; "
-                "run python3 paper/cpc/packet/make_packet.py",
+                "run python3 paper/cpc/packet/make_packet.py" + (" --draft" if args.draft else ""),
                 file=sys.stderr,
             )
             return 1
