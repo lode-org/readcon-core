@@ -13,7 +13,9 @@ docs/source/references.bib; one without a match is dropped and printed.
 
 The cell formula of CON-cell.6 is inline code in spec.org. It is parsed and
 written as an equation, and the parsed vectors are checked against
-ase.geometry.cellpar_to_cell.
+ase.geometry.cellpar_to_cell, or, on a host without ASE, against
+reference_cellpar_to_cell, which is that function without the import. The
+message of the run says which one ran.
 
 figures/generated/versions_table.tex holds the body rows of the main-text CON
 versions table: Version, Date, Release and Change. It ends with the
@@ -310,41 +312,59 @@ def value(node, env: dict[str, float]) -> float:
     raise SystemExit(f"{CELL_CLAUSE}: cannot evaluate {kind}")
 
 
-def _cos_sin(angle: float) -> tuple[float, float]:
-    eps = 2 * math.ulp(90.0)
-    if abs(abs(angle) - 90) < eps:
-        return 0.0, math.copysign(1.0, angle)
-    radians = angle * math.pi / 180
-    return math.cos(radians), math.sin(radians)
+def reference_cellpar_to_cell(cellpar: list[float]):
+    """``ase.geometry.cellpar_to_cell(cellpar)`` for its default orientation, without ASE.
 
-
-def cellpar_to_cell(cellpar: list[float]) -> list[list[float]]:
-    """``ase.geometry.cellpar_to_cell`` for its default orientation, with ``a`` along x and ``b`` in the xy plane.
-
-    The check uses ASE's own function when ASE imports; this is its construction
-    for a host without ASE, so the check, the table and the macros do not need ASE.
+    ``a`` lies along x and ``b`` in the xy plane.  The expressions, their
+    order, the numpy functions and the errors are ASE's, so the cell is the
+    same array bit for bit and a cell that ASE rejects raises the same
+    ``AssertionError``; a ``gamma`` of 0 gives an infinity, not an exception.
     """
-    try:
-        from ase.geometry import cellpar_to_cell as ase_cell
-    except ImportError:
-        pass
-    else:
-        return [list(row) for row in ase_cell(cellpar)]
+    import numpy as np
+
     a, b, c, alpha, beta, gamma = cellpar
-    cos_alpha = _cos_sin(alpha)[0]
-    cos_beta = _cos_sin(beta)[0]
-    cos_gamma, sin_gamma = _cos_sin(gamma)
+    eps = 2 * np.spacing(90.0, dtype=np.float64)
+    cos_alpha = 0.0 if abs(abs(alpha) - 90) < eps else np.cos(alpha * np.pi / 180.0)
+    cos_beta = 0.0 if abs(abs(beta) - 90) < eps else np.cos(beta * np.pi / 180.0)
+    if abs(gamma - 90) < eps:
+        cos_gamma, sin_gamma = 0.0, 1.0
+    elif abs(gamma + 90) < eps:
+        cos_gamma, sin_gamma = 0.0, -1.0
+    else:
+        cos_gamma = np.cos(gamma * np.pi / 180.0)
+        sin_gamma = np.sin(gamma * np.pi / 180.0)
+    va = a * np.array([1, 0, 0])
+    vb = b * np.array([cos_gamma, sin_gamma, 0])
+    cx = cos_beta
     cy = (cos_alpha - cos_beta * cos_gamma) / sin_gamma
-    cz = math.sqrt(1 - cos_beta**2 - cy**2)
-    return [
-        [a, 0.0, 0.0],
-        [b * cos_gamma, b * sin_gamma, 0.0],
-        [c * cos_beta, c * cy, c * cz],
-    ]
+    cz_sqr = 1.0 - cx * cx - cy * cy
+    if not cz_sqr >= 0:
+        raise AssertionError
+    vc = c * np.array([cx, cy, np.sqrt(cz_sqr)])
+    z = np.array((0, 0, 1), dtype="float")
+    z = z / np.linalg.norm(z)
+    x = np.array((1, 0, 0), dtype="float")
+    x = x - np.dot(x, z) * z
+    x = x / np.linalg.norm(x)
+    y = np.cross(z, x)
+    return np.dot(np.vstack((va, vb, vc)), np.vstack((x, y, z)))
 
 
-def cell_equation(org: str) -> tuple[str, str, int]:
-    """The CON-cell.6 vectors as one LaTeX equation, checked against ASE's cell construction."""
+def cell_reference():
+    """ASE's ``cellpar_to_cell`` and its name when ASE imports; otherwise the numpy construction of it and what ran."""
+    try:
+        from ase.geometry import cellpar_to_cell
+    except ImportError:
+        return (
+            reference_cellpar_to_cell,
+            "the numpy construction of ase.geometry.cellpar_to_cell (ASE is not installed)",
+        )
+    return cellpar_to_cell, "ase.geometry.cellpar_to_cell"
+
+
+def cell_equation(org: str) -> tuple[str, str, str]:
+    """The CON-cell.6 vectors as one LaTeX equation, and a line saying what they were checked against."""
+    cellpar_to_cell, reference = cell_reference()
     line = next(
         (ln for ln in org.splitlines() if ln.startswith(f"- {CELL_CLAUSE} ::")), None
     )
@@ -366,11 +386,11 @@ def cell_equation(org: str) -> tuple[str, str, int]:
             ours = [value(part, env) for part in vectors[name]]
             if any(abs(x - y) > 1e-9 * max(lengths) for x, y in zip(ours, row)):
                 raise SystemExit(
-                    f"{CELL_CLAUSE} {name} = {ours} differs from ASE {list(row)}"
+                    f"{CELL_CLAUSE} {name} = {ours} differs from {reference} {list(row)}"
                 )
     rows = " \\\\ ".join(vector_row(name, vectors[name]) for name in "abc")
     math_tex = f"\\begin{{equation}}\\begin{{aligned}} {rows} \\end{{aligned}}\\label{{eq:spec-cell}}\\end{{equation}}"
-    return spans[0], math_tex, trials
+    return spans[0], math_tex, f"matches {reference} on {trials} random cells"
 
 
 def history_rows(org: str) -> list[dict]:
@@ -732,7 +752,7 @@ def measure() -> None:
     )
 
 
-def org_source() -> tuple[str, list[str], int]:
+def org_source() -> tuple[str, list[str], str]:
     org = SPEC.read_text()
     kept, skip = [], False
     for line in org.splitlines():
@@ -747,7 +767,7 @@ def org_source() -> tuple[str, list[str], int]:
                 f"{SPEC.relative_to(ROOT)} does not hold {sentence.strip()!r} once"
             )
         org = org.replace(sentence, "", 1)
-    span, math_tex, trials = cell_equation(org)
+    span, math_tex, cell_check = cell_equation(org)
     org = org.replace(span + ",", span, 1).replace(span, f"@@latex:{math_tex}@@", 1)
     org = re.sub(
         r"^[ \t]*\|(?!-).*$",
@@ -772,7 +792,7 @@ def org_source() -> tuple[str, list[str], int]:
 
     org = re.sub(r"@@rst::cite:[a-z]*:`([^`]+)`@@", cite, org)
     org = re.sub(r"@@rst:[^@]*@@", "", org)
-    return org, [d for d in unmatched if d.split()[0] in dropped], trials
+    return org, [d for d in unmatched if d.split()[0] in dropped], cell_check
 
 
 def pandoc(org: str) -> str:
@@ -1044,7 +1064,7 @@ def main() -> None:
         VERSIONS_OUT: versions_table(rows),
         MACROS_OUT: spec_macros(SPEC.read_text()),
     }
-    org, dropped, trials = org_source()
+    org, dropped, cell_check = org_source()
     tex = postprocess(pandoc(org))
     records = ", ".join(p.relative_to(ROOT).as_posix() for p in (SPEC, VERSIONS))
     header = (
@@ -1078,9 +1098,7 @@ def main() -> None:
         return
     for path, text in outputs.items():
         path.write_text(text)
-    print(
-        f"wrote {OUT.relative_to(ROOT)}; {CELL_CLAUSE} matches ase.geometry.cellpar_to_cell on {trials} random cells"
-    )
+    print(f"wrote {OUT.relative_to(ROOT)}; {CELL_CLAUSE} {cell_check}")
     print(
         f"wrote {VERSIONS_OUT.relative_to(ROOT)}: {len(rows)} rows, each release read from "
         f"{VERSIONS.relative_to(ROOT)}"
