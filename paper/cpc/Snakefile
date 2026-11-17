@@ -79,11 +79,17 @@ rule mpi_fallback:
 rule dlpack_log:
     output:
         "logs/dlpack-exchange.log",
-        "src/figures/generated/dlpack_macros.tex",
+        "src/figures/generated/dlpack_exchange_values.tex",
         "src/figures/generated/dlpack_table.tex",
         "src/figures/generated/dlpack.pdf",
     shell:
         "taskset -c 0 python3 scripts/bench_dlpack.py"
+
+rule dlpack_macros:
+    output:
+        "src/figures/generated/dlpack_macros.tex",
+    shell:
+        "python3 scripts/gen_dlpack_macros.py"
 
 rule eon_build_log:
     output:
