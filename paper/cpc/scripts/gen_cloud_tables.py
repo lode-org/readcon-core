@@ -131,7 +131,7 @@ def footnotes(notes: dict[str, str], host: str | None = None) -> str:
         for text, letter in notes.items()
     )
     return marks + (
-        f" These counts were recorded on host {host} with the kernels of \\texttt{{scripts/numeric\\_pins.py}}: "
+        f" These counts were recorded on host {host} with pinned numeric kernels: "
         "one OpenBLAS thread on its Nehalem kernels and NumPy at its x86-64-v2 baseline, which every "
         "x86-64-v2 host runs."
         if notes and host
@@ -285,8 +285,8 @@ def kernel_sentence(runs: dict[str, dict]) -> str:
     listed = ", ".join(sets[:-1]) + " and " + sets[-1] if len(sets) > 1 else sets[0]
     return (
         f"File, $\\Delta E^\\ddagger$ and the displacement are printed to the significant figures, three at most, "
-        f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} kernel sets of "
-        f"\\texttt{{scripts/numeric\\_pins.py}} on that host agree, and as a range where their first figures "
+        f"on which reruns of every route on {words.get(len(runs), str(len(runs)))} pinned kernel sets "
+        f"on that host agree, and as a range where their first figures "
         f"differ: {listed}, the kernels that hosts of those generations select when nothing is pinned."
     )
 
@@ -361,7 +361,7 @@ def main() -> None:
         part
         for part in [
             "The counts in units in the last place of Table~\\ref*{tab:restartfmt} were recorded on host "
-            r"\rfHost{} with the kernels of \texttt{scripts/numeric\_pins.py}: one OpenBLAS thread on its Nehalem "
+            r"\rfHost{} with pinned numeric kernels: one OpenBLAS thread on its Nehalem "
             "kernels and NumPy at its x86-64-v2 baseline, which every x86-64-v2 host runs."
             if notes
             else "",
