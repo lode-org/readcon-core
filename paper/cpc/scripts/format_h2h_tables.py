@@ -115,13 +115,37 @@ def _load(name: str) -> dict:
     return json.loads((RECORDS / name / "cross-format.json").read_text())
 
 
+_MEASURED_FIELDS = (
+    "median_s",
+    "iqr_s",
+    "cold_median_s",
+    "cold_iqr_s",
+    "rss_bytes",
+    "file_bytes",
+    "position_error",
+    "cell_error",
+    "checksum",
+    "checksum_ok",
+)
+
+
 def _is_unsupported_row(row: dict) -> bool:
-    return (
-        row.get("cache") == "unsupported"
-        and str(row.get("loses") or "").startswith("unsupported")
-        and row.get("median_s") is None
-        and row.get("file_bytes") is None
-    )
+    if row.get("cache") != "unsupported":
+        return False
+    if not str(row.get("loses") or "").startswith("unsupported"):
+        return False
+    for key in _MEASURED_FIELDS:
+        if row.get(key) is not None:
+            return False
+    for sample_key in ("samples_s", "cold_samples_s"):
+        samples = row.get(sample_key)
+        if samples is not None and samples != []:
+            return False
+    for count_key in ("n", "cold_n"):
+        count = row.get(count_key)
+        if count is not None and (isinstance(count, bool) or count != 0):
+            return False
+    return True
 
 
 def _validate_one_million(name: str, data: dict) -> None:
