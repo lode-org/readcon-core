@@ -71,6 +71,17 @@ def _gil_enabled() -> bool:
     return True if probe is None else probe()
 
 
+def test_a_free_threaded_build_runs_with_the_gil_disabled() -> None:
+    """The free-threaded jobs set PYTHON_GIL=0 and this has to be true at runtime."""
+    if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
+        pytest.skip("this interpreter was built with the GIL")
+    probe = getattr(sys, "_is_gil_enabled", None)
+    assert probe is not None, "free-threaded runtime has no sys._is_gil_enabled"
+    assert probe() is False, (
+        "GIL is enabled; the free-threaded job must export PYTHON_GIL=0"
+    )
+
+
 def test_read_con_releases_gil(tmp_path: Path) -> None:
     import readcon
 
