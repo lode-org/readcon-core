@@ -154,13 +154,19 @@ fn positions_parallel_fast(
     // it made 100 000 frames of 32 atoms slower at eight threads than
     // the serial walk was at four.
     let mut direct: Option<(usize, usize, u32, usize)> = None;
+    // Component runs per frame once the trajectory is tiled from frame 0.
+    let mut tiled_runs: Option<usize> = None;
     let mut out = parse_con(bytes, rich, false, false, workers, Some(1))?;
     if let Some(first) = out.spans.first() {
         let frame_start = first.start;
         let first_end = first.end;
         let head0 = out.head_ends.first().copied().unwrap_or(0);
         if first_end > 0 && first_end < bytes.len() {
-            if let Some(nframes) = tiled_frame_count_parallel(bytes, first_end, head0, workers) {
+            let tiled = later_component_headers(bytes, frame_start, head0).and_then(|later| {
+                tiled_frame_count_parallel(bytes, first_end, head0, &later, workers)
+            });
+            if let Some(nframes) = tiled {
+                tiled_runs = Some(out.components.len());
                 let count0 = out.counts[0];
                 let spec = frame_spec(bytes, frame_start)?;
                 let block_lines = header_block_lines(bytes, frame_start)?;
@@ -277,6 +283,8 @@ fn positions_parallel_fast(
         };
         if frame_workers < 2 {
             let pool_threads = workers.min(jobs.len());
+            let lost_stock = std::sync::atomic::AtomicBool::new(false);
+            let saw_section = std::sync::atomic::AtomicBool::new(false);
             crate::parser::on_pool(pool_threads, || {
                 use rayon::prelude::*;
                 let failed = jobs.par_iter().find_map_any(|&(frame, dest)| {
@@ -296,6 +304,20 @@ fn positions_parallel_fast(
                         return Some(ParseError::InvalidCount(
                             "frame atom count does not match the first frame".into(),
                         ));
+                    }
+                    if let Some(runs) = tiled_runs {
+                        // The tiling copied frame 0's runs into this frame.
+                        if out.components[frame * runs..(frame + 1) * runs] != parsed.components {
+                            return Some(ParseError::ValidationError(
+                                "frame components do not match the first frame".into(),
+                            ));
+                        }
+                        if !parsed.stock {
+                            lost_stock.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        if parsed.has_section {
+                            saw_section.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                     }
                     unsafe {
                         std::ptr::copy_nonoverlapping(
@@ -323,6 +345,12 @@ fn positions_parallel_fast(
                 }
                 Ok(())
             })?;
+            if lost_stock.into_inner() {
+                out.stock = false;
+            }
+            if saw_section.into_inner() {
+                out.has_section = true;
+            }
         } else {
             for &(frame, dest) in &jobs {
                 fill_frame_rows(
@@ -864,7 +892,7 @@ fn repeated_span(bytes: &[u8], head_end: usize, est: usize) -> Option<(usize, us
         Some(span) => span,
         None => find_line_at(bytes, first_line, eol + 1)?,
     };
-    let nframes = tiled_frame_count(bytes, span, head_end)?;
+    let nframes = tiled_frame_count(bytes, span, head_end, &[])?;
     Some((span, nframes))
 }
 
@@ -1040,10 +1068,68 @@ fn span_matches_serial_frame(
     abs < frame_end && remainder_is_whitespace(file, abs)
 }
 
+/// The symbol and label lines of components `2..` in the frame at byte 0,
+/// each range starting at the newline before its symbol line.
+///
+/// `head_end` covers the first component's two lines only. Row widths fix
+/// where the later ones sit, so a tiled frame has them at the same offsets.
+/// `None` when the block does not parse the way the frame walker read it.
+#[cfg(feature = "parallel")]
+fn later_component_headers(
+    bytes: &[u8],
+    frame_start: usize,
+    head_end: usize,
+) -> Option<Vec<std::ops::Range<usize>>> {
+    if frame_start != 0 {
+        return None;
+    }
+    let mut pos = 0usize;
+    for _ in 0..6 {
+        skip_line(bytes, &mut pos).ok()?;
+    }
+    let types_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let natm_types = *parse_count_line(types_line, 1).ok()?.first()?;
+    if natm_types == 0 {
+        return (pos <= head_end).then(Vec::new);
+    }
+    let count_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
+    let counts = parse_count_line(count_line, natm_types).ok()?;
+    skip_line(bytes, &mut pos).ok()?;
+    let mut later = Vec::with_capacity(natm_types - 1);
+    for (index, count) in counts.iter().enumerate() {
+        let start = pos;
+        skip_line(bytes, &mut pos).ok()?;
+        skip_line(bytes, &mut pos).ok()?;
+        if index == 0 {
+            if pos != head_end {
+                return None;
+            }
+        } else {
+            later.push(start - 1..pos);
+        }
+        skip_count_lines(bytes, &mut pos, *count).ok()?;
+    }
+    Some(later)
+}
+
+/// Every range of frame 0's `later` headers is repeated at the same offset
+/// from `start`.
+fn later_headers_match(bytes: &[u8], start: usize, later: &[std::ops::Range<usize>]) -> bool {
+    later.iter().all(|range| {
+        bytes.get(start + range.start..start + range.end) == Some(&bytes[range.clone()])
+    })
+}
+
 /// `bytes` is `n` copies of a frame of `span` bytes, each starting with
-/// the same header. Later frames can then be planned on their own core.
-fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize> {
-    if span < 16 || head_end == 0 || head_end > span {
+/// the same header and repeating the `later` component headers of frame 0
+/// at the same offsets. Later frames can then be planned on their own core.
+fn tiled_frame_count(
+    bytes: &[u8],
+    span: usize,
+    head_end: usize,
+    later: &[std::ops::Range<usize>],
+) -> Option<usize> {
+    if span < 16 || head_end == 0 || head_end > span || later.iter().any(|r| r.end > span) {
         return None;
     }
     let n = bytes.len() / span;
@@ -1065,6 +1151,9 @@ fn tiled_frame_count(bytes: &[u8], span: usize, head_end: usize) -> Option<usize
         if bytes.get(start..start + head_end) != Some(header) {
             return None;
         }
+        if !later_headers_match(bytes, start, later) {
+            return None;
+        }
     }
     Some(n)
 }
@@ -1080,9 +1169,10 @@ fn tiled_frame_count_parallel(
     bytes: &[u8],
     span: usize,
     head_end: usize,
+    later: &[std::ops::Range<usize>],
     workers: usize,
 ) -> Option<usize> {
-    if span < 16 || head_end == 0 || head_end > span {
+    if span < 16 || head_end == 0 || head_end > span || later.iter().any(|r| r.end > span) {
         return None;
     }
     let n = bytes.len() / span;
@@ -1098,7 +1188,7 @@ fn tiled_frame_count_parallel(
     // A short trajectory does not pay for threads. The serial walk keeps
     // the same answer and avoids the scope spin-up.
     if workers < 2 || frames < 2 {
-        return tiled_frame_count(bytes, span, head_end);
+        return tiled_frame_count(bytes, span, head_end, later);
     }
     let header = &bytes[..head_end];
     let pool_threads = workers.min(frames);
@@ -1117,6 +1207,7 @@ fn tiled_frame_count_parallel(
                     let start = frame * span;
                     if bytes.get(start - 1) != Some(&b'\n')
                         || bytes.get(start..start + head_end) != Some(header)
+                        || !later_headers_match(bytes, start, later)
                     {
                         ok_ref.store(false, std::sync::atomic::Ordering::Relaxed);
                         return;
@@ -2124,7 +2215,7 @@ mod tests {
             let first = positions_from_con_bytes(&real[..second]).unwrap();
             assert_eq!(first.n_frames, 1);
             assert_eq!(
-                tiled_frame_count(&real, first.spans[0].end, first.head_ends[0]),
+                tiled_frame_count(&real, first.spans[0].end, first.head_ends[0], &[]),
                 Some(100_000)
             );
             let parallel = positions_parallel(&real, 8, false).unwrap();
@@ -2136,6 +2227,96 @@ mod tests {
             );
             assert_eq!(parallel.masses, serial.masses);
             assert_eq!(parallel.stock, serial.stock);
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    fn assert_parallel_matches_serial(bytes: &[u8], workers: usize) {
+        let serial = positions_with_identity(bytes).unwrap();
+        let parallel = positions_parallel(bytes, workers, true).unwrap();
+        assert_eq!(parallel.n_frames, serial.n_frames);
+        assert_eq!(parallel.counts, serial.counts);
+        assert_eq!(parallel.spans, serial.spans);
+        assert_eq!(parallel.head_ends, serial.head_ends);
+        assert_eq!(parallel.components, serial.components);
+        assert_eq!(parallel.stock, serial.stock);
+        assert_eq!(parallel.has_section, serial.has_section);
+        assert_eq!(parallel.ids, serial.ids);
+        assert_eq!(parallel.flags, serial.flags);
+        assert_eq!(first_bit_mismatch(&parallel.cells, &serial.cells), None);
+        assert_eq!(first_bit_mismatch(&parallel.masses, &serial.masses), None);
+        assert_eq!(
+            first_bit_mismatch(&parallel.positions, &serial.positions),
+            None
+        );
+    }
+
+    #[cfg(feature = "parallel")]
+    fn typed_frame(symbols: &[&str]) -> String {
+        let mut frame = format!(
+            "seed\n{{\"con_spec_version\":2}}\n10 10 10\n90 90 90\n0 0\n0 0 0\n{}\n",
+            symbols.len()
+        );
+        frame.push_str(&vec!["2"; symbols.len()].join(" "));
+        frame.push('\n');
+        frame.push_str(&vec!["1.0"; symbols.len()].join(" "));
+        frame.push('\n');
+        for (index, symbol) in symbols.iter().enumerate() {
+            frame.push_str(&format!(
+                "{symbol}\nCoordinates of Component {}\n",
+                index + 1
+            ));
+            frame.push_str(&format!("0.1 0.2 0.{index} 0 {}\n", 2 * index));
+            frame.push_str(&format!("0.4 0.5 0.{index} 1 {}\n", 2 * index + 1));
+        }
+        frame
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn later_component_symbols_split_the_tiling() {
+        let probe = format!("{}{}", typed_frame(&["Cu", "H"]), typed_frame(&["Cu", "B"]));
+        assert_eq!(probe.len() % 2, 0);
+        for workers in [2, 4] {
+            assert_parallel_matches_serial(probe.as_bytes(), workers);
+        }
+        let serial = positions_with_identity(probe.as_bytes()).unwrap();
+        let symbols: Vec<&str> = serial.components.iter().map(|(s, _)| &**s).collect();
+        assert_eq!(symbols, ["Cu", "H", "Cu", "B"]);
+        let bytes = probe.as_bytes();
+        let (span, head) = (serial.spans[0].end, serial.head_ends[0]);
+        assert_eq!(tiled_frame_count(bytes, span, head, &[]), Some(2));
+        let later = later_component_headers(bytes, 0, head).unwrap();
+        assert_eq!(later.len(), 1);
+        assert_eq!(
+            &bytes[later[0].clone()],
+            b"\nH\nCoordinates of Component 2\n"
+        );
+        assert_eq!(tiled_frame_count(bytes, span, head, &later), None);
+        assert_eq!(
+            tiled_frame_count_parallel(bytes, span, head, &later, 4),
+            None
+        );
+        let same = typed_frame(&["Cu", "H"]).repeat(3);
+        let later = later_component_headers(same.as_bytes(), 0, head).unwrap();
+        assert_eq!(
+            tiled_frame_count_parallel(same.as_bytes(), span, head, &later, 4),
+            Some(3)
+        );
+
+        // Past the 1024-frame threshold the header scan and the metadata
+        // fill both split across workers.
+        let mut long = String::new();
+        for frame in 0..1100 {
+            let symbols = match frame {
+                700 => ["Cu", "B", "O"],
+                1099 => ["Cu", "H", "N"],
+                _ => ["Cu", "H", "O"],
+            };
+            long.push_str(&typed_frame(&symbols));
+        }
+        for workers in [2, 4, 8] {
+            assert_parallel_matches_serial(long.as_bytes(), workers);
         }
     }
 
