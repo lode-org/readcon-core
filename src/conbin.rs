@@ -477,6 +477,13 @@ impl ConBinMap {
         self.view_at(self.after_motion()?, n).map(Some)
     }
 
+    /// The `(frames, 6)` cell column of a binary64 file, `a b c alpha beta
+    /// gamma` per frame, or `None` when the file has none or is binary32.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError::NonFiniteValue`] naming the field (`cell[i]`) and the
+    /// frame when the column holds a NaN or an infinity.
     pub fn cell_f64(&self) -> Result<Option<&[f64]>, ParseError> {
         if !self.header.cell || self.header.binary32 {
             return Ok(None);
@@ -494,7 +501,12 @@ impl ConBinMap {
         let n = (self.header.n_frames as usize)
             .checked_mul(6)
             .ok_or_else(|| ParseError::InvalidCount("CON-bin cell length overflows".into()))?;
-        self.view_at(at, n).map(Some)
+        let cells = self.view_at::<f64>(at, n)?;
+        // The cell column is six numbers a frame, read once here. A NaN or
+        // an infinity is stored bit for bit in the file, so it is named
+        // before the caller sees the slice.
+        crate::types::check_cell_rows(cells)?;
+        Ok(Some(cells))
     }
 
     pub fn atom_ids(&self) -> Result<Option<&[u64]>, ParseError> {
@@ -2231,7 +2243,9 @@ fn equal_frame_span(text: &str) -> Option<usize> {
     Some(span)
 }
 
-fn accumulate_frames(text: &str) -> Result<FrameColumns, ParseError> {
+/// The columns of the frames in `text`. `first_frame` is the index of the
+/// first of them in the whole file, so a failure names its global frame.
+fn accumulate_frames(text: &str, first_frame: u64) -> Result<FrameColumns, ParseError> {
     let mut n_frames = 0u64;
     let mut n_atoms = 0u64;
     let mut positions = Vec::new();
@@ -2244,7 +2258,7 @@ fn accumulate_frames(text: &str) -> Result<FrameColumns, ParseError> {
     let mut any_force = false;
     let mut any_velocity = false;
     for frame in ConFrameIterator::new(text) {
-        let frame = frame?;
+        let frame = frame.map_err(|error| error.in_frame(first_frame + n_frames))?;
         let n = frame.atom_data.len();
         if n_frames == 0 {
             n_atoms = n as u64;
@@ -2328,7 +2342,7 @@ fn equal_parts(text: &str, threads: usize) -> Result<Option<Vec<(u64, FrameColum
             let start = n * thread / threads;
             let end = n * (thread + 1) / threads;
             let chunk = &text[start * span..end * span];
-            jobs.push(scope.spawn(move || (start as u64, accumulate_frames(chunk))));
+            jobs.push(scope.spawn(move || (start as u64, accumulate_frames(chunk, start as u64))));
         }
         for job in jobs {
             parts.push(job.join().expect("frame parse"));
@@ -2462,6 +2476,7 @@ fn write_parts_at(
         for (begin, columns) in parts {
             jobs.push(scope.spawn(move || -> Result<(), ParseError> {
                 if binary32 {
+                    check_cells_fit_binary32(&columns.cells, *begin)?;
                     store_f32_at(file, &columns.positions, pos_at + begin * stride_xyz)?;
                     store_f32_at(file, &columns.velocities, vel_at + begin * stride_xyz)?;
                     if let Some(force_at) = force_at {
@@ -2520,7 +2535,7 @@ fn write_conbin_body(
             return write_parts_at(file, &parts, binary32, page);
         }
     }
-    let built = accumulate_frames(text)?;
+    let built = accumulate_frames(text, 0)?;
     let header = ConBinHeader {
         version: VERSION_2,
         n_frames: built.n_frames,
@@ -2536,6 +2551,29 @@ fn write_conbin_body(
     emit_built(file, &header, page, binary32, &built)
 }
 
+/// A cell that is finite in binary64 can still be infinite in binary32. The
+/// file would store that infinity, so the write is refused and names the
+/// frame (`first_frame` plus the row) and the field.
+fn check_cells_fit_binary32(cells: &[f64], first_frame: u64) -> Result<(), ParseError> {
+    if cells.iter().all(|v| (*v as f32).is_finite()) {
+        return Ok(());
+    }
+    for (row_index, row) in cells.chunks(6).enumerate() {
+        if let Some((index, value)) = row
+            .iter()
+            .enumerate()
+            .find(|(_, v)| !(**v as f32).is_finite())
+        {
+            return Err(ParseError::non_finite_cell(
+                &format!("cell[{index}]"),
+                format!("{value} (infinite in binary32)"),
+            )
+            .in_frame(first_frame + row_index as u64));
+        }
+    }
+    Ok(())
+}
+
 fn emit_built(
     file: &mut File,
     header: &ConBinHeader,
@@ -2547,6 +2585,7 @@ fn emit_built(
     #[cfg(target_endian = "little")]
     {
         if binary32 {
+            check_cells_fit_binary32(&built.cells, 0)?;
             let pos32: Vec<f32> = built.positions.iter().map(|v| *v as f32).collect();
             let vel32: Vec<f32> = built.velocities.iter().map(|v| *v as f32).collect();
             let force32 = if built.any_force {
@@ -2585,6 +2624,7 @@ fn emit_built(
     {
         let mut owned = Vec::with_capacity(7);
         if binary32 {
+            check_cells_fit_binary32(&built.cells, 0)?;
             let pos32: Vec<f32> = built.positions.iter().map(|v| *v as f32).collect();
             let vel32: Vec<f32> = built.velocities.iter().map(|v| *v as f32).collect();
             let force32: Vec<f32> = built.forces.iter().map(|v| *v as f32).collect();
@@ -2785,7 +2825,7 @@ mod tests {
         for thread in 0..threads {
             let start = n * thread / threads;
             let end = n * (thread + 1) / threads;
-            chunks.push(accumulate_frames(&text[start * span..end * span]).unwrap());
+            chunks.push(accumulate_frames(&text[start * span..end * span], 0).unwrap());
         }
         chunks.reverse();
         let mut out = Vec::new();
@@ -2798,7 +2838,7 @@ mod tests {
     #[test]
     fn repeated_frames_on_several_threads_match_one_thread() {
         let text = distinct_frames(8);
-        let serial_positions = accumulate_frames(&text).unwrap().positions;
+        let serial_positions = accumulate_frames(&text, 0).unwrap().positions;
         assert_eq!(positions_in_part_order(&text, 4), serial_positions);
         assert_ne!(
             positions_if_chunks_are_reversed(&text, 4),

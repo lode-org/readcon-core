@@ -17,6 +17,7 @@ use chemfiles::{BondOrder, CellShape, Frame, Property, Trajectory, UnitCell};
 use serde_json::{Value, json};
 
 use super::{ChemfilesReadOpts, chemfiles_internal_units_json};
+use crate::error::ParseError;
 use crate::storage_dtype::FloatArray2;
 use crate::types::{AtomDatum, Bond, ConFrame, FrameHeader, FrameMeta, PreboxHeader, meta};
 
@@ -396,6 +397,28 @@ fn frame_velocities(frame: &Frame) -> Result<&[[f64; 3]], ChemfilesImportError> 
     Ok(unsafe { std::slice::from_raw_parts(ptr, n) })
 }
 
+/// Name frame `index` of a trajectory in a non-finite cell error.
+///
+/// Any other error is returned as it was.
+fn name_cell_frame(error: ChemfilesImportError, index: usize) -> ChemfilesImportError {
+    match error {
+        ChemfilesImportError::InvalidFrame(message) => match ParseError::from_cell_text(&message) {
+            Some(cell) => {
+                ChemfilesImportError::InvalidFrame(cell.in_frame(index as u64).to_string())
+            }
+            None => ChemfilesImportError::InvalidFrame(message),
+        },
+        other => other,
+    }
+}
+
+/// Convert one chemfiles frame.
+///
+/// # Errors
+///
+/// [`ChemfilesImportError::InvalidFrame`] when the cell holds a NaN or an
+/// infinity, naming the field (`boxl[i]` or `angles[i]`), and for a
+/// structural problem.
 pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImportError> {
     let n = frame.size();
     let positions = frame_positions(frame)?;
@@ -408,6 +431,8 @@ pub fn con_frame_from_chemfiles(frame: &Frame) -> Result<ConFrame, ChemfilesImpo
 
     let cell_ref = frame.cell();
     let (boxl, angles, has_pbc) = cell_to_box_and_angles(&cell_ref);
+    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
+        .map_err(|error| ChemfilesImportError::InvalidFrame(error.to_string()))?;
     let velocities = if frame.has_velocities() {
         Some(frame_velocities(frame)?)
     } else {
@@ -1310,14 +1335,17 @@ pub fn con_frames_from_trajectory_path_with<P: AsRef<Path>>(
         for _ in 0..nsteps {
             traj.read(&mut chfl_frame)?;
             apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
-            frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+            let index = frames.len();
+            frames.push(
+                con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, index))?,
+            );
         }
     } else {
         let mut i = start;
         while i < end {
             traj.read_step(i, &mut chfl_frame)?;
             apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
-            frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+            frames.push(con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, i))?);
             i = i.saturating_add(stride);
         }
     }
@@ -1385,7 +1413,7 @@ pub fn con_frames_from_memory_with(
             continue;
         }
         apply_guess_bonds(&mut chfl_frame, opts.guess_bonds)?;
-        frames.push(con_frame_from_chemfiles(&chfl_frame)?);
+        frames.push(con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, i))?);
     }
     Ok(frames)
 }
