@@ -28,9 +28,9 @@ with source.open("w", encoding="ascii") as out:
             out.write(f"{atom * 0.001:.6f} 1.0 2.0 0 {atom}\n")
 
 frames = readcon.read_con(os.fspath(source), n_threads=2)
+columns = frames.columns()
 moved = frames[0]
 live_coords = frames[1]
-columns = frames.columns()
 positions = columns["positions"]
 cell = columns["cell"].copy()
 velocities = np.zeros_like(positions)
