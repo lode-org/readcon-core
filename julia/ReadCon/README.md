@@ -59,13 +59,22 @@ ABI checks). Pure Julia struct layout tests in `test/runtests.jl` still run.
 
 ## Non-finite cells
 
-`write_con` throws `ReadConError` when a frame holds a NaN or an infinite
-`cell` or `angles` entry. `err.code` is `-14` (parse error) and `err.message`
-names the field, for example
-`NonFiniteValue: non-finite value: cell field cell[1] is NaN`. No frame is
-written. `read_con` keeps its contract for a frame that fails to parse: it
-returns the frames before it and leaves the error on the C channel. Read it
-with `ReadCon.last_error()`, whose message names the field and the frame.
+Every `ConFrame` constructor throws `ReadCon.NonFiniteValue` for a NaN or an
+infinite `cell` or `angles` entry, so no such frame exists to pass to
+`write_con`. `err.field` names the entry with Julia's 1-based index and
+`err.value` holds it:
+
+```julia
+julia> ConFrame((10.0, Inf, 10.0), (90.0, 90.0, 90.0), Atom[], false, ("", ""), ("", ""))
+ERROR: NonFiniteValue: non-finite value: cell field cell[2] is Inf
+```
+
+`read_con` keeps its contract for a frame that fails to parse: it returns the
+frames before it and leaves the error on the C channel. Read it with
+`ReadCon.last_error()`. A non-finite box length, angle, or coordinate has
+`code` `-14` (parse error), the 0-based `frame_index`, and a `message` such as
+`NonFiniteValue: non-finite value: cell field boxl[1] of frame 1 is NaN`. The
+file's field names are 0-based.
 
 ## General registry
 
