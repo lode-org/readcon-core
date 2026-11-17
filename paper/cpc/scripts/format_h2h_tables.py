@@ -115,35 +115,56 @@ def _load(name: str) -> dict:
     return json.loads((RECORDS / name / "cross-format.json").read_text())
 
 
-_MEASURED_FIELDS = (
-    "median_s",
-    "iqr_s",
-    "cold_median_s",
-    "cold_iqr_s",
-    "rss_bytes",
-    "file_bytes",
-    "position_error",
-    "cell_error",
-    "checksum",
-    "checksum_ok",
+# Structural metadata keys an unsupported row may carry without provenance.
+# Derived from the committed MDCompress unsupported rows in
+# bench/h2h/formats/v0.23.3/extra/cross-format.json:
+# - structure, atoms, frames: structure group label and dimensions
+# - tool, format, arm, op: tool/format/arm identity and operation
+# - cache ("unsupported"), loses ("unsupported..."): refusal marker and reason
+_UNSUPPORTED_METADATA_KEYS = frozenset(
+    {
+        "structure",
+        "atoms",
+        "frames",
+        "tool",
+        "format",
+        "arm",
+        "op",
+        "cache",
+        "loses",
+    }
 )
+_UNSUPPORTED_COUNT_KEYS = frozenset({"n", "cold_n"})
+
+
+def _has_nonempty_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, dict):
+        return any(_has_nonempty_value(item) for item in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return any(_has_nonempty_value(item) for item in value)
+    return True
 
 
 def _is_unsupported_row(row: dict) -> bool:
     if row.get("cache") != "unsupported":
         return False
-    if not str(row.get("loses") or "").startswith("unsupported"):
+    loses = row.get("loses")
+    if not isinstance(loses, str) or not loses.startswith("unsupported"):
         return False
-    for key in _MEASURED_FIELDS:
-        if row.get(key) is not None:
-            return False
-    for sample_key in ("samples_s", "cold_samples_s"):
-        samples = row.get(sample_key)
-        if samples is not None and samples != []:
-            return False
-    for count_key in ("n", "cold_n"):
-        count = row.get(count_key)
-        if count is not None and (isinstance(count, bool) or count != 0):
+    for key, value in row.items():
+        if key in _UNSUPPORTED_METADATA_KEYS:
+            if isinstance(value, (dict, list, tuple, set)):
+                return False
+            continue
+        if key in _UNSUPPORTED_COUNT_KEYS:
+            if value is not None and (isinstance(value, bool) or value != 0):
+                return False
+            continue
+        if _has_nonempty_value(value):
             return False
     return True
 
