@@ -99,6 +99,9 @@ rule eon_build_log:
 
 rule manuscript:
     input:
+        "src/rg_main.tex",
+        "src/rg_supp.tex",
+        "src/rg_main.bib",
         "src/figures/generated/dlpack_macros.tex",
         "src/figures/generated/host_macros.tex",
         "src/figures/generated/host_table.tex",
@@ -106,8 +109,17 @@ rule manuscript:
         "src/figures/generated/db_macros.tex",
     output:
         "src/rg_main.pdf",
+        "src/rg_supp.pdf",
     shell:
-        "cd src && ../.texcache/tectonic rg_main.tex"
+        """
+        if [ -x .texcache/tectonic ]; then
+            PATH="$PWD/.texcache:$PATH" bash scripts/build_tex_tectonic.sh
+        elif command -v tectonic >/dev/null 2>&1; then
+            bash scripts/build_tex_tectonic.sh
+        else
+            bash scripts/build_tex.sh
+        fi
+        """
 
 rule stamp_host:
     shell:
