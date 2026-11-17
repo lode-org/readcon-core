@@ -83,8 +83,11 @@ def test_a_host_json_with_the_hardware_alone_carries_no_build(
 def test_a_host_json_with_the_build_schema_is_a_carrier(
     version_map, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from version_sot import read_version
+
     host = {
-        "readcon_core": "0.23.3",
+        "readcon_core": read_version(),
         "readcon_sha": "0" * 40,
         "rustc": "rustc 1.88.0",
         "python": "Python 3.12.3",
