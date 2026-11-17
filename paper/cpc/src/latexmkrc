@@ -1,1 +1,18 @@
+use File::Basename;
+$pdf_mode = 1;
+@default_files = ('rg_supp.tex', 'rg_main.tex');
 $bibtex = 'if grep -q "\\\\citation" %S; then bibtexu %O %S || test $? -eq 1; else exit 0; fi';
+
+add_cus_dep('tex', 'aux', 0, 'makeexternaldocument');
+sub makeexternaldocument {
+    my ($target) = @_;
+    return 0 if $ENV{LATEXMK_XR_GUARD};
+    return 0 if $target eq $root_filename;
+    local $ENV{LATEXMK_XR_GUARD} = 1;
+    my ($base, $dir) = fileparse($target);
+    my $cmd = "latexmk -pdf -interaction=nonstopmode -halt-on-error";
+    if ($dir && $dir ne './' && $dir ne '.') {
+        return system("cd \Q$dir\E && $cmd \Q$base.tex\E");
+    }
+    return system("$cmd \Q$base.tex\E");
+}
