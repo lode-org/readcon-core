@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import csv
+import re
 from pathlib import Path
 
 from sinum import num
@@ -339,6 +340,27 @@ Variant & Rule & Python & C \\
 
 
 E4 = ROOT / "evidence" / "results" / "e4_cells.csv"
+# The printed form of each source of the cited-specification record that names a file; any other source
+# that names a file stops the table, so no path is printed.
+SOURCE_NAMES = {
+    "ASE 3.29.0 ase/io/trajectory.py": r"ASE 3.29.0, module \texttt{ase.io.trajectory}",
+    "TNG 14dd68f Trajectoryformatspecification.mk": "TNG 14dd68f, trajectory format specification",
+    "TNG 14dd68f src/lib/tng_io.c": "TNG 14dd68f, C library source",
+    "docs/orgmode/spec.org": r"CON 3.1 specification, Section~\ref{sec:spec-normative}",
+}
+NAMES_FILE = re.compile(r"\.(?:py|c|h|rs|mk|org|tex)\b")
+
+
+def source_text(source: str) -> str:
+    if "://" in source:
+        return rf"\url{{{source}}}"
+    if source in SOURCE_NAMES:
+        return SOURCE_NAMES[source]
+    if NAMES_FILE.search(source):
+        raise SystemExit(f"{E4.name}: the source {source!r} names a file and has no entry in SOURCE_NAMES")
+    return tex(source)
+
+
 # Two tables, because five columns of restated clauses for every format do not fit one page.
 COMPARE = {
     "tab:spec-compare": (
@@ -399,7 +421,7 @@ def compare():
                 " & ".join(r"\raggedright " + c for c in out) + r" \tabularnewline"
             )
         listed = "; ".join(
-            f"{letter[s]}~" + (rf"\url{{{s}}}" if "://" in s else tex(s))
+            f"{letter[s]}~" + source_text(s)
             for s in sorted(cited, key=letter.get)
         )
 
