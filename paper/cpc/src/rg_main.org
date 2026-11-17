@@ -636,29 +636,26 @@ On the reference frame the \(\driftXyzPaths\) extended XYZ paths, from \(\driftX
 That grammar admits a \texttt{d} or \texttt{D} exponent and reads \texttt{T}, \texttt{true}, \texttt{True} and \texttt{TRUE} as true, and the paths split on both files.
 It leaves open whether a comment line that is not key-value pairs makes a file plain XYZ or an error, and on such a file the C parser of libAtoms departs from the default periodicity while its Python parser fails.
 
-Table~\ref{tab:drift} is in the supplement.
-
-\section{Resumed saddle searches}\label{sec:cases} The reads in Section~\ref{sec:host} use the library built on this branch.
-We first wrote the survey frame of Listing~\ref{lst:frame} with one library and read it back with the same library or another, \(\surveyRoutes\) routes in all, \(\surveySameRows\) within one library and \(\surveyCrossRows\) across two (Table~\ref{tab:survey}).
-The libraries are ASE \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMdanalysismdanalysisRelease21002025}, h5py, OVITO \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}, at the versions of Section~\ref*{sec:supp-versions}, and each stores each field through the mechanism its documentation gives.
-We grade a returned field as fixed by the format when the format's own specification defines its place in the file, and as a convention when only the documented layout of a library defines that place.
-
-Table~\ref{tab:survey} is in the supplement.
+\section{Resumed saddle searches}\label{sec:cases} A resumed search needs every field that its file carries, so we first asked which routes return them all.
+We wrote the survey frame of Listing~\ref{lst:frame} with one library and read it back with the same library or another, \(\surveyRoutes\) routes in all, \(\surveySameRows\) within one library and \(\surveyCrossRows\) across two (Table~\ref{tab:survey} of the supplementary material).
+The libraries are ASE \cite{larsenAtomicSimulationEnvironmenta2017}, chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,gowersMdanalysismdanalysisRelease21002025}, h5py \cite{collettePythonHdf52013}, OVITO \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}, at the versions of Section~\ref*{sec:supp-versions}, and each stores each field in the way its documentation gives.
+We grade a returned field as fixed by the format when the specification of the format defines its place in the file, and as a convention when only the documented layout of one library defines that place.
 
 Only the CON 3.1 route returns every field from places that its own specification defines.
 The ASE trajectory, with the identifiers stored as ASE tags, and H5MD written and read with h5py also return every field bit for bit.
-The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our reader knows to read.
+The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our own reader knows to read.
 Extended XYZ returns the mask and the identifiers through the column names of ASE, which chemfiles and OVITO also read.
 ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
 MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
-MDAnalysis 2.11.0 still writes the H5MD position, velocity and force values as \texttt{float32}, which is single precision \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
+MDAnalysis 2.11.0 still writes the H5MD positions, velocities and forces in single precision, as \texttt{float32} \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
-\subsection{A climbing-image band through every route} The restart study uses a larger slab, Pt(100) under the effective-medium theory (EMT) potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three layers of \(3\times3\) atoms with the bottom layer held in every component and one adatom held in \(z\) at the height of Table~\ref{tab:params} (Figure~\ref{fig:structures}, right).
+\subsection{A climbing-image band through every route} The restart study uses a larger slab: Pt(100) under the effective-medium theory (EMT) potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three layers of \(3\times3\) atoms with the bottom layer held in every component, and one adatom held in \(z\) at the height of Table~\ref{tab:params} (Figure~\ref{fig:structures}, right).
 The adatom hops between neighboring fourfold hollows along \(x\).
 With the slab fixed, the EMT force on the adatom at that height exceeds the band tolerance.
-That height is no stationary point of the free adsorbate, so a file that drops the hold resumes another relaxation.
-A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force, which keeps no step history, so a difference after the restart comes from the file.
+That height is not a stationary point of the free adsorbate, so a file that drops the hold resumes a different relaxation.
+A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force.
+That optimizer keeps no step history, so any difference after the restart comes from the file.
 The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017}.
 A force equal to the band tolerance moves an atom by \(2\times 10^{-4}\,\text{\AA}\) under that step.
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and \(\rfCallsUnint\) force calls, with barrier \(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the middle image.
@@ -685,12 +682,12 @@ Symbol & Meaning & Configuration key & Value \\
 
 \input{figures/generated/restart_main}
 
-The shortest CON round trip changes no coordinate, and the resumed band is the uninterrupted band bit for bit: the same \(\rfStepsCon\) steps, \(\rfModesCon\) free modes on the middle image, and the same coordinates and energy on every image (Figure~\ref{fig:restartfmt}).
+The shortest CON round trip changes no coordinate, and the resumed band matches the uninterrupted band bit for bit: the same \(\rfStepsCon\) steps, \(\rfModesCon\) free modes on the middle image, and the same coordinates and energy on every image (Figure~\ref{fig:restartfmt}).
 Every force evaluation builds its EMT calculators afresh, so a step depends on the positions alone.
 The ASE trajectory with identifiers in tags and H5MD written and read with h5py return the same row.
 POSCAR with the height held as FixScaled moves one coordinate by \(\num{\rfFileScaledNum}\,\text{\AA}\) and shifts the resumed barrier by \(\num{\rfDeScaledLoNum}\) to \(\num{\rfDeScaledHiNum}\,\mathrm{eV}\).
 Six decimals move the file by \(\num{\rfFileSixNum}\,\text{\AA}\) and the barrier by \(\num{\rfDeSixNum}\,\mathrm{eV}\), and extended XYZ written by ASE moves them by \(\num{\rfFileXyzNum}\,\text{\AA}\) and \(\num{\rfDeXyzNum}\,\mathrm{eV}\), all in the same step count.
-Each shift is printed to the figures on which reruns on the linear-algebra builds of four host generations agree, or as their range (Section~\ref*{sec:supp-restart}).
+Each shift is printed to the significant figures on which reruns with the linear-algebra builds of four host generations agree, or as their range when they do not (Section~\ref*{sec:supp-restart}).
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart_formats.pdf} \caption{\textbf{The CON 3.1 restart lies on the uninterrupted band.}
 Energy of each image above the first image, from the stored EMT bands.
@@ -698,27 +695,27 @@ The uninterrupted band and the shortest CON 3.1 round trip overlie each other.
 Extended XYZ, six decimals and the ASE trajectory are drawn together.}
 \label{fig:restartfmt} \end{figure}
 
-\subsection{The mask and the prefactor}\label{sec:prefactor} A barrier is one number, and the harmonic prefactor needs the free modes at the saddle.
+\subsection{The mask and the prefactor}\label{sec:prefactor} A barrier is one number, but the harmonic prefactor needs the free modes at the saddle.
 In harmonic transition state theory the rate is \(k=\nu\exp(-\Delta E^\ddagger/k_{\mathrm{B}}T)\) with the Vineyard prefactor \cite{vineyardFrequencyFactorsIsotope1957}
 \begin{equation}
 \label{eq:vineyard}
 \nu=\frac{\prod_{i=1}^{n}\nu_i^{\mathrm{min}}}{\prod_{i=1}^{n-1}\nu_i^{\ddagger}},
 \end{equation}
 where the products run over the \(n\) free modes of the minimum and the \(n-1\) real modes of the saddle.
-A mask that frees one more component can move the saddle itself, besides adding a mode to each product.
-We wrote the endpoints of the same slab through each route and read them back before relaxing them, converged a climbing-image band with the fast inertial relaxation engine (FIRE) \cite{bitzekStructuralRelaxationMade2006}, and took the Hessian of the highest image.
+A mask that frees one more component adds a mode to each product, and it can also move the saddle itself.
+We wrote the endpoints of the same slab through each route and read them back before relaxing them.
+We then converged a climbing-image band with the fast inertial relaxation engine (FIRE) \cite{bitzekStructuralRelaxationMade2006} and took the Hessian of the highest image.
 With the height held, the barrier is \(\eFiveBarrierHeld\,\mathrm{eV}\) on a path of \(\eFivePathHeld\,\text{\AA}\).
 The highest image has \(\eFiveModesHeld\) free modes, one imaginary mode of \(\eFiveImagHeld\,\mathrm{meV}\) with \(\eFiveWeightHeld\) of its weight on the lateral motion of the adatom, and a prefactor of \(\num{\eFivePrefactorHeldNum}\,\mathrm{Hz}\).
 CON 3.1, the ASE trajectory, FixScaled POSCAR and h5py H5MD all return that prefactor (Table~\ref{tab:prefactor-routes}).
-With the height free, the problem a reader solves when the file has lost the hold, the band crosses a saddle at \(\eFiveBarrierFree\,\mathrm{eV}\) with \(\eFiveModesFree\) free modes and a prefactor of \(\num{\eFivePrefactorFreeNum}\,\mathrm{Hz}\), \sigfig{2}{\eFivePrefactorRatioFree} times the held value.
+With the height free, which is the problem a reader solves when the file has lost the hold, the band crosses a saddle at \(\eFiveBarrierFree\,\mathrm{eV}\) with \(\eFiveModesFree\) free modes and a prefactor of \(\num{\eFivePrefactorFreeNum}\,\mathrm{Hz}\), \sigfig{2}{\eFivePrefactorRatioFree} times the held value.
 
 \input{figures/generated/e5_routes}
 
-\subsection{eOn resuming a Morse band}\label{sec:eon-band} The public eOn client resumes from its own output files.
-Section~\ref{sec:host} times that client on every frame, through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} on the frames \texttt{ConFileIO} reads.
-ASE ase.io (format eon) is the independent CON reader timed beside it.
-The default band optimizer of eOn is the limited-memory form, L-BFGS, of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and its memory vectors are stored in no geometry file.
-A restart therefore cannot repeat an L-BFGS path from the geometry alone.
+\subsection{eOn resuming a Morse band}\label{sec:eon-band} The public eOn client resumes a band from its own output files.
+Section~\ref{sec:host} times the readers of that client on every frame, through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} over the frames that \texttt{ConFileIO} reads, with the eon format of \texttt{ase.io} as an independent CON reader beside them.
+The default band optimizer of eOn is L-BFGS, the limited-memory form of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and no geometry file stores its memory vectors.
+A restart therefore cannot repeat an L-BFGS path from the geometry alone, and the band of Figure~\ref{fig:restart} uses steepest descent.
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/restart.pdf} \caption{\textbf{The resumed Morse band ends on the uninterrupted barrier.}
 Left: force calls of the uninterrupted steepest-descent band and of the three resumes.
