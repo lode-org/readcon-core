@@ -124,7 +124,7 @@ A JSON line states the version and the units.
 Each coordinate row carries a mask of fixed components and an atom identifier, and a reader of a known major accepts any later minor.
 Two corpora of \corpusFiles{} files fix the verdict of a conforming reader, and every Python and C read path returns that verdict.
 On a platinum slab, a climbing-image band resumed from CON 3.1 repeats the uninterrupted band, and a lost hold changes the prefactor by a factor \sigfig{2}{\eFivePrefactorRatioFree}.
-A borrowed DLPack view of \dlpackAtoms{} positions costs \dlpackRatio{} times an explicit copy, the median of eight repeats.
+A borrowed DLPack view of \dlpackAtoms{} positions costs \dlpackRatio{} times an explicit copy, the median of six repeats.
 \end{abstract}
 
 
@@ -548,15 +548,15 @@ The lifetime of each borrowed tensor is the builder, and the default build place
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
 Python materialises a contiguous NumPy array, and that array implements the DLPack protocol, so PyTorch, JAX and CuPy take the array with no second copy.
 The measured exchange is a NumPy DLPack view against an explicit copy of the same positions, for \dlpackAtoms{} copper atoms.
-The log records eight repeats of each arm.
+The record holds six repeats of each arm.
 The view takes a median of \dlpackViewUs{} microseconds and the copy a median of \dlpackCopyUs{} microseconds, so the view costs \dlpackRatio{} times the copy.
-A 95 percent bootstrap interval for that ratio, drawn from those eight samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
+A 95 percent bootstrap interval for that ratio, drawn from those six samples, is \dlpackRatioLo{} to \dlpackRatioHi{}, and the interval excludes 1.
 The type 7 interquartile ranges are \dlpackViewIqr{} microseconds and \dlpackCopyIqr{} microseconds.
-Figure~\ref{fig:dlpack} shows the eight repeats.
-The log is \path{paper/cpc/logs/dlpack-exchange.log}.
+Figure~\ref{fig:dlpack} shows the six repeats.
+The record is \path{paper/cpc/data/dlpack_cost.txt}.
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/dlpack.pdf} \caption{\textbf{A borrowed DLPack view costs \dlpackRatio{} times a copy of the same positions.}
-Eight repeats on \dlpackAtoms{} atoms.
+Six repeats on \dlpackAtoms{} atoms.
 The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
