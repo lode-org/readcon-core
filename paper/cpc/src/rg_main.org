@@ -290,7 +290,7 @@ A frame whose header is anything else is grammar version~1, the text written by 
 In Listing~\ref{lst:frame} the object names the major and minor version of the grammar, declares the slab periodic in \(x\) and \(y\) and open in \(z\), lists \texttt{velocities} as the only section after the coordinates, and gives the units of length, energy, mass and time.
 
 The two cell lines carry the lengths \(a=b\approx\wkLengthA\,\text{\AA}\) and \(c=\wkLengthC\,\text{\AA}\) and the angles \(\alpha\), \(\beta\) and \(\gamma\) in degrees.
-From these the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane \cite{bekkerUnificationBoxShapes1997},
+From these the reader rebuilds the cell with \(\mathbf{a}\) along \(x\) and \(\mathbf{b}\) in the \(xy\) plane, the restricted triclinic form of LAMMPS \cite{thompsonLammpsFlexibleSimulation2022},
 \begin{equation}
 \label{eq:cell}
 \begin{aligned}
