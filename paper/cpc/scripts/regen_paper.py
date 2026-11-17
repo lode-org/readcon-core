@@ -24,6 +24,7 @@ generated file was written from.  A file read inside a top-level function of
 the step's script counts for the outputs that function writes; a file read
 elsewhere counts for every output.  readcon opens files in Rust, out of the
 hook's sight, so the hook wraps the readcon functions that take a path.
+The steps of ``RECORD_FRAGMENTS`` run first, outside the hook.
 
 Every step runs with ``SOURCE_DATE_EPOCH`` and ``FORCE_SOURCE_DATE`` set, so
 the figures carry a fixed date.
@@ -117,6 +118,11 @@ FORMAT = [
     ["scripts/db_from_log.py"],
     ["scripts/mpi_from_log.py"],
 ]
+
+# Fragments written from a committed record. They run before FORMAT and outside the ledger, so the
+# version map names no step for them and sinum.py finds them. The DLPack macros are a tracked file;
+# bench_dlpack.py times a new run instead.
+RECORD_FRAGMENTS = [["scripts/gen_dlpack_macros.py"]]
 
 VERSION_MAP = ["scripts/gen_version_map.py"]
 
@@ -257,6 +263,8 @@ def main() -> None:
         stdout=subprocess.DEVNULL,
     )
     ledger: list[dict] = []
+    for step in RECORD_FRAGMENTS:
+        run(step, env)
     for step in FORMAT:
         run(step, env, ledger)
     READS.parent.mkdir(parents=True, exist_ok=True)
