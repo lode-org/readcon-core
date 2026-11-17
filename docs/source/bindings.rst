@@ -621,7 +621,9 @@ the message (also ``rkr_last_error_message``) ends with
 ``NonFiniteValue: non-finite value: cell field cell[1] is NaN``. A read names
 the frame too: ``cell field boxl[1] of frame 1 is NaN``, and ``frame_index``
 of the error is 1. C++ ``readcon::ConFrameBuilder`` throws ``readcon::Error`` with the same
-code and text.
+code and text. Fortran ``new_builder`` returns an invalid builder, so test
+``bd%valid()``, and the later calls return ``rkr_status_null_pointer``. Julia
+``write_con`` throws ``ReadConError``.
 
 Path iterator + compression + in-memory buffers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
