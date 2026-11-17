@@ -1238,10 +1238,12 @@ fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
             n: 0,
         });
     });
-    if !std::ptr::eq(
-        std::sync::Arc::as_ptr(&atoms[0].symbol) as *const u8,
-        hint.symbol,
-    ) {
+    if !atoms.iter().all(|atom| {
+        std::ptr::eq(
+            std::sync::Arc::as_ptr(&atom.symbol) as *const u8,
+            hint.symbol,
+        )
+    }) {
         return;
     }
     release_arc_str_count(&atoms[0].symbol, n);
@@ -5212,6 +5214,27 @@ mod tests {
         // `releasing_the_last_counts_drops_the_value` shows the release runs
         // the drop.
         assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn bulk_symbol_drop_rejects_a_mutated_nonfirst_symbol() {
+        let text = uniform_frame_text(2048);
+        let mut frame = crate::iterators::ConFrameIterator::new(&text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        mark_uniform_symbol_drop(&frame.atom_data);
+        frame.atom_data[2047].symbol = Arc::from("H");
+
+        bulk_drop_uniform_symbols(&mut frame.atom_data);
+
+        assert_eq!(
+            frame.atom_data.len(),
+            2048,
+            "a non-uniform buffer took the bulk drop path"
+        );
+        assert_eq!(&*frame.atom_data[0].symbol, "Cu");
+        assert_eq!(&*frame.atom_data[2047].symbol, "H");
     }
 
     #[test]
