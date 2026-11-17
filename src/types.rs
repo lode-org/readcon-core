@@ -1315,7 +1315,7 @@ fn stash_snapshot_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
     });
 }
 
-fn arc_str_strong(symbol: &std::sync::Arc<str>) -> *const std::sync::atomic::AtomicUsize {
+fn arc_str_strong<T: ?Sized>(symbol: &std::sync::Arc<T>) -> *const std::sync::atomic::AtomicUsize {
     let header = 2 * std::mem::size_of::<usize>();
     let align = std::mem::align_of_val(symbol.as_ref());
     let rem = header % align;
@@ -1328,7 +1328,7 @@ fn arc_str_strong(symbol: &std::sync::Arc<str>) -> *const std::sync::atomic::Ato
     unsafe { bytes.sub(offset) as *const std::sync::atomic::AtomicUsize }
 }
 
-fn release_arc_str_count(symbol: &std::sync::Arc<str>, n: usize) {
+fn release_arc_str_count<T: ?Sized>(symbol: &std::sync::Arc<T>, n: usize) {
     if n == 0 {
         return;
     }
@@ -5169,6 +5169,31 @@ mod tests {
     }
 
     #[test]
+    fn releasing_the_last_counts_drops_the_value() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Counted(Arc<AtomicUsize>);
+        impl Drop for Counted {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let n = 2048;
+        let drops = Arc::new(AtomicUsize::new(0));
+        let value = Arc::new(Counted(Arc::clone(&drops)));
+        let weak = Arc::downgrade(&value);
+        bump_arc_str(&value, n);
+        // The shares stand in for the atoms. The bulk drop gives their counts
+        // back in one call instead of dropping each one.
+        let mut shares: Vec<Arc<Counted>> = (0..n).map(|_| share_arc_str(&value)).collect();
+        drop(value);
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        release_arc_str_count(&shares[0], n);
+        unsafe { shares.set_len(0) };
+        assert_eq!(drops.load(Ordering::SeqCst), 1, "the value was not dropped");
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
     fn bulk_symbol_drop_frees_a_symbol_the_atoms_held_last() {
         let n = 2048;
         let symbol: Arc<str> = Arc::from("O");
@@ -5189,13 +5214,9 @@ mod tests {
         drop(symbol);
         bulk_drop_uniform_symbols(&mut atoms);
         assert!(atoms.is_empty(), "the bulk path did not run");
+        // `releasing_the_last_counts_drops_the_value` shows the release runs
+        // the drop.
         assert!(weak.upgrade().is_none());
-        // `weak` keeps the allocation. Its weak count is 1 once the last
-        // strong reference has released the implicit one.
-        let probe = std::mem::ManuallyDrop::new(unsafe { Arc::from_raw(weak.as_ptr()) });
-        let strong = arc_str_strong(&probe);
-        let weak_count = unsafe { (*strong.add(1)).load(std::sync::atomic::Ordering::Relaxed) };
-        assert_eq!(weak_count, 1, "the last symbol reference was not dropped");
     }
 
     #[test]
