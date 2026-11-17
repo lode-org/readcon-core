@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -13,7 +14,11 @@ import readcon
 
 assert sys._is_gil_enabled() is False
 
-root = Path(os.environ.get("READCON_TSAN_WORK", "/tmp/readcon-tsan-writer-v3"))
+root = (
+    Path(configured)
+    if (configured := os.environ.get("READCON_TSAN_WORK"))
+    else Path(tempfile.mkdtemp(prefix="readcon-tsan-writer-v3-"))
+)
 root.mkdir(parents=True, exist_ok=True)
 source = root / "source.con"
 with source.open("w", encoding="ascii") as out:
