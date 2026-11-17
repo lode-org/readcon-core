@@ -540,7 +540,7 @@ The PyO3 module sets \texttt{gil\_used = false}.
 Continuous integration tests run on free-threaded Python \texttt{3.13t} and \texttt{3.14t} alongside standard builds.
 Parsing, formatting, file writes, and correspondence checks detach the Python thread state with \texttt{py.detach}.
 Every Python write path snapshots or converts Python-reachable input while attached, then performs formatting, compression and file I/O while detached; this includes compressed writes of non-stored frame lists, plain writes after indexing and appends of \texttt{ConFrame} lists.
-Calling \texttt{touch\_checksum()} detaches while the coordinate slab is private, and stays attached once Python holds the shared slab.
+Calling \texttt{touch\_checksum()} needs the shared coordinate slab; it copies the slab element by element while attached and then walks the frames detached.
 On an unindexed frame, \texttt{coords\_array()} copies coordinates straight from the parsed frame buffer into an owned NumPy array without building per-atom Python objects.
 When the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
 
