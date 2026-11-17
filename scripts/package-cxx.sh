@@ -93,14 +93,28 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 DEST="${TMP_DIR}/${ARCHIVE_NAME}"
 mkdir -p "$DEST"/{cmake,include,src,scripts,examples,resources/test}
+PACKAGE_ROOT="$ROOT_DIR"
 
 # Crate sources: cargo package for a clean, publish-shaped tree, then overlay
 # the CMake/Meson install surface cargo package does not treat as crate files.
-cd "$ROOT_DIR"
-# A dirty tree is not the checkout CI packages. --allow-dirty made a local
-# pin disagree with that digest.
+# Tracked edits are never allowed. If there are only untracked files, package
+# from a clean checkout at HEAD so cargo package sees the same tracked tree.
+if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    status="$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal)"
+    if [[ -n "$status" ]]; then
+        if printf '%s\n' "$status" | grep -qvE '^\?\? '; then
+            echo "package-cxx: tracked changes present; commit or stash before packaging" >&2
+            exit 1
+        fi
+        PACKAGE_ROOT="${TMP_DIR}/clean-head-source"
+        head_sha="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+        git clone --quiet --no-hardlinks "$ROOT_DIR" "$PACKAGE_ROOT"
+        git -C "$PACKAGE_ROOT" checkout --quiet --detach "$head_sha"
+    fi
+fi
+cd "$PACKAGE_ROOT"
 cargo package --no-verify --package readcon-core
-CRATE_TAR="$(ls -1 "$ROOT_DIR"/target/package/readcon-core-"${VERSION}".crate)"
+CRATE_TAR="$(ls -1 "$PACKAGE_ROOT"/target/package/readcon-core-"${VERSION}".crate)"
 mkdir -p "${TMP_DIR}/crate"
 tar -C "${TMP_DIR}/crate" -xf "$CRATE_TAR"
 CRATE_DIR="$(find "${TMP_DIR}/crate" -mindepth 1 -maxdepth 1 -type d | head -1)"
@@ -110,20 +124,20 @@ cp -a "${CRATE_DIR}/." "$DEST/"
 rm -f "$DEST/cbindgen.toml"
 
 # Overlay the C/C++ distribution files (always, even if cargo package omitted them).
-cp -a "$ROOT_DIR/VERSION" "$DEST/"
-cp -a "$ROOT_DIR/CMakeLists.txt" "$DEST/"
-cp -a "$ROOT_DIR/cmake/." "$DEST/cmake/"
-cp -a "$ROOT_DIR/meson.build" "$DEST/"
-cp -a "$ROOT_DIR/meson_options.txt" "$DEST/"
-cp -a "$ROOT_DIR/include/." "$DEST/include/"
-cp -a "$ROOT_DIR/scripts/meson_cargo_build.py" "$DEST/scripts/"
-cp -a "$ROOT_DIR/examples/c_api_sample.c" "$DEST/examples/"
-cp -a "$ROOT_DIR/examples/cpp_api_sample.cpp" "$DEST/examples/"
-cp -a "$ROOT_DIR/examples/meson.build" "$DEST/examples/"
-cp -a "$ROOT_DIR/resources/test/tiny_multi_cuh2.con" "$DEST/resources/test/"
-cp -a "$ROOT_DIR/LICENSE" "$DEST/"
-if [[ -f "$ROOT_DIR/Cargo.lock" ]]; then
-    cp -a "$ROOT_DIR/Cargo.lock" "$DEST/"
+cp -a "$PACKAGE_ROOT/VERSION" "$DEST/"
+cp -a "$PACKAGE_ROOT/CMakeLists.txt" "$DEST/"
+cp -a "$PACKAGE_ROOT/cmake/." "$DEST/cmake/"
+cp -a "$PACKAGE_ROOT/meson.build" "$DEST/"
+cp -a "$PACKAGE_ROOT/meson_options.txt" "$DEST/"
+cp -a "$PACKAGE_ROOT/include/." "$DEST/include/"
+cp -a "$PACKAGE_ROOT/scripts/meson_cargo_build.py" "$DEST/scripts/"
+cp -a "$PACKAGE_ROOT/examples/c_api_sample.c" "$DEST/examples/"
+cp -a "$PACKAGE_ROOT/examples/cpp_api_sample.cpp" "$DEST/examples/"
+cp -a "$PACKAGE_ROOT/examples/meson.build" "$DEST/examples/"
+cp -a "$PACKAGE_ROOT/resources/test/tiny_multi_cuh2.con" "$DEST/resources/test/"
+cp -a "$PACKAGE_ROOT/LICENSE" "$DEST/"
+if [[ -f "$PACKAGE_ROOT/Cargo.lock" ]]; then
+    cp -a "$PACKAGE_ROOT/Cargo.lock" "$DEST/"
 fi
 
 # cargo package extracts a crate, not a workspace. Make cargo rustc happy
@@ -144,7 +158,7 @@ EOF
 fi
 if [[ ! -d "$DEST/third_party/metatensor-sys" ]]; then
     mkdir -p "$DEST/third_party"
-    cp -a "$ROOT_DIR/third_party/metatensor-sys" "$DEST/third_party/"
+    cp -a "$PACKAGE_ROOT/third_party/metatensor-sys" "$DEST/third_party/"
 fi
 
 if [[ ! -f "$DEST/Cargo.lock" ]]; then
@@ -226,13 +240,13 @@ rm -f "$DEST/.cargo_vcs_info.json" || true
 find "$DEST" -depth -type d -name '__pycache__' -exec rm -rf {} +
 find "$DEST" -type f -name '*.pyc' -delete
 mkdir -p "$DEST/tests"
-cp -a "$ROOT_DIR/tests/cmake-project" "$DEST/tests/"
-cp -a "$ROOT_DIR/tests/meson-wrap" "$DEST/tests/"
+cp -a "$PACKAGE_ROOT/tests/cmake-project" "$DEST/tests/"
+cp -a "$PACKAGE_ROOT/tests/meson-wrap" "$DEST/tests/"
 
 # Sorted names, uid 0, SOURCE_DATE_EPOCH, and gzip -n. Two builds of one
 # tree share a digest. The wrap pin is not a member of this archive.
 bash "$SCRIPT_DIR/reproducible-tar.sh" \
-    "$ROOT_DIR" \
+    "$PACKAGE_ROOT" \
     "$TMP_DIR" \
     "$ARCHIVE_NAME" \
     "${TMP_DIR}/${ARCHIVE_NAME}.tar.gz"
@@ -252,7 +266,7 @@ echo "${SHA}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.tar.gz.sha256"
 # A Meson wrap for this archive only. The filename is the archive name, so a
 # vendor build cannot replace the slim wrap. These files are build provenance.
 # The release directory copied by cxx_tarball.yml does not include them.
-if [[ "$VENDOR" -eq 0 && ! -f "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in" ]]; then
+if [[ "$VENDOR" -eq 0 && ! -f "$PACKAGE_ROOT/packaging/wrapdb/readcon-core.wrap.in" ]]; then
     echo "missing packaging/wrapdb/readcon-core.wrap.in" >&2
     exit 1
 fi
@@ -274,7 +288,7 @@ else
     {
         echo "# archive = readcon-core-cxx-${VERSION}.tar.gz"
         sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
-            "$ROOT_DIR/packaging/wrapdb/readcon-core.wrap.in"
+            "$PACKAGE_ROOT/packaging/wrapdb/readcon-core.wrap.in"
     } > "${OUTPUT_DIR}/${WRAP_NAME}"
 fi
 echo "${OUTPUT_DIR}/${WRAP_NAME}"
