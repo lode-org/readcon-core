@@ -139,6 +139,70 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+/// Start of the text of a [`ParseError::NonFiniteValue`] that names a cell field.
+const CELL_FIELD: &str = "cell field ";
+const CELL_VALUE_JOINT: &str = " is ";
+
+impl ParseError {
+    /// A cell number that is NaN or infinite, as [`ParseError::NonFiniteValue`].
+    ///
+    /// `field` is the name the caller knows the number by, for example
+    /// `boxl[1]`, `angles[2]`, `cell[4]`, or `lattice_vectors[0][2]`.
+    /// `value` is its spelling: the token of a file, or the Rust rendering of
+    /// the number (`NaN`, `inf`, `-inf`). [`Self::in_frame`] adds the frame.
+    pub fn non_finite_cell(field: &str, value: impl std::fmt::Display) -> Self {
+        ParseError::NonFiniteValue(format!("{CELL_FIELD}{field}{CELL_VALUE_JOINT}{value}"))
+    }
+
+    /// Recover the typed error from the text a `String`-error layer carries.
+    ///
+    /// The extended-XYZ and PDB scanners report errors as text. A message
+    /// made by `to_string` on a cell error comes back as the same error; any
+    /// other message gives `None`.
+    #[must_use]
+    pub fn from_cell_text(message: &str) -> Option<Self> {
+        let rest = message.strip_prefix("non-finite value: ")?;
+        rest.starts_with(CELL_FIELD)
+            .then(|| ParseError::NonFiniteValue(rest.to_string()))
+    }
+
+    /// True for the error [`Self::non_finite_cell`] makes.
+    pub fn is_non_finite_cell(&self) -> bool {
+        matches!(self, ParseError::NonFiniteValue(text) if text.starts_with(CELL_FIELD))
+    }
+
+    /// The 0-based frame a non-finite cell error names, if it names one.
+    #[must_use]
+    pub fn named_frame(&self) -> Option<u64> {
+        let ParseError::NonFiniteValue(text) = self else {
+            return None;
+        };
+        let rest = text.strip_prefix(CELL_FIELD)?;
+        let (field, _) = rest.split_once(CELL_VALUE_JOINT)?;
+        let (_, frame) = field.split_once(" of frame ")?;
+        frame.parse().ok()
+    }
+
+    /// Names `frame` (0-based) in a non-finite cell error that does not name
+    /// one yet. Every other error, and a cell error that already names a
+    /// frame, is returned as it was.
+    #[must_use]
+    pub fn in_frame(self, frame: u64) -> Self {
+        let ParseError::NonFiniteValue(text) = &self else {
+            return self;
+        };
+        let Some(rest) = text.strip_prefix(CELL_FIELD) else {
+            return self;
+        };
+        match rest.split_once(CELL_VALUE_JOINT) {
+            Some((field, value)) if !field.contains(' ') => ParseError::NonFiniteValue(format!(
+                "{CELL_FIELD}{field} of frame {frame}{CELL_VALUE_JOINT}{value}"
+            )),
+            _ => self,
+        }
+    }
+}
+
 impl ParseError {
     /// Stable class name from the v3.1 error table (CON-error.1).
     pub fn class_name(&self) -> &'static str {
@@ -219,7 +283,7 @@ impl LocatedParseError {
             error.line()
         };
         Self {
-            error,
+            error: error.in_frame(frame_index),
             line,
             frame_index,
         }
