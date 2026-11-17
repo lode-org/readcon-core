@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
-from numbers_lib import REPO, ROOT, Rule, jget
+from numbers_lib import REPO, ROOT, Rule, grep, jget
 
 GIT_DRIFT = "paper/cpc/data/spec/version_drift.json"
 
@@ -40,6 +41,22 @@ DRIFT_LINE = (
     rf"{DOC}~published wheels of readcon-core",
     r"rg_supp.tex~The drift comparison gives the probe files to the published readcon wheels",
 )
+
+
+READER_EXCHANGE = "logs/reader-exchange.log"
+BIB = "src/rg_main.bib"
+EON_PIN = "goswamiTheochemuieonCommitBf5d3282026"
+
+
+def eon_pin() -> str:
+    """The readcon-core version that eOn commit bf5d328 pins, as its cited entry titles it."""
+    entry = grep(BIB, rf"^@misc\{{{EON_PIN},\n((?:.*\n)*?)\}}$")
+    url = r"url = \{https://github\.com/TheochemUI/eOn/commit/bf5d328[0-9a-f]{33}\}"
+    title = r"title = \{.*commit bf5d328, pin readcon-core ([0-9]+\.[0-9]+\.[0-9]+) "
+    found = re.search(title, entry)
+    if not re.search(url, entry) or not found:
+        raise SystemExit(f"{BIB}: {EON_PIN} names no bf5d328 commit URL and pinned version")
+    return found.group(1)
 
 
 def opener(library: str, peer: str) -> str:
@@ -104,5 +121,19 @@ RULES = [
             DRIFT_LINE,
         )
         for v in ("0.17.0", "0.17.1", "0.17.2")
+    ),
+    Rule(
+        "0.20.0",
+        eon_pin(),
+        BIB,
+        f"readcon-core version that eOn commit bf5d328 pins, from the title of {EON_PIN}",
+        (rf"{DOC}~{EON_PIN}",),
+    ),
+    Rule(
+        "3.6.0",
+        grep(READER_EXCHANGE, r"^eon_version (\S+)$"),
+        READER_EXCHANGE,
+        "eon_version of the timed eon.fileio.loadcons arm",
+        (rf"{DOC}~times faster than eOn 3\.6\.0 \\texttt\{{loadcons\}}",),
     ),
 ]
