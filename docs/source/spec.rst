@@ -590,6 +590,8 @@ CON-num.9 \:\: MUST
 eOn ``.convel`` output at 6 digits after the decimal (``kConvelPrecision`` in ``client/ConFileIO.cpp:43``) is fixed-decimal and lossy.
 The kinetic-energy loss for that rounding was measured on one 336-atom Pt slab at 300 K (one Maxwell-Boltzmann draw) as 5.8e-7 relative.
 
+Cell numbers are the ``boxl`` and ``angles`` lines, the extended XYZ ``Lattice`` string, the PDB ``CRYST1`` record, the CON-bin cell column, and the cell or lattice an API caller passes to a builder or a column writer. A NaN or an infinity in one, or a decimal binary64 cannot hold such as ``1e999``, is ``NonFiniteValue``. The message names the field and, when the entry point knows it, the 0-based frame: ``non-finite value: cell field boxl[1] of frame 1 is NaN``. The field is ``boxl[i]``, ``angles[i]``, ``Lattice[i]``, ``cell[i]``, or ``lattice_vectors[r][c]``. A writer refuses a frame whose cell is non-finite with the same class and writes none of that frame. A refused batch or path write creates no file. A cell that is finite in binary64 and infinite in binary32 is refused when a file is written as binary32.
+
 A float token is an optional ``+`` or ``-``, a significand with at least one digit, an optional fraction (a leading dot is allowed), and an optional exponent. An integer token is one or more ASCII digits and nothing else.
 
 .. _compression:
@@ -628,7 +630,7 @@ A reader that stops at the first error MUST use the lowest line number, so threa
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | ``InvalidMetadataJson``     | Line 2 is malformed JSON, a reserved key has the wrong type, or ``validate`` true omits ``sections``.                                                                                  |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``NonFiniteValue``          | NaN, Inf, or a spelling of either, any mode.                                                                                                                                           |
+    | ``NonFiniteValue``          | NaN, Inf, or a spelling of either, any mode. A cell field is named, with its frame when known.                                                                                         |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | ``InvalidFixedFlag``        | Column 4 is not a legal integer flag, any mode.                                                                                                                                        |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
