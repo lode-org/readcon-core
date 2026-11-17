@@ -1262,6 +1262,9 @@ fn bulk_drop_uniform_symbols(atoms: &mut Vec<AtomDatum>) {
 thread_local! {
     static ATOM_SPARE: std::cell::RefCell<Vec<std::mem::MaybeUninit<AtomDatum>>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    static SNAPSHOT_ATOM_SPARES:
+        std::cell::RefCell<Vec<Vec<std::mem::MaybeUninit<AtomDatum>>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn take_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
@@ -1280,6 +1283,34 @@ fn stash_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
         let mut slot = cell.borrow_mut();
         if buf.capacity() > slot.capacity() {
             *slot = buf;
+        }
+    });
+}
+
+#[cfg(feature = "python")]
+fn take_snapshot_atom_spare(n: usize) -> Vec<std::mem::MaybeUninit<AtomDatum>> {
+    SNAPSHOT_ATOM_SPARES.with(|cell| {
+        let mut pool = cell.borrow_mut();
+        if let Some(index) = pool.iter().position(|buf| buf.capacity() >= n) {
+            pool.swap_remove(index)
+        } else {
+            Vec::with_capacity(n)
+        }
+    })
+}
+
+#[cfg(feature = "python")]
+fn stash_snapshot_atom_spare(buf: Vec<std::mem::MaybeUninit<AtomDatum>>) {
+    const CAP_BYTES: usize = 64 * 1024 * 1024;
+    SNAPSHOT_ATOM_SPARES.with(|cell| {
+        let mut pool = cell.borrow_mut();
+        let used = pool
+            .iter()
+            .map(|entry| entry.capacity() * std::mem::size_of::<AtomDatum>())
+            .sum::<usize>();
+        let bytes = buf.capacity() * std::mem::size_of::<AtomDatum>();
+        if used.saturating_add(bytes) <= CAP_BYTES {
+            pool.push(buf);
         }
     });
 }
@@ -1337,49 +1368,79 @@ impl Drop for ConFrame {
 }
 
 #[cfg(feature = "python")]
-impl AtomDatum {
-    /// This atom with its coordinates read from the three `f64`s at `slot`.
-    ///
-    /// The symbol and the section tail are shared with `self`, not owned,
-    /// so the view must be discarded without running its destructor and
-    /// must not outlive `self`.
-    unsafe fn view_at(&self, slot: *mut f64) -> Self {
-        Self {
-            symbol: unsafe { std::ptr::read(&self.symbol) },
-            atom_id: self.atom_id,
-            xyz: slot,
-            tail: self.tail & !TAIL_OWNED,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
 impl ConFrame {
+    /// Coordinates as one contiguous raw pointer.
+    ///
+    /// Frame views built from a slab and parsed frames with row-major SoA
+    /// storage return this. Other layouts fall back to per-atom reads.
+    #[cfg(feature = "python")]
+    fn coord_ptr_len(&self) -> Option<(*const f64, usize)> {
+        if self.positions.kind() != crate::storage_dtype::ElementKind::Float64 {
+            return None;
+        }
+        let want = self.atom_data.len().checked_mul(3)?;
+        if self.positions.nrows().checked_mul(self.positions.ncols())? != want {
+            return None;
+        }
+        let ptr = self.positions.data_ptr();
+        if ptr.is_null() {
+            return None;
+        }
+        Some((ptr.cast::<f64>(), want))
+    }
+
     /// This frame with atom `i` reading its coordinates at `base + 3 i`,
     /// first copied there when `fill` is set.
     ///
     /// The atom vector and the metadata map cell are new. Every other
     /// field is shared with `self`, so the same rules as
-    /// [`AtomDatum::view_at`] apply. Another reader may fill the source
-    /// map cell meanwhile, so that cell is never copied bit for bit; the
-    /// view starts with the map the source already had, if any. The flag
-    /// says whether it did.
+    /// Another reader may fill the source map cell meanwhile, so that cell
+    /// is never copied bit for bit; the view starts with the map the source
+    /// already had, if any. The flag says whether it did.
     unsafe fn view_onto(&self, base: *mut f64, fill: bool) -> (ConFrame, bool) {
         use std::ptr::read;
-        let atom_data: Vec<AtomDatum> = self
-            .atom_data
-            .iter()
-            .enumerate()
-            .map(|(index, atom)| unsafe {
-                let slot = base.add(index * 3);
-                if fill {
-                    slot.write(atom.x());
-                    slot.add(1).write(atom.y());
-                    slot.add(2).write(atom.z());
-                }
-                atom.view_at(slot)
-            })
-            .collect();
+        let n_atoms = self.atom_data.len();
+        let contiguous = self.coord_ptr_len().map(|(src, _)| src);
+        if fill {
+            if let Some(src) = contiguous {
+                assert_atomic_f64_alignment(src);
+            }
+        }
+        let mut raw = take_snapshot_atom_spare(n_atoms);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.atom_data.as_ptr(),
+                raw.as_mut_ptr().cast::<AtomDatum>(),
+                n_atoms,
+            );
+            raw.set_len(n_atoms);
+        }
+        let mut atom_data = unsafe {
+            Vec::from_raw_parts(
+                raw.as_mut_ptr().cast::<AtomDatum>(),
+                raw.len(),
+                raw.capacity(),
+            )
+        };
+        std::mem::forget(raw);
+        let base_address = base as usize;
+        let contiguous_address = contiguous.map(|ptr| ptr as usize);
+        let retarget = |index: usize, atom: &mut AtomDatum| {
+            let slot = unsafe { (base_address as *mut f64).add(index * 3) };
+            if fill {
+                let source = contiguous_address.map_or_else(
+                    || atom.xyz.cast_const(),
+                    |address| unsafe { (address as *const f64).add(index * 3) },
+                );
+                assert_atomic_f64_alignment(source);
+                unsafe { atomic_copy_f64_serial(source, slot, 3) };
+            }
+            atom.xyz = slot;
+            atom.tail &= !TAIL_OWNED;
+        };
+        for (index, atom) in atom_data.iter_mut().enumerate() {
+            retarget(index, atom);
+        }
         let source = &self.header;
         let map = std::sync::OnceLock::new();
         let shared_map = match source.metadata.map.get() {
@@ -1451,6 +1512,8 @@ pub(crate) struct CoordSnapshot<'a> {
     coords: Arc<Vec<f64>>,
     /// First and last source frame.
     ends: Option<(usize, usize)>,
+    /// Identity of every source frame in order.
+    identities: Arc<[usize]>,
     _sources: std::marker::PhantomData<&'a ConFrame>,
 }
 
@@ -1470,11 +1533,18 @@ impl<'a> CoordSnapshot<'a> {
                 *last as *const ConFrame as usize,
             )
         });
+        let identities: Arc<[usize]> = frames
+            .iter()
+            .map(|slot| {
+                slot.map(|frame| frame as *const ConFrame as usize)
+                    .unwrap_or(0)
+            })
+            .collect();
         // Coordinates the writer last priced for these frames serve again
         // while every bit still matches; nothing writes that buffer. The
         // first frame that differs moves the views to a fresh copy.
         let priced = ends
-            .and_then(|(first, last)| crate::writer::priced_coords(first, last))
+            .and_then(|_| crate::writer::priced_coords(&identities))
             .filter(|priced| priced.len() == total * 3);
         let mut fill = priced.is_none();
         let mut fresh: Vec<f64> = Vec::new();
@@ -1529,6 +1599,7 @@ impl<'a> CoordSnapshot<'a> {
             shared_maps,
             coords,
             ends,
+            identities,
             _sources: std::marker::PhantomData,
         }
     }
@@ -1540,15 +1611,19 @@ impl<'a> CoordSnapshot<'a> {
     /// Lets the writer reuse lengths priced for the same source frames
     /// while the coordinates are bit-for-bit the same.
     pub(crate) fn price_key(&self) -> Option<crate::writer::PriceKey> {
-        let (first, last) = self.ends?;
-        let mut views = self.frames.iter().flatten();
-        let view_first = views.next()?;
-        let view_last = views.last().unwrap_or(view_first);
+        self.ends?;
+        let view_identities: Arc<[usize]> = self
+            .frames
+            .iter()
+            .flatten()
+            .map(|frame| frame as *const ConFrame as usize)
+            .collect();
+        if view_identities.is_empty() {
+            return None;
+        }
         Some(crate::writer::PriceKey {
-            first,
-            last,
-            view_first: view_first as *const ConFrame as usize,
-            view_last: view_last as *const ConFrame as usize,
+            identities: self.identities.clone(),
+            view_identities,
             coords: self.coords.clone(),
         })
     }
@@ -1558,17 +1633,99 @@ impl<'a> CoordSnapshot<'a> {
 /// for bit.
 #[cfg(feature = "python")]
 fn coords_match(frame: &ConFrame, priced: *const f64) -> bool {
+    if let Some((left, n)) = frame.coord_ptr_len() {
+        let right = unsafe { std::slice::from_raw_parts(priced, n) };
+        assert_atomic_f64_alignment(left);
+        for (index, rhs) in right.iter().enumerate() {
+            if unsafe { atomic_load_f64(left.add(index)) }.to_bits() != rhs.to_bits() {
+                return false;
+            }
+        }
+        return true;
+    }
     let priced = unsafe { std::slice::from_raw_parts(priced, frame.atom_data.len() * 3) };
     frame
         .atom_data
         .iter()
         .zip(priced.as_chunks::<3>().0)
         .all(|(atom, xyz)| {
-            (atom.x().to_bits() ^ xyz[0].to_bits())
-                | (atom.y().to_bits() ^ xyz[1].to_bits())
-                | (atom.z().to_bits() ^ xyz[2].to_bits())
+            let source = atom.xyz.cast_const();
+            assert_atomic_f64_alignment(source);
+            (unsafe { atomic_load_f64(source) }.to_bits() ^ xyz[0].to_bits())
+                | (unsafe { atomic_load_f64(source.add(1)) }.to_bits() ^ xyz[1].to_bits())
+                | (unsafe { atomic_load_f64(source.add(2)) }.to_bits() ^ xyz[2].to_bits())
                 == 0
         })
+}
+
+#[cfg(feature = "python")]
+pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
+    assert!(
+        ptr.cast::<std::sync::atomic::AtomicU64>().is_aligned(),
+        "shared f64 storage is not aligned for AtomicU64"
+    );
+}
+
+/// Load one potentially shared `f64` without creating an `f64` reference.
+///
+/// A concurrent writer may change adjacent elements, so a snapshot has no
+/// cross-element atomicity. Each returned element is nevertheless one complete
+/// value observed by a relaxed 64-bit atomic load. Callers must keep the
+/// allocation alive and check [`assert_atomic_f64_alignment`] first.
+#[cfg(feature = "python")]
+#[inline(always)]
+pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
+    f64::from_bits(unsafe { atomic_load_bits(ptr) })
+}
+
+#[cfg(feature = "python")]
+#[inline(always)]
+unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
+    use std::sync::atomic::Ordering;
+    let atomic = ptr.cast::<std::sync::atomic::AtomicU64>();
+    unsafe { (*atomic).load(Ordering::Relaxed) }
+}
+
+/// Copy potentially shared doubles to private storage with relaxed loads.
+///
+/// The loop is explicitly unrolled so release builds issue independent plain
+/// loads on x86-64 and AArch64. The destination must not overlap the source.
+#[cfg(feature = "python")]
+#[inline]
+pub(crate) unsafe fn atomic_copy_f64(src: *const f64, dst: *mut f64, len: usize) {
+    unsafe { atomic_copy_f64_serial(src, dst, len) };
+}
+
+#[cfg(feature = "python")]
+#[inline(always)]
+unsafe fn atomic_copy_f64_serial(src: *const f64, dst: *mut f64, len: usize) {
+    let mut index = 0;
+    while index + 8 <= len {
+        unsafe {
+            dst.add(index).write(atomic_load_f64(src.add(index)));
+            dst.add(index + 1)
+                .write(atomic_load_f64(src.add(index + 1)));
+            dst.add(index + 2)
+                .write(atomic_load_f64(src.add(index + 2)));
+            dst.add(index + 3)
+                .write(atomic_load_f64(src.add(index + 3)));
+            dst.add(index + 4)
+                .write(atomic_load_f64(src.add(index + 4)));
+            dst.add(index + 5)
+                .write(atomic_load_f64(src.add(index + 5)));
+            dst.add(index + 6)
+                .write(atomic_load_f64(src.add(index + 6)));
+            dst.add(index + 7)
+                .write(atomic_load_f64(src.add(index + 7)));
+        }
+        index += 8;
+    }
+    while index < len {
+        unsafe {
+            dst.add(index).write(atomic_load_f64(src.add(index)));
+        }
+        index += 1;
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1580,7 +1737,17 @@ impl Drop for CoordSnapshot<'_> {
             crate::writer::invalidate_packed_lengths_if(frame as *const ConFrame as usize);
             let mut atoms = std::mem::take(&mut frame.atom_data);
             // The atoms are views; only their vector is ours to free.
-            unsafe { atoms.set_len(0) };
+            let capacity = atoms.capacity();
+            let pointer = atoms.as_mut_ptr();
+            std::mem::forget(atoms);
+            let spare = unsafe {
+                Vec::from_raw_parts(
+                    pointer.cast::<std::mem::MaybeUninit<AtomDatum>>(),
+                    0,
+                    capacity,
+                )
+            };
+            stash_snapshot_atom_spare(spare);
             // A map the writer parsed into the view is the view's own.
             let map = frame.header.metadata.map.take();
             if *shared {
