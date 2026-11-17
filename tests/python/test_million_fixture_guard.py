@@ -323,6 +323,23 @@ def test_format_h2h_tables_refuses_stale_one_million_record(
         with pytest.raises(SystemExit):
             tables.table()
 
+    # A missing or zero count is not a measurement. None and 0 stay unsupported.
+    for field, value in (
+        ("n", None),
+        ("cold_n", None),
+        ("cold_n", 0),
+    ):
+        counted = json.loads(json.dumps(unsupported_only_extra))
+        target = next(
+            row
+            for row in counted["rows"]
+            if row.get("structure") == "1M" and row.get("cache") == "unsupported"
+        )
+        target[field] = value
+        (records / "extra" / "cross-format.json").write_text(json.dumps(counted))
+        assert tables._is_unsupported_row(target)
+        assert r"\label{tab:format-h2h}" in tables.table()
+
     # Restore clean unsupported extra and confirm committed 1M mdcompress-mdc
     # unsupported rows also pass in a pinned 1m record.
     (records / "extra" / "cross-format.json").write_text(
