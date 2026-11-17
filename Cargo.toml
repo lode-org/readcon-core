@@ -165,6 +165,10 @@ tempfile = "3"
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
 
+# `asan_run` is passed by hand with `-Zsanitizer=address`.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(asan_run)"] }
+
 [[example]]
 name = "conbin_perf"
 
