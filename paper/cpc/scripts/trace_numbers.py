@@ -29,9 +29,10 @@ clone gives no drift on the first run) and otherwise leaves it in place; it
 then fails when a ledger left from an earlier run differs from the one the
 records give now, so an edit to a record behind a headline fails until the
 ledger is rewritten.  The generated ``src/figures/generated/*.tex`` fragments
-the manuscript inputs are gitignored too; a clean checkout rebuilds them from
-the committed records with the format steps of ``regen_paper.py`` (tables and
-macros only, not figures) before scanning.
+the manuscript inputs are gitignored too; a clean checkout writes the ones that
+are missing, and only those, from the committed records, with the steps of
+``regen_paper.py`` that name them, before scanning.  No figure plotter runs, and
+``clause_coverage.py`` runs as ``--macros``, so no tracked record is rewritten.
 
     python3 paper/cpc/scripts/trace_numbers.py
     python3 paper/cpc/scripts/trace_numbers.py --check
@@ -43,6 +44,7 @@ from __future__ import annotations
 import argparse
 import csv
 import difflib
+import functools
 import importlib
 import io
 import os
@@ -58,8 +60,10 @@ SRC = ROOT / "src"
 LEDGER = ROOT / "data" / "trace" / "numbers.csv"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db")
-# Format steps that write PDFs only; table and macro fragments come from the rest.
+# Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
+# A step that rewrites a tracked record when it runs bare runs with these arguments here, so it writes its fragment only.
+_FRAGMENT_ARGS = {"scripts/clause_coverage.py": ["--macros"]}
 COLUMNS = ("document", "line", "printed", "class", "source", "rule", "value", "macro")
 MACRO_DEF = re.compile(
     r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}"
@@ -323,32 +327,32 @@ def _format_pythons() -> list[str]:
     return list(dict.fromkeys(pythons))
 
 
-def _run_format_steps(python: str, env: dict[str, str]) -> None:
-    import regen_paper
+@functools.lru_cache(maxsize=None)
+def _source(script: str) -> str:
+    return (ROOT / script).read_text()
 
-    repo = ROOT.parents[1]
-    step_env = env
-    if python != sys.executable:
-        bindir = str(Path(python).resolve().parent)
-        step_env = dict(env)
-        step_env["PATH"] = os.pathsep.join([bindir, env.get("PATH", "")])
-    for step in regen_paper.FORMAT:
-        script = step[0]
-        if script.startswith("scripts/plot_") or script in _FORMAT_SKIP:
-            continue
-        command = [python, str(ROOT / script), *step[1:]]
-        subprocess.run(
-            command,
-            cwd=repo,
-            env=step_env,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+
+def names_fragment(script: str, fragment: Path) -> bool:
+    """Whether the script's source names the fragment, as ``"stem"`` or ``"stem.tex"``."""
+    source = _source(script)
+    return (
+        re.search(rf"[\"'/]{re.escape(fragment.stem)}(?:\.tex)?[\"']", source)
+        is not None
+    )
+
+
+def _tail(text: str) -> str:
+    lines = text.strip().splitlines()
+    return lines[-1] if lines else "no output"
 
 
 def ensure_generated() -> None:
-    """Rewrite missing table and macro fragments from the committed records."""
+    """Write the missing fragments, and no other file, from the committed records.
+
+    Only the format steps that name a missing fragment run, in the order of
+    ``regen_paper.FORMAT`` and not once the fragments they name exist.  A
+    figure plotter or a step that writes a tracked record never runs.
+    """
     missing = [path for path in generated_tex_inputs() if not path.is_file()]
     if not missing:
         return
@@ -364,14 +368,57 @@ def ensure_generated() -> None:
     env.setdefault(
         "READCON_LIB", str(repo / "target" / "release" / "libreadcon_core.so")
     )
+    steps = [
+        step
+        for step in regen_paper.FORMAT
+        if not step[0].startswith("scripts/plot_") and step[0] not in _FORMAT_SKIP
+    ]
+    orphans = [
+        path
+        for path in missing
+        if not any(names_fragment(step[0], path) for step in steps)
+    ]
+    if orphans:
+        names = ", ".join(path.relative_to(SRC).as_posix() for path in orphans)
+        raise SystemExit(
+            f"no format step writes {names}; restore it from the repository"
+        )
+    failures: list[str] = []
     for python in _format_pythons():
-        _run_format_steps(python, env)
-        if not [path for path in missing if not path.is_file()]:
+        step_env = env
+        if python != sys.executable:
+            step_env = dict(env)
+            step_env["PATH"] = os.pathsep.join(
+                [str(Path(python).resolve().parent), env.get("PATH", "")]
+            )
+        for step in steps:
+            if not any(
+                not path.is_file() and names_fragment(step[0], path) for path in missing
+            ):
+                continue
+            args = _FRAGMENT_ARGS.get(step[0], step[1:])
+            done = subprocess.run(
+                [python, str(ROOT / step[0]), *args],
+                cwd=repo,
+                env=step_env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if done.returncode:
+                failures.append(
+                    f"{' '.join([step[0], *args])} exited {done.returncode}: {_tail(done.stderr)}"
+                )
+        if all(path.is_file() for path in missing):
             return
-    still = [path for path in missing if not path.is_file()]
-    if still:
-        names = ", ".join(path.relative_to(SRC).as_posix() for path in still)
-        raise SystemExit(f"missing generated fragments after format: {names}")
+    names = ", ".join(
+        path.relative_to(SRC).as_posix() for path in missing if not path.is_file()
+    )
+    raise SystemExit(
+        "missing generated fragments after the format steps that name them: "
+        + names
+        + "".join(f"\n  {line}" for line in failures)
+    )
 
 
 def generated_macros(text: str) -> dict[str, str]:

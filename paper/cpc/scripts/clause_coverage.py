@@ -20,6 +20,7 @@ gives a reason for a clause that something names.
 
     python paper/cpc/scripts/clause_coverage.py            # writes data/spec/clause_coverage.json
     python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
+    python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
 
 It also writes clauses_macros.tex, the counts the paper prints.
 """
@@ -364,12 +365,22 @@ def main() -> int:
         default=OUT,
         help=f"record (default: {provenance.portable(OUT)})",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check",
         action="store_true",
         help="compare with --out and the TeX instead of writing",
     )
+    mode.add_argument(
+        "--macros",
+        action="store_true",
+        help="write only the TeX, from the record at --out; the record and the library are not read again",
+    )
     args = parser.parse_args()
+    if args.macros:
+        MACROS.write_text(macros(json.loads(args.out.read_text())))
+        print(f"wrote {provenance.portable(MACROS)}")
+        return 0
     record = build()
     t = record["totals"]
     print(
