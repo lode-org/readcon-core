@@ -1294,34 +1294,51 @@ fn fill_tiled_metadata(
                 chunks: &mut [std::mem::MaybeUninit<Vec<(usize, usize)>>],
                 comps: &mut [std::mem::MaybeUninit<(Arc<str>, usize)>],
                 lo: usize| {
+        let mut owned = Unpublished {
+            breaks,
+            chunks,
+            comps,
+            breaks_done: 0,
+            chunks_done: 0,
+            comps_done: 0,
+        };
         for offset in 0..counts.len() {
             let frame = lo + offset;
             let base = frame * span;
             counts[offset].write(count0);
             spans[offset].write(base..base + span);
             heads[offset].write(head0 + base);
-            breaks[offset].write(Vec::new());
-            chunks[offset].write(Vec::new());
+            owned.breaks[offset].write(Vec::new());
+            owned.breaks_done += 1;
+            owned.chunks[offset].write(Vec::new());
+            owned.chunks_done += 1;
             if ncells > 0 {
                 write_copied(&mut cells[offset * ncells..(offset + 1) * ncells], cells0);
             }
             if nmass > 0 {
                 write_copied(&mut masses[offset * nmass..(offset + 1) * nmass], masses0);
             }
-            if ncomp > 0 {
-                for (slot, (symbol, count)) in comps[offset * ncomp..(offset + 1) * ncomp]
-                    .iter_mut()
-                    .zip(comps0.iter())
-                {
-                    slot.write((Arc::clone(symbol), *count));
-                }
+            for (symbol, count) in &comps0 {
+                owned.comps[owned.comps_done].write((Arc::clone(symbol), *count));
+                owned.comps_done += 1;
+            }
+            #[cfg(test)]
+            if frame == FILL_PANIC_FRAME
+                && comps0
+                    .first()
+                    .is_some_and(|(symbol, _)| &**symbol == FILL_PANIC_SYMBOL)
+            {
+                panic!("tiled metadata fill probe");
             }
         }
+        // Every slot is written. The caller publishes them with `set_len`,
+        // or drops them if another worker panicked.
+        std::mem::forget(owned);
     };
 
     // Frame 0 keeps the values `parse_con` wrote. The spare tail is frames
     // `1..nframes`, and nothing in it is initialized yet.
-    {
+    let failed = {
         let counts = &mut out.counts.spare_capacity_mut()[..rest];
         let spans = &mut out.spans.spare_capacity_mut()[..rest];
         let heads = &mut out.head_ends.spare_capacity_mut()[..rest];
@@ -1334,6 +1351,7 @@ fn fill_tiled_metadata(
             fill(
                 counts, spans, heads, cells, masses, breaks, chunks, comps, 1,
             );
+            None
         } else {
             let pool_threads = workers.min(rest);
             let share = rest.div_ceil(pool_threads);
@@ -1347,6 +1365,7 @@ fn fill_tiled_metadata(
                 let mut chunks = chunks;
                 let mut comps = comps;
                 let mut lo = 1usize;
+                let mut handles = Vec::with_capacity(pool_threads);
                 for _ in 0..pool_threads {
                     if lo >= nframes {
                         break;
@@ -1369,16 +1388,46 @@ fn fill_tiled_metadata(
                     chunks = chunk_b;
                     comps = comp_b;
                     let start = lo;
-                    scope.spawn(move || {
+                    let handle = scope.spawn(move || {
                         fill(
                             count_a, span_a, head_a, cell_a, mass_a, break_a, chunk_a, comp_a,
                             start,
                         );
                     });
+                    handles.push((start - 1..start - 1 + take, handle));
                     lo += take;
                 }
-            });
+                // A panicking worker dropped its own slots while unwinding.
+                // The finished ones are dropped below, before the panic
+                // resumes, since `set_len` never publishes them.
+                let mut finished = Vec::with_capacity(handles.len());
+                let mut panic = None;
+                for (frames, handle) in handles {
+                    match handle.join() {
+                        Ok(()) => finished.push(frames),
+                        Err(payload) => {
+                            panic.get_or_insert(payload);
+                        }
+                    }
+                }
+                panic.map(|payload| (payload, finished))
+            })
         }
+    };
+    if let Some((payload, finished)) = failed {
+        for frames in finished {
+            // SAFETY: a worker that returned wrote every slot of its frames
+            // in the spare tail, and none of them was published.
+            unsafe {
+                drop_initialized(&mut out.wide_breaks.spare_capacity_mut()[frames.clone()]);
+                drop_initialized(&mut out.wide_chunks.spare_capacity_mut()[frames.clone()]);
+                drop_initialized(
+                    &mut out.components.spare_capacity_mut()
+                        [frames.start * ncomp..frames.end * ncomp],
+                );
+            }
+        }
+        std::panic::resume_unwind(payload);
     }
     // SAFETY: the spare prefix written above is exactly the tail, and every
     // slot of it was initialized. `counts` / `spans` / `head_ends` /
@@ -1400,6 +1449,44 @@ fn fill_tiled_metadata(
         out.components.set_len(comp_total);
     }
     out.n_frames = nframes;
+}
+
+#[cfg(all(test, feature = "parallel"))]
+const FILL_PANIC_SYMBOL: &str = "fill-panic-probe";
+#[cfg(all(test, feature = "parallel"))]
+const FILL_PANIC_FRAME: usize = 3000;
+
+/// The slots one metadata worker has written and not published. A panic
+/// drops them instead of leaking each `Arc` clone.
+#[cfg(feature = "parallel")]
+struct Unpublished<'a> {
+    breaks: &'a mut [std::mem::MaybeUninit<Vec<usize>>],
+    chunks: &'a mut [std::mem::MaybeUninit<Vec<(usize, usize)>>],
+    comps: &'a mut [std::mem::MaybeUninit<(Arc<str>, usize)>],
+    breaks_done: usize,
+    chunks_done: usize,
+    comps_done: usize,
+}
+
+#[cfg(feature = "parallel")]
+impl Drop for Unpublished<'_> {
+    fn drop(&mut self) {
+        // SAFETY: each `*_done` prefix is exactly the slots this worker wrote.
+        unsafe {
+            drop_initialized(&mut self.breaks[..self.breaks_done]);
+            drop_initialized(&mut self.chunks[..self.chunks_done]);
+            drop_initialized(&mut self.comps[..self.comps_done]);
+        }
+    }
+}
+
+/// # Safety
+/// Every slot of `slots` is initialized, and none is used after this.
+#[cfg(feature = "parallel")]
+unsafe fn drop_initialized<T>(slots: &mut [std::mem::MaybeUninit<T>]) {
+    for slot in slots {
+        unsafe { slot.assume_init_drop() };
+    }
 }
 
 /// Initialize `dst` with a copy of `src`.
@@ -2333,6 +2420,38 @@ mod tests {
         }
         for workers in [2, 4, 8] {
             assert_parallel_matches_serial(long.as_bytes(), workers);
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn a_panicking_metadata_worker_does_not_leak_symbols() {
+        let frame = typed_frame(&[FILL_PANIC_SYMBOL, "H"]);
+        let mut out = positions_with_identity(frame.as_bytes()).unwrap();
+        let probe = Arc::clone(&out.components[0].0);
+        let other = Arc::clone(&out.components[1].0);
+        let (probe_refs, other_refs) = (Arc::strong_count(&probe), Arc::strong_count(&other));
+        let span = out.spans[0].end;
+        let head0 = out.head_ends[0];
+        let (cells0, masses0) = (out.cells.clone(), out.masses.clone());
+        for workers in [1, 4] {
+            let filled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                fill_tiled_metadata(
+                    &mut out,
+                    4 * FILL_PANIC_FRAME,
+                    span,
+                    head0,
+                    4,
+                    &cells0,
+                    &masses0,
+                    workers,
+                );
+            }));
+            assert!(filled.is_err());
+            assert_eq!(out.components.len(), 2);
+            assert_eq!(out.n_frames, 1);
+            assert_eq!(Arc::strong_count(&probe), probe_refs);
+            assert_eq!(Arc::strong_count(&other), other_refs);
         }
     }
 
