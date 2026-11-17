@@ -2665,6 +2665,80 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
     drop(frames);
 }
 
+#[cfg(all(feature = "parallel", test, loom))]
+use loom::sync::{Condvar as GateCondvar, Mutex as GateMutex};
+#[cfg(all(feature = "parallel", not(all(test, loom))))]
+use std::sync::{Condvar as GateCondvar, Mutex as GateMutex};
+
+/// Counts the workers of a new pool that have started.
+///
+/// Every worker calls [`StartGate::arrive`] once. The builder blocks in
+/// [`StartGate::wait_for`] until all of them have. In the lib tests under
+/// `--cfg loom` the lock and the condition variable are loom's, so the
+/// handshake can be model-checked; see `start_gate_loom`.
+#[cfg(feature = "parallel")]
+struct StartGate {
+    started: GateMutex<usize>,
+    ready: GateCondvar,
+}
+
+#[cfg(feature = "parallel")]
+impl StartGate {
+    fn new() -> Self {
+        Self {
+            started: GateMutex::new(0),
+            ready: GateCondvar::new(),
+        }
+    }
+
+    fn arrive(&self) {
+        // The count changes under the lock the waiter checks it under, so
+        // the notify cannot fall between its check and its wait.
+        *self.started.lock().unwrap_or_else(|err| err.into_inner()) += 1;
+        self.ready.notify_one();
+    }
+
+    fn wait_for(&self, workers: usize) {
+        let mut started = self.started.lock().unwrap_or_else(|err| err.into_inner());
+        while *started < workers {
+            started = self
+                .ready
+                .wait(started)
+                .unwrap_or_else(|err| err.into_inner());
+        }
+    }
+}
+
+/// `RUSTFLAGS="--cfg loom" cargo test --release --features parallel --lib start_gate_loom`
+///
+/// Only these tests run under `--cfg loom`. The real pools would use the
+/// loom gate outside a model.
+#[cfg(all(test, loom, feature = "parallel"))]
+mod start_gate_loom {
+    use super::StartGate;
+    use loom::sync::Arc;
+
+    /// In every interleaving the builder gets past the gate, and only
+    /// after both workers have arrived. Loom fails a model that deadlocks.
+    #[test]
+    fn the_builder_returns_after_every_worker_arrives() {
+        loom::model(|| {
+            let gate = Arc::new(StartGate::new());
+            let workers: Vec<_> = (0..2)
+                .map(|_| {
+                    let gate = Arc::clone(&gate);
+                    loom::thread::spawn(move || gate.arrive())
+                })
+                .collect();
+            gate.wait_for(2);
+            assert_eq!(*gate.started.lock().unwrap(), 2);
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+    }
+}
+
 /// One pool per worker count, kept for the life of the process.
 ///
 /// A fresh pool on every file made each worker fault its frames again.
@@ -2683,7 +2757,7 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
 #[cfg(feature = "parallel")]
 #[allow(clippy::type_complexity)]
 fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
-    use std::sync::{Arc, Condvar, Mutex};
+    use std::sync::{Arc, Mutex};
     static CACHE: crate::parser::PerProcess<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> =
         crate::parser::PerProcess::new();
     let mut guard = CACHE.get_or_init(|| Mutex::new(Vec::new())).lock().ok()?;
@@ -2691,25 +2765,16 @@ fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
         return Some(Arc::clone(pool));
     }
     keep_parse_pages();
-    let started = Arc::new((Mutex::new(0usize), Condvar::new()));
-    let signal = Arc::clone(&started);
+    let gate = Arc::new(StartGate::new());
+    let signal = Arc::clone(&gate);
     let pool = Arc::new(
         rayon::ThreadPoolBuilder::new()
             .num_threads(workers)
-            .start_handler(move |_| {
-                let (count, ready) = &*signal;
-                *count.lock().unwrap_or_else(|err| err.into_inner()) += 1;
-                ready.notify_one();
-            })
+            .start_handler(move |_| signal.arrive())
             .build()
             .ok()?,
     );
-    let (count, ready) = &*started;
-    let mut seen = count.lock().unwrap_or_else(|err| err.into_inner());
-    while *seen < pool.current_num_threads() {
-        seen = ready.wait(seen).unwrap_or_else(|err| err.into_inner());
-    }
-    drop(seen);
+    gate.wait_for(pool.current_num_threads());
     guard.push((workers, Arc::clone(&pool)));
     Some(pool)
 }
