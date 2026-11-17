@@ -3,9 +3,9 @@
 
 The scan covers the prose of ``rg_main.tex`` and ``rg_supp.tex`` and the
 captions of every generated table they input.  Table cells and figures are
-written by the generator scripts from the committed records; the scan skips
-them and instead requires every generated fragment to equal its generator's
-output.  It skips macros, except in the front matter (title, abstract,
+written by the generator scripts from the committed records; the scan leaves
+them out and instead requires every generated fragment to equal its generator's
+output.  It leaves out macros, except in the front matter (title, abstract,
 Program Summary, highlights) and the Conclusions, where every macro of a
 generated file is expanded and traced like a printed number.
 
@@ -378,7 +378,7 @@ def _copy_tree(repo: Path, tree: Path, scratch: Path) -> None:
     """A copy of the working tree, ignored files included, for the generators to write into."""
     aside = scratch.resolve()
 
-    def skip(directory: str, names: list[str]) -> list[str]:
+    def leave_out(directory: str, names: list[str]) -> list[str]:
         top = Path(directory) == repo
         return [
             name
@@ -388,7 +388,7 @@ def _copy_tree(repo: Path, tree: Path, scratch: Path) -> None:
             or aside.is_relative_to((Path(directory) / name).resolve())
         ]
 
-    shutil.copytree(repo, tree, ignore=skip, symlinks=True)
+    shutil.copytree(repo, tree, ignore=leave_out, symlinks=True)
 
 
 def _tex_state(directory: Path) -> dict[str, bytes]:
