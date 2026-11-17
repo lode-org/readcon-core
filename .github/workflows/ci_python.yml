@@ -152,6 +152,41 @@ jobs:
         run: |
           python -m pytest tests/python/ -q --tb=short
 
+  pytest-free-threaded:
+    name: pytest free-threaded (${{ matrix.python-version }})
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13t", "3.14t"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install maturin + test deps
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install -U pip
+          .venv/bin/python -m pip install maturin pytest numpy
+
+      - name: maturin develop
+        env:
+          RUSTFLAGS: "-C link-arg=-fuse-ld=bfd"
+        run: |
+          maturin develop --features 'python,zstd'
+
+      - name: free-threaded pytest smoke
+        run: |
+          python -m pytest tests/python/test_gil_free_threads.py tests/python/test_readcon.py::TestReadCon::test_read_con_file -q --tb=short
+
   paper-tags:
     name: paper tags
     runs-on: ubuntu-22.04
