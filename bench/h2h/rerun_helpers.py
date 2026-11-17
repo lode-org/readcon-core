@@ -40,7 +40,7 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def require_clean_and_remote() -> str:
-    status = _git("status", "--porcelain", "--untracked-files=no")
+    status = _git("status", "--porcelain", "--untracked-files=all")
     if status.returncode != 0:
         raise SystemExit(status.stderr or "git status failed")
     if status.stdout.strip():
@@ -80,9 +80,12 @@ def run_dlpack_cost(cpc_out: Path, repeats: int) -> None:
         cwd=ROOT,
         check=True,
     )
+    from sample_protocol import core_list, serial_cpu
+
     binary = CPC / "bench" / "dlpack_cost" / "target" / "release" / "dlpack_cost"
+    pin = serial_cpu()
     proc = subprocess.run(
-        ["taskset", "-c", "0", str(binary)],
+        ["taskset", "-c", pin, str(binary)],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -90,7 +93,10 @@ def run_dlpack_cost(cpc_out: Path, repeats: int) -> None:
     )
     body = proc.stdout if proc.stdout.endswith("\n") else proc.stdout + "\n"
     when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    header = f"date_utc={when}\ncommand={binary.relative_to(ROOT)}\n"
+    header = (
+        f"date_utc={when}\ncommand={binary.relative_to(ROOT)}\n"
+        f"cpus={core_list()}\npinned={pin}\n"
+    )
     data_dir = cpc_out / "data"
     logs_dir = cpc_out / "logs"
     gen_dir = cpc_out / "generated"
@@ -229,6 +235,28 @@ def write_formats_lscpu(formats_dir: Path) -> None:
     (formats_dir / "lscpu.txt").write_text(lscpu, encoding="utf-8")
 
 
+def require_scaling_threadfix(scaling_out: Path) -> None:
+    """Refuse a threadfix record that has no before phase."""
+    sys.path.insert(0, str(BENCH))
+    import gil_threadfix_bench
+
+    gil_threadfix_bench.require_threadfix_record(
+        scaling_out / "threadfix-before-after.json"
+    )
+
+
+def write_threadfix_table(scaling_out: Path, cpc_out: Path) -> None:
+    """Write the paper table, refusing an after-only threadfix record."""
+    sys.path.insert(0, str(BENCH))
+    sys.path.insert(0, str(CPC / "scripts"))
+    import threadfix_tables
+
+    payload = threadfix_tables.load(scaling_out / "threadfix-before-after.json")
+    dest = cpc_out / "generated" / "threadfix_table.tex"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(threadfix_tables.table(payload), encoding="utf-8")
+
+
 def write_superseded_markers(
     tip: str,
     scaling_out: Path,
@@ -237,6 +265,7 @@ def write_superseded_markers(
     million_results_out: Path,
     cpc_out: Path,
 ) -> None:
+    require_scaling_threadfix(scaling_out)
     replacements = {
         ROOT / "bench/h2h/scaling/rel1": scaling_out,
         ROOT / "bench/h2h/scaling/v0.23.3/mpi-pwrite": scaling_out / "camp24",
@@ -266,6 +295,7 @@ def finalize_paper(
     million_results_out: Path,
     cpc_out: Path,
 ) -> None:
+    write_threadfix_table(scaling_out, cpc_out)
     env = os.environ.copy()
     env["FORMAT_H2H_RECORDS"] = str(formats_out.resolve())
     env["READS_JSON"] = str((scaling_out / "reads.json").resolve())
@@ -301,6 +331,11 @@ def finalize_paper(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--cpus",
+        default=None,
+        help="CPU list or range inside the affinity mask (default: the mask)",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_dlpack = sub.add_parser("dlpack-cost")
@@ -347,6 +382,9 @@ def main() -> None:
     p_pap.add_argument("--cpc-out", type=Path, required=True)
 
     args = parser.parse_args()
+    from sample_protocol import use_cpus
+
+    use_cpus(args.cpus)
     if args.cmd == "dlpack-cost":
         run_dlpack_cost(ROOT / args.cpc_out, args.repeats)
     elif args.cmd == "mpi-v2":

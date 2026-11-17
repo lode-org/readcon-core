@@ -19,6 +19,13 @@ from pathlib import Path
 
 import numpy as np
 
+
+def _pin_cmd(*args: str) -> list[str]:
+    from sample_protocol import serial_cpu
+
+    return ["taskset", "-c", serial_cpu(), *args]
+
+
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = Path(__file__).resolve().parent
 WORK = BENCH / "work" / "parallel-frames"
@@ -133,7 +140,7 @@ def rust_times(path: Path, mode: str, tag: str | None = None) -> dict:
     out = OUT / f"rust-{tag}.json"
     probe = ROOT / "target" / "release" / "examples" / "serial_probe"
     text = run(
-        ["taskset", "-c", "0", str(probe), str(path), str(out), str(SAMPLES), mode],
+        _pin_cmd(str(probe), str(path), str(out), str(SAMPLES), mode),
         f"rust-{tag}.log",
     )
     body = json.loads(out.read_text(encoding="utf-8"))
@@ -154,7 +161,7 @@ def tool_times(binary: Path, op: str, path: Path, lang: str) -> dict:
     # Fortran times every call, including the first. Ask for one extra and drop it.
     repeats = SAMPLES + WARMUP if lang == "fortran" else SAMPLES
     text = run(
-        ["taskset", "-c", "0", str(binary), op, str(path), str(out), str(repeats)],
+        _pin_cmd(str(binary), op, str(path), str(out), str(repeats)),
         f"{lang}.log",
     )
     samples = [
@@ -206,7 +213,7 @@ def python_times(path: Path) -> dict:
 
 def ceilings() -> dict:
     stream_bin = ROOT / "target" / "release" / "examples" / "stream_triad"
-    stream = run(["taskset", "-c", "0", str(stream_bin)], "stream.log")
+    stream = run(_pin_cmd(str(stream_bin)), "stream.log")
     disk = OUT / "disk-ceiling.bin"
     cmd = [
         "dd",
@@ -349,16 +356,16 @@ def main() -> None:
     rows.append(tool_times(bind / "time_cpp", "read", plain, "c++"))
     rows.append(tool_times(bind / "time_f", "read", plain, "fortran"))
     rows.append(python_times(plain))
+    from sample_protocol import cpu_record
+
     info = ceilings()
+    info.update(cpu_record())
     probe = ROOT / "target" / "release" / "examples" / "serial_probe"
     run(
         [
             "/usr/bin/time",
             "-v",
-            "taskset",
-            "-c",
-            "0",
-            str(probe),
+            *_pin_cmd(str(probe)),
             str(plain),
             str(OUT / "time-v.json"),
             "1",

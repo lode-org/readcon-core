@@ -218,6 +218,17 @@ def test_rerun_release_dry_run_resolves_all_campaigns_and_refuses_unpushed(
     assert "not on any remote branch" in (unpushed.stdout + unpushed.stderr)
 
 
+def test_rerun_release_refuses_an_untracked_file(tmp_path: Path) -> None:
+    """An untracked campaign file is a dirty tree, not an invisible one."""
+    repo = _isolated_clean_repo(tmp_path)
+    (repo / "campaign-untracked.txt").write_text("not a record\n", encoding="utf-8")
+    refused = _run_snakemake_dry(repo)
+    output = refused.stdout + refused.stderr
+    assert refused.returncode != 0, output
+    assert "dirty tree" in output
+    assert "campaign-untracked.txt" in output
+
+
 def test_rerun_drivers_enforce_minimum_repeats_and_perf(tmp_path: Path) -> None:
     """New campaign drivers enforce repeats >= 6 and refuse missing perf."""
     gil = subprocess.run(

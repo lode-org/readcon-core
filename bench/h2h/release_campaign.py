@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from bench_disk import bench_disk
+from sample_protocol import serial_cpu
 
 import numpy as np
 
@@ -134,7 +135,7 @@ def run_logged(cmd: list[str], log_name: str) -> None:
 
 def peak_kib(cmd: list[str], log_name: str) -> int:
     completed = subprocess.run(
-        ["/usr/bin/time", "-v", "taskset", "-c", "0", *cmd],
+        ["/usr/bin/time", "-v", "taskset", "-c", serial_cpu(), *cmd],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -171,7 +172,16 @@ def measure_memory() -> dict:
     unused = work / "mem-rel1-unused.con"
     gzip_json = OUT / "rust-gzip-samples.json"
     subprocess.run(
-        ["taskset", "-c", "0", str(probe), str(packed), str(gzip_json), "6", "default"],
+        [
+            "taskset",
+            "-c",
+            serial_cpu(),
+            str(probe),
+            str(packed),
+            str(gzip_json),
+            "6",
+            "default",
+        ],
         cwd=ROOT,
         check=True,
     )

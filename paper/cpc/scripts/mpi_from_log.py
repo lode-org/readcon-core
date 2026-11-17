@@ -17,12 +17,37 @@ MODES = ("shared", "scatter")
 WORDS = {1: "One", 2: "Two", 4: "Four", 8: "Eight"}
 
 
+def _require_zero_exit(parts: list[str], line: str) -> None:
+    indexes = [index for index, token in enumerate(parts) if token == "exit"]
+    if not indexes:
+        raise SystemExit(f"mpi log line has no exit status: {line}")
+    for index in indexes:
+        try:
+            code = int(parts[index + 1])
+        except (IndexError, ValueError) as exc:
+            raise SystemExit(f"mpi log exit status is not an integer: {line}") from exc
+        if code != 0:
+            raise SystemExit(f"mpi log records nonzero exit {code}: {line}")
+
+
 def samples(text: str) -> dict[tuple[str, int], list[float]]:
     found: dict[tuple[str, int], list[float]] = {}
     for line in text.splitlines():
+        if line.startswith("exit_code "):
+            parts = line.split()
+            try:
+                code = int(parts[1])
+            except (IndexError, ValueError) as exc:
+                raise SystemExit(
+                    f"mpi log exit_code is not an integer: {line}"
+                ) from exc
+            if code != 0:
+                raise SystemExit(f"mpi log exit_code {code}")
+            continue
         if not line.startswith("repeat "):
             continue
         parts = line.split()
+        _require_zero_exit(parts, line)
         mode = parts[3]
         ranks = int(parts[6])
         seconds = float(parts[parts.index("ns") + 1]) / 1e9

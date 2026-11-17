@@ -34,13 +34,16 @@ TIME_C = BENCH / "work" / "time_c"
 
 
 def pin() -> None:
+    from sample_protocol import serial_cpu
+
+    target = serial_cpu()
     allowed = ""
     for line in Path("/proc/self/status").read_text().splitlines():
         if line.startswith("Cpus_allowed_list:"):
             allowed = line.split(":", 1)[1].strip()
-    if allowed == "0":
+    if allowed == target:
         return
-    os.execvp("taskset", ["taskset", "-c", "0", sys.executable, *sys.argv])
+    os.execvp("taskset", ["taskset", "-c", target, sys.executable, *sys.argv])
 
 
 def type7(values: list[float], p: float) -> float:

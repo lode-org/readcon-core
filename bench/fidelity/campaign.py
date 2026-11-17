@@ -112,17 +112,21 @@ def fixture_path(name: str) -> Path:
 
 
 def _pin() -> None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench" / "h2h"))
+    from sample_protocol import serial_cpu
+
+    target = serial_cpu()
     allowed = ""
     status = Path("/proc/self/status").read_text(encoding="utf-8")
     for line in status.splitlines():
         if line.startswith("Cpus_allowed_list:"):
             allowed = line.split(":", 1)[1].strip()
-    if allowed == "0":
+    if allowed == target:
         return
     if os.environ.get("FIDELITY_PINNED") == "1":
         return
     os.environ["FIDELITY_PINNED"] = "1"
-    os.execvp("taskset", ["taskset", "-c", "0", sys.executable, *sys.argv])
+    os.execvp("taskset", ["taskset", "-c", target, sys.executable, *sys.argv])
 
 
 def _threads() -> None:

@@ -24,6 +24,7 @@ from pathlib import Path
 from bench_disk import bench_disk
 from campaign_protocol import head_sha, stamp_file, type7
 from frames_guard import write_distinct_copies
+from sample_protocol import affinity_set, core_list, serial_cpu, use_cpus
 
 BENCH = Path(__file__).resolve().parent
 ROOT = BENCH.parents[1]
@@ -96,7 +97,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--repeats", type=int, default=6)
+    parser.add_argument(
+        "--cpus",
+        default=None,
+        help="CPU list or range inside the affinity mask (default: the mask)",
+    )
     args = parser.parse_args()
+    use_cpus(args.cpus)
     if args.repeats < 6:
         raise SystemExit(f"repeats must be at least 6, got {args.repeats}")
 
@@ -115,7 +122,15 @@ def main() -> None:
     probe = _build_profiled_probe()
 
     rows: list[dict] = []
-    log_lines = [f"commit {sha}", f"repeats {args.repeats}", stream_out.strip()]
+    chosen = sorted(affinity_set())
+    pin = serial_cpu()
+    log_lines = [
+        f"commit {sha}",
+        f"repeats {args.repeats}",
+        f"cpus {core_list()}",
+        f"profile_cpu {pin}",
+        stream_out.strip(),
+    ]
     for name, src in (("con-100k", con_100k), ("con-1e6", con_1m)):
         nbytes = src.stat().st_size
         for workers in WORKERS:
@@ -125,7 +140,7 @@ def main() -> None:
                 [
                     "taskset",
                     "-c",
-                    "0-7",
+                    core_list(),
                     str(probe),
                     "pos",
                     str(src),
@@ -177,7 +192,7 @@ def main() -> None:
             "--",
             "taskset",
             "-c",
-            "0",
+            pin,
             str(probe),
             "pos",
             str(con_1m),
@@ -212,6 +227,8 @@ def main() -> None:
         "commit": sha,
         "stream": stream_out,
         "parse_coord_row_at_pct": share,
+        "cpus": chosen,
+        "profile_cpu": int(pin),
         "rows": rows,
     }
     json_path = out / "parse-limiter.json"
