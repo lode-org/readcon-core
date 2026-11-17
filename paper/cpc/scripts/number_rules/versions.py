@@ -51,7 +51,7 @@ EON_PIN = "goswamiTheochemuieonCommitBf5d3282026"
 def eon_pin() -> str:
     """The readcon-core tag that the readcon-core wrap of eOn commit bf5d328 builds; that commit is in no eOn release."""
     dev = jget(EON_PINS, "development")
-    if not dev["commit"].startswith("bf5d328") or dev["in_release"]:
+    if not dev["eon_commit"].startswith("bf5d328") or dev["in_release"]:
         raise SystemExit(f"{EON_PINS}: the development commit is not bf5d328 or is in an eOn release")
     if not re.fullmatch(r"v\d+\.\d+\.\d+", dev["readcon_revision"]):
         raise SystemExit(f"{EON_PINS}: the bf5d328 wrap names no readcon-core tag")

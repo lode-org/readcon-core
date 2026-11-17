@@ -1,13 +1,13 @@
 {
   "repository": "https://github.com/TheochemUI/eOn",
   "release": {
-    "tag": "v3.6.0",
-    "commit": "2d2adada2f64c4c5a063065abc0d9a8a56d74b2c",
+    "eon_release": "3.6.0",
+    "eon_commit": "2d2adada2f64c4c5a063065abc0d9a8a56d74b2c",
     "wrap": "[wrap-git]\ndirectory = readcon-core\nurl = https://github.com/lode-org/readcon-core.git\nrevision = v0.16.0\ndepth = 1\npatch_directory = readcon-core\n\n[provide]\nreadcon-core = readcon_dep\n",
     "readcon_revision": "v0.16.0"
   },
   "development": {
-    "commit": "bf5d328359457c4f8e724c2f411e340b802466e3",
+    "eon_commit": "bf5d328359457c4f8e724c2f411e340b802466e3",
     "in_release": false,
     "ahead_of_release_by": 697,
     "wrap": "[wrap-git]\ndirectory = readcon-core\nurl = https://github.com/lode-org/readcon-core.git\nrevision = v0.20.0\ndepth = 1\npatch_directory = readcon-core\n\n[provide]\nreadcon-core = readcon_dep\n",

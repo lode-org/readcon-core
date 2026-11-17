@@ -9,8 +9,9 @@
   ],
   "MDAnalysis": [
     {
-      "url": "https://github.com/MDAnalysis/mdanalysis/releases/tag/package-2.11.0",
-      "tag": "package-2.11.0",
+      "url": "https://api.github.com/repos/MDAnalysis/mdanalysis/releases/419551159",
+      "tag_prefix": "package-",
+      "tag_version": "2.11.0",
       "published_at": "2026-10-21T12:48:43Z",
       "version": "2.11.0",
       "date": "2026-10-21"
@@ -18,8 +19,9 @@
   ],
   "ase-extxyz": [
     {
-      "url": "https://github.com/libAtoms/extxyz/releases/tag/ase-extxyz-v0.1.2",
-      "tag": "ase-extxyz-v0.1.2",
+      "url": "https://api.github.com/repos/libAtoms/extxyz/releases/401640978",
+      "tag_prefix": "ase-extxyz-v",
+      "tag_version": "0.1.2",
       "published_at": "2026-10-02T08:14:44Z",
       "version": "0.1.2",
       "date": "2026-10-02"
