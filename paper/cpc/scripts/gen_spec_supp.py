@@ -657,12 +657,16 @@ def spec_macros(org: str) -> str:
 
 
 def org_inline(text: str) -> str:
-    """Org table text as LaTeX, a =verbatim= span as texttt."""
+    """Org table text as LaTeX, a =verbatim= span as texttt and a power such as 2^64-1 as math."""
     parts = re.split(r"=([^=\s][^=]*?)=", text)
     return "".join(
         f"\\texttt{{{''.join(TT_ESCAPES.get(ch, ch) for ch in part)}}}"
         if k % 2
-        else re.sub(r"([&%$#_{}])", r"\\\1", part)
+        else re.sub(
+            r"(\d+)\^(\d+)((?:[-+]\d+)?)",
+            r"\\(\1^{\2}\3\\)",
+            re.sub(r"([&%$#_{}])", r"\\\1", part),
+        )
         for k, part in enumerate(parts)
     )
 
