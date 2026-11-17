@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
-## v0.23.3 - 2026-11-14
+## v0.24.0 - 2026-11-17
 
 ### Breaking
 
@@ -15,14 +15,70 @@ All notable changes to this project will be documented in this file. See [conven
   header as it was. Every caller must handle or `unwrap` the result. A call
   that ignored the old unit return still compiles, but `#[must_use]` on
   `Result` warns, and the error is dropped.
+- **Rust API:** the extended-XYZ and PDB scanners and writers
+  (`extxyz_scan::tables_from_extxyz_bytes`, `tables_from_extxyz_bytes_reporting`,
+  `tables_from_extxyz_path`, `lattice_from_cell`, `extxyz_bytes`,
+  `extxyz_bytes_with_threads`, `extxyz_path_with_threads`,
+  `tables_to_extxyz_bytes`, `write_extxyz_path`, and
+  `pdb_scan::tables_from_pdb_bytes`) and the Cap'n Proto converters
+  (`rpc::convert::fill_frame_builder`, `frame_from_reader`) return
+  `error::ConvertError` instead of `String`. A non-finite cell is
+  `ConvertError::Parse(ParseError::NonFiniteValue)`; every other failure is
+  `ConvertError::Message` with the text it had before. The new
+  `extxyz_scan::scan_extxyz_bytes` and `pdb_scan::scan_pdb_path` are the typed
+  forms of `tables_from_extxyz_bytes_with_threads` and `tables_from_pdb_path`,
+  which still return the error as text. `ConvertError` converts into that
+  `String`, and `ParseError::from_cell_text` recovers the cell error from it.
+  `rpc::convert::name_frame` is removed; use `ConvertError::in_frame`.
+- **Rust API:** `rpc::client::RpcClient::write_frames` and `parse_bytes`
+  return a boxed `ConvertError` for a non-finite number, in a cell or, from
+  the server, in an atom row. Downcast the `Box<dyn Error>` to read it. The
+  server names the frame of a `.con` file it cannot parse.
 - **C API:** `rkr_frame_new` returns NULL, with `RKR_STATUS_PARSE_ERROR` in
   `rkr_last_error`, for a NaN or infinite `cell` or `angles` entry. It used to
   return a builder that carried the value. Check the pointer before
   `rkr_frame_add_atom`.
+- **C ABI:** `RKR_ABI_VERSION_MAJOR` is 2, `RKR_ABI_VERSION_MINOR` 0, and
+  `RKR_ABI_LAYOUT_REVISION` 0, for the `rkr_frame_new` change above. A host
+  that checks for major 1 must be rebuilt. The rpc compatibility stamp carries
+  the major, so a 2.x server refuses a 1.x client and the reverse.
 - **Python:** `ConFrame(...)`, `from_ase`, the column writers, and `write_con`
   raise `readcon.NonFiniteValue` (a `ValueError`) for a NaN or infinite cell
   where they used to accept it. `NonFiniteValue` is already the error for a
   non-finite number in a `.con` file.
+- **Julia:** every `ConFrame` constructor throws `ReadCon.NonFiniteValue`
+  for a NaN or infinite `cell` or `angles` entry, where it used to build the
+  frame. `err.field` names the entry with Julia's 1-based index (`cell[2]`)
+  and `err.value` holds it. `write_con` can no longer be handed such a frame.
+
+### Bugfixes
+
+- A NaN or infinite cell length, angle, or lattice component passed through
+  every constructor and writer that took one. These entry points now refuse
+  it, each with a message that names the field and, when the entry point
+  knows it, the frame, such as `cell field boxl[1] of frame 1 is NaN`:
+  - Rust: the `.con` text readers, the builder, the writers,
+    `set_lattice_vectors`, and CON-bin return `ParseError::NonFiniteValue`.
+    The extended-XYZ, PDB, and rpc paths return it inside
+    `ConvertError::Parse`. Chemfiles import returns
+    `ChemfilesImportError::InvalidFrame` with that error's text.
+  - Python: `readcon.NonFiniteValue`.
+  - C and C++: a NULL builder from `rkr_frame_new`, or a thrown
+    `readcon::Error`, with `RKR_STATUS_PARSE_ERROR` and a
+    `NonFiniteValue: ...` message on the error channel.
+  - Fortran: an invalid builder from `new_builder`, with the same error
+    channel.
+  - Julia: the `ConFrame` constructors throw `ReadCon.NonFiniteValue`.
+    `read_con` does not throw. It returns the frames before the one it cannot
+    read and leaves the `NonFiniteValue` error, with that frame's index, for
+    `ReadCon.last_error()`.
+
+  The `.con` readers in every binding also refuse a non-finite atom
+  coordinate, as before. CON-bin also refuses a cell that is finite in
+  binary64 and infinite in binary32. Reading a finite cell costs nothing, and
+  a finite cell round-trips bit for bit.
+
+## v0.23.3 - 2026-11-14
 
 ### Features
 
@@ -62,16 +118,6 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
-- A NaN or infinite cell length, angle, or lattice component passed through
-  every constructor and writer that took one. The `.con` text, CON-bin,
-  extended XYZ, PDB, chemfiles, and rpc paths, the Python, C, C++, Fortran,
-  and Julia builders and writers, `set_lattice_vectors`, and `from_ase` now
-  refuse it with `NonFiniteValue` (`readcon.NonFiniteValue` in Python, a parse
-  error with `RKR_STATUS_PARSE_ERROR` in C, `ReadConError` in Julia, an invalid
-  builder in Fortran). The message names the field and, when the entry point
-  knows it, the frame: `cell field boxl[1] of frame 1 is NaN`. CON-bin also
-  refuses a cell that is finite in binary64 and infinite in binary32. Reading
-  a finite cell costs nothing, and a finite cell round-trips bit for bit.
 - A packed `write_con` of a frame list reused the first frame's header
   whenever the atom skeleton matched. Later frames came back with that
   frame's energy, bead, and any other metadata key. The header is reused
@@ -1667,6 +1713,7 @@ All notable changes to this project will be documented in this file. See [conven
 - (**version**) v0.1.0 - (fd6972a) - *HaoZeke*
 
 <!-- [[[cog exec(open("scripts/cog_inline.py").read()); emit_changelog_links(cog)]]] -->
+[v0.24.0]: https://github.com/lode-org/readcon-core/compare/v0.23.3...v0.24.0
 [v0.23.3]: https://github.com/lode-org/readcon-core/compare/v0.23.2...v0.23.3
 [v0.23.2]: https://github.com/lode-org/readcon-core/compare/v0.23.1...v0.23.2
 [v0.23.1]: https://github.com/lode-org/readcon-core/compare/v0.23.0...v0.23.1
