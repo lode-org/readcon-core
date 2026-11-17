@@ -6792,7 +6792,7 @@ fn chemfiles_err_to_py(e: crate::chemfiles_import::ChemfilesImportError) -> PyEr
             pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
         }
         ChemfilesImportError::Io(io) => PyIOError::new_err(io.to_string()),
-        ChemfilesImportError::InvalidFrame(msg) => PyValueError::new_err(msg),
+        ChemfilesImportError::InvalidFrame(msg) => scan_err_to_py(msg),
         #[cfg(feature = "chemfiles")]
         ChemfilesImportError::Chemfiles(ch) => PyValueError::new_err(format!("chemfiles: {ch}")),
     }

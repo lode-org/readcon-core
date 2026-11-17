@@ -1374,7 +1374,7 @@ pub fn con_frame_from_trajectory_path_nth<P: AsRef<Path>>(
     }
     let mut chfl_frame = Frame::new();
     traj.read_step(index, &mut chfl_frame)?;
-    con_frame_from_chemfiles(&chfl_frame)
+    con_frame_from_chemfiles(&chfl_frame).map_err(|e| name_cell_frame(e, index))
 }
 
 /// Number of steps in a chemfiles trajectory ([`Trajectory::nsteps`]).
@@ -1435,6 +1435,102 @@ mod tests {
         frame.set("custom_note", Property::String("hello".into()));
         frame.set("time", Property::Double(1.25));
         frame
+    }
+
+    fn nan_length_error(frame_index: Option<usize>) -> String {
+        match frame_index {
+            Some(i) => format!("non-finite value: cell field boxl[0] of frame {i} is NaN"),
+            None => "non-finite value: cell field boxl[0] is NaN".to_string(),
+        }
+    }
+
+    fn assert_invalid_frame<T: std::fmt::Debug>(
+        result: Result<T, ChemfilesImportError>,
+        expected: &str,
+    ) {
+        match result {
+            Err(ChemfilesImportError::InvalidFrame(message)) => assert_eq!(message, expected),
+            other => panic!("expected InvalidFrame({expected:?}), got {other:?}"),
+        }
+    }
+
+    /// Write `finite` frames, then one frame whose first cell length is NaN.
+    fn write_trajectory_with_nan_cell(path: &Path, format: &str, finite: usize) {
+        let mut traj = Trajectory::open_with_format(path, 'w', format).expect("open for write");
+        let mut frame = make_water_frame();
+        for _ in 0..finite {
+            traj.write(&frame).expect("write finite frame");
+        }
+        frame.set_cell(&UnitCell::new([f64::NAN, 10.0, 10.0]));
+        traj.write(&frame).expect("write NaN-cell frame");
+    }
+
+    #[test]
+    fn a_non_finite_cell_length_is_refused_with_its_field() {
+        // chemfiles itself refuses a non-finite angle or a NaN in the second
+        // or third length, so the first length is the one it can hold.
+        let mut frame = make_water_frame();
+        frame.set_cell(&UnitCell::new([f64::NAN, 10.0, 10.0]));
+        assert_invalid_frame(con_frame_from_chemfiles(&frame), &nan_length_error(None));
+    }
+
+    #[test]
+    fn a_finite_cell_still_converts_bit_for_bit() {
+        let mut frame = make_water_frame();
+        frame.set_cell(&UnitCell::triclinic(
+            [10.123456789012345, 11.5, 12.25],
+            [80.5, 95.25, 100.125],
+        ));
+        let con = con_frame_from_chemfiles(&frame).expect("finite cell");
+        assert_eq!(con.header.boxl, frame.cell().lengths());
+        assert_eq!(con.header.angles, frame.cell().angles());
+    }
+
+    #[test]
+    fn a_trajectory_path_names_the_frame_with_the_non_finite_cell() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("nan.trr");
+        write_trajectory_with_nan_cell(&path, "TRR", 2);
+
+        let dense = con_frames_from_trajectory_path_with(&path, &ChemfilesReadOpts::default());
+        assert_invalid_frame(dense, &nan_length_error(Some(2)));
+
+        let strided = con_frames_from_trajectory_path_with(
+            &path,
+            &ChemfilesReadOpts {
+                start: 1,
+                ..ChemfilesReadOpts::default()
+            },
+        );
+        assert_invalid_frame(strided, &nan_length_error(Some(2)));
+
+        assert_invalid_frame(
+            con_frame_from_trajectory_path_nth(&path, 2),
+            &nan_length_error(Some(2)),
+        );
+        assert!(con_frame_from_trajectory_path_nth(&path, 1).is_ok());
+
+        let before_it = con_frames_from_trajectory_path_with(
+            &path,
+            &ChemfilesReadOpts {
+                stop: Some(2),
+                ..ChemfilesReadOpts::default()
+            },
+        )
+        .expect("the finite frames before the bad one still read");
+        assert_eq!(before_it.len(), 2);
+    }
+
+    #[test]
+    fn an_in_memory_trajectory_names_the_frame_with_the_non_finite_cell() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("nan.cif");
+        write_trajectory_with_nan_cell(&path, "CIF", 1);
+        let text = std::fs::read_to_string(&path).expect("cif text");
+        assert_invalid_frame(
+            con_frames_from_memory(&text, "CIF"),
+            &nan_length_error(Some(1)),
+        );
     }
 
     #[test]
