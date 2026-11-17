@@ -52,6 +52,7 @@ REPO = CPC.parents[1]
 SRC = CPC / "src"
 GENERATED = SRC / "figures" / "generated"
 OUT = GENERATED / "version_map.tex"
+LIBRARY_OUT = GENERATED / "library_macros.tex"
 READS = CPC / "data" / "trace" / "reads.json"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
@@ -995,10 +996,40 @@ def render() -> tuple[str, list[str]]:
     return "\n".join(lines), problems
 
 
+def library_macros() -> str:
+    """The library digest that most records behind a printed result name, with its version and counts, as macros."""
+    found, _ = record_places()
+    named: dict[tuple[str, str], int] = {}
+    for rel in found:
+        held = carrier(rel)
+        build = build_of(*held) if held and rel not in NO_BUILD else None
+        if build is not None and build.digest:
+            key = (build.readcon, build.digest)
+            named[key] = named.get(key, 0) + 1
+    if not named:
+        raise SystemExit("no record behind a printed result names a library digest")
+    ranked = sorted(named.items(), key=lambda item: -item[1])
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        raise SystemExit(f"two library digests are named by as many records: {ranked[:2]}")
+    (version, digest), count = ranked[0]
+    return "\n".join(
+        [
+            f"% Written by paper/cpc/scripts/gen_version_map.py from the builds the records name.",
+            rf"\newcommand{{\rcRecordDigest}}{{{digest[:12]}}}",
+            rf"\newcommand{{\rcRecordDigestVersion}}{{{version}}}",
+            rf"\newcommand{{\rcRecordDigestCount}}{{{count}}}",
+            rf"\newcommand{{\rcDigestRecordCount}}{{{sum(named.values())}}}",
+            "",
+        ]
+    )
+
+
 def main() -> int:
     text, problems = render()
     OUT.write_text(text)
     print(f"wrote {OUT.relative_to(REPO)}")
+    LIBRARY_OUT.write_text(library_macros())
+    print(f"wrote {LIBRARY_OUT.relative_to(REPO)}")
     for problem in problems:
         print(problem, file=sys.stderr)
     return 1 if problems else 0

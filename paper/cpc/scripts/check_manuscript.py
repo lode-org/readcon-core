@@ -802,6 +802,10 @@ def check_version_map() -> str:
         problems.append(
             "version_map.tex differs from the records; run scripts/gen_version_map.py"
         )
+    if (GENERATED / "library_macros.tex").read_text() != gen_version_map.library_macros():
+        problems.append(
+            "library_macros.tex differs from the records; run scripts/gen_version_map.py"
+        )
     if problems:
         fail(listed("version map", problems))
     rows = sum(
