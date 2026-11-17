@@ -545,29 +545,36 @@ readcon.write_con("band.con", frames)
 \end{lstlisting}
 
 \subsection{Python bindings and thread safety}\label{sec:python-threads}
-The PyO3 module sets \texttt{gil\_used = false} and supports free-threaded Python \texttt{3.14t} alongside standard builds.
-Parsing, formatting, file writes, checksums, and correspondence checks detach the Python thread state with \texttt{py.detach}.
+The PyO3 module sets \texttt{gil\_used = false}.
+Continuous integration tests run on free-threaded Python \texttt{3.13t} and \texttt{3.14t} alongside standard builds.
+Parsing, formatting, file writes, and correspondence checks detach the Python thread state with \texttt{py.detach}.
+Calling \texttt{touch\_checksum()} detaches while the coordinate slab is private, and stays attached once Python holds the shared slab.
 On an unindexed frame, \texttt{coords\_array()} copies coordinates straight from the parsed frame buffer into an owned NumPy array without building per-atom Python objects.
-Once the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
+When the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
 
 \texttt{ConFrameList} stores its parsed frames behind a per-list \texttt{RwLock}.
-Writers, string serialization, checksums, and identifier checks hold a read guard across the detached call instead of moving frames out of the list.
-Other threads still see the full list during a detached call, and a panic leaves the stored frames intact.
-Any thread waiting for the frame lock or frame cache detaches before blocking so a detached holder can re-attach without deadlock.
-Indexing a frame locks the cache before the list, marks any shared coordinate slab as reachable from Python under the write lock, and caches the indexed frame object.
+On the stored-frame fast path used when every frame stays in the list, plain writes, compressed writes, string output, and identifier checks hold one read guard across the detached call instead of moving frames out of the list.
+The \texttt{touch\_checksum()} method holds that read guard across its walk as well.
+When indexing has moved a frame into the object cache, writers fall back to iterating frame by frame.
+Other threads see the full list during a detached call, and a panic leaves the stored frames intact.
+Any thread waiting for the frame lock or frame cache detaches before blocking so a detached holder can reattach without deadlock.
+Indexing a frame locks the cache before the list and caches the indexed frame object.
+Under the list write lock, indexing also marks any shared coordinate slab as reachable from Python before moving that slot out.
 Calling \texttt{columns()} takes the write lock so active detached readers finish before Python receives the shared coordinate array.
 
-When coordinates are reachable from Python through a shared slab or a frame's \texttt{xyz} array, the attached thread copies them into a private buffer (\texttt{CoordSnapshot}) and borrows all remaining fields from the read-locked frames while detached work runs.
+When coordinates are reachable from Python through a shared slab or a frame's \texttt{xyz} array, the attached thread copies them into a private buffer (\texttt{CoordSnapshot}) and borrows all remaining fields from the source frames while detached work runs.
 Frames whose coordinates are unreachable from Python keep the zero-copy detached path.
 Repeat writes of a shared list retain the last priced coordinate buffer and reuse its packed frame lengths while every frame matches that buffer bit for bit.
 If a frame differs, the writer switches to a fresh copy from that frame onward.
 
 \texttt{write\_columns} and \texttt{write\_extxyz} copy NumPy input arrays in bounded runs into a reused staging buffer while attached and format each run detached.
-No Rust slice aliases caller-writable NumPy memory while Python threads can store into it.
-On little-endian Unix targets, \texttt{write\_conbin\_columns} passes NumPy column pointers directly to \texttt{libc::write} (\texttt{write(2)}) inside \texttt{py.detach} without forming a Rust slice.
-Other targets copy bounded runs attached and byte-swap detached.
+On little-endian Unix systems, \texttt{write\_conbin\_columns} passes NumPy column pointers directly to \texttt{libc::write} (\texttt{write(2)}) inside \texttt{py.detach} without forming a Rust slice in the detached write.
+Other targets stage bounded runs while attached and write them detached, copying raw bytes on little-endian non-Unix targets and byte-swapping to little-endian on big-endian targets.
 
-TODO: add concurrent Python read speedups from \path{gil-concurrent.json} and thread-scaling times from \path{threadfix-before-after.json} after \texttt{rerun\_release} runs.
+#+END_EXPORT
+# Pending: describe the relaxed atomic snapshot contract once the writer recovery lands, and cite the Bos atomics book.
+# TODO: add concurrent Python read speedups from gil-concurrent.json and thread-scaling times from threadfix-before-after.json after rerun_release runs.
+#+BEGIN_EXPORT latex
 
 \section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
 readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
