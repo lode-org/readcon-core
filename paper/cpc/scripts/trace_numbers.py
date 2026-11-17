@@ -243,6 +243,8 @@ def scan_lines(
     identifiers: list[Identifier] = []
     skip_env = None
     for number, raw in lines:
+        if name.endswith(".org") and raw.lstrip().startswith("# "):
+            continue
         line = _strip_comment(raw)
         if skip_env:
             if re.search(r"\\end\{" + skip_env + r"\}", line):
