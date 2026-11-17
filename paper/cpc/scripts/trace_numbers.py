@@ -30,14 +30,21 @@ clone gives no drift on the first run) and otherwise leaves it in place; it
 then fails when a ledger left from an earlier run differs from the one the
 records give now, so an edit to a record behind a headline fails until the
 ledger is rewritten.  The generated ``src/figures/generated/*.tex`` fragments
-the manuscript inputs are gitignored too.  The steps of ``regen_paper.py`` that
-name them run on a copy of the working tree, so no tracked file is written; no
-figure plotter runs, and ``clause_coverage.py`` runs as ``--macros``, which reads
-the committed record.  A fragment that is missing is copied from the copy, and
+the manuscript inputs are mostly gitignored; ``dlpack_macros.tex`` and
+``version_map.tex`` are tracked.  The steps of ``regen_paper.py`` that name them
+run on a copy of the working tree, so no tracked file is written; no figure
+plotter runs, and ``clause_coverage.py`` runs as ``--macros``, which reads the
+committed record.  A fragment that is missing is copied from the copy, and
 only a missing one is written.  A fragment that is present must equal what its
 generator wrote byte for byte, so a table cell or a macro edited by hand, or
 left from a record that has changed since, fails with a diff that names the
 fragment; a step that exits non-zero fails too, and its outputs are discarded.
+A fragment that is present and that no step names fails and is named; none is
+passed over.  ``version_map.tex`` is written from the ledger of every format step,
+plotters included, so ``regen_paper.py`` runs whole on a second copy to
+validate it.  When that run fails, for want of a package a plotter imports or
+of a record the version map accepts, the file is reported as not validated
+with the step that failed.
 
 ``rg_main.tex`` is the Org export of ``rg_main.org``, byte for byte.  The scan
 therefore also reads the body of ``rg_main.org`` and fails when it prints a
@@ -359,9 +366,9 @@ def names_fragment(script: str, fragment: Path) -> bool:
     )
 
 
-def _tail(text: str) -> str:
+def _tail(text: str, count: int = 1) -> str:
     lines = text.strip().splitlines()
-    return lines[-1] if lines else "no output"
+    return "; ".join(lines[-count:]) if lines else "no output"
 
 
 def _ignored(path: Path) -> bool:
@@ -413,6 +420,42 @@ def _step_env(python: str, env: dict[str, str]) -> dict[str, str]:
     )
 
 
+def _attempt(
+    script: Path,
+    args: list[str],
+    tree: Path,
+    env: dict[str, str],
+    generated: Path,
+    lines: int = 1,
+) -> str | None:
+    """Run a script of the copy with each python in turn; None when one exits zero, else why the last did not.
+
+    After a failed attempt the ``.tex`` files of ``generated`` are put back, so nothing a failing script wrote is kept.
+    """
+    failure = None
+    for python in _format_pythons():
+        before = _tex_state(generated)
+        done = subprocess.run(
+            [python, str(script), *args],
+            cwd=tree,
+            env=_step_env(python, env),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if done.returncode == 0:
+            return None
+        _restore_tex(generated, before)
+        label = " ".join(
+            [
+                script.relative_to(tree / ROOT.relative_to(ROOT.parents[1])).as_posix(),
+                *args,
+            ]
+        )
+        failure = f"{label} exited {done.returncode}: {_tail(done.stderr, lines)}"
+    return failure
+
+
 def ensure_generated(validate: bool = True) -> list[str]:
     """Write the missing fragments and report the stale ones, from the committed records.
 
@@ -422,8 +465,11 @@ def ensure_generated(validate: bool = True) -> list[str]:
     fragment a step names is regenerated on the copy, and a fragment present
     that differs byte for byte from what its generator wrote is a problem, as
     is a step that exits non-zero: its outputs are discarded and the fragments
-    it names cannot be validated.  Without ``validate``, only the steps for the
-    missing fragments run.
+    it names cannot be validated.  A fragment that is present and that no step
+    names is a problem too, never passed over.  The version map is written from the
+    ledger of every format step, so it is validated by a run of
+    ``regen_paper.py`` on a second copy.  Without ``validate``, only the steps
+    for the missing fragments run.
     """
     inputs = generated_tex_inputs()
     missing = [path for path in inputs if not path.is_file()]
@@ -434,20 +480,43 @@ def ensure_generated(validate: bool = True) -> list[str]:
     repo = ROOT.parents[1]
     steps = [
         step
-        for step in regen_paper.FORMAT
+        for step in [*regen_paper.RECORD_FRAGMENTS, *regen_paper.FORMAT]
         if not step[0].startswith("scripts/plot_") and step[0] not in _FORMAT_SKIP
+    ]
+    ledgered = [
+        path for path in inputs if names_fragment(regen_paper.VERSION_MAP[0], path)
     ]
     producers = {
         path: [step for step in steps if names_fragment(step[0], path)]
         for path in inputs
     }
-    orphans = [path for path in missing if not producers[path]]
-    if orphans:
-        names = ", ".join(path.relative_to(SRC).as_posix() for path in orphans)
+    for path in ledgered:
+        producers[path] = [["scripts/regen_paper.py"]]
+    orphans = [path for path in inputs if not producers[path]]
+    lost = [path for path in missing if not producers[path]]
+    if lost:
+        names = ", ".join(path.relative_to(SRC).as_posix() for path in lost)
         raise SystemExit(
             f"no format step writes {names}; restore it from the repository"
         )
-    targets = [path for path in (inputs if validate else missing) if producers[path]]
+    for path in missing:
+        if not _ignored(path):
+            raise SystemExit(
+                f"{path.relative_to(SRC).as_posix()} is tracked and missing; restore it from the repository"
+            )
+    problems: list[str] = []
+    failures: list[str] = []
+    if validate:
+        problems += [
+            f"{path.relative_to(SRC).as_posix()}: no format step of regen_paper.py writes it, "
+            "so it cannot be validated against a generator; name its producer in regen_paper.py"
+            for path in orphans
+            if path.is_file()
+        ]
+    wanted_paths = [
+        path for path in (inputs if validate else missing) if producers[path]
+    ]
+    targets = [path for path in wanted_paths if path not in ledgered]
     wanted = [
         step for step in steps if any(step in producers[path] for path in targets)
     ]
@@ -460,60 +529,79 @@ def ensure_generated(validate: bool = True) -> list[str]:
     env.setdefault(
         "READCON_LIB", str(repo / "target" / "release" / "libreadcon_core.so")
     )
-    problems: list[str] = []
-    failures: list[str] = []
+    git_dir = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--absolute-git-dir"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    made: dict[Path, Path | None] = {}
+    ledger_paths = [path for path in wanted_paths if path in ledgered]
     with regen_paper.bench_scratch("scratch") as scratch:
-        tree = Path(scratch) / "tree"
-        _copy_tree(repo, tree, Path(scratch))
-        git_dir = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--absolute-git-dir"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if git_dir.returncode == 0:
-            env = dict(env, GIT_DIR=git_dir.stdout.strip(), GIT_WORK_TREE=str(tree))
-        copied = {path: tree / path.relative_to(repo) for path in targets}
-        for path in copied.values():
-            path.unlink(missing_ok=True)
-        generated = tree / SRC.relative_to(repo) / "figures" / "generated"
-        for step in wanted:
-            args = _FRAGMENT_ARGS.get(step[0], step[1:])
-            failure = None
-            for python in _format_pythons():
-                before = _tex_state(generated)
-                done = subprocess.run(
-                    [python, str(tree / ROOT.relative_to(repo) / step[0]), *args],
-                    cwd=tree,
-                    env=_step_env(python, env),
-                    check=False,
-                    capture_output=True,
-                    text=True,
+
+        def copy(name: str) -> tuple[Path, dict[str, str], Path]:
+            tree = Path(scratch) / name
+            _copy_tree(repo, tree, Path(scratch))
+            tree_env = env
+            if git_dir.returncode == 0:
+                tree_env = dict(
+                    env, GIT_DIR=git_dir.stdout.strip(), GIT_WORK_TREE=str(tree)
                 )
-                if done.returncode == 0:
-                    failure = None
-                    break
-                _restore_tex(generated, before)
-                failure = f"{' '.join([step[0], *args])} exited {done.returncode}: {_tail(done.stderr)}"
+            return (
+                tree,
+                tree_env,
+                tree / SRC.relative_to(repo) / "figures" / "generated",
+            )
+
+        if targets:
+            tree, tree_env, generated = copy("tree")
+            for path in targets:
+                (tree / path.relative_to(repo)).unlink(missing_ok=True)
+            for step in wanted:
+                args = _FRAGMENT_ARGS.get(step[0], step[1:])
+                failure = _attempt(
+                    tree / ROOT.relative_to(repo) / step[0],
+                    args,
+                    tree,
+                    tree_env,
+                    generated,
+                )
+                if failure:
+                    failures.append(failure)
+            made.update({path: tree / path.relative_to(repo) for path in targets})
+        if ledger_paths:
+            tree, tree_env, generated = copy("ledger")
+            for path in ledger_paths:
+                (tree / path.relative_to(repo)).touch()
+            failure = _attempt(
+                tree / ROOT.relative_to(repo) / "scripts" / "regen_paper.py",
+                [],
+                tree,
+                tree_env,
+                generated,
+                lines=2,
+            )
             if failure:
                 failures.append(failure)
+            made.update(
+                {
+                    path: None if failure else tree / path.relative_to(repo)
+                    for path in ledger_paths
+                }
+            )
         unwritten = []
-        for path, made in copied.items():
+        for path, output in made.items():
             rel = path.relative_to(SRC).as_posix()
-            if not made.is_file():
+            if output is None or not output.is_file():
                 if path.is_file():
                     problems.append(
-                        f"{rel}: no format step wrote it, so it cannot be validated"
+                        f"{rel}: no successful format step wrote it, so it cannot be validated"
                     )
                 else:
                     unwritten.append(rel)
                 continue
-            new = made.read_bytes()
+            new = output.read_bytes()
             if not path.is_file():
-                if not _ignored(path):
-                    raise SystemExit(
-                        f"{rel} is tracked and missing; restore it from the repository"
-                    )
                 path.write_bytes(new)
             elif path.read_bytes() != new:
                 diff = difflib.unified_diff(
