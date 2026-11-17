@@ -4,6 +4,7 @@
     "data/db31/db26/RESULTS.md",
     "data/db31/db26/campaign.log"
   ],
+  "repository": "https://github.com/lode-org/readcon-db",
   "commit": "a584a28816c2f603c8c94759fdf45d86fc20f069",
   "tree": "c1c761697b9aa9e57f3f1943868811285c5d8d03",
   "host": {
