@@ -1238,6 +1238,10 @@ def main() -> int:
             ),
         ),
         ("version map", check_version_map),
+        (
+            "manuscript rule",
+            lambda: script_check("manuscript_inputs.py", "TeX inputs of the manuscript rule"),
+        ),
         ("programs", check_steps),
         ("pixi tasks", check_tasks),
         ("markers", check_markers),
