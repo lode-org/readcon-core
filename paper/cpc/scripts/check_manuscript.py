@@ -111,7 +111,10 @@ FUNDING = (
     "This research did not receive any specific grant from funding agencies in the public, commercial, "
     "or not-for-profit sectors."
 )
-COMPETING = "The author declares no competing interests."
+COMPETING = (
+    "The author declares that he has no known competing financial interests or personal relationships that "
+    "could have appeared to influence the work reported in this paper."
+)
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
 AI_STATEMENT = (
     "Chatbots were used to refine certain turns of phrase and to speed through some implementation details; "
