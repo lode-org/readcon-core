@@ -191,50 +191,54 @@ In Python, \texttt{readcon.read\_con(path)} returns the frames of a file (Listin
 \end{small}
 
 \section{Introduction}\label{sec:introduction} Rare-event methods turn a potential energy surface into rates.
-Transition state theory \cite{eyringActivatedComplexChemical1935,vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990} reduces the kinetics of an activated process to its saddle points and the vibrations there.
-The saddles are located by the nudged elastic band \cite{jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000,asgeirssonNudgedElasticBand2021}, by minimum-mode followers \cite{henkelmanDimerMethodFinding1999,kastnerSuperlinearlyConvergingDimer2008,olsenComparisonMethodsFinding2004} and by string methods \cite{eStringMethodStudy2002,petersGrowingStringMethod2004}.
-Adaptive kinetic Monte Carlo (AKMC) and accelerated dynamics chain them into trajectories of seconds and longer \cite{henkelmanLongTimeScale2001,xuAdaptiveKineticMonte2008,voterExtendingTimeScale2002,perezLongtimeDynamicsThrough2016}.
+Transition state theory \cite{eyringActivatedComplexChemical1935,vineyardFrequencyFactorsIsotope1957,hanggiReactionrateTheoryFifty1990} reduces the kinetics of an activated process to its saddle points and the vibrations about them.
+The saddle points are located with the nudged elastic band \cite{jonssonNudgedElasticBand1998,henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000,asgeirssonNudgedElasticBand2021}, with minimum-mode following methods \cite{henkelmanDimerMethodFinding1999,kastnerSuperlinearlyConvergingDimer2008,olsenComparisonMethodsFinding2004} and with string methods \cite{eStringMethodStudy2002,petersGrowingStringMethod2004}.
+Adaptive kinetic Monte Carlo (AKMC) chains such searches into state-to-state trajectories, and together with accelerated molecular dynamics it reaches milliseconds and longer \cite{henkelmanLongTimeScale2001,xuAdaptiveKineticMonte2008,voterExtendingTimeScale2002,perezLongtimeDynamicsThrough2016,chillEonSoftwareLong2014}.
 A long-timescale run in eOn \cite{chillEonSoftwareLong2014,rohitgoswamiTheochemuieonV3602026} spawns thousands of saddle searches, often on volunteer or distributed resources \cite{andersonBoincSystemPublicresource2004,pedersenDistributedImplementationAdaptive2010}.
-It passes their geometries between Python drivers \cite{larsenAtomicSimulationEnvironmenta2017,hermesSellaOpensourceAutomationfriendly2022}, C++ engines and Fortran electronic structure codes \cite{kresseEfficiencyAbinitioTotal1996}.
-A search that stops on one machine resumes on another from a geometry file, the checkpoint of the search.
+Their geometries pass between Python drivers \cite{larsenAtomicSimulationEnvironmenta2017,hermesSellaOpensourceAutomationfriendly2022}, C++ engines and Fortran electronic structure codes \cite{kresseEfficiencyAbinitioTotal1996}.
+A search that stops on one machine is resumed on another from a geometry file, which is then the checkpoint of the search.
 
-The checkpoint has to return four fields that a trajectory reader can ignore.
-A surface search fixes the slab and can hold an adatom at a set height while it crosses the surface, so mobility belongs to each Cartesian component, and a lost hold changes the saddle that the search converges to (Section~\ref{sec:prefactor}).
-Mode following and AKMC bookkeeping match atoms across frames and events by an identifier on each row.
-A reader has to return that identifier as written rather than as the row order.
-Dynamical steps read velocities, and the natural time unit of eOn is \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}=\wkTimeFs\,\mathrm{fs}\), so a reader that takes the same numbers as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\).
-A restart that repeats the interrupted run to roundoff reads back binary64 coordinates \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019}.
-For that, the writer prints the shortest decimal that reads back as the same double \cite{steeleHowPrintFloatingpoint1990,adamsRyFastFloattostring2018}, and the reader rounds each decimal to the nearest double \cite{clingerHowReadFloating1990}.
-Two readers given the same bytes must then return the same fields, and that takes a versioned grammar rather than the convention of one reader.
+Such a checkpoint has to return four fields that a trajectory reader can ignore.
+First, mobility belongs to each Cartesian component.
+A surface search fixes the slab and may hold an adatom at a set height while it crosses the surface, and losing that hold changes the saddle the search converges to (Section~\ref{sec:prefactor}).
+Second, mode following and the bookkeeping of AKMC match atoms across frames and events by an identifier on each row, so a reader has to return that identifier as written rather than the row order.
+Third, dynamical steps read velocities.
+The natural time unit of eOn is \((\mathrm{amu}\,\text{\AA}^2/\mathrm{eV})^{1/2}=\wkTimeFs\,\mathrm{fs}\), and a reader that takes the same numbers as \(\text{\AA}/\mathrm{fs}\) scales the kinetic energy by \(\velFactorSq\).
+Finally, a restart that repeats the interrupted run to roundoff has to read back the binary64 coordinates \cite{ieeecomputersocietyIeeeStandardFloatingpoint2019}.
+This requires a writer that prints the shortest decimal that reads back as the same double \cite{steeleHowPrintFloatingpoint1990,adamsRyFastFloattostring2018} and a reader that rounds each decimal to the nearest double \cite{clingerHowReadFloating1990}.
+Two readers given the same bytes must then return the same fields, which needs a versioned grammar rather than the conventions of one reader.
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain Cartesian coordinate format (XYZ) and publishes a grammar \cite{kermodeLibatomsExtxyzV0462026}.
-It keeps masks and identifiers in column names that the Atomic Simulation Environment (ASE) chose \cite{larsenAtomicSimulationEnvironmenta2017}, and a file declares no version and no velocity unit.
-H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores identity, velocities with units and the box in HDF5, and it defines no element for a per-component constraint.
-The GROMACS compressed trajectory (XTC) and full-precision trajectory (TRR) formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} store molecular dynamics output with neither a mask nor a velocity unit.
-The ASE trajectory keeps every field in a layout that the Python code of ASE defines.
-POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores a per-component hold as selective-dynamics flags but no atom identifier.
-Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023,frauxChemfiles2023}, MDAnalysis \cite{gowersMdanalysisPythonPackage2016,michaudAgrawalMDAnalysisToolkit2011}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
-Of the four, none opens a version-1 CON file or a CON 3.1 file, and the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
-OVITO 3.16.1, the version in Section~\ref*{sec:supp-versions}, writes an extended XYZ file that drops the periodicity of the simulation cell, and that file has no place for a per-component constraint or a velocity time unit.
-OVITO 3.17.0, released 2026-10-21, always writes that periodicity as \texttt{pbc}, and its XYZ reader accepts whitespace around \texttt{=}, escape sequences in quoted strings, array values and string columns \cite{ovitoNewFeatures31702026}.
-The extended XYZ file still names no velocity time unit.
-MDAnalysis can read one model of an mmCIF/PDBx file, with positions and a cell, and it has no element for that mask.
-extxyz-ng reads extended XYZ \cite{yuExtxyzNgV0022026}.
-An info line that is not a key-value pair is plain XYZ, which carries neither the cell nor the mask.
+It keeps masks and identifiers in column names chosen by the Atomic Simulation Environment (ASE) \cite{larsenAtomicSimulationEnvironmenta2017}, and a file declares neither a version nor a velocity unit.
+H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores particle identifiers, velocities and the box in HDF5, with units through an optional module, but it defines no element for a per-component constraint.
+The GROMACS compressed (XTC) and full-precision (TRR) trajectory formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} have no per-component mask.
+XTC stores no velocities, and TRR, DCD and TNG store them in the units of the program that wrote them, without a field that declares the unit.
+The Amber NetCDF convention declares a unit for every variable, the velocities included, but it defines neither an atom identifier nor a constraint \cite{amberNetcdfConvention2026}.
+The ASE trajectory keeps every field, in a layout defined by the Python code of ASE.
+POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores selective-dynamics flags along each lattice vector but no atom identifier.
+Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMdanalysisPythonPackage2016}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
+None of these four opens a version-1 CON file or a CON 3.1 file, while the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
+OVITO 3.16.1, the version of Section~\ref*{sec:supp-versions}, writes an extended XYZ file without the periodicity of the simulation cell, and that file has no place for a per-component constraint or a velocity time unit.
+OVITO 3.17.0, released 2026-10-21, always writes the periodicity as \texttt{pbc}, and its XYZ reader accepts whitespace around \texttt{=}, escape sequences in quoted strings, array values and string columns \cite{ovitoNewFeatures31702026}, but its extended XYZ file still names no velocity time unit.
+MDAnalysis reads one model of an mmCIF/PDBx file, with positions and a cell, and has no element for the mask either.
+The Rust parser extxyz-ng also reads extended XYZ \cite{yuExtxyzNgV0022026}.
+Under the specification, a comment line of key-value pairs without a \texttt{Properties} key makes the file plain XYZ, which carries neither the cell nor the mask.
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.
-Particle physics fixed the files that pass between independent event generators in published texts: the Les Houches event file \cite{Alwall2007LHEF}, the second Les Houches Accord for supersymmetric spectra \cite{Allanach2009SLHA2} and the HepMC3 library for generator events \cite{Buckley2021HepMC3}.
+Other fields have fixed their interchange files in published texts.
+In particle physics, the Les Houches event file passes parton-level events from matrix-element generators to shower generators \cite{Alwall2007LHEF}, the second SUSY Les Houches Accord passes spectra and decay tables between spectrum calculators, decay codes and event generators \cite{Allanach2009SLHA2}, and the HepMC3 library defines the event record that generators hand to analysis \cite{Buckley2021HepMC3}.
 Electronic structure has done the same for densities and wavefunctions with the European Theoretical Spectroscopy Facility (ETSF) file format \cite{Gonze2008ETSF} and TREXIO \cite{posenitskiyTrexioFileFormat2023}, and for pseudopotentials with the pseudopotential markup language (PSML) \cite{Garcia2018PSML}.
-A computed barrier is reproducible from a file only when every reader returns the same fields from it.
-A versioned specification and a corpus of files with known verdicts turn that condition into a test of any reader.
+A computed barrier can be reproduced from a file only when every reader returns the same fields from it.
+A versioned specification together with a corpus of files of known verdicts makes that condition a test that any reader can run.
 
-Here, we introduce the CON 3.1 specification and its reference implementation readcon-core to formalize and extend the widely used CON format.
-CON 3.1 adds a JSON header line declaring the format version, physical units, and periodicity flags, stores a three-bit constraint mask and atom identifier on each coordinate row, supports declared per-atom sections, and reads each coordinate back as the binary64 value written.
-We expose this parser from a single Rust core behind C, C++, Python, Julia, and Fortran interfaces, following the architecture of chemfiles \cite{frauxChemfileschemfilesVersion01042023}, and provide borrowed DLPack position views at \dlpackRatio{} times the cost of an explicit copy (Section~\ref{sec:dlpack}).
-Section~\ref{sec:worked} steps through a reference frame to quantify the impact of each field on a restart, and Section~\ref{sec:format} states the normative grammar and version rules.
-Sections~\ref{sec:implementation} and~\ref{sec:conformance} describe the implementation and test it against both conformance corpora, Section~\ref{sec:cases} resumes saddle searches from checkpoints that we wrote and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} compares read performance against ASE, MDAnalysis, OVITO, pymatgen, and pure Python.
-Unlike H5MD, TNG, and extended XYZ, CON 3.1 specifies all four checkpoint fields explicitly, and readcon-core is the only reader in this comparison that recovers the constraint mask, atom identifier, and velocity time unit from standardized fields while remaining forward-compatible across minor revisions.
+In this paper, we present the CON 3.1 specification and readcon-core, its reference implementation.
+CON 3.1 adds a JSON header line that declares the format version, the physical units and the periodic flags, stores a three-bit constraint mask and an atom identifier on each coordinate row, allows declared per-atom sections, and reads each coordinate back as the binary64 value that was written.
+The parser is one Rust core with C, C++, Python, Julia and Fortran interfaces, similar in layout to chemfiles \cite{frauxChemfileschemfilesVersion01042023}, and it provides borrowed DLPack views of the positions at \dlpackRatio{} times the cost of an explicit copy (Section~\ref{sec:dlpack}).
+Section~\ref{sec:worked} steps through a reference frame and gives the effect of each field on a restart, and Section~\ref{sec:format} states the normative grammar and the version rules.
+Sections~\ref{sec:implementation} and~\ref{sec:conformance} describe the implementation and test it against both conformance corpora.
+Section~\ref{sec:cases} resumes saddle searches from checkpoints written and read back with readcon-core and with other libraries, and Section~\ref{sec:performance} compares read times with ASE, eOn, chemfiles, MDAnalysis, OVITO, pymatgen, h5py and NumPy.
+Of the formats in this comparison, only CON 3.1 specifies all four checkpoint fields, and readcon-core is the only reader here that returns the constraint mask, the atom identifier and the velocity time unit from fields its own specification defines, while accepting later minor revisions.
 
 \section{One frame, line by line}\label{sec:worked} Listing~\ref{lst:frame} is a complete CON 3.1 file, the survey frame of a Pt(100) slab of two layers of four atoms with one adatom, written by readcon-core with velocities.
 The left panel of Figure~\ref{fig:structures} shows the slab, and Table~\ref{tab:frame} gives the content of each line and the rule that reads it.
