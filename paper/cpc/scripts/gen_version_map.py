@@ -77,6 +77,8 @@ NO_BUILD = {
     "data/novel/fidelity.json",
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
+    # Release metadata of eOn, read from its upstream repository.
+    "data/eon/readcon_pins.json",
 }
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
