@@ -928,7 +928,7 @@ He also thanks Ami the cactus.
 % proseguard off rgoswami.Headings.
 \section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}\label{sec:ai-declaration}
 % proseguard on rgoswami.Headings.
-During the preparation of this work the author used \rcAITool{} in order to refine certain turns of phrase in the manuscript.
+During the preparation of this work the author used \rcAITool{} to refine certain turns of phrase in the manuscript.
 After using this tool/service, the author reviewed and edited the content as needed and takes full responsibility for the content of the published article.
 
 \FloatBarrier % A digital object identifier in the reference list stays on one line.
