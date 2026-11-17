@@ -116,17 +116,14 @@ COMPETING = (
     "could have appeared to influence the work reported in this paper."
 )
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
-AI_TOOL = (
-    "Cursor, routing between Claude Opus 5.5, Claude Sonnet 5.5, GPT-5.6 Sol, GPT-5.3 Codex, Gemini 4 "
-    "and Grok 4.7"
-)
+AI_TOOL = "Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7"
 AI_STATEMENT = (
-    "During the preparation of this work the author used \\rcAITool{}, to help write code, run the tests "
-    "and benchmarks, and draft and edit the text."
+    "During the preparation of this work the author used \\rcAITool{}, to refine certain turns of phrase "
+    "and to speed through some implementation details."
 )
 AI_RESPONSIBILITY = (
     "After using this tool, the author reviewed and edited the content as needed and takes full "
-    "responsibility for the content of the published article."
+    "responsibility for the content of the publication."
 )
 NOT_IN_PAPER = {
     "a Limitations section": re.compile(r"\\section\*?\{[^}]*Limitation", re.I),
