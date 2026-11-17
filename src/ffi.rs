@@ -5846,10 +5846,25 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     if frame.positions.nrows() != n {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
+    // An exported tensor can share this column. The first row write then
+    // copies it, and the atoms that address the old column, which the
+    // tensor frees, move to the copy.
+    let old = frame.positions.f64_slice().map(|s| s.as_ptr_range());
     for i in 0..n {
         frame
             .positions
             .set_f64_row(i, [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]]);
+    }
+    if let (Some(old), Some(new)) = (old, frame.positions.f64_slice().map(|s| s.as_ptr())) {
+        if old.start != new {
+            for atom in &mut frame.atom_data {
+                let at = atom.coord_ptr();
+                if old.contains(&at) {
+                    let offset = unsafe { at.offset_from(old.start) };
+                    atom.retarget(unsafe { new.offset(offset) }.cast_mut());
+                }
+            }
+        }
     }
     frame.sync_atom_data_from_arrays();
     note(RKRStatus::RKR_STATUS_SUCCESS)
