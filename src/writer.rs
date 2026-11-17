@@ -3802,12 +3802,48 @@ pub fn write_binding_columns(
     symbol: &str,
     workers: usize,
 ) -> Result<(), WriteError> {
+    let mut file_bytes = Vec::new();
+    format_binding_columns(
+        &mut file_bytes,
+        n_frames,
+        n_atoms,
+        positions,
+        masses,
+        cell,
+        fixed,
+        velocities,
+        forces,
+        symbol,
+        workers,
+    )?;
+    publish_new(path, WriteError::Io, |file| {
+        file.write_all(&file_bytes).map_err(WriteError::Io)
+    })
+}
+
+/// Append the text [`write_binding_columns`] writes for these frames.
+///
+/// Frames are formatted one after another, so appending consecutive runs
+/// of frames gives the bytes of one call over all of them.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn format_binding_columns(
+    file_bytes: &mut Vec<u8>,
+    n_frames: usize,
+    n_atoms: usize,
+    positions: &[f64],
+    masses: &[f64],
+    cell: &[f64],
+    fixed: Option<&[f64]>,
+    velocities: Option<&[f64]>,
+    forces: Option<&[f64]>,
+    symbol: &str,
+    workers: usize,
+) -> Result<(), WriteError> {
     let workers = if workers == 0 {
         physical_cores()
     } else {
         workers
     };
-    let mut file_bytes = Vec::new();
     for frame_index in 0..n_frames {
         let atom_base = frame_index * n_atoms;
         let pos = &positions[atom_base * 3..(atom_base + n_atoms) * 3];
@@ -3830,8 +3866,8 @@ pub fn write_binding_columns(
         let mut velocity_block = Vec::new();
         let mut force_block = Vec::new();
         for (type_idx, count) in counts.iter().copied().enumerate() {
-            push_str_line(&mut file_bytes, symbol);
-            push_component_line(&mut file_bytes, "Coordinates of Component", type_idx);
+            push_str_line(file_bytes, symbol);
+            push_component_line(file_bytes, "Coordinates of Component", type_idx);
             if vel.is_some() {
                 push_str_line(&mut velocity_block, symbol);
                 push_component_line(&mut velocity_block, "Velocities of Component", type_idx);
@@ -3860,9 +3896,7 @@ pub fn write_binding_columns(
             file_bytes.extend_from_slice(&force_block);
         }
     }
-    publish_new(path, WriteError::Io, |file| {
-        file.write_all(&file_bytes).map_err(WriteError::Io)
-    })
+    Ok(())
 }
 
 /// Write `frames` to `path`, replacing that path only after the bytes are complete.

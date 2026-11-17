@@ -1109,6 +1109,12 @@ impl PyConFrame {
 }
 
 impl PyConFrame {
+    /// `inner`'s coordinate slots address a NumPy array that `xyz`
+    /// returns to Python, writable.
+    fn coords_shared(&self) -> bool {
+        self.slab.is_some() || self.xyz_owned.is_some()
+    }
+
     fn atom_count(&self, py: Python<'_>) -> usize {
         if self.n_atoms > 0 {
             return self.n_atoms;
@@ -1712,11 +1718,62 @@ fn pack_frame_columns<'a>(
     })
 }
 
+/// Doubles per staged run of a column writer, about 4 MiB.
+const STAGE_VALUES: usize = 1 << 19;
+
+/// Frames per staged run when one frame holds `per_frame` doubles.
+fn staged_frames(per_frame: usize) -> usize {
+    (STAGE_VALUES / per_frame.max(1)).max(1)
+}
+
+/// A frame-major NumPy column that is read only while attached.
+///
+/// Python can store into the array once the thread detaches. A column
+/// writer copies one run at a time into a buffer it reuses and formats
+/// that copy detached, so no Rust slice of the array is live while a
+/// store can run, and the copy stays in cache instead of costing a second
+/// trajectory of fresh pages. A store between two runs shows up in the
+/// later runs only.
+#[derive(Clone, Copy)]
+struct SharedColumn {
+    ptr: *const f64,
+    per_frame: usize,
+}
+
+// The pointer is dereferenced only in `stage_values`, which needs the
+// attached thread's token.
+unsafe impl Send for SharedColumn {}
+
+impl SharedColumn {
+    fn new(values: &[f64], per_frame: usize) -> Self {
+        Self {
+            ptr: values.as_ptr(),
+            per_frame,
+        }
+    }
+
+    /// Copy the values of `frames` into `into`.
+    fn stage(&self, py: Python<'_>, frames: std::ops::Range<usize>, into: &mut Vec<f64>) {
+        let per_frame = self.per_frame;
+        self.stage_values(py, frames.start * per_frame..frames.end * per_frame, into);
+    }
+
+    /// Copy `values` into `into`. The token is the proof that this runs
+    /// attached; the writer that built this column keeps the array alive
+    /// and checked the range against its length.
+    fn stage_values(&self, _py: Python<'_>, values: std::ops::Range<usize>, into: &mut Vec<f64>) {
+        into.clear();
+        into.extend_from_slice(unsafe {
+            std::slice::from_raw_parts(self.ptr.add(values.start), values.len())
+        });
+    }
+}
+
 /// Write one contiguous column dict, the shape returned by
 /// ``ConFrameList.columns``.
 ///
-/// Arrays are borrowed once. Frame shells are built and the file is
-/// formatted with the GIL released. There is no per-atom Python loop.
+/// Runs of frames are copied with the GIL held and formatted with it
+/// released. There is no per-atom Python loop.
 #[pyfunction]
 #[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
 fn write_columns(
@@ -1797,24 +1854,60 @@ fn write_columns(
         }
         None => None,
     };
-    // The readonly views stay on this stack. Formatting reads those
-    // slices directly; detach does not copy the columns.
+    let xyz = n_atoms * 3;
+    let columns = [
+        Some(SharedColumn::new(pos_slice, xyz)),
+        Some(SharedColumn::new(mass_slice, n_atoms)),
+        Some(SharedColumn::new(cell_slice, 6)),
+        fixed_slice.map(|values| SharedColumn::new(values, xyz)),
+        vel_slice.map(|values| SharedColumn::new(values, xyz)),
+        force_slice.map(|values| SharedColumn::new(values, xyz)),
+    ];
+    let per_frame = columns
+        .iter()
+        .flatten()
+        .map(|column| column.per_frame)
+        .sum();
+    let step = staged_frames(per_frame);
     let workers = n_threads.unwrap_or(0);
+    let mut file_bytes = Vec::new();
+    let mut staged: [Vec<f64>; 6] = Default::default();
+    let mut start = 0;
+    while start < n_frames {
+        let end = (start + step).min(n_frames);
+        for (column, into) in columns.iter().zip(staged.iter_mut()) {
+            if let Some(column) = column {
+                column.stage(py, start..end, into);
+            }
+        }
+        let present = |index: usize| columns[index].map(|_| staged[index].as_slice());
+        let (fixed, velocities, forces) = (present(3), present(4), present(5));
+        py.detach(|| {
+            crate::writer::format_binding_columns(
+                &mut file_bytes,
+                end - start,
+                n_atoms,
+                &staged[0],
+                &staged[1],
+                &staged[2],
+                fixed,
+                velocities,
+                forces,
+                symbol,
+                workers,
+            )
+        })
+        .map_err(|err| PyIOError::new_err(err.to_string()))?;
+        start = end;
+    }
     let path_owned = path.to_owned();
-    let symbol_owned = symbol.to_owned();
-    py.detach(|| {
-        crate::writer::write_binding_columns(
+    py.detach(move || {
+        crate::writer::publish_new(
             Path::new(&path_owned),
-            n_frames,
-            n_atoms,
-            pos_slice,
-            mass_slice,
-            cell_slice,
-            fixed_slice,
-            vel_slice,
-            force_slice,
-            &symbol_owned,
-            workers,
+            crate::writer::WriteError::Io,
+            |file| {
+                std::io::Write::write_all(file, &file_bytes).map_err(crate::writer::WriteError::Io)
+            },
         )
     })
     .map_err(|err| PyIOError::new_err(err.to_string()))
@@ -2171,9 +2264,19 @@ impl ReadCallPhases {
 /// metadata dict, is built the first time that frame is indexed.
 #[pyclass(name = "ConFrameList")]
 struct ConFrameList {
-    frames: std::sync::Mutex<Vec<Option<ConFrame>>>,
+    /// A write, a string, a checksum or an id check holds the read lock
+    /// for the whole call, detached included, so no thread sees the list
+    /// without its frames. Every lock is taken with `*_py_attached`: a
+    /// thread that has to wait detaches first, so a detached holder can
+    /// always attach again.
+    frames: std::sync::RwLock<Vec<Option<ConFrame>>>,
+    /// Lock order is `cache`, then `frames`.
     cache: std::sync::Mutex<Vec<Option<Py<PyConFrame>>>>,
     slab: Option<Py<PyArray3<f64>>>,
+    /// Python can reach the slab: `columns()` returned it, or an indexed
+    /// frame views one row of it. Set with `frames` write-locked, so a
+    /// reader that saw `false` finishes before Python has the array.
+    slab_shared: std::sync::atomic::AtomicBool,
     n_atoms: usize,
     workers: usize,
     phases: std::sync::Mutex<ReadCallPhases>,
@@ -2187,40 +2290,129 @@ struct ConFrameListIter {
     pos: usize,
 }
 
+/// Run `f` on `slots` with the GIL released.
+///
+/// `shared` means Python can store into the coordinates those frames read,
+/// through a NumPy array it holds. `f` then reads a [`CoordSnapshot`]
+/// copied here, attached, instead. The copy reads each double once, and
+/// under the GIL no Python store runs during it. A free-threaded build has
+/// no such exclusion, so a store racing the copy lands on either side of
+/// it, as with NumPy's own copies. Either way the frames `f` reads do not
+/// change under it.
+fn detach_slots<R, F>(py: Python<'_>, slots: &[Option<ConFrame>], shared: bool, f: F) -> R
+where
+    F: Send + FnOnce(&[Option<ConFrame>]) -> R,
+    R: Send,
+{
+    if !shared {
+        return py.detach(move || f(slots));
+    }
+    let refs: Vec<Option<&ConFrame>> = slots.iter().map(Option::as_ref).collect();
+    let snapshot = crate::types::CoordSnapshot::copy_of(&refs);
+    drop(refs);
+    py.detach(move || f(snapshot.slots()))
+}
+
+/// [`detach_slots`] for frames held one by one.
+fn detach_refs<R, F>(py: Python<'_>, frames: &[&ConFrame], shared: bool, f: F) -> R
+where
+    F: Send + FnOnce(&[&ConFrame]) -> R,
+    R: Send,
+{
+    if !shared {
+        return py.detach(move || f(frames));
+    }
+    let refs: Vec<Option<&ConFrame>> = frames.iter().copied().map(Some).collect();
+    let snapshot = crate::types::CoordSnapshot::copy_of(&refs);
+    drop(refs);
+    py.detach(move || {
+        let copies: Vec<&ConFrame> = snapshot.slots().iter().flatten().collect();
+        f(&copies)
+    })
+}
+
+/// A thread that has to wait for `mutex` detaches while it waits.
+fn lock_attached<'a, T>(
+    py: Python<'_>,
+    mutex: &'a std::sync::Mutex<T>,
+) -> std::sync::MutexGuard<'a, T> {
+    use pyo3::sync::MutexExt;
+    mutex
+        .lock_py_attached(py)
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 impl ConFrameList {
-    fn len_frames(&self) -> usize {
-        self.frames.lock().expect("frames").len()
+    fn slots(&self, py: Python<'_>) -> std::sync::RwLockReadGuard<'_, Vec<Option<ConFrame>>> {
+        use pyo3::sync::RwLockExt;
+        self.frames
+            .read_py_attached(py)
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn slots_mut(&self, py: Python<'_>) -> std::sync::RwLockWriteGuard<'_, Vec<Option<ConFrame>>> {
+        use pyo3::sync::RwLockExt;
+        self.frames
+            .write_py_attached(py)
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn len_frames(&self, py: Python<'_>) -> usize {
+        self.slots(py).len()
+    }
+
+    /// Run `f` on the stored slots under the read lock.
+    ///
+    /// `f` runs detached. It reads a coordinate snapshot when `reads_coords`
+    /// is set and Python can reach the slab those coordinates live in.
+    fn with_slots<R, F>(&self, py: Python<'_>, reads_coords: bool, f: F) -> R
+    where
+        F: Send + FnOnce(&[Option<ConFrame>]) -> R,
+        R: Send,
+    {
+        let slots = self.slots(py);
+        let shared = reads_coords && self.slab_shared.load(std::sync::atomic::Ordering::Acquire);
+        detach_slots(py, &slots, shared, f)
     }
 
     fn frame_obj(&self, py: Python<'_>, index: usize) -> PyResult<Py<PyConFrame>> {
-        {
-            let cache = self.cache.lock().expect("cache");
-            if let Some(hit) = cache.get(index).and_then(|slot| slot.as_ref()) {
-                return Ok(hit.clone_ref(py));
-            }
+        // Held until the object is cached. A second thread indexing the
+        // same frame waits here and then takes the cached object; it does
+        // not find the slot already moved out.
+        let mut cache = lock_attached(py, &self.cache);
+        if let Some(hit) = cache.get(index).and_then(|slot| slot.as_ref()) {
+            return Ok(hit.clone_ref(py));
         }
-        let frame = self.frames.lock().expect("frames")[index]
-            .take()
-            .ok_or_else(|| PyIOError::new_err(format!("frame {index} is already borrowed")))?;
+        let frame = {
+            let mut slots = self.slots_mut(py);
+            if self.slab.is_some() {
+                self.slab_shared
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
+            slots.get_mut(index).and_then(Option::take)
+        }
+        .ok_or_else(|| PyIOError::new_err(format!("frame {index} is already borrowed")))?;
         let built = if let Some(slab) = &self.slab {
             PyConFrame::from_slab(py, frame, slab.clone_ref(py), index, self.n_atoms)?
         } else {
             PyConFrame::from_owned(py, frame)?
         };
         let obj = Py::new(py, built)?;
-        self.cache.lock().expect("cache")[index] = Some(obj.clone_ref(py));
+        if let Some(slot) = cache.get_mut(index) {
+            *slot = Some(obj.clone_ref(py));
+        }
         Ok(obj)
     }
 }
 
 #[pymethods]
 impl ConFrameList {
-    fn __len__(&self) -> usize {
-        self.len_frames()
+    fn __len__(&self, py: Python<'_>) -> usize {
+        self.len_frames(py)
     }
 
     fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let n = self.len_frames();
+        let n = self.len_frames(py);
         if let Ok(slice) = key.cast::<pyo3::types::PySlice>() {
             let ind = slice.indices(n as isize)?;
             let mut out = Vec::with_capacity(ind.slicelength);
@@ -2249,7 +2441,7 @@ impl ConFrameList {
     /// construction, the return, and a later touch.
     #[getter]
     fn phases(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
-        self.phases.lock().expect("phases").dict(py)
+        lock_attached(py, &self.phases).dict(py)
     }
 
     /// XOR of every frame's positions, cell lengths, and atom-type symbols.
@@ -2264,48 +2456,37 @@ impl ConFrameList {
         };
         let values = slab.bind(py).readonly();
         let slice = values.as_slice()?;
-        // The walk reads the stored frames and the slab. Holding `frames`
-        // across `detach` deadlocks a thread that has the GIL and wants
-        // the same mutex. Take the slots, drop the lock, walk, then put
-        // the same frames back. The coordinate pointers address the slab
-        // or each frame's own buffer, so moving the `Vec` does not copy.
-        let taken = {
-            let mut slots = self.frames.lock().expect("frames");
-            std::mem::take(&mut *slots)
-        };
-        struct Restore<'a> {
-            slots: &'a std::sync::Mutex<Vec<Option<ConFrame>>>,
-            frames: Vec<Option<ConFrame>>,
-        }
-        impl Drop for Restore<'_> {
-            fn drop(&mut self) {
-                if let Ok(mut slots) = self.slots.lock() {
-                    *slots = std::mem::take(&mut self.frames);
-                }
-            }
-        }
-        let restore = Restore {
-            slots: &self.frames,
-            frames: taken,
-        };
         let workers = self.workers;
-        let pool = self.pool.lock().expect("pool").clone();
-        let fault0 = crate::iterators::process_minflt();
-        let t_touch = std::time::Instant::now();
-        let digest = py.detach(|| {
-            let run = || crate::iterators::touch_option_checksum(&restore.frames, slice, workers);
-            match pool.as_ref() {
+        let pool = lock_attached(py, &self.pool).clone();
+        let slots = self.slots(py);
+        let positions = slice;
+        let frames: &[Option<ConFrame>] = &slots;
+        let walk = move || {
+            let fault0 = crate::iterators::process_minflt();
+            let t_touch = std::time::Instant::now();
+            let run = || crate::iterators::touch_option_checksum(frames, positions, workers);
+            let digest = match pool.as_ref() {
                 Some(pool) if workers >= 2 => pool.install(run),
                 _ => run(),
-            }
-        });
-        let touch_s = t_touch.elapsed().as_secs_f64();
-        let touch_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
-        drop(restore);
+            };
+            let touch_s = t_touch.elapsed().as_secs_f64();
+            let touch_minflt = crate::iterators::process_minflt().saturating_sub(fault0);
+            (digest, touch_s, touch_minflt)
+        };
+        // Once Python holds the slab it can store into it whenever this
+        // thread is detached. The walk then stays attached: it reads the
+        // slab itself, as the timing means, and is short next to a copy.
+        let (digest, touch_s, touch_minflt) =
+            if self.slab_shared.load(std::sync::atomic::Ordering::Acquire) {
+                walk()
+            } else {
+                py.detach(walk)
+            };
+        drop(slots);
         let digest = digest
             .ok_or_else(|| PyIOError::new_err("touch_checksum could not read every frame"))?;
         {
-            let mut phases = self.phases.lock().expect("phases");
+            let mut phases = lock_attached(py, &self.phases);
             phases.touch_s = touch_s;
             phases.touch_minflt = touch_minflt;
         }
@@ -2317,16 +2498,20 @@ impl ConFrameList {
     ///
     /// `positions` is the coordinate slab from the read, the same array
     /// object on every call. The other arrays are copied from the parsed
-    /// frames while this call holds the list lock and the GIL. Releasing
-    /// the GIL while that lock is held deadlocks a thread that already
-    /// has the GIL and is waiting to index a frame. Indexing a frame
-    /// takes that frame out of the list, and a later call then fails.
-    /// Call this before `frames[i]`. `write_columns` writes the dict
-    /// back. Indexing a frame still builds Python atoms; this does not.
+    /// frames while this call holds the list lock. Indexing a frame takes
+    /// that frame out of the list, and a later call then fails. Call this
+    /// before `frames[i]`. `write_columns` writes the dict back. Indexing
+    /// a frame still builds Python atoms; this does not.
     fn columns(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let pack_positions = self.slab.is_none();
         let packed = {
-            let frames = self.frames.lock().expect("frames");
+            // The write lock waits out any detached reader of the slab
+            // before Python is handed the array.
+            let frames = self.slots_mut(py);
+            if self.slab.is_some() {
+                self.slab_shared
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
             if frames.iter().any(|slot| slot.is_none()) {
                 return Err(PyIOError::new_err(
                     "columns() needs every frame still stored; indexing a frame borrows it",
@@ -2390,7 +2575,7 @@ impl ConFrameList {
     /// of this object is empty.
     fn release_frames(&mut self, py: Python<'_>) -> f64 {
         let (teardown_s, pool_join_s) = py.detach(|| self.teardown());
-        let mut phases = self.phases.lock().expect("phases");
+        let mut phases = lock_attached(py, &self.phases);
         phases.teardown_s = teardown_s;
         phases.pool_join_s = pool_join_s;
         teardown_s
@@ -2400,8 +2585,16 @@ impl ConFrameList {
 impl ConFrameList {
     fn teardown(&mut self) -> (f64, f64) {
         let t0 = std::time::Instant::now();
-        let mut frames = std::mem::take(&mut *self.frames.lock().expect("frames"));
-        let pool = self.pool.lock().expect("pool").take();
+        let mut frames = std::mem::take(
+            self.frames
+                .get_mut()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        let pool = self
+            .pool
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         let workers = self.workers.max(1);
         if let Some(pool) = pool {
             if frames.len() >= 2 {
@@ -2475,13 +2668,13 @@ impl ConFrameListIter {
     }
 
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyConFrame>>> {
-        let n = self.inner.borrow(py).len_frames();
-        if self.pos >= n {
+        let list = self.inner.borrow(py);
+        if self.pos >= list.len_frames(py) {
             return Ok(None);
         }
         let index = self.pos;
         self.pos += 1;
-        self.inner.borrow(py).frame_obj(py, index).map(Some)
+        list.frame_obj(py, index).map(Some)
     }
 }
 
@@ -2678,9 +2871,10 @@ fn con_frame_list(
     let obj = Py::new(
         py,
         ConFrameList {
-            frames: std::sync::Mutex::new(stored),
+            frames: std::sync::RwLock::new(stored),
             cache: std::sync::Mutex::new(cache),
             slab,
+            slab_shared: std::sync::atomic::AtomicBool::new(false),
             n_atoms,
             workers,
             phases: std::sync::Mutex::new(record),
@@ -3557,25 +3751,18 @@ fn stream_frame_list(
     stop: Option<usize>,
     mut write: impl FnMut(&ConFrame) -> PyResult<()>,
 ) -> PyResult<()> {
-    let n = list.borrow().len_frames();
+    let borrowed = list.borrow();
+    let n = borrowed.len_frames(py);
     let end = stop.unwrap_or(n).min(n);
     for index in start..end {
-        let stored = {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            slots.get(index).and_then(|slot| slot.as_ref()).is_some()
-        };
-        if stored {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            let frame = slots
-                .get(index)
-                .and_then(|slot| slot.as_ref())
-                .expect("stored frame");
-            write(frame)?;
-            continue;
+        {
+            let slots = borrowed.slots(py);
+            if let Some(frame) = slots.get(index).and_then(|slot| slot.as_ref()) {
+                write(frame)?;
+                continue;
+            }
         }
-        let obj = list.borrow().frame_obj(py, index)?;
+        let obj = borrowed.frame_obj(py, index)?;
         let frame = obj.bind(py).borrow();
         write_python_frame(py, &frame, &mut write)?;
     }
@@ -3652,19 +3839,16 @@ fn con_frame_list_stored(
     py: Python<'_>,
     list: &Bound<'_, ConFrameList>,
 ) -> PyResult<Vec<ConFrame>> {
-    let n = list.borrow().len_frames();
+    let borrowed = list.borrow();
+    let n = borrowed.len_frames(py);
     let mut out = Vec::with_capacity(n);
     for index in 0..n {
-        let cloned = {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            slots.get(index).and_then(|slot| slot.clone())
-        };
+        let cloned = borrowed.slots(py).get(index).and_then(|slot| slot.clone());
         if let Some(frame) = cloned {
             out.push(frame);
             continue;
         }
-        let obj = list.borrow().frame_obj(py, index)?;
+        let obj = borrowed.frame_obj(py, index)?;
         out.push(obj.borrow(py).to_con_frame(py)?);
     }
     Ok(out)
@@ -3693,11 +3877,11 @@ fn chunk_wide_frame(frames: &Bound<'_, PyAny>, compression_members: Option<usize
         return false;
     }
     let atoms = if let Ok(list) = frames.cast::<ConFrameList>() {
-        if list.borrow().len_frames() != 1 {
+        let borrowed = list.borrow();
+        let slots = borrowed.slots(frames.py());
+        if slots.len() != 1 {
             return false;
         }
-        let borrowed = list.borrow();
-        let slots = borrowed.frames.lock().expect("frames");
         slots
             .first()
             .and_then(|slot| slot.as_ref())
@@ -3721,17 +3905,12 @@ fn write_bound_frames<W: std::io::Write>(
     writer: &mut ConFrameWriter<W>,
 ) -> PyResult<()> {
     if let Ok(list) = frames.cast::<ConFrameList>() {
-        let all_stored = {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            slots.iter().all(|slot| slot.is_some())
-        };
-        if all_stored {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
+        let borrowed = list.borrow();
+        let slots = borrowed.slots(py);
+        if slots.iter().all(|slot| slot.is_some()) {
             for slot in slots.iter() {
                 writer
-                    .write_frame_bound(slot.as_ref().expect("stored frame"))
+                    .write_frame_bound(stored_frame(slot))
                     .map_err(|err| write_err_to_py(py, err))?;
             }
             return Ok(());
@@ -3754,18 +3933,10 @@ fn plain_binding_bytes(
     let workers = n_threads.filter(|count| *count >= 2).unwrap_or(1);
     let mut buffer = Vec::new();
     if let Ok(list) = frames.cast::<ConFrameList>() {
-        let all_stored = {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            slots.iter().all(|slot| slot.is_some())
-        };
-        if all_stored {
-            let borrowed = list.borrow();
-            let slots = borrowed.frames.lock().expect("frames");
-            let refs: Vec<&ConFrame> = slots
-                .iter()
-                .map(|slot| slot.as_ref().expect("stored frame"))
-                .collect();
+        let borrowed = list.borrow();
+        let slots = borrowed.slots(py);
+        if slots.iter().all(|slot| slot.is_some()) {
+            let refs: Vec<&ConFrame> = slots.iter().map(stored_frame).collect();
             {
                 let mut writer = match precision {
                     Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
@@ -3837,7 +4008,7 @@ fn try_fused_members(
         return Ok(false);
     };
     let borrowed = list.borrow();
-    let slots = borrowed.frames.lock().expect("frames");
+    let slots = borrowed.slots(frames.py());
     if slots.len() != 1 {
         return Ok(false);
     }
@@ -3873,21 +4044,19 @@ fn try_fused_members(
     Ok(true)
 }
 
-fn take_stored_frames(list: &Bound<'_, ConFrameList>) -> Option<Vec<Option<ConFrame>>> {
-    let borrowed = list.borrow();
-    let mut slots = borrowed.frames.lock().expect("frames");
-    if slots.iter().any(|slot| slot.is_none()) {
-        return None;
-    }
-    // Move the slot allocation itself. Copying each frame into a second
-    // `Vec` doubles the shell storage and blows the streaming-write budget.
-    Some(std::mem::take(&mut *slots))
-}
-
-fn restore_stored_frames(list: &Bound<'_, ConFrameList>, frames: Vec<Option<ConFrame>>) {
-    let borrowed = list.borrow();
-    let mut slots = borrowed.frames.lock().expect("frames");
-    *slots = frames;
+/// Run `f` on every stored frame under the list's read lock.
+///
+/// `None` when the list has given a frame to Python. The frames stay in
+/// the list throughout, so a concurrent reader, a panic in `f`, or an
+/// error all leave the list whole. Nothing is moved or cloned.
+fn with_stored_frames<R, F>(list: &Bound<'_, ConFrameList>, reads_coords: bool, f: F) -> Option<R>
+where
+    F: Send + FnOnce(&[Option<ConFrame>]) -> R,
+    R: Send,
+{
+    list.borrow().with_slots(list.py(), reads_coords, |frames| {
+        frames.iter().all(|slot| slot.is_some()).then(|| f(frames))
+    })
 }
 
 fn stored_frame(slot: &Option<ConFrame>) -> &ConFrame {
@@ -4136,9 +4305,9 @@ fn write_owned_frames(
     }
 }
 
-/// A `read_con` result still holds every frame. Move those frames out of
-/// the list mutex, format and write without the GIL, then put the same
-/// frames back. Nothing is cloned.
+/// A `read_con` result still holds every frame. Format and write them
+/// under the list's read lock, without the GIL while Python cannot reach
+/// the coordinate slab. Nothing is cloned.
 fn write_stored_list(
     py: Python<'_>,
     path: &str,
@@ -4159,14 +4328,11 @@ fn write_stored_list(
     let Ok(list) = frames.cast::<ConFrameList>() else {
         return Ok(None);
     };
-    let Some(owned) = take_stored_frames(&list) else {
-        return Ok(None);
-    };
     let path_buf = Path::new(path).to_path_buf();
-    let (owned, result) = py.detach(move || {
-        let result = write_owned_frames(
+    let Some(result) = with_stored_frames(list, true, move |stored| {
+        write_owned_frames(
             &path_buf,
-            &owned,
+            stored,
             precision,
             codec,
             canonical,
@@ -4175,12 +4341,20 @@ fn write_stored_list(
             compression_members,
             rewrite,
             keep_spare,
-        );
-        (owned, result)
-    });
-    restore_stored_frames(&list, owned);
+        )
+    }) else {
+        return Ok(None);
+    };
     result.map_err(|err| write_err_to_py(py, err))?;
     Ok(Some(()))
+}
+
+#[derive(Clone, Copy)]
+struct RefWrite {
+    rewrite: bool,
+    keep_spare: bool,
+    /// The frames' coordinates live in a NumPy array Python can write.
+    shared: bool,
 }
 
 fn detach_frame_refs(
@@ -4190,29 +4364,22 @@ fn detach_frame_refs(
     workers: usize,
     precision: Option<usize>,
     canonical: bool,
-    rewrite: bool,
-    keep_spare: bool,
+    flags: RefWrite,
 ) -> PyResult<()> {
+    let RefWrite {
+        rewrite,
+        keep_spare,
+        shared,
+    } = flags;
     let path_buf = Path::new(path).to_path_buf();
-    // Addresses of frames that stay borrowed on this stack. `detach` runs
-    // the closure on this thread and the writer joins its workers before
-    // returning, so the pointers are not used after the borrow ends.
-    let addrs: Vec<usize> = frames
-        .iter()
-        .map(|frame| *frame as *const ConFrame as usize)
-        .collect();
-    py.detach(move || {
-        let refs: Vec<&ConFrame> = addrs
-            .iter()
-            .map(|addr| unsafe { &*(*addr as *const ConFrame) })
-            .collect();
+    detach_refs(py, frames, shared, move |refs| {
         if rewrite {
             crate::writer::rewrite_frame_refs_to_path(
-                &path_buf, &refs, workers, precision, canonical, true, keep_spare,
+                &path_buf, refs, workers, precision, canonical, true, keep_spare,
             )
         } else {
             crate::writer::write_frame_refs_to_path(
-                &path_buf, &refs, workers, precision, canonical, true,
+                &path_buf, refs, workers, precision, canonical, true,
             )
         }
     })
@@ -4429,51 +4596,36 @@ fn write_con(
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
             if rewrite {
-                let store = |refs: &[&ConFrame]| {
-                    crate::writer::rewrite_frame_refs_to_path(
-                        Path::new(path),
-                        refs,
-                        workers,
-                        precision,
-                        canonical,
-                        true,
-                        keep_spare,
-                    )
-                    .map_err(|err| write_err_to_py(py, err))
-                };
-                if let Ok(list) = frames.cast::<ConFrameList>() {
-                    let borrowed = list.borrow();
-                    let slots = borrowed.frames.lock().expect("frames");
-                    if slots.iter().all(|slot| slot.is_some()) {
-                        let refs: Vec<&ConFrame> = slots
-                            .iter()
-                            .map(|slot| slot.as_ref().expect("stored frame"))
-                            .collect();
-                        store(&refs)?;
-                        return Ok(());
-                    }
+                if let Ok(list) = frames.cast::<ConFrameList>()
+                    && let Some(result) = with_stored_frames(list, true, |stored| {
+                        let refs: Vec<&ConFrame> = stored.iter().map(stored_frame).collect();
+                        crate::writer::rewrite_frame_refs_to_path(
+                            Path::new(path),
+                            &refs,
+                            workers,
+                            precision,
+                            canonical,
+                            true,
+                            keep_spare,
+                        )
+                    })
+                {
+                    return result.map_err(|err| write_err_to_py(py, err));
                 }
                 let rust_frames = py_frames_to_rust(py, frames)?;
                 let refs: Vec<&ConFrame> = rust_frames.iter().collect();
-                detach_frame_refs(
-                    py, path, &refs, workers, precision, canonical, true, keep_spare,
-                )?;
+                let flags = RefWrite {
+                    rewrite: true,
+                    keep_spare,
+                    shared: false,
+                };
+                detach_frame_refs(py, path, &refs, workers, precision, canonical, flags)?;
                 return Ok(());
             }
             if !append {
                 if let Ok(list) = frames.cast::<ConFrameList>() {
-                    let all_stored = {
-                        let borrowed = list.borrow();
-                        let slots = borrowed.frames.lock().expect("frames");
-                        slots.iter().all(|slot| slot.is_some())
-                    };
-                    if all_stored {
-                        let borrowed = list.borrow();
-                        let slots = borrowed.frames.lock().expect("frames");
-                        let refs: Vec<&ConFrame> = slots
-                            .iter()
-                            .map(|slot| slot.as_ref().expect("stored frame"))
-                            .collect();
+                    let written = with_stored_frames(list, true, |stored| {
+                        let refs: Vec<&ConFrame> = stored.iter().map(stored_frame).collect();
                         crate::writer::write_frame_refs_to_path(
                             Path::new(path),
                             &refs,
@@ -4482,7 +4634,9 @@ fn write_con(
                             canonical,
                             true,
                         )
-                        .map_err(|err| write_err_to_py(py, err))?;
+                    });
+                    if let Some(result) = written {
+                        result.map_err(|err| write_err_to_py(py, err))?;
                     } else {
                         // Indexing a frame moves it into the Python cache.
                         // The write then uses that object instead of the slot.
@@ -4505,15 +4659,21 @@ fn write_con(
                     }
                 } else if let Some(held) = borrow_unmodified_frames(frames)? {
                     let refs = held.refs();
-                    detach_frame_refs(
-                        py, path, &refs, workers, precision, canonical, false, keep_spare,
-                    )?;
+                    let flags = RefWrite {
+                        rewrite: false,
+                        keep_spare,
+                        shared: held.coords_shared(),
+                    };
+                    detach_frame_refs(py, path, &refs, workers, precision, canonical, flags)?;
                 } else {
                     let rust_frames = py_frames_to_rust(py, frames)?;
                     let refs: Vec<&ConFrame> = rust_frames.iter().collect();
-                    detach_frame_refs(
-                        py, path, &refs, workers, precision, canonical, false, keep_spare,
-                    )?;
+                    let flags = RefWrite {
+                        rewrite: false,
+                        keep_spare,
+                        shared: false,
+                    };
+                    detach_frame_refs(py, path, &refs, workers, precision, canonical, flags)?;
                 }
                 return Ok(());
             }
@@ -4652,50 +4812,42 @@ fn write_list_string(
     let Ok(list) = frames.cast::<ConFrameList>() else {
         return Ok(None);
     };
-    let n = list.borrow().len_frames();
-    let end = stop.unwrap_or(n).min(n);
-    let start = start.min(end);
-    if let Some(owned) = take_stored_frames(&list) {
-        let (owned, result) = py.detach(move || {
-            let result = format_stamped(&owned[start..end], precision, canonical);
-            (owned, result)
-        });
-        restore_stored_frames(&list, owned);
+    let range = |n: usize| {
+        let end = stop.unwrap_or(n).min(n);
+        start.min(end)..end
+    };
+    if let Some(result) = with_stored_frames(list, true, |stored| {
+        format_stamped(&stored[range(stored.len())], precision, canonical)
+    }) {
         let buffer = result.map_err(|err| write_err_to_py(py, err))?;
         let text = String::from_utf8(buffer)
             .map_err(|err| PyIOError::new_err(format!("utf8 error: {err}")))?;
         return Ok(Some(text));
     }
+    let borrowed = list.borrow();
     let mut buffer: Vec<u8> = Vec::new();
     let mut writer = match precision {
         Some(precision) => ConFrameWriter::with_precision(&mut buffer, precision),
         None => ConFrameWriter::new(&mut buffer),
     }
     .canonical(canonical);
-    for index in start..end {
-        let taken = {
-            let borrowed = list.borrow();
-            let mut slots = borrowed.frames.lock().expect("frames");
-            slots.get_mut(index).and_then(|slot| slot.take())
+    for index in range(borrowed.len_frames(py)) {
+        let written = {
+            let slots = borrowed.slots(py);
+            let shared = borrowed
+                .slab_shared
+                .load(std::sync::atomic::Ordering::Acquire);
+            slots.get(index).and_then(Option::as_ref).map(|frame| {
+                detach_refs(py, &[frame], shared, |refs| {
+                    write_stamped_frame(&mut writer, refs[0]).map_err(|err| err.to_string())
+                })
+            })
         };
-        if let Some(frame) = taken {
-            let (next, frame, result) = py.detach(move || {
-                let result =
-                    write_stamped_frame(&mut writer, &frame).map_err(|err| err.to_string());
-                (writer, frame, result)
-            });
-            writer = next;
-            {
-                let borrowed = list.borrow();
-                let mut slots = borrowed.frames.lock().expect("frames");
-                if let Some(slot) = slots.get_mut(index) {
-                    *slot = Some(frame);
-                }
-            }
+        if let Some(result) = written {
             result.map_err(PyIOError::new_err)?;
             continue;
         }
-        let obj = list.borrow().frame_obj(py, index)?;
+        let obj = borrowed.frame_obj(py, index)?;
         let view = obj.bind(py).borrow();
         writer = detach_stamped_pyframe(py, writer, &view)?;
     }
@@ -4717,14 +4869,11 @@ where
     if !frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire)
         && let Some(inner) = frame.inner.as_ref()
     {
-        let addr = inner as *const ConFrame as usize;
-        return py
-            .detach(move || {
-                let inner = unsafe { &*(addr as *const ConFrame) };
-                write_stamped_frame(&mut writer, inner).map_err(|err| err.to_string())?;
-                Ok::<_, String>(writer)
-            })
-            .map_err(PyIOError::new_err);
+        return detach_refs(py, &[inner], frame.coords_shared(), move |refs| {
+            write_stamped_frame(&mut writer, refs[0]).map_err(|err| err.to_string())?;
+            Ok::<_, String>(writer)
+        })
+        .map_err(PyIOError::new_err);
     }
     let owned = frame.to_con_frame(py)?;
     py.detach(move || {
@@ -4742,10 +4891,11 @@ fn read_con_as_ase(py: Python<'_>, path: &str) -> PyResult<Vec<Py<PyAny>>> {
     // are Python objects, so they are built after the GIL is back. The
     // per-atom scaling that feeds them runs detached in `ase_from_pyconframe`.
     let frames = read_con(py, path, None, None, "auto", None)?;
-    let n = frames.borrow(py).len_frames();
+    let list = frames.borrow(py);
+    let n = list.len_frames(py);
     let mut out = Vec::with_capacity(n);
     for index in 0..n {
-        let frame = frames.borrow(py).frame_obj(py, index)?;
+        let frame = list.frame_obj(py, index)?;
         let view = frame.borrow(py);
         out.push(ase_from_pyconframe(py, &view)?);
     }
@@ -4762,6 +4912,10 @@ impl<'py> BorrowedFrames<'py> {
             .iter()
             .map(|frame| frame.inner.as_ref().expect("unmodified frame"))
             .collect()
+    }
+
+    fn coords_shared(&self) -> bool {
+        self.held.iter().any(|frame| frame.coords_shared())
     }
 }
 
@@ -5008,10 +5162,14 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         && let Some(inner) = frame.inner.as_ref()
     {
         let velocity_scale = velocity_scale(inner.has_velocities())?;
-        let addr = inner as *const ConFrame as usize;
-        py.detach(move || {
-            let inner = unsafe { &*(addr as *const ConFrame) };
-            ase_columns_from_frame(inner, length_scale, mass_scale, velocity_scale, force_scale)
+        detach_refs(py, &[inner], frame.coords_shared(), move |refs| {
+            ase_columns_from_frame(
+                refs[0],
+                length_scale,
+                mass_scale,
+                velocity_scale,
+                force_scale,
+            )
         })
     } else {
         let frame_atoms = frame.py_atoms(py)?;
@@ -5622,18 +5780,52 @@ fn write_conbin_columns(
             }
         }
     }
+    let columns = [
+        SharedColumn::new(pos, atoms * 3),
+        SharedColumn::new(vel, atoms * 3),
+        SharedColumn::new(mass, atoms),
+        SharedColumn::new(box_cell, 6),
+    ];
+    let lengths = (pos.len(), vel.len(), mass.len(), box_cell.len());
     let path_owned = path.to_owned();
     py.detach(move || {
-        crate::conbin::write_f64_columns(
+        // A little-endian file is the arrays' own bytes, which the kernel
+        // copies straight from them. Elsewhere each run is copied attached
+        // and swapped here.
+        #[cfg(all(unix, target_endian = "little"))]
+        let (run, emit) = (
+            usize::MAX,
+            |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| unsafe {
+                crate::conbin::write_f64_raw(
+                    file,
+                    columns[column].ptr.add(values.start),
+                    values.len(),
+                )
+            },
+        );
+        #[cfg(not(all(unix, target_endian = "little")))]
+        let (run, emit) = {
+            let mut staged = Vec::new();
+            (
+                STAGE_VALUES,
+                move |column: usize, values: std::ops::Range<usize>, file: &mut std::fs::File| {
+                    Python::attach(|py| columns[column].stage_values(py, values, &mut staged));
+                    crate::conbin::write_f64_le(file, &staged)
+                },
+            )
+        };
+        crate::conbin::write_f64_columns_staged(
             Path::new(&path_owned),
             n_frames,
             n_atoms,
-            pos,
-            Some(vel),
-            Some(mass),
-            Some(box_cell),
+            lengths.0,
+            Some(lengths.1),
+            Some(lengths.2),
+            Some(lengths.3),
             Some(&ids),
             Some(&masks),
+            run,
+            emit,
         )
         .map(|_| ())
         .map_err(|err| PyIOError::new_err(err.to_string()))
@@ -5867,18 +6059,18 @@ fn reorder_like(
     other: &PyConFrame,
     strict: bool,
 ) -> PyResult<PyConFrame> {
-    let reference = frame_for_compute(py, reference)?;
-    let other = frame_for_compute(py, other)?;
+    let reference_frame = frame_for_compute(py, reference)?;
+    let other_frame = frame_for_compute(py, other)?;
+    let shared = (reference.coords_shared()
+        && matches!(reference_frame, std::borrow::Cow::Borrowed(_)))
+        || (other.coords_shared() && matches!(other_frame, std::borrow::Cow::Borrowed(_)));
     let check = identity_check(strict);
-    let reference_addr = reference.as_ref() as *const ConFrame as usize;
-    let other_addr = other.as_ref() as *const ConFrame as usize;
-    let frame = py
-        .detach(move || {
-            let reference = unsafe { &*(reference_addr as *const ConFrame) };
-            let other = unsafe { &*(other_addr as *const ConFrame) };
-            crate::correspondence::reorder_like(reference, other, check)
-        })
-        .map_err(correspondence_to_py)?;
+    let pair = [reference_frame.as_ref(), other_frame.as_ref()];
+    let frame = detach_refs(py, &pair, shared, move |pair| {
+        let (reference, other) = (pair[0], pair[1]);
+        crate::correspondence::reorder_like(reference, other, check)
+    })
+    .map_err(correspondence_to_py)?;
     PyConFrame::from_owned(py, frame)
 }
 
@@ -5894,15 +6086,14 @@ fn check_atom_id_consistency(
     strict: bool,
 ) -> PyResult<()> {
     let check = identity_check(strict);
+    // Ids, symbols, masses and fixed masks only. No coordinate is read, so
+    // the walk can stay detached while Python holds the slab.
     if let Ok(list) = frames.cast::<ConFrameList>()
-        && let Some(owned) = take_stored_frames(&list)
+        && let Some(result) = with_stored_frames(list, false, move |stored| {
+            let refs: Vec<&ConFrame> = stored.iter().map(stored_frame).collect();
+            crate::correspondence::check_atom_id_consistency_refs(&refs, check)
+        })
     {
-        let (owned, result) = py.detach(move || {
-            let refs: Vec<&ConFrame> = owned.iter().map(|slot| stored_frame(slot)).collect();
-            let result = crate::correspondence::check_atom_id_consistency_refs(&refs, check);
-            (owned, result)
-        });
-        restore_stored_frames(&list, owned);
         return result.map_err(correspondence_to_py);
     }
     if let Ok(seq) = frames.extract::<Vec<PyRef<'_, PyConFrame>>>() {
@@ -5961,18 +6152,18 @@ fn minimum_image_displacements<'py>(
     other: &PyConFrame,
     strict: bool,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    let reference = frame_for_compute(py, reference)?;
-    let other = frame_for_compute(py, other)?;
+    let reference_frame = frame_for_compute(py, reference)?;
+    let other_frame = frame_for_compute(py, other)?;
+    let shared = (reference.coords_shared()
+        && matches!(reference_frame, std::borrow::Cow::Borrowed(_)))
+        || (other.coords_shared() && matches!(other_frame, std::borrow::Cow::Borrowed(_)));
     let check = identity_check(strict);
-    let reference_addr = reference.as_ref() as *const ConFrame as usize;
-    let other_addr = other.as_ref() as *const ConFrame as usize;
-    let rows = py
-        .detach(move || {
-            let reference = unsafe { &*(reference_addr as *const ConFrame) };
-            let other = unsafe { &*(other_addr as *const ConFrame) };
-            crate::correspondence::minimum_image_displacements(reference, other, check)
-        })
-        .map_err(correspondence_to_py)?;
+    let pair = [reference_frame.as_ref(), other_frame.as_ref()];
+    let rows = detach_refs(py, &pair, shared, move |pair| {
+        let (reference, other) = (pair[0], pair[1]);
+        crate::correspondence::minimum_image_displacements(reference, other, check)
+    })
+    .map_err(correspondence_to_py)?;
     let mut data = Vec::with_capacity(rows.len().saturating_mul(3));
     for row in rows {
         data.extend_from_slice(&row);
@@ -7478,8 +7669,8 @@ impl crate::extxyz_scan::ExtxyzSource for RealColumn<'_> {
 /// Write an extended XYZ file from the dict returned by ``read_extxyz``.
 ///
 /// Species, positions, the lattice, ``pbc`` and every per-atom column,
-/// including forces, are written. Numeric columns are borrowed from the
-/// caller's arrays. The binding does not allocate a second copy of them.
+/// including forces, are written. Numeric columns are copied from the
+/// caller's arrays before the GIL is released.
 #[pyfunction]
 #[pyo3(signature = (path, data, n_threads=None))]
 fn write_extxyz(
@@ -7546,155 +7737,189 @@ fn write_extxyz(
             order.push(0u8);
         }
     }
+    // Python can store into these arrays once the thread detaches. Runs
+    // of frames are copied attached and formatted detached.
+    if n_frames == 0 || n_atoms == 0 || order.is_empty() {
+        return Err(PyValueError::new_err("frames"));
+    }
     let cell_view = cell_array.readonly();
-    let cell = cell_view.as_slice()?;
-    let real3_views: Vec<_> = real3_arrays.iter().map(|array| array.readonly()).collect();
-    let real2_views: Vec<_> = real2_arrays.iter().map(|array| array.readonly()).collect();
-    let mut real3_slices = Vec::with_capacity(real3_views.len());
-    for view in &real3_views {
-        real3_slices.push(view.as_slice()?);
+    let cell_slice = cell_view.as_slice()?;
+    if cell_slice.len() < n_frames * 6 {
+        return Err(PyValueError::new_err("cell"));
     }
-    let mut real2_slices = Vec::with_capacity(real2_views.len());
-    for view in &real2_views {
-        real2_slices.push(view.as_slice()?);
-    }
-    let mut texts = Vec::new();
-    let mut reals = Vec::new();
-    let mut plan = Vec::new();
-    let mut text_index = 0;
-    let mut real3_index = 0;
-    let mut real2_index = 0;
+    let cell = SharedColumn::new(cell_slice, 6);
+    let shared_real =
+        |name: &str, array: &Bound<'_, PyAny>, width: usize| -> PyResult<SharedColumn> {
+            let values = array.cast::<numpy::PyArrayDyn<f64>>()?.readonly();
+            let slice = values.as_slice()?;
+            if slice.len() < n_frames * n_atoms * width {
+                return Err(PyValueError::new_err(format!("column {name}")));
+            }
+            Ok(SharedColumn::new(slice, n_atoms * width))
+        };
+    let mut reals = Vec::with_capacity(real3_arrays.len() + real2_arrays.len());
+    let mut texts = Vec::with_capacity(text_items.len());
+    let mut plan = Vec::with_capacity(order.len());
+    let (mut wide, mut thin, mut text) = (0, 0, 0);
     for kind in &order {
         match kind {
             0 => {
-                texts.push(TextColumn {
-                    name: &text_names[text_index],
-                    tokens: &text_items[text_index].symbols,
-                    ids: &text_items[text_index].ids,
-                });
+                texts.push((text_names[text].as_str(), &text_items[text]));
                 plan.push((0u8, texts.len() - 1));
-                text_index += 1;
+                text += 1;
             }
             1 => {
-                reals.push(RealColumn {
-                    name: &real3_meta[real3_index].0,
-                    width: real3_meta[real3_index].1,
-                    values: real3_slices[real3_index],
-                });
+                let (name, width) = &real3_meta[wide];
+                let column = shared_real(name, real3_arrays[wide].as_any(), *width)?;
+                reals.push((name.as_str(), *width, column));
                 plan.push((1u8, reals.len() - 1));
-                real3_index += 1;
+                wide += 1;
             }
             _ => {
-                reals.push(RealColumn {
-                    name: &real2_names[real2_index],
-                    width: 1,
-                    values: real2_slices[real2_index],
-                });
+                let name = &real2_names[thin];
+                let column = shared_real(name, real2_arrays[thin].as_any(), 1)?;
+                reals.push((name.as_str(), 1, column));
                 plan.push((1u8, reals.len() - 1));
-                real2_index += 1;
+                thin += 1;
             }
         }
     }
-    let sources: Vec<&(dyn crate::extxyz_scan::ExtxyzSource + Sync)> = plan
-        .iter()
-        .map(|(kind, index)| {
-            if *kind == 0 {
-                &texts[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
-            } else {
-                &reals[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
-            }
-        })
-        .collect();
     let workers = n_threads.unwrap_or(1);
-    let codec = crate::compression::detect_compression_from_extension(std::path::Path::new(path));
-    if !matches!(codec, crate::compression::Compression::None) {
-        if let Some(parent) = std::path::Path::new(path).parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
-        }
-        let bytes = py
-            .detach(|| {
-                crate::extxyz_scan::extxyz_bytes_with_threads(
-                    n_frames, n_atoms, cell, &sources, workers,
-                )
-            })
-            .map_err(PyValueError::new_err)?;
-        let members = crate::compression::compression_workers(bytes.len());
-        let threads = match n_threads {
-            Some(count) if count >= 1 => count,
-            _ => crate::compression::default_deflate_threads(members),
-        };
-        let path_owned = path.to_owned();
-        let written = py.detach(|| match codec {
-            crate::compression::Compression::Gzip => {
-                crate::compression::write_gzip_members_limited(
-                    std::path::Path::new(&path_owned),
-                    &bytes,
-                    members,
-                    threads,
-                )
-            }
-            crate::compression::Compression::Zstd => {
-                #[cfg(feature = "zstd")]
-                {
-                    crate::compression::write_zstd_members_limited(
-                        std::path::Path::new(&path_owned),
-                        &bytes,
-                        members,
-                        threads,
-                    )
-                }
-                #[cfg(not(feature = "zstd"))]
-                {
-                    let _ = (members, threads);
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        "zstd compression requires readcon built with the zstd feature",
-                    ))
-                }
-            }
-            crate::compression::Compression::None => unreachable!("plain extxyz already returned"),
-        });
-        return written
-            .map(|_| ())
-            .map_err(|err| PyValueError::new_err(err.to_string()));
-    }
-    if workers >= 2 {
-        if let Some(parent) = std::path::Path::new(path).parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
-        }
-        let path_owned = path.to_owned();
-        return py
-            .detach(|| {
-                crate::extxyz_scan::extxyz_path_with_threads(
-                    std::path::Path::new(&path_owned),
-                    n_frames,
-                    n_atoms,
-                    cell,
-                    &sources,
-                    workers,
-                )
-            })
-            .map_err(PyValueError::new_err);
-    }
-    let bytes = py
-        .detach(|| {
-            crate::extxyz_scan::extxyz_bytes_with_threads(
-                n_frames, n_atoms, cell, &sources, workers,
-            )
-        })
+    let bytes = staged_extxyz_bytes(py, n_frames, n_atoms, cell, &texts, &reals, &plan, workers)
         .map_err(PyValueError::new_err)?;
     if let Some(parent) = std::path::Path::new(path).parent()
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).map_err(|_| PyValueError::new_err("write"))?;
     }
+    let codec = crate::compression::detect_compression_from_extension(std::path::Path::new(path));
     let path_owned = path.to_owned();
-    py.detach(|| write_bytes_parallel(&path_owned, &bytes, n_threads.unwrap_or(1)))
-        .map_err(|_| PyValueError::new_err("write"))
+    if matches!(codec, crate::compression::Compression::None) {
+        return py
+            .detach(|| write_bytes_parallel(&path_owned, &bytes, workers))
+            .map_err(|_| PyValueError::new_err("write"));
+    }
+    let members = crate::compression::compression_workers(bytes.len());
+    let threads = match n_threads {
+        Some(count) if count >= 1 => count,
+        _ => crate::compression::default_deflate_threads(members),
+    };
+    let written = py.detach(|| match codec {
+        crate::compression::Compression::Gzip => crate::compression::write_gzip_members_limited(
+            std::path::Path::new(&path_owned),
+            &bytes,
+            members,
+            threads,
+        ),
+        crate::compression::Compression::Zstd => {
+            #[cfg(feature = "zstd")]
+            {
+                crate::compression::write_zstd_members_limited(
+                    std::path::Path::new(&path_owned),
+                    &bytes,
+                    members,
+                    threads,
+                )
+            }
+            #[cfg(not(feature = "zstd"))]
+            {
+                let _ = (members, threads);
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "zstd compression requires readcon built with the zstd feature",
+                ))
+            }
+        }
+        crate::compression::Compression::None => unreachable!("plain extxyz already returned"),
+    });
+    written
+        .map(|_| ())
+        .map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
+/// The bytes of `extxyz_bytes_with_threads` over these columns, formatted
+/// one run of frames at a time from copies taken attached.
+///
+/// A run of a longer trajectory always holds two frames or more: one
+/// frame alone takes the wide single-frame path.
+#[allow(clippy::too_many_arguments)]
+fn staged_extxyz_bytes(
+    py: Python<'_>,
+    n_frames: usize,
+    n_atoms: usize,
+    cell: SharedColumn,
+    texts: &[(&str, &OwnedText)],
+    reals: &[(&str, usize, SharedColumn)],
+    plan: &[(u8, usize)],
+    workers: usize,
+) -> Result<Vec<u8>, String> {
+    let per_frame = 6 + reals.iter().map(|real| real.2.per_frame).sum::<usize>();
+    let step = staged_frames(per_frame).max(2);
+    // Growing run by run copies the text written so far at each doubling.
+    let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
+    let mut cell_run = Vec::new();
+    let mut real_runs = vec![Vec::new(); reals.len()];
+    let mut start = 0;
+    while start < n_frames {
+        let mut end = (start + step).min(n_frames);
+        if n_frames - end == 1 {
+            end = n_frames;
+        }
+        cell.stage(py, start..end, &mut cell_run);
+        for ((_, _, column), run) in reals.iter().zip(real_runs.iter_mut()) {
+            column.stage(py, start..end, run);
+        }
+        let atoms = start * n_atoms..end * n_atoms;
+        let text_runs: Vec<TextColumn<'_>> = texts
+            .iter()
+            .map(|(name, owned)| {
+                if owned.ids.is_empty() {
+                    TextColumn {
+                        name,
+                        tokens: &owned.symbols[atoms.clone()],
+                        ids: &[],
+                    }
+                } else {
+                    TextColumn {
+                        name,
+                        tokens: &owned.symbols,
+                        ids: &owned.ids[atoms.clone()],
+                    }
+                }
+            })
+            .collect();
+        let real_columns: Vec<RealColumn<'_>> = reals
+            .iter()
+            .zip(&real_runs)
+            .map(|((name, width, _), values)| RealColumn {
+                name,
+                width: *width,
+                values,
+            })
+            .collect();
+        let sources: Vec<&(dyn crate::extxyz_scan::ExtxyzSource + Sync)> = plan
+            .iter()
+            .map(|(kind, index)| {
+                if *kind == 0 {
+                    &text_runs[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
+                } else {
+                    &real_columns[*index] as &(dyn crate::extxyz_scan::ExtxyzSource + Sync)
+                }
+            })
+            .collect();
+        py.detach(|| {
+            crate::extxyz_scan::extxyz_append_with_threads(
+                &mut out,
+                end - start,
+                n_atoms,
+                &cell_run,
+                &sources,
+                workers,
+            )
+        })?;
+        start = end;
+    }
+    Ok(out)
 }
 
 fn write_bytes_parallel(path: &str, bytes: &[u8], workers: usize) -> std::io::Result<()> {

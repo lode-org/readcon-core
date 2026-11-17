@@ -2058,6 +2058,138 @@ fn write_header_page(
         .map_err(|err| ParseError::ValidationError(err.to_string()))
 }
 
+/// Store `values` in file order.
+#[cfg(feature = "python")]
+fn write_le<T: StoreLe>(file: &mut File, values: &[T]) -> Result<(), ParseError> {
+    #[cfg(target_endian = "little")]
+    let bytes = view_bytes(values);
+    #[cfg(target_endian = "big")]
+    let bytes = le_bytes(values);
+    file.write_all(&bytes)
+        .map_err(|err| ParseError::ValidationError(err.to_string()))
+}
+
+#[cfg(all(feature = "python", not(all(unix, target_endian = "little"))))]
+pub(crate) fn write_f64_le(file: &mut File, values: &[f64]) -> Result<(), ParseError> {
+    write_le(file, values)
+}
+
+/// Store the `len` doubles at `ptr` at the file position.
+///
+/// Only the kernel reads them; no Rust reference to them is formed, so
+/// another thread may store into them meanwhile, as with
+/// `ndarray.tofile`.
+///
+/// # Safety
+///
+/// `ptr` must stay valid for `len` doubles until this returns.
+#[cfg(all(feature = "python", unix, target_endian = "little"))]
+pub(crate) unsafe fn write_f64_raw(
+    file: &File,
+    ptr: *const f64,
+    len: usize,
+) -> Result<(), ParseError> {
+    use std::os::fd::AsRawFd;
+    let mut at = ptr.cast::<u8>();
+    let mut left = len * std::mem::size_of::<f64>();
+    while left > 0 {
+        let stored = unsafe { libc::write(file.as_raw_fd(), at.cast(), left.min(1 << 30)) };
+        if stored < 0 {
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ParseError::ValidationError(err.to_string()));
+        }
+        if stored == 0 {
+            return Err(ParseError::ValidationError(
+                std::io::Error::from(std::io::ErrorKind::WriteZero).to_string(),
+            ));
+        }
+        at = unsafe { at.add(stored as usize) };
+        left -= stored as usize;
+    }
+    Ok(())
+}
+
+/// [`write_f64_columns`] with the binary64 columns handed over in runs.
+///
+/// The counts name the binary64 columns in payload order: positions,
+/// then velocities, masses and cell when present. `emit(column, values,
+/// file)` stores that range of that column at the file position, at most
+/// `run` values at a time, so the caller decides how memory it does not
+/// own reaches the file. The file matches [`write_f64_columns`] of the
+/// same values.
+#[cfg(feature = "python")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_f64_columns_staged(
+    path: &Path,
+    n_frames: u64,
+    n_atoms: u64,
+    positions: usize,
+    velocities: Option<usize>,
+    masses: Option<usize>,
+    cell: Option<usize>,
+    atom_ids: Option<&[u64]>,
+    fixed: Option<&[u8]>,
+    run: usize,
+    mut emit: impl FnMut(usize, std::ops::Range<usize>, &mut File) -> Result<(), ParseError>,
+) -> Result<ConBinHeader, ParseError> {
+    let header = f64_columns_header(
+        n_frames,
+        n_atoms,
+        positions,
+        velocities,
+        masses,
+        cell,
+        atom_ids.map(<[u64]>::len),
+        fixed.map(<[u8]>::len),
+    )?;
+    let page = page_size()?;
+    let mut counts = vec![positions];
+    counts.extend(velocities);
+    counts.extend(masses);
+    counts.extend(cell);
+    let overflow = || ParseError::InvalidCount("CON-bin file length overflows".into());
+    let values = counts
+        .iter()
+        .copied()
+        .chain(atom_ids.map(<[u64]>::len))
+        .try_fold(0u64, |sum, count| sum.checked_add(count as u64))
+        .ok_or_else(overflow)?;
+    let total = values
+        .checked_mul(8)
+        .and_then(|bytes| bytes.checked_add(fixed.map_or(0, <[u8]>::len) as u64))
+        .and_then(|bytes| bytes.checked_add(page as u64))
+        .ok_or_else(overflow)?;
+    let run = run.max(1);
+    crate::writer::publish_new(
+        path,
+        |err| ParseError::ValidationError(err.to_string()),
+        |file| {
+            preallocate(file, total)?;
+            file.write_all(&header_page_bytes(&header, page))
+                .map_err(|err| ParseError::ValidationError(err.to_string()))?;
+            for (column, count) in counts.iter().copied().enumerate() {
+                let mut at = 0;
+                while at < count {
+                    let end = (at + run).min(count);
+                    emit(column, at..end, file)?;
+                    at = end;
+                }
+            }
+            if let Some(values) = atom_ids {
+                write_le(file, values)?;
+            }
+            if let Some(values) = fixed {
+                write_le(file, values)?;
+            }
+            Ok(())
+        },
+    )?;
+    Ok(header)
+}
+
 /// Write version 2 from columns already in memory.
 ///
 /// Positions are required. Velocities, masses, the cell, atom ids and the
@@ -2072,17 +2204,17 @@ fn column_len(name: &str, got: usize, want: usize) -> Result<(), ParseError> {
     )))
 }
 
+/// Check the value counts of a version-2 binary64 write and build its header.
 #[allow(clippy::too_many_arguments)]
-pub fn write_f64_columns(
-    path: &Path,
+fn f64_columns_header(
     n_frames: u64,
     n_atoms: u64,
-    positions: &[f64],
-    velocities: Option<&[f64]>,
-    masses: Option<&[f64]>,
-    cell: Option<&[f64]>,
-    atom_ids: Option<&[u64]>,
-    fixed: Option<&[u8]>,
+    positions: usize,
+    velocities: Option<usize>,
+    masses: Option<usize>,
+    cell: Option<usize>,
+    atom_ids: Option<usize>,
+    fixed: Option<usize>,
 ) -> Result<ConBinHeader, ParseError> {
     let frames = usize::try_from(n_frames)
         .map_err(|_| ParseError::InvalidCount("CON-bin frame count does not fit".into()))?;
@@ -2097,23 +2229,23 @@ pub fn write_f64_columns(
     let cells = frames
         .checked_mul(6)
         .ok_or_else(|| ParseError::InvalidCount("CON-bin column length overflows".into()))?;
-    column_len("positions", positions.len(), xyz)?;
+    column_len("positions", positions, xyz)?;
     if let Some(values) = velocities {
-        column_len("velocities", values.len(), xyz)?;
+        column_len("velocities", values, xyz)?;
     }
     if let Some(values) = masses {
-        column_len("masses", values.len(), n)?;
+        column_len("masses", values, n)?;
     }
     if let Some(values) = cell {
-        column_len("cell", values.len(), cells)?;
+        column_len("cell", values, cells)?;
     }
     if let Some(values) = atom_ids {
-        column_len("atom ids", values.len(), n)?;
+        column_len("atom ids", values, n)?;
     }
     if let Some(values) = fixed {
-        column_len("fixed masks", values.len(), n)?;
+        column_len("fixed masks", values, n)?;
     }
-    let header = ConBinHeader {
+    Ok(ConBinHeader {
         version: VERSION_2,
         n_frames,
         n_atoms,
@@ -2124,7 +2256,31 @@ pub fn write_f64_columns(
         fixed: fixed.is_some(),
         cell: cell.is_some(),
         atom_ids: atom_ids.is_some(),
-    };
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn write_f64_columns(
+    path: &Path,
+    n_frames: u64,
+    n_atoms: u64,
+    positions: &[f64],
+    velocities: Option<&[f64]>,
+    masses: Option<&[f64]>,
+    cell: Option<&[f64]>,
+    atom_ids: Option<&[u64]>,
+    fixed: Option<&[u8]>,
+) -> Result<ConBinHeader, ParseError> {
+    let header = f64_columns_header(
+        n_frames,
+        n_atoms,
+        positions.len(),
+        velocities.map(<[f64]>::len),
+        masses.map(<[f64]>::len),
+        cell.map(<[f64]>::len),
+        atom_ids.map(<[u64]>::len),
+        fixed.map(<[u8]>::len),
+    )?;
     let page = page_size()?;
     #[cfg(target_endian = "little")]
     {
