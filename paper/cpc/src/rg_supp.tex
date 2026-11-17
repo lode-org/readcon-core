@@ -116,19 +116,13 @@ It then gives the test run of the release with the source lines of each step of 
 The last sections give the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
 \end{abstract} \end{frontmatter}
 
-We keep the specification, the corpora and the timing records in this supplement.
-We name in the source of each generated table the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
-We state a reader rule as an input and the outcome that follows from it.
-We measure a wall time as the median of at least six repeats.
-We place the type 7 interquartile range next to that median.
-We compare each peer on the same file and the same host.
-We call two reads equal when their coordinates match.
-We count the frames a reader returns and the bytes it keeps.
-We draw each restored figure from a stored record.
-We leave a version deposit unnamed until the record exists.
-We build the library from the candidate commit named in the manuscript.
-We run one cell at a time on one host.
-We keep the machine line to the architecture, the processor count and the processor string.
+The source of each generated table names the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
+A reader rule is stated as an input and the outcome that follows from it.
+A wall time is the median of at least six repeats, given with its type 7 interquartile range, and each reader is compared with the others on the same file and the same host, one cell at a time.
+Two reads are equal when their coordinates match, and we count the frames that a reader returns and the bytes that it keeps.
+Every figure drawn from an earlier campaign comes from its stored record.
+The library is built from the commit named in Data availability of the manuscript, and no version deposit is named before its record exists.
+The machine line of a record gives only the architecture, the processor count and the processor string.
 
 \section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), the specification source of that commit at git blob \texttt{\rcMeasuredSpecBlob}.
 A script of the paper typesets that file, and its check mode fails unless the typeset text matches the file.
@@ -441,8 +435,7 @@ MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen20
 Software citation follows the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
 The tensor exchange sits beside the metatensor layout \cite{bigiMetatensorMetatomicFoundational2026}.
 
-Table~\ref{tab:format-context} is context for choosing a format.
-readcon reads neither XYZ nor HDF5.
+Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
 \input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
@@ -453,7 +446,7 @@ The chemfiles row copies each frame out of the trajectory iterator, and that cop
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
-The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
+Section~\ref{sec:host} of the main text names the timed readers.
 
 The drift comparison gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, each in its own process, and the four do not return the same outcome on every file.
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
