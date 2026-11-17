@@ -743,6 +743,15 @@ fn status_for_parse(err: &crate::error::ParseError) -> RKRStatus {
     }
 }
 
+/// Store a parse error that names no frame, such as a bad argument to a
+/// constructor. `frame_index` is 0 and the message does not claim a frame.
+fn note_parse(err: &crate::error::ParseError) -> RKRStatus {
+    let status = status_for_parse(err);
+    let message = format!("{}: {}", err.class_name(), err);
+    set_last_error(status as i32, &message, err.line(), 0);
+    status
+}
+
 fn note_located(err: &crate::error::LocatedParseError) -> RKRStatus {
     let status = status_for_parse(&err.error);
     let message = format!("{}: {}", err.error.class_name(), err.error);
@@ -831,8 +840,7 @@ fn note_boxed(err: Box<dyn std::error::Error>) {
         Err(err) => err,
     };
     if let Some(parse) = err.downcast_ref::<crate::error::ParseError>() {
-        let located = crate::error::LocatedParseError::new(parse.clone(), parse.line(), 0);
-        note_located(&located);
+        note_parse(parse);
         return;
     }
     set_last_error(
@@ -4004,6 +4012,11 @@ pub unsafe extern "C" fn rkr_frame_add_atom_full(
 /// `free_rkr_frame_builder` or consume it via `rkr_frame_builder_build`.
 /// Returns NULL on error.
 ///
+/// A NaN or infinite entry of `cell` or `angles` is refused: the call returns
+/// NULL, sets `RKR_STATUS_PARSE_ERROR`, and `rkr_last_error_message` reads
+/// like `NonFiniteValue: non-finite value: cell field cell[1] is NaN`.
+/// A NULL `cell` or `angles` sets `RKR_STATUS_NULL_POINTER`.
+///
 /// # Safety
 /// cell and angles must point to 3 doubles. prebox0, postbox0, and
 /// postbox1 must be NULL or valid null-terminated strings; prebox1 is
@@ -4023,6 +4036,10 @@ pub unsafe extern "C" fn rkr_frame_new(
     }
     let cell_arr = unsafe { [*cell, *cell.add(1), *cell.add(2)] };
     let angles_arr = unsafe { [*angles, *angles.add(1), *angles.add(2)] };
+    if let Err(err) = crate::types::check_cell_finite(&cell_arr, "cell", &angles_arr, "angles") {
+        note_parse(&err);
+        return ptr::null_mut();
+    }
     let get_str = |p: *const c_char| -> String {
         if p.is_null() {
             String::new()
@@ -4580,6 +4597,10 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
     let builder = unsafe { *Box::from_raw(builder_handle as *mut ConFrameBuilder) };
     match builder.build() {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
+        Err(err) if err.is_non_finite_cell() => {
+            note_parse(&err);
+            ptr::null_mut()
+        }
         Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }

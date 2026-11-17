@@ -860,6 +860,10 @@ class ConFrameBuilder {
   public:
     /**
      * @brief Constructs a builder with cell dimensions, angles, and optional headers.
+     *
+     * @throws Error when a cell length or an angle is NaN or infinite. The
+     * message reads like "NonFiniteValue: non-finite value: cell field
+     * cell[1] is NaN" and the status is RKR_STATUS_PARSE_ERROR.
      */
     ConFrameBuilder(const std::array<double, 3> &cell,
                     const std::array<double, 3> &angles,
