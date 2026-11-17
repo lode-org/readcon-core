@@ -219,6 +219,7 @@ The ASE trajectory keeps every field, in a layout defined by the Python code of 
 POSCAR, the structure file of the Vienna Ab initio Simulation Package \cite{vaspwikiPoscar2026,kresseEfficiencyAbinitioTotal1996}, stores selective-dynamics flags along each lattice vector but no atom identifier.
 Many of these formats are read and written by chemfiles \cite{frauxChemfileschemfilesVersion01042023}, MDAnalysis \cite{michaudAgrawalMDAnalysisToolkit2011,gowersMdanalysisPythonPackage2016}, the Open Visualization Tool (OVITO) \cite{stukowskiVisualizationAnalysisAtomistic2010} and Open Babel \cite{oboyleOpenBabelOpen2011}.
 None of these four opens a version-1 CON file or a CON 3.1 file, while the eon module of ASE opens both but stops at the velocity section of the frame of Section~\ref{sec:worked}.
+The transition-state library TSASE, from the group that wrote eOn, writes CON with six decimals and one fixed flag per atom, and its reader ignores the identifier column and makes every cell periodic \cite{terrellTsaseTransitionStateLibrary2025}.
 OVITO 3.16.1, the version of Section~\ref*{sec:supp-versions}, writes an extended XYZ file without the periodicity of the simulation cell, and that file has no place for a per-component constraint or a velocity time unit.
 OVITO 3.17.0, released 2026-10-21, always writes the periodicity as \texttt{pbc}, and its XYZ reader accepts whitespace around \texttt{=}, escape sequences in quoted strings, array values and string columns \cite{ovitoNewFeatures31702026}, but its extended XYZ file still names no velocity time unit.
 MDAnalysis reads one model of an mmCIF/PDBx file, with positions and a cell, and has no element for the mask either.
@@ -227,6 +228,7 @@ Under the specification, a comment line of key-value pairs without a \texttt{Pro
 
 Most atomistic formats have no specification apart from the code that reads them, so that code is the de facto definition of the format.
 Other fields have fixed their interchange files in published texts.
+Crystallography did so with the Crystallographic Information File (CIF) \cite{hallCrystallographicInformationFile1991,bernsteinSpecificationCrystallographicInformation2016}.
 In particle physics, the Les Houches event file passes parton-level events from matrix-element generators to shower generators \cite{Alwall2007LHEF}, the second SUSY Les Houches Accord passes spectra and decay tables between spectrum calculators, decay codes and event generators \cite{Allanach2009SLHA2}, and the HepMC3 library defines the event record that generators hand to analysis \cite{Buckley2021HepMC3}.
 Electronic structure has done the same for densities and wavefunctions with the European Theoretical Spectroscopy Facility (ETSF) file format \cite{Gonze2008ETSF} and TREXIO \cite{posenitskiyTrexioFileFormat2023}, and for pseudopotentials with the pseudopotential markup language (PSML) \cite{Garcia2018PSML}.
 A computed barrier can be reproduced from a file only when every reader returns the same fields from it.
@@ -360,6 +362,7 @@ Listing~\ref*{lst:testrun} of the supplementary material runs the example progra
 
 \section{The grammar of CON 3.1}\label{sec:format} The normative specification, with \clauseTotal{} numbered clauses, is Section~\ref*{sec:spec-normative} of the supplementary material.
 Here we state the rules used in Section~\ref{sec:worked}, and Table~\ref{tab:clauses} lists the clauses behind them.
+Each clause carries a requirement word, such as MUST, SHOULD or MAY, with the meaning that the IETF gives these words \cite{bradnerKeyWordsUse1997}.
 A CON file is one or more frames with no marker between them, followed only by lines of white space.
 With \(T\) atom types of \(N_k\) atoms each, a frame \(\mathcal{F}\) is
 \begin{equation}
@@ -598,6 +601,7 @@ The bar is the median and the whisker is the type 7 interquartile range.}
 \label{fig:dlpack} \end{figure}
 
 \section{Conformance}\label{sec:conformance} A specification settles a dispute between readers only when each reader can be tested against it.
+JSONTestSuite did this for JSON parsers, with files that a parser must accept, must reject, or may decide either way \cite{seriotParsingJsonMinefield2016}.
 The conformance corpus shipped with readcon-core~\readconversion{} contains \(\corpusConfValid\) legal and \(\corpusConfInvalid\) illegal files (Table~\ref{tab:corpus} of the supplementary material), and its manifest names the error class of each illegal file.
 Read through the Python module of the release, all \(\corpusConfAgree\) files return the verdict and error class of their manifest entries, and the release checks the same files from Rust, Python, C, Fortran and Julia.
 
@@ -611,7 +615,7 @@ We also wrote an independent reader in \(\corpusIndepLines\) lines of Python tha
 It follows the clauses of the specification, and where a clause requires a rejection without naming its class, or no clause decides a case, it follows the reading of the corpus manifest.
 On all \(\corpusIndepAgree\) of the \(\corpusFiles\) files of both corpora, the frame list and the frame iterator of readcon and the independent reader each return the manifest outcome.
 On the \(\corpusBoth\) files that both readers accept, all \(\corpusFieldIdentical\) carry the same bits in every coordinate, velocity and cell entry and equal masks, identifiers, units and periodic flags (Table~\ref*{tab:corpus-crosscheck}).
-The two readers also read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds.
+As in differential testing \cite{mckeemanDifferentialTestingSoftware1998}, the two readers also read \(\mutantCases\) mutants of the \(\mutantFiles\) corpus files under \(\mutantMaxBytes\) bytes, \(\mutantPerSeed\) from each of \(\mutantSeeds\) seeds.
 Each mutant inserts, deletes or replaces characters and tokens at one to three random places.
 The readers agree on \(\mutantSame\) of them, with the same frame count or error class.
 The other \(\mutantDiffer\) fall in \(\mutantGroups\) cases that no clause decides: a count line that breaks two clauses at once, a number in the header beyond the binary64 range, and a carriage return as the last byte of the input.
@@ -640,7 +644,7 @@ The ASE trajectory, with the identifiers stored as ASE tags, and H5MD written an
 The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our own reader knows to read.
 Extended XYZ returns the mask and the identifiers through the column names of ASE, which chemfiles and OVITO also read.
 ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
-MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a Crystallographic Information File (CIF).
+MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a CIF file.
 MDAnalysis 2.11.0 still writes the H5MD positions, velocities and forces in single precision, as \texttt{float32} \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
 Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
 
