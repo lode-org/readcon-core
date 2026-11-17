@@ -3637,9 +3637,9 @@ pub fn parse_frames_at_offsets(
         )
     };
     match num_threads {
-        Some(n) if n >= 2 => match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-            Ok(pool) => pool.install(run),
-            Err(_) => run(),
+        Some(n) if n >= 2 => match shared_pool(n) {
+            Some(pool) => pool.install(run),
+            None => run(),
         },
         _ => run(),
     }
@@ -4799,13 +4799,10 @@ fn collect_parallel_located(
     };
     match num_threads {
         None => parse_chunks(),
-        Some(n) => {
-            let n = n.max(1);
-            match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
-                Ok(pool) => pool.install(parse_chunks),
-                Err(_) => parse_chunks(),
-            }
-        }
+        Some(n) => match shared_pool(n.max(1)) {
+            Some(pool) => pool.install(parse_chunks),
+            None => parse_chunks(),
+        },
     }
 }
 
