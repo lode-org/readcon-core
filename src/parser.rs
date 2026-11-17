@@ -117,10 +117,69 @@ pub(crate) fn fill_rows_from_breaks(
     on_pool(workers, fill)
 }
 
+/// A value built once per process, and built again in a forked child.
+///
+/// A child of `fork` keeps the parent's memory but only the thread that
+/// called `fork`. A pool the parent built has no workers in the child, so
+/// a job queued on it never runs. A lock that another parent thread held
+/// at the fork also stays held. The child therefore never uses or drops
+/// the parent's value. It stays reachable from the child's own value.
+#[cfg(feature = "parallel")]
+pub(crate) struct PerProcess<T: 'static> {
+    current: std::sync::atomic::AtomicPtr<ProcessSlot<T>>,
+}
+
+#[cfg(feature = "parallel")]
+struct ProcessSlot<T: 'static> {
+    pid: u32,
+    value: T,
+    _parent: Option<&'static ProcessSlot<T>>,
+}
+
+#[cfg(feature = "parallel")]
+impl<T: Send + Sync + 'static> PerProcess<T> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            current: std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()),
+        }
+    }
+
+    /// The value of the calling process, built with `init` on first use.
+    pub(crate) fn get_or_init(&'static self, init: impl Fn() -> T) -> &'static T {
+        use std::sync::atomic::Ordering;
+        let pid = std::process::id();
+        loop {
+            // Acquire pairs with the publishing exchange, so a slot's
+            // fields are visible before its pointer is.
+            let current = self.current.load(Ordering::Acquire);
+            let parent = unsafe { current.as_ref() };
+            if let Some(slot) = parent {
+                if slot.pid == pid {
+                    return &slot.value;
+                }
+            }
+            let fresh = Box::into_raw(Box::new(ProcessSlot {
+                pid,
+                value: init(),
+                _parent: parent,
+            }));
+            match self
+                .current
+                .compare_exchange(current, fresh, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => return unsafe { &(*fresh).value },
+                // Another thread of this process published first.
+                Err(_) => drop(unsafe { Box::from_raw(fresh) }),
+            }
+        }
+    }
+}
+
 /// Run `body` on a pool of `workers` threads.
 ///
 /// The pool for a given size is kept for the process. Building one per
 /// call was a serial pause on the wide-frame read and the row formatter.
+/// A forked child builds its own; see [`PerProcess`].
 #[cfg(feature = "parallel")]
 pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) -> T {
     if workers < 2 {
@@ -139,9 +198,9 @@ pub(crate) fn on_pool<T: Send>(workers: usize, body: impl FnOnce() -> T + Send) 
     #[cfg(not(miri))]
     {
         let pool = {
-            use std::sync::{Mutex, OnceLock};
-            static POOLS: OnceLock<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> =
-                OnceLock::new();
+            use std::sync::Mutex;
+            static POOLS: PerProcess<Mutex<Vec<(usize, &'static rayon::ThreadPool)>>> =
+                PerProcess::new();
             let pools = POOLS.get_or_init(|| Mutex::new(Vec::new()));
             let mut guard = pools.lock().unwrap_or_else(|err| err.into_inner());
             if let Some((_, pool)) = guard.iter().find(|(size, _)| *size == workers) {
