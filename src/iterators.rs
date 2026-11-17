@@ -2670,6 +2670,8 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
 /// A fresh pool on every file made each worker fault its frames again.
 /// Reusing the workers lets the allocator hand back the pages just freed.
 ///
+/// A forked child builds its own pools; see [`crate::parser::PerProcess`].
+///
 /// A new pool is returned once every worker has started. Until then the
 /// only owner of a worker's thread handle is std's start box on the
 /// global allocator, which LeakSanitizer does not scan, so a process
@@ -2677,10 +2679,10 @@ pub fn release_parsed_frames(frames: Vec<types::ConFrame>, workers: usize) {
 #[cfg(feature = "parallel")]
 #[allow(clippy::type_complexity)]
 fn shared_pool(workers: usize) -> Option<std::sync::Arc<rayon::ThreadPool>> {
-    use std::sync::{Arc, Condvar, Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(Vec::new()));
-    let mut guard = cache.lock().ok()?;
+    use std::sync::{Arc, Condvar, Mutex};
+    static CACHE: crate::parser::PerProcess<Mutex<Vec<(usize, Arc<rayon::ThreadPool>)>>> =
+        crate::parser::PerProcess::new();
+    let mut guard = CACHE.get_or_init(|| Mutex::new(Vec::new())).lock().ok()?;
     if let Some((_, pool)) = guard.iter().find(|(count, _)| *count == workers) {
         return Some(Arc::clone(pool));
     }
@@ -3137,21 +3139,34 @@ pub fn read_all_frames_indexed(
     num_threads: Option<usize>,
 ) -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error>> {
     let contents = crate::compression::read_file_contents(path)?;
-    let text = contents.as_str_sliced()?;
-    let idx = match contents {
-        crate::compression::FileContents::Mapped(_) => {
-            crate::frame_index::load_or_build(path, text, true)?
-        }
-        crate::compression::FileContents::Owned(_) => {
-            let on_disk = std::fs::metadata(path)?.len();
-            crate::frame_index::load_or_build(path, text, on_disk == text.len() as u64)?
-        }
+    let read = || -> Result<Vec<types::ConFrame>, Box<dyn std::error::Error + Send + Sync>> {
+        let text = contents.as_str_sliced()?;
+        let idx = match contents {
+            crate::compression::FileContents::Mapped(_) => {
+                crate::frame_index::load_or_build(path, text, true)?
+            }
+            crate::compression::FileContents::Owned(_) => {
+                let on_disk = std::fs::metadata(path)?.len();
+                crate::frame_index::load_or_build(path, text, on_disk == text.len() as u64)?
+            }
+        };
+        let offs: Vec<usize> = idx.offsets.iter().map(|&o| o as usize).collect();
+        parse_frames_at_offsets(text, &offs, num_threads)
+            .into_iter()
+            .map(|r| r.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>))
+            .collect()
     };
-    let offs: Vec<usize> = idx.offsets.iter().map(|&o| o as usize).collect();
-    parse_frames_at_offsets(text, &offs, num_threads)
-        .into_iter()
-        .map(|r| r.map_err(|e| Box::new(e) as Box<dyn std::error::Error>))
-        .collect()
+    // The UTF-8 check and the sidecar check use rayon. A threaded read runs
+    // them on its own pool, because rayon's global pool has no workers in a
+    // forked child.
+    let frames = match num_threads {
+        Some(n) if n >= 2 => match shared_pool(n) {
+            Some(pool) => pool.install(read),
+            None => read(),
+        },
+        _ => read(),
+    };
+    frames.map_err(|err| err as Box<dyn std::error::Error>)
 }
 
 enum IndexStep {
