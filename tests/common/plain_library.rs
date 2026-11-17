@@ -5,15 +5,20 @@
 //! `debug/deps/<test>`. Cargo 1.100 leaves the test binary in
 //! `debug/build/readcon-core/<hash>/out/` and the library in a sibling
 //! hash's `out/`. The lookup follows the test binary and that build
-//! directory, and it honours `CARGO_TARGET_DIR`.
+//! directory, and it honours `CARGO_TARGET_DIR`. A library that links
+//! pyo3 is skipped, whether shared or static, so the scan is the same with
+//! and without the `python` feature.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn is_plain_shared(path: &Path) -> bool {
-    let listed = Command::new("nm")
-        .args(["-D"])
+fn links_no_python(path: &Path, dynamic: bool) -> bool {
+    let mut nm = Command::new("nm");
+    if dynamic {
+        nm.arg("-D");
+    }
+    let listed = nm
         .arg(path)
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
@@ -24,13 +29,14 @@ fn is_plain_shared(path: &Path) -> bool {
 fn plain_library(dir: &Path) -> bool {
     let so = dir.join("libreadcon_core.so");
     if so.is_file() {
-        return is_plain_shared(&so);
+        return links_no_python(&so, true);
     }
     let dylib = dir.join("libreadcon_core.dylib");
     if dylib.is_file() {
-        return is_plain_shared(&dylib);
+        return links_no_python(&dylib, true);
     }
-    dir.join("libreadcon_core.a").is_file()
+    let archive = dir.join("libreadcon_core.a");
+    archive.is_file() && links_no_python(&archive, false)
 }
 
 fn push_plain(dirs: &mut Vec<PathBuf>, dir: &Path) {
@@ -68,19 +74,17 @@ pub fn libraries_from(start: &Path, target_dir: Option<&Path>) -> Vec<PathBuf> {
     }
     for _ in 0..12 {
         push_plain(&mut dirs, &dir);
-        if !cfg!(feature = "python") {
-            if dir.file_name().and_then(|name| name.to_str()) == Some("readcon-core")
-                && dir
-                    .parent()
-                    .and_then(|parent| parent.file_name())
-                    .and_then(|name| name.to_str())
-                    == Some("build")
-            {
-                scan_build_outs(&dir, &mut dirs);
-            }
-            if dir.file_name().and_then(|name| name.to_str()) == Some("build") {
-                scan_build_outs(&dir.join("readcon-core"), &mut dirs);
-            }
+        if dir.file_name().and_then(|name| name.to_str()) == Some("readcon-core")
+            && dir
+                .parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str())
+                == Some("build")
+        {
+            scan_build_outs(&dir, &mut dirs);
+        }
+        if dir.file_name().and_then(|name| name.to_str()) == Some("build") {
+            scan_build_outs(&dir.join("readcon-core"), &mut dirs);
         }
         if !dir.pop() {
             break;
@@ -91,9 +95,7 @@ pub fn libraries_from(start: &Path, target_dir: Option<&Path>) -> Vec<PathBuf> {
             let base = target.join(profile);
             push_plain(&mut dirs, &base);
             push_plain(&mut dirs, &base.join("deps"));
-            if !cfg!(feature = "python") {
-                scan_build_outs(&base.join("build").join("readcon-core"), &mut dirs);
-            }
+            scan_build_outs(&base.join("build").join("readcon-core"), &mut dirs);
         }
     }
     dirs
@@ -109,10 +111,11 @@ pub fn library_dirs() -> Vec<PathBuf> {
 mod plain_library_tests {
     use super::libraries_from;
     use std::fs;
+    use std::process::Command;
 
     #[test]
     fn a_sibling_build_out_is_found_when_the_test_dir_is_empty() {
-        let root = scratch_dir();
+        let root = scratch_dir("sibling");
         let test_out = root.join("debug/build/readcon-core/test-unit/out");
         let lib_out = root.join("debug/build/readcon-core/lib-unit/out");
         fs::create_dir_all(&test_out).unwrap();
@@ -128,11 +131,50 @@ mod plain_library_tests {
         let _ = fs::remove_dir_all(&root);
     }
 
-    fn scratch_dir() -> std::path::PathBuf {
+    #[test]
+    fn an_archive_that_links_python_is_skipped() {
+        let root = scratch_dir("python");
+        let test_out = root.join("debug/build/readcon-core/test-unit/out");
+        let py_out = root.join("debug/build/readcon-core/py-unit/out");
+        fs::create_dir_all(&test_out).unwrap();
+        fs::create_dir_all(&py_out).unwrap();
+        let source = root.join("py.c");
+        fs::write(
+            &source,
+            "extern int PyExc_BaseException;\nint readcon_py(void) { return PyExc_BaseException; }\n",
+        )
+        .unwrap();
+        let object = root.join("py.o");
+        let cc = Command::new("cc")
+            .arg("-c")
+            .arg(&source)
+            .arg("-o")
+            .arg(&object)
+            .status()
+            .expect("cc");
+        assert!(cc.success());
+        let ar = Command::new("ar")
+            .arg("rcs")
+            .arg(py_out.join("libreadcon_core.a"))
+            .arg(&object)
+            .status()
+            .expect("ar");
+        assert!(ar.success());
+        let binary = test_out.join("doc_examples-test");
+        fs::write(&binary, b"bin").unwrap();
+        let found = libraries_from(&binary, None);
+        assert!(
+            !found.iter().any(|dir| dir == &py_out),
+            "lookup took the pyo3 archive in {py_out:?}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    fn scratch_dir(name: &str) -> std::path::PathBuf {
         let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("build")
             .join("test")
-            .join(format!("plain-lib-{}", std::process::id()));
+            .join(format!("plain-lib-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
