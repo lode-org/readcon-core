@@ -58,7 +58,7 @@ mod tests {
         let mut message = capnp::message::Builder::new_default();
         {
             let mut stamp = message.init_root::<compatibility_stamp::Builder>();
-            stamp.set_abi_major(2);
+            stamp.set_abi_major(crate::ffi::RKR_ABI_VERSION_MAJOR + 1);
             stamp.set_abi_minor(crate::ffi::RKR_ABI_VERSION_MINOR);
             stamp.set_abi_layout_revision(crate::ffi::RKR_ABI_LAYOUT_REVISION);
             stamp.set_con_spec_version(crate::CON_SPEC_VERSION);

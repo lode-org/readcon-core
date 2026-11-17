@@ -97,17 +97,17 @@ namespace readcon {
 /**
  * Breaking-change major for the public C ABI.
  */
-#define RKR_ABI_VERSION_MAJOR 1
+#define RKR_ABI_VERSION_MAJOR 2
 
 /**
  * Additive-change minor for the public C ABI.
  */
-#define RKR_ABI_VERSION_MINOR 1
+#define RKR_ABI_VERSION_MINOR 0
 
 /**
  * Layout revision for opaque handles and exported records.
  */
-#define RKR_ABI_LAYOUT_REVISION 1
+#define RKR_ABI_LAYOUT_REVISION 0
 
 /**
  * CON/convel format spec version. Use `#if RKR_CON_SPEC_VERSION >= 2` in C/C++
