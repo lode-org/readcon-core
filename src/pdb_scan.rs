@@ -63,14 +63,24 @@ fn element_symbol(line: &[u8]) -> &[u8] {
     trim(line)
 }
 
-fn parse_cryst(line: &[u8], cell: &mut [f64; 6]) -> Result<(), String> {
+/// Parse a `CRYST1` record of the frame number `frame`. A NaN or infinite
+/// number is refused, naming `cell[i]` and the frame.
+fn parse_cryst(line: &[u8], cell: &mut [f64; 6], frame: usize) -> Result<(), String> {
     let mut rest = trim(line.get(6..).unwrap_or(b""));
-    for slot in cell.iter_mut() {
+    for (index, slot) in cell.iter_mut().enumerate() {
         rest = trim(rest);
         let (value, consumed) =
             fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "cryst".to_string())?;
         if consumed == 0 {
             return Err("cryst".to_string());
+        }
+        if !value.is_finite() {
+            return Err(crate::error::ParseError::non_finite_cell(
+                &format!("cell[{index}]"),
+                value,
+            )
+            .in_frame(frame as u64)
+            .to_string());
         }
         *slot = value;
         rest = rest.get(consumed..).unwrap_or(b"");
@@ -126,7 +136,7 @@ pub fn tables_from_pdb_bytes(bytes: &[u8]) -> Result<PdbTables, String> {
             index += 1;
         }
         if line.starts_with(b"CRYST1") {
-            parse_cryst(line, &mut cell)?;
+            parse_cryst(line, &mut cell, frame_positions.len())?;
         } else if line.starts_with(b"ATOM") || line.starts_with(b"HETATM") {
             push_atom(line, &mut current_pos, &mut current_mass)?;
         } else if line.starts_with(b"ENDMDL") {

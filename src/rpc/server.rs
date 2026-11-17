@@ -5,7 +5,7 @@ use futures::AsyncReadExt;
 use crate::iterators::ConFrameIterator;
 use crate::writer::ConFrameWriter;
 
-use super::convert::{fill_frame_builder, frame_from_reader};
+use super::convert::{fill_frame_builder, frame_from_reader, name_frame};
 use super::read_con_capnp::read_con_service;
 use super::{set_compatibility_stamp, validate_compatibility_stamp};
 
@@ -41,7 +41,7 @@ impl read_con_service::Server for ReadConServiceImpl {
         for (i, frame) in frames.iter().enumerate() {
             let fb = frames_builder.reborrow().get(i as u32);
             if let Err(e) = fill_frame_builder(fb, frame) {
-                return Promise::err(capnp::Error::failed(e));
+                return Promise::err(capnp::Error::failed(name_frame(e, i)));
             }
         }
 
@@ -65,7 +65,7 @@ impl read_con_service::Server for ReadConServiceImpl {
             let fd = frame_data_list.get(i);
             match frame_from_reader(fd) {
                 Ok(f) => frames.push(f),
-                Err(e) => return Promise::err(capnp::Error::failed(e)),
+                Err(e) => return Promise::err(capnp::Error::failed(name_frame(e, i as usize))),
             }
         }
 

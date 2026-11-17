@@ -1,7 +1,7 @@
 use capnp_rpc::{RpcSystem, rpc_twoparty_capnp, twoparty};
 use futures::AsyncReadExt;
 
-use super::convert::{fill_frame_builder, frame_from_reader};
+use super::convert::{fill_frame_builder, frame_from_reader, name_frame};
 use super::endpoint::Endpoint;
 use super::read_con_capnp::read_con_service;
 use super::{set_compatibility_stamp, validate_compatibility_stamp};
@@ -89,7 +89,10 @@ impl RpcClient {
 
                     let mut frames = Vec::with_capacity(frame_data_list.len() as usize);
                     for i in 0..frame_data_list.len() {
-                        frames.push(frame_from_reader(frame_data_list.get(i))?);
+                        frames.push(
+                            frame_from_reader(frame_data_list.get(i))
+                                .map_err(|e| name_frame(e, i as usize))?,
+                        );
                     }
                     Ok(frames)
                 })
@@ -111,8 +114,9 @@ impl RpcClient {
                         set_compatibility_stamp(wr.reborrow().init_compatibility());
                         let mut list = wr.reborrow().init_frames(frames.len() as u32);
                         for (i, frame) in frames.iter().enumerate() {
-                            fill_frame_builder(list.reborrow().get(i as u32), frame)
-                                .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+                            fill_frame_builder(list.reborrow().get(i as u32), frame).map_err(
+                                |e| -> Box<dyn std::error::Error> { name_frame(e, i).into() },
+                            )?;
                         }
                     }
                     let response = request.send().promise.await?;

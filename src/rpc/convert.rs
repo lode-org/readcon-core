@@ -9,11 +9,24 @@ use crate::types::{
     decode_fixed_bitmask_for_spec, encode_fixed_bitmask,
 };
 
+/// Name frame `index` in the message of a non-finite cell error. Any other
+/// message is returned as it was.
+pub fn name_frame(message: String, index: usize) -> String {
+    match crate::error::ParseError::from_cell_text(&message) {
+        Some(error) => error.in_frame(index as u64).to_string(),
+        None => message,
+    }
+}
+
 /// Fill one `ConFrameData` builder from a [`ConFrame`].
 pub fn fill_frame_builder(
     mut fb: con_frame_data::Builder<'_>,
     frame: &ConFrame,
 ) -> Result<(), String> {
+    frame
+        .header
+        .check_cell_finite()
+        .map_err(|error| error.to_string())?;
     let mut cell = fb.reborrow().init_cell(3);
     for (j, &v) in frame.header.boxl.iter().enumerate() {
         cell.set(j as u32, v);
@@ -149,6 +162,8 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Str
     }
     let boxl = [cell_list.get(0), cell_list.get(1), cell_list.get(2)];
     let angles = [angles_list.get(0), angles_list.get(1), angles_list.get(2)];
+    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
+        .map_err(|error| error.to_string())?;
 
     let prebox_list = fd.get_prebox_header().map_err(|e| e.to_string())?;
     let postbox_list = fd.get_postbox_header().map_err(|e| e.to_string())?;

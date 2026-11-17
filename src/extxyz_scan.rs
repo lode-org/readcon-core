@@ -171,7 +171,12 @@ fn logical_value(token: &[u8]) -> f64 {
     }
 }
 
-fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
+/// The six cell parameters of the nine `Lattice` numbers of frame `frame`.
+///
+/// A NaN or infinite lattice number is refused, naming `Lattice[i]` and the
+/// frame, as is a parameter that comes out NaN or infinite (a zero vector has
+/// no angle). The check is one test of fifteen numbers per frame.
+fn lattice_cell(lattice: &[u8], frame: usize) -> Result<[f64; 6], String> {
     let mut values = [0.0; 9];
     let mut rest = trim(lattice);
     for slot in values.iter_mut() {
@@ -180,6 +185,13 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
             fast_float2::parse_partial::<f64, _>(rest).map_err(|_| "lattice".to_string())?;
         *slot = value;
         rest = rest.get(consumed..).unwrap_or(b"");
+    }
+    if let Some(index) = values.iter().position(|value| !value.is_finite()) {
+        return Err(non_finite_lattice_in(
+            &format!("Lattice[{index}]"),
+            values[index],
+            frame,
+        ));
     }
     let length = |i: usize| {
         (values[i] * values[i] + values[i + 1] * values[i + 1] + values[i + 2] * values[i + 2])
@@ -195,7 +207,29 @@ fn lattice_cell(lattice: &[u8]) -> Result<[f64; 6], String> {
     let gamma = angle(dot(0, 3) / (la * lb));
     let beta = angle(dot(0, 6) / (la * lc));
     let alpha = angle(dot(3, 6) / (lb * lc));
-    Ok([la, lb, lc, alpha, beta, gamma])
+    let cell = [la, lb, lc, alpha, beta, gamma];
+    if let Some(index) = cell.iter().position(|value| !value.is_finite()) {
+        return Err(non_finite_lattice_in(
+            &format!("cell[{index}]"),
+            cell[index],
+            frame,
+        ));
+    }
+    Ok(cell)
+}
+
+/// The text of a non-finite cell error for a scan, which reports `String`.
+#[cold]
+fn non_finite_lattice(field: &str, value: f64) -> String {
+    crate::error::ParseError::non_finite_cell(field, value).to_string()
+}
+
+/// [`non_finite_lattice`] that names frame `frame`.
+#[cold]
+fn non_finite_lattice_in(field: &str, value: f64, frame: usize) -> String {
+    crate::error::ParseError::non_finite_cell(field, value)
+        .in_frame(frame as u64)
+        .to_string()
 }
 
 fn next_field<'a>(line: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
@@ -448,7 +482,7 @@ pub fn tables_from_extxyz_bytes_reporting(
                     for frame in frame_from..frame_to {
                         let comment = line_ref[starts[frame] - 1];
                         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
-                        let frame_cell = lattice_cell(lattice)?;
+                        let frame_cell = lattice_cell(lattice, frame)?;
                         if atom_from == 0 {
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
@@ -760,7 +794,7 @@ fn fill_species_pos_parallel(
     if n_frames == 1 && n_atoms >= 4096 && workers >= 2 {
         let comment = lines[starts[0] - 1];
         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
-        let frame_cell = lattice_cell(lattice)?;
+        let frame_cell = lattice_cell(lattice, 0)?;
         cell[..6].copy_from_slice(&frame_cell);
         let chunk = n_atoms.div_ceil(workers);
         let line0 = starts[0];
@@ -864,7 +898,7 @@ fn fill_species_pos_parallel(
                 for frame in from..to {
                     let comment = lines[starts[frame] - 1];
                     let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
-                    let frame_cell = lattice_cell(lattice)?;
+                    let frame_cell = lattice_cell(lattice, frame)?;
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             frame_cell.as_ptr(),
@@ -1114,7 +1148,7 @@ fn tables_stream_parallel(
     // is not built.
     if n_atoms >= 4096 && bytes.len() <= n_atoms.saturating_mul(512) {
         let lattice = quoted_after(comment, b"Lattice=")?;
-        let frame_cell = lattice_cell(lattice).ok()?;
+        let frame_cell = lattice_cell(lattice, 0).ok()?;
         if let Ok((chunks, end)) = crate::parser::plan_coord_chunks(bytes, body, n_atoms, workers) {
             let mut cursor = end;
             while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
@@ -1239,7 +1273,7 @@ fn fill_stream_frames(
                 let Some(lattice) = quoted_after(comment, b"Lattice=") else {
                     return;
                 };
-                let Ok(frame_cell) = lattice_cell(lattice) else {
+                let Ok(frame_cell) = lattice_cell(lattice, frame) else {
                     return;
                 };
                 unsafe {
@@ -1758,7 +1792,7 @@ fn tables_stream(bytes: &[u8]) -> Option<XyzTables> {
         let (comment_end, comment) = line_span(bytes, line_end)?;
         let properties = quoted_after(comment, b"Properties=")?;
         let lattice = quoted_after(comment, b"Lattice=")?;
-        let frame_cell = lattice_cell(lattice).ok()?;
+        let frame_cell = lattice_cell(lattice, n_frames).ok()?;
         if n_frames == 0 {
             specs = property_columns(properties).ok()?;
             if !stream_layout(&specs) {
@@ -2110,7 +2144,7 @@ fn tables_general(bytes: &[u8]) -> Result<XyzTables, String> {
         let lattice = quoted_after(comment, b"Lattice=").ok_or("lattice")?;
         let properties = quoted_after(comment, b"Properties=").ok_or("properties")?;
         let frame_specs = property_columns(properties)?;
-        let frame_cell = lattice_cell(lattice)?;
+        let frame_cell = lattice_cell(lattice, n_frames)?;
         if n_frames == 0 {
             // Numeric lanes are reserved up front. More lanes than bytes
             // in the file cannot be filled, and the reservation would be
@@ -2275,6 +2309,7 @@ pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], String> {
     if cell.len() < 6 {
         return Err("cell".to_string());
     }
+    crate::types::check_cellpar_finite(&cell[..6]).map_err(|error| error.to_string())?;
     let (a, b, c) = (cell[0], cell[1], cell[2]);
     let (cos_a, _sin_a) = cos_sin(cell[3]);
     let (cos_b, _sin_b) = cos_sin(cell[4]);
@@ -2289,7 +2324,21 @@ pub fn lattice_from_cell(cell: &[f64]) -> Result<[f64; 9], String> {
     };
     let cz2 = c * c - cx * cx - cy * cy;
     let cz = if cz2 > 0.0 { cz2.sqrt() } else { 0.0 };
-    Ok([a, 0.0, 0.0, bx, by, 0.0, cx, cy, cz])
+    let lattice = [a, 0.0, 0.0, bx, by, 0.0, cx, cy, cz];
+    if let Some(index) = lattice.iter().position(|value| !value.is_finite()) {
+        return Err(non_finite_lattice(
+            &format!("Lattice[{index}]"),
+            lattice[index],
+        ));
+    }
+    Ok(lattice)
+}
+
+/// Refuse the first non-finite value of the first `n_frames` cell rows,
+/// naming its field and frame, before any frame is formatted.
+fn check_cells(cell: &[f64], n_frames: usize) -> Result<(), String> {
+    let used = n_frames.saturating_mul(6).min(cell.len());
+    crate::types::check_cell_rows(&cell[..used]).map_err(|error| error.to_string())
 }
 
 /// One per-atom column the writer can format without taking ownership.
@@ -2374,6 +2423,7 @@ pub(crate) fn extxyz_append_with_threads(
     if cell.len() < n_frames * 6 {
         return Err("cell".to_string());
     }
+    check_cells(cell, n_frames)?;
     let properties = columns
         .iter()
         .map(|column| {
@@ -2530,6 +2580,7 @@ pub fn extxyz_path_with_threads(
     if cell.len() < 6 {
         return Err("cell".to_string());
     }
+    check_cells(cell, 1)?;
     let properties = columns
         .iter()
         .map(|column| {
@@ -2657,6 +2708,7 @@ fn write_frame_batches(
     if cell.len() < n_frames * 6 {
         return Err("cell".to_string());
     }
+    check_cells(cell, n_frames)?;
     let properties = columns
         .iter()
         .map(|column| {
