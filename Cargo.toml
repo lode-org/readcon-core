@@ -21,8 +21,13 @@ exclude = [
 ]
 
 [lints.rust]
-# `asan_run` is passed by hand with `-Zsanitizer=address`.
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(asan_run)", "cfg(loom)"] }
+# `asan_run` and `tsan_run` are passed by hand with `-Zsanitizer=address`
+# and `-Zsanitizer=thread`.
+unexpected_cfgs = { level = "warn", check-cfg = [
+  "cfg(asan_run)",
+  "cfg(tsan_run)",
+  "cfg(loom)",
+] }
 
 [lib]
 name = "readcon_core"

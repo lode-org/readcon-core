@@ -15,11 +15,12 @@
 //! staggered delay, so a read that returns before its workers run is
 //! caught without a sanitizer.
 //!
-//! ASan links its own `pthread_create` into the binary and aborts on a
-//! thread it did not record, so the binary is empty under `asan_run`.
-//! LeakSanitizer checks the same handles directly there.
+//! ASan and TSan link their own `pthread_create` into the binary. ASan
+//! aborts on a thread it did not record and TSan faults on one, so the
+//! binary is empty under `asan_run` and `tsan_run`. LeakSanitizer checks
+//! the same handles directly under ASan.
 
-#![cfg(all(target_os = "linux", not(asan_run)))]
+#![cfg(all(target_os = "linux", not(any(asan_run, tsan_run))))]
 
 use readcon_core::ffi::{free_rkr_frame_array, rkr_read_all_frames_n_threads};
 use readcon_core::iterators::read_all_frames_located;
