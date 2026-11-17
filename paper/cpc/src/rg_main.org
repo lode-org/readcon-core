@@ -632,7 +632,7 @@ A variant of the independent reader that follows readcon-core on those three cas
 
 Of the \(\clauseTotal\) clauses of the specification, \(\clauseCovered\) are named by a corpus file, a probe or a test of the library, and the other \(\clauseUncovered\) state no duty of a reader, such as the rules for revising the specification.
 
-A format name should mean the same language to every reader that claims it, and versions of one reader are the first test.
+One name must mean one language for every reader that carries it.
 The published wheels of readcon-core 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{} do not return the same outcome on every probe file.
 On files of two frames whose first line is empty, the oldest refuses the file and the later three read two frames, and on a blank symbol line the newest two refuse a file that the earlier two read (Section~\ref*{sec:supp-versions}).
 Each of those changes decided a case that the text of its release left open, and Table~\ref{tab:versions} lists the clauses involved.
@@ -762,11 +762,11 @@ Memory is the high-water mark of the resident set (VmHWM) after the read minus t
 On the 100000-frame coordinate file, readcon-core at the measured commit completes the read in \rcTipMedian~s.
 That is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
 It is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
-Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s, \rcTipOverDb{} times as long as the direct read.
+Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s, \rcTipOverDb{} times slower than the direct read.
 Every all-frame reader matches all 100000 frames with no failure.
 The read adds \rcTipMib~MiB to the resident memory of readcon-core, against \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles reading XYZ and \rcOvitoMib~MiB for OVITO reading XYZ.
 
-To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and readcon takes \rcFirstMedian~s, and both return a matching frame.
+To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and readcon takes \rcFirstMedian~s, with both matching 1 of 1 frame.
 
 \subsection{Same-file and nearest-native panel}\label{sec:h2h}
 The same-file comparison reads one CON file with readcon from C, Fortran and Python, with the eOn client and the eOn Python module, and with ASE through its eon format.
