@@ -525,7 +525,7 @@ fn round_trip_is_the_writer_default_and_lattice_lines_follow_vectors() {
     let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
     builder.add_atom("H", 1.25, 0.0, 0.0, [false; 3], 3, 1.0);
     let mut frame = builder.build().unwrap();
-    frame.header.set_lattice_vectors(vecs);
+    frame.header.set_lattice_vectors(vecs).unwrap();
     assert_eq!(frame.header.boxl, boxl);
     assert_eq!(frame.header.angles, angles);
     let mut buf = Vec::new();
@@ -899,7 +899,7 @@ fn cell_matrix_prefers_lattice_vectors_and_builds_the_rest() {
 
     let mut with_lattice = frame;
     let vecs = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]];
-    with_lattice.header.set_lattice_vectors(vecs);
+    with_lattice.header.set_lattice_vectors(vecs).unwrap();
     assert_eq!(with_lattice.header.cell_matrix(), vecs);
 
     let bad_pbc = v2_frame(

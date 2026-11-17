@@ -124,6 +124,9 @@ pub struct ConFrameWriter<W: Write> {
     bound_line: Option<String>,
     /// `Some(true)` once a reused header is known to have no lattice vectors.
     bound_no_lattice: Option<bool>,
+    /// Frames this writer has taken so far: the 0-based index of the next
+    /// frame, which names that frame in a non-finite cell error.
+    frame_number: u64,
 }
 
 struct BoundHeader {
@@ -320,6 +323,7 @@ impl<W: Write> ConFrameWriter<W> {
             bound_flags: None,
             bound_line: None,
             bound_no_lattice: None,
+            frame_number: 0,
         }
     }
 
@@ -582,6 +586,28 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
+        // A uniform trajectory either has lattice vectors on every frame
+        // or on none. The first frame decides; the rest read lines 3-4.
+        let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
+            (frame.header.boxl, frame.header.angles)
+        } else {
+            match frame.header.lattice_vectors() {
+                Some(vecs) => {
+                    self.bound_no_lattice = Some(false);
+                    crate::types::lengths_and_angles(vecs)
+                }
+                None => {
+                    self.bound_no_lattice = Some(true);
+                    (frame.header.boxl, frame.header.angles)
+                }
+            }
+        };
+        // A cell that is not finite is never written: the line would read
+        // back as NaN or inf, which a reader rejects. Six comparisons per
+        // frame, before this call takes any state of the writer.
+        crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
+            .map_err(|error| WriteError::Format(error.in_frame(self.frame_number)))?;
+        self.frame_number += 1;
         #[cfg(feature = "parallel")]
         let parallel_rows = self.atom_workers >= 2 && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
         #[cfg(not(feature = "parallel"))]
@@ -638,22 +664,6 @@ impl<W: Write> ConFrameWriter<W> {
         if keep_bound {
             self.bound = bound;
         }
-        // A uniform trajectory either has lattice vectors on every frame
-        // or on none. The first frame decides; the rest read lines 3-4.
-        let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
-            (frame.header.boxl, frame.header.angles)
-        } else {
-            match frame.header.lattice_vectors() {
-                Some(vecs) => {
-                    self.bound_no_lattice = Some(false);
-                    crate::types::lengths_and_angles(vecs)
-                }
-                None => {
-                    self.bound_no_lattice = Some(true);
-                    (frame.header.boxl, frame.header.angles)
-                }
-            }
-        };
         let atoms = frame.atom_data.len();
         let [
             has_vel,
@@ -1790,10 +1800,9 @@ pub(crate) fn binding_header_bytes(frame: &ConFrame) -> Result<Vec<u8>, WriteErr
             frame.has_spreads(),
         ],
     )?;
-    let (boxl, angles) = match frame.header.lattice_vectors() {
-        Some(vecs) => crate::types::lengths_and_angles(vecs),
-        None => (frame.header.boxl, frame.header.angles),
-    };
+    let (boxl, angles) = written_box(frame);
+    crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
+        .map_err(WriteError::Format)?;
     let prec = FloatFormat::RoundTrip;
     let mut buf = Vec::with_capacity(256);
     push_str_line(&mut buf, &frame.header.prebox_header.user);
@@ -3849,6 +3858,8 @@ pub(crate) fn format_binding_columns(
         let pos = &positions[atom_base * 3..(atom_base + n_atoms) * 3];
         let mass = &masses[atom_base..atom_base + n_atoms];
         let box_cell = &cell[frame_index * 6..frame_index * 6 + 6];
+        crate::types::check_cellpar_finite(box_cell)
+            .map_err(|error| WriteError::Format(error.in_frame(frame_index as u64)))?;
         let flags = fixed.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
         let vel = velocities.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
         let force = forces.map(|bits| &bits[atom_base * 3..(atom_base + n_atoms) * 3]);
@@ -3914,6 +3925,7 @@ pub fn write_frame_refs_to_path(
     canonical: bool,
     bind: bool,
 ) -> Result<(), WriteError> {
+    check_frames_cell_finite(frames)?;
     // One writer streams each frame to the file. Building the whole text
     // and copying it was a second pass the parallel paths do not pay.
     if workers < 2 {
@@ -4180,6 +4192,7 @@ pub fn rewrite_frame_refs_to_path(
     bind: bool,
     keep_spare: bool,
 ) -> Result<(), WriteError> {
+    check_frames_cell_finite(frames)?;
     let spare = prepare_rewrite_spare(path).map_err(WriteError::Io)?;
     let file = OpenOptions::new()
         .read(true)
@@ -4202,6 +4215,7 @@ pub fn write_frame_refs_with_threads(
     precision: Option<usize>,
     canonical: bool,
 ) -> Result<Vec<u8>, WriteError> {
+    check_frames_cell_finite(frames)?;
     let mut parts = formatted_parts(frames, workers, precision, canonical, false)?;
     // One wide frame is already one buffer. Copying it into a second
     // allocation was a serial memcpy of the whole text on the timing path.
@@ -4233,6 +4247,7 @@ pub fn format_frame_refs_unstored(
     if frames.is_empty() {
         return Ok(Vec::new());
     }
+    check_frames_cell_finite(frames)?;
     if workers < 2 || frames.len() < 2 {
         return Ok(vec![format_group_bytes(
             frames,
@@ -4581,6 +4596,24 @@ fn written_box(frame: &ConFrame) -> ([f64; 3], [f64; 3]) {
         Some(vecs) => crate::types::lengths_and_angles(vecs),
         None => (frame.header.boxl, frame.header.angles),
     }
+}
+
+/// Refuses, before any byte is formatted or file created, a frame whose
+/// written cell is NaN or infinite. The error names the frame by its index in
+/// `frames`, which the formatting workers of a parallel write cannot know.
+///
+/// A frame with a finite header cell passes on six comparisons. Only a frame
+/// without one reads its lattice vectors, which decide the written cell.
+pub(crate) fn check_frames_cell_finite(frames: &[&ConFrame]) -> Result<(), WriteError> {
+    for (index, frame) in frames.iter().enumerate() {
+        if frame.header.check_cell_finite().is_ok() {
+            continue;
+        }
+        let (boxl, angles) = written_box(frame);
+        crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
+            .map_err(|error| WriteError::Format(error.in_frame(index as u64)))?;
+    }
+    Ok(())
 }
 
 fn add_widths(sum: &mut usize, values: &[f64]) {

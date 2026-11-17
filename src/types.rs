@@ -2,6 +2,7 @@
 // Data Structures - The shape of our parsed data
 //=============================================================================
 
+use crate::error::ParseError;
 pub use rustc_hash::FxHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -749,7 +750,15 @@ impl FrameHeader {
 
     /// Sets the exact lattice vector matrix and keeps lines 3-4 consistent
     /// with that matrix (CON-cell.2, D12).
-    pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) {
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError::NonFiniteValue`] naming `lattice_vectors[row][column]`
+    /// when a component is NaN or infinite. The header is not changed: JSON
+    /// has no spelling for such a number, so the matrix would be stored as
+    /// `null` and read back as no lattice at all.
+    pub fn set_lattice_vectors(&mut self, vecs: [[f64; 3]; 3]) -> Result<(), ParseError> {
+        check_lattice_finite(&vecs)?;
         self.metadata.insert(
             meta::LATTICE_VECTORS.into(),
             serde_json::json!([
@@ -763,6 +772,23 @@ impl FrameHeader {
             self.boxl = boxl;
             self.angles = angles;
         }
+        Ok(())
+    }
+
+    /// Checks that the three lengths and three angles of lines 3-4 are
+    /// finite.
+    ///
+    /// The fields are named `boxl[i]` and `angles[i]`. The lattice vectors
+    /// in the metadata are not read: JSON cannot hold a NaN or an infinity.
+    /// One test of six numbers per frame, not per atom.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError::NonFiniteValue`], with [`ParseError::in_frame`] left to
+    /// the caller that knows the frame.
+    #[inline]
+    pub fn check_cell_finite(&self) -> Result<(), ParseError> {
+        check_cell_finite(&self.boxl, "boxl", &self.angles, "angles")
     }
 
     /// NEB bead (image) index.
@@ -2017,6 +2043,120 @@ pub fn lengths_and_angles(vecs: [[f64; 3]; 3]) -> ([f64; 3], [f64; 3]) {
     )
 }
 
+/// The first of `values` that is NaN or infinite, as a cell field error.
+#[cold]
+#[inline(never)]
+fn non_finite_cell_value(values: &[(&[f64], &str)]) -> ParseError {
+    for (group, name) in values {
+        if let Some((index, value)) = group.iter().enumerate().find(|(_, v)| !v.is_finite()) {
+            return ParseError::non_finite_cell(&format!("{name}[{index}]"), value);
+        }
+    }
+    ParseError::ValidationError("cell check found no non-finite value".into())
+}
+
+/// Checks that three cell lengths and three cell angles are finite.
+///
+/// `lengths_name` and `angles_name` are the names of the two arrays in the
+/// caller's API (`boxl` and `angles` in a header, `cell` and `angles` in a
+/// builder). An element is reported as `name[i]`.
+///
+/// # Errors
+///
+/// [`ParseError::NonFiniteValue`] naming the first non-finite field. The
+/// check is six comparisons and allocates only when it fails.
+#[inline]
+pub fn check_cell_finite(
+    lengths: &[f64; 3],
+    lengths_name: &str,
+    angles: &[f64; 3],
+    angles_name: &str,
+) -> Result<(), ParseError> {
+    if lengths.iter().all(|v| v.is_finite()) && angles.iter().all(|v| v.is_finite()) {
+        Ok(())
+    } else {
+        Err(non_finite_cell_value(&[
+            (lengths, lengths_name),
+            (angles, angles_name),
+        ]))
+    }
+}
+
+/// Checks a row of cell parameters: `a b c alpha beta gamma`.
+///
+/// This is the layout of a `cell` array with one row per frame (CON-bin,
+/// extended XYZ, the column writers, Python `cell`). An element is reported
+/// as `cell[i]`, `i` counted from the start of the row.
+///
+/// # Errors
+///
+/// [`ParseError::NonFiniteValue`] naming the first non-finite field.
+#[inline]
+pub fn check_cellpar_finite(cellpar: &[f64]) -> Result<(), ParseError> {
+    if cellpar.iter().all(|v| v.is_finite()) {
+        Ok(())
+    } else {
+        Err(non_finite_cell_value(&[(cellpar, "cell")]))
+    }
+}
+
+/// Checks every row of a `(frames, 6)` cell array, rows of `a b c alpha beta
+/// gamma`, laid out flat.
+///
+/// # Errors
+///
+/// [`ParseError::NonFiniteValue`] naming the first non-finite field as
+/// `cell[i]` of the frame, the row, that holds it. A trailing partial row is
+/// checked like a whole one.
+pub fn check_cell_rows(cells: &[f64]) -> Result<(), ParseError> {
+    if cells.iter().all(|v| v.is_finite()) {
+        return Ok(());
+    }
+    for (frame, row) in cells.chunks(6).enumerate() {
+        check_cellpar_finite(row).map_err(|error| error.in_frame(frame as u64))?;
+    }
+    Ok(())
+}
+
+/// Same as [`check_cell_rows`] for a binary32 array.
+///
+/// # Errors
+///
+/// [`ParseError::NonFiniteValue`], as [`check_cell_rows`].
+pub fn check_cell_rows_f32(cells: &[f32]) -> Result<(), ParseError> {
+    if cells.iter().all(|v| v.is_finite()) {
+        return Ok(());
+    }
+    for (frame, row) in cells.chunks(6).enumerate() {
+        if let Some((index, value)) = row.iter().enumerate().find(|(_, v)| !v.is_finite()) {
+            return Err(
+                ParseError::non_finite_cell(&format!("cell[{index}]"), value)
+                    .in_frame(frame as u64),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Checks that the nine components of a lattice matrix are finite.
+///
+/// A component is reported as `lattice_vectors[row][column]`.
+///
+/// # Errors
+///
+/// [`ParseError::NonFiniteValue`] naming the first non-finite component.
+pub fn check_lattice_finite(vecs: &[[f64; 3]; 3]) -> Result<(), ParseError> {
+    for (row, vector) in vecs.iter().enumerate() {
+        if let Some((column, value)) = vector.iter().enumerate().find(|(_, v)| !v.is_finite()) {
+            return Err(ParseError::non_finite_cell(
+                &format!("lattice_vectors[{row}][{column}]"),
+                value,
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
 /// in degrees (CON-cell.6).
 ///
@@ -2857,12 +2997,27 @@ impl ConFrameBuilder {
     ///
     /// In-memory SoA on [`Self::build`] defaults to float64 unless
     /// [`Self::storage_dtypes`] / metadata `storage_dtypes` requests otherwise.
+    ///
+    /// A NaN or infinite cell is not refused here, because this constructor
+    /// cannot fail. [`Self::build`] and [`Self::build_with_permutation`]
+    /// refuse it. Use [`Self::try_new`] to find out at construction.
     pub fn new(cell: [f64; 3], angles: [f64; 3]) -> Self {
         Self {
             cell,
             angles,
             ..Self::default()
         }
+    }
+
+    /// [`Self::new`] that refuses a cell with a NaN or infinite component.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError::NonFiniteValue`] naming the field, `cell[i]` or
+    /// `angles[i]`.
+    pub fn try_new(cell: [f64; 3], angles: [f64; 3]) -> Result<Self, ParseError> {
+        check_cell_finite(&cell, "cell", &angles, "angles")?;
+        Ok(Self::new(cell, angles))
     }
 
     /// Sets the user-facing pre-box header line. The JSON metadata line is
@@ -4163,9 +4318,24 @@ impl ConFrameBuilder {
     /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
     /// share a symbol and their masses differ by more than
     /// [`Self::TYPE_MASS_ABS_TOL`]. CON line 9 stores one mass per type.
+    ///
+    /// Returns [`crate::error::ParseError::NonFiniteValue`] when a cell
+    /// length or angle is NaN or infinite. The message names the field
+    /// (`cell[i]` or `angles[i]`), and the frame when the builder has a
+    /// `frame_index`.
     pub fn build_with_permutation(
         self,
     ) -> Result<(ConFrame, Vec<usize>), crate::error::ParseError> {
+        if let Err(err) = check_cell_finite(&self.cell, "cell", &self.angles, "angles") {
+            let frame = self
+                .metadata
+                .get(meta::FRAME_INDEX)
+                .and_then(serde_json::Value::as_u64);
+            return Err(match frame {
+                Some(frame) => err.in_frame(frame),
+                None => err,
+            });
+        }
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -4671,8 +4841,21 @@ pub fn con_frame_from_atom_data_with_positions(
 
 impl ConFrame {
     /// Creates a new builder for constructing a `ConFrame`.
+    ///
+    /// A NaN or infinite cell is refused by the builder's `build`. See
+    /// [`Self::try_builder`] to refuse it at once.
     pub fn builder(cell: [f64; 3], angles: [f64; 3]) -> ConFrameBuilder {
         ConFrameBuilder::new(cell, angles)
+    }
+
+    /// [`Self::builder`] that refuses a cell with a NaN or infinite component.
+    ///
+    /// # Errors
+    ///
+    /// [`ParseError::NonFiniteValue`] naming the field, `cell[i]` or
+    /// `angles[i]`.
+    pub fn try_builder(cell: [f64; 3], angles: [f64; 3]) -> Result<ConFrameBuilder, ParseError> {
+        ConFrameBuilder::try_new(cell, angles)
     }
 
     /// Delegate: `length` unit from header metadata.
@@ -5084,7 +5267,7 @@ mod tests {
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
-        header.set_lattice_vectors(vecs);
+        header.set_lattice_vectors(vecs).unwrap();
         assert_eq!(header.lattice_vectors(), Some(vecs));
     }
 
