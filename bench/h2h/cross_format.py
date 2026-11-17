@@ -624,17 +624,32 @@ def _compressed_con_sha256_and_bytes(path: Path, compression: str) -> tuple[int,
                 zstd_mod = importlib.import_module(mod_name)
             except ImportError:
                 zstd_mod = None
-            if zstd_mod is not None and hasattr(zstd_mod, "ZstdDecompressor"):
+            decompressor = (
+                getattr(zstd_mod, "ZstdDecompressor", None)
+                if zstd_mod is not None
+                else None
+            )
+            # zstandard exposes stream_reader. The 3.14 stdlib module has the
+            # same class name and streams through open(), with no stream_reader.
+            if decompressor is not None and (
+                hasattr(decompressor, "stream_reader") or hasattr(zstd_mod, "open")
+            ):
                 hasher = hashlib.sha256()
                 size = 0
                 try:
-                    with (
-                        path.open("rb") as raw,
-                        zstd_mod.ZstdDecompressor().stream_reader(raw) as reader,
-                    ):
-                        while chunk := reader.read(1 << 20):
-                            size += len(chunk)
-                            hasher.update(chunk)
+                    if hasattr(decompressor, "stream_reader"):
+                        with (
+                            path.open("rb") as raw,
+                            decompressor().stream_reader(raw) as reader,
+                        ):
+                            while chunk := reader.read(1 << 20):
+                                size += len(chunk)
+                                hasher.update(chunk)
+                    else:
+                        with zstd_mod.open(path, "rb") as reader:
+                            while chunk := reader.read(1 << 20):
+                                size += len(chunk)
+                                hasher.update(chunk)
                 except Exception as exc:
                     raise SystemExit(
                         f"1M zstd CON input {path} could not be decompressed: {exc}"
