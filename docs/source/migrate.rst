@@ -95,7 +95,7 @@ Chemfiles-linked install for foreign formats:
 
 .. code:: shell
 
-    pip install 'readcon-chemfiles==0.23.3'   # or: maturin develop --features python,chemfiles
+    pip install 'readcon-chemfiles==0.24.0'   # or: maturin develop --features python,chemfiles
 
 .. code:: python
 
