@@ -14,8 +14,12 @@
 //! the threads that began to run instead. New threads start after a
 //! staggered delay, so a read that returns before its workers run is
 //! caught without a sanitizer.
+//!
+//! ASan links its own `pthread_create` into the binary and aborts on a
+//! thread it did not record, so the binary is empty under `asan_run`.
+//! LeakSanitizer checks the same handles directly there.
 
-#![cfg(target_os = "linux")]
+#![cfg(all(target_os = "linux", not(asan_run)))]
 
 use readcon_core::ffi::{free_rkr_frame_array, rkr_read_all_frames_n_threads};
 use readcon_core::iterators::read_all_frames_located;
