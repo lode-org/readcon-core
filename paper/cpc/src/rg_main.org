@@ -570,9 +570,6 @@ If a frame differs, the writer switches to a fresh copy from that frame onward.
 \texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} apply the same element-load contract to NumPy arrays in private staging runs of about \(4\) MiB.
 Each run is copied and, where required, validated while attached, then formatted or written while detached; no Rust slice is formed over live Python-owned numeric memory.
 
-#+END_EXPORT
-# TODO: add concurrent Python read speedups from gil-concurrent.json and thread-scaling times from threadfix-before-after.json after rerun_release runs.
-#+BEGIN_EXPORT latex
 
 \section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
 readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
