@@ -1654,6 +1654,11 @@ enum RKRStatus rkr_frame_add_atom_full(struct RKRConFrameBuilder *builder_handle
  * `free_rkr_frame_builder` or consume it via `rkr_frame_builder_build`.
  * Returns NULL on error.
  *
+ * A NaN or infinite entry of `cell` or `angles` is refused: the call returns
+ * NULL, sets `RKR_STATUS_PARSE_ERROR`, and `rkr_last_error_message` reads
+ * like `NonFiniteValue: non-finite value: cell field cell[1] is NaN`.
+ * A NULL `cell` or `angles` sets `RKR_STATUS_NULL_POINTER`.
+ *
  * # Safety
  * cell and angles must point to 3 doubles. prebox0, postbox0, and
  * postbox1 must be NULL or valid null-terminated strings; prebox1 is
