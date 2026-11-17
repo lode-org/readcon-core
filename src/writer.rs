@@ -5281,6 +5281,53 @@ struct PackedCache {
     coords: Option<std::sync::Arc<Vec<f64>>>,
 }
 
+/// One independently synchronized packed-length cache.
+///
+/// Production obtains one instance per process through [`packed_lengths`].
+/// Keeping the state injectable also lets protocol tests exercise invalidation
+/// without observing or perturbing unrelated tests.
+struct PackedLengthsCache {
+    entry: std::sync::Mutex<Option<PackedCache>>,
+    generation: std::sync::atomic::AtomicU64,
+}
+
+impl PackedLengthsCache {
+    const fn new() -> Self {
+        Self {
+            entry: std::sync::Mutex::new(None),
+            generation: std::sync::atomic::AtomicU64::new(1),
+        }
+    }
+
+    fn invalidate(&self) {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
+        self.entry
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .take();
+    }
+
+    fn invalidate_if(&self, frame: usize) {
+        let mut entry = self.entry.lock().unwrap_or_else(|err| err.into_inner());
+        if entry
+            .as_ref()
+            .is_some_and(|cached| cached.identities.contains(&frame))
+        {
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::Release);
+            entry.take();
+        }
+    }
+}
+
+fn packed_lengths() -> &'static PackedLengthsCache {
+    static CACHE: crate::parser::PerProcess<PackedLengthsCache> =
+        crate::parser::PerProcess::new();
+    CACHE.get_or_init(PackedLengthsCache::new)
+}
+const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
+
 /// Names the frames a coordinate snapshot was taken from.
 ///
 /// Each snapshot puts its views at new addresses, so the address key alone
@@ -5348,8 +5395,14 @@ fn snapshot_key(frames: &[&ConFrame]) -> Option<SnapshotKey> {
 /// price still stands.
 #[cfg(feature = "python")]
 pub(crate) fn priced_coords(identities: &[usize]) -> Option<std::sync::Arc<Vec<f64>>> {
-    let cache = packed_cache().lock().unwrap_or_else(|err| err.into_inner());
-    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    let packed = packed_lengths();
+    let cache = packed
+        .entry
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+    let generation = packed
+        .generation
+        .load(std::sync::atomic::Ordering::Acquire);
     cache
         .as_ref()
         .filter(|hit| hit.generation == generation && hit.identities.as_ref() == identities)
@@ -5364,37 +5417,36 @@ fn same_bits(a: &[f64], b: &[f64]) -> bool {
         }
 }
 
-fn packed_cache() -> &'static std::sync::Mutex<Option<PackedCache>> {
-    static CACHE: crate::parser::PerProcess<std::sync::Mutex<Option<PackedCache>>> =
-        crate::parser::PerProcess::new();
-    CACHE.get_or_init(|| std::sync::Mutex::new(None))
-}
-static PACKED_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-const MAX_PACKED_CACHE_BYTES: usize = 64 * 1024 * 1024;
-
 /// A coordinate edit changes the spelled length. The next write prices again.
 pub(crate) fn invalidate_packed_lengths() {
-    PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Release);
-    packed_cache()
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .take();
+    packed_lengths().invalidate();
 }
 
 /// Dropping any frame named by the full cache key retires that price.
 /// A later allocation at the same address must not reuse it.
 pub(crate) fn invalidate_packed_lengths_if(frame: usize) {
-    let mut cache = packed_cache().lock().unwrap_or_else(|err| err.into_inner());
-    if cache
-        .as_ref()
-        .is_some_and(|entry| entry.identities.contains(&frame))
-    {
-        PACKED_GEN.fetch_add(1, std::sync::atomic::Ordering::Release);
-        cache.take();
-    }
+    packed_lengths().invalidate_if(frame);
 }
 
 pub(crate) fn cached_packed_lengths(
+    frames: &[&ConFrame],
+    workers: usize,
+    precision: Option<usize>,
+    canonical: bool,
+    bind: bool,
+) -> Option<Vec<usize>> {
+    cached_packed_lengths_in(
+        packed_lengths(),
+        frames,
+        workers,
+        precision,
+        canonical,
+        bind,
+    )
+}
+
+fn cached_packed_lengths_in(
+    packed: &PackedLengthsCache,
     frames: &[&ConFrame],
     workers: usize,
     precision: Option<usize>,
@@ -5410,8 +5462,8 @@ pub(crate) fn cached_packed_lengths(
         }
     };
     let count = frames.len();
-    let cache = packed_cache().lock().unwrap_or_else(|err| err.into_inner());
-    let generation = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    let cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
+    let generation = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     let hit = cache
         .as_ref()
         .filter(|hit| {
@@ -5436,7 +5488,7 @@ pub(crate) fn cached_packed_lengths(
             return Some(lengths);
         }
     }
-    let generation_before = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    let generation_before = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     let lengths = packed_frame_lengths(frames, workers, precision, canonical, bind)?;
     let coords_bytes = coords
         .as_ref()
@@ -5444,8 +5496,8 @@ pub(crate) fn cached_packed_lengths(
     let cache_bytes = coords_bytes
         .saturating_add(std::mem::size_of_val(lengths.as_slice()))
         .saturating_add(std::mem::size_of_val(identities.as_ref()));
-    let mut cache = packed_cache().lock().unwrap_or_else(|err| err.into_inner());
-    let generation_after = PACKED_GEN.load(std::sync::atomic::Ordering::Acquire);
+    let mut cache = packed.entry.lock().unwrap_or_else(|err| err.into_inner());
+    let generation_after = packed.generation.load(std::sync::atomic::Ordering::Acquire);
     if generation_before == generation_after && cache_bytes <= MAX_PACKED_CACHE_BYTES {
         *cache = Some(PackedCache {
             identities,
@@ -6615,20 +6667,23 @@ mod parallel_write_tests {
     #[test]
     fn invalidation_clears_the_cached_lengths_slot() {
         use crate::types::ConFrameBuilder;
+        let packed = super::PackedLengthsCache::new();
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
         builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
         let frame = builder.build().unwrap();
         let refs = vec![&frame, &frame];
-        let _ = super::cached_packed_lengths(&refs, 1, None, false, true);
+        let _ = super::cached_packed_lengths_in(&packed, &refs, 1, None, false, true);
         assert!(
-            super::packed_cache()
+            packed
+                .entry
                 .lock()
                 .unwrap_or_else(|err| err.into_inner())
                 .is_some()
         );
-        super::invalidate_packed_lengths();
+        packed.invalidate();
         assert!(
-            super::packed_cache()
+            packed
+                .entry
                 .lock()
                 .unwrap_or_else(|err| err.into_inner())
                 .is_none()
