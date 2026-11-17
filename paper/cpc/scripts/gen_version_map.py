@@ -80,6 +80,40 @@ NO_BUILD = {
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
+# The printed name of each record, by campaign and content; a record that matches none is a problem.
+KERNELS = {"nehalem": "Nehalem", "haswell": "Haswell", "skylakex": "Skylake-X", "cooperlake": "Cooper Lake"}
+RECORD_NAMES = (
+    (r"bench/results/r0174/", "Timing campaign r0174"),
+    (r"bench/results/velocity_case\.json", "Velocity case"),
+    (r"bench/results/hcn_loss\.csv", "HCN loss measurement"),
+    (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
+    (r"data/corpus_paths\.json", "Corpus read paths"),
+    (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
+    (r"data/every_path\.json", "Every-path count"),
+    (r"data/failure/bands/", "Failure campaign, band arrays of each format"),
+    (r"data/failure/con_openers\.json", "Failure campaign, CON openers"),
+    (r"data/failure/drift_extxyz\.(?:csv|json)", "Failure campaign, extended XYZ drift"),
+    (r"data/failure/matrix\.(?:csv|json)", "Failure campaign, failure matrix"),
+    (r"data/failure/restart_bands\.json", "Failure campaign, restart bands"),
+    (r"data/failure/restart_formats\.(?:csv|json)", "Failure campaign, restart formats"),
+    (r"data/failure/restart_kernels/(\w+)\.json", "Failure campaign, restart formats on the {kernel} kernel set"),
+    (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
+    (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
+    (r"data/sizes\.csv", "File sizes"),
+    (r"data/spec/corpus_recount\.json", "Specification campaign, corpus recount"),
+    (r"data/spec/mutant_differential\.json", "Specification campaign, mutant differential"),
+    (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
+    (r"data/survey_frame\.json", "Survey frame"),
+    (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
+    (r"data/test_run\.json", "Test run"),
+    (r"data/worked_example\.json", "Worked example"),
+    (r"evidence/results/e1_restart\.json", "Evidence E1, restart"),
+    (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),
+    (r"evidence/results/e5_prefactor\.json", "Evidence E5, prefactor"),
+    (r"data/db31/(db\d+)/ab\.json", "readcon-db campaign {campaign}"),
+    (r"data/db31/corpus-ops/readcon_db_bench\.json", "readcon-db campaign db31, corpus operations"),
+    (r"data/db3[02]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
+)
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
 PREFIXES = {
     "tab": "Table",
@@ -577,6 +611,30 @@ def tex(text: str) -> str:
     return re.sub(r"([_%&#$])", r"\\\1", text)
 
 
+def record_name(shown_as: str) -> str | None:
+    """The printed name of a record as ``shown`` gives it; None when ``RECORD_NAMES`` has none."""
+    for pattern, name in RECORD_NAMES:
+        match = re.fullmatch(pattern, shown_as)
+        if match:
+            part = match.group(1) if match.groups() else ""
+            return name.format(kernel=KERNELS.get(part, part), campaign=part)
+    return None
+
+
+def artifact(path: str) -> str:
+    """A built module, library or program, named by what it is and not by where it was built."""
+    name = Path(path).name
+    if "site-packages/readcon/" in path:
+        return "Python module readcon"
+    if name == "libreadcon_core.so":
+        return "C library built with the parallel feature" if "clib-parallel" in path else "C library"
+    if "/examples/" in path:
+        return f"example program {tex(name)}"
+    if name == "readcon-bench":
+        return "benchmark program readcon-bench"
+    raise SystemExit(f"gen_version_map.py: no printed name for the built file {path}")
+
+
 def host_text(host: dict) -> str:
     return f"family {host['family']} model {host['model']}, {float(host['mhz']):.0f} MHz, {host['nproc']} threads"
 
@@ -647,10 +705,10 @@ def from_provenance(prov: dict, data: dict) -> Build | None:
             rf" which embeds readcon-core {tex(eon['readcon_core_version'])}"
         )
     if "binary" in data and "binary_sha256" in data:
-        extra += rf"; binary \nolinkurl{{{data['binary']}}}, SHA-256 \texttt{{{data['binary_sha256'][:12]}}}"
+        extra += rf"; {artifact(data['binary'])}, SHA-256 \texttt{{{data['binary_sha256'][:12]}}}"
     if isinstance(prov.get("c_libraries"), dict):
-        extra += "; C libraries " + " and ".join(
-            rf"\nolinkurl{{{lib['binary']}}}, SHA-256 \texttt{{{lib['binary_sha256'][:12]}}}"
+        extra += "; " + " and ".join(
+            rf"{artifact(lib['binary'])}, SHA-256 \texttt{{{lib['binary_sha256'][:12]}}}"
             for lib in prov["c_libraries"].values()
         )
     if "measures_release" in data:
@@ -822,7 +880,7 @@ def heading(build: Build) -> str:
         )
     if build.module:
         parts.append(
-            rf"module \nolinkurl{{{build.module}}}"
+            artifact(build.module)
             + (rf", SHA-256 {code(build.module_sha256)}" if build.module_sha256 else "")
         )
     tools = ", ".join(
@@ -876,9 +934,10 @@ def render() -> tuple[str, list[str]]:
         (
             r"\caption{The build and host of every record behind a printed result. Each heading names the readcon-core"
             r" version, the library digest (the SHA-256 over the library sources, leading hexadecimal digits), the"
-            r" Python module or binary behind the records below it with its SHA-256, the Rust compiler, the Python"
-            r" interpreter and the host, as far as those records name them. Each record names the tables, figures,"
-            r" listings and parts of the documents that print a value from it.}\label{tab:versionmap}\\"
+            r" Python module or program behind the records below it with its SHA-256, the Rust compiler, the Python"
+            r" interpreter and the host, as far as those records name them. Each record is named by its campaign"
+            r" and what it holds, and names the tables, figures, listings and parts of the documents that print a"
+            r" value from it.}\label{tab:versionmap}\\"
         ),
         *head,
         r"\endfirsthead",
@@ -891,7 +950,11 @@ def render() -> tuple[str, list[str]]:
         names = shown(list(groups[build]))
         rows: dict[str, list[Place]] = {}
         for rel, places in groups[build].items():
-            rows.setdefault(names[rel], []).extend(places)
+            name = record_name(names[rel])
+            if name is None:
+                problems.append(f"{names[rel]}: no printed name in RECORD_NAMES")
+                name = tex(names[rel])
+            rows.setdefault(name, []).extend(places)
         lines += [
             r"\midrule",
             rf"\multicolumn{{2}}{{@{{}}p{{0.98\textwidth}}@{{}}}}{{{heading(build)}}} \\",
@@ -902,7 +965,7 @@ def render() -> tuple[str, list[str]]:
                 if place and place not in ordered:
                     ordered.append(place)
             lines.append(
-                rf"\nolinkurl{{{record}}} & {', '.join(render_place(p) for p in ordered)} \\"
+                rf"{record} & {', '.join(render_place(p) for p in ordered)} \\"
             )
     lines += [r"\end{longtable}", r"\endgroup", ""]
     return "\n".join(lines), problems
