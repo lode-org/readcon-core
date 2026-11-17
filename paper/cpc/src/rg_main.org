@@ -729,63 +729,59 @@ Its kinetic energy is \(\velFixtureKe\,\mathrm{eV}\) in that unit and \(\velFixt
 After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982}, the misread positions differ from the declared ones by \(\velVerletRmsd\,\text{\AA}\) root mean square and by at most \(\velVerletMax\,\text{\AA}\) (Section~\ref*{sec:supp-velocity}).
 A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
 
-\section{Read performance}\label{sec:performance} The read comparison of this paper is Section~\ref{sec:host}.
-It reads one 100000-frame file, six times, one fresh process per sample.
+\section{Read performance}\label{sec:performance} Section~\ref{sec:host} gives the read comparison of this paper.
+It reads one 100000-frame file six times for each reader, in a fresh process for each sample.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time of the all-frame CON readers on one 100000-frame file, six interleaved repeats.
 The bar is the type 7 median.
-The repeats ran on the host of Section~\ref{sec:host} at commit \texttt{\rcHostCommit}.}
+The repeats ran on the host of Section~\ref{sec:host}, with readcon-core at the commit named in Data availability.}
 \label{fig:timing} \end{figure*}
 
-\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{CON reader time divided by the readcon tip time, six repeats.
+\begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/ratios.pdf} \caption{Time of each CON reader divided by the time of readcon-core at the measured commit, six repeats.
 The horizontal line is 1.
-A point above the line means the tip is that many times as fast.}
+A point above the line means that readcon-core is that many times as fast.}
 \label{fig:ratios} \end{figure}
 
 \begin{figure}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/memory.pdf} \caption{MiB added to the high-water mark by the read, after the import, six repeats.}
 \label{fig:memory} \end{figure}
 
-\FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames and 32 copper atoms, six times for each arm, interleaved, each sample a fresh process.
+\FloatBarrier \section{Measurements on this host}\label{sec:host} We read one trajectory of 100000 frames of 32 copper atoms six times for each reader, with the readers interleaved and each sample in a fresh process.
 Each library is imported before the clock starts.
-The host is an \texttt{x86\_64} machine with 8 cores whose processor reports itself as Intel Xeon Processor, and the timing record names commit \texttt{\rcHostCommit}.
-CON readers read the CON file, XYZ readers read the XYZ file, and HDF5 readers read the same HDF5 file, and readcon reads neither XYZ nor HDF5.
-Memory is the VmHWM after the read minus the VmHWM after the import.
+The host is an \texttt{x86\_64} machine with 8 cores whose processor reports itself as Intel Xeon Processor, and the timing record names the commit of readcon-core that Data availability gives.
+CON readers read the CON file, XYZ readers the XYZ file and HDF5 readers one HDF5 file; readcon reads neither XYZ nor HDF5.
+Memory is the high-water mark of the resident set (VmHWM) after the read minus that after the import.
 
 \subsection{Results}\label{sec:results}
-On the 100000-frame coordinate file, the development tip of readcon-core completes the read in \rcTipMedian~s, which is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
-The tip is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
-Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, while ingesting the same file into the readcon-db store takes \rcDbMedian~s (\rcTipOverDb{} times slower than the direct read).
-Every all-frame reader matches all 100000 frames with zero failures; the read adds \rcTipMib~MiB to resident memory in readcon-core, compared with \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles (reading XYZ), and \rcOvitoMib~MiB for OVITO (reading XYZ).
+On the 100000-frame coordinate file, readcon-core at the measured commit completes the read in \rcTipMedian~s.
+That is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
+It is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
+Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s, \rcTipOverDb{} times as long as the direct read.
+Every all-frame reader matches all 100000 frames with no failure.
+The read adds \rcTipMib~MiB to the resident memory of readcon-core, against \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles reading XYZ and \rcOvitoMib~MiB for OVITO reading XYZ.
 
-For single-frame initialization on the first frame, \texttt{Matter.con2matter} requires \rcMatterMedian~s whereas readcon takes \rcFirstMedian~s, with both matching 1 of 1 frame.
+To initialize from the first frame alone, \texttt{Matter.con2matter} takes \rcMatterMedian~s and readcon takes \rcFirstMedian~s, and both return a matching frame.
 
 \subsection{Same-file and nearest-native panel}\label{sec:h2h}
-The same-file comparison reads one con file.
-The readers are readcon from C, Fortran, and Python, the upstream eon client, eon Python, and the Atomic Simulation Environment (ASE) with the eon format.
-The nearest-native panel reads different files that carry the same atoms and the same cell.
+The same-file comparison reads one CON file with readcon from C, Fortran and Python, with the eOn client and the eOn Python module, and with ASE through its eon format.
+The nearest-native panel reads different files that carry the same atoms and the same cell, each in a format native to its reader.
 NumPy reads an npy coordinate array, which has no cell.
-ASE and chemfiles read extended xyz.
-The ASE extended-XYZ arm is ASE's built-in reader.
-ase-extxyz 0.1.2, released 2026-10-02, registers the libAtoms C parser as the ASE format \texttt{cextxyz} \cite{kermodeAseExtxyzV0122026,kermodeAseExtxyzPyproject2026,kermodeAseExtxyzIo2026}.
-OVITO reads extended xyz.
-pymatgen reads a POSCAR.
-MDAnalysis reads a protein data bank file with a crystal record.
-That protein data bank row is the MDAnalysis 2.10.0 measurement.
-Release 2.11.0 adds XYZ and protein data bank read benchmarks, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, protein data bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
-That panel is separate from the con table.
-A row passes only when the atom count, the cell, and the coordinates match.
-NumPy has no cell, so that row fails the cell check.
-Table~\ref{tab:format-h2h} is the fair per-format comparison of the v0.23.3 cross-format campaign, measured on one commit and one host, \hhfHost, as the processor listing stored with that campaign reports it.
-readcon reads plain CON, binary CON and CON.zst; each other tool reads its supported formats, and readcon-chemfiles keeps its own row.
-For every arm the table reports the warm and cold median read, the peak resident set of the read, the file size, and the CON 3.1 fields the format drops.
+ASE, chemfiles and OVITO read extended XYZ, and the ASE row uses the built-in reader of ASE.
+The ase-extxyz package 0.1.2, released 2026-10-02, registers the libAtoms C parser as the ASE format \texttt{cextxyz} \cite{kermodeAseExtxyzV0122026,kermodeAseExtxyzPyproject2026,kermodeAseExtxyzIo2026}.
+pymatgen \cite{ongPythonMaterialsGenomics2013} reads a POSCAR, and MDAnalysis reads a Protein Data Bank file with a crystal record.
+That Protein Data Bank row was measured with MDAnalysis 2.10.0.
+Release 2.11.0 adds read benchmarks for XYZ and the Protein Data Bank, and its trajectory-reader benchmark covers XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, Protein Data Bank and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}.
+This panel is separate from the CON table.
+A row passes only when the atom count, the cell and the coordinates match, so the NumPy row fails the cell check.
+Table~\ref{tab:format-h2h} gives the per-format comparison of the cross-format campaign labelled v0.23.3, measured with one commit on one host, \hhfHost{}, as the processor listing stored with that campaign reports it.
+readcon reads plain CON, binary CON and CON.zst, each other tool reads the formats it supports, and readcon-chemfiles has its own row.
+For every reader the table gives the warm and cold median read, the peak resident set of the read, the file size and the CON 3.1 fields that the format drops.
 Each median is the type-7 median of \hhfSamplesSubOneM{} samples below one million atoms and \hhfSamplesOneM{} at one million, each read in a fresh process on one thread.
-On the recorded host a fresh process reads one million atoms of CON in \hhfReadconConWarmOneM~s warm and \hhfReadconConColdOneM~s cold, from an \hhfReadconConBytesOneM-byte file, and peaks at \hhfReadconConPeakOneM~MiB, while the MDAnalysis mmCIF read of the same atoms takes \hhfMmcifWarmOneM~s and peaks at \hhfMmcifPeakOneM~MiB.
+On that host, a fresh process reads one million atoms of CON in \hhfReadconConWarmOneM~s warm and \hhfReadconConColdOneM~s cold, from an \hhfReadconConBytesOneM-byte file, and peaks at \hhfReadconConPeakOneM~MiB, while the MDAnalysis mmCIF read of the same atoms takes \hhfMmcifWarmOneM~s and peaks at \hhfMmcifPeakOneM~MiB.
 
 \input{figures/generated/format_h2h}
 
-The times for XYZ, HDF5 and the mapped binary coordinate file are context for choosing a format, in Section~\ref*{sec:supp-timing}.
-h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s.
-The mapped binary file reads them in \rcConbinMedian~s.
+Section~\ref*{sec:supp-timing} of the supplementary material gives the times for XYZ, HDF5 and the mapped binary coordinate file, as context for choosing a format.
+h5py reads the same frames in \rcHdfMedian~s, against \rcTipMedian~s for readcon, and the mapped binary file is read in \rcConbinMedian~s.
 
 \input{figures/generated/host_table}
 
