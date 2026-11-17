@@ -82,7 +82,124 @@ rule campaign:
 # final_check fails if any file under the output directory was produced
 # on a commit other than HEAD. On the default path that directory is
 # bench/h2h/scaling/rel1.
-FINAL_OUT = config.get("out", "bench/h2h/scaling/rel1")
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+_SNAKEFILE = os.path.abspath(workflow.snakefile)
+_REPO = os.path.abspath(os.path.join(os.path.dirname(_SNAKEFILE), "..", ".."))
+with open(os.path.join(_REPO, "VERSION"), encoding="utf-8") as _version_file:
+    _RELEASE = _version_file.read().strip()
+
+
+def _git_output(args, failure):
+    try:
+        return subprocess.check_output(args, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        raise SystemExit(failure)
+
+
+_TIP = _git_output(
+    ["git", "-C", _REPO, "rev-parse", "HEAD"],
+    "refusing to write a saved record: could not read the git tip",
+).strip()
+_TIP_SHORT = _git_output(
+    ["git", "-C", _REPO, "rev-parse", "--short=12", "HEAD"],
+    "refusing to write a saved record: could not read the git tip",
+).strip()
+
+
+def _canonical_repo_path(raw):
+    # Follow symlinks and collapse "." and ".." before any comparison.
+    # A path that leaves the repository is refused.
+    resolved = Path(_REPO, str(raw)).resolve()
+    try:
+        relative = resolved.relative_to(Path(_REPO).resolve())
+    except ValueError:
+        raise SystemExit("refusing to write a saved record")
+    return relative.as_posix()
+
+
+def _cli_targets():
+    skip_next = False
+    found = []
+    for arg in sys.argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in {
+            "-s",
+            "--snakefile",
+            "--config",
+            "--configfile",
+            "-d",
+            "--directory",
+            "-c",
+            "--cores",
+            "-j",
+            "--jobs",
+            "--resources",
+        }:
+            skip_next = True
+            continue
+        if arg.startswith("-") or "=" in arg:
+            continue
+        found.append(arg)
+    return found
+
+
+RERUN_TAG = str(config.get("rerun_tag", f"v{_RELEASE}-{_TIP_SHORT}")).rstrip("/")
+RERUN_SCALING = _canonical_repo_path(
+    str(config.get("out", f"bench/h2h/release/{RERUN_TAG}")).rstrip("/")
+)
+RERUN_FORMATS = _canonical_repo_path(
+    str(config.get("formats_out", f"bench/h2h/formats/{RERUN_TAG}")).rstrip("/")
+)
+RERUN_MILLION_RESULTS = _canonical_repo_path(
+    str(
+        config.get(
+            "million_results_out", f"paper/cpc/bench/results/{RERUN_TAG}/million"
+        )
+    ).rstrip("/")
+)
+RERUN_CPC = _canonical_repo_path(
+    str(config.get("cpc_out", f"paper/cpc/campaign/{RERUN_TAG}")).rstrip("/")
+)
+_RERUN_RULES = {
+    "rerun_release",
+    "rerun_paper",
+    "rerun_supersede",
+    "rerun_cross_1k",
+    "rerun_cross_100k",
+    "rerun_cross_1m",
+    "rerun_cross_1m_mmcif",
+    "rerun_cross_traj",
+    "rerun_cross_extra",
+    "rerun_cross_asv",
+    "rerun_cross_lscpu",
+    "rerun_million_summary",
+    "rerun_mpi_cost",
+    "rerun_mpi_fallback",
+    "rerun_reader_exchange_cpc",
+    "rerun_dlpack_cost",
+    "rerun_db_appendix",
+    "rerun_novel_fidelity",
+    "rerun_camp24_extras",
+    "rerun_gil_threadfix",
+    "rerun_parse_limiter",
+}
+_REQUESTED_CLI = _cli_targets()
+_IS_RERUN = any(
+    t in _RERUN_RULES
+    or t.startswith((RERUN_FORMATS + "/", RERUN_CPC + "/", RERUN_MILLION_RESULTS + "/"))
+    for t in _REQUESTED_CLI
+)
+FINAL_OUT = (
+    RERUN_SCALING
+    if _IS_RERUN and "out" not in config
+    else config.get("out", "bench/h2h/scaling/rel1")
+)
 FINAL_REPEATS = int(config.get("repeats", 6))
 
 # A stale PYTHONPATH must not shadow the wheel this campaign installs.
@@ -90,6 +207,7 @@ shell.prefix("unset PYTHONPATH; ")
 
 
 rule final_bindings:
+    threads: 999
     output:
         f"{FINAL_OUT}/bindings.json",
     params:
@@ -100,6 +218,7 @@ rule final_bindings:
 
 
 rule final_ceilings:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -113,6 +232,7 @@ rule final_ceilings:
 
 
 rule final_strong_threads:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -126,6 +246,7 @@ rule final_strong_threads:
 
 
 rule final_strong_mpi:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -139,6 +260,7 @@ rule final_strong_mpi:
 
 
 rule final_weak:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -159,6 +281,7 @@ rule final_weak:
 # one thread pwriting those same bytes. Samples stay inside one process.
 # The asv class WeakWrite times one call of the same helpers.
 rule sink_ceiling:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -174,6 +297,7 @@ rule sink_ceiling:
 # Weak writes beside that ceiling. The table has two efficiency columns:
 # ideal T(1)/T(N), and max(format alone, sink(N)) / T(N).
 rule weak_write:
+    threads: 999
     input:
         f"{FINAL_OUT}/sink-ceiling.json",
         f"{FINAL_OUT}/hardware.json",
@@ -190,6 +314,7 @@ rule weak_write:
 
 
 rule final_langs:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -204,6 +329,7 @@ rule final_langs:
 
 # 8-member gzip and zstd, threads 1/2/4/8, plus the codec ceiling.
 rule final_compressed:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -217,6 +343,7 @@ rule final_compressed:
 
 
 rule final_table2:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -236,6 +363,7 @@ rule final_table2:
 # (plain, gz, zst). Chemfiles has no CON reader; the other arms are
 # extxyz, XYZ, PDB, DCD, XTC, and NetCDF where that library imports.
 rule cross_format:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -251,6 +379,7 @@ rule cross_format:
 
 
 rule compressed_h2h:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -266,6 +395,7 @@ rule compressed_h2h:
 
 
 rule final_con_h2h:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -281,6 +411,7 @@ rule final_con_h2h:
 
 
 rule final_db:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -294,6 +425,7 @@ rule final_db:
 
 
 rule final_fidelity:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
         f"{FINAL_OUT}/hardware.json",
@@ -308,6 +440,7 @@ rule final_fidelity:
 
 
 rule compressed_write_memory:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -321,6 +454,7 @@ rule compressed_write_memory:
 
 
 rule plugin_rss:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -334,6 +468,7 @@ rule plugin_rss:
 
 
 rule mw_persistence:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -347,6 +482,7 @@ rule mw_persistence:
 
 
 rule hop_barrier:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -360,6 +496,7 @@ rule hop_barrier:
 
 
 rule eon_loadcons:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -376,6 +513,7 @@ rule eon_loadcons:
 # repeats, time and the resident-set increase. The JSON is what
 # plot_union_extra.py reads.
 rule reader_exchange:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -391,6 +529,7 @@ rule reader_exchange:
 # The roofline figure reads cells of reads.json. The payload is the
 # seeded Langevin trajectory of resources/test/cuh2.con.
 rule roofline:
+    threads: 999
     input:
         f"{FINAL_OUT}/bindings.json",
     output:
@@ -477,47 +616,6 @@ rule camp16b:
 # when that directory is a committed record or lies under bench/h2h/scaling.
 # The path is resolved first, so ".", "..", an absolute path, and a symlink
 # are the same directory. The working directory has to be the repository.
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-# abspath the Snakefile before climbing. A relative -s path is otherwise
-# joined from its dirname, which walks out of the checkout.
-_SNAKEFILE = os.path.abspath(workflow.snakefile)
-_REPO = os.path.abspath(os.path.join(os.path.dirname(_SNAKEFILE), "..", ".."))
-with open(os.path.join(_REPO, "VERSION"), encoding="utf-8") as _version_file:
-    _RELEASE = _version_file.read().strip()
-
-
-def _git_output(args, failure):
-    try:
-        return subprocess.check_output(args, text=True)
-    except (OSError, subprocess.CalledProcessError):
-        raise SystemExit(failure)
-
-
-_TIP = _git_output(
-    ["git", "-C", _REPO, "rev-parse", "HEAD"],
-    "refusing to write a saved record: could not read the git tip",
-).strip()
-_TIP_SHORT = _git_output(
-    ["git", "-C", _REPO, "rev-parse", "--short=12", "HEAD"],
-    "refusing to write a saved record: could not read the git tip",
-).strip()
-
-
-def _canonical_repo_path(raw):
-    # Follow symlinks and collapse "." and ".." before any comparison.
-    # A path that leaves the repository is refused.
-    resolved = Path(_REPO, str(raw)).resolve()
-    try:
-        relative = resolved.relative_to(Path(_REPO).resolve())
-    except ValueError:
-        raise SystemExit("refusing to write a saved record")
-    return relative.as_posix()
-
-
 MILLION_SAVED = f"bench/h2h/million/v{_RELEASE}"
 _million_override = config.get("million_out")
 if _million_override:
@@ -632,34 +730,83 @@ def _refuse_million_target(targets):
             _refuse_saved_record(MILLION)
 
 
-def _cli_targets():
-    # Drop flags. The following value of -s or --config is not a target
-    # path under the million-atom directory.
-    skip_next = False
-    found = []
-    for arg in sys.argv[1:]:
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in {"-s", "--snakefile", "--config", "--configfile", "-d", "--directory"}:
-            skip_next = True
-            continue
-        if arg.startswith("-"):
-            continue
-        found.append(arg)
-    return found
+def _refuse_release_saved_path(path):
+    normalized = _canonical_repo_path(path)
+    saved_prefixes = (
+        "bench/h2h/scaling",
+        "bench/h2h/formats/v0.23.3",
+        "bench/h2h/million/v0.23.3",
+        "bench/h2h/results",
+        "bench/h2h/logs",
+        "bench/fidelity/results",
+        "paper/cpc/bench/results/r0174",
+        "paper/cpc/bench/results/v0.23.3",
+        "paper/cpc/data",
+        "paper/cpc/logs",
+        "benches/results",
+    )
+    for prefix in saved_prefixes:
+        canon = _canonical_repo_path(prefix)
+        if normalized == canon or normalized.startswith(canon + "/"):
+            raise SystemExit(f"refusing to write a saved record: {normalized}")
+    for saved in _committed_record_directories():
+        if normalized == saved or normalized.startswith(saved + "/"):
+            raise SystemExit(f"refusing to write a saved record: {normalized}")
+
+
+def _refuse_release_target(targets):
+    matched = any(
+        str(target) in _RERUN_RULES
+        or str(target).startswith(
+            (RERUN_FORMATS + "/", RERUN_CPC + "/", RERUN_MILLION_RESULTS + "/")
+        )
+        for target in targets
+    )
+    if not matched:
+        return
+    _require_repo_cwd()
+    if FINAL_REPEATS < 6:
+        raise SystemExit(
+            f"refusing release rerun: repeats must be >= 6, got {FINAL_REPEATS}"
+        )
+    status = _git_output(
+        ["git", "-C", _REPO, "status", "--porcelain", "--untracked-files=no"],
+        "refusing release rerun: could not read git status",
+    ).strip()
+    if status:
+        raise SystemExit("refusing release rerun on a dirty tree:\n" + status)
+    branches = _git_output(
+        ["git", "-C", _REPO, "branch", "-r", "--contains", "HEAD"],
+        "refusing release rerun: git branch -r --contains HEAD failed",
+    ).strip()
+    if not branches:
+        raise SystemExit(
+            f"refusing release rerun: {_TIP} is not on any remote branch "
+            "(git branch -r --contains HEAD is empty)"
+        )
+    for dest in (
+        FINAL_OUT,
+        RERUN_FORMATS,
+        MILLION,
+        RERUN_MILLION_RESULTS,
+        RERUN_CPC,
+    ):
+        _refuse_release_saved_path(dest)
 
 
 _refuse_million_target(_cli_targets())
+_refuse_release_target(_cli_targets())
 
 
 onstart:
     settings = workflow.dag_settings
     requested = list(settings.targets) if settings is not None and settings.targets else []
     _refuse_million_target(requested)
+    _refuse_release_target(requested)
 
 
 rule million_measure:
+    threads: 999
     output:
         # A later change of the shell or the tip must not replace a record.
         protected(MILLION_MEASURE),
@@ -700,6 +847,7 @@ EOF
 
 
 rule million_asv:
+    threads: 999
     input:
         f"{MILLION}/cross-format.json",
     output:
@@ -721,6 +869,7 @@ rule million_asv:
 
 
 rule million_record:
+    threads: 999
     input:
         f"{MILLION}/cross-format.json",
         f"{MILLION}/asv.json",
@@ -896,3 +1045,393 @@ rule cross_asv:
         export NUMEXPR_NUM_THREADS=1 RAYON_NUM_THREADS=1
         python3 bench/h2h/h2h15_asv.py bench/h2h/formats/v0.23.3/asv
         """
+
+
+# Serial full-paper release rerun into new versioned directories (never editing
+# saved records, adding SUPERSEDED.md beside replaced ones).
+rule rerun_cross_1k:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/1k/host.json",
+        f"{RERUN_FORMATS}/1k/cross-format.json",
+        f"{RERUN_FORMATS}/1k/cross-format.log",
+        f"{RERUN_FORMATS}/1k/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/1k",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1k
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_100k:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/100k/host.json",
+        f"{RERUN_FORMATS}/100k/cross-format.json",
+        f"{RERUN_FORMATS}/100k/cross-format.log",
+        f"{RERUN_FORMATS}/100k/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/100k",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=100k
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_1m:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/1m/host.json",
+        f"{RERUN_FORMATS}/1m/cross-format.json",
+        f"{RERUN_FORMATS}/1m/cross-format.log",
+        f"{RERUN_FORMATS}/1m/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/1m",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1M
+        export READCON_CROSS_SKIP_ARMS=mda-mmcif
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_1m_mmcif:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/1m-mmcif/host.json",
+        f"{RERUN_FORMATS}/1m-mmcif/cross-format.json",
+        f"{RERUN_FORMATS}/1m-mmcif/cross-format.log",
+        f"{RERUN_FORMATS}/1m-mmcif/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/1m-mmcif",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=1M
+        export READCON_CROSS_ARMS=mda-mmcif
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_traj:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/traj/host.json",
+        f"{RERUN_FORMATS}/traj/cross-format.json",
+        f"{RERUN_FORMATS}/traj/cross-format.log",
+        f"{RERUN_FORMATS}/traj/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/traj",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=table
+        export READCON_CROSS_STRUCTURES=traj
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_extra:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/extra/host.json",
+        f"{RERUN_FORMATS}/extra/cross-format.json",
+        f"{RERUN_FORMATS}/extra/cross-format.log",
+        f"{RERUN_FORMATS}/extra/cross-format.tsv",
+    params:
+        out=f"{RERUN_FORMATS}/extra",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        export READCON_CROSS_PART=extra
+        python3 bench/h2h/h2h15.py --out "{params.out}"
+        """
+
+
+rule rerun_cross_asv:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_FORMATS}/asv/asv.json",
+        f"{RERUN_FORMATS}/asv/asv-machine.json",
+    params:
+        out=f"{RERUN_FORMATS}/asv",
+    threads: 999
+    shell:
+        """
+        set -euo pipefail
+        export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 RAYON_NUM_THREADS=1
+        python3 bench/h2h/h2h15_asv.py "{params.out}"
+        """
+
+
+rule rerun_cross_lscpu:
+    input:
+        f"{RERUN_FORMATS}/1m/host.json",
+    output:
+        f"{RERUN_FORMATS}/lscpu.txt",
+    params:
+        formats=RERUN_FORMATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py formats-lscpu --formats-out {params.formats}"
+
+
+rule rerun_million_summary:
+    input:
+        f"{MILLION}/cross-format.log",
+        f"{MILLION}/host.json",
+    output:
+        f"{RERUN_MILLION_RESULTS}/million_hold.json",
+        f"{RERUN_MILLION_RESULTS}/peers_n1e6.json",
+    params:
+        log=f"{MILLION}/cross-format.log",
+        hold=f"{RERUN_MILLION_RESULTS}/million_hold.json",
+        peers=f"{RERUN_MILLION_RESULTS}/peers_n1e6.json",
+    threads: 999
+    shell:
+        "python3 paper/cpc/bench/write_million_release.py {params.log} --hold {params.hold} --peers {params.peers}"
+
+
+rule rerun_mpi_cost:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/logs/mpi.log",
+        f"{RERUN_CPC}/results/v2/mpi.log",
+    params:
+        cpc_out=RERUN_CPC,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py mpi-v2 --cpc-out {params.cpc_out} --repeats {params.repeats}"
+
+
+rule rerun_mpi_fallback:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/logs/mpi-fallback.log",
+    params:
+        cpc_out=RERUN_CPC,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py mpi-fallback --cpc-out {params.cpc_out}"
+
+
+rule rerun_reader_exchange_cpc:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/logs/reader-exchange.log",
+    params:
+        cpc_out=RERUN_CPC,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py reader-exchange-cpc --cpc-out {params.cpc_out} --repeats {params.repeats}"
+
+
+rule rerun_dlpack_cost:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/data/dlpack_cost.txt",
+        f"{RERUN_CPC}/logs/dlpack_cost.log",
+        f"{RERUN_CPC}/logs/dlpack-exchange.log",
+    params:
+        cpc_out=RERUN_CPC,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py dlpack-cost --cpc-out {params.cpc_out} --repeats {params.repeats}"
+
+
+rule rerun_db_appendix:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/data/db/summary.csv",
+        f"{RERUN_CPC}/data/db/sizes.csv",
+        f"{RERUN_CPC}/data/db/correctness.json",
+        f"{RERUN_CPC}/data/db/hardware.json",
+        f"{RERUN_CPC}/data/db/dedup.json",
+    params:
+        cpc_out=RERUN_CPC,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py db-appendix --cpc-out {params.cpc_out} --repeats {params.repeats}"
+
+
+rule rerun_novel_fidelity:
+    input:
+        f"{FINAL_OUT}/bindings.json",
+    output:
+        f"{RERUN_CPC}/data/novel/anatomy.json",
+        f"{RERUN_CPC}/data/novel/dedup_graph.json",
+        f"{RERUN_CPC}/data/novel/errors.json",
+        f"{RERUN_CPC}/data/novel/fidelity.json",
+        f"{RERUN_CPC}/data/novel/restart_diff.json",
+        f"{RERUN_CPC}/data/novel/velocity.json",
+    params:
+        cpc_out=RERUN_CPC,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py novel-fidelity --cpc-out {params.cpc_out}"
+
+
+rule rerun_camp24_extras:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",
+    output:
+        f"{FINAL_OUT}/camp24/ranked.json",
+        f"{FINAL_OUT}/camp24/store-ab.json",
+        f"{FINAL_OUT}/camp24/conbin.json",
+        f"{FINAL_OUT}/camp24/host.json",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/rerun_helpers.py camp24-extras --scaling-out {params.out} --repeats {params.repeats}"
+
+
+rule rerun_gil_threadfix:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",
+    output:
+        f"{FINAL_OUT}/gil-concurrent.json",
+        f"{FINAL_OUT}/gil-concurrent.log",
+        f"{FINAL_OUT}/threadfix-before-after.json",
+        f"{FINAL_OUT}/threadfix-before-after.log",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/gil_threadfix_bench.py --out {params.out} --repeats {params.repeats}"
+
+
+rule rerun_parse_limiter:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",
+    output:
+        f"{FINAL_OUT}/parse-limiter.json",
+        f"{FINAL_OUT}/parse-limiter.log",
+        f"{FINAL_OUT}/perf-parse-report.txt",
+    params:
+        out=FINAL_OUT,
+        repeats=FINAL_REPEATS,
+    threads: 999
+    shell:
+        "python3 bench/h2h/parse_limiter.py --out {params.out} --repeats {params.repeats}"
+
+
+rule rerun_supersede:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",
+        f"{FINAL_OUT}/camp24/ranked.json",
+        f"{FINAL_OUT}/gil-concurrent.json",
+        f"{FINAL_OUT}/threadfix-before-after.json",
+        f"{FINAL_OUT}/parse-limiter.json",
+        f"{MILLION}/host.json",
+        f"{RERUN_MILLION_RESULTS}/million_hold.json",
+        f"{RERUN_MILLION_RESULTS}/peers_n1e6.json",
+        f"{RERUN_FORMATS}/1k/cross-format.json",
+        f"{RERUN_FORMATS}/100k/cross-format.json",
+        f"{RERUN_FORMATS}/1m/cross-format.json",
+        f"{RERUN_FORMATS}/1m-mmcif/cross-format.json",
+        f"{RERUN_FORMATS}/traj/cross-format.json",
+        f"{RERUN_FORMATS}/extra/cross-format.json",
+        f"{RERUN_FORMATS}/asv/asv.json",
+        f"{RERUN_FORMATS}/lscpu.txt",
+        f"{RERUN_CPC}/logs/mpi.log",
+        f"{RERUN_CPC}/logs/mpi-fallback.log",
+        f"{RERUN_CPC}/logs/reader-exchange.log",
+        f"{RERUN_CPC}/data/dlpack_cost.txt",
+        f"{RERUN_CPC}/data/db/summary.csv",
+        f"{RERUN_CPC}/data/novel/fidelity.json",
+    output:
+        f"{FINAL_OUT}/SUPERSEDED.OK",
+    params:
+        tip=_TIP,
+        scaling=FINAL_OUT,
+        formats=RERUN_FORMATS,
+        million=MILLION,
+        million_results=RERUN_MILLION_RESULTS,
+        cpc=RERUN_CPC,
+    threads: 999
+    shell:
+        """
+        python3 bench/h2h/rerun_helpers.py supersede \
+            --tip "{params.tip}" \
+            --scaling-out "{params.scaling}" \
+            --formats-out "{params.formats}" \
+            --million-out "{params.million}" \
+            --million-results-out "{params.million_results}" \
+            --cpc-out "{params.cpc}"
+        """
+
+
+rule rerun_paper:
+    input:
+        f"{FINAL_OUT}/SUPERSEDED.OK",
+    output:
+        f"{FINAL_OUT}/PAPER_OK",
+    params:
+        scaling=FINAL_OUT,
+        formats=RERUN_FORMATS,
+        million_results=RERUN_MILLION_RESULTS,
+        cpc=RERUN_CPC,
+    threads: 999
+    shell:
+        """
+        python3 bench/h2h/rerun_helpers.py finalize-paper \
+            --scaling-out "{params.scaling}" \
+            --formats-out "{params.formats}" \
+            --million-results-out "{params.million_results}" \
+            --cpc-out "{params.cpc}"
+        """
+
+
+rule rerun_release:
+    input:
+        f"{FINAL_OUT}/COMMIT_OK",
+        f"{FINAL_OUT}/SUPERSEDED.OK",
+        f"{FINAL_OUT}/PAPER_OK",
