@@ -516,34 +516,34 @@ Version & Date & Release & Change \\
 \section{Reference implementation}\label{sec:implementation} readcon-core implements the grammar once, in Rust (Figure~\ref{fig:architecture}).
 C++, Julia \cite{bezansonJuliaFreshApproach2017} and Fortran 2008 call its C interface, and Python calls the Rust core through PyO3 and receives NumPy arrays \cite{harrisArrayProgrammingNumpy2020}.
 eOn links readcon-core through the C++ wrapper, and its public release \eOneEonVersion{} embeds readcon-core \eOneEonReadcon, which writes CON 3.0 \cite{rohitgoswamiTheochemuieonV3602026}.
-That layering follows chemfiles \cite{frauxChemfileschemfilesVersion01042023}, one core with a binding for each language, and we take it over unchanged.
+chemfiles is built the same way, with one C++ core behind a C interface that its other languages call \cite{frauxChemfileschemfilesVersion01042023}.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/architecture.pdf} \caption{\textbf{One Rust core serves every language.}
 C, C++ (including eOn), Julia and Fortran call the core through the C interface, and Python calls it through PyO3.
 An arrow runs from the caller to the code it calls.}
 \label{fig:architecture} \end{figure*}
 
-In the core, Algorithm~\ref{alg:parser} is the path reader of the release.
+Algorithm~\ref{alg:parser} is the path reader of the release.
 A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is read whole into memory, a larger one is memory-mapped, and a gzip or zstd file is decompressed into memory whatever its size.
 One thread parses frame after frame.
 At the default thread count, the global thread pool parses a text of at least \(B_{\mathrm{par}}=\wkParallelBytes\) bytes, and an explicit count above one parses in a pool of that size.
-The parallel path walks the frame boundaries in one thread, because the start of each frame depends on the counts before it, then parses the frames independently and returns them in file order.
-When the columnar reader tiles equal-length frames in parallel, it checks the headers of every later component at their frame~0 byte offsets across all frames.
-Multi-component parallel fills also verify each frame's component runs against frame~0.
-Workers filling tiled metadata write into spare capacity behind a drop guard and join before unwinding, so a worker panic drops unpublished slots without leaking symbols.
+The parallel path finds the frame boundaries in one thread, since the start of each frame depends on the counts before it, and then parses the frames independently and returns them in file order.
+When the columnar reader fills frames of equal length in parallel, it checks every frame against the header and the component layout of frame~0.
+A worker that panics leaves no partly filled frame in the result.
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step.
 
 % snapper:off.
-\begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a path, as the candidate commit, readcon-core~\readconversion{}, does.}
+\begin{algorithm}[tbp] \footnotesize \caption{Read a CON file from a path, as readcon-core~\readconversion{} does.}
 \label{alg:parser} \begin{algorithmic}[1] \Require path; thread count \(P\), where absent or 0 selects the default \Ensure frames in file order, or an error that names its line \State Read the first four bytes; on gzip magic, decompress every member into memory \State On zstd magic, decompress when built with zstd, else \textbf{error}: unsupported zstd input \State Otherwise read a file shorter than \(B_{\mathrm{map}}\) whole, else memory-map it \If{\(P=1\), or no parallel feature, or \(P\) is the default and the text is shorter than \(B_{\mathrm{par}}\)} \State Parse frame after frame with \Call{ParseFrame}{} \Else \State Walk the frame boundaries in one thread, skipping each frame by its counts \State Parse the frames with \Call{ParseFrame}{} in a pool of \(P\) threads, or the global pool \EndIf \Function{ParseFrame}{} \State \textbf{error} on a byte-order mark at the start of the file; line 2 is JSON when it starts with \texttt{\{}, else version 1 \State Check the header against Eq.~\eqref{eq:version}; keep unknown keys \State Read the cell; \textbf{error} when \(\hat\rho\le-\num{\wkWindow}\) in Eq.~\eqref{eq:cell} \State Read the type counts, the masses and the coordinate rows \State Round each decimal to the nearest binary64 value; \textbf{error} on a value that is not finite; check each mask against Eq.~\eqref{eq:mask} \If{line 2 has no \texttt{sections} key} \State Read a legacy velocity block when a blank line and a complete block follow \Else \For{each name in \texttt{sections}, in order} \State Read a reserved section, or count the rows of a later minor's section of declared width, else \textbf{error} \EndFor \EndIf \State \textbf{error} on a velocity section without \texttt{units.time} when \(M=3\) and \(\mu\ge 1\) \EndFunction \end{algorithmic} \end{algorithm} % snapper:on.
 
 One frame of \(N\) atoms costs \(\Theta(N)\) time and memory.
 For a text of \(B\) bytes, after inflation for a gzip or zstd file, the read costs one serial \(\Theta(B)\) boundary walk and a \(\Theta(B)\) parse that \(P\) threads share, and the frames it returns occupy \(\Theta(B)\) memory.
 A compressed file of \(C\) bytes is first inflated by one serial decoder in \(\Theta(C+B)\) time.
-The peak resident set of each reader on this branch is in Section~\ref{sec:host}.
+Section~\ref{sec:host} gives the peak resident set of each reader.
 
-Every writer that takes a path writes its frames to a temporary file in the directory of the destination, flushes and syncs that file once the last frame is accepted, and renames it over the destination.
-A frame that fails deletes the temporary file, so the destination keeps its earlier bytes.
+Every writer that takes a path writes its frames to a temporary file in the directory of the destination.
+Once the last frame is accepted, it flushes and syncs that file and renames it over the destination.
+A frame that fails deletes the temporary file, and the destination keeps its earlier bytes.
 The uncompressed writers of the C interface write a device or a named pipe in place, and a writer to a string or to a stream that the caller opened writes no temporary file.
 Each language binding has a test that fails a write midway and compares the destination with its earlier bytes.
 Listing~\ref{lst:py} reads a band from Python and writes it back to the same path, after which the file contains either its earlier frames or the frames written.
@@ -555,33 +555,27 @@ readcon.write_con("band.con", frames)
 \end{lstlisting}
 
 \subsection{Python bindings and thread safety}\label{sec:python-threads}
-The PyO3 module sets \texttt{gil\_used = false}.
-Continuous integration tests run on free-threaded Python \texttt{3.13t} and \texttt{3.14t} alongside standard builds.
-Parsing, formatting, file writes, and correspondence checks detach the Python thread state with \texttt{py.detach}.
-Every Python write path snapshots or converts Python-reachable input while attached, then performs formatting, compression and file I/O while detached; this includes compressed writes of non-stored frame lists, plain writes after indexing and appends of \texttt{ConFrame} lists.
-Calling \texttt{touch\_checksum()} needs the shared coordinate slab; it copies the slab element by element while attached and then walks the frames detached.
-On an unindexed frame, \texttt{coords\_array()} copies coordinates straight from the parsed frame buffer into an owned NumPy array without building per-atom Python objects.
-When the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
+The PyO3 module declares that it does not need the global interpreter lock (\texttt{gil\_used = false}).
+Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t} as well as on the standard builds.
+Parsing, formatting, file writes and correspondence checks detach the Python thread state with \texttt{py.detach}, so other Python threads run while they do.
+Each write path first copies or converts whatever input Python can reach, while still attached, and only then formats, compresses and writes while detached.
+On a frame that Python has not indexed, \texttt{coords\_array()} copies the coordinates from the parsed buffer into a new NumPy array without building a Python object for each atom.
+Once the atom list of a frame exists, \texttt{coords\_array()} reads that list, so edits made in place remain visible.
 
-\texttt{ConFrameList} stores its parsed frames behind a per-list \texttt{RwLock}.
-On the stored-frame fast path used when every frame stays in the list, plain writes, compressed writes, string output, and identifier checks hold one read guard across the detached call instead of moving frames out of the list.
-The \texttt{touch\_checksum()} method holds that read guard across its walk as well.
-When indexing has moved a frame into the object cache, writers fall back to iterating frame by frame.
-Other threads see the full list during a detached call, and a panic leaves the stored frames intact.
-Any thread waiting for the frame lock or frame cache detaches before blocking so a detached holder can reattach without deadlock.
-Indexing a frame locks the cache before the list and caches the indexed frame object.
-Under the list write lock, indexing also marks any shared coordinate slab as reachable from Python before moving that slot out.
-Calling \texttt{columns()} takes the write lock so active detached readers finish before Python receives the shared coordinate array.
+\texttt{ConFrameList} keeps its parsed frames behind a read-write lock of its own.
+When every frame is still in the list, the writers and \texttt{touch\_checksum()} hold one read lock across the detached call instead of moving frames out, so other threads see the full list and a panic leaves the frames intact.
+When indexing has moved a frame out into a Python object, the writers go through the list frame by frame.
+A thread that waits for the lock detaches before it blocks, so a detached holder can attach again without deadlock.
+\texttt{columns()} takes the write lock, so detached readers finish before Python receives the shared coordinate array.
 
-When coordinates are reachable from Python through a shared slab or a frame's \texttt{xyz} array, the attached thread copies them into a private buffer (\texttt{CoordSnapshot}) and borrows all remaining fields from the source frames while detached work runs.
-Following the atomic snapshot model of Bos \cite{bosRustAtomicsLocks2023}, each aligned double is read by a relaxed \texttt{AtomicU64} element load and reconstructed from its bits in private storage.
-Each copied double is therefore untorn, but the loads have no cross-element atomicity: a concurrent writer can make one snapshot contain elements from different instants.
-Frames whose coordinates are unreachable from Python keep the zero-copy detached path.
-Repeat writes of a shared list retain the last priced coordinate buffer and reuse its packed frame lengths while every frame matches that buffer bit for bit.
-If a frame differs, the writer switches to a fresh copy from that frame onward.
+When Python can reach the coordinates of a frame, through the shared array of \texttt{columns()} or the \texttt{xyz} array of the frame, the attached thread copies them into a private buffer before the detached work starts, and the other fields are borrowed from the frames.
+Each aligned double is copied with one relaxed \texttt{AtomicU64} load \cite{bosRustAtomicsLocks2023}, so no single value is torn.
+The loads are not atomic across elements, and a thread that writes during the copy can leave the buffer holding elements from different instants.
+Frames whose coordinates Python cannot reach are written without the copy.
+When a shared list is written again and no frame has changed, the writer reuses the buffer of the previous write.
 
-\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} apply the same element-load contract to NumPy arrays in private staging runs of about \(4\) MiB.
-Each run is copied and, where required, validated while attached, then formatted or written while detached; no Rust slice is formed over live Python-owned numeric memory.
+\texttt{write\_columns}, \texttt{write\_extxyz} and \texttt{write\_conbin\_columns} treat NumPy arrays the same way, copying them in runs of about \(4\) MiB while attached and formatting or writing each run while detached.
+No Rust slice is ever formed over numeric memory that Python owns and can change.
 
 
 \section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
