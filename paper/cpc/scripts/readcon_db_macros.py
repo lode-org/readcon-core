@@ -6,18 +6,15 @@ Each value is read from the reviewed readcon-db records that
 significant figures the subsection prints it with.  A ``% from`` line names the
 records of the macros that follow it, for gen_version_map.py.
 
-``CONTRACT`` lists the record fields the subsection needs that the stored
-records do not hold yet; the release rerun of the readcon-db campaigns writes
-them.  Until it does, the macro of a missing field prints a bold bracket that
-names the record and the field, and ``--contract`` lists them and fails.
-
-The db26 campaign compares the raw read with an earlier commit and prints only
-the interval of its paired median, which must include 1.  The db28 campaign
+The db26 campaign compares the raw read with an earlier commit; the
+subsection prints its paired median beside the interval, which must include
+1, and the interval method and arm order of ``DB26_PROTOCOL``, which
+db26_protocol.py writes from the saved db26 records.  The db28 campaign
 forces the opt-in shuffle-zstd codec on every read, and the subsection prints
-its storage and its paired time intervals as a tradeoff.
+its storage, its warm ratio of medians and its paired time intervals as a
+tradeoff.
 
     python3 paper/cpc/scripts/readcon_db_macros.py
-    python3 paper/cpc/scripts/readcon_db_macros.py --contract
 """
 
 from __future__ import annotations
@@ -54,41 +51,11 @@ DB26_RAW = "raw_tip_vs_aedcbda4_rayon_1.full_read:warm.paired"
 DB25_WARM = "ops_rayon_num_threads_1.full_read:warm"
 DB28_MD = "reads.md.threads_1"
 
-# (record, dotted field, what the field holds): written by the release rerun.
-CONTRACT = [
-    (
-        DB26,
-        DB26_RAW + ".ci_method",
-        "the interval method, as the ci_method of the db28 record words it",
-    ),
-    (
-        DB26,
-        DB26_RAW + ".order",
-        "the order of the two arms in each pair, e.g. shuffled in each round with a named seed",
-    ),
-]
+DB26_PROTOCOL = "data/db31/db26/paired_protocol.json"
 
 
 def tex(text: str) -> str:
     return "".join("\\" + c if c in "_&%#$" else c for c in text)
-
-
-def present(record: str, dotted: str) -> bool:
-    try:
-        jget(record, dotted)
-    except (KeyError, IndexError):
-        return False
-    return True
-
-
-def contracted(record: str, dotted: str) -> str:
-    """The value of a CONTRACT field, or a bold bracket naming it while the record lacks it."""
-    assert any(r == record and f == dotted for r, f, _ in CONTRACT), (record, dotted)
-    if present(record, dotted):
-        return tex(str(jget(record, dotted)))
-    campaign = Path(record).parent.name
-    field = tex(dotted.rsplit(".", 1)[1])
-    return rf"\textbf{{[the release rerun writes the {field} field of the {campaign} record]}}"
 
 
 def interval(record: str, dotted: str, decimals: int) -> tuple[str, str]:
@@ -97,18 +64,24 @@ def interval(record: str, dotted: str, decimals: int) -> tuple[str, str]:
 
 
 def db26() -> list[tuple[str, str]]:
-    if not present(DB26, DB26_RAW.rsplit(".", 1)[0] + ".ratio_tip_over_aedcbda4"):
-        raise SystemExit(f"{DB26}: the raw comparison is not the tip over aedcbda4")
+    try:
+        jget(DB26, DB26_RAW.rsplit(".", 1)[0] + ".ratio_tip_over_aedcbda4")
+    except KeyError:
+        raise SystemExit(f"{DB26}: the raw comparison is not the tip over aedcbda4") from None
     low, high = jget(DB26, DB26_RAW + ".ci95")
     if not low <= 1 <= high:
         raise SystemExit(f"{DB26}: the paired interval {low}..{high} excludes 1; the subsection says it includes 1")
+    protocol = jget(DB26_PROTOCOL, DB26_RAW)
+    if protocol["ci95"] != [low, high] or protocol["n"] != jget(DB26, DB26_RAW + ".n"):
+        raise SystemExit(f"{DB26_PROTOCOL}: not the protocol of the saved db26 interval; run db26_protocol.py")
     lo, hi = interval(DB26, DB26_RAW, 4)
     return [
-        ("rdbRawPairs", str(jget(DB26, DB26_RAW + ".n"))),
+        ("rdbRawPairs", str(protocol["n"])),
+        ("rdbRawPairedMedian", fixed(jget(DB26, DB26_RAW + ".median"), 4)),
         ("rdbRawPairedLo", lo),
         ("rdbRawPairedHi", hi),
-        ("rdbRawPairedCIMethod", contracted(DB26, DB26_RAW + ".ci_method")),
-        ("rdbRawPairOrder", contracted(DB26, DB26_RAW + ".order")),
+        ("rdbRawPairedCIMethod", tex(protocol["ci_method"])),
+        ("rdbRawPairOrder", tex(protocol["order"])),
     ]
 
 
@@ -128,6 +101,7 @@ def db28() -> list[tuple[str, str]]:
         for key in ("frames_soa_value_bytes", "corpus_bytes")
     }
     return [
+        ("rdbMembraneRatio", fixed(jget(DB28, f"{DB28_MD}.full_read:warm.ratio_shuffle_over_raw"), 3)),
         ("rdbMembraneFrameShare", fixed(share["frames_soa_value_bytes"], 3)),
         ("rdbMembraneCorpusShare", fixed(share["corpus_bytes"], 3)),
         ("rdbMembranePairs", str(cold["n"])),
@@ -168,7 +142,7 @@ GROUPS = [
             ("rdbShuffleSecondHi", fixed(jget(DB25, DB25_WARM + ".paired.ci95.1"), 4)),
         ],
     ),
-    ([DB26], db26()),
+    ([DB26, DB26_PROTOCOL], db26()),
     (
         [DB28],
         [
@@ -206,17 +180,7 @@ def render() -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--contract", action="store_true", help="list the CONTRACT fields the records lack, and fail if any"
-    )
-    if parser.parse_args().contract:
-        missing = [(r, f, what) for r, f, what in CONTRACT if not present(r, f)]
-        for record, dotted, what in missing:
-            print(f"{record}: {dotted} ({what})")
-        if not missing:
-            print("every CONTRACT field is in its record")
-        return 1 if missing else 0
+    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render())
     print(f"wrote {OUT.relative_to(ROOT.parents[1])}")
