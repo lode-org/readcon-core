@@ -57,6 +57,16 @@ If `libreadcon_core` is not on `LD_LIBRARY_PATH` / `READCON_CORE_LIB`, tests tha
 touch the FFI **fail fast** with a clear load error (they do not silently skip
 ABI checks). Pure Julia struct layout tests in `test/runtests.jl` still run.
 
+## Non-finite cells
+
+`write_con` throws `ReadConError` when a frame holds a NaN or an infinite
+`cell` or `angles` entry. `err.code` is `-14` (parse error) and `err.message`
+names the field, for example
+`NonFiniteValue: non-finite value: cell field cell[1] is NaN`. No frame is
+written. `read_con` keeps its contract for a frame that fails to parse: it
+returns the frames before it and leaves the error on the C channel. Read it
+with `ReadCon.last_error()`, whose message names the field and the frame.
+
 ## General registry
 
 This package is not on Julia General yet. The `uuid` in `Project.toml` is

@@ -40,6 +40,11 @@ source-dir = "test"
 main = "test_add_atom_frame.f90"
 
 [[test]]
+name = "test_non_finite_cell"
+source-dir = "test"
+main = "test_non_finite_cell.f90"
+
+[[test]]
 name = "test_conformance_goldens"
 source-dir = "test_conformance"
 main = "test_conformance_goldens.f90"
