@@ -765,16 +765,16 @@ The mapped binary file reads them in \rcConbinMedian~s.
 \input{figures/generated/host_table}
 
 \subsection{readcon-db campaign store}\label{sec:readcon-db} readcon-db is the companion campaign store, and this paper reports its reviewed records.
-Those records are readcon-db commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}, copied to \path{paper/cpc/data/db31}.
+Those records are readcon-db commit \texttt{ff1210e3} with the measured code at \texttt{a584a288}, on the fix/ingest-species-count branch of \url{https://github.com/lode-org/readcon-db}, copied to \path{paper/cpc/data/db31}, and the fair-store rerun is readcon-db commit \texttt{227e45cf} with the measured code at \texttt{d8bf1cb5} on the same branch, copied to \path{paper/cpc/data/db32}.
 The fair store comparison ingests the same 40 frames of 8 copper atoms into readcon-db and into the ASE database on one thread, twelve samples each, each insert one transaction and one commit, and each sample the mean of a 2~s span.
-readcon-db takes a median of \num{2.2606e-3}~s and the ASE database takes \num{5.5270e-3}~s, and symbols, positions and cell round-trip exactly in both stores.
-This equal comparison is the fair-db31 campaign; the legacy copper-dimer bench under \path{paper/cpc/data/db31/ase} is an unequal-workload stand-in and is not this comparison.
+readcon-db takes a median of \num{2.2603e-3}~s and the ASE database takes \num{5.7336e-3}~s, and symbols, positions and cell round-trip exactly in both stores.
+This equal comparison is the fair-db32 campaign; the legacy copper-dimer bench under \path{paper/cpc/data/db31/ase} is an unequal-workload stand-in and is not this comparison.
 On a 500-frame corpus readcon-db reads every frame in a mean of \num{5.22}~ms.
 readcon-db also keeps a derived cache of the same CON text with each coordinate column byte-shuffled and compressed with zstd.
 On one thread the warm full read of the shuffled cache on the lattice trajectory divided by the raw read is \num{0.6440} in the db24 campaign and \num{0.6401} in db25, and the db25 paired interval runs from \num{0.6220} to \num{0.7668}, so the shuffled read is the faster of the two.
 The db26 campaign compares the raw read of \texttt{a584a288} with an earlier commit, its paired median on one thread is \num{1.0231} with an interval from \num{0.8372} to \num{1.2127}, and a commit bisect of the raw read returns a paired interval at each stored step; every stored bisect interval and this db26 interval include 1.
 On one thread the lattice best case reads the shuffled cache in \num{0.684} of the raw time in db28 and the db29 paired median of that read is \num{0.7903}, while the db28 membrane-protein trajectory reads it in \num{1.179} of the raw time, so the shuffled cache is not always the faster read.
-The fair one-million-atom warm read on one thread runs from \num{1.939e-2}~s to \num{3.447e-2}~s across the readcon-db campaigns on this host and is \num{1.9523e-2}~s in fair-db31, each under a 50~ms sampling window.
+The fair one-million-atom warm read on one thread runs from \num{1.726e-2}~s to \num{3.447e-2}~s across the readcon-db campaigns on this host and is \num{1.7261e-2}~s in fair-db32, each under a 50~ms sampling window.
 
 \input{figures/generated/mpi_macros}
 
