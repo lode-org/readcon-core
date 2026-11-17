@@ -217,6 +217,11 @@ MEASUREMENT_RECORDS = frozenset(
         # from lode-org/readcon-db 227e45cf. It names the measured readcon-db
         # commit d8bf1cb5, not a tag or a commit of this repository.
         "paper/cpc/data/db32/fair-db32/campaign.json",
+        # The two-store fidelity field table, copied verbatim from
+        # lode-org/readcon-db 0afbaa0b, where the tightened
+        # python/tests/test_two_store_fidelity.py proves it. It names that
+        # readcon-db commit, not a tag or a commit of this repository.
+        "paper/cpc/data/db32/fair-fidelity/FIELDS.md",
     }
 )
 
