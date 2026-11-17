@@ -250,9 +250,23 @@ fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, 
         if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
             continue;
         }
+        if key == meta::LATTICE_VECTORS {
+            check_lattice_vectors_object(&value)?;
+        }
         metadata.insert(key, py_to_json_value(&value)?);
     }
     Ok(metadata)
+}
+
+/// A `lattice_vectors` entry that is a 3 by 3 array of numbers must hold
+/// finite ones. JSON cannot store a NaN, so a non-finite entry would
+/// otherwise lose the whole lattice.
+fn check_lattice_vectors_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    if let Ok(rows) = value.extract::<[[f64; 3]; 3]>() {
+        crate::types::check_lattice_finite(&rows)
+            .map_err(|err| cell_err_to_py(value.py(), &err))?;
+    }
+    Ok(())
 }
 
 fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
@@ -400,6 +414,8 @@ impl PyConFrame {
         postbox_header: Option<[String; 2]>,
         metadata: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        crate::types::check_cell_finite(&cell, "cell", &angles, "angles")
+            .map_err(|err| cell_err_to_py(py, &err))?;
         let atoms = py_atoms_to_list(py, atoms)?;
         let metadata = match metadata {
             Some(obj) => json_map_to_py_dict(py, &py_metadata_to_json_map(obj)?)?,
@@ -1403,7 +1419,7 @@ impl PyConFrame {
 
         builder
             .build()
-            .map_err(|e| parse_err_to_py(py, &e, e.line(), 0))
+            .map_err(|e| parse_err_to_py(py, &e, e.line(), e.named_frame().unwrap_or(0)))
     }
 }
 
@@ -1809,6 +1825,7 @@ fn write_columns(
     {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
+    check_cell_array(py, cell_slice)?;
     let fixed_value = columns.get_item("fixed")?;
     let fixed_arr = match fixed_value.as_ref() {
         Some(value) if !value.is_none() => Some(value.cast::<PyArray3<f64>>()?.readonly()),
@@ -2094,6 +2111,7 @@ fn write_coords(
     if mass.len() != n_frames * n_atoms || cell_s.len() != n_frames * 6 {
         return Err(PyValueError::new_err("positions, masses and cell disagree"));
     }
+    check_cell_array(py, cell_s)?;
     let pos_owned = pos.to_vec();
     let mass_owned = mass.to_vec();
     let cell_owned = cell_s.to_vec();
@@ -3384,7 +3402,7 @@ fn stream_error(
     frame_index: u64,
 ) -> PyErr {
     if let Some(parse) = e.downcast_ref::<ParseError>() {
-        parse_err_to_py(py, parse, parse.line(), frame_index)
+        parse_err_in_frame(py, parse, parse.line(), frame_index)
     } else {
         PyIOError::new_err(format!("read error: {e}"))
     }
@@ -3447,7 +3465,7 @@ impl PyConFrameIterator {
             }
             Some(Err(e)) => {
                 let line = file_line(self.line_base, iter.lines.line_no());
-                Err(parse_err_to_py(py, &e, line, self.frame_index))
+                Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => {
                 *pos = contents.as_str().len();
@@ -3491,7 +3509,7 @@ impl PyConFrameIterator {
             }
             Some(Err(e)) => {
                 let line = file_line(self.line_base, iter.lines.line_no());
-                Err(parse_err_to_py(py, &e, line, self.frame_index))
+                Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => Ok(false),
         }
@@ -5341,15 +5359,10 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
     let rows: [[f64; 3]; 3] = cell_matrix
         .extract()
         .map_err(|_| PyValueError::new_err("ASE cell must be a 3x3 matrix of finite numbers"))?;
-    if rows.iter().flatten().any(|value| !value.is_finite()) {
-        return Err(PyValueError::new_err(
-            "ASE cell must be a 3x3 matrix of finite numbers",
-        ));
-    }
+    crate::types::check_lattice_finite(&rows).map_err(|err| cell_err_to_py(py, &err))?;
     let (lengths, raw_angles) = crate::types::lengths_and_angles(rows);
-    if lengths.iter().any(|length| !length.is_finite()) {
-        return Err(PyValueError::new_err("ASE cell lengths must be finite"));
-    }
+    crate::types::check_cell_finite(&lengths, "cell", &[90.0; 3], "angles")
+        .map_err(|err| cell_err_to_py(py, &err))?;
     let angles_defined = raw_angles.iter().all(|angle| angle.is_finite());
     let (cell, angles) = if angles_defined {
         let cellpar: Vec<f64> = cell_obj
@@ -5762,6 +5775,7 @@ fn write_conbin_columns(
     {
         return Err(PyValueError::new_err("CON-bin columns disagree"));
     }
+    check_cell_array(py, box_cell)?;
     // One buffer for the masks and one for the ids. The loops only store
     // bytes; they do not allocate per atom.
     let mut masks = vec![0u8; n];
@@ -5867,10 +5881,7 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
         Some(mass) => Some((ptr(mass), mass.len())),
         None => None,
     };
-    let cell_ptr = match mapped
-        .cell_f64()
-        .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
+    let cell_ptr = match mapped.cell_f64().map_err(|e| cell_err_to_py(py, &e))? {
         Some(cell) => Some((ptr(cell), cell.len())),
         None => None,
     };
@@ -6219,12 +6230,41 @@ fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64
     class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
 }
 
+/// [`parse_err_to_py`] for an error found while reading frame `frame_index`.
+/// A non-finite cell error that does not name a frame names this one.
+fn parse_err_in_frame(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
+    parse_err_to_py(py, &err.clone().in_frame(frame_index), line, frame_index)
+}
+
 fn utf8_failure(err: &ParseError) -> bool {
     matches!(err, ParseError::ValidationError(msg) if msg.contains("invalid UTF-8"))
 }
 
 fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
     Python::attach(|py| parse_err_to_py(py, &err.error, err.line, err.frame_index))
+}
+
+/// The typed Python error for a non-finite cell error found outside a parse.
+///
+/// `frame_index` carries the frame the error names, else 0.
+fn cell_err_to_py(py: Python<'_>, err: &ParseError) -> PyErr {
+    parse_err_to_py(py, err, 0, err.named_frame().unwrap_or(0))
+}
+
+/// Refuse a `(frames, 6)` cell array that holds a NaN or an infinity.
+fn check_cell_array(py: Python<'_>, cell: &[f64]) -> PyResult<()> {
+    crate::types::check_cell_rows(cell).map_err(|err| cell_err_to_py(py, &err))
+}
+
+/// Map the `String` error of an extended-XYZ or PDB scan or write.
+///
+/// A non-finite cell comes back as `NonFiniteValue`; any other message is a
+/// `ValueError`, as before.
+fn scan_err_to_py(message: String) -> PyErr {
+    match ParseError::from_cell_text(&message) {
+        Some(err) => Python::attach(|py| cell_err_to_py(py, &err)),
+        None => PyValueError::new_err(message),
+    }
 }
 
 fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
@@ -6463,7 +6503,9 @@ mod batch_location_tests {
 fn write_err_to_py(py: Python<'_>, err: crate::writer::WriteError) -> PyErr {
     match err {
         crate::writer::WriteError::Io(io) => PyIOError::new_err(io.to_string()),
-        crate::writer::WriteError::Format(parse) => parse_err_to_py(py, &parse, parse.line(), 0),
+        crate::writer::WriteError::Format(parse) => {
+            parse_err_to_py(py, &parse, parse.line(), parse.named_frame().unwrap_or(0))
+        }
     }
 }
 
@@ -7402,7 +7444,7 @@ fn read_extxyz<'py>(
                 .map_err(|_| "read".to_string())?;
             crate::extxyz_scan::tables_from_extxyz_bytes_with_threads(&bytes, workers)
         })
-        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        .map_err(scan_err_to_py)?;
     let n_frames = tables.n_frames;
     let n_atoms = tables.n_atoms;
     let positions = ndarray::Array3::from_shape_vec(
@@ -7747,6 +7789,7 @@ fn write_extxyz(
     if cell_slice.len() < n_frames * 6 {
         return Err(PyValueError::new_err("cell"));
     }
+    check_cell_array(py, &cell_slice[..n_frames * 6])?;
     let cell = SharedColumn::new(cell_slice, 6);
     let shared_real =
         |name: &str, array: &Bound<'_, PyAny>, width: usize| -> PyResult<SharedColumn> {
@@ -7786,7 +7829,7 @@ fn write_extxyz(
     }
     let workers = n_threads.unwrap_or(1);
     let bytes = staged_extxyz_bytes(py, n_frames, n_atoms, cell, &texts, &reals, &plan, workers)
-        .map_err(PyValueError::new_err)?;
+        .map_err(scan_err_to_py)?;
     if let Some(parent) = std::path::Path::new(path).parent()
         && !parent.as_os_str().is_empty()
     {
@@ -8017,7 +8060,7 @@ fn read_pdb<'py>(
     let path_owned = path.to_owned();
     let tables = py
         .detach(|| crate::pdb_scan::tables_from_pdb_path(std::path::Path::new(&path_owned)))
-        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        .map_err(scan_err_to_py)?;
     let positions =
         ndarray::Array3::from_shape_vec((tables.n_frames, tables.n_atoms, 3), tables.positions)
             .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
