@@ -117,12 +117,12 @@ COMPETING = (
 )
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
 AI_STATEMENT = (
-    "Chatbots were used to refine certain turns of phrase and to speed through some implementation details; "
-    "all the work is the author's own."
+    "During the preparation of this work the author used \\rcAITool{} in order to refine certain turns of "
+    "phrase in the manuscript."
 )
 AI_RESPONSIBILITY = (
-    "The author reviewed and edited all tool output as needed and takes full responsibility for the "
-    "content of the published article."
+    "After using this tool/service, the author reviewed and edited the content as needed and takes full "
+    "responsibility for the content of the published article."
 )
 NOT_IN_PAPER = {
     "a Limitations section": re.compile(r"\\section\*?\{[^}]*Limitation", re.I),
@@ -268,6 +268,7 @@ def check_front(main: str) -> str:
         not ai
         or AI_STATEMENT not in ai.group(1)
         or AI_RESPONSIBILITY not in ai.group(1)
+        or ai.group(1).index(AI_STATEMENT) > ai.group(1).index(AI_RESPONSIBILITY)
     ):
         bad.append(
             "no generative-AI declaration in Elsevier's form, with the author's statement and the responsibility "

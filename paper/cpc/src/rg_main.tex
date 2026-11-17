@@ -80,6 +80,8 @@ Elsevier%
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
 \newcommand{\DOIPENDING}{The version DOI for the candidate commit is not minted.}
+% The author names the tool or service of the generative-AI declaration before submission.
+\newcommand{\rcAITool}{\textbf{[author to name the tool or service]}}
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros are defined first.
 \makeatletter
@@ -913,9 +915,10 @@ He also thanks Ami the cactus.
 
 % Elsevier prescribes this heading word for word.
 % proseguard off rgoswami.Headings.
-\section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}\label{sec:ai-declaration} % proseguard on rgoswami.Headings.
-The author reviewed and edited all tool output as needed and takes full responsibility for the content of the published article.
-Chatbots were used to refine certain turns of phrase and to speed through some implementation details; all the work is the author's own.
+\section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}\label{sec:ai-declaration}
+% proseguard on rgoswami.Headings.
+During the preparation of this work the author used \rcAITool{} in order to refine certain turns of phrase in the manuscript.
+After using this tool/service, the author reviewed and edited the content as needed and takes full responsibility for the content of the published article.
 
 \FloatBarrier % A digital object identifier in the reference list stays on one line.
 \DeclareUrlCommand\path{\def\UrlFont{\footnotesize\ttfamily}\mathchardef\UrlBreakPenalty=10000 \mathchardef\UrlBigBreakPenalty=10000 }
