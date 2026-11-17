@@ -124,19 +124,16 @@ pub(crate) fn fill_rows_from_breaks(
 /// a job queued on it never runs. A lock that another parent thread held
 /// at the fork also stays held. The child therefore never uses or drops
 /// the parent's value. It stays reachable from the child's own value.
-#[cfg(feature = "parallel")]
 pub(crate) struct PerProcess<T: 'static> {
     current: std::sync::atomic::AtomicPtr<ProcessSlot<T>>,
 }
 
-#[cfg(feature = "parallel")]
 struct ProcessSlot<T: 'static> {
     pid: u32,
     value: T,
     _parent: Option<&'static ProcessSlot<T>>,
 }
 
-#[cfg(feature = "parallel")]
 impl<T: Send + Sync + 'static> PerProcess<T> {
     pub(crate) const fn new() -> Self {
         Self {
@@ -153,10 +150,10 @@ impl<T: Send + Sync + 'static> PerProcess<T> {
             // fields are visible before its pointer is.
             let current = self.current.load(Ordering::Acquire);
             let parent = unsafe { current.as_ref() };
-            if let Some(slot) = parent {
-                if slot.pid == pid {
-                    return &slot.value;
-                }
+            if let Some(slot) = parent
+                && slot.pid == pid
+            {
+                return &slot.value;
             }
             let fresh = Box::into_raw(Box::new(ProcessSlot {
                 pid,
@@ -165,10 +162,13 @@ impl<T: Send + Sync + 'static> PerProcess<T> {
             }));
             match self
                 .current
-                .compare_exchange(current, fresh, Ordering::AcqRel, Ordering::Acquire)
+                .compare_exchange(current, fresh, Ordering::AcqRel, Ordering::Relaxed)
             {
                 Ok(_) => return unsafe { &(*fresh).value },
-                // Another thread of this process published first.
+                // Another thread published first. Failure does not publish
+                // `fresh`, and this iteration never dereferences the returned
+                // pointer. The next loop's Acquire load performs the required
+                // synchronization, so the failure ordering can be Relaxed.
                 Err(_) => drop(unsafe { Box::from_raw(fresh) }),
             }
         }
@@ -3653,6 +3653,39 @@ pub fn parse_spread_section<'a>(
 mod tests {
     use super::*;
     use crate::iterators::ConFrameIterator;
+
+    #[cfg(all(unix, not(miri)))]
+    #[test]
+    fn per_process_replaces_a_mutex_held_across_fork() {
+        static CACHE: PerProcess<std::sync::Mutex<()>> = PerProcess::new();
+        let mutex = CACHE.get_or_init(|| std::sync::Mutex::new(()));
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let _guard = mutex.lock().expect("parent cache lock");
+            held_tx.send(()).expect("announce held lock");
+            release_rx.recv().expect("release parent lock");
+        });
+        held_rx.recv().expect("wait for held lock");
+
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0, "fork failed");
+        if pid == 0 {
+            unsafe { libc::alarm(5) };
+            let child_mutex = CACHE.get_or_init(|| std::sync::Mutex::new(()));
+            let ok = child_mutex.lock().is_ok();
+            unsafe { libc::_exit(if ok { 0 } else { 1 }) };
+        }
+
+        release_tx.send(()).expect("release holder");
+        holder.join().expect("holder thread");
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(
+            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+            "forked child reused the held parent mutex, status {status:#x}"
+        );
+    }
 
     #[test]
     fn test_parse_line_of_n_success() {
