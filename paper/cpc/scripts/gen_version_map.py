@@ -896,6 +896,28 @@ def heading(build: Build) -> str:
     return "; ".join(parts) + build.extra
 
 
+CAPTION = "% caption"
+
+
+def caption(collapsed: bool) -> str:
+    """The caption of the map; when one row stands for several records of a campaign, it says so."""
+    rows = (
+        "Each row names one record, or several records of one campaign, by the campaign and what they hold,"
+        " and names the tables, figures, listings and parts of the documents that print a value from them."
+        if collapsed
+        else "Each record is named by its campaign and what it holds, and names the tables, figures, listings"
+        " and parts of the documents that print a value from it."
+    )
+    return (
+        r"\caption{The build and host of the records behind the printed results. Each heading names the"
+        r" readcon-core version, the library digest (the SHA-256 over the library sources, leading hexadecimal"
+        r" digits), the Python module or program behind the records below it with its SHA-256, the Rust"
+        r" compiler, the Python interpreter and the host, as far as those records name them. "
+        + rows
+        + r"}\label{tab:versionmap}\\"
+    )
+
+
 def render() -> tuple[str, list[str]]:
     """The table, and the problems: data files behind a result that name no build, and macro files that do not
     name the record of each macro."""
@@ -934,14 +956,7 @@ def render() -> tuple[str, list[str]]:
         r"\begingroup",
         r"\scriptsize",
         r"\begin{longtable}{@{}p{0.42\textwidth}p{0.54\textwidth}@{}}",
-        (
-            r"\caption{The build and host of every record behind a printed result. Each heading names the readcon-core"
-            r" version, the library digest (the SHA-256 over the library sources, leading hexadecimal digits), the"
-            r" Python module or program behind the records below it with its SHA-256, the Rust compiler, the Python"
-            r" interpreter and the host, as far as those records name them. Each record is named by its campaign"
-            r" and what it holds, and names the tables, figures, listings and parts of the documents that print a"
-            r" value from it.}\label{tab:versionmap}\\"
-        ),
+        CAPTION,
         *head,
         r"\endfirsthead",
         *head,
@@ -949,15 +964,20 @@ def render() -> tuple[str, list[str]]:
         r"\bottomrule",
         r"\endfoot",
     ]
+    caption_at = lines.index(CAPTION)
+    collapsed = False
     for build in sorted(groups, key=lambda b: (-len(groups[b]), heading(b))):
         names = shown(list(groups[build]))
         rows: dict[str, list[Place]] = {}
+        held: dict[str, int] = {}
         for rel, places in groups[build].items():
             name = record_name(names[rel])
             if name is None:
                 problems.append(f"{names[rel]}: no printed name in RECORD_NAMES")
                 name = tex(names[rel])
             rows.setdefault(name, []).extend(places)
+            held[name] = held.get(name, 0) + 1
+        collapsed = collapsed or any(n > 1 for n in held.values())
         lines += [
             r"\midrule",
             rf"\multicolumn{{2}}{{@{{}}p{{0.98\textwidth}}@{{}}}}{{{heading(build)}}} \\",
@@ -970,6 +990,7 @@ def render() -> tuple[str, list[str]]:
             lines.append(
                 rf"{record} & {', '.join(render_place(p) for p in ordered)} \\"
             )
+    lines[caption_at] = caption(collapsed)
     lines += [r"\end{longtable}", r"\endgroup", ""]
     return "\n".join(lines), problems
 

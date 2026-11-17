@@ -812,7 +812,7 @@ def check_version_map() -> str:
         for line in text.splitlines()
         if line.endswith(r" \\") and " & " in line and not line.startswith(("\\", "Record & "))
     )
-    return f"version map current, {rows} records, each naming its build"
+    return f"version map current, {rows} rows, each naming its build"
 
 
 PIXI_CALL = re.compile(r"""\bpixi\s+exec\b|\[\s*["']pixi["']""")
