@@ -512,6 +512,9 @@ A plain file of fewer than \(B_{\mathrm{map}}=\wkMmapBytes\) bytes is read whole
 One thread parses frame after frame.
 At the default thread count, the global thread pool parses a text of at least \(B_{\mathrm{par}}=\wkParallelBytes\) bytes, and an explicit count above one parses in a pool of that size.
 The parallel path walks the frame boundaries in one thread, because the start of each frame depends on the counts before it, then parses the frames independently and returns them in file order.
+When the columnar reader tiles equal-length frames in parallel, it checks the headers of every later component at their frame~0 byte offsets across all frames.
+Multi-component parallel fills also verify each frame's component runs against frame~0.
+Workers filling tiled metadata write into spare capacity behind a drop guard and join before unwinding, so a worker panic drops unpublished slots without leaking symbols.
 Table~\ref*{tab:anchors} of the supplementary material gives the source lines of each step.
 
 % snapper:off.
@@ -534,6 +537,31 @@ import readcon
 frames = readcon.read_con("band.con")
 readcon.write_con("band.con", frames)
 \end{lstlisting}
+
+\subsection{Python bindings and thread safety}\label{sec:python-threads}
+The PyO3 module sets \texttt{gil\_used = false} and supports free-threaded Python \texttt{3.14t} alongside standard builds.
+Parsing, formatting, file writes, checksums, and correspondence checks detach the Python thread state with \texttt{py.detach}.
+On an unindexed frame, \texttt{coords\_array()} copies coordinates straight from the parsed frame buffer into an owned NumPy array without building per-atom Python objects.
+Once the Python atom list exists, \texttt{coords\_array()} reads that list so in-place edits remain visible.
+
+\texttt{ConFrameList} stores its parsed frames behind a per-list \texttt{RwLock}.
+Writers, string serialization, checksums, and identifier checks hold a read guard across the detached call instead of moving frames out of the list.
+Other threads still see the full list during a detached call, and a panic leaves the stored frames intact.
+Any thread waiting for the frame lock or frame cache detaches before blocking so a detached holder can re-attach without deadlock.
+Indexing a frame locks the cache before the list, marks any shared coordinate slab as reachable from Python under the write lock, and caches the indexed frame object.
+Calling \texttt{columns()} takes the write lock so active detached readers finish before Python receives the shared coordinate array.
+
+When coordinates are reachable from Python through a shared slab or a frame's \texttt{xyz} array, the attached thread copies them into a private buffer (\texttt{CoordSnapshot}) and borrows all remaining fields from the read-locked frames while detached work runs.
+Frames whose coordinates are unreachable from Python keep the zero-copy detached path.
+Repeat writes of a shared list retain the last priced coordinate buffer and reuse its packed frame lengths while every frame matches that buffer bit for bit.
+If a frame differs, the writer switches to a fresh copy from that frame onward.
+
+\texttt{write\_columns} and \texttt{write\_extxyz} copy NumPy input arrays in bounded runs into a reused staging buffer while attached and format each run detached.
+No Rust slice aliases caller-writable NumPy memory while Python threads can store into it.
+On little-endian Unix targets, \texttt{write\_conbin\_columns} passes NumPy column pointers directly to \texttt{libc::write} (\texttt{write(2)}) inside \texttt{py.detach} without forming a Rust slice.
+Other targets copy bounded runs attached and byte-swap detached.
+
+TODO: add concurrent Python read speedups from \path{gil-concurrent.json} and thread-scaling times from \path{threadfix-before-after.json} after \texttt{rerun\_release} runs.
 
 \section{Zero-copy tensor exchange}\label{sec:dlpack} A caller that already has a frame should read its coordinates as a tensor.
 readcon-core exposes that tensor through DLPack \cite{dlpackDLPack2026}.
