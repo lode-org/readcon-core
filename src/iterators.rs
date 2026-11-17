@@ -2589,9 +2589,13 @@ fn keep_parse_pages() {
 /// A fresh buffer is a new mapping, and those writes are the repeating
 /// minor faults. The next parse reuses the same pages.
 #[cfg(feature = "parallel")]
-fn take_slot_buf(
-    n: usize,
-) -> Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>> {
+type SlotResult = std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>;
+
+#[cfg(feature = "parallel")]
+type SlotCache = std::sync::Mutex<Vec<SlotResult>>;
+
+#[cfg(feature = "parallel")]
+fn take_slot_buf(n: usize) -> Vec<SlotResult> {
     let mut buf = slot_cache()
         .lock()
         .map(|mut slot| std::mem::take(&mut *slot))
@@ -2604,13 +2608,9 @@ fn take_slot_buf(
 }
 
 #[cfg(feature = "parallel")]
-fn slot_cache()
--> &'static std::sync::Mutex<Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>>
-{
-    static CACHE: std::sync::Mutex<
-        Vec<std::mem::MaybeUninit<Result<types::ConFrame, error::ParseError>>>,
-    > = std::sync::Mutex::new(Vec::new());
-    &CACHE
+fn slot_cache() -> &'static SlotCache {
+    static CACHE: crate::parser::PerProcess<SlotCache> = crate::parser::PerProcess::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
 #[cfg(feature = "parallel")]
@@ -2969,12 +2969,16 @@ fn equal_span_boundaries(bytes: &[u8], workers: usize) -> Option<Vec<usize>> {
 /// Building that buffer from a fresh allocation stalled for milliseconds
 /// after a large free. The next file fills the same pages.
 #[cfg(feature = "parallel")]
-static START_CACHE: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+fn start_cache() -> &'static std::sync::Mutex<Vec<usize>> {
+    static CACHE: crate::parser::PerProcess<std::sync::Mutex<Vec<usize>>> =
+        crate::parser::PerProcess::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
 
 #[cfg(feature = "parallel")]
 #[cfg_attr(not(test), allow(dead_code))]
 fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
-    let mut starts = START_CACHE
+    let mut starts = start_cache()
         .lock()
         .map(|mut slot| std::mem::take(&mut *slot))
         .unwrap_or_default();
@@ -2989,7 +2993,7 @@ fn arithmetic_starts(span: usize, n: usize) -> Vec<usize> {
 
 #[cfg(feature = "parallel")]
 fn recycle_starts(starts: Vec<usize>) {
-    if let Ok(mut slot) = START_CACHE.lock()
+    if let Ok(mut slot) = start_cache().lock()
         && starts.capacity() >= slot.capacity()
     {
         *slot = starts;
