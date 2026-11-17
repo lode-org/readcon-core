@@ -710,7 +710,6 @@ With the height free, the problem a reader solves when the file has lost the hol
 \subsection{eOn resuming a Morse band}\label{sec:eon-band} The public eOn client resumes from its own output files.
 Section~\ref{sec:host} times that client on every frame, through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} on the frames \texttt{ConFileIO} reads.
 ASE ase.io (format eon) is the independent CON reader timed beside it.
-The candidate band counts are not reported.
 The default band optimizer of eOn is the limited-memory form, L-BFGS, of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and its memory vectors are stored in no geometry file.
 A restart therefore cannot repeat an L-BFGS path from the geometry alone.
 
@@ -726,9 +725,8 @@ Its kinetic energy is \(\velFixtureKe\,\mathrm{eV}\) in that unit and \(\velFixt
 After one velocity Verlet step of 1~fs \cite{swopeComputerSimulationMethod1982}, the misread positions differ from the declared ones by \(\velVerletRmsd\,\text{\AA}\) root mean square and by at most \(\velVerletMax\,\text{\AA}\) (Section~\ref*{sec:supp-velocity}).
 A \(\velSlabAtoms\)-atom slab drawn at \(\velSlabTemperature\,\mathrm{K}\) has a kinetic energy of \(\velSlabKe\,\mathrm{eV}\), and the misread gives \(\num{\velSlabKeFsNum}\,\mathrm{eV}\).
 
-\section{Read performance}\label{sec:performance} The comparison measured on this branch is Section~\ref{sec:host}.
+\section{Read performance}\label{sec:performance} The read comparison of this paper is Section~\ref{sec:host}.
 It reads one 100000-frame file, six times, one fresh process per sample.
-The candidate timing campaign is not reported.
 
 \begin{figure*}[tbp] \centering \includegraphics[width=\textwidth]{figures/generated/timing.pdf} \caption{Wall time of the all-frame CON readers on one 100000-frame file, six interleaved repeats.
 The bar is the type 7 median.
