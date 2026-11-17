@@ -15,20 +15,9 @@ program test_non_finite_cell
   pinf = ieee_value(1.0_real64, ieee_positive_inf)
   ninf = ieee_value(1.0_real64, ieee_negative_inf)
 
-  call refuses([nan, 10.0_real64, 10.0_real64], [90.0_real64, 90.0_real64, 90.0_real64], &
-       "cell field cell[0] is NaN")
-  call refuses([10.0_real64, pinf, 10.0_real64], [90.0_real64, 90.0_real64, 90.0_real64], &
-       "cell field cell[1] is inf")
-  call refuses([10.0_real64, 10.0_real64, ninf], [90.0_real64, 90.0_real64, 90.0_real64], &
-       "cell field cell[2] is -inf")
-  call refuses([10.0_real64, 10.0_real64, 10.0_real64], [nan, 90.0_real64, 90.0_real64], &
-       "cell field angles[0] is NaN")
-  call refuses([10.0_real64, 10.0_real64, 10.0_real64], [90.0_real64, pinf, 90.0_real64], &
-       "cell field angles[1] is inf")
-  call refuses([10.0_real64, 10.0_real64, 10.0_real64], [90.0_real64, 90.0_real64, ninf], &
-       "cell field angles[2] is -inf")
+  call refuses_every_slot()
   call accepts_finite()
-  call reads_a_nan_file()
+  call reads_every_slot()
 
   if (nfail /= 0) then
     print *, "FAIL", nfail
@@ -40,6 +29,29 @@ contains
     character(len=*), intent(in) :: what
     nfail = nfail + 1
     print *, "FAIL ", what
+  end subroutine
+
+  ! Every cell length and angle, each NaN, +Inf, and -Inf.
+  subroutine refuses_every_slot()
+    real(real64) :: values(3), cell(3), ang(3)
+    character(len=4), parameter :: tokens(3) = ["NaN ", "inf ", "-inf"]
+    character(len=64) :: field
+    integer :: slot, k
+
+    values = [nan, pinf, ninf]
+    do k = 1, 3
+      do slot = 1, 3
+        cell = [10.0_real64, 11.0_real64, 12.0_real64]
+        ang = [90.0_real64, 91.0_real64, 92.0_real64]
+        cell(slot) = values(k)
+        write (field, "(a,i0,a,a)") "cell field cell[", slot - 1, "] is ", trim(tokens(k))
+        call refuses(cell, ang, trim(field))
+        cell = [10.0_real64, 11.0_real64, 12.0_real64]
+        ang(slot) = values(k)
+        write (field, "(a,i0,a,a)") "cell field angles[", slot - 1, "] is ", trim(tokens(k))
+        call refuses(cell, ang, trim(field))
+      end do
+    end do
   end subroutine
 
   subroutine refuses(cell, ang, field)
@@ -97,7 +109,42 @@ contains
     call bd%free()
   end subroutine
 
-  subroutine reads_a_nan_file()
+  ! A box length, an angle, or a position coordinate, each NaN, inf, and
+  ! -inf, through the iterator and read_first_frame.
+  subroutine reads_every_slot()
+    character(len=4), parameter :: tokens(3) = ["NaN ", "inf ", "-inf"]
+    character(len=16) :: box(3), angles(3), atom(3)
+    character(len=80) :: expected
+    integer :: slot, k, line
+
+    do k = 1, 3
+      do slot = 1, 3
+        do line = 1, 3
+          box = ["10.0", "11.0", "12.0"]
+          angles = ["90.0", "91.0", "92.0"]
+          atom = ["0.5 ", "1.25", "2.0 "]
+          select case (line)
+          case (1)
+            box(slot) = tokens(k)
+            write (expected, "(a,i0,a,a)") "cell field boxl[", slot - 1, "] of frame 0 is ", &
+                 trim(tokens(k))
+          case (2)
+            angles(slot) = tokens(k)
+            write (expected, "(a,i0,a,a)") "cell field angles[", slot - 1, &
+                 "] of frame 0 is ", trim(tokens(k))
+          case default
+            atom(slot) = tokens(k)
+            write (expected, "(a,a)") "non-finite value: ", trim(tokens(k))
+          end select
+          call reads_refused(box, angles, atom, trim(expected))
+        end do
+      end do
+    end do
+  end subroutine
+
+  subroutine reads_refused(box, angles, atom, expected)
+    character(len=*), intent(in) :: box(3), angles(3), atom(3)
+    character(len=*), intent(in) :: expected
     character(len=*), parameter :: path = "readcon_non_finite_cell_test.con"
     type(iterator_t) :: it
     type(frame_t) :: fr
@@ -111,8 +158,8 @@ contains
     end if
     write (unit, "(a)") "frame"
     write (unit, "(a)") '{"con_spec_version":2}'
-    write (unit, "(a)") "10.0 NaN 10.0"
-    write (unit, "(a)") "90.0 90.0 90.0"
+    write (unit, "(a,1x,a,1x,a)") trim(box(1)), trim(box(2)), trim(box(3))
+    write (unit, "(a,1x,a,1x,a)") trim(angles(1)), trim(angles(2)), trim(angles(3))
     write (unit, "(a)") "0 0"
     write (unit, "(a)") "0 0 0"
     write (unit, "(a)") "1"
@@ -120,31 +167,36 @@ contains
     write (unit, "(a)") "63.546"
     write (unit, "(a)") "Cu"
     write (unit, "(a)") "Coordinates of Component 1"
-    write (unit, "(a)") "0.0 0.0 0.0 0 1"
+    write (unit, "(a,1x,a,1x,a,a)") trim(atom(1)), trim(atom(2)), trim(atom(3)), " 0 1"
     close(unit)
 
     call clear_error()
     it = open_iterator(path)
     fr = it%next()
     if (fr%valid()) then
-      call fail("the iterator returned a frame with a NaN cell")
+      call fail("the iterator returned a frame for " // expected)
       call fr%free()
     end if
-    if (last_error_code() /= rkr_status_parse_error) call fail("read error code")
+    if (last_error_code() /= rkr_status_parse_error) call fail("read error code for " // expected)
     detail = last_error_message()
-    if (index(detail, "NonFiniteValue") == 0 .or. &
-        index(detail, "cell field boxl[1] of frame 0 is NaN") == 0) then
-      call fail("read error message: " // detail)
+    if (index(detail, "NonFiniteValue") == 0 .or. index(detail, expected) == 0) then
+      call fail("read error message for " // expected // ": " // detail)
     end if
     call it%free()
 
     call clear_error()
     fr = read_first_frame(path)
     if (fr%valid()) then
-      call fail("read_first_frame returned a frame with a NaN cell")
+      call fail("read_first_frame returned a frame for " // expected)
       call fr%free()
     end if
-    if (last_error_code() /= rkr_status_parse_error) call fail("read_first_frame error code")
+    if (last_error_code() /= rkr_status_parse_error) then
+      call fail("read_first_frame error code for " // expected)
+    end if
+    detail = last_error_message()
+    if (index(detail, expected) == 0) then
+      call fail("read_first_frame error message for " // expected // ": " // detail)
+    end if
 
     open(newunit=unit, file=path, status="old", iostat=ios)
     if (ios == 0) close(unit, status="delete")
