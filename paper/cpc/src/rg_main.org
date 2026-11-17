@@ -216,7 +216,7 @@ Two readers given the same bytes must then return the same fields, which needs a
 
 Existing formats keep some of these fields.
 Extended XYZ adds key-value metadata to the comment line of the plain Cartesian coordinate format (XYZ) and publishes a grammar \cite{kermodeLibatomsExtxyzV0462026}.
-It keeps masks and identifiers in column names chosen by the Atomic Simulation Environment (ASE) \cite{larsenAtomicSimulationEnvironmenta2017}, and a file declares neither a version nor a velocity unit.
+The writer of the Atomic Simulation Environment (ASE) keeps the mask in a \texttt{move\_mask} column \cite{larsenAtomicSimulationEnvironmenta2017,aseSource3290}, identifiers live only in a column whose name each writer chooses, and a file declares neither a version nor a velocity unit.
 H5MD \cite{buylH5mdStructuredEfficient2014,folkOverviewHdf5Technology2011} stores particle identifiers, velocities and the box in HDF5, with units through an optional module, but it defines no element for a per-component constraint.
 The GROMACS compressed (XTC) and full-precision (TRR) trajectory formats \cite{abrahamGromacsHighPerformance2015}, the binary trajectory (DCD) format of CHARMM \cite{brooksCharmmBiomolecularSimulation2009} and the trajectory next generation (TNG) format \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014} have no per-component mask.
 XTC stores no velocities, and TRR, DCD and TNG store them in the units of the program that wrote them, without a field that declares the unit.
@@ -648,11 +648,11 @@ We grade a returned field as fixed by the format when the specification of the f
 Only the CON 3.1 route returns every field from places that its own specification defines.
 The ASE trajectory, with the identifiers stored as ASE tags, and H5MD written and read with h5py also return every field bit for bit.
 The trajectory keeps the mask, the identifiers, the unit and the periodicity in the layout of ASE, and H5MD keeps the mask in a dataset outside the H5MD specification, which only our own reader knows to read.
-Extended XYZ returns the mask and the identifiers through the column names of ASE, which chemfiles and OVITO also read.
+Extended XYZ returns the mask through the \texttt{move\_mask} column of ASE and the identifiers through a column named \texttt{id}, which chemfiles and OVITO also read.
 ASE writes that file with eight decimals, a shift of \(\num{\surveyAseXyzShiftNum}\,\text{\AA}\); chemfiles moves the coordinates by \(\num{\surveyChemXyzShiftNum}\,\text{\AA}\), rounds the cell lengths to six significant digits and drops the velocities.
 MDAnalysis 2.10.0 returns single precision, which changes a coordinate by up to \(\num{\surveyMdaShiftNum}\,\text{\AA}\), and Open Babel keeps the identifiers only inside the site labels of a CIF file.
 MDAnalysis 2.11.0 still writes the H5MD positions, velocities and forces in single precision, as \texttt{float32} \cite{gowersMdanalysismdanalysisRelease21102026,gowersMdanalysisH5mdPy21102026}.
-Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through the \texttt{id} column of ASE.
+Identifiers come back on \(\surveyCrossIds\) of the \(\surveyCrossRoutes\) cross-library round trips, all through a column named \texttt{id}.
 
 \subsection{A climbing-image band through every route} The restart study uses a larger slab: Pt(100) under the effective-medium theory (EMT) potential of ASE \cite{jacobsenSemiempiricalEffectiveMedium1996}, three layers of \(3\times3\) atoms with the bottom layer held in every component, and one adatom held in \(z\) at the height of Table~\ref{tab:params} (Figure~\ref{fig:structures}, right).
 The adatom hops between neighboring fourfold hollows along \(x\).
@@ -660,7 +660,7 @@ With the slab fixed, the EMT force on the adatom at that height exceeds the band
 That height is not a stationary point of the free adsorbate, so a file that drops the hold resumes a different relaxation.
 A climbing-image band of five movable images with the improved tangent \cite{henkelmanClimbingImageNudged2000,henkelmanImprovedTangentEstimate2000} converges under fixed-step steepest descent on the projected force.
 That optimizer keeps no step history, so any difference after the restart comes from the file.
-The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017}.
+The spring and the tangent are the defaults of ASE, the band tolerance is the default force tolerance of the ASE optimizer divided by the five movable images, and each endpoint is minimized to that tolerance divided by five again \cite{larsenAtomicSimulationEnvironmenta2017,aseSource3290}.
 A force equal to the band tolerance moves an atom by \(2\times 10^{-4}\,\text{\AA}\) under that step.
 Uninterrupted, the band converges in \(\rfStepsUnint\) steps and \(\rfCallsUnint\) force calls, with barrier \(\rfBarrierUnint\,\mathrm{eV}\) and \(\rfModesUnint\) free modes on the middle image.
 We interrupt it after \(K\) steps, write it, read it back and resume it to \(f_{\mathrm{band}}\), once per route of Table~\ref{tab:restartfmt}.
