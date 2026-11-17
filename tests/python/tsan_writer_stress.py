@@ -29,8 +29,9 @@ with source.open("w", encoding="ascii") as out:
 
 frames = readcon.read_con(os.fspath(source), n_threads=2)
 columns = frames.columns()
-moved = frames[0]
-live_coords = frames[1]
+borrowed_frames = readcon.read_con(os.fspath(source), n_threads=2)
+moved = borrowed_frames[0]
+live_coords = borrowed_frames[1]
 positions = columns["positions"]
 cell = columns["cell"].copy()
 velocities = np.zeros_like(positions)
@@ -79,9 +80,11 @@ started.wait()
 try:
     for iteration in range(24):
         con = root / f"shared-{iteration}.con"
+        borrowed_con = root / f"borrowed-{iteration}.con"
         cols = root / f"columns-{iteration}.con"
         conbin = root / f"columns-{iteration}.conbin"
         readcon.write_con(os.fspath(con), frames, n_threads=2)
+        readcon.write_con(os.fspath(borrowed_con), borrowed_frames, n_threads=2)
         readcon.write_columns(os.fspath(cols), columns, n_threads=2)
         try:
             readcon.write_conbin_columns(
