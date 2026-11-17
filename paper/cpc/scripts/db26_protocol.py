@@ -30,7 +30,6 @@ DIR = "data/db31/db26"
 AB = f"{DIR}/ab.json"
 RESULTS = f"{DIR}/RESULTS.md"
 LOG = f"{DIR}/campaign.log"
-OUT = f"{DIR}/paired_protocol.json"
 ARMS = ("tip", "aedcbda4")
 COMPARISON = "raw_tip_vs_aedcbda4_rayon_1"
 OP = "full_read:warm"
@@ -88,6 +87,7 @@ def build() -> dict:
     return {
         "record": AB,
         "from": [RESULTS, LOG],
+        "repository": "https://github.com/lode-org/readcon-db",
         "commit": ab["commit"],
         "tree": ab["tree"],
         "host": ab["host"],
@@ -109,15 +109,16 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail unless the record is what a run writes")
     args = parser.parse_args()
     text = json.dumps(build(), indent=2) + "\n"
-    out = ROOT / OUT
+    out = ROOT / DIR / "paired_protocol.json"
+    rel = out.relative_to(ROOT).as_posix()
     if args.check:
         if not out.is_file() or out.read_text() != text:
-            print(f"{OUT} differs from what db26_protocol.py writes", file=sys.stderr)
+            print(f"{rel} differs from what db26_protocol.py writes", file=sys.stderr)
             return 1
-        print(f"{OUT} matches the saved db26 records")
+        print(f"{rel} matches the saved db26 records")
         return 0
     out.write_text(text)
-    print(f"wrote paper/cpc/{OUT}")
+    print(f"wrote paper/cpc/{rel}")
     return 0
 
 
