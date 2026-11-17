@@ -13,6 +13,7 @@ quartiles are exact rationals of the recorded integers, rounded half up.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from decimal import ROUND_HALF_UP, Decimal
@@ -22,7 +23,9 @@ from pathlib import Path
 import numpy as np
 
 CPC = Path(__file__).resolve().parents[1]
-RECORD = CPC / "data" / "dlpack_cost.txt"
+RECORD = Path(
+    os.environ.get("DLPACK_COST_RECORD", str(CPC / "data" / "dlpack_cost.txt"))
+)
 OUT = CPC / "src" / "figures" / "generated" / "dlpack_macros.tex"
 SEED = 20261104
 RESAMPLES = 10000

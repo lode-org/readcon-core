@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-LOG = ROOT / "logs" / "db.log"
+LOG = Path(os.environ.get("READCON_DB_LOG", str(ROOT / "logs" / "db.log")))
 OUT = ROOT / "src" / "figures" / "generated" / "db_macros.tex"
 
 

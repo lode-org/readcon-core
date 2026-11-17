@@ -37,7 +37,12 @@ from pathlib import Path
 
 CPC = Path(__file__).resolve().parents[1]
 REPO = CPC.parents[1]
-RECORDS = REPO / "bench" / "h2h" / "formats" / "v0.23.3"
+RECORDS = Path(
+    os.environ.get(
+        "FORMAT_H2H_RECORDS",
+        str(REPO / "bench" / "h2h" / "formats" / "v0.23.3"),
+    )
+)
 OUT = Path(os.environ.get("BENCH_GENERATED", CPC / "src" / "figures" / "generated"))
 HEADER = (
     "% Written by paper/cpc/scripts/format_h2h_tables.py from "
