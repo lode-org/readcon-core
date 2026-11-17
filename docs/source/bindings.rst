@@ -326,6 +326,10 @@ symbol with different masses still construct, stay in insertion order,
 and fail at write with ``inconsistent masses``. ``==`` compares cell,
 angles, symbols, positions, velocities, forces, masses, and fixed flags.
 It ignores file text, metadata, atom ids, and other sections.
+    The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
+    ``ValueError``) for a cell length or angle that is NaN or infinite, and
+    for a ``lattice_vectors`` metadata matrix that holds one. The message names
+    the field, for example ``cell field cell[1] is NaN``.
 
 ``readcon.read_first_frame(path)``
     Parse and return only the first
@@ -607,6 +611,17 @@ this as ``readcon::Trajectory`` with ``size()``, ``at(i)`` and ``operator[]``.
         free_rkr_frame(frame);
     }
     rkr_trajectory_free(t);
+
+Non-finite cells
+^^^^^^^^^^^^^^^^
+
+``rkr_frame_new`` returns NULL for a NaN or infinite entry of ``cell`` or
+``angles``. ``rkr_last_error`` then has code ``RKR_STATUS_PARSE_ERROR``, and
+the message (also ``rkr_last_error_message``) ends with
+``NonFiniteValue: non-finite value: cell field cell[1] is NaN``. A read names
+the frame too: ``cell field boxl[1] of frame 1 is NaN``, and ``frame_index``
+of the error is 1. C++ ``readcon::ConFrameBuilder`` throws ``readcon::Error`` with the same
+code and text.
 
 Path iterator + compression + in-memory buffers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

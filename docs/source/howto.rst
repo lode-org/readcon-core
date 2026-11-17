@@ -911,6 +911,8 @@ Building frames from data
     free_rkr_writer(writer);
     free_rkr_frame(frame);
 
+``rkr_frame_new`` returns NULL, with ``RKR_STATUS_PARSE_ERROR`` in ``rkr_last_error()``, when an entry of ``cell`` or ``angles`` is NaN or infinite. Check the pointer before the first ``rkr_frame_add_atom``.
+
 Reading a single frame
 ~~~~~~~~~~~~~~~~~~~~~~
 

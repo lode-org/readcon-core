@@ -45,6 +45,17 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- A NaN or infinite cell length, angle, or lattice component passed through
+  every reader, builder, and writer that took one. The `.con` text, CON-bin,
+  extended XYZ, and PDB readers, the Python, C, and C++ constructors,
+  `set_lattice_vectors`, `from_ase`, and every writer now refuse it with
+  `NonFiniteValue` (`readcon.NonFiniteValue` in Python, a parse error with
+  `RKR_STATUS_PARSE_ERROR` in C). The message names the field and, when the
+  entry point knows it, the frame: `cell field boxl[1] of frame 1 is NaN`.
+  CON-bin also refuses a cell that is finite in binary64 and infinite in
+  binary32. `rkr_frame_new` returns NULL, and `set_lattice_vectors` returns a
+  `Result`. Reading a finite cell costs nothing, and a finite cell round-trips
+  bit for bit.
 - A packed `write_con` of a frame list reused the first frame's header
   whenever the atom skeleton matched. Later frames came back with that
   frame's energy, bead, and any other metadata key. The header is reused
