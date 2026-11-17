@@ -309,7 +309,7 @@ No file, probe or test names CON-count.5, a SHOULD NOT on writing for a given co
 
 Table~\ref{tab:versionsafety} applies the version rule of Eq.~\eqref{eq:version} and the velocity rule of Section~\ref{sec:format} to seven headers of one velocity frame (\path{paper/cpc/data/failure/version_safety.csv}).
 The Python module and the C library follow the rule on each row.
-They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labelled fs in the natural unit.
+They reject a velocity block of version 3.1 without a time unit, an unknown major, a missing version and a mask of 9, keep an unknown key of a later minor, and read a CON 3.0 block labeled fs in the natural unit.
 The Python rewrite of that block stays at version 3.0 and keeps its fs label, so the next reader again applies the natural unit.
 
 \input{figures/generated/versionsafety_table}
@@ -392,8 +392,8 @@ That file still names no velocity time unit.
 
 \input{figures/generated/survey_compare}
 
-\FloatBarrier \section{Restart protocol}\label{sec:supp-restart} The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighbouring hollow.
-Endpoints were relaxed with the Broyden-{}-Fletcher-{}-Goldfarb-{}-Shanno (BFGS) optimiser of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
+\FloatBarrier \section{Restart protocol}\label{sec:supp-restart} The restart study of Table~\ref{tab:restartfmt} uses a Pt(100) slab of \(3\times3\times3\) atoms under the effective-medium theory (EMT) potential of ASE, with 6.0\hspace*{.2em}\AA{} of vacuum, the bottom layer held, and one adatom 1.75\hspace*{.2em}\AA{} above a hollow and held in \(z\), hopping to the neighboring hollow.
+Endpoints were relaxed with the Broyden-{}-Fletcher-{}-Goldfarb-{}-Shanno (BFGS) optimizer of ASE to \(0.002\,\mathrm{eV/\text{\AA}}\).
 Five movable images were interpolated with the constraints applied.
 The band uses the improved tangent with a climbing image, and each step adds \(0.02\,\text{\AA}^2/\mathrm{eV}\) times the projected force.
 The band is interrupted after step 25.
