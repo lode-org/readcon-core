@@ -2351,6 +2351,23 @@ pub fn extxyz_bytes_with_threads(
     columns: &[&(dyn ExtxyzSource + Sync)],
     workers: usize,
 ) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    extxyz_append_with_threads(&mut out, n_frames, n_atoms, cell, columns, workers)?;
+    Ok(out)
+}
+
+/// Append the bytes of [`extxyz_bytes_with_threads`] to `out`.
+///
+/// Appending consecutive runs of frames gives the bytes of one call over
+/// all of them.
+pub(crate) fn extxyz_append_with_threads(
+    out: &mut Vec<u8>,
+    n_frames: usize,
+    n_atoms: usize,
+    cell: &[f64],
+    columns: &[&(dyn ExtxyzSource + Sync)],
+    workers: usize,
+) -> Result<(), String> {
     if n_frames == 0 || n_atoms == 0 || columns.is_empty() {
         return Err("frames".to_string());
     }
@@ -2410,13 +2427,13 @@ pub fn extxyz_bytes_with_threads(
                 .map(|handle| handle.join().unwrap_or_default())
                 .collect::<Vec<_>>()
         });
-        let mut out = header.into_bytes();
         let total: usize = parts.iter().map(|part| part.len()).sum();
-        out.reserve(total);
+        out.reserve(header.len() + total);
+        out.extend_from_slice(header.as_bytes());
         for part in parts {
             out.extend_from_slice(&part);
         }
-        return Ok(out);
+        return Ok(());
     }
     if workers >= 2 && n_frames >= 2 {
         let chunk = n_frames.div_ceil(workers).max(1);
@@ -2445,9 +2462,10 @@ pub fn extxyz_bytes_with_threads(
         });
         error?;
         let total: usize = parts.iter().map(|part| part.len()).sum();
-        let mut out = Vec::with_capacity(total);
+        let start = out.len();
+        out.reserve(total);
         if total > 0 {
-            let dest = out.as_mut_ptr() as usize;
+            let dest = unsafe { out.as_mut_ptr().add(start) } as usize;
             std::thread::scope(|scope| {
                 let mut at = 0usize;
                 for part in &parts {
@@ -2467,31 +2485,26 @@ pub fn extxyz_bytes_with_threads(
                     at += n;
                 }
             });
-            // SAFETY: the copies covered `total` disjoint bytes.
-            unsafe { out.set_len(total) };
+            // SAFETY: the copies covered `total` disjoint bytes after `start`.
+            unsafe { out.set_len(start + total) };
         }
-        return Ok(out);
+        return Ok(());
     }
-    let mut out = Vec::with_capacity(n_frames.saturating_mul(n_atoms).saturating_mul(64));
+    out.reserve(n_frames.saturating_mul(n_atoms).saturating_mul(64));
     for frame in 0..n_frames {
-        push_frame_header(
-            &mut out,
-            n_atoms,
-            &cell[frame * 6..frame * 6 + 6],
-            &properties,
-        )?;
+        push_frame_header(out, n_atoms, &cell[frame * 6..frame * 6 + 6], &properties)?;
         for atom in 0..n_atoms {
             for (index, column) in columns.iter().enumerate() {
                 if index > 0 {
                     out.push(b' ');
                 }
                 let base = (frame * n_atoms + atom) * column.column_width();
-                column.write_fields(base, &mut out);
+                column.write_fields(base, out);
             }
             out.push(b'\n');
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 /// Format one wide frame into `path`, overlapping the file copy with formatting.

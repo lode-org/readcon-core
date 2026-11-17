@@ -1291,6 +1291,184 @@ impl Drop for ConFrame {
     }
 }
 
+#[cfg(feature = "python")]
+impl AtomDatum {
+    /// This atom with its coordinates read from the three `f64`s at `slot`.
+    ///
+    /// The symbol and the section tail are shared with `self`, not owned,
+    /// so the view must be discarded without running its destructor and
+    /// must not outlive `self`.
+    unsafe fn view_at(&self, slot: *mut f64) -> Self {
+        Self {
+            symbol: unsafe { std::ptr::read(&self.symbol) },
+            atom_id: self.atom_id,
+            xyz: slot,
+            tail: self.tail & !TAIL_OWNED,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl ConFrame {
+    /// This frame with atom `i` reading its coordinates at `base + 3 i`,
+    /// first copied there when `fill` is set.
+    ///
+    /// The atom vector and the metadata map cell are new. Every other
+    /// field is shared with `self`, so the same rules as
+    /// [`AtomDatum::view_at`] apply. Another reader may fill the source
+    /// map cell meanwhile, so that cell is never copied bit for bit; the
+    /// view starts with the map the source already had, if any. The flag
+    /// says whether it did.
+    unsafe fn view_onto(&self, base: *mut f64, fill: bool) -> (ConFrame, bool) {
+        use std::ptr::read;
+        let atom_data: Vec<AtomDatum> = self
+            .atom_data
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| unsafe {
+                let slot = base.add(index * 3);
+                if fill {
+                    slot.write(atom.x());
+                    slot.add(1).write(atom.y());
+                    slot.add(2).write(atom.z());
+                }
+                atom.view_at(slot)
+            })
+            .collect();
+        let source = &self.header;
+        let map = std::sync::OnceLock::new();
+        let shared_map = match source.metadata.map.get() {
+            Some(parsed) => {
+                let _ = map.set(unsafe { read(parsed) });
+                true
+            }
+            None => false,
+        };
+        let header = unsafe {
+            FrameHeader {
+                prebox_header: read(&source.prebox_header),
+                boxl: source.boxl,
+                angles: source.angles,
+                postbox_header: read(&source.postbox_header),
+                natm_types: source.natm_types,
+                natms_per_type: read(&source.natms_per_type),
+                masses_per_type: read(&source.masses_per_type),
+                spec_version: source.spec_version,
+                metadata: FrameMeta {
+                    raw: read(&source.metadata.raw),
+                    minor: source.metadata.minor,
+                    map,
+                },
+                sections: read(&source.sections),
+                strict_validation: source.strict_validation,
+                sections_declared: source.sections_declared,
+            }
+        };
+        let view = unsafe {
+            ConFrame {
+                header,
+                atom_data,
+                column_tails: read(&self.column_tails),
+                positions: read(&self.positions),
+                velocities: read(&self.velocities),
+                forces: read(&self.forces),
+                atom_energies: read(&self.atom_energies),
+                charges: read(&self.charges),
+                spins: read(&self.spins),
+                magmoms: read(&self.magmoms),
+                displacements: read(&self.displacements),
+                spreads: read(&self.spreads),
+                masses: read(&self.masses),
+                atom_ids: read(&self.atom_ids),
+                sequential_plain: self.sequential_plain,
+            }
+        };
+        (view, shared_map)
+    }
+}
+
+/// Views of frames whose coordinates live in a buffer only this value
+/// holds.
+///
+/// A source frame can read its coordinates from memory another thread may
+/// store into, such as a NumPy array handed to Python. The writer prices
+/// each frame's text length before it spells it, so a store between the
+/// two would overrun the priced range. These views read the values once,
+/// when the snapshot is taken, and share everything else with the source
+/// frames, which the borrow keeps alive and unchanged.
+#[cfg(feature = "python")]
+pub(crate) struct CoordSnapshot<'a> {
+    frames: Vec<Option<ConFrame>>,
+    /// Per view: its metadata map belongs to the source frame.
+    shared_maps: Vec<bool>,
+    _coords: Vec<f64>,
+    _sources: std::marker::PhantomData<&'a ConFrame>,
+}
+
+#[cfg(feature = "python")]
+impl<'a> CoordSnapshot<'a> {
+    pub(crate) fn copy_of(frames: &[Option<&'a ConFrame>]) -> Self {
+        let total: usize = frames
+            .iter()
+            .flatten()
+            .map(|frame| frame.atom_data.len())
+            .sum();
+        let mut coords: Vec<f64> = Vec::with_capacity(total * 3);
+        let base = coords.as_mut_ptr();
+        let mut offset = 0usize;
+        let mut shared_maps = Vec::with_capacity(frames.len());
+        let frames = frames
+            .iter()
+            .map(|slot| {
+                let view = slot.map(|frame| {
+                    let (view, shared) = unsafe { frame.view_onto(base.add(offset), true) };
+                    offset += frame.atom_data.len() * 3;
+                    shared_maps.push(shared);
+                    view
+                });
+                if view.is_none() {
+                    shared_maps.push(false);
+                }
+                view
+            })
+            .collect();
+        // Every slot was written above, and the buffer never grows, so the
+        // views keep pointing into it.
+        unsafe { coords.set_len(total * 3) };
+        CoordSnapshot {
+            frames,
+            shared_maps,
+            _coords: coords,
+            _sources: std::marker::PhantomData,
+        }
+    }
+
+    pub(crate) fn slots(&self) -> &[Option<ConFrame>] {
+        &self.frames
+    }
+}
+
+#[cfg(feature = "python")]
+impl Drop for CoordSnapshot<'_> {
+    fn drop(&mut self) {
+        for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
+            let Some(frame) = slot else { continue };
+            // A later snapshot can reuse these addresses.
+            crate::writer::invalidate_packed_lengths_if(frame as *const ConFrame as usize);
+            let mut atoms = std::mem::take(&mut frame.atom_data);
+            // The atoms are views; only their vector is ours to free.
+            unsafe { atoms.set_len(0) };
+            // A map the writer parsed into the view is the view's own.
+            let map = frame.header.metadata.map.take();
+            if *shared {
+                std::mem::forget(map);
+            }
+        }
+        // Every other field of a view belongs to its source frame.
+        unsafe { self.frames.set_len(0) };
+    }
+}
+
 impl AtomDatum {
     /// Coordinate-only atom. Section accessors return `None` until one is set.
     pub fn coords(
