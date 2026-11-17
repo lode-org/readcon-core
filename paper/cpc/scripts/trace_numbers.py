@@ -34,6 +34,12 @@ are missing, and only those, from the committed records, with the steps of
 ``regen_paper.py`` that name them, before scanning.  No figure plotter runs, and
 ``clause_coverage.py`` runs as ``--macros``, so no tracked record is rewritten.
 
+``rg_main.tex`` is the Org export of ``rg_main.org``, byte for byte.  The scan
+therefore also reads the body of ``rg_main.org`` and fails when it prints a
+number, a version, a date or a headline macro that ``rg_main.tex`` does not
+print at the same place in the sequence, and, when ``emacs`` is on ``PATH``,
+when the export of ``rg_main.org`` is not ``rg_main.tex``.
+
     python3 paper/cpc/scripts/trace_numbers.py
     python3 paper/cpc/scripts/trace_numbers.py --check
     python3 paper/cpc/scripts/trace_numbers.py --only rg_main.tex:400-860
@@ -47,8 +53,10 @@ import difflib
 import functools
 import importlib
 import io
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -64,6 +72,8 @@ RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readco
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
 # A step that rewrites a tracked record when it runs bare runs with these arguments here, so it writes its fragment only.
 _FRAGMENT_ARGS = {"scripts/clause_coverage.py": ["--macros"]}
+ORG = "rg_main.org"
+EXPORT_EL = ROOT / "scripts" / "export_rg_main.el"
 COLUMNS = ("document", "line", "printed", "class", "source", "rule", "value", "macro")
 MACRO_DEF = re.compile(
     r"\\newcommand\{\\(\w+)\}\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}"
@@ -491,6 +501,147 @@ def scan_macros(
     return printed
 
 
+def _document_start(lines: list[str], document: str) -> int:
+    """The index of the first line after the preamble: ``\\begin{document}`` in TeX, ``#+END_COMMENT`` in the Org source."""
+    if document.endswith(".tex"):
+        marker = r"\begin{document}"
+        found = next((i for i, line in enumerate(lines) if marker in line), None)
+    else:
+        marker = "#+END_COMMENT"
+        found = next(
+            (i for i, line in enumerate(lines) if line.startswith(marker)), None
+        )
+    if found is None:
+        raise SystemExit(f"{document} has no {marker}")
+    return found + 1
+
+
+def _sequence_problems(org_items: list, tex_items: list, key, line, shown) -> list[str]:
+    """Where the Org source and the TeX print different things, as the lines of each."""
+    problems = []
+    matcher = difflib.SequenceMatcher(
+        None,
+        [key(item) for item in org_items],
+        [key(item) for item in tex_items],
+        autojunk=False,
+    )
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        for k in range(max(i2 - i1, j2 - j1)):
+            org = org_items[i1 + k] if i1 + k < i2 else None
+            tex = tex_items[j1 + k] if j1 + k < j2 else None
+            if org is not None and tex is not None:
+                problems.append(
+                    f"{ORG}:{line(org)}: {shown(org)} where rg_main.tex:{line(tex)} prints {shown(tex)}"
+                )
+            elif org is not None:
+                problems.append(
+                    f"{ORG}:{line(org)}: {shown(org)} is not printed in rg_main.tex"
+                )
+            else:
+                problems.append(
+                    f"rg_main.tex:{line(tex)}: {shown(tex)} is not printed in {ORG}"
+                )
+    return problems
+
+
+def org_parity() -> list[str]:
+    """Numbers, versions, dates and headline macros that ``rg_main.org`` prints differently from ``rg_main.tex``.
+
+    ``rg_main.tex`` is the Org export of ``rg_main.org``, and the rules trace the
+    TeX; a number edited in the Org source only is stale there until it is exported.
+    """
+    org_path = SRC / ORG
+    if not org_path.is_file():
+        return []
+    tex_text = (SRC / "rg_main.tex").read_text()
+    org_lines = org_path.read_text().splitlines()
+    tex_lines = tex_text.splitlines()
+    org_start = _document_start(org_lines, ORG)
+    tex_start = _document_start(tex_lines, "rg_main.tex")
+    macros = generated_macros(tex_text)
+    org_p, org_i = scan_lines(ORG, list(enumerate(org_lines, start=1))[org_start:])
+    tex_p, tex_i = scan_lines(
+        "rg_main.tex", list(enumerate(tex_lines, start=1))[tex_start:]
+    )
+    org_p += scan_macros(ORG, org_lines, org_start, macros)
+    tex_p += scan_macros("rg_main.tex", tex_lines, tex_start, macros)
+    return _sequence_problems(
+        org_p,
+        tex_p,
+        lambda item: (item.normal, item.macro),
+        lambda item: item.line,
+        lambda item: f"{item.text} (\\{item.macro})" if item.macro else item.text,
+    ) + _sequence_problems(
+        org_i,
+        tex_i,
+        lambda item: (item[2], item[3]),
+        lambda item: item[1],
+        lambda item: item[2],
+    )
+
+
+def org_export() -> bytes | None:
+    """``rg_main.org`` exported by Emacs as the manuscript is, or ``None`` when ``emacs`` is not on ``PATH``."""
+    emacs = shutil.which("emacs")
+    if emacs is None:
+        return None
+    import regen_paper
+
+    with regen_paper.bench_scratch("scratch") as tmp:
+        out = Path(tmp) / "rg_main.tex"
+        form = (
+            f"(progn (find-file {json.dumps(str(SRC / ORG))}) "
+            "(readcon-prepare-latex-export) "
+            f"(org-export-to-file 'latex {json.dumps(str(out))}))"
+        )
+        done = subprocess.run(
+            [
+                emacs,
+                "--batch",
+                "-Q",
+                "--eval",
+                "(setq enable-local-eval t)",
+                "-l",
+                str(EXPORT_EL),
+                "--eval",
+                form,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if done.returncode or not out.is_file():
+            raise SystemExit(f"emacs could not export {ORG}: {_tail(done.stderr)}")
+        return out.read_bytes()
+
+
+def export_problems() -> list[str]:
+    """``rg_main.tex`` differs from the export of ``rg_main.org``; empty when there is no Emacs to export with."""
+    exported = org_export()
+    tex = SRC / "rg_main.tex"
+    if exported is None:
+        print(
+            f"emacs is not on PATH: rg_main.tex is not compared with the export of {ORG}",
+            file=sys.stderr,
+        )
+        return []
+    if exported == tex.read_bytes():
+        return []
+    diff = list(
+        difflib.unified_diff(
+            tex.read_text().splitlines(),
+            exported.decode(errors="replace").splitlines(),
+            "rg_main.tex",
+            f"export of {ORG}",
+            n=0,
+            lineterm="",
+        )
+    )
+    return [f"rg_main.tex is not the Org export of {ORG}:\n  " + "\n  ".join(diff[:8])]
+
+
 def scan() -> tuple[list[Printed], list[Identifier]]:
     ensure_generated()
     printed: list[Printed] = []
@@ -635,6 +786,8 @@ def trace(
                 problems.append(
                     f"rule {rule.printed!r} ({rule.source}) matches no printed number"
                 )
+    if not only:
+        problems += org_parity()
     rows.sort(key=lambda r: (r[0], int(r[1])))
     return rows, problems
 
@@ -674,6 +827,8 @@ def main() -> int:
         only.append((doc, int(lo), int(hi)))
 
     rows, problems = trace(only)
+    if not only:
+        problems += export_problems()
     text = render(rows)
     if args.check and not only:
         # data/trace/ is gitignored, so a clean clone has no ledger. Build it

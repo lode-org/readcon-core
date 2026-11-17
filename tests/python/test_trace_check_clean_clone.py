@@ -2,12 +2,14 @@
 
 ``paper/cpc/data/trace/`` and the ``src/figures/generated/`` fragments the
 manuscript inputs are gitignored, so a fresh checkout has neither. ``--check``
-must build the ledger and the missing fragments it needs, and write no tracked
-file.
+must build the ledger and the missing fragments it needs, write no tracked
+file, and fail on a number that the Org source of the manuscript prints
+differently from the TeX it exports to.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -90,6 +92,33 @@ def _status(clone: Path) -> str:
     return _git(clone, "status", "--porcelain")
 
 
+def _load_trace_numbers():
+    spec = importlib.util.spec_from_file_location("trace_numbers_under_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _edit_first_org_number(clone: Path, name: str) -> int:
+    """Change one printed number of ``name`` in the clone, and return its line."""
+    trace = _load_trace_numbers()
+    org = (clone / CPC / "src" / "rg_main.org").read_text().splitlines()
+    start = trace._document_start(org, "rg_main.org")
+    printed, _ = trace.scan_lines(name, list(enumerate(org, start=1))[start:])
+    first = next(item for item in printed if item.text.isdigit() and len(item.text) > 1)
+    path = clone / CPC / "src" / name
+    lines = path.read_text().splitlines(keepends=True)
+    index = first.line - 1 if name.endswith(".org") else None
+    if index is None:
+        index = next(i for i, line in enumerate(lines) if first.context in line)
+    changed = first.text[:-1] + str((int(first.text[-1]) + 1) % 10)
+    assert first.text in lines[index], (first.text, lines[index])
+    lines[index] = lines[index].replace(first.text, changed, 1)
+    path.write_text("".join(lines))
+    return index + 1
+
+
 def test_check_builds_the_ledger_on_a_clean_tree() -> None:
     had_ledger = LEDGER.is_file()
     backup = LEDGER.read_bytes() if had_ledger else None
@@ -143,3 +172,38 @@ def test_check_writes_only_the_missing_fragments(clone: Path) -> None:
     }
     assert {k: v for k, v in after.items() if k not in gone} == before
     assert _status(clone) == "", _status(clone)
+
+
+@pytest.mark.parametrize("name", ["rg_main.org", "rg_main.tex"])
+def test_check_fails_on_a_number_edited_in_one_source(clone: Path, name: str) -> None:
+    line = _edit_first_org_number(clone, name)
+    done = _check(clone)
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert f"{name}:{line}:" in done.stdout, done.stdout
+
+
+def test_check_fails_on_an_org_number_without_emacs(
+    clone: Path, tmp_path: Path
+) -> None:
+    first = _check(clone)
+    assert first.returncode == 0, first.stdout + first.stderr
+    line = _edit_first_org_number(clone, "rg_main.org")
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    done = _check(clone, {"PATH": str(bare)})
+    assert shutil.which("emacs", path=str(bare)) is None
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert f"rg_main.org:{line}:" in done.stdout, done.stdout
+    assert "rg_main.tex is not the Org export" not in done.stdout
+    assert "emacs is not on PATH" in done.stderr, done.stderr
+
+
+def test_check_fails_when_the_tex_is_not_the_org_export(clone: Path) -> None:
+    assert shutil.which("emacs"), "emacs is required to export rg_main.org"
+    tex = clone / CPC / "src" / "rg_main.tex"
+    text = tex.read_text()
+    assert "geometry checkpoint" in text
+    tex.write_text(text.replace("geometry checkpoint", "geometry check-point", 1))
+    done = _check(clone)
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert "rg_main.tex is not the Org export of rg_main.org" in done.stdout
