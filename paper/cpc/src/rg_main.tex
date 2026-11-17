@@ -790,7 +790,9 @@ On a 500-frame corpus readcon-db reads every frame in a mean of \num{\rdbCorpusR
 
 readcon-db also keeps a derived cache of the same CON text with each coordinate column byte-shuffled and compressed with zstd.
 On one thread the warm full read of the shuffled cache on the lattice trajectory divided by the raw read is \num{\rdbShuffleFirst} in the first campaign and \num{\rdbShuffleSecond} in the second, and the paired interval of the second runs from \num{\rdbShuffleSecondLo} to \num{\rdbShuffleSecondHi}, so the shuffled read is the faster of the two.
-A third campaign compares the raw read of the measured code with an earlier commit; its paired median on one thread is \num{\rdbRawPairedMedian} with an interval from \num{\rdbRawPairedLo} to \num{\rdbRawPairedHi}, and a commit bisect of the raw read returns a paired interval at each stored step; every stored bisect interval and this interval include 1.
+A third campaign compares the raw warm full read of the measured code with an earlier commit on one thread, in \rdbRawPairs{} pairs (\rdbRawPairedCIMethod; \rdbRawPairOrder).
+Each pair divides the time of the measured code by that of the earlier commit, and the interval of the paired median runs from \num{\rdbRawPairedLo} to \num{\rdbRawPairedHi}, so it includes 1.
+A commit bisect of the raw read returns a paired interval at each stored step, and every stored bisect interval includes 1.
 In a fourth campaign the lattice best case reads the shuffled cache in \num{\rdbLatticeBest} of the raw time, and the paired median of that read in a fifth is \num{\rdbLatticePaired}, while the membrane-protein trajectory of the fourth reads it in \num{\rdbMembraneRatio} of the raw time, so the shuffled cache is not always the faster read.
 The fair one-million-atom warm read on one thread runs from \num{\rdbMillionReadMin}~s to \num{\rdbMillionReadMax}~s across the readcon-db campaigns on this host and is \num{\rdbFairReadMedian}~s in the fair-store rerun, each under a 50~ms sampling window.
 
