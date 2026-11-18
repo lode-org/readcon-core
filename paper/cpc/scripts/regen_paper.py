@@ -6,7 +6,8 @@
 
 The format steps read only committed records. The measurement steps rewrite
 those records; the C-interface rows load the library that
-``cargo build --release`` writes, or ``READCON_LIB``. The eOn band
+``cargo build --release --features benchmark`` writes, or ``READCON_LIB``.
+The library must contain mimalloc. The eOn band
 (``evidence/e1_restart.py``), the resume wall times
 (``scripts/run_restart_walls.py``), the file sizes (``scripts/file_sizes.py``),
 the timing, memray, Cachegrind, head-to-head and binary-format records of
@@ -250,8 +251,23 @@ def main() -> None:
     if args.measure:
         if not Path(env["READCON_LIB"]).is_file():
             raise SystemExit(
-                f"{env['READCON_LIB']} is missing; run cargo build --release"
+                f"{env['READCON_LIB']} is missing; "
+                "run cargo build --release --features benchmark"
             )
+        allocator = subprocess.run(
+            [
+                sys.executable,
+                str(REPO / "scripts" / "check_mimalloc_symbols.py"),
+                env["READCON_LIB"],
+            ],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if allocator.returncode:
+            raise SystemExit(allocator.stderr.strip() or allocator.stdout.strip())
+        print(allocator.stdout.strip(), flush=True)
         for step in MEASURE:
             run(step, env)
     # matplotlib runs fc-list when it builds its font cache, and the ledger would record that run for the first

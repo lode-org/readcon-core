@@ -245,7 +245,7 @@ def ensure_python_extension() -> None:
             "build",
             "--release",
             "--features",
-            "python,zstd,global_mimalloc",
+            "python,zstd,benchmark",
         ],
         cwd=ROOT,
         check=True,

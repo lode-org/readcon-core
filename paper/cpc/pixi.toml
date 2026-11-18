@@ -49,10 +49,10 @@ SOURCE_DATE_EPOCH = "1793404800"
 FORCE_SOURCE_DATE = "1"
 
 [tasks]
-cpc-readcon = { cmd = "maturin develop --release --features python,zstd,global_mimalloc", cwd = "../..", description = "Build the readcon module of the checkout, with zstd input, into this environment" }
-cpc-clib = { cmd = "cargo build --release --features global_mimalloc", cwd = "../..", description = "Build target/release/libreadcon_core.so of the checkout, which the C-interface rows of the survey load" }
-cpc-clib-parallel = { cmd = "cargo build --release --features parallel,global_mimalloc", cwd = "../..", env = { CARGO_TARGET_DIR = "target/clib-parallel" }, description = "Build target/clib-parallel/release/libreadcon_core.so with Rayon, as the release archives build the C library, for scripts/corpus_paths.py" }
-cpc-cli = { cmd = "cargo build --release --features zstd,global_mimalloc --bin readcon-core", cwd = "../..", env = { CARGO_TARGET_DIR = "target/cli" }, description = "Build target/cli/release/readcon-core with zstd input, as the release archives build the CLI, for scripts/referee_probes.py" }
+cpc-readcon = { cmd = "maturin develop --release --features python,zstd,benchmark", cwd = "../..", description = "Build the readcon module of the checkout, with zstd input, into this environment" }
+cpc-clib = { cmd = "cargo build --release --features benchmark", cwd = "../..", description = "Build target/release/libreadcon_core.so of the checkout, which the C-interface rows of the survey load" }
+cpc-clib-parallel = { cmd = "cargo build --release --features parallel,benchmark", cwd = "../..", env = { CARGO_TARGET_DIR = "target/clib-parallel" }, description = "Build target/clib-parallel/release/libreadcon_core.so with Rayon, as the release archives build the C library, for scripts/corpus_paths.py" }
+cpc-cli = { cmd = "cargo build --release --features zstd,benchmark --bin readcon-core", cwd = "../..", env = { CARGO_TARGET_DIR = "target/cli" }, description = "Build target/cli/release/readcon-core with zstd input, as the release archives build the CLI, for scripts/referee_probes.py" }
 cpc-regen = { cmd = "python scripts/regen_paper.py", description = "Rewrite every table, figure and macro of the paper from the records; times and measures nothing" }
 cpc-tex = { cmd = "bash scripts/build_tex.sh", description = "Typeset rg_main.tex and rg_supp.tex" }
 cpc-tex-tectonic = { cmd = "bash scripts/build_tex_tectonic.sh", description = "Typeset rg_main.tex and rg_supp.tex with Tectonic 0.17.0 on PATH, for hosts without TeX Live" }

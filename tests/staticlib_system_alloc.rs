@@ -33,7 +33,8 @@ fn defined_mimalloc(archive: &Path) -> String {
             let _addr = parts.next();
             let kind = parts.next().unwrap_or("");
             let name = parts.next().unwrap_or("");
-            kind == "T" && (name == "mi_malloc" || name == "mi_free")
+            matches!(kind, "T" | "t")
+                && (name == "mi_malloc" || name == "mi_free" || name == "mi_malloc_aligned")
         })
         .collect::<Vec<_>>()
         .join("\n")

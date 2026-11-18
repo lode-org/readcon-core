@@ -83,7 +83,7 @@ def _build_profiled_probe() -> Path:
             "--example",
             "scale_probe",
             "--features",
-            "global_mimalloc",
+            "benchmark",
         ],
         cwd=ROOT,
         env=env,

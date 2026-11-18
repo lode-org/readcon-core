@@ -73,7 +73,7 @@ Workflow ``Benchmark PR`` (``ci_benchmark.yml``) is one job. Snakemake
 benchmarks.
 
 1. asv virtualenv builds **base** and **head** with
-   ``maturin build --features python,chemfiles-from-sources --release``
+   ``maturin build --features python,chemfiles-from-sources,global_mimalloc --release``
    (pinned in ``asv.conf.json`` and ``benchmarks/workflow/requirements.txt``).
    ``ci_benchmark.yml`` pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
    Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
