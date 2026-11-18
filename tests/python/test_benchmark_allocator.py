@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -22,54 +23,63 @@ def test_documented_criterion_commands_use_the_benchmark_feature() -> None:
     bad = []
     for route in docs:
         for line in (ROOT / route).read_text(encoding="utf-8").splitlines():
-            if "cargo bench" in line and "--features" in line:
-                if "benchmark" not in line or "global_mimalloc" in line:
-                    bad.append(f"{route}: {line.strip()}")
+            if "cargo bench" in line and (
+                "--features" not in line
+                or "benchmark" not in line
+                or "global_mimalloc" in line
+            ):
+                bad.append(f"{route}: {line.strip()}")
     assert not bad, "stale Criterion commands:\n" + "\n".join(bad)
 
 
-def test_timing_routes_name_the_benchmark_feature() -> None:
-    commands = (
-        ("asv.conf.json", "--features python,chemfiles-from-sources,benchmark", 1),
-        ("pixi.toml", 'bench = "cargo bench --features parallel,benchmark"', 1),
-        ("benchmarks/workflow/weak/COMMANDS.txt", "--features mpi,benchmark", 1),
-        ("benchmarks/workflow/weak/COMMANDS.txt", "--features parallel,benchmark", 1),
-        ("bench/h2h/camp6.py", '"python,zstd,benchmark"', 1),
-        ("bench/h2h/mem_r1.py", '"parallel,benchmark"', 1),
-        ("bench/h2h/mem_r1.py", '"python,parallel,benchmark"', 1),
-        ("bench/h2h/parse_limiter.py", '"benchmark"', 1),
-        ("bench/h2h/release_campaign.py", '"python,zstd,benchmark"', 1),
-        ("bench/h2h/scale_r6.py", '"parallel,benchmark"', 1),
-        ("bench/h2h/scale_r6.py", '"parallel,mpi,benchmark"', 1),
-        ("bench/h2h/scale_r6.py", '"parallel,zstd,benchmark"', 1),
-        ("bench/h2h/support.py", '"parallel,benchmark"', 1),
-        ("paper/cpc/bench/binary_formats.py", 'features = ["parallel", "benchmark"]', 1),
-        ("paper/cpc/bench/cachegrind.py", '"chemfiles-from-sources,benchmark"', 1),
-        ("paper/cpc/bench/cpp_reads.py", '["parallel", "benchmark"]', 1),
-        ("paper/cpc/bench/h2h.py", '"parallel,benchmark"', 2),
-        ("paper/cpc/bench/h2h.py", '"cargo_features": ["parallel", "benchmark"]', 1),
-        ("paper/cpc/bench/dlpack_cost/Cargo.toml", 'features = ["benchmark"]', 1),
-        ("paper/cpc/bench/mpi_cost/Cargo.toml", 'features = ["mpi", "benchmark"]', 1),
-        (
-            "paper/cpc/bench/readcon-bench/Cargo.toml",
-            'features = ["parallel", "benchmark"]',
-            1,
+def test_every_timing_example_requires_the_benchmark_feature() -> None:
+    timing_examples = {
+        "cachegrind_harness",
+        "chemfiles_xyz_time",
+        "codec_ceiling",
+        "conbin_perf",
+        "format_profile",
+        "leaf_io_harness",
+        "mpi_read_check",
+        "mpi_write_check",
+        "rcidx_bench",
+        "scale_probe",
+        "serial_probe",
+        "strong_scale_mpi",
+        "v31_parse_bench",
+        "wall_scale_harness",
+        "weak_scale_mpi",
+        "weak_scale_threads",
+    }
+    exemptions = {
+        "parse_probe": "functional parser outcome probe; it does not read a clock",
+        "stream_triad": (
+            "standalone rustc memory-bandwidth probe; it does not link readcon-core"
         ),
-        ("paper/cpc/pixi.toml", "--features python,zstd,benchmark", 1),
-        ("paper/cpc/pixi.toml", "--features benchmark", 1),
-        ("paper/cpc/pixi.toml", "--features parallel,benchmark", 1),
-        ("paper/cpc/pixi.toml", "--features zstd,benchmark", 1),
-        ("scripts/run_cachegrind_bench.sh", '},benchmark"', 1),
+    }
+    examples_dir = ROOT / "examples"
+    clocked = {
+        path.stem
+        for path in examples_dir.glob("*.rs")
+        if "Instant" in path.read_text(encoding="utf-8")
+    }
+    assert not clocked - timing_examples - exemptions.keys(), (
+        "unclassified timing examples: "
+        + ", ".join(sorted(clocked - timing_examples - exemptions.keys()))
     )
-    missing = [
-        f"{route}: {fragment} ({actual}/{count})"
-        for route, fragment, count in commands
-        if (
-            actual := (ROOT / route).read_text(encoding="utf-8").count(fragment)
-        )
-        < count
-    ]
-    assert not missing, "timed build commands without benchmark:\n" + "\n".join(missing)
+    assert "Instant" not in (examples_dir / "parse_probe.rs").read_text(encoding="utf-8")
+    stream = (examples_dir / "stream_triad.rs").read_text(encoding="utf-8")
+    assert "Instant" in stream and "readcon_core" not in stream
+
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    declared = {
+        example["name"]: set(example.get("required-features", ()))
+        for example in manifest["example"]
+    }
+    missing = sorted(
+        name for name in timing_examples if "benchmark" not in declared.get(name, set())
+    )
+    assert not missing, f"timing examples without required feature benchmark: {missing}"
 
 
 def test_symbol_gate_rejects_a_non_mimalloc_binary() -> None:

@@ -24,6 +24,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.11
