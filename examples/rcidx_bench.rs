@@ -1,6 +1,6 @@
 //! Serial vs indexed read timings.
 //!
-//! `cargo run --release --features parallel --example rcidx_bench -- FILE [THREADS]`
+//! `cargo run --release --features parallel,benchmark --example rcidx_bench -- FILE [THREADS]`
 //!
 //! Reports: offset scan, sidecar load, strict UTF-8, sliced UTF-8,
 //! serial `read_all_frames`, and `read_all_frames_indexed` cold (no

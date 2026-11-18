@@ -40,6 +40,20 @@ fn python_module_and_rlib_consumer_load_together() {
     assert!(wheel_build.success(), "Python module build failed");
     let wheel = wheel_target.join("release/libreadcon_core.so");
     assert!(wheel.is_file(), "missing {}", wheel.display());
+    let wheel_symbols = Command::new("nm")
+        .args(["--defined-only", wheel.to_str().unwrap()])
+        .output()
+        .expect("nm wheel module");
+    assert!(wheel_symbols.status.success());
+    assert!(
+        String::from_utf8_lossy(&wheel_symbols.stdout)
+            .lines()
+            .any(|line| line
+                .split_whitespace()
+                .last()
+                .is_some_and(|symbol| symbol.starts_with("mi_"))),
+        "Python module contains no defined mimalloc symbol"
+    );
     let wheel_dynamic = Command::new("readelf")
         .args(["-d", wheel.to_str().unwrap()])
         .output()
@@ -71,7 +85,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = {{ version = "0.28", features = ["extension-module"] }}
-readcon-core = {{ path = "{}", default-features = false }}
+readcon-core = {{ path = "{}" }}
 "#,
         root.display()
     );

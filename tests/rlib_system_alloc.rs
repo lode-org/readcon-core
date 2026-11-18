@@ -22,7 +22,6 @@ fn default_rlib_defines_no_allocator_shim_or_mimalloc() {
             "--locked",
             "--release",
             "--lib",
-            "--no-default-features",
             "--crate-type",
             "rlib",
             "--target-dir",

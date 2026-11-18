@@ -36,6 +36,8 @@ mod allocator_link_tests {
     #[test]
     fn the_shipped_allocator_is_mimalloc() {
         let boxed = Box::new([0u8; 32]);
+        // SAFETY: `boxed` is live, non-null, and was allocated by the active
+        // mimalloc global allocator; `mi_usable_size` only reads its metadata.
         let usable = unsafe { mi_usable_size(boxed.as_ptr() as *const std::ffi::c_void) };
         assert!(
             usable >= 32,

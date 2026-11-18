@@ -1,5 +1,5 @@
 //! Deterministic workload for Cachegrind CI.
-//! Usage: cargo run --release --example cachegrind_harness [--features chemfiles] -- [scenario|all|list]
+//! Usage: cargo run --release --example cachegrind_harness --features benchmark[,chemfiles] -- [scenario|all|list]
 
 use readcon_core::iterators::ConFrameIterator;
 use readcon_core::parser::{parse_line_of_n, parse_line_of_n_f64};

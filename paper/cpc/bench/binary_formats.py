@@ -471,7 +471,7 @@ def readcon_manifest() -> str:
         f"path = {json.dumps(str(DRIVERS / 'readcon_read.rs'))}",
         "",
         "[dependencies]",
-        f'readcon-core = {{ path = {json.dumps(str(SRC))}, features = ["parallel", "global_mimalloc"] }}',
+        f'readcon-core = {{ path = {json.dumps(str(SRC))}, features = ["parallel", "benchmark"] }}',
         "",
         "[profile.release]",
         *(f"{key} = {json.dumps(value)}" for key, value in profile.items()),

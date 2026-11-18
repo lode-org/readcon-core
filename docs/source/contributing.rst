@@ -195,7 +195,7 @@ Three-step workflow (Linux, ``rustc`` 1.88+):
     $(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata \
       merge -o build/pgo/merged.profdata build/pgo
     RUSTFLAGS="-Cprofile-use=build/pgo/merged.profdata" \
-      cargo build --release --features parallel,zstd,rpc
+      cargo build --release --features parallel,zstd,rpc,global_mimalloc
 
 The same flow works for ``cargo cinstall`` when you want PGO-optimised
 ``libreadcon_core.so`` for distribution; substitute ``cargo cinstall``

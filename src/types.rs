@@ -261,6 +261,15 @@ impl PartialEq for FrameMeta {
     }
 }
 
+impl serde::Serialize for FrameMeta {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.with_map(|map| serde::Serialize::serialize(map, serializer))
+    }
+}
+
 impl FrameMeta {
     pub fn from_line(raw: impl Into<std::sync::Arc<str>>) -> Self {
         let raw = raw.into();

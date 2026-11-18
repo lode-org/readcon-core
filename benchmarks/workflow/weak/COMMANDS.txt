@@ -30,12 +30,14 @@ python3 benchmarks/weak_scale.py report --json results/weak/threads.json --out r
 
 == Rank curve, mpirun
 The plan's ranks_mpi.run field has to be true.
-cargo build --release --example weak_scale_mpi --features mpi
+cargo build --release --example weak_scale_mpi --features mpi,benchmark
+python3 scripts/check_mimalloc_symbols.py target/release/examples/weak_scale_mpi
 snakemake -s benchmarks/workflow/weak/Snakefile --configfile benchmarks/workflow/weak/config.yaml -c 1 ranks
 python3 benchmarks/weak_scale.py report --json results/weak/ranks.json --out results/weak/tables --plot
 
 == Fallback thread harness, when the asv wheel cannot be built
-cargo build --release --example weak_scale_threads --features parallel
+cargo build --release --example weak_scale_threads --features parallel,benchmark
+python3 scripts/check_mimalloc_symbols.py target/release/examples/weak_scale_threads
 target/release/examples/weak_scale_threads results/weak/threads-rust.json 64
 python3 benchmarks/weak_scale.py report --json results/weak/threads-rust.json --out results/weak/tables --plot
 

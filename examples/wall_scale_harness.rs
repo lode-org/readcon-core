@@ -3,7 +3,7 @@
 //! Usage (on a builder, never the laptop):
 //!
 //! ```text
-//! cargo run --release --example wall_scale_harness --features parallel -- \
+//! cargo run --release --example wall_scale_harness --features parallel,benchmark -- \
 //!     benches/results/wall_scale.json
 //! ```
 //!

@@ -65,6 +65,9 @@ local_dynamic_tls = ["mimalloc/local_dynamic_tls"]
 # the C cdylib, readcon's binaries, and its benchmark executables.
 # local-dynamic TLS is mandatory for every shared object that ships mimalloc.
 global_mimalloc = ["dep:mimalloc", "local_dynamic_tls"]
+# Stable allocator feature used by every timed artifact. Benchmark commands
+# name this feature themselves instead of inheriting an allocator implicitly.
+benchmark = ["global_mimalloc"]
 # Compatibility switch retained for readcon-db and C static-archive builds.
 # The default is now already the system allocator. It also wins if a build
 # accidentally combines this feature with `global_mimalloc`.
@@ -119,6 +122,7 @@ ndarray = "0.17"
 fast-float2 = "0.2"
 ryu = "1.0"
 serde_json = { version = "1", features = ["float_roundtrip"] }
+serde = "1"
 memchr = "2"
 memmap2 = "0.9"
 libc = "0.2"
@@ -197,30 +201,30 @@ required-features = ["mpi"]
 
 [[example]]
 name = "rcidx_bench"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "wall_scale_harness"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "weak_scale_threads"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "weak_scale_mpi"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "strong_scale_mpi"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "serial_probe"
 
 [[example]]
 name = "codec_ceiling"
-required-features = ["parallel", "zstd"]
+required-features = ["parallel", "zstd", "benchmark"]
 
 [[example]]
 name = "leaf_io_harness"
@@ -233,22 +237,22 @@ required-features = ["parallel"]
 [[bench]]
 name = "iterator_bench"
 harness = false
-required-features = ["global_mimalloc"]
+required-features = ["benchmark"]
 
 [[bench]]
 name = "traj10k"
 harness = false
-required-features = ["global_mimalloc"]
+required-features = ["benchmark"]
 
 [[bench]]
 name = "wide_write"
 harness = false
-required-features = ["global_mimalloc"]
+required-features = ["benchmark"]
 
 [[bench]]
 name = "speed_checks"
 harness = false
-required-features = ["parallel", "global_mimalloc"]
+required-features = ["parallel", "benchmark"]
 
 # Match release so the 10k-frame numbers are the ones a user binary gets.
 [profile.bench]
@@ -300,7 +304,7 @@ strip = "symbols"
 [[example]]
 name = "cachegrind_harness"
 path = "examples/cachegrind_harness.rs"
-required-features = ["global_mimalloc"]
+required-features = ["benchmark"]
 
 [[example]]
 name = "chemfiles_xyz_time"

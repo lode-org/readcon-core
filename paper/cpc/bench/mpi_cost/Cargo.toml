@@ -14,4 +14,4 @@ path = "src/fallback.rs"
 
 [dependencies]
 mpi = { version = "0.8", default-features = false }
-readcon-core = { path = "../../../..", features = ["mpi", "global_mimalloc"] }
+readcon-core = { path = "../../../..", features = ["mpi", "benchmark"] }

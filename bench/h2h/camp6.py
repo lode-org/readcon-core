@@ -107,7 +107,7 @@ def install_wheel() -> None:
             "--release",
             "--offline",
             "--features",
-            "python,zstd,global_mimalloc",
+            "python,zstd,benchmark",
         ],
         cwd=ROOT,
         check=True,
