@@ -99,7 +99,7 @@ def main(argv: list[str]) -> int:
         crate_features = features.strip()
         if crate_type == "cdylib":
             crate_features = ",".join(
-                part for part in (crate_features, "global_mimalloc") if part
+                part for part in (crate_features, "mimalloc-allocator") if part
             )
         else:
             crate_features = ",".join(

@@ -10,8 +10,11 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bugfixes
 
 - Rust library builds no longer install mimalloc as the process-wide global
-  allocator. Final applications choose their own allocator. The Python module
-  and C shared library still opt into mimalloc, built with local-dynamic TLS;
+  allocator. The optional `mimalloc-allocator` feature is reserved for final
+  readcon artifacts, and `default-features = false` removes both the mimalloc
+  dependency and allocator symbol. This allows downstream binaries to link
+  minimage's `capi` feature without a duplicate `mi_version` definition. The
+  Python module and C shared library enable the feature with local-dynamic TLS;
   the C static archive and the compatibility `static_system_alloc` feature
   continue to use the system allocator.
 

@@ -1,0 +1,40 @@
+name: Downstream minimage link
+
+on:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feat/**"
+      - "ci/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: minimage-link-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  minimage-link:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.88
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Link readcon-core with minimage C API
+        run: cargo run --release --locked --manifest-path tests/minimage-link/Cargo.toml
+
+      - name: Confirm mimalloc is absent
+        shell: bash
+        run: |
+          tree="$(
+            cargo tree --locked --manifest-path tests/minimage-link/Cargo.toml \
+              -e normal --prefix none
+          )"
+          printf '%s\n' "$tree"
+          if grep -Eq '^mimalloc v' <<<"$tree"; then
+            echo "mimalloc must be absent when readcon-core uses default-features = false" >&2
+            exit 1
+          fi

@@ -57,24 +57,26 @@ rpc = [
 # dlpk's sys::DLManagedTensorVersioned types directly. Once dlpk
 # bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
-# Build mimalloc's C objects with local-dynamic TLS. This feature does not
-# select a process allocator by itself; it remains public for compatibility.
-local_dynamic_tls = ["mimalloc/local_dynamic_tls"]
+# Build mimalloc's C objects with local-dynamic TLS when mimalloc is selected.
+# This compatibility feature does not pull mimalloc into a library build.
+local_dynamic_tls = ["mimalloc?/local_dynamic_tls"]
 # Install mimalloc as the process allocator. Libraries must not enable this
 # for Rust consumers; it is for final artifacts such as the Python module,
 # the C cdylib, readcon's binaries, and its benchmark executables.
 # local-dynamic TLS is mandatory for every shared object that ships mimalloc.
-global_mimalloc = ["dep:mimalloc", "local_dynamic_tls"]
+mimalloc-allocator = ["dep:mimalloc", "local_dynamic_tls"]
+# Compatibility alias for builds that used the pre-0.24 feature name.
+global_mimalloc = ["mimalloc-allocator"]
 # Stable allocator feature used by every timed artifact. Benchmark commands
 # name this feature themselves instead of inheriting an allocator implicitly.
-benchmark = ["global_mimalloc"]
+benchmark = ["mimalloc-allocator"]
 # Compatibility switch retained for readcon-db and C static-archive builds.
 # The default is now already the system allocator. It also wins if a build
-# accidentally combines this feature with `global_mimalloc`.
+# accidentally combines this feature with `mimalloc-allocator`.
 static_system_alloc = []
 # Counters for the borrowed-frame writer. Off in a release module.
 borrow-path-counts = []
-python = ["dep:pyo3", "dep:numpy", "parallel", "global_mimalloc"]
+python = ["dep:pyo3", "dep:numpy", "parallel", "mimalloc-allocator"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.

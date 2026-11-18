@@ -18,7 +18,7 @@ if "STATIC_TLS" in report:
     raise SystemExit(
         f"{library}: DF_STATIC_TLS is set; dlopen fails with "
         "'cannot allocate memory in static TLS block'. "
-        "Build the cdylib with --features global_mimalloc "
+        "Build the cdylib with --features mimalloc-allocator "
         "(which includes mimalloc's stable local-dynamic TLS)."
     )
 print(f"{library.name}: SONAME verified, no DF_STATIC_TLS")
