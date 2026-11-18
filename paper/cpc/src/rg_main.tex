@@ -333,7 +333,7 @@ with \(b_\alpha=1\) when component \(\alpha\) is fixed.
 In Listing~\ref{lst:frame} the bottom rows are fixed in every component, the top layer is free, and the adatom is held in \(z\) alone.
 A reader that applies the version-1 rule of Table~\ref{tab:clauses} to this frame rejects the mask of the adatom as an illegal flag.
 Conversely, a reader that applies the CON 3.1 rule to a version-1 file frees \(y\) and \(z\) of every atom held there.
-Section~\ref{sec:prefactor} shows what is lost with the hold of the adatom: the band crosses a different saddle, with a larger prefactor.
+Without the hold of the adatom, the band crosses a different saddle, with a larger prefactor (Section~\ref{sec:prefactor}).
 
 The identifier is the index of the atom in the numbering of the writer, from \wkIdFirst{} on the first row to \wkIdLast{} on the last, and between \wkIdLow{} and \wkIdHigh{} overall.
 Grouping the atoms by type has permuted that numbering, and sorting by identifier restores it.
@@ -380,7 +380,7 @@ A type count of zero gives a frame without atoms.
 The release also ships this shape as an informative parsing expression grammar (PEG) \cite{fordParsingExpressionGrammars2004}, and where the PEG admits a token that a clause rejects, the clause decides.
 
 \begin{table}[tbp] \centering \footnotesize \caption{Clauses of the specification that Sections~\ref{sec:worked} and~\ref{sec:format} apply.
-Section~\ref*{sec:spec-normative} of the supplementary material gives their normative text.}
+Their normative text is in Section~\ref*{sec:spec-normative} of the supplementary material.}
 \label{tab:clauses}
 \begin{tabular}{@{}lp{0.74\linewidth}@{}}
 \toprule
@@ -717,7 +717,7 @@ With the height free, which is the problem a reader solves when the file has los
 \input{figures/generated/e5_routes}
 
 \subsection{eOn resuming a Morse band}\label{sec:eon-band} The public eOn client resumes a band from its own output files.
-Section~\ref{sec:host} times the readers of that client on every frame, through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} over the frames that \texttt{ConFileIO} reads, with the eon format of \texttt{ase.io} as an independent CON reader beside them.
+We time the readers of that client on every frame (Section~\ref{sec:host}), through \texttt{eon.fileio.loadcons} and through a loop of \texttt{con2matter} over the frames that \texttt{ConFileIO} reads, with the eon format of \texttt{ase.io} as an independent CON reader beside them.
 The default band optimizer of eOn is L-BFGS, the limited-memory form of the Broyden, Fletcher, Goldfarb and Shanno update \cite{nocedalUpdatingQuasinewtonMatrices1980,sheppardOptimizationMethodsFinding2008}, and no geometry file stores its memory vectors.
 A restart therefore cannot repeat an L-BFGS path from the geometry alone, and the band of Figure~\ref{fig:restart} uses steepest descent.
 
@@ -783,7 +783,7 @@ On that host, a fresh process reads one million atoms of CON in \hhfReadconConWa
 
 \input{figures/generated/format_h2h}
 
-Section~\ref*{sec:supp-timing} of the supplementary material gives the times for XYZ, HDF5 and the mapped binary coordinate file, as context for choosing a format.
+The times for XYZ, HDF5 and the mapped binary coordinate file are in Section~\ref*{sec:supp-timing} of the supplementary material, as context for choosing a format.
 h5py reads the same frames in \rcHdfMedian~s, against \rcTipMedian~s for readcon, and the mapped binary file is read in \rcConbinMedian~s.
 
 \input{figures/generated/host_table}
@@ -826,7 +826,7 @@ The timing record of these launches and the record of a scatter run that takes t
 \begin{figure}[tbp] \centering \includegraphics[width=0.85\textwidth]{figures/generated/mpi_host.pdf} \caption{Distributed read on this host. The marker is the type 7 median and the whisker is the type 7 interquartile range.}
 \label{fig:mpi-host} \end{figure}
 
-\FloatBarrier \section{Stored campaigns}\label{sec:stored} The figures in this section are drawn from the stored records of this paper (Data availability).
+\FloatBarrier \section{Stored campaigns}\label{sec:stored} Each figure below is drawn from the stored records of this paper (Data availability).
 The database and MPI figures come from earlier campaigns, not from the timed repeats on the host of this paper.
 
 \begin{figure}[tbp] \centering \includegraphics[width=0.72\textwidth]{figures/generated/fairness_ratios.pdf} \caption{An earlier stored ratio of readcon-core wall time to the peer wall time.}
@@ -909,7 +909,7 @@ The readcon-db records are copied verbatim from two commits on the fix/ingest-sp
 The fidelity test is the two-store fidelity test of lode-org/readcon-db at commit \texttt{0afbaa0b}, and its field table is copied with the fair-store records.
 The equal store comparison is the fair-db32 campaign; the legacy copper-dimer bench of the reviewed records is an unequal-workload stand-in and is not that comparison.
 The five shuffled-cache campaigns of Section~\ref*{sec:readcon-db} are db24, db25, db26, db28 and db29 in the order given there, and the third compares the raw read of readcon-db commit \texttt{a584a288} with an earlier commit.
-Section~\ref*{sec:supp-repro} gives the commands that install readcon-core and rebuild the paper with TeX Live or Tectonic, and says how each measurement is rerun, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
+The commands that install readcon-core and rebuild the paper with TeX Live or Tectonic, and the way to rerun each measurement, are in Section~\ref*{sec:supp-repro}, and Table~\ref*{tab:versionmap} maps every result to the release, the commit, the compiler and the host it was measured on.
 
 \FloatBarrier \section*{CRediT authorship contribution statement}\label{sec:credit} Rohit Goswami: Conceptualization, Methodology, Software, Visualization, Writing -{}- original draft, Writing -{}- review and editing.
 
