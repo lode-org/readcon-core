@@ -101,7 +101,14 @@ def weak_efficiency(serial_s: float, parallel_s: float) -> float:
 
 def install_wheel() -> None:
     subprocess.run(
-        ["maturin", "build", "--release", "--offline", "--features", "python,zstd"],
+        [
+            "maturin",
+            "build",
+            "--release",
+            "--offline",
+            "--features",
+            "python,zstd,global_mimalloc",
+        ],
         cwd=ROOT,
         check=True,
     )

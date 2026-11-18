@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT_DIR="${OUT_DIR:-$ROOT/docs/source/_generated}"
 CG_DIR="${CG_DIR:-$ROOT/target/cachegrind}"
-FEATURES="${CACHEGRIND_FEATURES:-chemfiles}"
+FEATURES="${CACHEGRIND_FEATURES:-chemfiles},global_mimalloc"
 mkdir -p "$OUT_DIR" "$CG_DIR"
 
 echo "Building release harness (features=${FEATURES})..."

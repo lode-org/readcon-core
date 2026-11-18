@@ -15,10 +15,9 @@ use readcon_core::parser::{parse_line_of_n_f64, parse_single_frame};
 use readcon_core::storage_dtype::ElementKind;
 use readcon_core::stream::ConFrameReader;
 
-// The library installs mimalloc as the process allocator. An integration
-// test cannot install a second one to record request sizes. These tests
-// keep the spec result: a count the input cannot hold is IncompleteFrame
-// or InvalidVectorLength, not a reservation that follows the declaration.
+// These tests keep the spec result: a count the input cannot hold is
+// IncompleteFrame or InvalidVectorLength, not a reservation that follows
+// the declaration.
 
 const DECLARED: [u64; 2] = [u32::MAX as u64, usize::MAX as u64];
 

@@ -49,7 +49,7 @@ RESULTS = Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174")) / "c
 PAYLOADS = Path(os.environ.get("RC_PAYLOADS", HERE / "work" / "r0174"))
 CXX = os.environ.get("CXX", str(ENV / "bin" / "x86_64-conda-linux-gnu-c++"))
 CXXFLAGS = ["-O3", "-std=c++17", "-DNDEBUG"]
-FEATURES = ["parallel"]
+FEATURES = ["parallel", "global_mimalloc"]
 REL_TOL = 1e-12
 CHECKED = {
     "moc": (

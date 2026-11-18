@@ -10,10 +10,10 @@ platforms = ["linux-64", "osx-arm64", "osx-64"]
 [tasks]
 test = "cargo test"
 test-all = "cargo test --all-features"
-bench = "cargo bench"
+bench = "cargo bench --features global_mimalloc"
 cachegrind-bench = { cmd = "scripts/run_cachegrind_bench.sh", description = "Valgrind Cachegrind I-refs for docs (slow)" }
-build = "cargo build --release"
-build-rpc = "cargo build --release --features rpc"
+build = "cargo build --release --features global_mimalloc"
+build-rpc = "cargo build --release --features rpc,global_mimalloc"
 regen-capi-headers = { cmd = "scripts/regen-capi-headers.sh", description = "Optional: draft include/readcon-core.h via cbindgen (maintainers only, not CI)" }
 check-capi-headers = { cmd = "scripts/regen-capi-headers.sh --check", description = "Optional maintainer diff vs cbindgen; CI does not run this" }
 check-cxx-dist = { cmd = "scripts/check-cxx-dist.sh", description = "Gate: CMake/Meson/pkg-config never require cbindgen" }

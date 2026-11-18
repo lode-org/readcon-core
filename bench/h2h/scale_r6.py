@@ -534,7 +534,7 @@ def build_tools() -> None:
             "build",
             "--release",
             "--features",
-            "parallel",
+            "parallel,global_mimalloc",
             "--example",
             "scale_probe",
             "--example",
@@ -583,7 +583,7 @@ def build_tools() -> None:
                 "build",
                 "--release",
                 "--features",
-                "parallel,mpi",
+                "parallel,mpi,global_mimalloc",
                 "--example",
                 "strong_scale_mpi",
                 "--example",
@@ -721,7 +721,7 @@ def _codec_ceiling(
                 "--example",
                 "codec_ceiling",
                 "--features",
-                "parallel,zstd",
+                "parallel,zstd,global_mimalloc",
             ]
         )
     cmd = [str(binary), op, str(path), str(threads), str(repeats)]

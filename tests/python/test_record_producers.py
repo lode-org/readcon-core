@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import re
 from pathlib import Path
 
@@ -45,6 +46,13 @@ def test_the_peer_matrix_and_cross_format_notes_use_american_spelling() -> None:
     assert "optimization" in peer
     assert "serialise" not in notes
     assert "serialize" in notes
+
+
+def test_the_published_test_run_record_is_immutable() -> None:
+    record = CPC / "data" / "test_run.json"
+    assert hashlib.sha256(record.read_bytes()).hexdigest() == (
+        "7e8188d01bc543cef044225cda3cee45d05234b90b68eb374db57c05802e9c73"
+    )
 
 
 TEXTS = (CPC / "src" / "rg_main.tex", CPC / "src" / "rg_supp.tex")
