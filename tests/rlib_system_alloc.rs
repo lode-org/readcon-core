@@ -48,10 +48,7 @@ fn default_rlib_defines_no_allocator_shim_or_mimalloc() {
             let symbol = line.split_whitespace().last().unwrap_or("");
             symbol.starts_with("__rust_alloc")
                 || symbol.starts_with("__rg_")
-                || symbol == "mi_malloc"
-                || symbol == "mi_free"
-                || symbol.starts_with("mi_malloc_")
-                || symbol.starts_with("mi_free_")
+                || symbol.starts_with("mi_")
         })
         .collect::<Vec<_>>();
     assert!(

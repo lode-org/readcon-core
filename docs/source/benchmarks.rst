@@ -26,7 +26,7 @@ What we measure
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
     | local  | ``benchmarks/workflow/weak/Snakefile`` launches asv and mpirun                | Frames per worker stay fixed. Efficiency is t(1)/t(w).                            |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | local  | ``cargo bench --features global_mimalloc`` (Criterion)                        | Rust microbench latency; optional PR job saves baselines                          |
+    | local  | ``cargo bench --features benchmark`` (Criterion)                              | Rust microbench latency; optional PR job saves baselines                          |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
     | local  | ``benches/stream_compressed.py``                                              | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
@@ -287,7 +287,7 @@ the Rust work; ``iter_con`` yields full frames.
 Criterion (local Rust latency)
 ------------------------------
 
-``cargo bench --features global_mimalloc`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
+``cargo bench --features benchmark`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
 regressions and ASV for the Python PR surface. The posted PR comment is the
 ASV table (``results/comparison.txt``).
 
@@ -384,4 +384,4 @@ Reproduce (one place)
     scripts/run_cachegrind_bench.sh
 
     # Rust Criterion
-    cargo bench --features global_mimalloc
+    cargo bench --features benchmark

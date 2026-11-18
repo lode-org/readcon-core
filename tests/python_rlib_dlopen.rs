@@ -5,9 +5,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn work_dir() -> PathBuf {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let base = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target"));
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                root.join(path)
+            }
+        })
+        .unwrap_or_else(|| root.join("target"));
     base.join("python-rlib-dlopen")
 }
 
