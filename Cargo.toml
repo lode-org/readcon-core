@@ -57,19 +57,24 @@ rpc = [
 # dlpk's sys::DLManagedTensorVersioned types directly. Once dlpk
 # bumps to pyo3 0.28 (upstream), flip this to `dlpk/pyo3`.
 # Python wheels enable Rayon multi-frame parse (see iterators::read_all_frames).
-# mimalloc's C objects default to initial-exec TLS. A later dlopen of the
-# cdylib then fails with "cannot allocate memory in static TLS block".
-# This is the stable switch (libmimalloc-sys `local_dynamic_tls`). Static
-# bins and `cargo test` leave it off, so they keep initial-exec.
+# Build mimalloc's C objects with local-dynamic TLS. This feature does not
+# select a process allocator by itself; it remains public for compatibility.
 local_dynamic_tls = ["mimalloc/local_dynamic_tls"]
-# The static archive is linked into a C host beside another Rust staticlib.
-# Each archive carries its own std, so a mimalloc pointer from this crate
-# is freed with glibc. The system allocator is the one both copies already
-# call. The cdylib does not enable this and keeps mimalloc.
+# Install mimalloc as the process allocator. Libraries must not enable this
+# for Rust consumers; it is for final artifacts such as the Python module,
+# the C cdylib, readcon's binaries, and its benchmark executables.
+# local-dynamic TLS is mandatory for every shared object that ships mimalloc.
+global_mimalloc = ["dep:mimalloc", "local_dynamic_tls"]
+# Stable allocator feature used by every timed artifact. Benchmark commands
+# name this feature themselves instead of inheriting an allocator implicitly.
+benchmark = ["global_mimalloc"]
+# Compatibility switch retained for readcon-db and C static-archive builds.
+# The default is now already the system allocator. It also wins if a build
+# accidentally combines this feature with `global_mimalloc`.
 static_system_alloc = []
 # Counters for the borrowed-frame writer. Off in a release module.
 borrow-path-counts = []
-python = ["dep:pyo3", "dep:numpy", "parallel", "local_dynamic_tls"]
+python = ["dep:pyo3", "dep:numpy", "parallel", "global_mimalloc"]
 zstd = ["dep:zstd"]
 # Distributed I/O over a caller-supplied communicator (rsmpi). Needs an
 # MPI implementation and libclang at build time. See src/distrib.rs.
@@ -117,12 +122,13 @@ ndarray = "0.17"
 fast-float2 = "0.2"
 ryu = "1.0"
 serde_json = { version = "1", features = ["float_roundtrip"] }
+serde = "1"
 memchr = "2"
 memmap2 = "0.9"
 libc = "0.2"
 rustc-hash = "2"
 rayon = { version = "1.10", optional = true }
-mimalloc = { version = "0.1.43", features = ["extended"] }
+mimalloc = { version = "0.1.43", features = ["extended"], optional = true }
 mpi = { version = "0.8", optional = true, default-features = false }
 capnp = { version = "0.20", optional = true }
 capnp-rpc = { version = "0.20", optional = true }
@@ -177,6 +183,7 @@ libc = "0.2"
 
 [[example]]
 name = "conbin_perf"
+required-features = ["benchmark"]
 
 [[example]]
 name = "rust_usage"
@@ -187,42 +194,55 @@ required-features = ["mpi"]
 
 [[example]]
 name = "mpi_read_check"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "mpi_write_check"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "rcidx_bench"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "wall_scale_harness"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "weak_scale_threads"
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 [[example]]
 name = "weak_scale_mpi"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "strong_scale_mpi"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "serial_probe"
+required-features = ["benchmark"]
+
+[[example]]
+name = "scale_probe"
+required-features = ["benchmark"]
+
+[[example]]
+name = "format_profile"
+required-features = ["benchmark"]
+
+[[example]]
+name = "v31_parse_bench"
+required-features = ["benchmark"]
 
 [[example]]
 name = "codec_ceiling"
-required-features = ["parallel", "zstd"]
+required-features = ["parallel", "zstd", "benchmark"]
 
 [[example]]
 name = "leaf_io_harness"
-required-features = ["rpc"]
+required-features = ["rpc", "benchmark"]
 
 [[test]]
 name = "default_read_threads"
@@ -231,19 +251,22 @@ required-features = ["parallel"]
 [[bench]]
 name = "iterator_bench"
 harness = false
+required-features = ["benchmark"]
 
 [[bench]]
 name = "traj10k"
 harness = false
+required-features = ["benchmark"]
 
 [[bench]]
 name = "wide_write"
 harness = false
+required-features = ["benchmark"]
 
 [[bench]]
 name = "speed_checks"
 harness = false
-required-features = ["parallel"]
+required-features = ["parallel", "benchmark"]
 
 # Match release so the 10k-frame numbers are the ones a user binary gets.
 [profile.bench]
@@ -295,7 +318,8 @@ strip = "symbols"
 [[example]]
 name = "cachegrind_harness"
 path = "examples/cachegrind_harness.rs"
+required-features = ["benchmark"]
 
 [[example]]
 name = "chemfiles_xyz_time"
-required-features = ["chemfiles"]
+required-features = ["chemfiles", "benchmark"]

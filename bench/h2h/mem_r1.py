@@ -106,7 +106,7 @@ def build_rust() -> None:
             "build",
             "--release",
             "--features",
-            "parallel",
+            "parallel,benchmark",
             "--example",
             "serial_probe",
             "--example",
@@ -121,7 +121,14 @@ def build_rust() -> None:
 
 def build_python() -> None:
     run(
-        ["cargo", "build", "--release", "--features", "python,parallel", "--lib"],
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--features",
+            "python,parallel,benchmark",
+            "--lib",
+        ],
         "cargo-python.log",
     )
     folder = ROOT / "target" / "release"

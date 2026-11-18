@@ -6,7 +6,7 @@
 //! Rayon pool of that size.
 //!
 //! ```text
-//! cargo run --release --example weak_scale_threads --features parallel -- \
+//! cargo run --release --example weak_scale_threads --features parallel,benchmark -- \
 //!     OUT.json [FRAMES_PER_WORKER] [REPEATS]
 //! ```
 //!

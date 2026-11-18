@@ -2,7 +2,7 @@
 //! criterion bench uses. Build with `--features chemfiles-from-sources`.
 //!
 //! ```text
-//! cargo +1.90.0 run --release --features chemfiles-from-sources --example chemfiles_xyz_time
+//! cargo +1.90.0 run --release --features chemfiles-from-sources,benchmark --example chemfiles_xyz_time
 //! ```
 
 use chemfiles::{Atom, Frame, Trajectory};

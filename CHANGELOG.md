@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file. See [conven
 
 <!-- towncrier release notes start -->
 
+## Unreleased
+
+### Bugfixes
+
+- Rust library builds no longer install mimalloc as the process-wide global
+  allocator. Final applications choose their own allocator. The Python module
+  and C shared library still opt into mimalloc, built with local-dynamic TLS;
+  the C static archive and the compatibility `static_system_alloc` feature
+  continue to use the system allocator.
+
 ## v0.24.0 - 2026-11-17
 
 ### Breaking

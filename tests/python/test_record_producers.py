@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import re
 from pathlib import Path
 
@@ -22,6 +23,9 @@ _NEW_SOURCES = (
     "paper/cpc/scripts/measure_db.py",
     "paper/cpc/scripts/measure_novel.py",
     "paper/cpc/scripts/write_e5_bands.py",
+    "scripts/check_mimalloc_symbols.py",
+    "scripts/check_timed_allocators.py",
+    "tests/python/test_benchmark_allocator.py",
     "tests/python/test_record_producers.py",
     "tests/python/test_write_million_release.py",
     "tests/staticlib_system_alloc.rs",
@@ -45,6 +49,13 @@ def test_the_peer_matrix_and_cross_format_notes_use_american_spelling() -> None:
     assert "optimization" in peer
     assert "serialise" not in notes
     assert "serialize" in notes
+
+
+def test_the_published_test_run_record_is_immutable() -> None:
+    record = CPC / "data" / "test_run.json"
+    assert hashlib.sha256(record.read_bytes()).hexdigest() == (
+        "7e8188d01bc543cef044225cda3cee45d05234b90b68eb374db57c05802e9c73"
+    )
 
 
 TEXTS = (CPC / "src" / "rg_main.tex", CPC / "src" / "rg_supp.tex")

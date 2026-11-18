@@ -9,4 +9,4 @@ name = "dlpack_cost"
 path = "src/main.rs"
 
 [dependencies]
-readcon-core = { path = "../../../.." }
+readcon-core = { path = "../../../..", features = ["benchmark"] }

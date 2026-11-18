@@ -26,7 +26,7 @@ What we measure
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
     | local  | ``benchmarks/workflow/weak/Snakefile`` launches asv and mpirun                | Frames per worker stay fixed. Efficiency is t(1)/t(w).                            |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
-    | local  | ``cargo bench`` (Criterion)                                                   | Rust microbench latency; optional PR job saves baselines                          |
+    | local  | ``cargo bench --features benchmark`` (Criterion)                              | Rust microbench latency; optional PR job saves baselines                          |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
     | local  | ``benches/stream_compressed.py``                                              | Peak resident memory and wall time of Python ``iter_con`` by mode, plain and gzip |
     +--------+-------------------------------------------------------------------------------+-----------------------------------------------------------------------------------+
@@ -73,7 +73,7 @@ Workflow ``Benchmark PR`` (``ci_benchmark.yml``) is one job. Snakemake
 benchmarks.
 
 1. asv virtualenv builds **base** and **head** with
-   ``maturin build --features python,chemfiles-from-sources --release``
+   ``maturin build --features python,chemfiles-from-sources,global_mimalloc --release``
    (pinned in ``asv.conf.json`` and ``benchmarks/workflow/requirements.txt``).
    ``ci_benchmark.yml`` pins rustc 1.88.0, the Actions by commit, uv 0.13.6,
    Python 3.12.16, and the Ubuntu 22.04 cmake, gcc, and g++ package versions.
@@ -287,7 +287,7 @@ the Rust work; ``iter_con`` yields full frames.
 Criterion (local Rust latency)
 ------------------------------
 
-``cargo bench`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
+``cargo bench --features benchmark`` runs ``benches/iterator_bench.rs``. Prefer Cachegrind for I-ref
 regressions and ASV for the Python PR surface. The posted PR comment is the
 ASV table (``results/comparison.txt``).
 
@@ -384,4 +384,4 @@ Reproduce (one place)
     scripts/run_cachegrind_bench.sh
 
     # Rust Criterion
-    cargo bench
+    cargo bench --features benchmark

@@ -52,6 +52,7 @@ REPO = CPC.parents[1]
 SRC = CPC / "src"
 GENERATED = SRC / "figures" / "generated"
 OUT = GENERATED / "version_map.tex"
+LIBRARY_OUT = GENERATED / "library_macros.tex"
 READS = CPC / "data" / "trace" / "reads.json"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
@@ -76,6 +77,9 @@ NO_BUILD = {
     "data/novel/fidelity.json",
     "data/novel/restart_diff.json",
     "data/novel/velocity.json",
+    # Release metadata of eOn and of peer libraries, read from their upstream pages.
+    "data/eon/readcon_pins.json",
+    "data/peers/releases.json",
 }
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
@@ -111,6 +115,8 @@ RECORD_NAMES = (
     (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),
     (r"evidence/results/e5_prefactor\.json", "Evidence E5, prefactor"),
     (r"data/db31/(db\d+)/ab\.json", "readcon-db campaign {campaign}"),
+    (r"data/db31/(db\d+)/paired_protocol\.json", "readcon-db campaign {campaign}, paired protocol"),
+    (r"data/db31/(db\d+)/", "readcon-db campaign {campaign}"),
     (r"data/db31/corpus-ops/readcon_db_bench\.json", "readcon-db campaign db31, corpus operations"),
     (r"data/db3[0-2]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
     (r"data/db30/(db\d+)/campaign\.json", "readcon-db campaign {campaign}"),
@@ -894,6 +900,28 @@ def heading(build: Build) -> str:
     return "; ".join(parts) + build.extra
 
 
+CAPTION = "% caption"
+
+
+def caption(collapsed: bool) -> str:
+    """The caption of the map; when one row stands for several records of a campaign, it says so."""
+    rows = (
+        "Each row names one record, or several records of one campaign, by the campaign and what they hold,"
+        " and names the tables, figures, listings and parts of the documents that print a value from them."
+        if collapsed
+        else "Each record is named by its campaign and what it holds, and names the tables, figures, listings"
+        " and parts of the documents that print a value from it."
+    )
+    return (
+        r"\caption{The build and host of the records behind the printed results. Each heading names the"
+        r" readcon-core version, the library digest (the SHA-256 over the library sources, leading hexadecimal"
+        r" digits), the Python module or program behind the records below it with its SHA-256, the Rust"
+        r" compiler, the Python interpreter and the host, as far as those records name them. "
+        + rows
+        + r"}\label{tab:versionmap}\\"
+    )
+
+
 def render() -> tuple[str, list[str]]:
     """The table, and the problems: data files behind a result that name no build, and macro files that do not
     name the record of each macro."""
@@ -932,14 +960,7 @@ def render() -> tuple[str, list[str]]:
         r"\begingroup",
         r"\scriptsize",
         r"\begin{longtable}{@{}p{0.42\textwidth}p{0.54\textwidth}@{}}",
-        (
-            r"\caption{The build and host of every record behind a printed result. Each heading names the readcon-core"
-            r" version, the library digest (the SHA-256 over the library sources, leading hexadecimal digits), the"
-            r" Python module or program behind the records below it with its SHA-256, the Rust compiler, the Python"
-            r" interpreter and the host, as far as those records name them. Each record is named by its campaign"
-            r" and what it holds, and names the tables, figures, listings and parts of the documents that print a"
-            r" value from it.}\label{tab:versionmap}\\"
-        ),
+        CAPTION,
         *head,
         r"\endfirsthead",
         *head,
@@ -947,15 +968,20 @@ def render() -> tuple[str, list[str]]:
         r"\bottomrule",
         r"\endfoot",
     ]
+    caption_at = lines.index(CAPTION)
+    collapsed = False
     for build in sorted(groups, key=lambda b: (-len(groups[b]), heading(b))):
         names = shown(list(groups[build]))
         rows: dict[str, list[Place]] = {}
+        held: dict[str, int] = {}
         for rel, places in groups[build].items():
             name = record_name(names[rel])
             if name is None:
                 problems.append(f"{names[rel]}: no printed name in RECORD_NAMES")
                 name = tex(names[rel])
             rows.setdefault(name, []).extend(places)
+            held[name] = held.get(name, 0) + 1
+        collapsed = collapsed or any(n > 1 for n in held.values())
         lines += [
             r"\midrule",
             rf"\multicolumn{{2}}{{@{{}}p{{0.98\textwidth}}@{{}}}}{{{heading(build)}}} \\",
@@ -968,14 +994,45 @@ def render() -> tuple[str, list[str]]:
             lines.append(
                 rf"{record} & {', '.join(render_place(p) for p in ordered)} \\"
             )
+    lines[caption_at] = caption(collapsed)
     lines += [r"\end{longtable}", r"\endgroup", ""]
     return "\n".join(lines), problems
+
+
+def library_macros() -> str:
+    """The library digest that most records behind a printed result name, with its version and counts, as macros."""
+    found, _ = record_places()
+    named: dict[tuple[str, str], int] = {}
+    for rel in found:
+        held = carrier(rel)
+        build = build_of(*held) if held and rel not in NO_BUILD else None
+        if build is not None and build.digest:
+            key = (build.readcon, build.digest)
+            named[key] = named.get(key, 0) + 1
+    if not named:
+        raise SystemExit("no record behind a printed result names a library digest")
+    ranked = sorted(named.items(), key=lambda item: -item[1])
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        raise SystemExit(f"two library digests are named by as many records: {ranked[:2]}")
+    (version, digest), count = ranked[0]
+    return "\n".join(
+        [
+            f"% Written by paper/cpc/scripts/gen_version_map.py from the builds the records name.",
+            rf"\newcommand{{\rcRecordDigest}}{{{digest[:12]}}}",
+            rf"\newcommand{{\rcRecordDigestVersion}}{{{version}}}",
+            rf"\newcommand{{\rcRecordDigestCount}}{{{count}}}",
+            rf"\newcommand{{\rcDigestRecordCount}}{{{sum(named.values())}}}",
+            "",
+        ]
+    )
 
 
 def main() -> int:
     text, problems = render()
     OUT.write_text(text)
     print(f"wrote {OUT.relative_to(REPO)}")
+    LIBRARY_OUT.write_text(library_macros())
+    print(f"wrote {LIBRARY_OUT.relative_to(REPO)}")
     for problem in problems:
         print(problem, file=sys.stderr)
     return 1 if problems else 0

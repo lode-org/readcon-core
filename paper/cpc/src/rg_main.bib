@@ -181,6 +181,26 @@
   doi = {10.1002/jcc.23495}
 }
 
+@article{bekkerUnificationBoxShapes1997,
+  title = {Unification of box shapes in molecular simulations},
+  author = {Bekker, H.},
+  year = {1997},
+  journal = {Journal of Computational Chemistry},
+  volume = {18},
+  number = {15},
+  pages = {1930--1942},
+  publisher = {Wiley},
+  doi = {10.1002/(sici)1096-987x(19971130)18:15<1930::aid-jcc8>3.0.co;2-p}
+}
+
+@misc{lammpsHowtoTriclinic2026,
+  title = {{LAMMPS} Documentation: Triclinic (non-orthogonal) simulation boxes},
+  author = {{LAMMPS developers}},
+  year = {2026},
+  howpublished = {\url{https://docs.lammps.org/Howto_triclinic.html}},
+  note = {Accessed 2026-11-17}
+}
+
 @article{thompsonLammpsFlexibleSimulation2022,
   title = {{LAMMPS} -- a flexible simulation tool for particle-based materials modeling at the atomic, meso, and continuum scales},
   author = {Thompson, Aidan P. and Aktulga, H. Metin and Berger, Richard and Bolintineanu, Dan S. and Brown, W. Michael and Crozier, Paul S. and in 't Veld, Pieter J. and Kohlmeyer, Axel and Moore, Stan G. and Nguyen, Trung Dac and Shan, Ray and Stevens, Mark J. and Tranchida, Julien and Trott, Christian and Plimpton, Steven J.},
@@ -485,7 +505,7 @@
   number = {8878},
   publisher = {RFC Editor},
   institution = {IETF},
-  editor = {Kucherawy, M.},
+  note = {M. Kucherawy, Ed.},
   doi = {10.17487/rfc8878}
 }
 
@@ -636,13 +656,14 @@
   doi = {10.1109/ieeestd.2019.8766229}
 }
 
-@misc{opengeospatialconsortiumZarrStorageSpecification2022,
+@book{opengeospatialconsortiumZarrStorageSpecification2022,
   title = {Zarr Storage Specification 2.0 Community Standard},
-  author = {{Open Geospatial Consortium}},
+  editor = {{Zarr Developers}},
   year = {2022},
+  note = {{OGC} 21-050r1},
   publisher = {Open Geospatial Consortium, Inc.},
-  editor = {{Open Geospatial Consortium, Inc.}},
-  doi = {10.62973/21-050r1}
+  doi = {10.62973/21-050r1},
+  url = {https://docs.ogc.org/doi/21-050r1}
 }
 
 @article{brooksCharmmBiomolecularSimulation2009,
@@ -823,18 +844,6 @@
   doi = {10.1038/nsb1203-980}
 }
 
-@article{bekkerUnificationBoxShapes1997,
-  title = {Unification of box shapes in molecular simulations},
-  author = {Bekker, H.},
-  year = {1997},
-  journal = {Journal of Computational Chemistry},
-  volume = {18},
-  number = {15},
-  pages = {1930--1942},
-  publisher = {Wiley},
-  doi = {10.1002/(sici)1096-987x(19971130)18:15<1930::aid-jcc8>3.0.co;2-p}
-}
-
 @article{spangbergTrajectoryNgPortable2011,
   title = {Trajectory {NG}: portable, compressed, general molecular dynamics trajectories},
   author = {Spångberg, Daniel and Larsson, Daniel S. D. and van der Spoel, David},
@@ -869,6 +878,30 @@
   pages = {304--308},
   publisher = {AIP Publishing},
   doi = {10.1063/1.4823180}
+}
+
+@misc{gromacsFileFormats2026,
+  title = {{GROMACS} Reference Manual: File formats},
+  author = {{GROMACS development team}},
+  year = {2026},
+  howpublished = {\url{https://manual.gromacs.org/current/reference-manual/file-formats.html}},
+  note = {Accessed 2026-11-17}
+}
+
+@misc{gromacsDefinitionsUnits2026,
+  title = {{GROMACS} Reference Manual: Definitions and Units},
+  author = {{GROMACS development team}},
+  year = {2026},
+  howpublished = {\url{https://manual.gromacs.org/current/reference-manual/definitions.html}},
+  note = {Accessed 2026-11-17}
+}
+
+@misc{vmdDcdPlugin2026,
+  title = {{VMD} Molfile Plugins: {DCD} Plugin, Version 1.11},
+  author = {{Theoretical and Computational Biophysics Group}},
+  year = {2026},
+  howpublished = {\url{https://www.ks.uiuc.edu/Research/vmd/plugins/molfile/dcdplugin.html}},
+  note = {Accessed 2026-11-17}
 }
 
 @article{humphreyVmdVisualMolecular1996,
@@ -1130,8 +1163,8 @@
   year = {2026},
   version = {v0.0.2},
   howpublished = {GitHub},
-  url = {https://github.com/extxyz/extxyz/releases/tag/v0.0.2},
-  note = {Software, version 0.0.2}
+  url = {https://github.com/extxyz/extxyz/tree/v0.0.2},
+  note = {Software, version 0.0.2, tagged 2026-04}
 }
 
 @article{krylovLibxtcEfficientLibrary2021,
@@ -1145,12 +1178,12 @@
   doi = {10.1186/s13104-021-05536-5}
 }
 
-@misc{amberNetcdfConvention2026,
+@misc{amberNetcdfConvention2022,
   title = {{AMBER} {NetCDF} Trajectory/Restart Convention, Version 1.0, Revision {C}},
   author = {{The Amber Developers}},
-  year = {2026},
+  year = {2022},
   howpublished = {\url{https://ambermd.org/netcdf/nctraj.xhtml}},
-  note = {Accessed 2026-10-31}
+  note = {Last revised 2022-08-31; the revision history of the page also lists Revision D (2014). Accessed 2026-11-17}
 }
 
 @misc{readconDocsInstall,
@@ -1238,21 +1271,16 @@
 }
 
 @article{bigiMetatensorMetatomicFoundational2026,
-  title = {metatensor and metatomic : Foundational libraries for interoperable atomistic machine learning},
+  title = {{metatensor} and {metatomic}: Foundational libraries for interoperable atomistic machine learning},
   author = {Bigi, Filippo and Abbott, Joseph W. and Loche, Philip and Mazitov, Arslan and Tisi, Davide and Langer, Marcel F. and Goscinski, Alexander and Pegolo, Paolo and Chong, Sanggyu and Goswami, Rohit and Febrer, Pol and Chorna, Sofiia and Kellner, Matthias and Ceriotti, Michele and Fraux, Guillaume},
   year = {2026},
   journal = {The Journal of Chemical Physics},
+  volume = {164},
+  number = {6},
+  pages = {064113},
   publisher = {AIP Publishing},
   doi = {10.1063/5.0304911},
   url = {https://doi.org/10.1063/5.0304911}
-}
-
-@software{frauxChemfiles2023,
-  title = {chemfiles},
-  author = {Fraux, Guillaume and Kimms, Len and Fine, Jonathan and Barletta, German P. and Dimura, Mykola and Coudert, FX and {pelsa} and Levesque, Maximilien and Maiti, Shoubhik and Guionniere, Simon and {jmintser}},
-  year = {2023},
-  doi = {10.5281/zenodo.1202207},
-  url = {https://doi.org/10.5281/zenodo.1202207}
 }
 
 @article{smithSoftwareCitationPrinciples2016,
@@ -1285,12 +1313,12 @@
 }
 
 @misc{ovitoNewFeatures31702026,
-  title = {{OVITO} 3.17.0: new features},
+  title = {{OVITO} User Manual 3.17.2: Changelog, entry for version 3.17.0},
   author = {{OVITO}},
   year = {2026},
   howpublished = {OVITO documentation},
   url = {https://www.ovito.org/docs/current/new_features.html},
-  note = {Version 3.17.0, released 2026-10-21. Accessed 2026-11-15}
+  note = {Changelog of the 3.17.2 manual; version 3.17.0 released 2026-10-21. Accessed 2026-11-17}
 }
 
 @misc{gowersMdanalysismdanalysisRelease21102026,
@@ -1357,4 +1385,97 @@
   howpublished = {GitHub},
   url = {https://github.com/libAtoms/extxyz/blob/ase-extxyz-v0.1.2/python/ase-extxyz/ase_extxyz/io.py},
   note = {Format cextxyz backed by the libextxyz C parser at tag ase-extxyz-v0.1.2. Accessed 2026-11-15}
+}
+
+@book{collettePythonHdf52013,
+  title = {Python and {HDF5}},
+  author = {Collette, Andrew},
+  year = {2013},
+  publisher = {O'Reilly Media},
+  address = {Sebastopol, CA},
+  isbn = {978-1-4493-6783-1}
+}
+
+@article{ongPythonMaterialsGenomics2013,
+  title = {Python Materials Genomics (pymatgen): A robust, open-source python library for materials analysis},
+  author = {Ong, Shyue Ping and Richards, William Davidson and Jain, Anubhav and Hautier, Geoffroy and Kocher, Michael and Cholia, Shreyas and Gunter, Dan and Chevrier, Vincent L. and Persson, Kristin A. and Ceder, Gerbrand},
+  year = {2013},
+  journal = {Computational Materials Science},
+  volume = {68},
+  pages = {314--319},
+  publisher = {Elsevier BV},
+  doi = {10.1016/j.commatsci.2012.10.028}
+}
+
+@article{hallCrystallographicInformationFile1991,
+  title = {The crystallographic information file ({CIF}): a new standard archive file for crystallography},
+  author = {Hall, S. R. and Allen, F. H. and Brown, I. D.},
+  year = {1991},
+  journal = {Acta Crystallographica Section A: Foundations of Crystallography},
+  volume = {47},
+  number = {6},
+  pages = {655--685},
+  publisher = {International Union of Crystallography (IUCr)},
+  doi = {10.1107/S010876739101067X}
+}
+
+@article{bernsteinSpecificationCrystallographicInformation2016,
+  title = {Specification of the Crystallographic Information File format, version 2.0},
+  author = {Bernstein, Herbert J. and Bollinger, John C. and Brown, I. David and Gra{\v{z}}ulis, Saulius and Hester, James R. and McMahon, Brian and Spadaccini, Nick and Westbrook, John D. and Westrip, Simon P.},
+  year = {2016},
+  journal = {Journal of Applied Crystallography},
+  volume = {49},
+  number = {1},
+  pages = {277--284},
+  publisher = {International Union of Crystallography (IUCr)},
+  doi = {10.1107/S1600576715021871}
+}
+
+@techreport{bradnerKeyWordsUse1997,
+  title = {Key words for use in {RFCs} to Indicate Requirement Levels},
+  author = {Bradner, S.},
+  year = {1997},
+  number = {2119},
+  type = {RFC},
+  institution = {IETF},
+  publisher = {RFC Editor},
+  note = {BCP 14},
+  doi = {10.17487/RFC2119}
+}
+
+@misc{seriotParsingJsonMinefield2016,
+  title = {Parsing {JSON} is a Minefield},
+  author = {Seriot, Nicolas},
+  year = {2016},
+  url = {https://seriot.ch/security/parsing_json.html},
+  note = {Article first published 2016-10-26, updated 2018-03-30; test corpus JSONTestSuite at https://github.com/nst/JSONTestSuite, commit 1ef36fa (2024-11-22)}
+}
+
+@article{mckeemanDifferentialTestingSoftware1998,
+  title = {Differential Testing for Software},
+  author = {McKeeman, William M.},
+  year = {1998},
+  journal = {Digital Technical Journal},
+  volume = {10},
+  number = {1},
+  pages = {100--107},
+  url = {https://web.archive.org/web/20230306000947/https://www.hpl.hp.com/hpjournal/dtj/vol10num1/vol10num1art9.pdf}
+}
+
+@misc{terrellTsaseTransitionStateLibrary2025,
+  title = {{TSASE}: Transition State Library for {ASE}},
+  author = {Terrell, Rye and Chill, Samuel and Xiao, Penghao and Duncan, Juliana and Stauffer, Shannon and Bandy, Rileigh and Janssen, Jan},
+  year = {2025},
+  howpublished = {GitHub},
+  url = {https://github.com/henkelmangroup/tsase},
+  note = {Henkelman group, commit 98aac60 (2025-09-26); CON reader and writer in tsase/io/con.py; documentation https://theory.cm.utexas.edu/tsase/}
+}
+
+@misc{aseSource3290,
+  title = {{ASE} 3.29.0 source: ase/geometry/cell.py, ase/io/eon.py, ase/io/extxyz.py, ase/mep/neb.py},
+  author = {{ASE developers}},
+  year = {2026},
+  howpublished = {GitLab},
+  url = {https://gitlab.com/ase/ase/-/tree/3.29.0},
+  note = {Tag 3.29.0; read\_eon in ase/io/eon.py, lines 151--190; right-angle tolerance in cellpar\_to\_cell, ase/geometry/cell.py, lines 103--123}
 }

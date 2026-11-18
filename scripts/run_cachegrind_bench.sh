@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 OUT_DIR="${OUT_DIR:-$ROOT/docs/source/_generated}"
 CG_DIR="${CG_DIR:-$ROOT/target/cachegrind}"
-FEATURES="${CACHEGRIND_FEATURES:-chemfiles}"
+FEATURES="${CACHEGRIND_FEATURES:-chemfiles},benchmark"
 mkdir -p "$OUT_DIR" "$CG_DIR"
 
 echo "Building release harness (features=${FEATURES})..."
@@ -13,6 +13,7 @@ echo "Building release harness (features=${FEATURES})..."
 cargo build --release --example cachegrind_harness --features ${FEATURES}
 BIN="$ROOT/target/release/examples/cachegrind_harness"
 test -x "$BIN"
+python3 "$ROOT/scripts/check_mimalloc_symbols.py" "$BIN"
 
 mapfile -t SCENARIOS < <("$BIN" list 2>/dev/null | grep -v '^#' || true)
 if [[ ${#SCENARIOS[@]} -eq 0 ]]; then

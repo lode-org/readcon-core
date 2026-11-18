@@ -76,7 +76,15 @@ def _build_profiled_probe() -> Path:
     env["CARGO_TARGET_DIR"] = str(target_dir)
     env["CARGO_PROFILE_RELEASE_DEBUG"] = "true"
     subprocess.run(
-        ["cargo", "build", "--release", "--example", "scale_probe"],
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--example",
+            "scale_probe",
+            "--features",
+            "benchmark",
+        ],
         cwd=ROOT,
         env=env,
         check=True,

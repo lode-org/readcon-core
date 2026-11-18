@@ -12,6 +12,10 @@ named paper/cpc/..., sorted, owned by uid 0 and dated SOURCE_DATE_EPOCH of
 regen_paper.py, and gzip carries no name or time, so two runs on one tree give
 the same bytes.
 
+regen_paper.py and the benchmark drivers import readcon_bench.py from the
+repository root, which loads bench/h2h/bench_disk.py; the commit of the paper
+holds neither, so both ship under their repository paths beside paper/cpc.
+
     python paper/cpc/scripts/pack_paper.py OUT.tar.gz
 """
 
@@ -29,9 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import regen_paper  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
 PREFIX = "paper/cpc"
 BUILT = {"src/rg_main.pdf", "src/rg_supp.pdf"}
 IGNORED_RECORDS = ("bench/results/r0174/cachegrind", "evidence/work/e1")
+REPOSITORY_FILES = ("readcon_bench.py", "bench/h2h/bench_disk.py")
 
 
 def kept() -> list[str]:
@@ -78,14 +84,22 @@ def members() -> list[str]:
     return names
 
 
+def repository_files() -> list[tuple[str, Path]]:
+    missing = [name for name in REPOSITORY_FILES if not (REPO / name).is_file()]
+    if missing:
+        raise SystemExit(f"{', '.join(missing)} missing from the repository root")
+    return [(name, REPO / name) for name in REPOSITORY_FILES]
+
+
 def pack(out: Path) -> int:
     mtime = int(regen_paper.SOURCE_DATE_EPOCH)
-    names = members()
+    names = sorted(
+        [(f"{PREFIX}/{name}", ROOT / name) for name in members()] + repository_files()
+    )
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.PAX_FORMAT) as tar:
-        for name in names:
-            path = ROOT / name
-            info = tarfile.TarInfo(f"{PREFIX}/{name}")
+        for name, path in names:
+            info = tarfile.TarInfo(name)
             info.size = path.stat().st_size
             info.mtime = mtime
             info.mode = 0o755 if path.stat().st_mode & 0o111 else 0o644
@@ -106,7 +120,10 @@ def main() -> int:
     parser.add_argument("out", type=Path, help="the tarball to write")
     args = parser.parse_args()
     n = pack(args.out)
-    print(f"wrote {args.out}: {n} files under {PREFIX}/")
+    print(
+        f"wrote {args.out}: {n - len(REPOSITORY_FILES)} files under {PREFIX}/ and "
+        f"{', '.join(REPOSITORY_FILES)}"
+    )
     return 0
 
 

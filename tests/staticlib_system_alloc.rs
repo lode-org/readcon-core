@@ -1,6 +1,6 @@
 // Copyright (c) readcon-core developers
 //! The static archive is linked into C++ hosts beside other Rust
-//! staticlibs. It must not install mimalloc; the cdylib keeps it.
+//! staticlibs. It must not install mimalloc; the cdylib opts into it.
 
 use std::path::Path;
 use std::process::Command;
@@ -33,10 +33,50 @@ fn defined_mimalloc(archive: &Path) -> String {
             let _addr = parts.next();
             let kind = parts.next().unwrap_or("");
             let name = parts.next().unwrap_or("");
-            kind == "T" && (name == "mi_malloc" || name == "mi_free")
+            matches!(kind, "T" | "t")
+                && (name == "mi_malloc" || name == "mi_free" || name == "mi_malloc_aligned")
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(target_os = "linux")]
+fn assert_shared_mimalloc_is_dlopen_safe(shared: &Path) {
+    let symbols = Command::new("nm")
+        .args(["--defined-only"])
+        .arg(shared)
+        .output()
+        .expect("nm shared library");
+    assert!(
+        symbols.status.success(),
+        "nm failed on {}",
+        shared.display()
+    );
+    let symbols = String::from_utf8_lossy(&symbols.stdout);
+    assert!(
+        symbols
+            .lines()
+            .any(|line| line.ends_with(" mi_malloc_aligned")),
+        "C shared library does not contain mimalloc:\n{symbols}"
+    );
+
+    for flag in ["-d", "-r"] {
+        let output = Command::new("readelf")
+            .args([flag])
+            .arg(shared)
+            .output()
+            .expect("readelf shared library");
+        assert!(
+            output.status.success(),
+            "readelf {flag} failed on {}",
+            shared.display()
+        );
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !report.contains("STATIC_TLS") && !report.contains("TPOFF"),
+            "C shared library contains initial-exec TLS:\n{report}"
+        );
+    }
 }
 
 fn alloc_work(name: &str) -> std::path::PathBuf {
@@ -75,6 +115,7 @@ fn static_archive_does_not_install_mimalloc() {
         hits.is_empty(),
         "static archive still installs mimalloc:\n{hits}"
     );
+    assert_shared_mimalloc_is_dlopen_safe(&work.join("libreadcon_core.so"));
 }
 
 #[cfg(target_os = "linux")]
@@ -154,4 +195,7 @@ fn cmake_both_libraries_archive_does_not_install_mimalloc() {
         hits.is_empty(),
         "default CMake archive still installs mimalloc:\n{hits}"
     );
+    let shared = work.join("cargo-target/debug/libreadcon_core.so");
+    assert!(shared.is_file(), "missing {}", shared.display());
+    assert_shared_mimalloc_is_dlopen_safe(&shared);
 }

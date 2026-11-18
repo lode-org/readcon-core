@@ -116,17 +116,14 @@ COMPETING = (
     "could have appeared to influence the work reported in this paper."
 )
 AI_DECLARATION = "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process"
-AI_TOOL = (
-    "Cursor, routing between Claude Opus 5.5, Claude Sonnet 5.5, GPT-5.6 Sol, GPT-5.3 Codex, Gemini 4 "
-    "and Grok 4.7"
-)
+AI_TOOL = "Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7"
 AI_STATEMENT = (
-    "During the preparation of this work the author used \\rcAITool{}, to help write code, run the tests "
-    "and benchmarks, and draft and edit the text."
+    "During the preparation of this work the author used \\rcAITool{}, to refine certain turns of phrase "
+    "and to speed through some implementation details."
 )
 AI_RESPONSIBILITY = (
     "After using this tool, the author reviewed and edited the content as needed and takes full "
-    "responsibility for the content of the published article."
+    "responsibility for the content of the publication."
 )
 NOT_IN_PAPER = {
     "a Limitations section": re.compile(r"\\section\*?\{[^}]*Limitation", re.I),
@@ -805,6 +802,10 @@ def check_version_map() -> str:
         problems.append(
             "version_map.tex differs from the records; run scripts/gen_version_map.py"
         )
+    if (GENERATED / "library_macros.tex").read_text() != gen_version_map.library_macros():
+        problems.append(
+            "library_macros.tex differs from the records; run scripts/gen_version_map.py"
+        )
     if problems:
         fail(listed("version map", problems))
     rows = sum(
@@ -812,7 +813,7 @@ def check_version_map() -> str:
         for line in text.splitlines()
         if line.endswith(r" \\") and " & " in line and not line.startswith(("\\", "Record & "))
     )
-    return f"version map current, {rows} records, each naming its build"
+    return f"version map current, {rows} rows, each naming its build"
 
 
 PIXI_CALL = re.compile(r"""\bpixi\s+exec\b|\[\s*["']pixi["']""")
@@ -1244,6 +1245,10 @@ def main() -> int:
             ),
         ),
         ("version map", check_version_map),
+        (
+            "db26 paired protocol",
+            lambda: script_check("db26_protocol.py", "db26 paired protocol"),
+        ),
         (
             "manuscript rule",
             lambda: script_check("manuscript_inputs.py", "TeX inputs of the manuscript rule"),

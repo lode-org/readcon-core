@@ -1968,6 +1968,7 @@ Cu 0.00000000 0.00000000 0.00000000
     /// Identical atoms must share one symbol and must not allocate a heap
     /// block per atom. The old import cloned a name, a type, and a JSON
     /// sidecar for every atom, which was several allocations each.
+    #[cfg(all(feature = "global_mimalloc", not(feature = "static_system_alloc")))]
     #[test]
     fn uniform_import_allocates_less_than_once_per_atom() {
         let n = 2048usize;
@@ -2005,6 +2006,7 @@ Cu 0.00000000 0.00000000 0.00000000
         );
     }
 
+    #[cfg(all(feature = "global_mimalloc", not(feature = "static_system_alloc")))]
     fn mimalloc_mallocs() -> u64 {
         let stats = mimalloc::MiMalloc::stats_json().expect("mimalloc stats");
         let text = stats.to_str().expect("stats utf-8");

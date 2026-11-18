@@ -1,0 +1,39 @@
+{
+  "OVITO": [
+    {
+      "url": "https://www.ovito.org/docs/current/new_features.html",
+      "heading": "Version 3.17.0 (21-Oct-2026)",
+      "version": "3.17.0",
+      "date": "2026-10-21"
+    }
+  ],
+  "MDAnalysis": [
+    {
+      "url": "https://api.github.com/repos/MDAnalysis/mdanalysis/releases/419551159",
+      "tag_prefix": "package-",
+      "tag_version": "2.11.0",
+      "published_at": "2026-10-21T12:48:43Z",
+      "version": "2.11.0",
+      "date": "2026-10-21"
+    }
+  ],
+  "ase-extxyz": [
+    {
+      "url": "https://api.github.com/repos/libAtoms/extxyz/releases/401640978",
+      "tag_prefix": "ase-extxyz-v",
+      "tag_version": "0.1.2",
+      "published_at": "2026-10-02T08:14:44Z",
+      "version": "0.1.2",
+      "date": "2026-10-02"
+    }
+  ],
+  "extxyz-ng": [
+    {
+      "url": "https://pypi.org/project/extxyz-ng/0.0.2/",
+      "pypi_version": "0.0.2",
+      "first_upload": "2026-04-29T12:06:45.997183Z",
+      "version": "0.0.2",
+      "date": "2026-04-29"
+    }
+  ]
+}

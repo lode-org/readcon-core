@@ -48,7 +48,7 @@ SRC = Path(os.environ.get("READCON_SRC", "").strip() or provenance.REPO).resolve
 RESULTS = (
     Path(os.environ.get("BENCH_RESULTS", HERE / "results" / "r0174")) / "cachegrind"
 )
-FEATURES = "chemfiles-from-sources"
+FEATURES = "chemfiles-from-sources,benchmark"
 TARGET = SRC / "target" / "cachegrind"
 BIN = TARGET / "release" / "examples" / "cachegrind_harness"
 IREFS = re.compile(r"I\s+refs:\s*([\d,]+)")

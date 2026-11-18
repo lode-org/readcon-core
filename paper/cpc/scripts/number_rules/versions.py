@@ -44,19 +44,18 @@ DRIFT_LINE = (
 
 
 READER_EXCHANGE = "logs/reader-exchange.log"
-BIB = "src/rg_main.bib"
+EON_PINS = "data/eon/readcon_pins.json"
 EON_PIN = "goswamiTheochemuieonCommitBf5d3282026"
 
 
 def eon_pin() -> str:
-    """The readcon-core version that eOn commit bf5d328 pins, as its cited entry titles it."""
-    entry = grep(BIB, rf"^@misc\{{{EON_PIN},\n((?:.*\n)*?)\}}$")
-    url = r"url = \{https://github\.com/TheochemUI/eOn/commit/bf5d328[0-9a-f]{33}\}"
-    title = r"title = \{.*commit bf5d328, pin readcon-core ([0-9]+\.[0-9]+\.[0-9]+) "
-    found = re.search(title, entry)
-    if not re.search(url, entry) or not found:
-        raise SystemExit(f"{BIB}: {EON_PIN} names no bf5d328 commit URL and pinned version")
-    return found.group(1)
+    """The readcon-core tag that the readcon-core wrap of eOn commit bf5d328 builds; that commit is in no eOn release."""
+    dev = jget(EON_PINS, "development")
+    if not dev["eon_commit"].startswith("bf5d328") or dev["in_release"]:
+        raise SystemExit(f"{EON_PINS}: the development commit is not bf5d328 or is in an eOn release")
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", dev["readcon_revision"]):
+        raise SystemExit(f"{EON_PINS}: the bf5d328 wrap names no readcon-core tag")
+    return dev["readcon_revision"]
 
 
 def opener(library: str, peer: str) -> str:
@@ -125,8 +124,8 @@ RULES = [
     Rule(
         "0.20.0",
         eon_pin(),
-        BIB,
-        f"readcon-core version that eOn commit bf5d328 pins, from the title of {EON_PIN}",
+        EON_PINS,
+        "readcon-core tag in subprojects/readcon-core.wrap at eOn commit bf5d328, which no eOn release contains",
         (rf"{DOC}~{EON_PIN}",),
     ),
     Rule(

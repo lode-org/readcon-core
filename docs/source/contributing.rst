@@ -162,7 +162,7 @@ Testing
     meson test -C bbdir
 
     # Benchmarks
-    cargo bench
+    cargo bench --features benchmark
     # or: pixi r bench
 
 Test data lives in ``resources/test/``. Use the ``test_case!`` macro in
@@ -184,18 +184,18 @@ Three-step workflow (Linux, ``rustc`` 1.88+):
     # 1. Build instrumented binary; pass --features for everything you
     #    want profile data on.
     mkdir -p build/pgo
-    RUSTFLAGS="-Cprofile-generate=build/pgo" \
-      cargo bench --features parallel,zstd,rpc --no-run
+    RUSTFLAGS="-Cprofile-generate=$PWD/build/pgo" \
+      cargo bench --features parallel,zstd,rpc,benchmark --no-run
 
     # 2. Run the benches to collect .profraw files.
-    RUSTFLAGS="-Cprofile-generate=build/pgo" \
-      cargo bench --features parallel,zstd,rpc
+    RUSTFLAGS="-Cprofile-generate=$PWD/build/pgo" \
+      cargo bench --features parallel,zstd,rpc,benchmark
 
     # 3. Merge profraws then build with --use to consume the merged profile.
     $(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata \
       merge -o build/pgo/merged.profdata build/pgo
-    RUSTFLAGS="-Cprofile-use=build/pgo/merged.profdata" \
-      cargo build --release --features parallel,zstd,rpc
+    RUSTFLAGS="-Cprofile-use=$PWD/build/pgo/merged.profdata" \
+      cargo build --release --features parallel,zstd,rpc,benchmark
 
 The same flow works for ``cargo cinstall`` when you want PGO-optimised
 ``libreadcon_core.so`` for distribution; substitute ``cargo cinstall``

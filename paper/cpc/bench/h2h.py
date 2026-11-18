@@ -177,7 +177,7 @@ def payloads() -> None:
                 "run",
                 "--release",
                 "--features",
-                "parallel",
+                "parallel,benchmark",
                 "--example",
                 "peer_time",
                 "--",
@@ -418,7 +418,14 @@ def cpp() -> None:
     import cpp_peer_matrix as matrix
 
     run(
-        ["cargo", "build", "--release", "--features", "parallel", "--lib"],
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--features",
+            "parallel,benchmark",
+            "--lib",
+        ],
         cwd=SRC,
         env=cargo_env(),
     )
@@ -491,7 +498,7 @@ def cpp() -> None:
             "rustc": rustc,
             "cargo_profile_release": profile,
             "readcon_library": str(library),
-            "cargo_features": ["parallel"],
+            "cargo_features": ["parallel", "benchmark"],
             "inputs": {
                 "con_coordinates": str(paths[campaign]["con"]),
                 "con_bytes": paths[campaign]["con"].stat().st_size,

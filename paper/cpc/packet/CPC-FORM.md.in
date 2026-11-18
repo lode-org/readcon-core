@@ -2,6 +2,8 @@
 
 Status: Prepared, not submitted.
 
+Packet state: ${packet_state}
+
 Every count and quoted text below is written by `make_packet.py` from the sources and the `build_tex.sh`
 build of the paper, for readcon-core ${version}, ${commit_role} `${commit}`, library digest `${digest}`.
 

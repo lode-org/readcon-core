@@ -9,13 +9,13 @@ SOURCE_DATE_EPOCH=$(sed -n 's/^SOURCE_DATE_EPOCH = "\([0-9]*\)"$/\1/p' ../script
 export SOURCE_DATE_EPOCH FORCE_SOURCE_DATE=1
 rm -f rg_supp.aux rg_supp.bbl rg_supp.blg rg_supp.out rg_main.aux rg_main.bbl rg_main.blg rg_main.out
 for doc in rg_supp rg_main; do
-  pdflatex -interaction=nonstopmode -halt-on-error "$doc.tex" >/dev/null
+  pdflatex -recorder -interaction=nonstopmode -halt-on-error "$doc.tex" >/dev/null
 done
 bibtex rg_supp >/dev/null
 bibtex rg_main >/dev/null
 for pass in 1 2 3; do
   for doc in rg_supp rg_main; do
-    pdflatex -interaction=nonstopmode -halt-on-error "$doc.tex" >/dev/null
+    pdflatex -recorder -interaction=nonstopmode -halt-on-error "$doc.tex" >/dev/null
   done
 done
 for doc in rg_main rg_supp; do

@@ -1,0 +1,38 @@
+{
+  "record": "data/db31/db26/ab.json",
+  "from": [
+    "data/db31/db26/RESULTS.md",
+    "data/db31/db26/campaign.log"
+  ],
+  "repository": "https://github.com/lode-org/readcon-db",
+  "commit": "a584a28816c2f603c8c94759fdf45d86fc20f069",
+  "tree": "c1c761697b9aa9e57f3f1943868811285c5d8d03",
+  "host": {
+    "system": "Linux",
+    "release": "6.12.113+",
+    "machine": "x86_64",
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "ncpu": 8,
+    "kernel": "6.12.113+",
+    "serial": true,
+    "quantile": "type-7",
+    "omp_num_threads": "1",
+    "openblas_num_threads": "1",
+    "mkl_num_threads": "1",
+    "numexpr_num_threads": "1",
+    "cpuinfo_mhz": 2700.0
+  },
+  "raw_tip_vs_aedcbda4_rayon_1": {
+    "full_read:warm": {
+      "paired": {
+        "n": 12,
+        "ci95": [
+          0.8372018230367848,
+          1.2127116867650876
+        ],
+        "ci_method": "10000-draw percentile bootstrap, type-7 median, numpy Generator seed 0",
+        "order": "the measured code first on even sample indexes and the earlier commit first on odd ones"
+      }
+    }
+  }
+}

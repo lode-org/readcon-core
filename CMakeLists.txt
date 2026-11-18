@@ -149,19 +149,21 @@ set(_readcon_user_feats "")
 if (NOT "${READCON_CORE_CARGO_FEATURES}" STREQUAL "")
     string(REPLACE " " "," _readcon_user_feats "${READCON_CORE_CARGO_FEATURES}")
 endif()
-# The static archive is linked beside other Rust staticlibs. It must use
-# the system allocator so it does not define mi_malloc. The cdylib keeps
-# mimalloc and the caller's features.
+# The static archive is linked beside other Rust staticlibs and uses the
+# system allocator. The cdylib explicitly opts into mimalloc; that feature
+# also selects local-dynamic TLS, which is safe for a library loaded later.
 if ("${_readcon_user_feats}" STREQUAL "")
     set(_readcon_static_feats "static_system_alloc")
 else()
     set(_readcon_static_feats "${_readcon_user_feats},static_system_alloc")
 endif()
 set(_readcon_static_feat_arg "--features=${_readcon_static_feats}")
-set(_readcon_shared_feat_arg "")
-if (NOT "${_readcon_user_feats}" STREQUAL "")
-    set(_readcon_shared_feat_arg "--features=${_readcon_user_feats}")
+if ("${_readcon_user_feats}" STREQUAL "")
+    set(_readcon_shared_feats "global_mimalloc")
+else()
+    set(_readcon_shared_feats "${_readcon_user_feats},global_mimalloc")
 endif()
+set(_readcon_shared_feat_arg "--features=${_readcon_shared_feats}")
 
 if ("${RUST_BUILD_TARGET}" STREQUAL "")
     if (CARGO_VERSION_RAW MATCHES "host: ([a-zA-Z0-9_\\-]*)\n")
@@ -180,9 +182,9 @@ else()
 endif()
 
 # The cdylib cargo rustc also emits libreadcon_core.a, because the package
-# lists staticlib among its crate types. That second archive is built
-# without static_system_alloc and would replace the one we want. Build
-# the archive in its own target directory and copy it into place last.
+# lists staticlib among its crate types. That second archive is built with
+# global_mimalloc and would replace the system-allocator archive. Build the
+# archive in its own target directory and copy it into place last.
 set(CARGO_STATIC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo-target-static")
 string(REPLACE "--target-dir=${CARGO_TARGET_DIR}" "--target-dir=${CARGO_STATIC_TARGET_DIR}" CARGO_STATIC_BUILD_ARG "${CARGO_BUILD_ARG}")
 string(REPLACE "${CARGO_TARGET_DIR}" "${CARGO_STATIC_TARGET_DIR}" CARGO_STATIC_OUTPUT_DIR "${CARGO_OUTPUT_DIR}")

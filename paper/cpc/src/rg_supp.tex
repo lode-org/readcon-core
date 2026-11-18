@@ -60,6 +60,7 @@ Elsevier%
 \input{figures/generated/clauses_macros}
 \input{figures/generated/mutant_macros}
 \input{figures/generated/spec_macros}
+\input{figures/generated/library_macros}
 \input{figures/generated/h2h_macros}
 \input{figures/generated/bf_macros}
 \input{figures/generated/ordering_macros}
@@ -109,35 +110,29 @@ belowskip=0.4em
 % snapper:on
 
 \begin{frontmatter} \input{authors.tex} \begin{abstract} This supplement gives the normative specification of CON 3.1.
-CON is a geometry format used in many codes, and readcon-core formalizes it.
-The supplement also states the reader rules.
-It then gives the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
-The last sections give the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
+CON is a geometry format used in eOn, ASE and other codes, and CON 3.1 formalizes and extends it.
+The supplement gives the reader rules, the test run of the release with the source lines of each step of its reader, the CON 3.1 corpus with the cross-check and the header variants, and the survey and drift files with the mechanism given to each library.
+It also gives the records beside a checkpoint with what the specification of each format states, the restart protocol, the velocity unit and the identifiers, the timing method and tables, the measured versions, and the commands that rebuild the paper.
 \end{abstract} \end{frontmatter}
 
-We keep the specification, the corpora and the timing records in this supplement.
-We name in the source of each generated table the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
-We state a reader rule as an input and the outcome that follows from it.
-We measure a wall time as the median of at least six repeats.
-We place the type 7 interquartile range next to that median.
-We compare each peer on the same file and the same host.
-We call two reads equal when their coordinates match.
-We count the frames a reader returns and the bytes it keeps.
+The source of each generated table names the script that writes it, and Table~\ref{tab:versionmap} names the record behind each result.
+Each reader rule gives an input and the outcome that follows from it.
+We take a wall time as the median of at least six repeats and report the type 7 interquartile range.
+We compare the readers on the same file and the same host, one cell at a time.
+Two reads are equal when their coordinates match, and we count the frames that a reader returns and the bytes that it keeps.
 We draw each restored figure from a stored record.
-We leave a version deposit unnamed until the record exists.
-We build the library from the candidate commit named in the manuscript.
-We run one cell at a time on one host.
-We keep the machine line to the architecture, the processor count and the processor string.
+We build the library from the commit named in Data availability of the manuscript, and we name no version deposit before its record exists.
+The machine line of a record gives only the architecture, the processor count and the processor string.
 
-\section{Normative specification}\label{sec:spec-normative} This section is the specification of CON 3.1 of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), the specification source of that commit at git blob \texttt{\rcMeasuredSpecBlob}.
+\section{Normative specification}\label{sec:spec-normative} The normative specification of CON 3.1 is that of the \readconcommitrole{} \texttt{\readconcommitshort} (readcon-core~\rcMeasuredVersion{}), taken from the specification source of that commit at git blob \texttt{\rcMeasuredSpecBlob}.
 A script of the paper typesets that file, and its check mode fails unless the typeset text matches the file.
 That file is byte for byte the CON 3.1 text of readcon-core~\specTextRelease{}, the first release that includes it, with its version line, its date and its \specClauses{} numbered clauses.
 A continuous-integration test of the library fails when the two differ.
-Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and they are left out here.
+Two informative sentences of its units section round the value the parser gives the natural time unit and its difference from the value of eOn, and the supplement omits them.
 The parser reads \texttt{(amu*angstrom\^{}2/eV)\^{}0.5} as the binary64 number \(\velNaturalFsBinary\,\mathrm{fs}\), eOn hard-codes \(\velEonFs\,\mathrm{fs}\), and their difference relative to the parsed value, computed in binary64, is \(\velEonRelDiff\) (Section~\ref{sec:supp-velocity}).
-The reader this section specifies is the one readcon-core~\readconversion{} ships.
-Each clause keeps its identifier, so a clause cited in the corpus manifest or an error message names the same text here.
-Section~\ref{sec:conformance} of the manuscript measures the clauses against the reader on the conformance corpus.
+readcon-core~\readconversion{} ships the reader that this specification describes.
+Each clause keeps its identifier, so a clause that the corpus manifest or an error message cites has the same text in the supplement.
+The manuscript measures the clauses against the reader on the conformance corpus (Section~\ref{sec:conformance}).
 The specification also points to an informative parsing expression grammar (PEG) that the library ships, which is not reproduced.
 The reader-compatibility notes and the references of the source are omitted, because they describe other programs.
 
@@ -272,8 +267,7 @@ Binary image: header check & \texttt{\srcRcbinCrc} \\
 \end{tabular}
 \end{table}
 
-\FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} This section describes the second corpus of Section~\ref{sec:conformance}, the cross-check of both corpora and the seven headers of Table~\ref{tab:versionsafety}.
-The records of the paper contain the \cthreeoneFiles{} files of that corpus, which a script of the paper writes byte for byte, and its manifest names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
+\FloatBarrier \section{The CON 3.1 corpus, the cross-check and the header variants}\label{sec:supp-corpus31} The CON 3.1 corpus, the second corpus of Section~\ref{sec:conformance}, has \cthreeoneFiles{} files in the records of the paper, which a script of the paper writes byte for byte, and its manifest names for each file the outcome, the clauses that decide it and the basis of that outcome in the released text.
 Its results record holds the outcome of every file at one, two and eight threads and the default, from the \texttt{corpus31\_report} example of readcon-core, and the build that read the files.
 The corpus-path run reads the \cpathsFiles{} files of both corpora through the string, file, mapped, gzip and iterator reads and the frame count of the readcon module and of the C library.
 The C library is read in its default build and built with \texttt{parallel}, as the release archives build it, and the module also reads the plain and the gzip file through its stream reader, \texttt{iter\_con(stream=True)}.
@@ -363,8 +357,8 @@ Metadata is the version or schema that another reader can apply.
 Indexed means frame \(k\) can be opened without a scan whose length is the number of earlier frames.
 Every row is a route measured in Table~\ref{tab:survey}.
 Tables~\ref{tab:spec-compare} and~\ref{tab:spec-compare-values} give, one row per format, the version, the atom identifiers, the per-component mask, the velocity time unit and the decimal round trip as the specification of each format of Table~\ref{tab:compare} and of other trajectory, structure and quantum-chemistry formats states them, with the source of every cell.
-The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2026,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
-Other records sit beside a saddle search without being measured here: the archives of the Protein Data Bank (PDB), wwPDB and mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000}; the column files of LAMMPS and the Atomsk converter \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015}; the quantum-chemistry objects of cclib, IOData, TREXIO and QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021}; the published geometries of OPTIMADE, the Novel Materials Discovery (NOMAD) laboratory, Catalysis-Hub, Transition1x and OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}; the analysis tools MDTraj, Visual Molecular Dynamics (VMD), d-SEAMS, essential dynamics and parallel H5MD analysis over the Message Passing Interface (MPI) \cite{mcgibbonMdtrajModernOpen2015,humphreyVmdVisualMolecular1996,goswamiDseamsDeferredStructural2020,meyerEssentialDynamicsTool2006,jakupovicMpiparallelMolecularDynamics2021}; the array stores Zarr and ADIOS2 and portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993}; the initial boxes of PACKMOL \cite{martinezPackmolPackageBuilding2009}; the program checkpoints of PLUMED and ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019}; and the live steps of i-PI and the MolSSI Driver Interface (MDI) \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
+The trajectory next generation (TNG) format and the trajectories of GROMACS and CHARMM \cite{spangbergTrajectoryNgPortable2011,lundborgEfficientExtensibleFormat2014,abrahamGromacsHighPerformance2015,brooksCharmmBiomolecularSimulation2009}, and the NetCDF trajectory of Amber \cite{caseAmberBiomolecularSimulation2005,amberNetcdfConvention2022,rewNetcdfInterfaceScientific1990}, are not routes of Table~\ref{tab:survey}.
+Other records sit beside a saddle search, and this paper does not measure them: the archives of the Protein Data Bank (PDB), wwPDB and mmCIF \cite{bermanProteinDataBank2000,bermanAnnouncingWorldwideProtein2003,westbrookStarmmcifOntologyMacromolecular2000}; the column files of LAMMPS and the Atomsk converter \cite{thompsonLammpsFlexibleSimulation2022,hirelAtomskToolManipulating2015}; the quantum-chemistry objects of cclib, IOData, TREXIO and QCArchive \cite{oboyleCclibLibraryPackageindependent2008,verstraelenIodataPythonLibrary2021,posenitskiyTrexioFileFormat2023,smithMolssiQcaRchive2021}; the structure API of OPTIMADE and the published geometries of the Novel Materials Discovery (NOMAD) laboratory, Catalysis-Hub, Transition1x and OC20 \cite{andersenOptimadeApiExchanging2021,draxlNomadLaboratoryData2019,wintherCatalysishuborgOpenElectronic2019,schreinerTransition1xDatasetBuilding2022,chanussotOpenCatalyst20202021}; the analysis tools MDTraj, Visual Molecular Dynamics (VMD), d-SEAMS and parallel H5MD analysis over the Message Passing Interface (MPI) \cite{mcgibbonMdtrajModernOpen2015,humphreyVmdVisualMolecular1996,goswamiDseamsDeferredStructural2020,jakupovicMpiparallelMolecularDynamics2021}; trajectory compression by essential dynamics \cite{meyerEssentialDynamicsTool2006}; the array stores Zarr and ADIOS2 and portable scientific data \cite{opengeospatialconsortiumZarrStorageSpecification2022,godoyAdios2Adaptable2020,brownSoftwarePortableScientific1993}; the initial configurations of PACKMOL \cite{martinezPackmolPackageBuilding2009}; the restart files of PLUMED and the checkpoints of ESPResSo \cite{tribelloPlumed2New2014,weikEspresso40Extensible2019}; and the socket steps and XML restart files of i-PI and the steps passed through the MolSSI Driver Interface (MDI) \cite{ceriottiIpiPythonInterface2014,kapilIpi20Universal2019,litmanIpi30Flexible2024,barnesMolssiDriverInterface2021}.
 
 \begin{table}[tbp] \centering \scriptsize \caption{Restart record against the other routes of Table~\ref{tab:survey}.
 ``Scan'' means the reader walks the file to find a frame.
@@ -420,28 +414,25 @@ Table~\ref{tab:hcn} is what readcon-core returns on each atom of the three frame
 
 \input{figures/generated/hcn_table}
 
-\FloatBarrier \section{Timing}\label{sec:supp-timing} Section~\ref{sec:performance} of the main text uses the measurements in Section~\ref{sec:host}.
-Their timing records are those of the reader exchange, the readcon-db ingest, the distributed read and the DLPack exchange.
+\FloatBarrier \section{Timing}\label{sec:supp-timing} The read performance of the main text rests on the measurements of Section~\ref{sec:host}, whose timing records are those of the reader exchange, the readcon-db ingest, the distributed read and the DLPack exchange.
 Each head-to-head arm reports how many frames match the reference and how many do not.
 A fair rerun times the OVITO 3.17.0 reader and the OVITO 3.17.0 writer, and the record has a loss column.
-A fair rerun of the MDAnalysis readers times each of XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026,gowersMdanalysisTrajReader21002026}, keeps the fastest, and records what that format loses.
+A fair rerun of the MDAnalysis readers times each format of the trajectory-reader benchmark of MDAnalysis 2.11.0, namely XTC, TRR, DCD, Amber NetCDF, GROMOS11 TRC, PDB and XYZ \cite{gowersMdanalysisTrajReader21102026}, keeps the fastest, and records what that format loses.
 The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 measurement.
 A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
 That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
-extxyz-ng 0.0.2 is a candidate extended-XYZ reader beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
-A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015,kaliberaRigorousBenchmarkingReasonable2013}.
-The ordering table tests those ratios with the rank sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the interval of Hodges and Lehmann \cite{hollanderNonparametricStatisticalMethods2014} and Holm's step-down rule \cite{holmSimpleSequentiallyRejective1979}.
+We time the newer extended-XYZ reader extxyz-ng 0.0.2 beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
+A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions and within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
+The ordering table tests those ratios with the rank-sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the estimate of the shift by Hodges and Lehmann with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014} and the step-down rule of Holm \cite{holmSimpleSequentiallyRejective1979}.
 
 \input{figures/generated/ordering_table}
-memray records the peak heap of a cell \cite{memrayBloomberg}.
-libxtc reads the XTC trajectory \cite{krylovLibxtcEfficientLibrary2021}.
-Resumed bands are drawn on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after iterative rotational alignment \cite{gundeIRAShapeMatching2021}.
+memray records the peak heap of a cell \cite{memrayBloomberg}, and libxtc reads the XTC trajectory \cite{krylovLibxtcEfficientLibrary2021}.
+We draw the resumed bands on the $(s, d)$ plane \cite{goswamiTwodimensionalRmsdProjections2026} after alignment by iterative rotations and assignments (IRA) \cite{gundeIRAShapeMatching2021}.
 MDTraj is an analysis tool beside these readers \cite{mcgibbonMdtrajModernOpen2015}.
-Software citation follows the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
-The tensor exchange sits beside the metatensor layout \cite{bigiMetatensorMetatomicFoundational2026}.
+Software is cited by version, following the principles for research software \cite{smithSoftwareCitationPrinciples2016}.
+The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
 
-Table~\ref{tab:format-context} is context for choosing a format.
-readcon reads neither XYZ nor HDF5.
+Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
 \input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
@@ -452,7 +443,7 @@ The chemfiles row copies each frame out of the trajectory iterator, and that cop
 \section{Measured versions}\label{sec:supp-versions} The survey of Table~\ref{tab:survey} ran ASE 3.29.0, chemfiles 0.10.4, MDAnalysis 2.10.0, h5py 3.16.0, OVITO 3.16.1 and Open Babel 3.2.1.
 chemfiles 0.10.4, MDAnalysis 2.10.0, OVITO 3.16.1 and Open Babel 3.2.1 open neither a version-1 CON file nor a CON 3.1 file, and the eon module of ASE 3.29.0 opens both.
 The drift files of Table~\ref{tab:drift} went to ASE 3.29.0, the libAtoms \texttt{extxyz} 0.4.6 package, chemfiles 0.10.4, OVITO 3.16.1, MDAnalysis 2.10.0 and Open Babel 3.2.1.
-The readers timed on this branch are named in Section~\ref{sec:host} of the main text.
+The timed readers ran at the versions that Section~\ref{sec:host} of the main text names.
 
 The drift comparison gives the probe files to the published readcon wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, each in its own process, and the four do not return the same outcome on every file.
 On files of two frames whose line~1 is empty, the first refuses the file and the later three read two frames.
@@ -460,7 +451,7 @@ Only the second refuses a file with a legacy velocity label in capitals or separ
 On a blank symbol line and on a symbol line that starts with \texttt{\{}, the third and the fourth refuse the file and the earlier two read it, and the fourth returns the outcome of the third on every probe.
 
 \FloatBarrier \section{Reproduction}\label{sec:supp-repro} Table~\ref{tab:versionmap} names the build and host of every record from a readcon-core build.
-Each of them names its library by its digest, \texttt{\readcondigest}.
+Each of them names its library by its digest, and \rcRecordDigestCount{} of the \rcDigestRecordCount{} that name one name readcon-core~\rcRecordDigestVersion{}, whose digest begins \texttt{\rcRecordDigest}.
 Two of them also run other builds, which their headings name: the drift comparison reads the published wheels of 0.17.0, 0.17.1, 0.17.2 and \rcDriftFourth{}, the earlier releases of CON 3.1, and the eOn case runs the public eOn client and the readcon-core it embeds.
 A provenance module of the paper scripts writes the digests of the readcon module and of the library sources into each record.
 The version history of Table~\ref{tab:versions} is read from the specification at each release tag without running readcon-core code, so the table does not list it.
