@@ -93,7 +93,10 @@ def main() -> None:
         )
         paths.append(executable(mpi, "weak_scale_mpi"))
     else:
-        print("skip weak_scale_mpi: mpicc is unavailable")
+        raise SystemExit(
+            "FAIL: timed allocator gate incomplete "
+            f"({len(paths)}/9 artifacts built; 0/9 checked): mpicc is unavailable"
+        )
 
     benches = cargo(
         "bench",
