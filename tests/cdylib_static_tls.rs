@@ -1,4 +1,4 @@
-//! A cdylib built with `global_mimalloc` must dlopen after the process
+//! A cdylib built with `mimalloc-allocator` must dlopen after the process
 //! static-TLS surplus is gone, and must not carry initial-exec relocations.
 
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ fn cdylib() -> PathBuf {
             "--crate-type",
             "cdylib",
             "--features",
-            "global_mimalloc",
+            "mimalloc-allocator",
             "--target-dir",
         ])
         .arg(&target)

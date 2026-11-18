@@ -40,5 +40,5 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: |
           cargo clippy --locked --all-targets \
-            --features parallel,chemfiles,zstd,grammar,metatensor,global_mimalloc,benchmark \
+            --features parallel,chemfiles,zstd,grammar,metatensor,mimalloc-allocator,benchmark \
             -- -D warnings

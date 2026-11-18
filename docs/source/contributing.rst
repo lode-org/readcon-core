@@ -683,17 +683,24 @@ Feature gates
 
 Optional functionality is gated behind Cargo features:
 
-.. table::
+.. list-table::
+   :header-rows: 1
 
-    +----------+-------------------------------+----------------------------+
-    | Feature  | Dependencies                  | Purpose                    |
-    +==========+===============================+============================+
-    | parallel | rayon                         | Multi-frame parallel parse |
-    +----------+-------------------------------+----------------------------+
-    | rpc      | capnp, capnp-rpc, tokio, etc. | Cap'n Proto RPC serving    |
-    +----------+-------------------------------+----------------------------+
-    | python   | pyo3                          | Python bindings            |
-    +----------+-------------------------------+----------------------------+
+   * - Feature
+     - Dependencies
+     - Purpose
+   * - parallel
+     - rayon
+     - Multi-frame parallel parse
+   * - rpc
+     - capnp, capnp-rpc, tokio, etc.
+     - Cap'n Proto RPC serving
+   * - python
+     - pyo3
+     - Python bindings
+   * - mimalloc-allocator
+     - mimalloc
+     - Process allocator for final readcon artifacts
 
 Add new optional features in ``Cargo.toml`` under ``[features]``.
 

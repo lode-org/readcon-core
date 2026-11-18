@@ -1,0 +1,11 @@
+[package]
+name = "readcon-minimage-link-test"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+minimage = { version = "=0.1.2", default-features = false, features = ["capi"] }
+readcon-core = { path = "../..", default-features = false }
+
+[workspace]

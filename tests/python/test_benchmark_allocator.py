@@ -73,7 +73,7 @@ def test_documented_criterion_commands_use_the_benchmark_feature() -> None:
             if "cargo bench" in line and (
                 "--features" not in line
                 or "benchmark" not in line
-                or "global_mimalloc" in line
+                or "mimalloc-allocator" in line
             ):
                 bad.append(f"{route}: {line.strip()}")
             if "cargo bench" in line and "profile-generate" in line:
