@@ -425,7 +425,7 @@ The protein data bank row of Section~\ref{sec:h2h} stays the MDAnalysis 2.10.0 m
 A fair rerun also times \texttt{cextxyz} and the ASE trajectory format, with a loss column.
 That column records no file version, no velocity time unit, and a mask and an identifier that come back only by column name or only by the ASE layout.
 We time the newer extended-XYZ reader extxyz-ng 0.0.2 beside libAtoms \texttt{extxyz}, with readcon on CON \cite{yuExtxyzNgV0022026,kermodeLibatomsExtxyzV0462026}.
-A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions as well as within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
+A time is the median of the runs of its cell \cite{hoeflerScientificBenchmarkingParallel2015}, and since each run is a new process, the repeats sample the variation between executions and within one \cite{kaliberaRigorousBenchmarkingReasonable2013}.
 The ordering table tests those ratios with the rank-sum statistic of Mann and Whitney \cite{mannTestWhetherOne1947}, the estimate of the shift by Hodges and Lehmann with its distribution-free interval \cite{hollanderNonparametricStatisticalMethods2014} and the step-down rule of Holm \cite{holmSimpleSequentiallyRejective1979}.
 
 \input{figures/generated/ordering_table}
