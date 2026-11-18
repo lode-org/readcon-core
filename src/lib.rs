@@ -1,6 +1,7 @@
-// glibc's allocator serialises the per-frame shells of a parallel parse
-// on one arena lock. mimalloc keeps a serial read at the same speed and
-// lets those shells allocate on the thread that parses them.
+// A Rust library must not choose the process allocator for its consumers.
+// Final readcon artifacts opt into mimalloc with `global_mimalloc`: glibc's
+// allocator serialises the per-frame shells of a parallel parse on one arena
+// lock, while mimalloc lets those shells allocate on the parsing thread.
 // `asan_run` is set only for `-Zsanitizer=address`. mimalloc's `mi_free`
 // ignores the size Rust passes, so that run uses the system allocator.
 // `tsan_run` is set only for `-Zsanitizer=thread`. mimalloc is not built
@@ -8,31 +9,30 @@
 // another, and reports the reuse as a race. That run uses the system
 // allocator too.
 // Miri cannot execute mimalloc either, so it uses the system allocator too.
-// `static_system_alloc` is the static archive. A C host links that archive
-// beside another Rust staticlib (readcon-db). Each archive carries its own
-// std, and mimalloc in one copy is freed with glibc by the other. The
-// cdylib is one shared object and keeps mimalloc.
+// `static_system_alloc` remains an explicit override for the C static archive
+// and existing users, although system allocation is now the library default.
 #![allow(unexpected_cfgs)]
 #[cfg(all(
+    feature = "global_mimalloc",
     not(any(asan_run, tsan_run, miri)),
     not(feature = "static_system_alloc")
 ))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    feature = "global_mimalloc",
+    not(any(asan_run, tsan_run, miri)),
+    not(feature = "static_system_alloc")
+))]
 mod allocator_link_tests {
     unsafe extern "C" {
         fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
     }
 
-    /// Rust, C, and Python builds all link this crate, so they all use
-    /// this allocator. `mi_usable_size` is only meaningful for mimalloc.
-    /// The static archive opts out (`static_system_alloc`).
-    #[cfg(all(
-        not(any(asan_run, tsan_run, miri)),
-        not(feature = "static_system_alloc")
-    ))]
+    /// Final artifacts that opt in use this allocator. `mi_usable_size` is
+    /// only meaningful for mimalloc. The static archive always opts out.
     #[test]
     fn the_shipped_allocator_is_mimalloc() {
         let boxed = Box::new([0u8; 32]);

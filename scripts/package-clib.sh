@@ -131,10 +131,10 @@ fi
 
 default_features() {
     case "$TARGET" in
-        *linux*) echo chemfiles-from-sources,parallel,local_dynamic_tls ;;
-        *apple*) echo chemfiles,parallel,local_dynamic_tls ;;
-        *windows*) echo parallel,local_dynamic_tls ;;
-        *) echo chemfiles,parallel,local_dynamic_tls ;;
+        *linux*) echo chemfiles-from-sources,parallel,global_mimalloc ;;
+        *apple*) echo chemfiles,parallel,global_mimalloc ;;
+        *windows*) echo parallel,global_mimalloc ;;
+        *) echo chemfiles,parallel,global_mimalloc ;;
     esac
 }
 
@@ -226,9 +226,11 @@ else
     if [[ "$TARGET" == "$HOST" ]]; then
         LIB_DIR="$ROOT_DIR/target/release"
         CARGO_TARGET_ARGS=()
+        STATIC_LIB_DIR="$TMP_DIR/cargo-static/release"
     else
         LIB_DIR="$ROOT_DIR/target/${TARGET}/release"
         CARGO_TARGET_ARGS=(--target "$TARGET")
+        STATIC_LIB_DIR="$TMP_DIR/cargo-static/${TARGET}/release"
     fi
 
     if [[ "$NO_BUILD" -eq 0 ]]; then
@@ -249,6 +251,27 @@ else
             cargo build --release --locked --package readcon-core \
                 ${CARGO_TARGET_ARGS[@]+"${CARGO_TARGET_ARGS[@]}"} \
                 ${feat_args[@]+"${feat_args[@]}"}
+
+            # The one Cargo package emits every configured crate type with one
+            # feature set. Rebuild only the archive without the shared
+            # artifact's allocator opt-in, then copy it over the mixed build.
+            static_features=()
+            IFS=',' read -ra requested_features <<< "$FEATURES"
+            for feature in "${requested_features[@]}"; do
+                case "$feature" in
+                    global_mimalloc|local_dynamic_tls|static_system_alloc|"") ;;
+                    *) static_features+=("$feature") ;;
+                esac
+            done
+            static_features+=(static_system_alloc)
+            static_feature_csv="$(IFS=,; echo "${static_features[*]}")"
+            cargo rustc --release --locked --package readcon-core \
+                ${CARGO_TARGET_ARGS[@]+"${CARGO_TARGET_ARGS[@]}"} \
+                --target-dir "$TMP_DIR/cargo-static" \
+                --features "$static_feature_csv" --lib -- --crate-type=staticlib
+            if [[ "$TARGET" != *windows* ]]; then
+                cp -a "$STATIC_LIB_DIR/libreadcon_core.a" "$LIB_DIR/libreadcon_core.a"
+            fi
         )
     fi
 
@@ -256,6 +279,12 @@ else
         echo "package-clib: no libreadcon_core in $LIB_DIR (build first or pass --prefix)" >&2
         exit 1
     }
+    if [[ "$NO_BUILD" -eq 0 ]]; then
+        case "$TARGET" in
+            *windows*) cp -a "$STATIC_LIB_DIR/readcon_core.lib" "$DEST/lib/libreadcon_core.lib" ;;
+            *) cp -a "$STATIC_LIB_DIR/libreadcon_core.a" "$DEST/lib/libreadcon_core.a" ;;
+        esac
+    fi
 fi
 
 if [[ ! -f "$DEST/lib/pkgconfig/readcon-core.pc" ]]; then

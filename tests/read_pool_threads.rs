@@ -8,12 +8,10 @@
 //! LeakSanitizer does not scan, so a read must also not return before
 //! the workers it started are running.
 //!
-//! The library installs mimalloc as the process allocator, and std
-//! allocates the thread handle with `System`, so a counting allocator in
-//! this binary would not see it. The binary counts `pthread_create` and
-//! the threads that began to run instead. New threads start after a
-//! staggered delay, so a read that returns before its workers run is
-//! caught without a sanitizer.
+//! The binary counts `pthread_create` and the threads that began to run.
+//! New threads start after a staggered delay, so a read that returns before
+//! its workers run is caught without depending on allocator internals or a
+//! sanitizer.
 //!
 //! ASan and TSan link their own `pthread_create` into the binary. ASan
 //! aborts on a thread it did not record and TSan faults on one, so the

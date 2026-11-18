@@ -162,7 +162,7 @@ Testing
     meson test -C bbdir
 
     # Benchmarks
-    cargo bench
+    cargo bench --features global_mimalloc
     # or: pixi r bench
 
 Test data lives in ``resources/test/``. Use the ``test_case!`` macro in
@@ -185,11 +185,11 @@ Three-step workflow (Linux, ``rustc`` 1.88+):
     #    want profile data on.
     mkdir -p build/pgo
     RUSTFLAGS="-Cprofile-generate=build/pgo" \
-      cargo bench --features parallel,zstd,rpc --no-run
+      cargo bench --features parallel,zstd,rpc,global_mimalloc --no-run
 
     # 2. Run the benches to collect .profraw files.
     RUSTFLAGS="-Cprofile-generate=build/pgo" \
-      cargo bench --features parallel,zstd,rpc
+      cargo bench --features parallel,zstd,rpc,global_mimalloc
 
     # 3. Merge profraws then build with --use to consume the merged profile.
     $(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata \

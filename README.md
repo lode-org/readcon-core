@@ -102,7 +102,7 @@ See [docs/orgmode/benchmarks.org](docs/orgmode/benchmarks.org).
 -   **Writers:** append an uncompressed file, flush the 8 KiB buffer, and stream one Python frame at a time. `.gz` and `.zst` select the codec.
 -   **ASE:** the `ase-readcon` package registers `readcon-con` and `readcon-convel` on `ase.ioformats`.
 -   **Bindings:** Python (PyO3), Julia (ccall), C (shipped header), C++ (RAII header), Fortran (fpm); hourglass ABI patterned on [metatensor](https://github.com/metatensor/metatensor).
--   **Static archive:** Meson builds `libreadcon_core.a` with `static_system_alloc`, so that archive uses the system allocator. The cdylib keeps mimalloc. A C host can link the archive beside another Rust staticlib.
+-   **Allocators:** Rust library builds do not install a process-wide allocator. Applications choose their allocator in their final binary; use `#[global_allocator] static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;` or enable `global_mimalloc` only when readcon itself is the final artifact. The Python module and C cdylib opt into mimalloc with local-dynamic TLS. The C static archive keeps the system allocator, and `static_system_alloc` remains accepted for compatibility.
 -   **Metadata helpers:** Typed `energy`, `frame_index`, `time`, `timestep`, `neb_bead`, `neb_band` across bindings; raw JSON still available.
 -   **Validation:** `validate=true` enforces finiteness, reserved keys, geometry, labels, symbols, section presence, identity columns.
 -   **Fidelity:** `atom_id`, per-direction fixed masks, and declared optional sections round-trip through the core reader/writer.

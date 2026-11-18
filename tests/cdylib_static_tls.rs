@@ -1,4 +1,4 @@
-//! A cdylib built with `local_dynamic_tls` must dlopen after the process
+//! A cdylib built with `global_mimalloc` must dlopen after the process
 //! static-TLS surplus is gone, and must not carry initial-exec relocations.
 
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ fn cdylib() -> PathBuf {
             "--crate-type",
             "cdylib",
             "--features",
-            "local_dynamic_tls",
+            "global_mimalloc",
             "--target-dir",
         ])
         .arg(&target)
@@ -34,6 +34,18 @@ fn cdylib() -> PathBuf {
 #[test]
 fn a_late_dlopen_has_no_initial_exec_tls() {
     let so = cdylib();
+    let symbols = Command::new("nm")
+        .args(["--defined-only", so.to_str().unwrap()])
+        .output()
+        .expect("nm");
+    assert!(symbols.status.success());
+    let symbols = String::from_utf8_lossy(&symbols.stdout);
+    assert!(
+        symbols
+            .lines()
+            .any(|line| line.ends_with(" mi_malloc_aligned")),
+        "opt-in cdylib does not contain mimalloc:\n{symbols}"
+    );
     let dynamic = Command::new("readelf")
         .args(["-d", so.to_str().unwrap()])
         .output()

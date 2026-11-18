@@ -240,7 +240,13 @@ def measure_memory() -> dict:
 def ensure_python_extension() -> None:
     """Install the wheel built from this checkout before any Python timing."""
     subprocess.run(
-        ["maturin", "build", "--release", "--features", "python,zstd"],
+        [
+            "maturin",
+            "build",
+            "--release",
+            "--features",
+            "python,zstd,global_mimalloc",
+        ],
         cwd=ROOT,
         check=True,
     )

@@ -430,7 +430,13 @@ def compile_tools() -> None:
     # archive, so a campaign has to refresh it or it times the previous
     # checkout.
     subprocess.run(
-        ["cargo", "build", "--release", "--features", "parallel"],
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--features",
+            "parallel,global_mimalloc",
+        ],
         cwd=ROOT,
         check=True,
     )
