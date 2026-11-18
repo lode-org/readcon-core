@@ -81,7 +81,7 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: |
-          cargo build --features mpi --example mpi_smoke --example mpi_read_check
+          cargo build --features mpi,benchmark --example mpi_smoke --example mpi_read_check
           cargo build --features mpi --lib
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_shim.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_shim
@@ -105,7 +105,7 @@ jobs:
         env:
           MPICC: ${{ matrix.cc }}
         run: |
-          cargo build --features mpi --lib --example mpi_write_check
+          cargo build --features mpi,benchmark --lib --example mpi_write_check
           ${{ matrix.cc }} -Wall -Wextra -Werror -Iinclude tests/c/test_mpi_write.c \
             -Ltarget/debug -lreadcon_core -o target/test_mpi_write
       - name: Collective write is byte-identical to serial (sha256, 1 to 4 ranks)

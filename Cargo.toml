@@ -183,6 +183,7 @@ libc = "0.2"
 
 [[example]]
 name = "conbin_perf"
+required-features = ["benchmark"]
 
 [[example]]
 name = "rust_usage"
@@ -193,11 +194,11 @@ required-features = ["mpi"]
 
 [[example]]
 name = "mpi_read_check"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "mpi_write_check"
-required-features = ["mpi"]
+required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "rcidx_bench"
@@ -221,6 +222,19 @@ required-features = ["mpi", "benchmark"]
 
 [[example]]
 name = "serial_probe"
+required-features = ["benchmark"]
+
+[[example]]
+name = "scale_probe"
+required-features = ["benchmark"]
+
+[[example]]
+name = "format_profile"
+required-features = ["benchmark"]
+
+[[example]]
+name = "v31_parse_bench"
+required-features = ["benchmark"]
 
 [[example]]
 name = "codec_ceiling"
@@ -228,7 +242,7 @@ required-features = ["parallel", "zstd", "benchmark"]
 
 [[example]]
 name = "leaf_io_harness"
-required-features = ["rpc"]
+required-features = ["rpc", "benchmark"]
 
 [[test]]
 name = "default_read_threads"
@@ -308,4 +322,4 @@ required-features = ["benchmark"]
 
 [[example]]
 name = "chemfiles_xyz_time"
-required-features = ["chemfiles"]
+required-features = ["chemfiles", "benchmark"]

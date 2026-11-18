@@ -3,7 +3,7 @@
 //! Usage (builder only):
 //!
 //! ```text
-//! cargo run --release --example leaf_io_harness --features rpc -- \
+//! cargo run --release --example leaf_io_harness --features rpc,benchmark -- \
 //!     benches/results/leaf_io.json
 //! ```
 //!
