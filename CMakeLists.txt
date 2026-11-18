@@ -159,9 +159,9 @@ else()
 endif()
 set(_readcon_static_feat_arg "--features=${_readcon_static_feats}")
 if ("${_readcon_user_feats}" STREQUAL "")
-    set(_readcon_shared_feats "global_mimalloc")
+    set(_readcon_shared_feats "mimalloc-allocator")
 else()
-    set(_readcon_shared_feats "${_readcon_user_feats},global_mimalloc")
+    set(_readcon_shared_feats "${_readcon_user_feats},mimalloc-allocator")
 endif()
 set(_readcon_shared_feat_arg "--features=${_readcon_shared_feats}")
 
@@ -183,7 +183,7 @@ endif()
 
 # The cdylib cargo rustc also emits libreadcon_core.a, because the package
 # lists staticlib among its crate types. That second archive is built with
-# global_mimalloc and would replace the system-allocator archive. Build the
+# mimalloc-allocator and would replace the system-allocator archive. Build the
 # archive in its own target directory and copy it into place last.
 set(CARGO_STATIC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargo-target-static")
 string(REPLACE "--target-dir=${CARGO_TARGET_DIR}" "--target-dir=${CARGO_STATIC_TARGET_DIR}" CARGO_STATIC_BUILD_ARG "${CARGO_BUILD_ARG}")

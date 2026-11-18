@@ -131,10 +131,10 @@ fi
 
 default_features() {
     case "$TARGET" in
-        *linux*) echo chemfiles-from-sources,parallel,global_mimalloc ;;
-        *apple*) echo chemfiles,parallel,global_mimalloc ;;
-        *windows*) echo parallel,global_mimalloc ;;
-        *) echo chemfiles,parallel,global_mimalloc ;;
+        *linux*) echo chemfiles-from-sources,parallel,mimalloc-allocator ;;
+        *apple*) echo chemfiles,parallel,mimalloc-allocator ;;
+        *windows*) echo parallel,mimalloc-allocator ;;
+        *) echo chemfiles,parallel,mimalloc-allocator ;;
     esac
 }
 
@@ -259,7 +259,7 @@ else
             IFS=',' read -ra requested_features <<< "$FEATURES"
             for feature in "${requested_features[@]}"; do
                 case "$feature" in
-                    global_mimalloc|local_dynamic_tls|static_system_alloc|"") ;;
+                    global_mimalloc|mimalloc-allocator|local_dynamic_tls|static_system_alloc|"") ;;
                     *) static_features+=("$feature") ;;
                 esac
             done

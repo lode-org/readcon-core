@@ -1,6 +1,6 @@
 // A Rust library must not choose the process allocator for its consumers.
-// Final readcon artifacts opt into mimalloc with `global_mimalloc`: glibc's
-// allocator serialises the per-frame shells of a parallel parse on one arena
+// Final readcon artifacts opt into mimalloc with `mimalloc-allocator`: glibc's
+// allocator serializes the per-frame shells of a parallel parse on one arena
 // lock, while mimalloc lets those shells allocate on the parsing thread.
 // `asan_run` is set only for `-Zsanitizer=address`. mimalloc's `mi_free`
 // ignores the size Rust passes, so that run uses the system allocator.
@@ -13,7 +13,7 @@
 // and existing users, although system allocation is now the library default.
 #![allow(unexpected_cfgs)]
 #[cfg(all(
-    feature = "global_mimalloc",
+    feature = "mimalloc-allocator",
     not(any(asan_run, tsan_run, miri)),
     not(feature = "static_system_alloc")
 ))]
@@ -22,7 +22,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[cfg(all(
     test,
-    feature = "global_mimalloc",
+    feature = "mimalloc-allocator",
     not(any(asan_run, tsan_run, miri)),
     not(feature = "static_system_alloc")
 ))]
