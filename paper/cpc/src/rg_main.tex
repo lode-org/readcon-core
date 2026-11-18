@@ -171,7 +171,7 @@ CON is a geometry format used in eOn, ASE and other codes, and it had no specifi
 \textit{Solution method:} CON 3.1 is a versioned grammar that formalizes and extends the CON text, and readcon-core is its reference reader and writer.
 The second line of a frame is a JSON object that declares the major and minor version, the units, the periodic flags and the per-atom sections that follow the coordinates.
 The fourth column of a coordinate row is a three-bit mask of the fixed components, and the fifth is an atom identifier.
-From minor 1 onwards, a velocity section declares its time unit.
+From minor 1 onward, a velocity section declares its time unit.
 A reader of a known major accepts any later minor, keeps unknown keys and skips a section of a later minor by its declared width.
 The writer prints the shortest decimal that reads back as the same binary64 value, and the reader rounds each decimal to the nearest binary64 value.
 Two corpora of legal and illegal files fix the verdict of a conforming reader on the clauses of the specification.
@@ -484,7 +484,7 @@ Spreads & \(s_x\, s_y\, s_z\) & \texttt{units.length}, each at least 0 \\
 \end{tabular}
 \end{table}
 
-From minor 1 onwards, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
+From minor 1 onward, a frame with a velocity section declares \texttt{units.time}, and the reader converts that unit to femtoseconds by Eq.~\eqref{eq:tau}.
 Frames of earlier versions are read in the natural unit, whatever \texttt{units.time} names (Table~\ref{tab:clauses}).
 Producers of that period wrote natural-unit numbers under an fs label, and the public release eOn~\eOneEonVersion{} still does \cite{rohitgoswamiTheochemuieonV3602026}.
 That release embeds readcon-core~\eOneEonReadcon{} and writes CON~3.0, and since its velocity writer sets no time unit, the library writes its default label of fs.
@@ -560,7 +560,7 @@ readcon.write_con("band.con", frames)
 
 \subsection{Python bindings and thread safety}\label{sec:python-threads}
 The PyO3 module declares that it does not need the global interpreter lock (\texttt{gil\_used = false}).
-Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t} as well as on the standard builds.
+Continuous integration runs the tests on free-threaded Python \texttt{3.13t} and \texttt{3.14t}, and on the standard builds.
 Parsing, formatting, file writes and correspondence checks detach the Python thread state with \texttt{py.detach}, so other Python threads run while they do.
 Each write path first copies or converts whatever input Python can reach, while still attached, and only then formats, compresses and writes while detached.
 This includes compressed writes of frame lists that do not keep their parsed frames, plain writes after indexing, and appends of \texttt{ConFrame} lists.
