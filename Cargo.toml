@@ -12,16 +12,42 @@ documentation = "https://docs.rs/readcon-core"
 keywords = ["Parser", "comp-chem", "file-format"]
 categories = ["filesystem", "parser-implementations", "science"]
 license = "MIT"
-exclude = [
-  # Campaign harness, fixtures, and recorded rows. The library build does
-  # not read this tree. Tests that open a fixture use the git checkout.
-  "bench/**",
-  # cargo-fuzz crate. It is not part of the published library or the cxx wrap.
-  "fuzz/**",
-  # The CPC paper sources, records and scripts. scripts/package-cxx.sh builds
-  # the cxx archive from cargo package, so a paper edit must not change the
-  # wrap digest.
-  "paper/**",
+# The package is the library and the cxx wrap surface, nothing else. The cxx
+# wrap archive is built from it, so a file outside this list cannot move the
+# archive digest. Each path is anchored at the package root. Besides the
+# library sources, the build needs VERSION (build.rs), grammar/readcon.pest
+# (pest_derive), support/metatensor_install.rs (build.rs) and
+# schema/ReadCon.capnp (build.rs, rpc feature). The examples and the
+# .con inputs are the ones examples/meson.build builds and reads.
+# frame_builder_consume.c is the extra example that meson.build builds.
+include = [
+  "/src/**",
+  "/include/**",
+  "/build.rs",
+  "/Cargo.toml",
+  "/Cargo.lock",
+  "/LICENSE",
+  "/README.md",
+  "/VERSION",
+  "/grammar/readcon.pest",
+  "/support/metatensor_install.rs",
+  "/schema/ReadCon.capnp",
+  "/CMakeLists.txt",
+  "/cmake/**",
+  "/meson.build",
+  "/meson_options.txt",
+  "/scripts/meson_cargo_build.py",
+  "/examples/c_api_sample.c",
+  "/examples/frame_builder_consume.c",
+  "/examples/cpp_api_sample.cpp",
+  "/examples/meson.build",
+  "/examples/cpp_displacements_roundtrip.cpp",
+  "/examples/cpp_spreads_roundtrip.cpp",
+  "/examples/cpp_trajectory.cpp",
+  "/examples/cpp_v31_units_roundtrip.cpp",
+  "/examples/print_neb_band.cpp",
+  "/resources/test/tiny_multi_cuh2.con",
+  "/resources/examples/neb_band.con",
 ]
 
 [lints.rust]

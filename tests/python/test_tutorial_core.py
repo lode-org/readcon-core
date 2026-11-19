@@ -63,6 +63,23 @@ def test_tutorial_script_does_not_call_system_python3():
     assert not hits, "script hard-codes system python3:\n" + "\n".join(hits)
 
 
+def test_tutorial_script_never_installs_into_the_caller():
+    """A missing readcon goes into a scratch virtualenv, not the interpreter that runs the script."""
+    script = SCRIPT.read_text(encoding="utf-8")
+    code = "\n".join(line.split("#", 1)[0] for line in script.splitlines())
+    assert "maturin develop" not in code
+    assert "-m venv" in code and "--interpreter" in code
+
+
+def _imports_readcon(python: str) -> bool:
+    return (
+        subprocess.run(
+            [python, "-c", "import readcon"], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
+
+
 def _maturin_invocation(python: str) -> str | None:
     """Return how ``python`` can reach maturin, or None if it is not installed.
 
@@ -117,16 +134,20 @@ def test_org_babel_tutorial_core_script():
             "interpreter, and `python -m maturin` failed"
         )
     assert ORG.is_file() and SCRIPT.is_file()
+    had_readcon = _imports_readcon(python)
     proc = subprocess.run(
         ["bash", str(SCRIPT)],
         cwd=str(REPO),
         env=_runner_env(python, maturin),
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=1200,
     )
     assert proc.returncode == 0, (
         f"run-tutorial-core.sh failed:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert _imports_readcon(python) == had_readcon, (
+        "the tutorial changed the caller's interpreter"
     )
     out = proc.stdout + proc.stderr
     assert "OK — tangled, drift-checked, and ran" in out
