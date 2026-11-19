@@ -644,12 +644,19 @@ struct ParsedMetaLine {
 const META_LINE_CACHE_CAP: usize = 4;
 
 std::thread_local! {
-    // Keep the bounded cache alive until process exit. Free-threaded CPython
-    // can tear worker TLS down while libc is still running other TLS
-    // destructors; dropping the cached Arcs there produces a TSan-visible
-    // libc TLS-dtor race. At most four parsed lines remain per exited thread.
+    // Native builds keep the bounded cache alive until process exit.
+    // Free-threaded CPython can tear worker TLS down while libc is still
+    // running other TLS destructors; dropping the cached Arcs there produces
+    // a TSan-visible libc TLS-dtor race. At most four parsed lines remain
+    // per exited thread. Miri does not run those destructors concurrently,
+    // and it reports the retained lines as leaks, so under Miri the cache
+    // is an ordinary thread-local and drops with the thread.
+    #[cfg(not(miri))]
     static META_LINE_CACHE: std::mem::ManuallyDrop<std::cell::RefCell<Vec<ParsedMetaLine>>> =
         const { std::mem::ManuallyDrop::new(std::cell::RefCell::new(Vec::new())) };
+    #[cfg(miri)]
+    static META_LINE_CACHE: std::cell::RefCell<Vec<ParsedMetaLine>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json::Value> {
@@ -5533,6 +5540,19 @@ mod tests {
             let hint = hint.get();
             hint.atoms == atoms.as_ptr() as usize && hint.n == atoms.len()
         })
+    }
+
+    /// A successful write fills the per-thread metadata line cache. The
+    /// cache must not be reported as a leak when the thread ends.
+    #[test]
+    fn a_written_frame_releases_the_metadata_line_cache() {
+        let frame = crate::iterators::ConFrameIterator::new(&uniform_frame_text(1))
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let bytes =
+            crate::writer::write_frames_to_vec(std::slice::from_ref(&frame)).expect("write");
+        assert!(!bytes.is_empty());
     }
 
     #[cfg(feature = "python")]
