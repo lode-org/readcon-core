@@ -1617,7 +1617,7 @@ fn metadata_json_rebuilt(frame: &ConFrame) -> String {
     for (k, v) in &frame.header.metadata {
         obj.insert(k.clone(), v.clone());
     }
-    serde_json::Value::Object(obj).to_string()
+    crate::writer::serialize_json_object_with_minor_raw(obj, frame.header.metadata.huge_minor_raw())
 }
 
 /// Plain geometry for the eOn cache: coordinates, sequential ids, no sections.
