@@ -2330,12 +2330,31 @@ impl PyConFrame {
         // A read that only writes the frames back keeps the parser's
         // coordinates on the frame instead.
         let xyz_owned = if py.import("numpy").is_ok() {
-            let data = match frame.positions.take_contiguous_f64() {
+            // Atoms that address the f64 column let the array adopt its
+            // allocation. An atom with its own box holds the value the
+            // writer spells, which a projected column or one that was never
+            // synced can differ from.
+            let adopt = frame.atom_data.len() != n_atoms
+                || n_atoms == 0
+                || frame.atom_data.first().is_some_and(|atom| {
+                    std::ptr::eq(atom.coord_ptr(), frame.positions.data_ptr().cast())
+                });
+            let adopted = if adopt {
+                frame.positions.take_contiguous_f64()
+            } else {
+                None
+            };
+            let data = match adopted {
                 Some(buf) => buf,
                 None => {
                     count_binding_copy();
                     let mut data = Vec::with_capacity(n_atoms.saturating_mul(3));
-                    if let Some(src) = frame.positions.f64_slice() {
+                    if frame.atom_data.len() == n_atoms {
+                        // The atoms are rebound to this array below.
+                        for atom in &frame.atom_data {
+                            data.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+                        }
+                    } else if let Some(src) = frame.positions.f64_slice() {
                         data.extend_from_slice(src);
                     } else {
                         for i in 0..n_atoms {
@@ -3997,7 +4016,8 @@ impl ConFrameListIter {
 /// Point coordinate slots at `base`, laid out `[frame, atom, xyz]`.
 ///
 /// The slots alias `frame.positions` until the shared slab takes over.
-/// Owned boxes are left in place: they do not alias that buffer.
+/// An atom with an owned box is rebound as well, so the slab is the only
+/// copy of the coordinates and the atoms read what Python writes.
 fn retarget_frames_to_slab(frames: &mut [ConFrame], base: *mut f64, n_atoms: usize) {
     if n_atoms == 0 || base.is_null() {
         return;
