@@ -483,4 +483,46 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn capnp_roundtrip_arbitrary_size_con_spec_minor() {
+        let three_hundred = format!("1{}7", "0".repeat(298));
+        for minor in [
+            "18446744073709551616",
+            "18446744073709551617",
+            "1000000000000000000000000000000000000007",
+            three_hundred.as_str(),
+        ] {
+            let text = format!(
+                "gen\n{{\"con_spec_version\":3,\"con_spec_minor\":{minor},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}}}}\n10.0 10.0 10.0\n90.0 90.0 90.0\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0.0 0.0 0.0 0 0\n"
+            );
+            let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
+            assert_eq!(frame.header.con_spec_minor_str(), minor);
+
+            let mut message = Builder::new_default();
+            {
+                let root = message.init_root::<con_frame_data::Builder>();
+                fill_frame_builder(root, &frame).unwrap();
+            }
+            let reader = message
+                .get_root_as_reader::<con_frame_data::Reader>()
+                .unwrap();
+            let back = frame_from_reader(reader).unwrap();
+
+            assert_eq!(back.header.spec_version, 3);
+            assert_eq!(
+                back.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(back.header.con_spec_minor_str(), minor);
+
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
+                .write_frame(&back)
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            let needle = format!("\"con_spec_minor\":{minor}");
+            assert!(written.contains(&needle), "{written}");
+        }
+    }
 }

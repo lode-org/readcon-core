@@ -5165,6 +5165,615 @@ Forces of Component 1
             }
         }
     }
+
+    #[test]
+    fn test_arbitrary_size_con_spec_minor_accepted_and_preserved() {
+        const TWO_POW_64: &str = "18446744073709551616";
+        const TWO_POW_64_PLUS_1: &str = "18446744073709551617";
+        const FORTY_DIGITS: &str = "1000000000000000000000000000000000000007";
+        let three_hundred_digits = format!("1{}7", "0".repeat(298));
+
+        for minor in [
+            TWO_POW_64,
+            TWO_POW_64_PLUS_1,
+            FORTY_DIGITS,
+            three_hundred_digits.as_str(),
+        ] {
+            let meta_general = format!(
+                r#"{{"con_spec_version":3,"con_spec_minor":{minor},"units":{{"length":"angstrom","energy":"eV"}},"sections":[],"validate":true,"probe":1}}"#
+            );
+            let lines_general = [
+                "PREBOX1",
+                meta_general.as_str(),
+                "10.0 10.0 10.0",
+                "90.0 90.0 90.0",
+                "POSTBOX1",
+                "POSTBOX2",
+                "1",
+                "1",
+                "63.546",
+                "Cu",
+                "Coordinates of Component 1",
+                "0.0 0.0 0.0 0 0",
+            ];
+            let frame = parse_single_frame(&mut lines_general.iter().copied())
+                .unwrap_or_else(|e| panic!("minor {minor} general path failed: {e}"));
+            assert_eq!(frame.header.spec_version, 3);
+            assert_eq!(
+                frame.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(frame.header.con_spec_minor_str(), minor);
+
+            let meta_fast = format!(
+                r#"{{"con_spec_version":3,"con_spec_minor":{minor},"units":{{"length":"angstrom","energy":"eV"}}}}"#
+            );
+            let lines_fast = [
+                "PREBOX1",
+                meta_fast.as_str(),
+                "10.0 10.0 10.0",
+                "90.0 90.0 90.0",
+                "POSTBOX1",
+                "POSTBOX2",
+                "1",
+                "1",
+                "63.546",
+                "Cu",
+                "Coordinates of Component 1",
+                "0.0 0.0 0.0 0 0",
+            ];
+            let fast_frame = parse_single_frame(&mut lines_fast.iter().copied())
+                .unwrap_or_else(|e| panic!("minor {minor} fast path failed: {e}"));
+            assert_eq!(
+                fast_frame.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(fast_frame.header.con_spec_minor_str(), minor);
+
+            let mut builder = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+            builder.set_metadata_json(&meta_general).unwrap();
+            builder.add_atom("Cu", 0.0, 0.0, 0.0, [false; 3], 0, 63.546);
+            let built = builder.build().unwrap();
+            assert_eq!(
+                built.header.con_spec_minor_saturating(),
+                crate::types::SATURATED_SPEC_MINOR
+            );
+            assert_eq!(built.header.con_spec_minor_str(), minor);
+        }
+
+        // Integers exceeding f64::MAX (such as 400 digits) are rejected by serde_json at BASE
+        // and are left untouched so both general and fast paths surface BASE InvalidMetadataJson.
+        let four_hundred_digits = format!("1{}7", "0".repeat(398));
+        for meta_line in [
+            format!(
+                r#"{{"con_spec_version":3,"con_spec_minor":{four_hundred_digits},"units":{{"length":"angstrom","energy":"eV"}}}}"#
+            ),
+            format!(
+                r#"{{"con_spec_version":3,"con_spec_minor":{four_hundred_digits},"units":{{"length":"angstrom","energy":"eV"}},"probe":1}}"#
+            ),
+        ] {
+            let lines = [
+                "PREBOX1",
+                meta_line.as_str(),
+                "10.0 10.0 10.0",
+                "90.0 90.0 90.0",
+                "POSTBOX1",
+                "POSTBOX2",
+                "1",
+                "1",
+                "63.546",
+                "Cu",
+                "Coordinates of Component 1",
+                "0.0 0.0 0.0 0 0",
+            ];
+            let err = parse_frame_header(&mut lines.iter().copied()).unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson");
+            assert!(
+                err.to_string()
+                    .contains("number out of range at line 1 column 439"),
+                "{err}"
+            );
+        }
+        let mut b400 = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        assert_eq!(
+            b400.set_con_spec_minor_str(&four_hundred_digits)
+                .unwrap_err()
+                .class_name(),
+            "InvalidMetadataJson"
+        );
+    }
+
+    #[test]
+    fn test_arbitrary_size_con_spec_minor_keeps_later_minor_semantics() {
+        const FORTY_DIGITS: &str = "1000000000000000000000000000000000000007";
+        // CON-units.11: minor >= 1 with velocities requires units.time.
+        let no_time = format!(
+            "PRE\n{{\"con_spec_version\":3,\"con_spec_minor\":{FORTY_DIGITS},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
+        );
+        let err = crate::iterators::ConFrameIterator::new(&no_time)
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err.class_name(), "InvalidUnits");
+
+        // CON-section.8: minor > CON_SPEC_MINOR skips unknown section with section_arity.
+        let unknown_sec = format!(
+            "PRE\n{{\"con_spec_version\":3,\"con_spec_minor\":{FORTY_DIGITS},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[\"widgets\"],\"section_arity\":{{\"widgets\":2}}}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nWidgets of Component 1\n1.0 2.0 0 0\n"
+        );
+        let frame = crate::iterators::ConFrameIterator::new(&unknown_sec)
+            .next()
+            .unwrap()
+            .expect("newer minor with section_arity should skip unknown section");
+        assert_eq!(frame.atom_data.len(), 1);
+
+        // Writer treats 40-digit minor as >= 1 (CON-units.12: velocities require units.time).
+        let mut vel_builder = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        vel_builder.set_con_spec_minor_str(FORTY_DIGITS).unwrap();
+        vel_builder
+            .set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}))
+            .unwrap();
+        vel_builder
+            .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+            .with_velocity([0.1, 0.0, 0.0]);
+        let vel_frame = vel_builder.build().unwrap();
+        let mut bad_out = Vec::new();
+        let write_err = crate::writer::ConFrameWriter::new(&mut bad_out)
+            .write_frame(&vel_frame)
+            .expect_err("minor >= 1 velocities without units.time must fail on write");
+        assert!(write_err.to_string().contains("units.time"), "{write_err}");
+    }
+
+    #[test]
+    fn test_invalid_con_spec_minor_and_duplicate_semantics() {
+        for bad in [
+            "-1",
+            "-18446744073709551616",
+            "-0",
+            "+1",
+            "01",
+            "1.0",
+            "1.5",
+            "18446744073709551616.0",
+            "1e0",
+            "1e2",
+            "1E20",
+            "\"1\"",
+            "\"18446744073709551616\"",
+            "true",
+            "null",
+        ] {
+            for extra in ["", r#","probe":1"#] {
+                let meta = format!(
+                    r#"{{"con_spec_version":3,"con_spec_minor":{bad},"units":{{"length":"angstrom","energy":"eV"}}{extra}}}"#
+                );
+                let lines = [
+                    "PRE",
+                    meta.as_str(),
+                    "10.0 10.0 10.0",
+                    "90.0 90.0 90.0",
+                    "",
+                    "",
+                    "1",
+                    "1",
+                    "1.0",
+                    "H",
+                    "Coordinates of Component 1",
+                    "0.0 0.0 0.0 0 0",
+                ];
+                let err = parse_frame_header(&mut lines.iter().copied())
+                    .expect_err(&format!("expected error for minor {bad}"));
+                assert_eq!(
+                    err.class_name(),
+                    "InvalidMetadataJson",
+                    "minor {bad} gave {err:?}"
+                );
+            }
+        }
+
+        // Duplicate keys follow serde last-key-wins semantics.
+        for bad_last in [
+            r#"{"con_spec_version":3,"con_spec_minor":0,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}"#,
+            r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":-0,"units":{"length":"angstrom","energy":"eV"}}"#,
+        ] {
+            let lines = ["PRE", bad_last, "10 10 10", "90 90 90", "", "", "0", "", ""];
+            let err = parse_frame_header(&mut lines.iter().copied()).unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{bad_last}");
+        }
+
+        // Earlier invalid duplicate overwritten by a valid final key matches BASE.
+        let neg_then_zero = [
+            "PRE",
+            r#"{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":0,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h_zero = parse_frame_header(&mut neg_then_zero.iter().copied()).unwrap();
+        assert_eq!(h_zero.con_spec_minor_saturating(), 0);
+        assert_eq!(h_zero.con_spec_minor_str(), "0");
+
+        let neg_then_huge = [
+            "PRE",
+            r#"{"con_spec_version":3,"con_spec_minor":-0,"con_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h_huge = parse_frame_header(&mut neg_then_huge.iter().copied()).unwrap();
+        assert_eq!(h_huge.con_spec_minor_saturating(), u64::MAX);
+        assert_eq!(h_huge.con_spec_minor_str(), "18446744073709551616");
+
+        let last_small = [
+            "PRE",
+            r#"{"con_spec_version":3,"con_spec_minor":18446744073709551616,"con_spec_minor":7,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h1 = parse_frame_header(&mut last_small.iter().copied()).unwrap();
+        // B3: when the effective (last) minor is in-range, minor_from_line matches BASE
+        // first-key lookup (18446744073709551616 fails u64 parse -> 0) while serde_json keeps 7.
+        assert_eq!(h1.con_spec_minor_saturating(), 0);
+        assert_eq!(h1.metadata["con_spec_minor"].as_u64(), Some(7));
+
+        let last_huge = [
+            "PRE",
+            r#"{"con_spec_version":3,"con_spec_minor":7,"con_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h2 = parse_frame_header(&mut last_huge.iter().copied()).unwrap();
+        assert_eq!(h2.con_spec_minor_saturating(), u64::MAX);
+        assert_eq!(h2.con_spec_minor_str(), "18446744073709551616");
+
+        // con_spec_version and section_arity follow BASE duplicate semantics.
+        let dup_major = [
+            "PRE",
+            r#"{"con_spec_version":-0,"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut dup_major.iter().copied())
+                .unwrap()
+                .spec_version,
+            3
+        );
+        let dup_arity = [
+            "PRE",
+            r#"{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut dup_arity.iter().copied())
+                .unwrap()
+                .metadata
+                .get("section_arity")
+                .unwrap()["widgets"]
+                .as_u64(),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn test_v4_blocker_guarantees_and_base_parity() {
+        // section_arity is left untouched (2^64 / 40-digit rejected as InvalidMetadataJson).
+        for line2 in [
+            r#"{"con_spec_version":2,"section_arity":{"widgets":18446744073709551616}}"#,
+            r#"{"con_spec_version":2,"section_arity":{"widgets":1000000000000000000000000000000000000007}}"#,
+            r#"{"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"},"section_arity":{"velocities":18446744073709551616}}"#,
+        ] {
+            let lines = ["PRE", line2, "10 10 10", "90 90 90", "", "", "0", "", ""];
+            let err = parse_frame_header(&mut lines.iter().copied()).unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{line2}: {err}");
+        }
+
+        // Length-preserving placeholder preserves exact BASE error column after serde-valid
+        // huge con_spec_minor (2^64, 40 digits, 300 digits), while > f64::MAX (400 digits)
+        // is left untouched so BASE's own column 418 error surfaces.
+        let twenty = format!(
+            r#"{{"con_spec_minor":{},"energy":1e999,"con_spec_version":2}}"#,
+            "18446744073709551616"
+        );
+        let twenty_one = format!(
+            r#"{{"con_spec_minor":{}1,"energy":1e999,"con_spec_version":2}}"#,
+            "18446744073709551616"
+        );
+        let forty = format!(
+            r#"{{"con_spec_minor":{},"energy":1e999,"con_spec_version":2}}"#,
+            "1000000000000000000000000000000000000007"
+        );
+        let forty_syntax = format!(
+            r#"{{"con_spec_minor":{},"energy":, "con_spec_version":2}}"#,
+            "1000000000000000000000000000000000000007"
+        );
+        let three_hundred = format!(
+            r#"{{"con_spec_minor":1{}7,"energy":1e999,"con_spec_version":2}}"#,
+            "0".repeat(298)
+        );
+        let four_hundred = format!(
+            r#"{{"con_spec_minor":1{}7,"energy":1e999,"con_spec_version":2}}"#,
+            "0".repeat(398)
+        );
+        for (line2, expected_substr) in [
+            (twenty.as_str(), "number out of range at line 1 column 53"),
+            (
+                twenty_one.as_str(),
+                "number out of range at line 1 column 54",
+            ),
+            (forty.as_str(), "number out of range at line 1 column 73"),
+            (forty_syntax.as_str(), "expected value at line 1 column 69"),
+            (
+                three_hundred.as_str(),
+                "number out of range at line 1 column 333",
+            ),
+            (
+                four_hundred.as_str(),
+                "number out of range at line 1 column 418",
+            ),
+        ] {
+            let lines = ["PRE", line2, "10 10 10", "90 90 90", "", "", "0", "", ""];
+            let err = parse_frame_header(&mut lines.iter().copied()).unwrap_err();
+            assert_eq!(err.class_name(), "InvalidMetadataJson", "{err}");
+            assert!(err.to_string().contains(expected_substr), "{err}");
+        }
+
+        // con_spec_version overflow keeps BASE error kind and column.
+        let major_2pow64 = [
+            "PRE",
+            r#"{"con_spec_version":18446744073709551616}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let err_m64 = parse_frame_header(&mut major_2pow64.iter().copied()).unwrap_err();
+        assert_eq!(err_m64.class_name(), "InvalidMetadataJson");
+        assert!(
+            err_m64
+                .to_string()
+                .contains("con_spec_version must be a JSON integer"),
+            "{err_m64}"
+        );
+
+        let major_400_line = format!(r#"{{"con_spec_version":1{}7}}"#, "0".repeat(398));
+        let major_400 = [
+            "PRE",
+            major_400_line.as_str(),
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let err_m400 = parse_frame_header(&mut major_400.iter().copied()).unwrap_err();
+        assert_eq!(err_m400.class_name(), "InvalidMetadataJson");
+        assert!(
+            err_m400
+                .to_string()
+                .contains("number out of range at line 1 column 420"),
+            "{err_m400}"
+        );
+
+        let neg_zero_major = [
+            "PRE",
+            r#"{"con_spec_version":-0}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut neg_zero_major.iter().copied())
+                .unwrap_err()
+                .class_name(),
+            "InvalidMetadataJson"
+        );
+
+        // Value equality, -0 float preservation, frame_index:-0, section_arity:-0, 1e400/1e999.
+        let v_one_zero: Value = serde_json::from_str("1.0").unwrap();
+        let v_one_zero_zero: Value = serde_json::from_str("1.00").unwrap();
+        let v_exp: Value = serde_json::from_str("1e2").unwrap();
+        let v_hundred: Value = serde_json::from_str("100.0").unwrap();
+        assert_eq!(v_one_zero, v_one_zero_zero);
+        assert_eq!(v_exp, v_hundred);
+
+        let neg_zero_energy = [
+            "PRE",
+            r#"{"con_spec_version":2,"energy":-0}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h_neg_zero = parse_frame_header(&mut neg_zero_energy.iter().copied()).unwrap();
+        let energy_val = h_neg_zero.metadata.get("energy").unwrap();
+        assert!(energy_val.is_f64());
+        assert_eq!(energy_val.as_f64().unwrap().to_bits(), (-0.0_f64).to_bits());
+
+        let bad_frame_idx = [
+            "PRE",
+            r#"{"con_spec_version":2,"sections":[],"validate":true,"frame_index":-0}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut bad_frame_idx.iter().copied())
+                .unwrap_err()
+                .class_name(),
+            "InvalidMetadataJson"
+        );
+
+        let arity_neg_zero = [
+            "PRE",
+            r#"{"con_spec_version":2,"section_arity":{"widgets":-0}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut arity_neg_zero.iter().copied())
+                .unwrap_err()
+                .class_name(),
+            "InvalidMetadataJson"
+        );
+        let arity_zero = [
+            "PRE",
+            r#"{"con_spec_version":2,"section_arity":{"widgets":0}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        assert_eq!(
+            parse_frame_header(&mut arity_zero.iter().copied())
+                .unwrap_err()
+                .class_name(),
+            "InvalidCount"
+        );
+
+        let mut b = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        let b_err = b
+            .set_metadata_json(r#"{"con_spec_version":2,"energy":1e400}"#)
+            .unwrap_err();
+        assert_eq!(b_err.class_name(), "InvalidMetadataJson");
+        assert!(
+            b_err
+                .to_string()
+                .contains("number out of range at line 1 column 36"),
+            "{b_err}"
+        );
+
+        // FrameMeta::insert, remove, and generic serde::Serialize stay consistent.
+        let mut fm = crate::types::FrameMeta::from_line(
+            r#"{"con_spec_version":2,"con_spec_minor":18446744073709551616}"#,
+        );
+        assert_eq!(fm.spec_minor(), u64::MAX);
+        assert_eq!(fm.spec_minor_str(), "18446744073709551616");
+        fm.insert("energy".into(), serde_json::json!(-1.2));
+        assert_eq!(fm.spec_minor_str(), "18446744073709551616");
+        let ser_json = serde_json::to_string(&fm).unwrap();
+        assert!(
+            ser_json.contains("\"con_spec_minor\":18446744073709551616"),
+            "{ser_json}"
+        );
+        assert!(
+            !ser_json.contains("18446744073709551615"),
+            "must not emit saturated u64::MAX: {ser_json}"
+        );
+        fm.set_con_spec_minor_str("18446744073709551616").unwrap();
+        assert_eq!(fm.spec_minor(), u64::MAX);
+        assert_eq!(fm.spec_minor_str(), "18446744073709551616");
+        assert_eq!(
+            fm.get(meta::CON_SPEC_MINOR).and_then(|v| v.as_u64()),
+            Some(u64::MAX)
+        );
+        // Float minor >= 2^64 via FrameMeta::insert behaves identically to BASE (stays float, clears minor_raw).
+        fm.insert(meta::CON_SPEC_MINOR.into(), serde_json::json!(1e20));
+        assert_eq!(fm.spec_minor(), 0);
+        assert_eq!(fm.spec_minor_str(), "0");
+        fm.remove(meta::CON_SPEC_MINOR);
+        assert_eq!(fm.spec_minor(), 0);
+        assert_eq!(fm.spec_minor_str(), "0");
+
+        // In-range FrameMeta::from_line preserves BASE's first-match rule.
+        let escaped = crate::types::FrameMeta::from_line(
+            r#"{"con_spec_version":2,"note":"\"con_spec_minor\":99","nested":{"con_spec_minor":77}}"#,
+        );
+        assert_eq!(escaped.spec_minor(), 77);
+        assert_eq!(escaped.spec_minor_str(), "77");
+
+        // Unicode-escaped key at top level preserves 2^64 minor.
+        let unicode_key = [
+            "PRE",
+            r#"{"con_spec_version":3,"\u0063on_spec_minor":18446744073709551616,"units":{"length":"angstrom","energy":"eV"}}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "0",
+            "",
+            "",
+        ];
+        let h_unicode = parse_frame_header(&mut unicode_key.iter().copied()).unwrap();
+        assert_eq!(h_unicode.con_spec_minor_saturating(), u64::MAX);
+        assert_eq!(h_unicode.con_spec_minor_str(), "18446744073709551616");
+
+        // -1.20 normalized to -1.2 by writer.
+        let neb_line = [
+            "PRE",
+            r#"{"con_spec_version":2,"energy":-1.20}"#,
+            "10 10 10",
+            "90 90 90",
+            "",
+            "",
+            "1",
+            "1",
+            "1.0",
+            "H",
+            "Coordinates of Component 1",
+            "0 0 0 0 0",
+        ];
+        let neb_frame = parse_single_frame(&mut neb_line.iter().copied()).unwrap();
+        let mut neb_out = Vec::new();
+        crate::writer::ConFrameWriter::new(&mut neb_out)
+            .write_frame(&neb_frame)
+            .unwrap();
+        let neb_written = String::from_utf8(neb_out).unwrap();
+        assert!(neb_written.contains("\"energy\":-1.2}"), "{neb_written}");
+        assert!(!neb_written.contains("-1.20"), "{neb_written}");
+    }
 }
 
 #[cfg(all(test, feature = "parallel"))]
