@@ -69,8 +69,11 @@ pub fn fill_frame_builder(
         sections.set(i as u32, s.as_str());
     }
 
-    let meta_json = serde_json::to_string(&frame.header.metadata.to_map())
-        .map_err(|e| format!("metadata json: {e}"))?;
+    let meta_json = crate::writer::serialize_json_map_with_minor_raw(
+        &frame.header.metadata.to_map(),
+        frame.header.metadata.huge_minor_raw(),
+    )
+    .map_err(|e| format!("metadata json: {e}"))?;
     fb.set_metadata_json(&meta_json);
     fb.set_strict_validation(frame.header.strict_validation);
     fb.set_sections_declared(frame.header.sections_declared);
@@ -237,20 +240,22 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         sections.push(s);
     }
 
-    let metadata: BTreeMap<String, serde_json::Value> = if fd.has_metadata_json() {
-        let raw = fd
-            .get_metadata_json()
-            .map_err(|e| e.to_string())?
-            .to_str()
-            .unwrap_or("{}");
-        if raw.trim().is_empty() {
-            BTreeMap::new()
+    let (metadata, minor_raw): (BTreeMap<String, serde_json::Value>, Option<String>) =
+        if fd.has_metadata_json() {
+            let raw = fd
+                .get_metadata_json()
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .unwrap_or("{}");
+            if raw.trim().is_empty() {
+                (BTreeMap::new(), None)
+            } else {
+                crate::parser::parse_metadata_map_with_minor_raw(raw)
+                    .map_err(|e| format!("metadataJson: {e}"))?
+            }
         } else {
-            serde_json::from_str(raw).map_err(|e| format!("metadataJson: {e}"))?
-        }
-    } else {
-        BTreeMap::new()
-    };
+            (BTreeMap::new(), None)
+        };
 
     let spec_version = fd.get_spec_version();
     let atoms_list = fd.get_atoms().map_err(|e| e.to_string())?;
@@ -356,7 +361,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         natms_per_type,
         masses_per_type,
         spec_version: fd.get_spec_version(),
-        metadata: FrameMeta::from_map(metadata),
+        metadata: FrameMeta::from_map_with_minor_raw(metadata, minor_raw.as_deref()),
         sections,
         strict_validation: fd.get_strict_validation(),
         sections_declared: fd.get_sections_declared(),
