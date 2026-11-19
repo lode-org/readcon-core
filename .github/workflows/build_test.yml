@@ -21,6 +21,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # check_version_sot.sh reads v0.23.2 and an older source_commit.
+          # A depth-1 checkout has neither the tag nor that commit.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
