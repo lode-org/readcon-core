@@ -38,6 +38,7 @@ P2 = str(FMAX + 2**970 - 1)
 P3 = str(FMAX + 2**970)
 U64_MAX = 2**64 - 1
 NATURAL = "(amu*angstrom^2/eV)^0.5"
+NATURAL_SYMBOL = "(u*Å^2/eV)^0.5"
 U_T = '"units":{"length":"angstrom","energy":"eV","time":"fs"}'
 U_N = '"units":{"length":"angstrom","energy":"eV"}'
 KEY = "con_spec_minor"
@@ -206,12 +207,20 @@ def dump(obj: dict) -> str:
 
 def written(line2: str, *, stamp_minor: bool, natural_time: bool) -> str:
     obj = json.loads(line2)
-    obj["con_spec_version"] = 3
+    obj["con_spec_version"] = 4
+    obj["con_spec_patch"] = 4
     obj["sections"] = ["velocities"]
     if stamp_minor:
-        obj["con_spec_minor"] = 1
+        obj["con_spec_minor"] = 0
     if natural_time:
-        obj["units"]["time"] = NATURAL
+        obj["units"]["time"] = NATURAL_SYMBOL
+    return dump(obj)
+
+
+def rpc_written(line2: str) -> str:
+    obj = json.loads(line2)
+    obj["con_spec_version"] = 3
+    obj["sections"] = ["velocities"]
     return dump(obj)
 
 
@@ -234,28 +243,19 @@ def expect(name: str, body: str) -> dict:
         ):
             case[op] = kind
         return case
-    legacy = top in (None, 0)
-    # units.time satisfies the velocity check for any minor. Without it,
-    # only a minor the reader sees as 0 (v3.0) reads.
+    # CON-units.9 applies to every minor of major 3. A missing units.time
+    # therefore never rejects one of these valid probe frames.
     case["read_w"] = "ok"
-    case["read_n"] = "ok" if reader_minor(n) == 0 else "units"
-    # The builder stamps minor 1 when the key is absent and does not touch
-    # units.time.
+    case["read_n"] = "ok"
+    # Builders and binding rewrites emit current major 4. An absent minor
+    # becomes the current minor, and a major-3 velocity without units.time
+    # is carried forward in the natural time unit (CON-units.19).
     case["raw_w"] = written(w, stamp_minor=top is None, natural_time=False)
-    case["raw_n"] = (
-        written(n, stamp_minor=False, natural_time=False) if top == 0 else "units"
-    )
-    # RPC carries the parsed map as is.
-    case["rpc_w"] = written(w, stamp_minor=False, natural_time=False)
-    case["rpc_n"] = (
-        written(n, stamp_minor=False, natural_time=False) if legacy else "units"
-    )
-    # Julia and Python write a v3.0 frame with velocities as minor 1 in the
-    # natural time unit (CON-units.9).
-    case["binding_w"] = written(w, stamp_minor=legacy, natural_time=legacy)
-    case["binding_n"] = (
-        written(n, stamp_minor=legacy, natural_time=legacy) if legacy else "units"
-    )
+    case["raw_n"] = written(n, stamp_minor=top is None, natural_time=True)
+    case["rpc_w"] = rpc_written(w)
+    case["rpc_n"] = rpc_written(n)
+    case["binding_w"] = written(w, stamp_minor=top is None, natural_time=False)
+    case["binding_n"] = written(n, stamp_minor=top is None, natural_time=True)
     return case
 
 

@@ -370,8 +370,11 @@ class TestLegacyVelocityLabel:
         out = tmp_path / "out.convel"
         readcon.write_con(str(out), [src])
         header = out.read_text().splitlines()[1]
-        assert '"con_spec_minor":1' in header
+        assert '"con_spec_version":4' in header
+        assert '"con_spec_minor":0' in header
+        assert '"con_spec_patch":0' in header
         assert '"time":"fs"' not in header
+        assert '"(amu*angstrom^2/eV)^0.5"' in header
         again = readcon.read_con(str(out))[0]
         assert again.atoms[0].vx == pytest.approx(src.atoms[0].vx, rel=0, abs=0)
 

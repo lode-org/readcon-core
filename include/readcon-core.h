@@ -118,7 +118,7 @@ namespace readcon {
  * the convenience of either naming convention; they always carry the
  * same value.
  */
-#define RKR_CON_SPEC_VERSION 3
+#define RKR_CON_SPEC_VERSION 4
 
 #define RKR_DL_INT 0
 

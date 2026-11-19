@@ -898,7 +898,7 @@ pub fn parse_line_of_range_f64_stack(
     let mut i = 0usize;
     let mut found = 0usize;
     while found < max {
-        while i < n && bytes[i].is_ascii_whitespace() {
+        while i < n && is_field_ws(bytes[i]) {
             i += 1;
         }
         if i >= n {
@@ -906,7 +906,7 @@ pub fn parse_line_of_range_f64_stack(
         }
         let end = bytes[i..]
             .iter()
-            .position(|b| b.is_ascii_whitespace())
+            .position(|b| is_field_ws(*b))
             .map(|k| i + k)
             .unwrap_or(n);
         let token = std::str::from_utf8(&bytes[i..end]).unwrap_or("");
@@ -929,7 +929,7 @@ pub fn parse_line_of_range_f64_stack(
         found += 1;
         i = next;
     }
-    while i < n && bytes[i].is_ascii_whitespace() {
+    while i < n && is_field_ws(bytes[i]) {
         i += 1;
     }
     // Reject trailing extra tokens (same contract as the old split loop).
@@ -1074,7 +1074,7 @@ fn parse_finite_float_token(token: &str) -> Result<f64, ParseError> {
 }
 
 fn skip_ascii_ws(bytes: &[u8], mut i: usize) -> usize {
-    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+    while i < bytes.len() && is_field_ws(bytes[i]) {
         i += 1;
     }
     i
@@ -1086,7 +1086,7 @@ fn take_token(line: &str, i: usize) -> Option<(&str, usize)> {
         return None;
     }
     let mut j = i;
-    while j < bytes.len() && !bytes[j].is_ascii_whitespace() {
+    while j < bytes.len() && !is_field_ws(bytes[j]) && !at_row_end(bytes, j) {
         j += 1;
     }
     Some((&line[i..j], j))
@@ -1163,10 +1163,46 @@ fn parse_vector_row(
     Ok(row)
 }
 
-/// Field separator inside a coordinate row. Newline ends the row.
+/// Field separator inside a row. CON-token.3 allows spaces and tabs only.
+/// A carriage return ends a line (CON-file.3); it is not a separator.
 #[inline(always)]
 fn is_field_ws(b: u8) -> bool {
-    matches!(b, b' ' | b'\t' | b'\r' | 0x0c)
+    matches!(b, b' ' | b'\t')
+}
+
+/// True at the end of a row: end of input, LF, or a CR that ends the line.
+#[inline(always)]
+fn at_row_end(bytes: &[u8], i: usize) -> bool {
+    if i >= bytes.len() || bytes[i] == b'\n' {
+        return true;
+    }
+    bytes[i] == b'\r' && (i + 1 >= bytes.len() || bytes[i + 1] == b'\n')
+}
+
+/// A space, a tab, or the end of the row. A form feed or a CR between
+/// fields is not one of these, so that byte stays in the token.
+#[inline(always)]
+fn ends_field(bytes: &[u8], i: usize) -> bool {
+    i >= bytes.len() || is_field_ws(bytes[i]) || at_row_end(bytes, i)
+}
+
+/// Index just past the row ending at `i`, when [`at_row_end`] is true.
+#[inline(always)]
+fn consume_row_end(bytes: &[u8], i: usize) -> usize {
+    if i >= bytes.len() {
+        return i;
+    }
+    if bytes[i] == b'\r' {
+        let next = i + 1;
+        if next < bytes.len() && bytes[next] == b'\n' {
+            return next + 1;
+        }
+        return next;
+    }
+    if bytes[i] == b'\n' {
+        return i + 1;
+    }
+    i
 }
 
 #[inline(always)]
@@ -1234,7 +1270,7 @@ fn parse_f64_at(bytes: &[u8], i: usize, line_start: usize) -> Result<(f64, usize
         ParseError::InvalidNumberFormat(format!("invalid float: {}", token_on_line(bytes, i)))
     })?;
     let next = i + consumed;
-    let boundary = next >= bytes.len() || is_field_ws(bytes[next]) || bytes[next] == b'\n';
+    let boundary = ends_field(bytes, next);
     if !boundary || !val.is_finite() {
         let token = token_on_line(bytes, i);
         if is_nonfinite_spelling(&token) || !val.is_finite() {
@@ -1278,7 +1314,7 @@ fn parse_flag_at(
             .ok_or_else(bad)?;
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if !ends_field(bytes, j) {
         return Err(bad());
     }
     let fixed = if spec_version < 2 {
@@ -1319,7 +1355,7 @@ fn parse_id_at(bytes: &[u8], i: usize) -> Result<(u64, usize), ParseError> {
             })?;
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if !ends_field(bytes, j) {
         return Err(ParseError::InvalidNumberFormat(format!(
             "invalid integer: {}",
             token_on_line(bytes, i)
@@ -1361,11 +1397,11 @@ fn parse_coord_fields_fast(
     let mut i = skip_field_ws(bytes, i);
     let mut xyz = [0.0f64; 3];
     for dest in &mut xyz {
-        if i >= bytes.len() || bytes[i] == b'\n' || bytes[i] >= 0x80 {
+        if at_row_end(bytes, i) || bytes[i] >= 0x80 {
             return None;
         }
         let (val, next) = crate::fast_dec::parse_f64_hot(bytes, i)?;
-        if next < bytes.len() && !is_field_ws(bytes[next]) && bytes[next] != b'\n' {
+        if !ends_field(bytes, next) {
             return None;
         }
         *dest = val;
@@ -1373,18 +1409,16 @@ fn parse_coord_fields_fast(
     }
     let (fixed, next) = parse_flag_fast(bytes, i, spec_version)?;
     i = skip_field_ws(bytes, next);
-    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+    let (atom_id, next) = if at_row_end(bytes, i) {
         (default_id?, i)
     } else {
         parse_u64_fast(bytes, i)?
     };
     i = skip_field_ws(bytes, next);
-    if i < bytes.len() && bytes[i] != b'\n' {
+    if !at_row_end(bytes, i) {
         return None;
     }
-    if i < bytes.len() && bytes[i] == b'\n' {
-        i += 1;
-    }
+    i = consume_row_end(bytes, i);
     Some(((xyz, fixed, atom_id), i))
 }
 
@@ -1405,7 +1439,7 @@ fn parse_u64_fast(bytes: &[u8], i: usize) -> Option<(u64, usize)> {
         val = val * 10 + u64::from(bytes[j] - b'0');
         j += 1;
     }
-    if j < bytes.len() && !is_field_ws(bytes[j]) && bytes[j] != b'\n' {
+    if !ends_field(bytes, j) {
         return None;
     }
     Some((val, j))
@@ -1439,7 +1473,7 @@ fn parse_coord_fields_detailed(
 ) -> Result<(ParsedCoord, usize), ParseError> {
     let line_start = i;
     let mut i = skip_field_ws(bytes, i);
-    if i >= bytes.len() || bytes[i] == b'\n' {
+    if at_row_end(bytes, i) {
         return Err(ParseError::InvalidVectorLength {
             expected: 5,
             found: 0,
@@ -1447,7 +1481,7 @@ fn parse_coord_fields_detailed(
     }
     let mut xyz = [0.0f64; 3];
     for (slot, dest) in xyz.iter_mut().enumerate() {
-        if i >= bytes.len() || bytes[i] == b'\n' {
+        if at_row_end(bytes, i) {
             return Err(ParseError::InvalidVectorLength {
                 expected: 5,
                 found: slot,
@@ -1462,7 +1496,7 @@ fn parse_coord_fields_detailed(
     }
     let (fixed, next) = parse_flag_at(bytes, i, spec_version)?;
     i = skip_field_ws(bytes, next);
-    let (atom_id, next) = if i >= bytes.len() || bytes[i] == b'\n' {
+    let (atom_id, next) = if at_row_end(bytes, i) {
         (
             default_id.ok_or(ParseError::InvalidVectorLength {
                 expected: 5,
@@ -1474,13 +1508,11 @@ fn parse_coord_fields_detailed(
         parse_id_at(bytes, i)?
     };
     i = skip_field_ws(bytes, next);
-    if i < bytes.len() && bytes[i] != b'\n' {
+    if !at_row_end(bytes, i) {
         let found = 5 + count_tokens_on_line(bytes, i);
         return Err(ParseError::InvalidVectorLength { expected: 5, found });
     }
-    if i < bytes.len() && bytes[i] == b'\n' {
-        i += 1;
-    }
+    i = consume_row_end(bytes, i);
     Ok(((xyz, fixed, atom_id), i))
 }
 
@@ -1561,7 +1593,7 @@ fn parse_finite_at(line: &str, i: usize) -> Result<(f64, usize), ParseError> {
         ParseError::InvalidNumberFormat(format!("invalid float: {token}"))
     })?;
     let next = i + consumed;
-    let boundary = next == bytes.len() || bytes[next].is_ascii_whitespace();
+    let boundary = ends_field(bytes, next);
     if !boundary || !val.is_finite() {
         let token = take_token(line, i).map(|(tok, _)| tok).unwrap_or("");
         if is_nonfinite_spelling(token) || !val.is_finite() {
@@ -1603,18 +1635,6 @@ fn labels_equal(found: &str, expected: &str) -> bool {
             _ => return false,
         }
     }
-}
-
-/// True when `line`, after the same folding, starts with every word of `prefix`.
-fn label_has_prefix(line: &str, prefix: &str) -> bool {
-    let mut found_words = line.split_ascii_whitespace();
-    for word in prefix.split_ascii_whitespace() {
-        match found_words.next() {
-            Some(got) if got.eq_ignore_ascii_case(word) => {}
-            _ => return false,
-        }
-    }
-    true
 }
 
 fn token_count(line: &str) -> usize {
@@ -2171,10 +2191,21 @@ pub fn validate_metadata_schema(
             meta::CON_SPEC_MINOR => {
                 if json_u64(value).is_none() {
                     return Err(metadata_json_error(
-                        "con_spec_minor must be a JSON integer >= 0",
+                        "con_spec_minor must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
                     ));
                 }
             }
+            meta::CON_SPEC_PATCH => {
+                if json_u64(value).is_none() {
+                    return Err(metadata_json_error(
+                        "con_spec_patch must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
+                    ));
+                }
+            }
+            meta::IDS_PERSISTENT if !value.is_boolean() => {
+                return Err(metadata_json_error("ids_persistent must be a boolean"));
+            }
+            meta::IDS_PERSISTENT => {}
             meta::SECTION_ARITY => validate_section_arity_value(value)?,
             meta::ENERGY
             | meta::TIME
@@ -2317,6 +2348,423 @@ fn validate_lattice_vectors_metadata(value: &Value) -> Result<(), ParseError> {
     Ok(())
 }
 
+std::thread_local! {
+    static DECLARED_VELOCITIES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub(crate) fn note_declared_velocities(yes: bool) {
+    DECLARED_VELOCITIES.with(|flag| flag.set(yes));
+}
+
+/// True when this thread's current frame declared a velocities section.
+pub(crate) fn declared_velocities() -> bool {
+    DECLARED_VELOCITIES.with(|flag| flag.get())
+}
+
+/// Spaces and tabs only. CON-file.4 does not ignore a form feed.
+fn trim_space_tab(line: &str) -> &str {
+    line.trim_matches(|c: char| c == ' ' || c == '\t')
+}
+
+/// CON-line2.23. A repeated name in any object on line 2 is
+/// InvalidMetadataJson. A document this scan does not understand is left to
+/// the JSON parser, including a nesting depth past 127 (CON-line2.18).
+fn reject_duplicate_names(line: &str) -> Result<(), ParseError> {
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    skip_json_ws(bytes, &mut i);
+    if i >= bytes.len() || bytes[i] != b'{' {
+        return Ok(());
+    }
+    match scan_json_value(bytes, &mut i, 0) {
+        JsonScan::Duplicate => Err(metadata_json_error("a JSON object repeats a name")),
+        JsonScan::Done | JsonScan::Defer => Ok(()),
+    }
+}
+
+enum JsonScan {
+    Done,
+    Duplicate,
+    Defer,
+}
+
+fn scan_json_value(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
+    if depth > 127 {
+        return JsonScan::Defer;
+    }
+    skip_json_ws(bytes, i);
+    if *i >= bytes.len() {
+        return JsonScan::Defer;
+    }
+    match bytes[*i] {
+        b'{' => scan_json_object(bytes, i, depth),
+        b'[' => scan_json_array(bytes, i, depth),
+        b'"' => match scan_json_string(bytes, i) {
+            Some(_) => JsonScan::Done,
+            None => JsonScan::Defer,
+        },
+        b't' => scan_json_lit(bytes, i, b"true"),
+        b'f' => scan_json_lit(bytes, i, b"false"),
+        b'n' => scan_json_lit(bytes, i, b"null"),
+        b'-' | b'0'..=b'9' => {
+            skip_json_number(bytes, i);
+            JsonScan::Done
+        }
+        _ => JsonScan::Defer,
+    }
+}
+
+fn scan_json_object(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
+    *i += 1;
+    let mut keys: Vec<String> = Vec::new();
+    loop {
+        skip_json_ws(bytes, i);
+        if *i >= bytes.len() {
+            return JsonScan::Defer;
+        }
+        if bytes[*i] == b'}' {
+            *i += 1;
+            return JsonScan::Done;
+        }
+        if !keys.is_empty() {
+            if bytes[*i] != b',' {
+                return JsonScan::Defer;
+            }
+            *i += 1;
+            skip_json_ws(bytes, i);
+        }
+        if *i >= bytes.len() || bytes[*i] != b'"' {
+            return JsonScan::Defer;
+        }
+        let Some(key) = scan_json_string(bytes, i) else {
+            return JsonScan::Defer;
+        };
+        if keys.iter().any(|have| have == &key) {
+            return JsonScan::Duplicate;
+        }
+        keys.push(key);
+        skip_json_ws(bytes, i);
+        if *i >= bytes.len() || bytes[*i] != b':' {
+            return JsonScan::Defer;
+        }
+        *i += 1;
+        match scan_json_value(bytes, i, depth + 1) {
+            JsonScan::Done => {}
+            other => return other,
+        }
+    }
+}
+
+fn scan_json_array(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
+    *i += 1;
+    let mut any = false;
+    loop {
+        skip_json_ws(bytes, i);
+        if *i >= bytes.len() {
+            return JsonScan::Defer;
+        }
+        if bytes[*i] == b']' {
+            *i += 1;
+            return JsonScan::Done;
+        }
+        if any {
+            if bytes[*i] != b',' {
+                return JsonScan::Defer;
+            }
+            *i += 1;
+        }
+        any = true;
+        match scan_json_value(bytes, i, depth + 1) {
+            JsonScan::Done => {}
+            other => return other,
+        }
+    }
+}
+
+fn scan_json_lit(bytes: &[u8], i: &mut usize, lit: &[u8]) -> JsonScan {
+    if bytes[*i..].starts_with(lit) {
+        *i += lit.len();
+        JsonScan::Done
+    } else {
+        JsonScan::Defer
+    }
+}
+
+fn skip_json_number(bytes: &[u8], i: &mut usize) {
+    if bytes.get(*i) == Some(&b'-') {
+        *i += 1;
+    }
+    while matches!(bytes.get(*i), Some(b'0'..=b'9')) {
+        *i += 1;
+    }
+    if bytes.get(*i) == Some(&b'.') {
+        *i += 1;
+        while matches!(bytes.get(*i), Some(b'0'..=b'9')) {
+            *i += 1;
+        }
+    }
+    if matches!(bytes.get(*i), Some(b'e' | b'E')) {
+        *i += 1;
+        if matches!(bytes.get(*i), Some(b'+' | b'-')) {
+            *i += 1;
+        }
+        while matches!(bytes.get(*i), Some(b'0'..=b'9')) {
+            *i += 1;
+        }
+    }
+}
+
+fn scan_json_string(bytes: &[u8], i: &mut usize) -> Option<String> {
+    if bytes.get(*i) != Some(&b'"') {
+        return None;
+    }
+    *i += 1;
+    let mut out = String::new();
+    while *i < bytes.len() {
+        let b = bytes[*i];
+        *i += 1;
+        match b {
+            b'"' => return Some(out),
+            b'\\' => {
+                let escaped = *bytes.get(*i)?;
+                *i += 1;
+                match escaped {
+                    b'"' | b'\\' | b'/' => out.push(escaped as char),
+                    b'b' => out.push('\u{0008}'),
+                    b'f' => out.push('\u{000c}'),
+                    b'n' => out.push('\n'),
+                    b'r' => out.push('\r'),
+                    b't' => out.push('\t'),
+                    b'u' => out.push(decode_json_u(bytes, i)?),
+                    _ => return None,
+                }
+            }
+            c if c < 0x20 => return None,
+            c if c < 0x80 => out.push(c as char),
+            _ => {
+                *i -= 1;
+                let rest = std::str::from_utf8(&bytes[*i..]).ok()?;
+                let ch = rest.chars().next()?;
+                out.push(ch);
+                *i += ch.len_utf8();
+            }
+        }
+    }
+    None
+}
+
+fn decode_json_u(bytes: &[u8], i: &mut usize) -> Option<char> {
+    let unit = json_hex4(bytes, i)?;
+    if (0xD800..=0xDBFF).contains(&unit) {
+        if bytes.get(*i) != Some(&b'\\') || bytes.get(*i + 1) != Some(&b'u') {
+            return None;
+        }
+        *i += 2;
+        let low = json_hex4(bytes, i)?;
+        if !(0xDC00..=0xDFFF).contains(&low) {
+            return None;
+        }
+        let cp = 0x10000 + (((unit - 0xD800) << 10) | (low - 0xDC00));
+        return char::from_u32(cp);
+    }
+    if (0xDC00..=0xDFFF).contains(&unit) {
+        return None;
+    }
+    char::from_u32(unit)
+}
+
+fn json_hex4(bytes: &[u8], i: &mut usize) -> Option<u32> {
+    if *i + 4 > bytes.len() {
+        return None;
+    }
+    let text = std::str::from_utf8(&bytes[*i..*i + 4]).ok()?;
+    let value = u32::from_str_radix(text, 16).ok()?;
+    *i += 4;
+    Some(value)
+}
+
+/// Parse line 2. An unreserved number that is not a finite binary64 does not
+/// reject the frame (CON-line2.21). The metadata line keeps that token. The
+/// value used for the schema walk is a string of the same spelling, because
+/// it is not a binary64. A reserved key still rejects (CON-line2.19).
+pub(crate) fn parse_metadata_value(line: &str) -> Result<serde_json::Value, ParseError> {
+    reject_duplicate_names(line)?;
+    match serde_json::from_str(line) {
+        Ok(value) => Ok(value),
+        Err(err) => match relax_unreserved_overflow(line) {
+            Some(relaxed) => serde_json::from_str(&relaxed)
+                .map_err(|err| ParseError::InvalidMetadataJson(err.to_string())),
+            None => Err(ParseError::InvalidMetadataJson(err.to_string())),
+        },
+    }
+}
+
+/// Replace an out-of-range number under a key this document does not reserve
+/// with a JSON string of that token. `None` when nothing was replaced, or
+/// when a reserved key holds the bad number.
+pub(crate) fn relax_unreserved_overflow(line: &str) -> Option<String> {
+    let bytes = line.as_bytes();
+    let mut out = String::with_capacity(line.len() + 2);
+    let mut i = 0usize;
+    let mut in_string = false;
+    let mut escape = false;
+    let mut pending_key: Option<String> = None;
+    let mut stack: Vec<Option<String>> = Vec::new();
+    let mut replaced = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_string {
+            out.push(b as char);
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        if b == b'"' {
+            let start = i;
+            i += 1;
+            let mut text = String::new();
+            while i < bytes.len() {
+                let c = bytes[i];
+                if c == b'\\' && i + 1 < bytes.len() {
+                    text.push(bytes[i + 1] as char);
+                    i += 2;
+                    continue;
+                }
+                if c == b'"' {
+                    i += 1;
+                    break;
+                }
+                text.push(c as char);
+                i += 1;
+            }
+            out.push_str(&line[start..i]);
+            let mut j = i;
+            while j < bytes.len() && is_field_ws(bytes[j]) {
+                j += 1;
+            }
+            if bytes.get(j) == Some(&b':') {
+                pending_key = Some(text);
+            }
+            continue;
+        }
+        if b == b'{' || b == b'[' {
+            stack.push(pending_key.take());
+            out.push(b as char);
+            i += 1;
+            continue;
+        }
+        if b == b'}' || b == b']' {
+            pending_key = stack.pop().flatten();
+            out.push(b as char);
+            i += 1;
+            continue;
+        }
+        if b == b'-' || b.is_ascii_digit() {
+            let start = i;
+            if bytes[i] == b'-' {
+                i += 1;
+            }
+            while i < bytes.len()
+                && (bytes[i].is_ascii_digit()
+                    || matches!(bytes[i], b'.' | b'e' | b'E' | b'+' | b'-'))
+            {
+                i += 1;
+            }
+            let token = &line[start..i];
+            // A token outside the JSON number grammar is malformed JSON
+            // (CON-line2.2), not a number a reader cannot store.
+            if !is_json_number(token) {
+                return None;
+            }
+            let finite = token.parse::<f64>().ok().filter(|value| value.is_finite());
+            if finite.is_none() {
+                let reserved = pending_key
+                    .as_deref()
+                    .or_else(|| stack.iter().rev().find_map(|key| key.as_deref()))
+                    .is_some_and(reserved_number_key);
+                if reserved {
+                    return None;
+                }
+                out.push('"');
+                out.push_str(token);
+                out.push('"');
+                replaced = true;
+                pending_key = None;
+                continue;
+            }
+            out.push_str(token);
+            pending_key = None;
+            continue;
+        }
+        out.push(b as char);
+        i += 1;
+    }
+    replaced.then_some(out)
+}
+
+/// `-? (0 | [1-9][0-9]*) (. [0-9]+)? ([eE] [+-]? [0-9]+)?`, the number of RFC 8259.
+fn is_json_number(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    let mut i = usize::from(bytes.first() == Some(&b'-'));
+    let digits = |i: &mut usize| {
+        let start = *i;
+        while bytes.get(*i).is_some_and(u8::is_ascii_digit) {
+            *i += 1;
+        }
+        *i - start
+    };
+    match bytes.get(i) {
+        Some(b'0') => i += 1,
+        Some(b'1'..=b'9') => {
+            digits(&mut i);
+        }
+        _ => return false,
+    }
+    if bytes.get(i) == Some(&b'.') {
+        i += 1;
+        if digits(&mut i) == 0 {
+            return false;
+        }
+    }
+    if matches!(bytes.get(i), Some(b'e' | b'E')) {
+        i += 1;
+        if matches!(bytes.get(i), Some(b'+' | b'-')) {
+            i += 1;
+        }
+        if digits(&mut i) == 0 {
+            return false;
+        }
+    }
+    i == bytes.len()
+}
+
+fn reserved_number_key(key: &str) -> bool {
+    matches!(
+        key,
+        meta::CON_SPEC_VERSION
+            | meta::CON_SPEC_MINOR
+            | meta::CON_SPEC_PATCH
+            | meta::ENERGY
+            | meta::TIME
+            | meta::TIMESTEP
+            | meta::CONVERGENCE_FMAX
+            | meta::CONVERGENCE_ENERGY
+            | meta::FMAX
+            | meta::FRAME_INDEX
+            | meta::NEB_BEAD
+            | meta::NEB_BAND
+            | meta::LATTICE_VECTORS
+            | meta::PBC
+            | meta::SECTION_ARITY
+    )
+}
+
 /// Parses a line of whitespace-separated values into a vector of a specific type.
 ///
 /// This generic helper function takes a string slice, splits it by whitespace,
@@ -2390,135 +2838,175 @@ pub fn parse_frame_header<'a>(
         .next()
         .ok_or(ParseError::IncompleteHeader)?
         .to_string();
-    // CON-file.2: a leading BOM is rejected. It would sit on line 1.
+    // CON-file.2: U+FEFF at the start of any frame is rejected.
     if prebox1.starts_with('\u{feff}') {
         return Err(ParseError::ValidationError(
-            "file begins with a byte-order mark".into(),
+            "frame begins with a byte-order mark".into(),
         ));
     }
+    note_declared_velocities(false);
     let prebox2_raw = lines.next().ok_or(ParseError::IncompleteHeader)?;
 
     // Line 2: if it starts with '{', parse as JSON metadata (spec v2+).
     // Otherwise treat as a legacy (pre-v2) file with spec_version = 1.
-    // One JSON object and nothing else (CON-line2.1). serde_json::from_str
-    // rejects trailing junk after the value.
-    let trimmed = prebox2_raw.trim();
-    let (spec_version, sections, validate, sections_declared) =
-        if trimmed == "{\"con_spec_version\":2}" {
-            // The line written by every stock trajectory. Same object the
-            // JSON parser would build: major 2, no extra keys.
-            (2, Vec::new(), false, false)
-        } else if let Some(ver) = simple_metadata_version(trimmed) {
-            // A header whose only keys are the spec version, an optional
-            // minor, and a units object. Every byte is still read. Any
-            // other key falls through to the general parser.
-            (ver, Vec::new(), false, false)
-        } else if trimmed.starts_with('{') {
-            let minor_spans = top_level_minor_spans(trimmed);
-            if minor_spans.len() > 1 {
-                return Err(metadata_json_error(DUPLICATE_CON_SPEC_MINOR));
-            }
-            let (sanitized, huge_minor) = sanitize_huge_con_spec_minor(trimmed, &minor_spans);
-            let mut json_val: serde_json::Value = serde_json::from_str(sanitized.as_ref())
-                .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
-            let json_obj = json_val.as_object_mut().ok_or_else(|| {
-                ParseError::InvalidMetadataJson("expected a JSON object".to_string())
-            })?;
-            let ver_value = json_obj
-                .get(meta::CON_SPEC_VERSION)
-                .ok_or(ParseError::MissingSpecVersion)?;
-            let ver = json_u64(ver_value).ok_or_else(|| {
-                ParseError::InvalidMetadataJson(
-                    "con_spec_version must be a JSON integer, the major version".into(),
-                )
-            })?;
-            if ver > u64::from(u32::MAX) {
-                return Err(ParseError::UnsupportedVersion(u32::MAX));
-            }
-            let ver = ver as u32;
-            // JSON majors 0 and 1 are UnsupportedVersion (CON-line2.5).
-            // An unknown major is UnsupportedVersion (CON-line2.6).
-            // Unknown minors of a known major are accepted (CON-line2.7, CON-status.1).
-            if ver == 0 || ver == 1 || ver > crate::CON_SPEC_VERSION {
-                return Err(ParseError::UnsupportedVersion(ver));
-            }
-            if ver >= 3 {
-                match json_obj.get(meta::UNITS) {
-                    Some(u) => crate::units::validate_v3_units_metadata(u)
-                        .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?,
-                    None => {
-                        return Err(ParseError::InvalidUnits(
+    // One JSON object and nothing else (CON-line2.1). Only spaces and tabs
+    // are ignored around the object (CON-file.4).
+    let trimmed = trim_space_tab(prebox2_raw);
+    let (spec_version, sections, validate, sections_declared, has_lattice) = if trimmed
+        == "{\"con_spec_version\":2}"
+    {
+        // The line written by every stock trajectory. Same object the
+        // JSON parser would build: major 2, no extra keys.
+        (2, Vec::new(), false, false, false)
+    } else if let Some(ver) = simple_metadata_version(trimmed) {
+        // A header whose only keys are the spec version, an optional
+        // minor, and a units object. Every byte is still read. Any
+        // other key falls through to the general parser.
+        (ver, Vec::new(), false, false, false)
+    } else if trimmed.starts_with('{') {
+        let minor_spans = top_level_minor_spans(trimmed);
+        if minor_spans.len() > 1 {
+            return Err(metadata_json_error(DUPLICATE_CON_SPEC_MINOR));
+        }
+        let (sanitized, huge_minor) = sanitize_huge_con_spec_minor(trimmed, &minor_spans);
+        let mut json_val = parse_metadata_value(sanitized.as_ref())?;
+        let json_obj = json_val
+            .as_object_mut()
+            .ok_or_else(|| ParseError::InvalidMetadataJson("expected a JSON object".to_string()))?;
+        let ver_value = json_obj
+            .get(meta::CON_SPEC_VERSION)
+            .ok_or(ParseError::MissingSpecVersion)?;
+        let ver = json_u64(ver_value).ok_or_else(|| {
+            ParseError::InvalidMetadataJson(
+                "con_spec_version must be a JSON integer, the major version".into(),
+            )
+        })?;
+        if ver > u64::from(u32::MAX) {
+            return Err(ParseError::UnsupportedVersion(u32::MAX));
+        }
+        let ver = ver as u32;
+        // JSON majors 0 and 1 are UnsupportedVersion (CON-line2.5).
+        // An unknown major is UnsupportedVersion (CON-line2.6).
+        // Unknown minors of a known major are accepted (CON-line2.7, CON-status.1).
+        if ver == 0 || ver == 1 || ver > crate::CON_SPEC_VERSION {
+            return Err(ParseError::UnsupportedVersion(ver));
+        }
+        if ver >= 3 {
+            match json_obj.get(meta::UNITS) {
+                Some(u) => crate::units::validate_v3_units_metadata(u)
+                    .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?,
+                None => {
+                    return Err(ParseError::InvalidUnits(
                         "con_spec_version >= 3 requires metadata \"units\" with length and energy"
                             .into(),
                     ));
-                    }
                 }
             }
+        }
 
-            // Single pass over the JSON object: collect sections, capture the
-            // validate flag, copy the rest into metadata. Folds the previous
-            // pre-extract get(validate) + re-iterate pattern into one walk.
-            let mut sections: Vec<String> = Vec::new();
-            let mut sections_declared = false;
-            let mut validate = false;
-            for (k, v) in json_obj.iter() {
-                match k.as_str() {
-                    meta::CON_SPEC_VERSION => {}
-                    meta::CON_SPEC_MINOR => {
-                        if huge_minor.is_none() && json_u64(v).is_none() {
-                            return Err(metadata_json_error(
-                                "con_spec_minor must be a JSON integer >= 0",
-                            ));
-                        }
+        // Single pass over the JSON object: collect sections, capture the
+        // validate flag, copy the rest into metadata. Folds the previous
+        // pre-extract get(validate) + re-iterate pattern into one walk.
+        let mut sections: Vec<String> = Vec::new();
+        let mut sections_declared = false;
+        let mut validate = false;
+        let mut has_lattice = false;
+        for (k, v) in json_obj.iter() {
+            match k.as_str() {
+                meta::CON_SPEC_VERSION => {}
+                meta::CON_SPEC_MINOR => {
+                    if huge_minor.is_none() && json_u64(v).is_none() {
+                        return Err(metadata_json_error(
+                            "con_spec_minor must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
+                        ));
                     }
-                    meta::SECTION_ARITY => {
-                        validate_section_arity_value(v)?;
+                }
+                meta::CON_SPEC_PATCH => {
+                    if json_u64(v).is_none() {
+                        return Err(metadata_json_error(
+                            "con_spec_patch must be a JSON integer >= 0 that fits in an unsigned 64-bit integer",
+                        ));
                     }
-                    meta::SECTIONS => {
-                        sections_declared = true;
-                        let arr = v.as_array().ok_or_else(|| {
+                }
+                meta::IDS_PERSISTENT => {
+                    if !v.is_boolean() {
+                        return Err(metadata_json_error("ids_persistent must be a boolean"));
+                    }
+                }
+                meta::LATTICE_VECTORS => {
+                    validate_lattice_vectors_metadata(v)?;
+                    has_lattice = true;
+                }
+                meta::PBC => validate_pbc_metadata(v)?,
+                meta::ENERGY => validate_metadata_number(k, v)?,
+                meta::SECTION_ARITY => {
+                    validate_section_arity_value(v)?;
+                }
+                meta::SECTIONS => {
+                    sections_declared = true;
+                    let arr = v.as_array().ok_or_else(|| {
+                        metadata_json_error("sections must be an array of strings")
+                    })?;
+                    sections.reserve(arr.len());
+                    for entry in arr {
+                        let s = entry.as_str().ok_or_else(|| {
                             metadata_json_error("sections must be an array of strings")
                         })?;
-                        sections.reserve(arr.len());
-                        for entry in arr {
-                            let s = entry.as_str().ok_or_else(|| {
-                                metadata_json_error("sections must be an array of strings")
-                            })?;
-                            sections.push(s.to_string());
+                        if sections.iter().any(|have| have == s) {
+                            return Err(metadata_json_error(format!(
+                                "duplicate section name '{s}'"
+                            )));
                         }
+                        sections.push(s.to_string());
                     }
-                    meta::VALIDATE => {
-                        validate = match v {
-                            Value::Bool(b) => *b,
-                            _ => return Err(metadata_json_error("validate must be a boolean")),
-                        };
-                    }
-                    _ => {}
                 }
+                meta::VALIDATE => {
+                    validate = match v {
+                        Value::Bool(b) => *b,
+                        _ => return Err(metadata_json_error("validate must be a boolean")),
+                    };
+                }
+                _ => {}
             }
+        }
 
-            if huge_minor.is_some() {
-                json_obj.insert(
-                    meta::CON_SPEC_MINOR.into(),
-                    Value::from(crate::types::SATURATED_SPEC_MINOR),
-                );
-            }
+        if huge_minor.is_some() {
+            json_obj.insert(
+                meta::CON_SPEC_MINOR.into(),
+                Value::from(crate::types::SATURATED_SPEC_MINOR),
+            );
+        }
 
-            // Strict-mode schema check fires only when the file requested
-            // it. Hot-path parses (validate=false) skip the per-key match.
-            if validate {
-                validate_metadata_schema(json_obj)?;
-            }
+        // Strict-mode schema check fires only when the file requested
+        // it. Hot-path parses (validate=false) skip the per-key match.
+        if validate {
+            validate_metadata_schema(json_obj)?;
+        }
+        let has_declared_velocities =
+            sections_declared && sections.iter().any(|name| name == SECTION_VELOCITIES);
+        note_declared_velocities(has_declared_velocities);
+        debug_assert_eq!(declared_velocities(), has_declared_velocities);
 
-            (ver, sections, validate, sections_declared)
-        } else {
-            // Legacy file: no JSON metadata line.
-            (1_u32, Vec::new(), false, false)
-        };
+        (ver, sections, validate, sections_declared, has_lattice)
+    } else {
+        // Legacy file: no JSON metadata line.
+        (1_u32, Vec::new(), false, false, false)
+    };
     let prebox2 = prebox2_raw.to_string();
 
     let boxl_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "boxl")?;
     let angles_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "angles")?;
+    // CON-cell.7. lattice_vectors wins over lines 3-4 (CON-cell.1), so a
+    // file that carries the matrix is not rejected for the angles line.
+    if !has_lattice {
+        let angles: [f64; 3] = angles_vec.as_slice().try_into().unwrap();
+        if angles
+            .iter()
+            .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
+        {
+            crate::types::require_real_cell(angles)?;
+        }
+    }
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
@@ -2977,6 +3465,14 @@ where
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
         let symbol: Arc<str> = Arc::from(symbol_line.trim());
         let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        // CON-coord.1. The label is checked in every mode. The symbol check
+        // stays inside validate (CON-validate.4).
+        let expected_label = format!("Coordinates of Component {}", type_idx + 1);
+        if !labels_equal(coord_label, &expected_label) {
+            return Err(ParseError::ValidationError(format!(
+                "expected coordinate label {expected_label:?}, found {coord_label:?}"
+            )));
+        }
         if validate {
             validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
         }
@@ -3059,6 +3555,12 @@ where
         let symbol_line = lines.next().ok_or(ParseError::IncompleteFrame)?;
         let symbol: Arc<str> = Arc::from(symbol_line.trim());
         let coord_label = lines.next().ok_or(ParseError::IncompleteFrame)?;
+        let expected_label = format!("Coordinates of Component {}", type_idx + 1);
+        if !labels_equal(coord_label, &expected_label) {
+            return Err(ParseError::ValidationError(format!(
+                "expected coordinate label {expected_label:?}, found {coord_label:?}"
+            )));
+        }
         if validate {
             validate_coordinate_component(type_idx, symbol.as_ref(), coord_label)?;
         }
@@ -3366,6 +3868,21 @@ fn validate_masses(masses_per_type: &[f64]) -> Result<(), ParseError> {
     Ok(())
 }
 
+fn section_label_mismatch(
+    validate: bool,
+    section: &str,
+    expected: &str,
+    found: &str,
+) -> ParseError {
+    if validate {
+        ParseError::ValidationError(format!(
+            "expected section label {expected:?}, found {found:?}"
+        ))
+    } else {
+        ParseError::IncompleteSection(section.into())
+    }
+}
+
 fn validate_coordinate_component(
     type_idx: usize,
     symbol: &str,
@@ -3424,6 +3941,39 @@ fn validate_section_component(
     Ok(())
 }
 
+/// The symbol check of [`validate_section_component`], before the label is read.
+///
+/// The failing line is the symbol line (CON-error.4). Reading the label first
+/// would report that later line.
+fn reject_wrong_section_symbol(
+    section: &str,
+    type_idx: usize,
+    atom_idx: usize,
+    symbol: &str,
+    header: &FrameHeader,
+    atom_data: &[AtomDatum],
+) -> Result<(), ParseError> {
+    if header.natms_per_type.get(type_idx).copied().unwrap_or(0) == 0 {
+        return Ok(());
+    }
+    let expected_symbol = atom_data
+        .get(atom_idx)
+        .map(|atom| atom.symbol.as_ref())
+        .ok_or_else(|| {
+            ParseError::ValidationError(format!(
+                "{section} component {} has no coordinate atom to validate against",
+                type_idx + 1
+            ))
+        })?;
+    if symbol != expected_symbol {
+        return Err(ParseError::ValidationError(format!(
+            "{section} component {} symbol mismatch: expected {expected_symbol}, found {symbol}",
+            type_idx + 1
+        )));
+    }
+    Ok(())
+}
+
 fn validate_section_atom_identity(
     section: &str,
     atom_idx: usize,
@@ -3459,6 +4009,21 @@ fn validate_section_atom_identity(
 /// (CON-frame.5). The lines stay in the stream.
 fn frame_minor(header: &FrameHeader) -> u64 {
     header.metadata.spec_minor()
+}
+
+/// Minor this reader implements for `spec_version` (CON-section.8).
+///
+/// Major 4 reserves the section table at minor 0. Major 3 reserved it at
+/// minor 1, and a minor of major 3 does not become "newer" just because
+/// this reader now implements minor 0 of major 4.
+fn implemented_minor(spec_version: u32) -> u64 {
+    if spec_version >= 4 {
+        u64::from(crate::CON_SPEC_MINOR)
+    } else if spec_version == 3 {
+        1
+    } else {
+        0
+    }
 }
 
 fn section_row_arity(header: &FrameHeader, name: &str) -> Option<usize> {
@@ -3546,23 +4111,16 @@ pub fn parse_velocity_section<'a>(
     column: &mut Vec<f64>,
 ) -> Result<bool, ParseError> {
     let validate = header.strict_validation;
-    // A blank line followed only by whitespace to EOF is not a velocity
-    // block (CON-frame.5, D2). Leave those lines for the iterator.
-    match lines.peek_line() {
-        Some(line) if line.trim().is_empty() => {
-            if lines.remainder_is_whitespace() {
-                return Ok(false);
-            }
-            // CON-section.2 / the legacy fallback: the blank counts only
-            // when it begins a complete velocity block. Otherwise it is
-            // line 1 of the next frame (CON-frame.7, CON-header.4).
-            if !lines.blank_line_opens_section() {
-                return Ok(false);
-            }
-            lines.next_line();
-        }
-        _ => return Ok(false),
+    // CON-section.23. A declared velocities block opens on the blank line.
+    // A second blank is the symbol line, and the line after it is the label.
+    // The legacy caller asks blank_opens_velocity_block first, so a blank
+    // that is line 1 of the next frame is not consumed here.
+    if !open_section(lines)? {
+        return Ok(false);
     }
+    // The blank that opened the section is the current line. A declared
+    // velocities section reports the metadata line instead.
+    reject_velocities_without_time(header)?;
 
     let n = atom_data.len();
     column.clear();
@@ -3574,13 +4132,29 @@ pub fn parse_velocity_section<'a>(
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?
             .trim();
+        if validate {
+            reject_wrong_section_symbol(
+                "Velocities",
+                type_idx,
+                atom_idx,
+                symbol,
+                header,
+                atom_data,
+            )?;
+        }
 
         // "Velocities of Component N" line
         let comp_line = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_VELOCITIES.into()))?;
-        if !label_has_prefix(comp_line, "Velocities of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_VELOCITIES.into()));
+        let expected = format!("Velocities of Component {}", type_idx + 1);
+        if !labels_equal(comp_line, &expected) {
+            return Err(section_label_mismatch(
+                validate,
+                SECTION_VELOCITIES,
+                &expected,
+                comp_line,
+            ));
         }
         if validate {
             validate_section_component(
@@ -3644,8 +4218,14 @@ pub fn parse_force_section<'a>(
         let comp_line = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_FORCES.into()))?;
-        if !label_has_prefix(comp_line, "Forces of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_FORCES.into()));
+        let expected = format!("Forces of Component {}", type_idx + 1);
+        if !labels_equal(comp_line, &expected) {
+            return Err(section_label_mismatch(
+                validate,
+                SECTION_FORCES,
+                &expected,
+                comp_line,
+            ));
         }
         if validate {
             validate_section_component(
@@ -3704,8 +4284,14 @@ pub fn parse_energy_section<'a>(
         let comp_line = lines
             .next_line()
             .ok_or(ParseError::IncompleteSection(SECTION_ENERGIES.into()))?;
-        if !label_has_prefix(comp_line, "Energies of Component") {
-            return Err(ParseError::IncompleteSection(SECTION_ENERGIES.into()));
+        let expected = format!("Energies of Component {}", type_idx + 1);
+        if !labels_equal(comp_line, &expected) {
+            return Err(section_label_mismatch(
+                validate,
+                SECTION_ENERGIES,
+                &expected,
+                comp_line,
+            ));
         }
         if validate {
             validate_section_component(
@@ -3840,7 +4426,7 @@ pub fn parse_declared_sections<'a>(
                     applied += 1;
                 }
                 other => {
-                    if frame_minor(&frame.header) > u64::from(crate::CON_SPEC_MINOR)
+                    if frame_minor(&frame.header) > implemented_minor(frame.header.spec_version)
                         && let Some(arity) = section_row_arity(&frame.header, other)
                     {
                         skip_unknown_section(lines, &frame.header, other, arity)?;
@@ -3852,24 +4438,19 @@ pub fn parse_declared_sections<'a>(
         }
         frame.header.sections = sections;
     }
-    reject_velocities_without_time(&frame.header)?;
     Ok(applied)
 }
 
-/// CON-units.11. Versions 1, 2, and 3.0 do not require `units.time`
-/// (CON-units.8, CON-units.9). From minor 1 the key is required when a
-/// velocities section is present.
+/// CON-units.11. Versions 1, 2, and every minor of major 3 do not require
+/// `units.time` (CON-units.8, CON-units.9). Major 4 and later require the
+/// key when a velocities section is present.
 fn reject_velocities_without_time(header: &FrameHeader) -> Result<(), ParseError> {
-    if header.spec_version < 3 || frame_minor(header) < 1 {
+    if header.spec_version < 4 {
         return Ok(());
     }
-    if !header
-        .sections
-        .iter()
-        .any(|name| name == SECTION_VELOCITIES)
-    {
-        return Ok(());
-    }
+    // This runs as the velocities block is opened. `header.sections` is
+    // filled after the block, so the call itself is the evidence that the
+    // section is present.
     let time_ok = header
         .metadata
         .get(meta::UNITS)
@@ -3880,7 +4461,7 @@ fn reject_velocities_without_time(header: &FrameHeader) -> Result<(), ParseError
         Ok(())
     } else {
         Err(ParseError::InvalidUnits(
-            "minor >= 1 requires units.time when a velocities section is present".into(),
+            "major >= 4 requires units.time when a velocities section is present".into(),
         ))
     }
 }
@@ -3910,8 +4491,14 @@ fn parse_scalar_atom_section<'a>(
         let comp_line = lines
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-        if !label_has_prefix(comp_line, component_label) {
-            return Err(ParseError::IncompleteSection(section_name.into()));
+        let expected = format!("{} {}", component_label.trim_end(), type_idx + 1);
+        if !labels_equal(comp_line, &expected) {
+            return Err(section_label_mismatch(
+                validate,
+                section_name,
+                &expected,
+                comp_line,
+            ));
         }
         if validate {
             validate_section_component(
@@ -3994,8 +4581,14 @@ fn parse_vector_named_section<'a>(
         let comp_line = lines
             .next_line()
             .ok_or_else(|| ParseError::IncompleteSection(section_name.into()))?;
-        if !label_has_prefix(comp_line, component_label) {
-            return Err(ParseError::IncompleteSection(section_name.into()));
+        let expected = format!("{} {}", component_label.trim_end(), type_idx + 1);
+        if !labels_equal(comp_line, &expected) {
+            return Err(section_label_mismatch(
+                validate,
+                section_name,
+                &expected,
+                comp_line,
+            ));
         }
         if validate {
             validate_section_component(
@@ -5429,15 +6022,17 @@ Forces of Component 1
     #[test]
     fn test_arbitrary_size_con_spec_minor_keeps_later_minor_semantics() {
         const FORTY_DIGITS: &str = "1000000000000000000000000000000000000007";
-        // CON-units.11: minor >= 1 with velocities requires units.time.
+        // CON-units.9: every minor of major 3 ignores units.time, and a
+        // missing units.time must not reject the frame.
         let no_time = format!(
             "PRE\n{{\"con_spec_version\":3,\"con_spec_minor\":{FORTY_DIGITS},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
         );
-        let err = crate::iterators::ConFrameIterator::new(&no_time)
+        let frame = crate::iterators::ConFrameIterator::new(&no_time)
             .next()
             .unwrap()
-            .unwrap_err();
-        assert_eq!(err.class_name(), "InvalidUnits");
+            .unwrap();
+        assert_eq!(frame.header.spec_version, 3);
+        assert_eq!(frame.header.metadata.huge_minor_raw(), Some(FORTY_DIGITS));
 
         // CON-section.8: minor > CON_SPEC_MINOR skips unknown section with section_arity.
         let unknown_sec = format!(
@@ -5449,7 +6044,8 @@ Forces of Component 1
             .expect("newer minor with section_arity should skip unknown section");
         assert_eq!(frame.atom_data.len(), 1);
 
-        // Writer treats 40-digit minor as >= 1 (CON-units.12: velocities require units.time).
+        // A new builder writes major 4 and materialises the natural time
+        // unit required by CON-units.12.
         let mut vel_builder = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
         vel_builder.set_con_spec_minor_str(FORTY_DIGITS).unwrap();
         vel_builder
@@ -5459,11 +6055,12 @@ Forces of Component 1
             .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
             .with_velocity([0.1, 0.0, 0.0]);
         let vel_frame = vel_builder.build().unwrap();
-        let mut bad_out = Vec::new();
-        let write_err = crate::writer::ConFrameWriter::new(&mut bad_out)
+        let mut out = Vec::new();
+        crate::writer::ConFrameWriter::new(&mut out)
             .write_frame(&vel_frame)
-            .expect_err("minor >= 1 velocities without units.time must fail on write");
-        assert!(write_err.to_string().contains("units.time"), "{write_err}");
+            .unwrap();
+        let written = String::from_utf8(out).unwrap();
+        assert!(written.contains(crate::units::NATURAL_TIME_UNIT));
     }
 
     #[test]
@@ -5502,8 +6099,15 @@ Forces of Component 1
             let no_time = format!(
                 "PRE\n{{\"con_spec_version\":3,\"con_spec_minor\":{digits},\"units\":{{\"length\":\"angstrom\",\"energy\":\"eV\"}},\"sections\":[\"velocities\"]}}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
             );
-            let err = ConFrameIterator::new(&no_time).next().unwrap().unwrap_err();
-            assert_eq!(err.class_name(), "InvalidUnits", "{digits}: {err}");
+            let frame = ConFrameIterator::new(&no_time)
+                .next()
+                .unwrap()
+                .unwrap_or_else(|err| panic!("{digits}: {err}"));
+            assert_eq!(frame.header.spec_version, 3);
+            assert_eq!(
+                frame.header.metadata.huge_minor_raw(),
+                Some(digits.as_str())
+            );
 
             let mut builder = crate::types::ConFrameBuilder::new([10.0; 3], [90.0; 3]);
             builder.set_con_spec_minor_str(digits).unwrap();
@@ -5514,11 +6118,12 @@ Forces of Component 1
                 .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
                 .with_velocity([0.1, 0.0, 0.0]);
             let built = builder.build().unwrap();
-            let mut bad = Vec::new();
-            let write_err = crate::writer::ConFrameWriter::new(&mut bad)
+            let mut out = Vec::new();
+            crate::writer::ConFrameWriter::new(&mut out)
                 .write_frame(&built)
-                .expect_err("minor above u64::MAX still requires units.time");
-            assert!(write_err.to_string().contains("units.time"), "{write_err}");
+                .unwrap();
+            let written = String::from_utf8(out).unwrap();
+            assert!(written.contains(crate::units::NATURAL_TIME_UNIT));
         }
 
         let over = format!(
@@ -5602,7 +6207,7 @@ Forces of Component 1
             );
         }
 
-        // con_spec_version and section_arity follow BASE duplicate semantics.
+        // CON-line2.23 rejects repeated names in every metadata object.
         let dup_major = [
             "PRE",
             r#"{"con_spec_version":-0,"con_spec_version":3,"units":{"length":"angstrom","energy":"eV"}}"#,
@@ -5614,12 +6219,8 @@ Forces of Component 1
             "",
             "",
         ];
-        assert_eq!(
-            parse_frame_header(&mut dup_major.iter().copied())
-                .unwrap()
-                .spec_version,
-            3
-        );
+        let err = parse_frame_header(&mut dup_major.iter().copied()).unwrap_err();
+        assert_eq!(err.class_name(), "InvalidMetadataJson");
         let dup_arity = [
             "PRE",
             r#"{"con_spec_version":2,"section_arity":{"widgets":-0,"widgets":2}}"#,
@@ -5631,15 +6232,8 @@ Forces of Component 1
             "",
             "",
         ];
-        assert_eq!(
-            parse_frame_header(&mut dup_arity.iter().copied())
-                .unwrap()
-                .metadata
-                .get("section_arity")
-                .unwrap()["widgets"]
-                .as_u64(),
-            Some(2)
-        );
+        let err = parse_frame_header(&mut dup_arity.iter().copied()).unwrap_err();
+        assert_eq!(err.class_name(), "InvalidMetadataJson");
     }
 
     #[test]
@@ -6089,8 +6683,9 @@ Forces of Component 1
         );
     }
 
-    /// ASCII whitespace between line-2 tokens is the set the fast path
-    /// skips, including a form feed. A decoded top-level escape is that key.
+    /// The strict minor scanner does not treat form feed as JSON
+    /// whitespace, so the fast path leaves that minor absent. A decoded
+    /// top-level escape is still the reserved key.
     #[test]
     fn form_feed_and_escaped_top_level_minor_match_the_fast_path() {
         let ff = '\u{000c}';
@@ -6104,7 +6699,7 @@ Forces of Component 1
         ];
         for line in &minor_lines {
             let meta = crate::types::FrameMeta::from_line(line.as_str());
-            assert_eq!(meta.spec_minor(), 5, "{line:?}");
+            assert_eq!(meta.spec_minor(), 0, "{line:?}");
         }
         let escaped =
             crate::types::FrameMeta::from_line(r#"{"con_spec_version":2,"con_spec_\u006dinor":5}"#);
@@ -6121,9 +6716,9 @@ Forces of Component 1
             let text = format!(
                 "PRE\n{line2}\n10 10 10\n90 90 90\n\n\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n\nH\nVelocities of Component 1\n0.1 0 0 0 0\n"
             );
-            let err = crate::iterators::frames_from_text(&text, None)
-                .expect_err("minor 1 requires units.time");
-            assert_eq!(err.class_name(), "InvalidUnits", "{line2:?}: {err}");
+            let frames = crate::iterators::frames_from_text(&text, None)
+                .unwrap_or_else(|err| panic!("{line2:?}: {err}"));
+            assert_eq!(frames[0].header.metadata.spec_minor(), 0);
         }
     }
 }

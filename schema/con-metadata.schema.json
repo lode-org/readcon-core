@@ -115,26 +115,12 @@
         "atom_ids": { "$ref": "#/$defs/integerDtype" }
       },
       "additionalProperties": false
-    },
-    "chemfiles_atom_names": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Display names sidecar from chemfiles import, chemfiles atom order."
-    },
-    "chemfiles_atom_types": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Atomic types sidecar from chemfiles import, chemfiles atom order."
-    },
-    "chemfiles_atom_properties": {
-      "description": "Per-atom property sidecar from chemfiles import.",
-      "type": ["array", "object"]
     }
   },
   "allOf": [
     {
       "if": {
-        "properties": { "con_spec_version": { "const": 3 } }
+        "properties": { "con_spec_version": { "enum": [3, 4] } }
       },
       "then": {
         "required": ["units"],

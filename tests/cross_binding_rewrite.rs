@@ -145,8 +145,8 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     let built = frame_with_every_section();
     let atom = &built.atom_data[0];
     assert_eq!(atom.velocity(), Some([0.1, 0.2, 0.3]));
-    // v3 minor 1 already carries the label contract, so the stamp returns.
-    let kept = binding_rewrite_frame(&built).expect("rewrite minor 1");
+    // A major 4 frame already carries the natural time label the builder wrote.
+    let kept = binding_rewrite_frame(&built).expect("rewrite major 4");
     let kept_atom = &kept.atom_data[0];
     assert_eq!(kept_atom.velocity(), Some([0.1, 0.2, 0.3]));
     assert_eq!(kept_atom.force(), Some([1.0, 0.0, -1.0]));
@@ -156,7 +156,7 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     assert_eq!(kept_atom.magmom(), Some([0.0, 0.0, 1.25]));
     assert_eq!(kept_atom.displacement(), Some([0.01, 0.02, 0.03]));
     assert_eq!(kept_atom.spread(), Some([0.04, 0.05, 0.06]));
-    assert_eq!(time_label(&kept), None);
+    assert_eq!(time_label(&kept), Some(NATURAL_TIME_UNIT));
 
     let mut legacy = built.clone();
     legacy.header.spec_version = 2;
@@ -176,7 +176,7 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
             .metadata
             .get(meta::CON_SPEC_MINOR)
             .and_then(|minor| minor.as_u64()),
-        Some(1)
+        Some(0)
     );
     assert_eq!(stamped.atom_data[0].velocity(), Some([0.1, 0.2, 0.3]));
 

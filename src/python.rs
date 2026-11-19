@@ -1116,13 +1116,35 @@ impl PyConFrame {
         let snaps = snaps_from_iterable(atoms)?;
         let prebox_header = prebox_header.unwrap_or_default();
         let postbox_header = postbox_header.unwrap_or_default();
-        let (meta, minor_raw) = match metadata {
+        let (mut meta, minor_raw) = match metadata {
             Some(obj) => {
                 let (map, minor_raw) = py_metadata_to_json_map_with_minor(obj)?;
                 (map, minor_raw)
             }
             None => (BTreeMap::new(), None),
         };
+        // In-memory velocities are natural-unit numbers. A major 4 frame
+        // needs units.time before a reader trusts the label (CON-units.3).
+        if snaps.iter().any(|atom| atom.velocity.is_some()) {
+            let time_ok = meta
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(Value::as_str)
+                .is_some_and(|unit| !unit.trim().is_empty());
+            if !time_ok {
+                let mut units = meta
+                    .get(meta::UNITS)
+                    .cloned()
+                    .unwrap_or_else(crate::units::default_v3_units_json);
+                if let Some(object) = units.as_object_mut() {
+                    object.insert(
+                        "time".to_string(),
+                        Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+                    );
+                    meta.insert(meta::UNITS.to_string(), units);
+                }
+            }
+        }
         let mut inner = frame_for_storage(
             cell,
             angles,
@@ -2631,7 +2653,7 @@ impl PyConFrame {
         let (mut meta, minor_raw) = py_metadata_to_json_map_with_minor(self.meta(py)?.as_any())?;
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
-        // The builder writes minor 1, which requires units.time (CON-units.11).
+        // The builder writes major 4, which requires units.time (CON-units.11).
         crate::writer::stamp_legacy_velocity_time(
             &mut meta,
             self.spec_version,
@@ -3138,14 +3160,25 @@ impl SharedColumn {
 /// untorn value from that array, but different elements can come from
 /// different stores.
 #[pyfunction]
-#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
+#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None, spec_version=None))]
 fn write_columns(
     py: Python<'_>,
     path: &str,
     columns: &Bound<'_, PyDict>,
     symbol: &str,
     n_threads: Option<usize>,
+    spec_version: Option<u32>,
 ) -> PyResult<()> {
+    let written_spec = match spec_version {
+        None => crate::CON_SPEC_VERSION,
+        Some(version) if version == 3 || version == crate::CON_SPEC_VERSION => version,
+        Some(version) => {
+            return Err(PyValueError::new_err(format!(
+                "spec_version must be 3 or {}, not {version}",
+                crate::CON_SPEC_VERSION
+            )));
+        }
+    };
     let positions = columns
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
@@ -3265,6 +3298,7 @@ fn write_columns(
                 forces,
                 symbol,
                 workers,
+                written_spec,
             )
         })
         .map_err(|err| PyIOError::new_err(err.to_string()))?;

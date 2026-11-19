@@ -435,6 +435,8 @@ pub struct ConFrameIterator<'a> {
     /// Successful `next` and `forward_fast` advance it. A failure leaves
     /// it on the frame that failed.
     frame_index: u64,
+    /// Cross-frame id set when `ids_persistent` is in use (CON-id.11).
+    persistent_ids: Option<crate::types::PersistentIds>,
 }
 
 /// Newlines seen and the byte index just past the `n`-th `\n`.
@@ -499,6 +501,7 @@ impl<'a> ConFrameIterator<'a> {
         ConFrameIterator {
             lines: MemchrLines::new(file_contents),
             frame_index: 0,
+            persistent_ids: None,
         }
     }
 
@@ -522,6 +525,7 @@ impl<'a> ConFrameIterator<'a> {
         ConFrameIterator {
             lines: MemchrLines::from_bytes(bytes),
             frame_index: 0,
+            persistent_ids: None,
         }
     }
 
@@ -981,6 +985,9 @@ impl<'a> Iterator for ConFrameIterator<'a> {
             // ArcArray uniqueness checks.
             frame.sequential_plain = false;
             frame.install_declared_section_soa();
+        }
+        if let Err(error) = crate::types::observe_persistent_ids(&mut self.persistent_ids, &frame) {
+            return Some(Err(self.lines.prefer_utf8(error)));
         }
         self.frame_index = self.frame_index.saturating_add(1);
         Some(Ok(frame))
@@ -1945,6 +1952,9 @@ pub fn frames_from_bytes(
             for r in parts {
                 frames.push(r?);
             }
+            if crate::types::persistent_ids_requested(&frames) {
+                return frames_from_bytes(bytes, Some(1));
+            }
             return Ok(frames);
         }
     }
@@ -1968,7 +1978,11 @@ fn frames_from_bytes_located(
     {
         if let Some(n) = num_threads.filter(|n| *n >= 2) {
             let timed = parse_bytes_timed(bytes, Some(n));
-            return collect_located_slots(timed.slots, &timed.fail_lines);
+            let frames = collect_located_slots(timed.slots, &timed.fail_lines)?;
+            if crate::types::persistent_ids_requested(&frames) {
+                return frames_from_bytes_located(bytes, Some(1));
+            }
+            return Ok(frames);
         }
     }
     #[cfg(not(feature = "parallel"))]

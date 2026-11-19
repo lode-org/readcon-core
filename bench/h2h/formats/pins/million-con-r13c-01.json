@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "reason": "The CON 4 units.time metadata changes the generated one-million-atom fixture.",
+  "supersedes": {
+    "bytes": 85299756,
+    "sha256": "51654ae0b729a25f0f23d7c7f3218a64cccf549eedee7102d8408642caa46068"
+  },
+  "con": {
+    "bytes": 85299775,
+    "sha256": "870aa66fb624b876d881c2e42494cd6e3fa0f140614e4b6f878c1033eb15a146"
+  }
+}

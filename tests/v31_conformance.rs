@@ -564,7 +564,10 @@ fn v31_writer_requires_time_when_velocities_are_present() {
     builder
         .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
         .with_velocity([0.1, 0.0, 0.0]);
-    let frame = builder.build().unwrap();
+    let mut frame = builder.build().unwrap();
+    let mut units = frame.header.units().cloned().unwrap();
+    units.as_object_mut().unwrap().remove("time");
+    frame.header.set_units(units);
     let mut buf = Vec::new();
     let err = ConFrameWriter::new(&mut buf)
         .write_frame(&frame)
@@ -963,7 +966,11 @@ fn velocity_time_follows_the_minor() {
         NATURAL_TIME_UNIT
     );
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(3, &meta, None).unwrap(), "fs");
+    assert_eq!(
+        velocity_file_time_unit(3, &meta, None).unwrap(),
+        NATURAL_TIME_UNIT
+    );
+    assert_eq!(velocity_file_time_unit(4, &meta, None).unwrap(), "fs");
 
     let minor0 = "\
 PRE
@@ -988,7 +995,7 @@ Velocities of Component 1
 
     let minor1_no_time = "\
 PRE
-{\"con_spec_version\":3,\"con_spec_minor\":1,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
+{\"con_spec_version\":4,\"con_spec_minor\":0,\"units\":{\"length\":\"angstrom\",\"energy\":\"eV\"},\"sections\":[\"velocities\"]}
 10 10 10
 90 90 90
 A

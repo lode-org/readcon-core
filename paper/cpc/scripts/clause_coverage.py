@@ -111,6 +111,26 @@ REASONS = {
     "CON-token.1": "An integer token is ASCII digits with no sign and no decimal point. The finite-number parser "
     "rejects the other spellings, and the tests name the function rather than this clause.",
 }
+REASONS.update(
+    {
+        "CON-file.7": "The parser applies this definition while finding blank lines; no test name spells this clause.",
+        "CON-file.8": "The byte parser reports the required class; no corpus entry isolates non-UTF-8 text outside a numeric field.",
+        "CON-file.9": "The line reader accepts a final carriage return; no corpus entry isolates that ending.",
+        "CON-frame.8": "The iterator returns no frame for an empty stream; no corpus entry names the empty stream.",
+        "CON-frame.9": "The initial-header path is the ordinary parser entry; no test name spells this distinction.",
+        "CON-line2.18": "The metadata parser enforces the depth limit; no test name spells this clause id.",
+        "CON-line2.19": "The metadata parser rejects a reserved non-binary64 number; no test name spells this clause id.",
+        "CON-line2.20": "The metadata type check precedes validation checks in one parser path; no test name spells this ordering.",
+        "CON-count.9": "The count parser uses an unsigned 64-bit integer; no test name spells the complete range.",
+        "CON-count.10": "The count parser runs before row-width validation; no test name spells this ordering.",
+        "CON-coord.1": "The coordinate-label parser applies this check in every mode; no test name spells this clause.",
+        "CON-section.21": "The section parser applies this row rule; no test name spells this clause.",
+        "CON-section.22": "The section parser applies this value rule; no test name spells this clause.",
+        "CON-section.23": "The section parser applies this identity rule; no test name spells this clause.",
+        "CON-units.17": "The unit lexer removes ASCII spaces and tabs; no test name spells this clause.",
+        "CON-num.10": "The byte parser reports the required numeric class; no test name spells this clause.",
+    }
+)
 
 
 def sha256(path: Path) -> str:
