@@ -9,6 +9,17 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- **Metadata / Python:** `con_spec_minor` integers above `u64::MAX` (within
+  `serde_json`'s finite `Number` range) are now preserved verbatim across
+  native `ConFrameWriter`, C ABI, Cap'n Proto, and Python metadata rather than
+  failing as non-`u64` (generic `serde::Serialize` on `FrameMeta` still errors
+  above `u128::MAX`). Writing a Python `ConFrame(cell, angles, [Atom(...,
+  vx=..., vy=..., vz=...)], metadata={"con_spec_minor": ...})` with
+  `con_spec_minor > u64::MAX` and no `units.time` now raises
+  `readcon.InvalidUnits` (a `ValueError` subclass) from `write_con` and
+  `OSError` from `write_con_string` (`invalid units: minor >= 1 requires
+  units.time when a velocities section is present`), matching the `minor >= 1`
+  rule instead of silently clamping or rewriting the minor.
 - Rust library builds no longer install mimalloc as the process-wide global
   allocator. The optional `mimalloc-allocator` feature is reserved for final
   readcon artifacts, and `default-features = false` removes both the mimalloc
