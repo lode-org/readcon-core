@@ -443,11 +443,24 @@ impl Array2Storage {
     /// Contiguous mutable f64 row-major slice when storage is float64.
     ///
     /// Shared `ArcArray` storage is copied before the mutable slice is
-    /// returned, so pointers derived here carry writable provenance for this
-    /// storage's allocation.
+    /// returned. The slice's borrow ends with the reference, so a pointer
+    /// saved from it is not a way to write the block later.
     pub fn f64_mut_slice(&mut self) -> Option<&mut [f64]> {
         match self {
             Self::F64(a) => a.as_slice_memory_order_mut(),
+            _ => None,
+        }
+    }
+
+    /// Writable pointer to the first element of a unique contiguous f64 block.
+    ///
+    /// [`Self::f64_slice`] retags that block as shared. A pointer saved from
+    /// the slice cannot be written afterwards. This is the array's own
+    /// pointer after the storage is made unique. A write through it stays
+    /// valid while the allocation stays where it is.
+    pub fn f64_allocation_ptr(&mut self) -> Option<*mut f64> {
+        match self {
+            Self::F64(array) if array.is_standard_layout() => Some(array.as_mut_ptr()),
             _ => None,
         }
     }

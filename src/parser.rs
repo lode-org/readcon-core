@@ -5071,14 +5071,16 @@ Velocities of Component 1
             .next()
             .expect("frame")
             .expect("parse");
-        let soa = frame.velocities.f64_slice().expect("f64 column");
-        let mut packed = Vec::with_capacity(soa.len());
-        for atom in &frame.atom_data {
-            packed.extend_from_slice(&atom.velocity().expect("velocity"));
+        {
+            let soa = frame.velocities.f64_slice().expect("f64 column");
+            let mut packed = Vec::with_capacity(soa.len());
+            for atom in &frame.atom_data {
+                packed.extend_from_slice(&atom.velocity().expect("velocity"));
+            }
+            assert_eq!(soa, packed.as_slice());
+            assert_eq!(soa, &[0.125, -0.25, 0.5, -0.125, 0.25, -0.5][..]);
+            assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
         }
-        assert_eq!(soa, packed.as_slice());
-        assert_eq!(soa, &[0.125, -0.25, 0.5, -0.125, 0.25, -0.5][..]);
-        assert_eq!(frame.atom_data[0].velocity_slot(), soa.as_ptr());
         frame.atom_data[0].set_velocity(Some([9.0, 8.0, 7.0]));
         assert_eq!(frame.velocities.as_f64_row(0), [9.0, 8.0, 7.0]);
         assert_eq!(frame.velocities.as_f64_row(1), [-0.125, 0.25, -0.5]);
@@ -5110,14 +5112,16 @@ Forces of Component 1
             .next()
             .expect("frame")
             .expect("parse");
-        let soa = frame.forces.f64_slice().expect("f64 column");
-        let mut packed = Vec::with_capacity(soa.len());
-        for atom in &frame.atom_data {
-            packed.extend_from_slice(&atom.force().expect("force"));
+        {
+            let soa = frame.forces.f64_slice().expect("f64 column");
+            let mut packed = Vec::with_capacity(soa.len());
+            for atom in &frame.atom_data {
+                packed.extend_from_slice(&atom.force().expect("force"));
+            }
+            assert_eq!(soa, packed.as_slice());
+            assert_eq!(soa, &[0.1, 0.2, 0.3, -0.4, 0.5, -0.6][..]);
+            assert_eq!(frame.atom_data[0].force_slot(), soa.as_ptr());
         }
-        assert_eq!(soa, packed.as_slice());
-        assert_eq!(soa, &[0.1, 0.2, 0.3, -0.4, 0.5, -0.6][..]);
-        assert_eq!(frame.atom_data[0].force_slot(), soa.as_ptr());
         frame.atom_data[1].set_force(Some([1.0, 2.0, 3.0]));
         assert_eq!(frame.forces.as_f64_row(1), [1.0, 2.0, 3.0]);
     }

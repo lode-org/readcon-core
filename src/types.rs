@@ -2932,11 +2932,7 @@ impl ConFrame {
         if self.velocities.nrows() != n || n == 0 {
             return;
         }
-        let Some(ptr) = self
-            .velocities
-            .f64_slice()
-            .map(|slice| slice.as_ptr() as *mut f64)
-        else {
+        let Some(ptr) = self.velocities.f64_allocation_ptr() else {
             for i in 0..n {
                 let row = self.velocities.as_f64_row(i);
                 self.atom_data[i].set_velocity(Some(row));
@@ -2958,11 +2954,7 @@ impl ConFrame {
         if self.forces.nrows() != n || n == 0 {
             return;
         }
-        let Some(ptr) = self
-            .forces
-            .f64_slice()
-            .map(|slice| slice.as_ptr() as *mut f64)
-        else {
+        let Some(ptr) = self.forces.f64_allocation_ptr() else {
             for i in 0..n {
                 let row = self.forces.as_f64_row(i);
                 self.atom_data[i].set_force(Some(row));
