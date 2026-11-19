@@ -319,7 +319,7 @@ CON-count.1 \:\: MUST
     A type count of 0 MUST be a frame with zero atoms: lines 8 and 9 contain only spaces and tabs, no coordinate block and no section block follow, ``sections`` is absent or empty, and the legacy velocity fallback does not apply. Any other character on line 8 or 9, including other Unicode White\_Space, MUST be ``InvalidCount``.
 
 CON-count.2 \:\: MUST
-    A zero-atom frame of that form MUST be accepted in every mode, including ``validate`` true. ``CON-validate.3`` still requires the ``sections`` key when ``validate`` is true.
+    A zero-atom frame of that form MUST be accepted in every mode, including ``validate`` true. ``CON-validate.3`` independently requires the ``sections`` key when ``validate`` is true.
 
 CON-count.3 \:\: MUST
     When the type count is 1 or more, each per-type count MUST be an integer >= 1, and any other count token MUST be ``InvalidCount``.
@@ -451,7 +451,7 @@ CON-id.11 \:\: MUST
     When ``ids_persistent`` is true on any frame, it MUST be true on every frame, every frame MUST hold the same set of column-5 ids, and each of those ids MUST occur once in a frame. Column 5 of a historical file is an index of one frame, so cross-frame identity is not the default. ``ids_persistent`` true is the file opting into that identity: the same id is the same atom in every frame. A reader MUST reject a file that breaks this rule as ``ValidationError`` on the last line of the frame that breaks it. A writer MUST NOT emit such a file.
 
 CON-id.12 \:\: MUST NOT
-    When ``ids_persistent`` is absent or false on every frame, a reader MUST NOT treat an id in one frame as the same atom in another frame. The verdict is that the reader returns the ids and does not match them across frames. ``CON-id.4`` still applies inside a frame.
+    When ``ids_persistent`` is absent or false on every frame, a reader MUST NOT treat an id in one frame as the same atom in another frame. The verdict is that the reader returns the ids and does not match them across frames. ``CON-id.4`` applies inside a frame.
 
 CON-id.13 \:\: MUST
     A read of a frame followed by a write of that frame MUST preserve each column-5 id.
@@ -753,7 +753,7 @@ CON-compress.3 \:\: MUST
     Readers MUST detect gzip and zstd by magic bytes, not only by the extension.
 
 CON-compress.4 \:\: MAY
-    A writer MAY split one frame across gzip members at the same deflate level. The first member then sets the FEXTRA flag. Its extra field contains subfield id ``RC`` whose data is the ASCII magic ``RCZ1``, a little-endian ``u16`` member count, and that many little-endian ``u64`` file offsets of the members. A reader MAY inflate those slices concurrently. A gzip file without that subfield, including one member and a multi-member file from another writer, MUST still be read in order. ``gzip -d`` reads both.
+    A writer MAY split one frame across gzip members at the same deflate level. The first member then sets the FEXTRA flag. Its extra field contains subfield id ``RC`` whose data is the ASCII magic ``RCZ1``, a little-endian ``u16`` member count, and that many little-endian ``u64`` file offsets of the members. A reader MAY inflate those slices concurrently. A gzip file without that subfield, including one member and a multi-member file from another writer, MUST be read in order. ``gzip -d`` reads both.
 
 CON-compress.5 \:\: MAY
     A writer MAY split one frame across zstd frames at the same level. A skippable frame (magic ``50 2a 4d 18``) then precedes them and carries the same ``RCZ1`` index. A decoder MUST ignore an unknown skippable frame. A one-frame zstd file has no index. ``zstd -d`` reads both.
@@ -812,7 +812,7 @@ CON-error.4 \:\: MUST
     A reader that stops at an error MUST report the one with the lowest line number.
 
 CON-error.5 \:\: MUST
-    When one line can fail more than one check, the reader MUST report the class the clause for that line names. ``CON-error.4`` still selects the lowest line. On a count line the count class of ``CON-count.10`` precedes the field-count class of ``CON-num.9``. On the angles line, the cell check of ``CON-cell.7`` is ``ValidationError``.
+    When one line can fail more than one check, the reader MUST report the class the clause for that line names. ``CON-error.4`` selects the lowest line. On a count line the count class of ``CON-count.10`` precedes the field-count class of ``CON-num.9``. On the angles line, the cell check of ``CON-cell.7`` is ``ValidationError``.
 
 .. _conformance:
 
@@ -838,8 +838,8 @@ CON-profile.4 \:\: MUST NOT
 CON-profile.5 \:\: MUST
     A round trip is a read of a frame, a write of that frame, and a read of the result. The second read MUST return the same binary64 coordinates, velocities, and cell entries, the same masks, identifiers, and periodic flags, and units of the same dimension. It MUST NOT be required to return the same spelling of a float or of an unknown key.
 
-Version history
----------------
+Version chronology
+------------------
 
 .. table::
 
@@ -885,7 +885,7 @@ Changes in 4.0.0:
 
 - A non-finite number is rejected in every mode (``CON-num.1``), including a cell value such as ``1e999``.
 
-- A gzip envelope exposes every member, in order (``CON-compress.1``). A writer may add the ``RCZ1`` index of ``CON-compress.4`` and ``CON-compress.5``. A file without that index is still read in order.
+- A gzip envelope exposes every member, in order (``CON-compress.1``). A writer may add the ``RCZ1`` index of ``CON-compress.4`` and ``CON-compress.5``. A file without that index is read in order.
 
 Changes in 4.0.1:
 
