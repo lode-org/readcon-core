@@ -917,6 +917,23 @@ fn cell_matrix_prefers_lattice_vectors_and_builds_the_rest() {
     assert_eq!(class_of(&bad_lattice), "InvalidMetadataJson");
 }
 
+#[test]
+fn sheared_flat_cell_roundoff_window_is_bounded() {
+    let alpha_for_rho = |rho: f64| {
+        let gamma = 60.0_f64.to_radians();
+        (gamma.sin() * (1.0 - rho).sqrt()).acos().to_degrees()
+    };
+    let inside = cell_vectors([10.0; 3], [alpha_for_rho(-5.0e-13), 90.0, 60.0]);
+    let outside = cell_vectors([10.0; 3], [alpha_for_rho(-2.0e-12), 90.0, 60.0]);
+
+    assert!(
+        inside[1][0].abs() > 1.0,
+        "the flat cell must remain sheared"
+    );
+    assert_eq!(inside[2][2], 0.0);
+    assert!(outside[2][2].is_nan());
+}
+
 /// CON-header.3, CON-units.7.
 #[test]
 fn coordinates_and_masses_use_declared_units() {
