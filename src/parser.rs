@@ -2699,11 +2699,17 @@ where
         if let Some(pos) = positions_other.as_mut() {
             pos.set_f64_row(ids.len(), xyz);
         }
-        let index = pos_flat.len() / 3;
-        pos_flat.extend_from_slice(&xyz);
-        let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::at_slot(Arc::clone(symbol), slot, fixed, atom_id));
+        // The frame keeps `positions_other`, not `pos_flat`, so an atom
+        // cannot address `pos_flat` and owns its coordinates instead.
+        atom_data.push(AtomDatum::coords(
+            Arc::clone(symbol),
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            fixed,
+            atom_id,
+        ));
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
@@ -4844,6 +4850,35 @@ Forces of Component 1
                     expected.as_f64_row(0),
                     "{kind:?} row {i}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn atoms_keep_their_coordinates_when_positions_are_not_f64() {
+        use crate::storage_dtype::ElementKind;
+        let rows = [[0.5, -1.25, 3.0], [1.0e-3, 2.5e4, -7.75]];
+        for &kind in ElementKind::all_hosted() {
+            if kind == ElementKind::Float64 {
+                continue;
+            }
+            let mut text = format!(
+                "PREBOX1\n{{\"con_spec_version\":3,\"units\":{{\"length\":\"angstrom\",\
+                 \"energy\":\"eV\"}},\"storage_dtypes\":{{\"positions\":\"{}\"}}}}\n\
+                 10.0 10.0 10.0\n90.0 90.0 90.0\nPOSTBOX1\nPOSTBOX2\n1\n2\n1.008\nH\n\
+                 Coordinates of Component 1\n",
+                kind.as_str()
+            );
+            for (id, [x, y, z]) in rows.iter().enumerate() {
+                text.push_str(&format!("{x} {y} {z} 0 {id}\n"));
+            }
+            let frame = ConFrameIterator::new(&text)
+                .next()
+                .expect("frame")
+                .expect("parse");
+            assert_eq!(frame.positions.kind(), kind);
+            for (i, atom) in frame.atom_data.iter().enumerate() {
+                assert_eq!([atom.x(), atom.y(), atom.z()], rows[i], "{kind:?} atom {i}");
             }
         }
     }
