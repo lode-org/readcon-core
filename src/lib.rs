@@ -135,7 +135,7 @@ pub const CON_SPEC_VERSION: u32 = 4;
 pub const CON_SPEC_MINOR: u32 = 0;
 
 /// Patch of this specification text (CON-status.3, CON-status.4).
-pub const CON_SPEC_PATCH: u32 = 2;
+pub const CON_SPEC_PATCH: u32 = 4;
 
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.
@@ -154,7 +154,7 @@ mod tests {
     fn test_spec_version_is_current() {
         assert_eq!(CON_SPEC_VERSION, 4);
         assert_eq!(CON_SPEC_MINOR, 0);
-        assert_eq!(CON_SPEC_PATCH, 2);
+        assert_eq!(CON_SPEC_PATCH, 4);
         assert_eq!(ffi::RKR_CON_SPEC_VERSION, CON_SPEC_VERSION);
     }
 

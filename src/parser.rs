@@ -2938,8 +2938,12 @@ pub fn parse_frame_header<'a>(
         }
         if ver >= 3 {
             match json_obj.get(meta::UNITS) {
-                Some(u) => crate::units::validate_units_metadata_for_version(ver, u)
-                    .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?,
+                Some(u) => {
+                    crate::units::validate_units_metadata_for_version(ver, u)
+                        .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?;
+                    crate::units::enforce_velocity_precedence(ver, u)
+                        .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?;
+                }
                 None => {
                     return Err(ParseError::InvalidUnits(
                         "con_spec_version >= 3 requires metadata \"units\" with length and energy"
@@ -3260,6 +3264,10 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
                         "length" if length.is_none() => length = Some(value),
                         "energy" if energy.is_none() => energy = Some(value),
                         "mass" | "time" | "velocity" | "force" => {
+                            // CON-units.21 compares velocity with the assigned time.
+                            if ukey == "velocity" {
+                                return None;
+                            }
                             if crate::units::validate_unit_for_quantity(ukey, value).is_err() {
                                 return None;
                             }

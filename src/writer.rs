@@ -711,14 +711,29 @@ impl<W: Write> ConFrameWriter<W> {
                             ))
                         },
                     )?;
+                    crate::units::enforce_velocity_precedence(spec_version, u).map_err(|e| {
+                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+                    })?;
                 }
             }
         }
         if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
             // D11: an invalid unit fails the write. Do not substitute a default.
-            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
+            let mut c = crate::units::canonicalize_units_object(&u).map_err(|e| {
                 WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
             })?;
+            // Canonicalization folds both natural spellings to the symbol.
+            // Major 3 and earlier record the historical spelling (CON-units.5).
+            if spec_version < 4
+                && let Some(object) = c.as_object_mut()
+                && object.get("time").and_then(|value| value.as_str())
+                    == Some(crate::units::NATURAL_TIME_UNIT)
+            {
+                object.insert(
+                    "time".to_string(),
+                    serde_json::Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
+                );
+            }
             meta_obj.insert(meta::UNITS.into(), c);
         }
         let minor = if minor_raw.is_some() {
@@ -3123,9 +3138,11 @@ fn push_scalar_line(
 ///
 /// Versions 1, 2, and every minor of major 3 store those numbers in the
 /// natural unit whatever `units.time` says (CON-units.8, CON-units.9).
-/// A rewrite that emits major 4 makes the label authoritative
-/// (CON-units.10), so replace any label rather than keep one the old file
-/// never honored. A major 4 frame is left alone.
+/// The label those versions record is the historical spelling. It is not
+/// authoritative, and the published files of those versions use it
+/// (CON-units.5). A rewrite that emits major 4 makes the label
+/// authoritative (CON-units.10), so that path writes the symbol spelling.
+/// A major 4 frame is left alone.
 pub(crate) fn stamp_legacy_velocity_time(
     meta: &mut BTreeMap<String, Value>,
     spec_version: u32,
@@ -3142,7 +3159,7 @@ pub(crate) fn stamp_legacy_velocity_time(
     if let Some(object) = units.as_object_mut() {
         object.insert(
             "time".to_string(),
-            Value::String(crate::units::NATURAL_TIME_UNIT.to_string()),
+            Value::String(crate::units::HISTORICAL_NATURAL_TIME.to_string()),
         );
         meta.insert(meta::UNITS.to_string(), units);
     }

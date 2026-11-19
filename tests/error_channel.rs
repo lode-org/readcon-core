@@ -587,7 +587,7 @@ fn indexed_read_covers_owned_and_mapped_files() {
 fn unit_edges_cover_override_time_and_rejected_spellings() {
     let mut meta = serde_json::Map::new();
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(4, &meta, Some("ps")).unwrap(), "ps");
+    assert!(velocity_file_time_unit(4, &meta, Some("ps")).is_err());
     let missing = velocity_file_time_unit(4, &meta, None).unwrap_err();
     assert_eq!(missing.class_name(), "InvalidUnits");
     assert!(missing.to_string().contains("units.time"));

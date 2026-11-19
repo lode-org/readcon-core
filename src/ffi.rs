@@ -4187,7 +4187,7 @@ pub unsafe extern "C" fn rkr_frame_builder_set_metadata_json(
 }
 /// Sets the units object on an existing frame builder.
 /// `units_json` is a JSON object, for example
-/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}`.
+/// `{"length":"angstrom","energy":"eV","mass":"amu","time":"(u*Å^2/eV)^0.5"}`.
 /// Returns `RKR_STATUS_SUCCESS` on success, `RKR_STATUS_INVALID_JSON` when
 /// the text is not a JSON object, or `RKR_STATUS_VALIDATION_ERROR` when a
 /// unit expression is not valid.
@@ -7234,10 +7234,7 @@ Coordinates of Component 1
         let text = unsafe { CStr::from_ptr(json) }.to_str().unwrap();
         assert!(text.contains(r#""length":"angstrom""#), "{text}");
         assert!(text.contains(r#""energy":"eV""#), "{text}");
-        assert!(
-            text.contains(r#""time":"(amu*angstrom^2/eV)^0.5""#),
-            "{text}"
-        );
+        assert!(text.contains("\"time\":\"(u*Å^2/eV)^0.5\""), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);
@@ -7259,7 +7256,7 @@ Coordinates of Component 1
             .to_string();
         assert!(text.contains(r#""con_spec_version":4"#), "{text}");
         assert!(text.contains(r#""con_spec_minor":0"#), "{text}");
-        assert!(text.contains(r#""con_spec_patch":2"#), "{text}");
+        assert!(text.contains(r#""con_spec_patch":4"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);
@@ -8522,7 +8519,7 @@ Coordinates of Component 1
                 "{rewritten_meta}"
             );
             assert!(
-                rewritten_meta.contains(crate::units::NATURAL_TIME_UNIT),
+                rewritten_meta.contains(crate::units::HISTORICAL_NATURAL_TIME),
                 "{rewritten_meta}"
             );
             unsafe {

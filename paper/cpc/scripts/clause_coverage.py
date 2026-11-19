@@ -67,14 +67,6 @@ REASONS = {
     "Rust, Python or the C ABI, takes a consumer or a target version: the arguments name the "
     "destination, the frames, the float format or precision, compression, canonical order and the "
     "MPI settings, so no writer call states the clause.",
-    "CON-section.10": "A rule for revising the specification: adding a reserved section name raises "
-    "con_spec_minor. It states nothing a reader or a writer does.",
-    "CON-section.11": "A rule for revising the specification: adding a reserved section name needs no new major. "
-    "It states nothing a reader or a writer does.",
-    "CON-section.18": "A SHOULD on the values a producer stores. CON-section.19 forbids a reader to reject a frame "
-    "whose energy differs from the sum of its energies rows, and "
-    "tests/clause_coverage.rs::energy_that_differs_from_the_energies_sum_is_accepted reads such "
-    "a frame.",
     "CON-file.6": "A writer rule against an extra blank line between frames. A reader still finds the next "
     "frame; no corpus file has that blank as its only fault.",
     "CON-header.1": "A MAY that leaves lines 5 and 6 empty. The reader accepts an empty line and a filled one, "

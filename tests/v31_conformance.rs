@@ -1048,7 +1048,8 @@ fn unit_vocabulary_includes_mol() {
                 "meter",
                 "metre",
                 "angstrom",
-                "a",
+                "Angstrom",
+                "A",
                 "å",
                 "Å",
                 "nm",
@@ -1059,9 +1060,15 @@ fn unit_vocabulary_includes_mol() {
         ),
         (
             "energy",
-            &["j", "joule", "ev", "mev", "hartree", "ha", "kcal", "kj"][..],
+            &[
+                "J", "j", "joule", "eV", "ev", "meV", "mev", "MeV", "hartree", "Ha", "kcal", "kJ",
+                "kj",
+            ][..],
         ),
-        ("mass", &["kg", "kilogram", "u", "amu", "dalton", "da"][..]),
+        (
+            "mass",
+            &["kg", "kilogram", "u", "Da", "amu", "AMU", "dalton"][..],
+        ),
         (
             "time",
             &[
@@ -1082,6 +1089,10 @@ fn unit_vocabulary_includes_mol() {
                 .unwrap_or_else(|err| panic!("{name}: {err}"));
         }
     }
+    // CON-units.16. These three are SI spellings and are not folded.
+    assert!(validate_unit_for_quantity("length", "a").is_err());
+    assert!(validate_unit_for_quantity("energy", "ha").is_err());
+    assert!(validate_unit_for_quantity("mass", "da").is_err());
     parse_unit_expression("mol").unwrap();
     assert!(parse_unit_expression("MOL").is_err());
 }
