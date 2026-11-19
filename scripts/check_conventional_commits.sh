@@ -46,7 +46,7 @@ while IFS=$'\t' read -r sha parents subject; do
       continue
       ;;
   esac
-  if [[ "$subject" =~ ^[a-z]+(\([a-z0-9/_-]+\))?!?:\ .+ ]]; then
+  if [[ "$subject" =~ ^[a-z]+(\([a-z0-9/_,-]+\))?!?:\ .+ ]]; then
     echo "OK ${sha} ${subject}"
   else
     echo "ERROR non-conventional ${sha} ${subject}" >&2

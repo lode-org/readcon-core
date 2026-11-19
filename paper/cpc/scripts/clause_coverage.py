@@ -18,7 +18,7 @@ names the id. A clause that no corpus file, probe or test names has its reason
 in REASONS; the script stops when such a clause has none, or when REASONS
 gives a reason for a clause that something names.
 
-    python paper/cpc/scripts/clause_coverage.py            # writes data/spec/clause_coverage.json
+    python paper/cpc/scripts/clause_coverage.py            # writes the versioned data/spec record
     python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
     python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
 
@@ -47,7 +47,9 @@ PROBES = ROOT / "data" / "referee_probes.json"
 INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
-OUT = ROOT / "data" / "spec" / "clause_coverage.json"
+VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
+SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
+OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -310,6 +312,11 @@ def build() -> dict:
         "uncovered": len(entries) - len(covered),
     }
     return {
+        "supersedes": rel(SUPERSEDES),
+        "reason": (
+            f"Recounts specification coverage for readcon-core {VERSION} "
+            "without rewriting the previous measurement."
+        ),
         "script": rel(Path(__file__)),
         "spec": {"path": rel(SPEC), "sha256": sha256(SPEC), "clauses": len(entries)},
         "sources": {
@@ -346,7 +353,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        "% Written by paper/cpc/scripts/clause_coverage.py from data/spec/clause_coverage.json.\n"
+        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )

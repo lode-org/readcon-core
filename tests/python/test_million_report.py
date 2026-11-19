@@ -211,6 +211,20 @@ def _record_hashes(record: Path) -> dict[str, str]:
     return found
 
 
+def _skip_unreleased_record(root: Path, version: str, record: Path) -> None:
+    """Skip a missing record only before its release tag exists."""
+    if record.is_file():
+        return
+    tagged = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/v{version}^{{}}"],
+        cwd=root,
+        check=False,
+    )
+    if tagged.returncode != 0:
+        pytest.skip(f"v{version} is not tagged and has no saved million-atom record")
+    pytest.fail(f"v{version} is tagged but {record.relative_to(root)} is missing")
+
+
 def test_million_rule_targets_the_versioned_record(tmp_path: Path):
     root = Path(__file__).resolve().parents[2]
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
@@ -221,6 +235,7 @@ def test_million_rule_targets_the_versioned_record(tmp_path: Path):
         tip, short = _tip(fresh_tree)
         fresh = f"bench/h2h/million/v{version}-{short}"
         saved = fresh_tree / "bench/h2h/million" / f"v{version}"
+        _skip_unreleased_record(fresh_tree, version, saved / "cross-format.json")
         before = (
             (saved / "cross-format.json").read_bytes(),
             (saved / "cross-format.log").read_bytes(),
@@ -299,6 +314,7 @@ def test_superseded_note_follows_a_complete_measurement(tmp_path: Path):
         tip, short = _tip(done)
         fresh = f"bench/h2h/million/v{version}-{short}"
         saved = done / "bench/h2h/million" / f"v{version}"
+        _skip_unreleased_record(done, version, saved / "cross-format.json")
         before = (
             (saved / "cross-format.json").read_bytes(),
             (saved / "cross-format.log").read_bytes(),

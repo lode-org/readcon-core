@@ -27,12 +27,16 @@ SNAKEFILE = ROOT / "Snakefile"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 BEGIN = "        # BEGIN TeX inputs, written by scripts/manuscript_inputs.py"
 END = "        # END TeX inputs"
-READS = re.compile(r"\\(input|includegraphics|lstinputlisting|bibliography)(?:\[[^]]*\])?\{([^}]+)\}")
+READS = re.compile(
+    r"\\(input|includegraphics|lstinputlisting|bibliography)(?:\[[^]]*\])?\{([^}]+)\}"
+)
 # What a pdfTeX run writes and then reads back.
 GENERATED = "src/figures/generated/"
 # The files each generated TeX file reads, as its writer emits them.
 NESTED = {
-    "src/figures/generated/survey_listing.tex": ("src/figures/generated/survey_frame.con",),
+    "src/figures/generated/survey_listing.tex": (
+        "src/figures/generated/survey_frame.con",
+    ),
 }
 BUILD_OUTPUTS = (".aux", ".bbl", ".out", ".spl", ".toc", ".lof", ".lot", ".fls", ".log")
 
@@ -54,7 +58,10 @@ def targets() -> list[str]:
         if current.startswith(GENERATED):
             reads = list(NESTED.get(current, ()))
         elif path.is_file():
-            reads = [target(command, name) for command, name in READS.findall(path.read_text())]
+            reads = [
+                target(command, name)
+                for command, name in READS.findall(path.read_text())
+            ]
         else:
             continue
         for name in reads:
@@ -101,18 +108,31 @@ def declared() -> list[str]:
     bad = []
     for path in sorted((ROOT / GENERATED).glob("*.tex")):
         name = f"{GENERATED}{path.name}"
-        reads = sorted({target(command, n) for command, n in READS.findall(path.read_text())})
+        reads = sorted(
+            {target(command, n) for command, n in READS.findall(path.read_text())}
+        )
         if reads != sorted(NESTED.get(name, ())):
-            bad.append(f"{name} reads {reads or 'nothing'}, but NESTED declares {sorted(NESTED.get(name, ()))}")
+            bad.append(
+                f"{name} reads {reads or 'nothing'}, but NESTED declares {sorted(NESTED.get(name, ()))}"
+            )
     return bad
 
 
 def check() -> list[str]:
     scan, rule = targets(), listed()
     bad = declared()
-    bad += [f"the manuscript rule leaves out {name}" for name in scan if name not in rule]
-    bad += [f"the manuscript rule lists {name}, which no document reads" for name in rule if name not in scan]
-    bad += [f"the last build read {name}, which the scan misses" for name in sorted(recorded() - set(scan))]
+    bad += [
+        f"the manuscript rule leaves out {name}" for name in scan if name not in rule
+    ]
+    bad += [
+        f"the manuscript rule lists {name}, which no document reads"
+        for name in rule
+        if name not in scan
+    ]
+    bad += [
+        f"the last build read {name}, which the scan misses"
+        for name in sorted(recorded() - set(scan))
+    ]
     return bad
 
 
@@ -124,7 +144,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.write:
         write()
-        print(f"wrote {len(targets())} TeX inputs into the manuscript rule of {SNAKEFILE.name}")
+        print(
+            f"wrote {len(targets())} TeX inputs into the manuscript rule of {SNAKEFILE.name}"
+        )
         return 0
     bad = check()
     for line in bad:

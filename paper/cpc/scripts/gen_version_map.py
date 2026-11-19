@@ -58,12 +58,15 @@ DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
 RECORD_DIRS = ("data/", "evidence/", "bench/results/", "src/figures/generated/")
 DATA_SUFFIXES = {".json", ".csv", ".npz", ".h5", ".h5md", ".dat"}
 OUTPUT_KEYS = ("outputs", "csv")
+VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
 # Records no readcon-core build writes: clauses copied from the specifications they cite, and the version
 # history that gen_spec_supp.py --measure reads from spec.org at each release tag.
 NO_BUILD = {
     "evidence/results/e4_cells.csv",
+    f"data/spec/spec-measurement-{VERSION}.json",
     "data/spec/versions.json",
     "data/spec/clause_coverage.json",
+    f"data/spec/clause_coverage-{VERSION}.json",
     # Stored tables the restored figures draw. The database rows come from
     # readcon-db, and these files carry no readcon-core provenance block.
     "data/db/dedup.json",
@@ -85,7 +88,12 @@ NO_BUILD = {
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
 # The printed name of each record, by campaign and content; a record that matches none is a problem.
-KERNELS = {"nehalem": "Nehalem", "haswell": "Haswell", "skylakex": "Skylake-X", "cooperlake": "Cooper Lake"}
+KERNELS = {
+    "nehalem": "Nehalem",
+    "haswell": "Haswell",
+    "skylakex": "Skylake-X",
+    "cooperlake": "Cooper Lake",
+}
 RECORD_NAMES = (
     (r"bench/results/r0174/", "Timing campaign r0174"),
     (r"bench/results/velocity_case\.json", "Velocity case"),
@@ -96,16 +104,28 @@ RECORD_NAMES = (
     (r"data/every_path\.json", "Every-path count"),
     (r"data/failure/bands/", "Failure campaign, band arrays of each format"),
     (r"data/failure/con_openers\.json", "Failure campaign, CON openers"),
-    (r"data/failure/drift_extxyz\.(?:csv|json)", "Failure campaign, extended XYZ drift"),
+    (
+        r"data/failure/drift_extxyz\.(?:csv|json)",
+        "Failure campaign, extended XYZ drift",
+    ),
     (r"data/failure/matrix\.(?:csv|json)", "Failure campaign, failure matrix"),
     (r"data/failure/restart_bands\.json", "Failure campaign, restart bands"),
-    (r"data/failure/restart_formats\.(?:csv|json)", "Failure campaign, restart formats"),
-    (r"data/failure/restart_kernels/(\w+)\.json", "Failure campaign, restart formats on the {kernel} kernel set"),
+    (
+        r"data/failure/restart_formats\.(?:csv|json)",
+        "Failure campaign, restart formats",
+    ),
+    (
+        r"data/failure/restart_kernels/(\w+)\.json",
+        "Failure campaign, restart formats on the {kernel} kernel set",
+    ),
     (r"data/failure/version_safety\.csv", "Failure campaign, version safety"),
     (r"data/restart_walls/restart_walls\.(?:csv|json)", "Restart wall times"),
     (r"data/sizes\.csv", "File sizes"),
     (r"data/spec/corpus_recount\.json", "Specification campaign, corpus recount"),
-    (r"data/spec/mutant_differential\.json", "Specification campaign, mutant differential"),
+    (
+        r"data/spec/mutant_differential\.json",
+        "Specification campaign, mutant differential",
+    ),
     (r"data/spec/version_drift\.json", "Specification campaign, version drift"),
     (r"data/survey_frame\.json", "Survey frame"),
     (r"src/figures/generated/survey_frame\.con", "Survey frame, CON text"),
@@ -115,10 +135,19 @@ RECORD_NAMES = (
     (r"evidence/results/e1_restart_lbfgs_control\.json", "Evidence E1, L-BFGS control"),
     (r"evidence/results/e5_prefactor\.json", "Evidence E5, prefactor"),
     (r"data/db31/(db\d+)/ab\.json", "readcon-db campaign {campaign}"),
-    (r"data/db31/(db\d+)/paired_protocol\.json", "readcon-db campaign {campaign}, paired protocol"),
+    (
+        r"data/db31/(db\d+)/paired_protocol\.json",
+        "readcon-db campaign {campaign}, paired protocol",
+    ),
     (r"data/db31/(db\d+)/", "readcon-db campaign {campaign}"),
-    (r"data/db31/corpus-ops/readcon_db_bench\.json", "readcon-db campaign db31, corpus operations"),
-    (r"data/db3[0-2]/fair-(db\d+)/campaign\.json", "readcon-db fair-store campaign {campaign}"),
+    (
+        r"data/db31/corpus-ops/readcon_db_bench\.json",
+        "readcon-db campaign db31, corpus operations",
+    ),
+    (
+        r"data/db3[0-2]/fair-(db\d+)/campaign\.json",
+        "readcon-db fair-store campaign {campaign}",
+    ),
     (r"data/db30/(db\d+)/campaign\.json", "readcon-db campaign {campaign}"),
 )
 FLOATS = {"table": "Table", "figure": "Figure", "algorithm": "Algorithm"}
@@ -634,7 +663,11 @@ def artifact(path: str) -> str:
     if "site-packages/readcon/" in path:
         return "Python module readcon"
     if name == "libreadcon_core.so":
-        return "C library built with the parallel feature" if "clib-parallel" in path else "C library"
+        return (
+            "C library built with the parallel feature"
+            if "clib-parallel" in path
+            else "C library"
+        )
     if "/examples/" in path:
         return f"example program {tex(name)}"
     if name == "readcon-bench":
@@ -1013,11 +1046,13 @@ def library_macros() -> str:
         raise SystemExit("no record behind a printed result names a library digest")
     ranked = sorted(named.items(), key=lambda item: -item[1])
     if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
-        raise SystemExit(f"two library digests are named by as many records: {ranked[:2]}")
+        raise SystemExit(
+            f"two library digests are named by as many records: {ranked[:2]}"
+        )
     (version, digest), count = ranked[0]
     return "\n".join(
         [
-            f"% Written by paper/cpc/scripts/gen_version_map.py from the builds the records name.",
+            "% Written by paper/cpc/scripts/gen_version_map.py from the builds the records name.",
             rf"\newcommand{{\rcRecordDigest}}{{{digest[:12]}}}",
             rf"\newcommand{{\rcRecordDigestVersion}}{{{version}}}",
             rf"\newcommand{{\rcRecordDigestCount}}{{{count}}}",

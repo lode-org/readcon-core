@@ -897,7 +897,7 @@ Building frames from data
         free_rkr_frame_builder(builder);
         return 1;
     }
-    RKRConFrame *frame = rkr_frame_builder_build(builder);
+    RKRConFrame *frame = rkr_frame_builder_build(&builder);
     if (!frame) {
         return 1;
     }

@@ -10,10 +10,12 @@ on:
       - "ci/**"
     paths:
       - "paper/cpc/**"
+      - "tests/python/test_trace_check_clean_clone.py"
       - ".github/workflows/ci_paper.yml"
   pull_request:
     paths:
       - "paper/cpc/**"
+      - "tests/python/test_trace_check_clean_clone.py"
       - ".github/workflows/ci_paper.yml"
   workflow_dispatch:
 
@@ -36,6 +38,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Install Emacs
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes emacs-nox
+
       - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           manifest-path: paper/cpc/pixi.toml
@@ -53,8 +60,14 @@ jobs:
       - name: Run the figure and record producer tests
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_figure_producers.py tests/python/test_record_producers.py
 
+      - name: Check paper trace regeneration
+        run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_trace_check_clean_clone.py
+
       - name: Regenerate the paper from the committed records
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-regen
+
+      - name: Check regenerated files are committed
+        run: git diff --exit-code
 
       - name: Typeset with Tectonic
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-tex-tectonic

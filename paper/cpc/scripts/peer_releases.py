@@ -38,14 +38,19 @@ OVITO_HEADING = re.compile(r"Version (\d+\.\d+\.\d+) \((\d{2}-[A-Z][a-z]{2}-\d{4
 
 
 def fetch(url: str) -> str:
-    request = urllib.request.Request(url, headers={"User-Agent": "readcon-core paper records"})
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "readcon-core paper records"}
+    )
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read().decode("utf-8", "replace")
 
 
 def ovito_release(heading: str) -> dict:
     version, day = OVITO_HEADING.fullmatch(heading).groups()
-    return {"version": version, "date": datetime.datetime.strptime(day, "%d-%b-%Y").date().isoformat()}
+    return {
+        "version": version,
+        "date": datetime.datetime.strptime(day, "%d-%b-%Y").date().isoformat(),
+    }
 
 
 def github_release(prefix: str, tag: str, published: str) -> dict:
@@ -58,15 +63,25 @@ def build() -> dict:
     text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", fetch(OVITO)))
     headings = {v: d for v, d in OVITO_HEADING.findall(text) if v in OVITO_VERSIONS}
     if set(headings) != set(OVITO_VERSIONS):
-        raise SystemExit(f"{OVITO}: no release heading for {sorted(set(OVITO_VERSIONS) - set(headings))}")
+        raise SystemExit(
+            f"{OVITO}: no release heading for {sorted(set(OVITO_VERSIONS) - set(headings))}"
+        )
     releases = {
         "OVITO": [
-            {"url": OVITO, "heading": f"Version {v} ({d})", **ovito_release(f"Version {v} ({d})")}
+            {
+                "url": OVITO,
+                "heading": f"Version {v} ({d})",
+                **ovito_release(f"Version {v} ({d})"),
+            }
             for v, d in headings.items()
         ]
     }
     for name, (repo, prefix, version) in GITHUB.items():
-        data = json.loads(fetch(f"https://api.github.com/repos/{repo}/releases/tags/{prefix}{version}"))
+        data = json.loads(
+            fetch(
+                f"https://api.github.com/repos/{repo}/releases/tags/{prefix}{version}"
+            )
+        )
         releases[name] = [
             {
                 "url": data["url"],
@@ -99,10 +114,15 @@ def check(releases: dict) -> list[str]:
                 want = ovito_release(entry["heading"])
             elif "tag_prefix" in entry:
                 want = github_release(
-                    entry["tag_prefix"], entry["tag_prefix"] + entry["tag_version"], entry["published_at"]
+                    entry["tag_prefix"],
+                    entry["tag_prefix"] + entry["tag_version"],
+                    entry["published_at"],
                 )
             else:
-                want = {"version": entry["pypi_version"], "date": entry["first_upload"][:10]}
+                want = {
+                    "version": entry["pypi_version"],
+                    "date": entry["first_upload"][:10],
+                }
             got = {"version": entry["version"], "date": entry["date"]}
             if got != want:
                 bad.append(f"{name}: stored {got} where its text gives {want}")
@@ -113,13 +133,17 @@ def release(name: str, version: str) -> dict:
     """The stored release ``version`` of ``name``."""
     found = [e for e in json.loads(OUT.read_text())[name] if e["version"] == version]
     if len(found) != 1:
-        raise SystemExit(f"{OUT.relative_to(ROOT)}: {name} {version} is not one release")
+        raise SystemExit(
+            f"{OUT.relative_to(ROOT)}: {name} {version} is not one release"
+        )
     return found[0]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="check the stored record offline")
+    parser.add_argument(
+        "--check", action="store_true", help="check the stored record offline"
+    )
     args = parser.parse_args()
     releases = json.loads(OUT.read_text()) if args.check else build()
     bad = check(releases)
@@ -128,7 +152,9 @@ def main() -> int:
     if bad:
         return 1
     if args.check:
-        print(f"{OUT.relative_to(ROOT)}: every version and date is the one its text gives")
+        print(
+            f"{OUT.relative_to(ROOT)}: every version and date is the one its text gives"
+        )
         return 0
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(releases, indent=2) + "\n")

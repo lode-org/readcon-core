@@ -4579,22 +4579,24 @@ pub unsafe extern "C" fn rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
         )
     }
 }
-/// Consumes the builder and returns a finalized RKRConFrame handle.
-/// The builder handle is invalidated after this call.
+/// Consumes the builder, sets its handle to NULL, and returns a finalized
+/// RKRConFrame handle.
 /// The caller OWNS the returned frame and MUST call `free_rkr_frame`.
 /// Returns NULL on error, including
 /// [`crate::error::ParseError::MassMismatch`].
 ///
 /// # Safety
-/// builder_handle must be valid. The caller takes ownership of the returned frame.
+/// `builder_handle` must be a valid pointer to a builder handle or to NULL. The
+/// caller takes ownership of the returned frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_frame_builder_build(
-    builder_handle: *mut RKRConFrameBuilder,
+    builder_handle: *mut *mut RKRConFrameBuilder,
 ) -> *mut RKRConFrame {
-    if builder_handle.is_null() {
+    if builder_handle.is_null() || unsafe { (*builder_handle).is_null() } {
         return null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER);
     }
-    let builder = unsafe { *Box::from_raw(builder_handle as *mut ConFrameBuilder) };
+    let builder = unsafe { *Box::from_raw(*builder_handle as *mut ConFrameBuilder) };
+    unsafe { *builder_handle = ptr::null_mut() };
     match builder.build() {
         Ok(frame) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Err(err) if err.is_non_finite_cell() => {
@@ -4604,7 +4606,8 @@ pub unsafe extern "C" fn rkr_frame_builder_build(
         Err(_) => null_err::<_>(RKRStatus::RKR_STATUS_NULL_POINTER),
     }
 }
-/// Frees a frame builder without building.
+/// Frees a frame builder without building. Passing the NULL handle left by
+/// `rkr_frame_builder_build` is a no-op.
 ///
 /// # Safety
 /// builder_handle must be valid or null.
@@ -6982,7 +6985,7 @@ Coordinates of Component 1
     }
     #[test]
     fn builder_set_units_c_abi_stores_the_object() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let units = c_string(
             r#"{"length":"A","energy":"ev","mass":"amu","time":"(amu*angstrom^2/eV)^0.5"}"#,
         );
@@ -6993,7 +6996,7 @@ Coordinates of Component 1
             unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         assert!(!frame.is_null());
         let json = unsafe { rkr_frame_metadata_json(frame) };
         assert!(!json.is_null());
@@ -7011,13 +7014,13 @@ Coordinates of Component 1
     }
     #[test]
     fn builder_stamps_con_spec_minor_one_unless_set() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let symbol = c_string("H");
         assert_eq!(
             unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         let json = unsafe { rkr_frame_metadata_json(frame) };
         let text = unsafe { CStr::from_ptr(json) }
             .to_str()
@@ -7029,7 +7032,7 @@ Coordinates of Component 1
             free_rkr_frame(frame);
         }
 
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         assert_eq!(
             unsafe { rkr_frame_builder_set_con_spec_minor(builder, 4) },
             RKRStatus::RKR_STATUS_SUCCESS
@@ -7039,7 +7042,7 @@ Coordinates of Component 1
             unsafe { rkr_frame_add_atom(builder, symbol.as_ptr(), 0.0, 0.0, 0.0, false, 0, 1.0) },
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         let json = unsafe { rkr_frame_metadata_json(frame) };
         let text = unsafe { CStr::from_ptr(json) }
             .to_str()
@@ -7081,7 +7084,7 @@ Coordinates of Component 1
     }
     #[test]
     fn builder_preserves_fixed_mask_for_atom_without_velocity_or_forces() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let symbol = c_string("Cu");
         let status = unsafe {
             rkr_frame_add_atom_with_fixed_mask(
@@ -7098,12 +7101,12 @@ Coordinates of Component 1
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         unsafe { assert_single_atom(frame, [true, false, true], None, None) };
     }
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_velocity() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let symbol = c_string("H");
         let status = unsafe {
             rkr_frame_add_atom_with_velocity_fixed_mask(
@@ -7123,12 +7126,12 @@ Coordinates of Component 1
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         unsafe { assert_single_atom(frame, [false, true, false], Some([0.1, 0.2, 0.3]), None) };
     }
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_forces() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let symbol = c_string("O");
         let status = unsafe {
             rkr_frame_add_atom_with_forces_fixed_mask(
@@ -7148,12 +7151,12 @@ Coordinates of Component 1
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         unsafe { assert_single_atom(frame, [true, true, false], None, Some([-0.1, -0.2, -0.3])) };
     }
     #[test]
     fn builder_preserves_fixed_mask_for_atom_with_velocity_and_forces() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let symbol = c_string("N");
         let status = unsafe {
             rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(
@@ -7176,7 +7179,7 @@ Coordinates of Component 1
             )
         };
         assert_eq!(status, RKRStatus::RKR_STATUS_SUCCESS);
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         unsafe {
             assert_single_atom(
                 frame,
@@ -7188,7 +7191,7 @@ Coordinates of Component 1
     }
     #[test]
     fn builder_bool_fixed_functions_set_all_axes_together() {
-        let builder = test_builder_handle();
+        let mut builder = test_builder_handle();
         let cu = c_string("Cu");
         let h = c_string("H");
         let atom_status =
@@ -7210,7 +7213,7 @@ Coordinates of Component 1
             )
         };
         assert_eq!(velocity_status, RKRStatus::RKR_STATUS_SUCCESS);
-        let frame = unsafe { rkr_frame_builder_build(builder) };
+        let frame = unsafe { rkr_frame_builder_build(&mut builder) };
         let c_frame = unsafe { rkr_frame_to_c_frame(frame) };
         assert!(!c_frame.is_null());
         let c_frame_ref = unsafe { &*c_frame };
@@ -7313,7 +7316,7 @@ Coordinates of Component 1
         // Forces (N,3) + energies (N,) via builder → frame
         let cell = [10.0f64; 3];
         let ang = [90.0f64; 3];
-        let b = unsafe {
+        let mut b = unsafe {
             rkr_frame_new(
                 cell.as_ptr(),
                 ang.as_ptr(),
@@ -7346,7 +7349,7 @@ Coordinates of Component 1
             );
             rkr_frame_builder_set_last_energy(b, -0.5);
         }
-        let built = unsafe { rkr_frame_builder_build(b) };
+        let built = unsafe { rkr_frame_builder_build(&mut b) };
         assert!(!built.is_null());
         let n_built = unsafe { rkr_frame_atom_count(built) } as i64;
         let mut frc: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();

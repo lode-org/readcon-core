@@ -113,7 +113,13 @@ def toc() -> None:
     full = band_energy(bands / "uninterrupted.npz")
     resumed = band_energy(bands / "CON_3_1__shortest_round_trip.npz")
     fig, ax = plt.subplots(figsize=(5, 5))
-    ax.plot(range(len(full)), full - full[0], color=TEAL, marker="o", label="uninterrupted band")
+    ax.plot(
+        range(len(full)),
+        full - full[0],
+        color=TEAL,
+        marker="o",
+        label="uninterrupted band",
+    )
     ax.plot(
         range(len(resumed)),
         resumed - resumed[0],

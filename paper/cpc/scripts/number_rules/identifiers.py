@@ -62,7 +62,10 @@ def peer_rules(record: str, prefix: str, guard: str, why: str) -> list[Rule]:
     for key, name in names.items():
         version = peers[key]
         where = lines(rf"^{guard}.*\b{name} {re.escape(version)}\b")
-        if any(re.search(w.partition("~")[2], text(f"src/{w.partition('~')[0]}"), re.M) for w in where):
+        if any(
+            re.search(w.partition("~")[2], text(f"src/{w.partition('~')[0]}"), re.M)
+            for w in where
+        ):
             out.append(Rule(version, version, record, f"{key} version {why}", where))
     return out
 
@@ -84,10 +87,14 @@ def fair_insert(key: str) -> str:
     values = {
         r[key]
         for r in jget(FAIR_DB, "fair")
-        if r["protocol"] == "fair" and r["workload"] == "paper40x8" and r["op"] == "insert"
+        if r["protocol"] == "fair"
+        and r["workload"] == "paper40x8"
+        and r["op"] == "insert"
     }
     if len(values) != 1:
-        raise SystemExit(f"{FAIR_DB}: the fair paper40x8 insert rows give {key} {sorted(values)}")
+        raise SystemExit(
+            f"{FAIR_DB}: the fair paper40x8 insert rows give {key} {sorted(values)}"
+        )
     return f"{values.pop():g}"
 
 
@@ -116,12 +123,14 @@ def spec_digit(digit: int) -> str:
         rf"(?<![\w.]){digit}(?![\w.])"
     )
     if not re.search(phrase, text(SPEC)):
-        raise SystemExit(f"{SPEC}: names no line, column, major, minor, version or mask {digit}")
+        raise SystemExit(
+            f"{SPEC}: names no line, column, major, minor, version or mask {digit}"
+        )
     return str(digit)
 
 
 SPEC_LINES = (
-    r"CON-|[Ll]ines?~? ?\d|[Cc]olumn \d|[Mm]ajor|[Mm]inor|[Vv]ersions?~? ?\d|con\\_spec|"
+    r"CON-|(?:line|Line)s?~? ?\d|[Cc]olumn \d|[Mm]ajor|[Mm]inor|[Vv]ersions?~? ?\d|con\\_spec|"
     r"M ?(?:=|\\in|\\ge)|\\mu\\ge|mask|section\\_arity|grammar version"
 )
 LAYOUT_ROW = r"^[1-9](?:, [1-9])? & "
@@ -131,6 +140,7 @@ crosscheck_version = jget(CROSSCHECK, "provenance.build.readcon_version")
 survey_ids = jget(SURVEY, "ids")
 hcn = row(HCN, file="hcn_v31.con", frame="2", reader="readcon-core")["ids"].split()
 mpi_ranks = sorted({int(r) for r in re.findall(r" launch ranks (\d+) ", text(MPI_LOG))})
+manifest_rfc = grep(MANIFEST, r"RFC (\d+) section 9")
 
 RULES = [
     Rule("3.1", grammar_minor(), LIB, "CON_SPEC_VERSION.CON_SPEC_MINOR of the reader"),
@@ -140,7 +150,12 @@ RULES = [
         SPEC,
         "row of the version history of the specification",
     ),
-    *peer_rules(OPENERS, "provenance.peers", NOT_DRIFT, "of the survey that opens the probe files"),
+    *peer_rules(
+        OPENERS,
+        "provenance.peers",
+        NOT_DRIFT,
+        "of the survey that opens the probe files",
+    ),
     *peer_rules(DRIFT_X, "provenance.peers", DRIFT_LINE, "of the drift comparison"),
     Rule(
         "2.10.0",
@@ -157,8 +172,13 @@ RULES = [
         lines(r"extxyz\}? 0\.4\.6"),
     ),
     *(
-        Rule(v, jget(DRIFT, "reported_versions")[v], DRIFT, f"published wheel {v} the drift probes ran",
-             lines(r"published wheels of 0\.17\.0, 0\.17\.1, 0\.17\.2", (SUPP,)))
+        Rule(
+            v,
+            jget(DRIFT, "reported_versions")[v],
+            DRIFT,
+            f"published wheel {v} the drift probes ran",
+            lines(r"published wheels of 0\.17\.0, 0\.17\.1, 0\.17\.2", (SUPP,)),
+        )
         for v in ("0.17.0", "0.17.1", "0.17.2")
     ),
     Rule(
@@ -173,7 +193,10 @@ RULES = [
         formats_version,
         f"{FORMATS}/provenance.json",
         "readcon_version of the cross-format campaign",
-        lines(rf"v{re.escape(formats_version)} cross-format campaign", (MAIN, f"{GEN}format_h2h.tex")),
+        lines(
+            rf"v{re.escape(formats_version)} cross-format campaign",
+            (MAIN, f"{GEN}format_h2h.tex"),
+        ),
     ),
     Rule(
         "0.12.0",
@@ -208,14 +231,14 @@ RULES = [
         release("ase-extxyz", "0.1.2")["version"],
         RELEASES,
         "ase-extxyz GitHub release",
-        lines(r"ase-extxyz 0\.1\.2", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2", (MAIN,)),
     ),
     Rule(
         "2026-10-02",
         release("ase-extxyz", "0.1.2")["date"],
         RELEASES,
         "publication date of the ase-extxyz 0.1.2 GitHub release",
-        lines(r"ase-extxyz 0\.1\.2, released", (MAIN,)),
+        lines(r"ase-extxyz package 0\.1\.2, released", (MAIN,)),
     ),
     Rule(
         "0.0.2",
@@ -232,7 +255,7 @@ RULES = [
     ),
     Rule(
         "RFC)~8259",
-        f"RFC)~{grep(MANIFEST, r'RFC (\d+) section 9')}",
+        f"RFC)~{manifest_rfc}",
         MANIFEST,
         "RFC the corpus entries on JSON numbers and nesting cite",
     ),
@@ -243,25 +266,43 @@ RULES = [
         "code point of the corpus entry on a blank line of Unicode white space",
     ),
     *(
-        Rule(str(d), spec_digit(d), SPEC, f"line, column, major, minor, version or mask {d} of the specification",
-             lines(SPEC_LINES, (MAIN, SUPP, f"{GEN}corpus_crosscheck.tex")) + lines(LAYOUT_ROW, (MAIN,)))
+        Rule(
+            str(d),
+            spec_digit(d),
+            SPEC,
+            f"line, column, major, minor, version or mask {d} of the specification",
+            lines(SPEC_LINES, (MAIN, SUPP, f"{GEN}corpus_crosscheck.tex"))
+            + lines(LAYOUT_ROW, (MAIN,)),
+        )
         for d in range(10)
     ),
-    Rule("7", numpy_type7(MPI_DRIVER), MPI_DRIVER, "numpy percentile method linear, Hyndman-Fan type 7",
-         (f"{GEN}mpi_host_table.tex", f"{MAIN}~Distributed read on this host")),
+    Rule(
+        "7",
+        numpy_type7(MPI_DRIVER),
+        MPI_DRIVER,
+        "numpy percentile method linear, Hyndman-Fan type 7",
+        (f"{GEN}mpi_host_table.tex", f"{MAIN}~Distributed read on this host"),
+    ),
     Rule(
         "7",
         grep(READER_EXCHANGE, r"^numpy_percentile method=linear type=(\d+)$"),
         READER_EXCHANGE,
         "quantile type of the host timing record",
-        (f"{GEN}host_table.tex", f"{MAIN}~The bar is the type 7 median\\.$", f"{SUPP}~type 7 interquartile range next to"),
+        (
+            f"{GEN}host_table.tex",
+            f"{MAIN}~The bar is the type 7 median\\.$",
+            f"{SUPP}~type 7 interquartile range next to",
+        ),
     ),
     Rule(
         "7",
         grep(DLPACK_DRIVER, r'"""Type (\d+): linear between the order statistics'),
         DLPACK_DRIVER,
         "quantile type of the DLPack macros",
-        lines(r"type 7 interquartile ranges are \\dlpack|whisker is the type 7 interquartile range\.\}$", (MAIN,)),
+        lines(
+            r"type 7 interquartile ranges are \\dlpack|whisker is the type 7 interquartile range\.\}$",
+            (MAIN,),
+        ),
     ),
     Rule(
         "8",
@@ -271,18 +312,33 @@ RULES = [
         lines(r"machine with 8 cores", (MAIN,)),
     ),
     *(
-        Rule(str(r), str(r), MPI_LOG, "rank count of a launch in the MPI record",
-             lines(r"at 1, 2, 4 and 8 ranks", (MAIN,)))
+        Rule(
+            str(r),
+            str(r),
+            MPI_LOG,
+            "rank count of a launch in the MPI record",
+            lines(r"at 1, 2, 4 and 8 ranks", (MAIN,)),
+        )
         for r in mpi_ranks
     ),
     *(
-        Rule(i, i, HCN, "identifier of the frame-2 readcon-core row of hcn_v31.con",
-             (f"{GEN}hcn_table.tex~stores ids",))
+        Rule(
+            i,
+            i,
+            HCN,
+            "identifier of the frame-2 readcon-core row of hcn_v31.con",
+            (f"{GEN}hcn_table.tex~stores ids",),
+        )
         for i in dict.fromkeys(hcn)
     ),
     *(
-        Rule(str(i), str(i), SURVEY, "identifier of the survey frame",
-             lines(r"The identifiers are 17, 3", (SUPP,)))
+        Rule(
+            str(i),
+            str(i),
+            SURVEY,
+            "identifier of the survey frame",
+            lines(r"The identifiers are 17, 3", (SUPP,)),
+        )
         for i in survey_ids
         if i < 10
     ),
@@ -312,19 +368,29 @@ RULES = [
         stage_mib(),
         PYTHON_RS,
         "STAGE_VALUES doubles of 8 bytes, in MiB",
-        lines(r"staging runs of about \\\(4\\\) MiB", (MAIN,)),
+        lines(r"copying them in runs of about \\\(4\\\) MiB", (MAIN,)),
     ),
     *(
-        Rule(f, f, HCN, "frame of hcn_v31.con in the HCN record",
-             lines(r"Frames 0 and 1 of one file|Frame 2 is a constructed probe", (SUPP,)))
-        for f in dict.fromkeys(r["frame"] for r in rows(HCN) if r["file"] == "hcn_v31.con")
+        Rule(
+            f,
+            f,
+            HCN,
+            "frame of hcn_v31.con in the HCN record",
+            lines(
+                r"Frames 0 and 1 of one file|Frame 2 is a constructed probe", (SUPP,)
+            ),
+        )
+        for f in dict.fromkeys(
+            r["frame"] for r in rows(HCN) if r["file"] == "hcn_v31.con"
+        )
     ),
     Rule(
         "3",
         slab_side(),
         RESTART,
         "side of the Pt(100) slab of the restart record",
-        lines(r"slab of \\\(3\\times3\\times3\\\)", (SUPP,)) + lines(r"three layers of \\\(3\\times3\\\)", (MAIN,)),
+        lines(r"slab of \\\(3\\times3\\times3\\\)", (SUPP,))
+        + lines(r"three layers of \\\(3\\times3\\\)", (MAIN,)),
     ),
     Rule(
         "1",

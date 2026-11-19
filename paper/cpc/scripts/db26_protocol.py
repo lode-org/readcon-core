@@ -49,7 +49,9 @@ def method(text: str) -> tuple[int, int, int]:
     return int(found.group(1)), int(found.group(2)), int(quantile.group(1))
 
 
-def logged_order(text: str, n: int) -> tuple[list[tuple[str, ...]], dict[int, list[tuple[str, float]]]]:
+def logged_order(
+    text: str, n: int
+) -> tuple[list[tuple[str, ...]], dict[int, list[tuple[str, float]]]]:
     rows = [line.split() for line in text.splitlines() if line.startswith(LOGGED + " ")]
     pairs: dict[int, list[tuple[str, float]]] = {}
     for row in rows:
@@ -70,20 +72,28 @@ def build() -> dict:
     order, pairs = logged_order((ROOT / LOG).read_text(), n)
     expected = [ARMS if i % 2 == 0 else ARMS[::-1] for i in range(n)]
     if order != expected:
-        raise SystemExit(f"{LOG}: the arm order is not tip first on even indexes and aedcbda4 first on odd ones")
+        raise SystemExit(
+            f"{LOG}: the arm order is not tip first on even indexes and aedcbda4 first on odd ones"
+        )
     for i in range(n):
         for arm, seconds in pairs[i]:
             saved = entry[arm]["samples_s"][i]
             if abs(seconds - saved) > 5e-7 * saved:
-                raise SystemExit(f"{LOG}: pair {i} {arm} {seconds} is not the saved sample {saved}")
+                raise SystemExit(
+                    f"{LOG}: pair {i} {arm} {seconds} is not the saved sample {saved}"
+                )
     if quantile != 7:
-        raise SystemExit(f"{RESULTS}: the median is type-{quantile}, not the linear type-7 numpy computes")
+        raise SystemExit(
+            f"{RESULTS}: the median is type-{quantile}, not the linear type-7 numpy computes"
+        )
     ratios = np.asarray(paired["ratios"], dtype=float)
     rng = np.random.default_rng(seed)
     medians = np.median(ratios[rng.integers(0, n, size=(draws, n))], axis=1)
     ci = [float(x) for x in np.percentile(medians, [2.5, 97.5], method="linear")]
     if ci != paired["ci95"]:
-        raise SystemExit(f"{RESULTS}: the stated method gives {ci}, not the saved interval {paired['ci95']}")
+        raise SystemExit(
+            f"{RESULTS}: the stated method gives {ci}, not the saved interval {paired['ci95']}"
+        )
     return {
         "record": AB,
         "from": [RESULTS, LOG],
@@ -106,7 +116,11 @@ def build() -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="fail unless the record is what a run writes")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="fail unless the record is what a run writes",
+    )
     args = parser.parse_args()
     text = json.dumps(build(), indent=2) + "\n"
     out = ROOT / DIR / "paired_protocol.json"

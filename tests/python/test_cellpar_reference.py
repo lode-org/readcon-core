@@ -13,6 +13,7 @@ import random
 import sys
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -115,3 +116,29 @@ def test_the_run_says_which_cell_check_ran(monkeypatch: pytest.MonkeyPatch) -> N
     assert "numpy construction of ase.geometry.cellpar_to_cell" in check, check
     assert "ASE is not installed" in check, check
     assert check.endswith("on 200 random cells"), check
+
+
+def test_spec_macros_accept_the_matching_unreleased_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load()
+    current = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    record = tmp_path / "measurement.json"
+    record.write_text(
+        '{"tags": [], "tree": {"release": '
+        f'"{current}", "tagged": false, "spec_blob": "current-blob"}}}}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(module, "SPEC", tmp_path / "spec.org")
+    monkeypatch.setattr(module, "VERSIONS", record)
+    monkeypatch.setattr(module, "package_version", lambda: current)
+    monkeypatch.setattr(
+        module, "git", lambda *args, **kwargs: SimpleNamespace(stdout="current-blob\n")
+    )
+    rendered = module.spec_macros("- CON-test.1 :: MUST :: test\n")
+    assert rf"\newcommand{{\specTextRelease}}{{{current}}}" in rendered
+
+    monkeypatch.setattr(module, "package_version", lambda: "9.9.9")
+    with pytest.raises(SystemExit, match="no release tag"):
+        module.spec_macros("- CON-test.1 :: MUST :: test\n")

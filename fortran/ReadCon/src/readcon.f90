@@ -651,7 +651,7 @@ module readcon
     end function
     function c_rkr_frame_builder_build(b) bind(C, name="rkr_frame_builder_build")
       import :: c_ptr
-      type(c_ptr), value :: b
+      type(c_ptr), intent(inout) :: b
       type(c_ptr) :: c_rkr_frame_builder_build
     end function
     subroutine c_free_rkr_frame_builder(b) bind(C, name="free_rkr_frame_builder")
@@ -1584,7 +1584,6 @@ contains
     fr%cview = c_null_ptr
     if (.not. c_associated(self%b)) return
     fr%handle = c_rkr_frame_builder_build(self%b)
-    self%b = c_null_ptr  ! consumed
   end function
 
   function open_writer(path) result(w)
