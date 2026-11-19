@@ -57,6 +57,7 @@ holding '="', which org itself closes at that "=".
 
 import argparse
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -621,11 +622,25 @@ def release_rows(org: str) -> list[dict]:
             None,
         )
         if first is None:
-            raise SystemExit(
-                f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
-                f"of {row['date']}"
+            tree = record["tree"]
+            listed = any(
+                (entry["version"], entry["date"])
+                == (row["version"], row["date"])
+                for entry in record.get("unreleased_history", [])
             )
-        row["release"] = f"readcon-core {first[1:]}"
+            if (
+                not listed
+                or tree["tagged"]
+                or tree["release"] != package_version()
+            ):
+                raise SystemExit(
+                    f"no tag or superseding tree record of "
+                    f"{VERSIONS.relative_to(ROOT)} lists version "
+                    f"{row['version']} of {row['date']}"
+                )
+            row["release"] = f"readcon-core {tree['release']} (untagged)"
+        else:
+            row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
         re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M)
     )
@@ -648,9 +663,13 @@ def release_rows(org: str) -> list[dict]:
                     f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
                     "does not hold"
                 )
-            at = max(
+            matching = [
                 i for i, row in enumerate(rows) if row["version"] == newest(tag)[0]
-            )
+            ]
+            if not matching:
+                previous = tag
+                continue
+            at = max(matching)
             # The mark goes under the date, so the date column keeps the width of a bare date.
             rows.insert(
                 at + 1,

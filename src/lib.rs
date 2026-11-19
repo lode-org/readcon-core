@@ -27,6 +27,10 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
     not(feature = "static_system_alloc")
 ))]
 mod allocator_link_tests {
+    #[cfg(all(
+        not(any(asan_run, tsan_run, miri)),
+        not(feature = "static_system_alloc")
+    ))]
     unsafe extern "C" {
         fn mi_usable_size(ptr: *const std::ffi::c_void) -> usize;
     }

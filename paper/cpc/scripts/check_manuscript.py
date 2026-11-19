@@ -160,6 +160,13 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def live_clause_coverage() -> dict:
+    """Regenerate clause coverage from this checkout without reading a record."""
+    import clause_coverage
+
+    return clause_coverage.build()
+
+
 def macros() -> dict[str, str]:
     """``\\newcommand`` values of commit.tex, release.tex and every generated macro file."""
     values: dict[str, str] = {}

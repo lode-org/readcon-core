@@ -387,7 +387,12 @@ def main() -> int:
     mode.add_argument(
         "--macros",
         action="store_true",
-        help="write only the TeX, from the record at --out; the record and the library are not read again",
+        help="write only the TeX from the live tree (the default; retained for callers)",
+    )
+    mode.add_argument(
+        "--record",
+        action="store_true",
+        help="write the final record as well as the live TeX",
     )
     args = parser.parse_args()
     chain = recounts()
@@ -407,6 +412,9 @@ def main() -> int:
         f"independent reader, {t['uncovered']} by nothing: {', '.join(record['uncovered'])}"
     )
     if args.check:
+        expected = [(MACROS, macros(record))]
+        if args.out is not None or out.is_file():
+            expected.append((out, text(record)))
         stale = [
             path.name
             for path, want in (
