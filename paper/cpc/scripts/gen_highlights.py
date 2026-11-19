@@ -38,12 +38,17 @@ def render() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="fail when highlights.txt differs")
+    parser.add_argument(
+        "--check", action="store_true", help="fail when highlights.txt differs"
+    )
     args = parser.parse_args()
     text = render()
     if args.check:
         if OUT.read_text() != text:
-            print(f"{OUT.name} differs from the highlights of {MAIN.name}; run gen_highlights.py", file=sys.stderr)
+            print(
+                f"{OUT.name} differs from the highlights of {MAIN.name}; run gen_highlights.py",
+                file=sys.stderr,
+            )
             return 1
         print(f"{OUT.name} matches the highlights of {MAIN.name}")
         return 0

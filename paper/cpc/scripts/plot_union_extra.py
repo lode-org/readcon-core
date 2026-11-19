@@ -398,7 +398,6 @@ def structures() -> None:
 
     import cairosvg
     import xyzrender as xr
-    from ase.io import write
 
     work = OUT / "work"
     work.mkdir(parents=True, exist_ok=True)
@@ -408,9 +407,7 @@ def structures() -> None:
         ("NEB band", REPO / "resources" / "examples" / "neb_band.con"),
     ]
 
-    def con_atoms(src: Path):
-        from ase import Atoms
-
+    def con_atoms(src: Path) -> tuple[list[str], list[list[float]], list[float]]:
         lines = src.read_text(encoding="utf-8").splitlines()
         cell = [float(x) for x in lines[2].split()[:3]]
         symbols: list[str] = []
@@ -443,12 +440,22 @@ def structures() -> None:
                 in_coord = False
                 continue
             symbols.append(element)
-        return Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
+        return symbols, positions, cell
 
     def one(src: Path, dest: Path) -> None:
-        atoms = con_atoms(src)
+        symbols, positions, cell = con_atoms(src)
         xyz = work / (dest.stem + ".xyz")
-        write(str(xyz), atoms)
+        lattice = f"{cell[0]} 0 0 0 {cell[1]} 0 0 0 {cell[2]}"
+        atoms = "\n".join(
+            f"{symbol} {x:.17g} {y:.17g} {z:.17g}"
+            for symbol, (x, y, z) in zip(symbols, positions, strict=True)
+        )
+        xyz.write_text(
+            f'{len(symbols)}\nLattice="{lattice}" '
+            'Properties=species:S:1:pos:R:3 pbc="T T T"\n'
+            f"{atoms}\n",
+            encoding="utf-8",
+        )
         molecule = xr.load(str(xyz))
         cfg = xr.build_config("default")
         cfg.canvas_size = 480

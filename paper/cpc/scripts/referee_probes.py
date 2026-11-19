@@ -913,7 +913,7 @@ def clib():
                 ],
                 status,
             ),
-            ("rkr_frame_builder_build", [vp], vp),
+            ("rkr_frame_builder_build", [ctypes.POINTER(vp)], vp),
             ("free_rkr_frame_builder", [vp], None),
             ("create_writer_from_path_c", [cp], vp),
             ("create_writer_gzip_c", [cp], vp),
@@ -984,7 +984,8 @@ def c_frame(id_a: int, id_b: int):
         ):
             lib.free_rkr_frame_builder(builder)
             raise RuntimeError("rkr_frame_add_atom failed")
-    return lib.rkr_frame_builder_build(builder)
+    builder_handle = ctypes.c_void_p(builder)
+    return lib.rkr_frame_builder_build(ctypes.byref(builder_handle))
 
 
 # --- paths ---------------------------------------------------------------------------------------

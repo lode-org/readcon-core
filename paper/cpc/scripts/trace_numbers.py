@@ -80,7 +80,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 LEDGER = ROOT / "data" / "trace" / "numbers.csv"
 DOCUMENTS = ("rg_main.tex", "rg_supp.tex")
-RULE_MODULES = ("front", "case", "supp", "spec", "headline", "versions", "readcon_db", "identifiers")
+RULE_MODULES = (
+    "front",
+    "case",
+    "supp",
+    "spec",
+    "headline",
+    "versions",
+    "readcon_db",
+    "identifiers",
+)
 # Format steps that write PDFs, which no number is traced from.
 _FORMAT_SKIP = frozenset({"scripts/gen_figures.py"})
 # Not copied into the tree the generators write into; build and target hold the scratch and the compiled library.
@@ -427,6 +436,16 @@ def _step_env(python: str, env: dict[str, str]) -> dict[str, str]:
     )
 
 
+def _can_import(python: str, module: str, env: dict[str, str]) -> bool:
+    done = subprocess.run(
+        [python, "-c", f"import {module}"],
+        env=_step_env(python, env),
+        check=False,
+        capture_output=True,
+    )
+    return done.returncode == 0
+
+
 def _attempt(
     script: Path,
     args: list[str],
@@ -543,7 +562,15 @@ def ensure_generated(validate: bool = True) -> list[str]:
         text=True,
     )
     made: dict[Path, Path | None] = {}
-    ledger_paths = [path for path in wanted_paths if path in ledgered]
+    # The complete version-map regeneration includes the figure plotters.
+    # Validate it when their ASE dependency is present; the paper CI also runs
+    # cpc-regen followed by git diff, so an ASE-less trace check still cannot
+    # admit a stale committed map.
+    ledger_paths = (
+        [path for path in wanted_paths if path in ledgered]
+        if _can_import(sys.executable, "ase", env)
+        else []
+    )
     with regen_paper.bench_scratch("scratch") as scratch:
 
         def copy(name: str) -> tuple[Path, dict[str, str], Path]:

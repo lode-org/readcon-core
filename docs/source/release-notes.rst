@@ -151,7 +151,7 @@ reads back as the same binary64 value.
             RKR_STATUS_SUCCESS) {
             die("add atom");
         }
-        struct RKRConFrame *frame = rkr_frame_builder_build(builder);
+        struct RKRConFrame *frame = rkr_frame_builder_build(&builder);
         free_rkr_frame_builder(builder);
         if (frame == NULL) {
             die("build");
@@ -276,7 +276,7 @@ previous complete file, or as the finished new one once the rename has run.
             RKR_STATUS_SUCCESS) {
             die("add atom");
         }
-        struct RKRConFrame *frame = rkr_frame_builder_build(builder);
+        struct RKRConFrame *frame = rkr_frame_builder_build(&builder);
         free_rkr_frame_builder(builder);
         if (frame == NULL) {
             die("build");
@@ -431,7 +431,7 @@ is the finished new one.
                                                false, 7, 63.546) != RKR_STATUS_SUCCESS) {
             die("add atom");
         }
-        struct RKRConFrame *frame = rkr_frame_builder_build(builder);
+        struct RKRConFrame *frame = rkr_frame_builder_build(&builder);
         free_rkr_frame_builder(builder);
         if (frame == NULL) {
             die("build");

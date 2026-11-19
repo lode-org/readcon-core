@@ -26,7 +26,7 @@ fn builder() -> *mut RKRConFrameBuilder {
 
 #[test]
 fn builder_bulk_setters_getters_and_metrics() {
-    let b = builder();
+    let mut b = builder();
     assert!(!b.is_null());
     let cu = CString::new("Cu").unwrap();
     let h = CString::new("H").unwrap();
@@ -188,7 +188,9 @@ fn builder_bulk_setters_getters_and_metrics() {
         let _ = rkr_frame_builder_clear_atom_energy(b, 0);
 
         // build consumes the builder
-        let frame = rkr_frame_builder_build(b);
+        let frame = rkr_frame_builder_build(&mut b);
+        assert!(b.is_null());
+        free_rkr_frame_builder(b);
         assert!(!frame.is_null());
 
         assert!(rkr_frame_atom_count(frame) >= 1);
@@ -581,7 +583,7 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
         // add_atom_full + convenience variants
         let cell = [10.0_f64, 10.0, 10.0];
         let ang = [90.0_f64, 90.0, 90.0];
-        let b = rkr_frame_new(
+        let mut b = rkr_frame_new(
             cell.as_ptr(),
             ang.as_ptr(),
             ptr::null(),
@@ -734,7 +736,7 @@ fn frame_copy_dlpack_metatensor_and_add_variants() {
             ),
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        let frame2 = rkr_frame_builder_build(b);
+        let frame2 = rkr_frame_builder_build(&mut b);
         assert!(!frame2.is_null());
         free_rkr_frame(frame2);
     }
@@ -777,7 +779,7 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
         // builder data ptrs for masses/ids
         let cell = [10.0_f64; 3];
         let ang = [90.0_f64; 3];
-        let b = rkr_frame_new(
+        let mut b = rkr_frame_new(
             cell.as_ptr(),
             ang.as_ptr(),
             ptr::null(),
@@ -793,7 +795,7 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
         // force velocities buffer-too-small after adding velocity section
         let v = [0.1_f64, 0., 0.];
         rkr_frame_builder_set_atom_velocity(b, 0, v.as_ptr());
-        let frame = rkr_frame_builder_build(b);
+        let frame = rkr_frame_builder_build(&mut b);
         let mut tiny = [0.0f64; 1];
         assert_eq!(
             rkr_frame_copy_velocities(frame, tiny.as_mut_ptr(), 1),
@@ -833,7 +835,7 @@ fn ffi_read_first_chemfiles_and_data_ptrs() {
 
 #[test]
 fn builder_build_returns_null_on_same_symbol_mass_mismatch() {
-    let b = builder();
+    let mut b = builder();
     assert!(!b.is_null());
     let h = CString::new("H").unwrap();
     unsafe {
@@ -845,7 +847,7 @@ fn builder_build_returns_null_on_same_symbol_mass_mismatch() {
             rkr_frame_add_atom(b, h.as_ptr(), 1.0, 0.0, 0.0, false, 1, 2.014),
             RKRStatus::RKR_STATUS_SUCCESS
         );
-        let frame = rkr_frame_builder_build(b);
+        let frame = rkr_frame_builder_build(&mut b);
         assert!(frame.is_null());
     }
 }

@@ -802,7 +802,9 @@ def check_version_map() -> str:
         problems.append(
             "version_map.tex differs from the records; run scripts/gen_version_map.py"
         )
-    if (GENERATED / "library_macros.tex").read_text() != gen_version_map.library_macros():
+    if (
+        GENERATED / "library_macros.tex"
+    ).read_text() != gen_version_map.library_macros():
         problems.append(
             "library_macros.tex differs from the records; run scripts/gen_version_map.py"
         )
@@ -811,7 +813,9 @@ def check_version_map() -> str:
     rows = sum(
         1
         for line in text.splitlines()
-        if line.endswith(r" \\") and " & " in line and not line.startswith(("\\", "Record & "))
+        if line.endswith(r" \\")
+        and " & " in line
+        and not line.startswith(("\\", "Record & "))
     )
     return f"version map current, {rows} rows, each naming its build"
 
@@ -1013,7 +1017,9 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    clauses = json.loads((ROOT / "data" / "spec" / "clause_coverage.json").read_text())[
+    version = (ROOT.parents[1] / "VERSION").read_text().strip()
+    coverage_record = f"clause_coverage-{version}.json"
+    clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
         "totals"
     ]
     mutants = json.loads(
@@ -1031,8 +1037,8 @@ def check_conformance() -> str:
         ("cpathsReads", f"{paths['reads']:,}", "corpus_paths.json"),
         ("cpathsMatch", f"{paths['match']:,}", "corpus_paths.json"),
         ("everyPathInputs", f"{every['inputs']:,}", "every_path.json"),
-        ("clauseTotal", clauses["clauses"], "clause_coverage.json"),
-        ("clauseCovered", clauses["covered"], "clause_coverage.json"),
+        ("clauseTotal", clauses["clauses"], coverage_record),
+        ("clauseCovered", clauses["covered"], coverage_record),
         ("mutantCases", f"{mutants['cases']:,}", "mutant_differential.json"),
         ("mutantSame", f"{mutants['same']:,}", "mutant_differential.json"),
     ):
@@ -1251,7 +1257,9 @@ def main() -> int:
         ),
         (
             "manuscript rule",
-            lambda: script_check("manuscript_inputs.py", "TeX inputs of the manuscript rule"),
+            lambda: script_check(
+                "manuscript_inputs.py", "TeX inputs of the manuscript rule"
+            ),
         ),
         ("programs", check_steps),
         ("pixi tasks", check_tasks),

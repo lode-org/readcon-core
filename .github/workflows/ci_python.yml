@@ -105,6 +105,9 @@ jobs:
             name: chemfiles
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -150,7 +153,9 @@ jobs:
           # A missing reader fails these runs instead of leaving its test empty.
           READCON_REQUIRE_ARMS: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md,mda-mmcif,extxyz-ng
         run: |
-          python -m pytest tests/python/ -q --tb=short
+          # The clean-clone trace tests use the locked paper toolchain in ci_paper.yml.
+          python -m pytest tests/python/ -q --tb=short \
+            --ignore=tests/python/test_trace_check_clean_clone.py
 
   pytest-free-threaded:
     name: pytest free-threaded (${{ matrix.python-version }})
@@ -161,9 +166,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13t", "3.14t"]
+        include:
+          - python-version: "3.13t"
+            required-arms: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md
+          - python-version: "3.14t"
+            required-arms: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md,mda-mmcif
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -179,7 +191,7 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install -U pip
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends emacs-nox zlib1g-dev libjpeg-dev libhdf5-dev pkg-config
+          sudo apt-get install -y --no-install-recommends emacs-nox zlib1g-dev libjpeg-dev libhdf5-dev libopenblas-dev pkg-config
           .venv/bin/python -m pip install maturin pytest numpy ase chemfiles 'MDAnalysis==2.11.0' 'h5py==3.16.0'
           .venv/bin/python -m pip install -e ase-readcon
           # A current rpds-py wheel installs on 3.13t. The version pip would
@@ -188,8 +200,8 @@ jobs:
           .venv/bin/python -m pip install --only-binary=:all: rpds-py
           .venv/bin/python -m pip install 'snakemake==8.30.0'
           # gemmi 0.7.5 publishes a 3.14t wheel and no 3.13t wheel, and the
-          # source build rejects the nanobind it is given. The suite still
-          # runs; mda-mmcif is then absent and test_required_arms_are_offered fails.
+          # source build rejects the nanobind it is given. The 3.13t matrix
+          # therefore omits mda-mmcif from its required reader arms.
           .venv/bin/python -m pip install 'gemmi==0.7.5' || echo "gemmi==0.7.5 did not install on this interpreter"
 
       - name: maturin develop
@@ -202,8 +214,9 @@ jobs:
         env:
           # extxyz-ng 0.0.2 publishes only a cp310-abi3 wheel. Pip on a
           # free-threaded interpreter rejects it, and loading that extension
-          # aborts the process. The other arms are the same set as the 3.12 job.
-          READCON_REQUIRE_ARMS: mda-pdb,mda-xyz,mda-dcd,mda-xtc,mda-ncdf,mda-trr,mda-h5md,mda-mmcif
+          # aborts the process. The matrix requires mmCIF only where gemmi
+          # publishes a compatible wheel.
+          READCON_REQUIRE_ARMS: ${{ matrix.required-arms }}
         run: |
           test "$PYTHON_GIL" = 0
           python - <<'PY'
@@ -212,7 +225,9 @@ jobs:
           if probe is None or probe():
               raise SystemExit(f"GIL is enabled at runtime: {probe}")
           PY
-          python -m pytest tests/python/ -q --tb=short
+          # The clean-clone trace tests use the locked paper toolchain in ci_paper.yml.
+          python -m pytest tests/python/ -q --tb=short \
+            --ignore=tests/python/test_trace_check_clean_clone.py
 
   paper-tags:
     name: paper tags

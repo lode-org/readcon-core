@@ -25,7 +25,7 @@ versions table: Version, Date, Release and Change. It ends with the
 \\bottomrule, because a rule that follows \\input inside a tabular is a
 misplaced \\noalign; the table inputs it after its \\midrule. A row of the
 spec.org version history keeps its version, date and change, and its release
-is the first tag of data/spec/versions.json whose spec.org lists the row's
+is the first tag of the selected specification measurement whose spec.org lists the row's
 version with the row's date; version 1 is the eOn text. A tag whose spec.org
 differs from that of the tag before it under the same newest version, both
 with numbered clauses, published a second text of that version. It is a row
@@ -33,11 +33,12 @@ of its own after the version's row, dated by the tag and marked "(tag)". Its
 change names each clause the tag added, dropped or reworded and, in a section
 whose clauses stay the same, quotes each sentence it added or dropped there.
 figures/generated/spec_macros.tex holds the clause count of spec.org and the
-first release whose spec.org is the same blob; a spec.org that no release tag
-ships stops the build. --measure writes data/spec/versions.json, the version
-history and clause ids of spec.org at every release tag vX.Y.Z and, for a
-second text, what it changed in each section, from the git objects of this
-repository alone.
+first release whose spec.org is the same blob. A release-preparation tree may
+name its upcoming version before the tag exists; any other spec.org that no
+release tag ships stops the build. --measure writes a versioned specification
+measurement, preserving earlier records, with the version history and clause
+ids of spec.org at every release tag vX.Y.Z and, for a second text, what it
+changed in each section, from the git objects of this repository alone.
 --check exits 1 unless the three generated files are byte for byte what
 --as-is writes from spec.org.
 
@@ -48,7 +49,7 @@ holding '="', which org itself closes at that "=".
     gen_spec_supp.py --as-is            write figures/generated/spec_normative.tex, versions_table.tex and spec_macros.tex
     gen_spec_supp.py --check            compare those three files with what --as-is writes
     gen_spec_supp.py --as-is --compile  also compile spec_normative.tex with pdflatex in a test document
-    gen_spec_supp.py --measure          write data/spec/versions.json from the release tags
+    gen_spec_supp.py --measure          write a versioned specification measurement from the release tags
 """
 
 import argparse
@@ -81,7 +82,12 @@ SUPP = PAPER_SRC / "rg_supp.tex"
 OUT = PAPER_SRC / "figures" / "generated" / "spec_normative.tex"
 VERSIONS_OUT = PAPER_SRC / "figures" / "generated" / "versions_table.tex"
 MACROS_OUT = PAPER_SRC / "figures" / "generated" / "spec_macros.tex"
-VERSIONS = ROOT / "paper" / "cpc" / "data" / "spec" / "versions.json"
+SPEC_DATA = ROOT / "paper" / "cpc" / "data" / "spec"
+LEGACY_VERSIONS = SPEC_DATA / "versions.json"
+MEASUREMENT = SPEC_DATA / (
+    f"spec-measurement-{(ROOT / 'VERSION').read_text().strip()}.json"
+)
+VERSIONS = MEASUREMENT if MEASUREMENT.is_file() else LEGACY_VERSIONS
 RELEASE = r"[0-9]+\.[0-9]+\.[0-9]+"
 CLAUSE_ID = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) ::", re.M)
 CLAUSE_LINE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+ :: .*)$")
@@ -98,7 +104,9 @@ ROUNDED = (
 # Front-matter items whose value is a file of the repository; the grammar they name is the appendix left out.
 REPOSITORY_ITEMS = ("Surface grammar", "Clause index")
 ASE_LOCATION = re.compile(r"=ase/([a-z_/]+)\.py:([0-9]+)(?:-([0-9]+))?=")
-FILE_PATH = re.compile(r"=(?:[\w.-]+/)+([\w.-]+\.[A-Za-z]+)(?::([0-9]+)(?:-([0-9]+))?)?=")
+FILE_PATH = re.compile(
+    r"=(?:[\w.-]+/)+([\w.-]+\.[A-Za-z]+)(?::([0-9]+)(?:-([0-9]+))?)?="
+)
 CELL_CLAUSE = "CON-cell.6"
 LEVELS = r"MUST NOT|SHOULD NOT|MUST|SHOULD|MAY"
 GREEK = ("alpha", "beta", "gamma")
@@ -637,13 +645,22 @@ def release_rows(org: str) -> list[dict]:
 
 
 def spec_macros(org: str) -> str:
-    """The clause count of spec.org and the first release tag whose spec.org is the same blob.
+    """The clause count and the first release that ships this specification.
 
-    A patch release ships the text of its minor unchanged, so a spec.org that no tag holds stops the build.
+    A release-preparation tree may name the upcoming release before its tag
+    exists. Any other spec.org that no release tag holds stops the build.
     """
     record = json.loads(VERSIONS.read_text())
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
+    tree = record["tree"]
+    if (
+        same is None
+        and not tree["tagged"]
+        and tree.get("spec_blob") == blob
+        and tree["release"] == package_version()
+    ):
+        same = tree["release"]
     if same is None:
         raise SystemExit(
             f"no release tag in {VERSIONS.relative_to(ROOT)} ships {SPEC.relative_to(ROOT)} "
@@ -704,6 +721,13 @@ def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     )
 
 
+def package_version() -> str:
+    found = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
+    if found is None:
+        raise SystemExit("Cargo.toml names no package version")
+    return found.group(1)
+
+
 def versions_record() -> dict:
     """The version history and clause ids of spec.org at every release tag vX.Y.Z, and what a second text changed."""
     spec = SPEC.relative_to(ROOT).as_posix()
@@ -738,15 +762,14 @@ def versions_record() -> dict:
         if entry["spec_blob"] and entry["history"]:
             previous, previous_org = entry, org
         entries.append(entry)
-    release = re.search(
-        r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M
-    )[1]
+    release = package_version()
     return {
         "spec": spec,
         "tags": entries,
         "tree": {
             "release": release,
             "tagged": f"v{release}" in {e["tag"] for e in entries},
+            "spec_blob": git("hash-object", str(SPEC)).stdout.strip(),
         },
     }
 
@@ -756,10 +779,11 @@ def measure() -> None:
         "generator": "paper/cpc/scripts/gen_spec_supp.py --measure",
         **versions_record(),
     }
-    VERSIONS.parent.mkdir(parents=True, exist_ok=True)
-    VERSIONS.write_text(json.dumps(versions, indent=2) + "\n")
+    MEASUREMENT.parent.mkdir(parents=True, exist_ok=True)
+    MEASUREMENT.write_text(json.dumps(versions, indent=2) + "\n")
     print(
-        f"wrote {VERSIONS.relative_to(ROOT)}: {len(versions['tags'])} tags, release {versions['tree']}"
+        f"wrote {MEASUREMENT.relative_to(ROOT)}: {len(versions['tags'])} tags, "
+        f"release {versions['tree']}"
     )
 
 
@@ -796,7 +820,9 @@ def org_source() -> tuple[str, list[str], str]:
     for item in REPOSITORY_ITEMS:
         line = re.compile(rf"^- {item} :: .*\n", re.M)
         if len(line.findall(org)) != 1:
-            raise SystemExit(f"{SPEC.relative_to(ROOT)} does not hold the item {item!r} once")
+            raise SystemExit(
+                f"{SPEC.relative_to(ROOT)} does not hold the item {item!r} once"
+            )
         org = line.sub("", org, count=1)
     org = ASE_LOCATION.sub(location, org)
     org = FILE_PATH.sub(file_name, org)
@@ -1078,7 +1104,9 @@ def main() -> None:
         "first tag that ships its row",
     )
     mode.add_argument(
-        "--measure", action="store_true", help="write data/spec/versions.json"
+        "--measure",
+        action="store_true",
+        help="write the versioned specification measurement",
     )
     mode.add_argument(
         "--check",

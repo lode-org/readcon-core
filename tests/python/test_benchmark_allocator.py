@@ -54,7 +54,8 @@ def _assigned_literal(path: Path, name: str):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == name for target in node.targets
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
         ):
             return ast.literal_eval(node.value)
     raise AssertionError(f"{path} does not assign {name}")
@@ -87,7 +88,9 @@ def test_every_timing_example_requires_the_benchmark_feature() -> None:
     names = {path.stem for path in examples_dir.glob("*.rs")}
     names.update(path.parent.name for path in examples_dir.glob("*/main.rs"))
     assert NON_TIMING_EXAMPLES <= names
-    assert "Instant" not in (examples_dir / "parse_probe.rs").read_text(encoding="utf-8")
+    assert "Instant" not in (examples_dir / "parse_probe.rs").read_text(
+        encoding="utf-8"
+    )
     stream = (examples_dir / "stream_triad.rs").read_text(encoding="utf-8")
     assert "Instant" in stream and "readcon_core" not in stream
     assert not _example_guard(ROOT)
@@ -114,7 +117,9 @@ def test_nested_example_mutation_fails_the_guard(tmp_path: Path) -> None:
 
 def test_non_example_timed_build_routes_select_benchmark() -> None:
     asv = json.loads((ROOT / "asv.conf.json").read_text(encoding="utf-8"))
-    asv_builds = [command for command in asv["build_command"] if "maturin build" in command]
+    asv_builds = [
+        command for command in asv["build_command"] if "maturin build" in command
+    ]
     assert asv_builds and all("benchmark" in command for command in asv_builds)
 
     pixi = tomllib.loads((ROOT / "pixi.toml").read_text(encoding="utf-8"))

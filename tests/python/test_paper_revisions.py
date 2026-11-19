@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 CPC = ROOT / "paper" / "cpc" / "src"
+CURRENT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 HEX = re.compile(r"(?<![0-9A-Za-z])[0-9a-f]{7,40}(?![0-9A-Za-z])")
 TAG = re.compile(r"\bv(\d+\.\d+\.\d+)\b")
 COMMAND = re.compile(r"\\newcommand\{\\([A-Za-z]+)\}\{([^{}]+)\}")
@@ -51,6 +52,19 @@ def _tags() -> list[str]:
     return [line.strip() for line in listed.stdout.splitlines() if line.strip()]
 
 
+def _has_measurement_record(version: str) -> bool:
+    """Return whether a benchmark record directory names this version."""
+    h2h = ROOT / "bench" / "h2h"
+    return any(
+        path.is_dir() and path.name == f"v{version}" for path in h2h.glob("*/v*")
+    )
+
+
+def test_measurement_exemption_requires_a_record_directory() -> None:
+    assert _has_measurement_record("0.23.3")
+    assert not _has_measurement_record("9.9.9")
+
+
 def test_named_commits_and_tags_exist() -> None:
     macros = _macros()
     assert macros["readconversion"] == "0.17.3"
@@ -78,7 +92,10 @@ def test_named_commits_and_tags_exist() -> None:
         (CPC / "release.tex").read_text(encoding="utf-8"),
         (CPC / "rg_main.tex").read_text(encoding="utf-8"),
     ):
-        for version in TAG.findall(text):
+        for match in TAG.finditer(text):
+            version = match.group(1)
+            if _has_measurement_record(version):
+                continue
             if (
                 _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode
                 != 0
@@ -158,7 +175,9 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/data/sizes.json",
         "paper/cpc/data/restart_walls/restart_walls.json",
         "paper/cpc/data/spec/corpus_recount.json",
+        f"paper/cpc/data/spec/clause_coverage-{CURRENT_VERSION}.json",
         "paper/cpc/data/spec/mutant_differential.json",
+        f"paper/cpc/data/spec/spec-measurement-{CURRENT_VERSION}.json",
         "paper/cpc/data/spec/versions.json",
         "paper/cpc/data/survey_frame.json",
         "paper/cpc/data/worked_example.json",
@@ -297,6 +316,8 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
                 continue
             # The results directory is named for this release. It is not a tag.
             if line.strip().startswith("VERSION ="):
+                continue
+            if _has_measurement_record(version):
                 continue
             if (
                 _git("rev-parse", "--verify", f"refs/tags/v{version}^{{}}").returncode

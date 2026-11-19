@@ -1959,19 +1959,21 @@ enum RKRStatus rkr_frame_add_atom_with_velocity_and_forces_fixed_mask(struct RKR
                                                                       double fz);
 
 /**
- * Consumes the builder and returns a finalized RKRConFrame handle.
- * The builder handle is invalidated after this call.
+ * Consumes the builder, sets its handle to NULL, and returns a finalized
+ * RKRConFrame handle.
  * The caller OWNS the returned frame and MUST call `free_rkr_frame`.
  * Returns NULL on error, including
  * [`crate::error::ParseError::MassMismatch`].
  *
  * # Safety
- * builder_handle must be valid. The caller takes ownership of the returned frame.
+ * builder_handle must be a valid pointer to a builder handle or to NULL. The
+ * caller takes ownership of the returned frame.
  */
-struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder *builder_handle);
+struct RKRConFrame *rkr_frame_builder_build(struct RKRConFrameBuilder **builder_handle);
 
 /**
- * Frees a frame builder without building.
+ * Frees a frame builder without building. Passing the NULL handle left by
+ * `rkr_frame_builder_build` is a no-op.
  *
  * # Safety
  * builder_handle must be valid or null.

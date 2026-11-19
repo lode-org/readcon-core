@@ -67,13 +67,19 @@ def db26() -> list[tuple[str, str]]:
     try:
         jget(DB26, DB26_RAW.rsplit(".", 1)[0] + ".ratio_tip_over_aedcbda4")
     except KeyError:
-        raise SystemExit(f"{DB26}: the raw comparison is not the tip over aedcbda4") from None
+        raise SystemExit(
+            f"{DB26}: the raw comparison is not the tip over aedcbda4"
+        ) from None
     low, high = jget(DB26, DB26_RAW + ".ci95")
     if not low <= 1 <= high:
-        raise SystemExit(f"{DB26}: the paired interval {low}..{high} excludes 1; the subsection says it includes 1")
+        raise SystemExit(
+            f"{DB26}: the paired interval {low}..{high} excludes 1; the subsection says it includes 1"
+        )
     protocol = jget(DB26_PROTOCOL, DB26_RAW)
     if protocol["ci95"] != [low, high] or protocol["n"] != jget(DB26, DB26_RAW + ".n"):
-        raise SystemExit(f"{DB26_PROTOCOL}: not the protocol of the saved db26 interval; run db26_protocol.py")
+        raise SystemExit(
+            f"{DB26_PROTOCOL}: not the protocol of the saved db26 interval; run db26_protocol.py"
+        )
     lo, hi = interval(DB26, DB26_RAW, 4)
     return [
         ("rdbRawPairs", str(protocol["n"])),
@@ -87,13 +93,22 @@ def db26() -> list[tuple[str, str]]:
 
 def db28() -> list[tuple[str, str]]:
     codecs = jget(DB28, "codecs.md")
-    if (codecs["raw"]["codec_requested"], codecs["shuffle"]["codec_requested"]) != ("raw", "shuffle-zstd"):
-        raise SystemExit(f"{DB28}: the membrane arms do not request raw and shuffle-zstd")
-    cold, warm = (jget(DB28, f"{DB28_MD}.full_read:{cache}.paired") for cache in ("cold", "warm"))
+    if (codecs["raw"]["codec_requested"], codecs["shuffle"]["codec_requested"]) != (
+        "raw",
+        "shuffle-zstd",
+    ):
+        raise SystemExit(
+            f"{DB28}: the membrane arms do not request raw and shuffle-zstd"
+        )
+    cold, warm = (
+        jget(DB28, f"{DB28_MD}.full_read:{cache}.paired") for cache in ("cold", "warm")
+    )
     if cold["ci_method"] != warm["ci_method"] or cold["n"] != warm["n"]:
         raise SystemExit(f"{DB28}: the cold and warm membrane reads differ in protocol")
     if not (cold["ci95"][1] < 1 < warm["ci95"][0]):
-        raise SystemExit(f"{DB28}: the membrane intervals do not show a faster cold and a slower warm shuffled read")
+        raise SystemExit(
+            f"{DB28}: the membrane intervals do not show a faster cold and a slower warm shuffled read"
+        )
     cold_lo, cold_hi = interval(DB28, f"{DB28_MD}.full_read:cold.paired", 4)
     warm_lo, warm_hi = interval(DB28, f"{DB28_MD}.full_read:warm.paired", 4)
     share = {
@@ -101,7 +116,10 @@ def db28() -> list[tuple[str, str]]:
         for key in ("frames_soa_value_bytes", "corpus_bytes")
     }
     return [
-        ("rdbMembraneRatio", fixed(jget(DB28, f"{DB28_MD}.full_read:warm.ratio_shuffle_over_raw"), 3)),
+        (
+            "rdbMembraneRatio",
+            fixed(jget(DB28, f"{DB28_MD}.full_read:warm.ratio_shuffle_over_raw"), 3),
+        ),
         ("rdbMembraneFrameShare", fixed(share["frames_soa_value_bytes"], 3)),
         ("rdbMembraneCorpusShare", fixed(share["corpus_bytes"], 3)),
         ("rdbMembranePairs", str(cold["n"])),
@@ -148,14 +166,28 @@ GROUPS = [
         [
             (
                 "rdbLatticeBest",
-                fixed(jget(DB28, "reads.lattice.threads_1.full_read:warm.ratio_shuffle_over_raw"), 3),
+                fixed(
+                    jget(
+                        DB28,
+                        "reads.lattice.threads_1.full_read:warm.ratio_shuffle_over_raw",
+                    ),
+                    3,
+                ),
             ),
             *db28(),
         ],
     ),
     (
         [DB29],
-        [("rdbLatticePaired", fixed(jget(DB29, "reads.lattice.threads_1.full_read:warm.paired.median"), 4))],
+        [
+            (
+                "rdbLatticePaired",
+                fixed(
+                    jget(DB29, "reads.lattice.threads_1.full_read:warm.paired.median"),
+                    4,
+                ),
+            )
+        ],
     ),
     (
         [FAIRDB32, FAIR, DB8, FAIRDB30],
@@ -170,7 +202,9 @@ GROUPS = [
 def render() -> str:
     lines = [
         "% Written by paper/cpc/scripts/readcon_db_macros.py from "
-        + ", ".join(sorted({f"paper/cpc/{r}" for records, _ in GROUPS for r in records}))
+        + ", ".join(
+            sorted({f"paper/cpc/{r}" for records, _ in GROUPS for r in records})
+        )
         + "."
     ]
     for records, macros in GROUPS:

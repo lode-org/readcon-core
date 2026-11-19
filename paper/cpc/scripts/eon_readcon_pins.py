@@ -58,7 +58,11 @@ def revision(wrap: str) -> str:
 def build() -> dict:
     tag = f"v{RELEASE}"
     ref = api(f"git/ref/tags/{tag}")["object"]
-    commit = api(f"git/tags/{ref['sha']}")["object"]["sha"] if ref["type"] == "tag" else ref["sha"]
+    commit = (
+        api(f"git/tags/{ref['sha']}")["object"]["sha"]
+        if ref["type"] == "tag"
+        else ref["sha"]
+    )
     compare = api(f"compare/{tag}...{EON_COMMIT}")
     tag_wrap, dev_wrap = raw(tag, WRAP), raw(EON_COMMIT, WRAP)
     return {
@@ -82,7 +86,9 @@ def build() -> dict:
 
 def tag_commit(tag: str) -> str:
     found = subprocess.run(
-        ["git", "-C", str(REPO), "rev-parse", f"{tag}^{{commit}}"], capture_output=True, text=True
+        ["git", "-C", str(REPO), "rev-parse", f"{tag}^{{commit}}"],
+        capture_output=True,
+        text=True,
     )
     if found.returncode != 0:
         raise SystemExit(f"readcon-core has no tag {tag}")
@@ -97,19 +103,29 @@ def check(record: dict) -> list[str]:
             bad.append(f"{part}: readcon_revision is not the revision of its wrap")
         tag_commit(pinned)
     dev = record["development"]
-    notes = dict(line.split(" ", 1) for line in dev["notes"]["text"].splitlines() if " " in line)
+    notes = dict(
+        line.split(" ", 1) for line in dev["notes"]["text"].splitlines() if " " in line
+    )
     if notes.get("readcon_pin") != dev["readcon_revision"]:
-        bad.append(f"{NOTES}: readcon_pin is not the wrap revision {dev['readcon_revision']}")
+        bad.append(
+            f"{NOTES}: readcon_pin is not the wrap revision {dev['readcon_revision']}"
+        )
     if notes.get("readcon_commit") != tag_commit(dev["readcon_revision"]):
-        bad.append(f"{NOTES}: readcon_commit is not the commit of readcon-core {dev['readcon_revision']}")
+        bad.append(
+            f"{NOTES}: readcon_commit is not the commit of readcon-core {dev['readcon_revision']}"
+        )
     if dev["in_release"]:
-        bad.append(f"the development commit is in eOn {record['release']['eon_release']}")
+        bad.append(
+            f"the development commit is in eOn {record['release']['eon_release']}"
+        )
     return bad
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check", action="store_true", help="check the stored record offline")
+    parser.add_argument(
+        "--check", action="store_true", help="check the stored record offline"
+    )
     args = parser.parse_args()
     if args.check:
         bad = check(json.loads(OUT.read_text()))

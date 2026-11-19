@@ -2,6 +2,7 @@
 
 examples_array = [  #
     ['c_api_sample', 'c_api_sample.c', f'@_msproot@/resources/test/tiny_multi_cuh2.con'],
+    ['frame_builder_consume', 'frame_builder_consume.c', ''],
 ]
 
 if get_option('with_cpp')

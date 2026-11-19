@@ -622,8 +622,14 @@ function _build_frame_handle(frame::ConFrame)
             _add_atom(builder, atom)
         end
 
-        handle = ccall(_lib_symbol(:rkr_frame_builder_build), Ptr{Cvoid}, (Ptr{Cvoid},), builder)
-        builder = C_NULL
+        builder_ref = Ref(builder)
+        handle = ccall(
+            _lib_symbol(:rkr_frame_builder_build),
+            Ptr{Cvoid},
+            (Ref{Ptr{Cvoid}},),
+            builder_ref,
+        )
+        builder = builder_ref[]
         handle == C_NULL && _throw_last("failed to build frame")
         return handle
     finally

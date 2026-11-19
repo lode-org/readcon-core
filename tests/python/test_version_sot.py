@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -95,3 +96,28 @@ def test_lockstep_gate_catches_a_mismatched_real_manifest():
         cargo.write_text(original, encoding="utf-8")
     assert result.returncode != 0, "gate passed a mismatched Cargo.toml version"
     assert "Cargo.toml" in result.stdout + result.stderr
+
+
+def test_recorded_result_version_must_match_its_source_commit():
+    gate = ROOT / "scripts" / "check_version_sot.sh"
+    record = ROOT / "bench" / "h2h" / "versions.json"
+    original = record.read_text(encoding="utf-8")
+    payload = json.loads(original)
+    measured = payload["readcon"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", measured)
+    payload["readcon"] = "9.9.9"
+    record.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            ["bash", str(gate)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        record.write_text(original, encoding="utf-8")
+    assert result.returncode != 0, "gate passed an invented measured version"
+    output = result.stdout + result.stderr
+    assert "bench/h2h/versions.json" in output
+    assert "9.9.9" in output

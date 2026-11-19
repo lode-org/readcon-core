@@ -630,3 +630,18 @@ def test_a_full_regeneration_writes_the_committed_version_map(clone: Path) -> No
         )
     )
     assert written == committed, diff
+
+
+def test_two_regenerations_leave_the_number_trace_clean(clone: Path) -> None:
+    for _ in range(2):
+        regenerated = subprocess.run(
+            [sys.executable, str(clone / CPC / "scripts" / "regen_paper.py")],
+            cwd=clone,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert regenerated.returncode == 0, regenerated.stdout + regenerated.stderr
+    traced = _check(clone)
+    assert traced.returncode == 0, traced.stdout + traced.stderr
+    assert "0 problems" in traced.stdout, traced.stdout

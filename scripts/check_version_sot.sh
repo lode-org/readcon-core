@@ -206,15 +206,27 @@ allow_exact = {
     # The one macro the paper reads. scripts/cargo_version_tex.py writes
     # it from Cargo.toml, and the Snakemake rule cargo_version runs that.
     "paper/cpc/src/cargo_version.tex",
-    # Provenance names the readcon module that ran the spec probes.
-    "paper/cpc/data/spec/version_drift.json",
 }
+# gen_spec_supp.py records a measured release-preparation tree in a
+# version-named file. An unmeasured release is pending, not a reason to
+# manufacture a placeholder record.
+spec_measurement = f"paper/cpc/data/spec/spec-measurement-{version}.json"
+if (root / spec_measurement).is_file():
+    allow_exact.add(spec_measurement)
+else:
+    print(f"PENDING: {spec_measurement} has not been measured")
+clause_coverage = f"paper/cpc/data/spec/clause_coverage-{version}.json"
+if (root / clause_coverage).is_file():
+    allow_exact.add(clause_coverage)
+else:
+    print(f"PENDING: {clause_coverage} has not been measured")
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {
     "bench/fidelity/results/fidelity.json",
     "bench/fidelity/results/timing.json",
     "bench/h2h/versions.json",
+    "paper/cpc/data/spec/version_drift.json",
 }
 skip_dirs = {
     ".git",
@@ -279,12 +291,17 @@ measured = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.]+)?$")
 for rel in sorted(recorded_results):
     payload = json.loads((root / rel).read_text(encoding="utf-8"))
     found = []
+    source_commits = []
 
     def walk(node):
         if isinstance(node, dict):
-            value = node.get("readcon")
-            if isinstance(value, str) and measured.fullmatch(value):
-                found.append(value)
+            for key in ("readcon", "readcon_version"):
+                value = node.get(key)
+                if isinstance(value, str) and measured.fullmatch(value):
+                    found.append(value)
+            source_commit = node.get("source_commit")
+            if isinstance(source_commit, str):
+                source_commits.append(source_commit)
             for child in node.values():
                 walk(child)
         elif isinstance(node, list):
@@ -295,8 +312,37 @@ for rel in sorted(recorded_results):
     versions = sorted(set(found))
     if len(versions) != 1:
         die(f"{rel} must record one measured readcon version, found {versions}")
-    else:
-        print(f"OK: {rel} records measured readcon {versions[0]}")
+        continue
+    recorded = versions[0]
+    commits = sorted(set(source_commits))
+    if not commits:
+        tagged = subprocess.run(
+            ["git", "rev-parse", "--verify", f"refs/tags/v{recorded}^{{commit}}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        if tagged.returncode != 0:
+            die(f"{rel} records readcon {recorded} but has no source_commit or v{recorded} tag")
+            continue
+        commits = [tagged.stdout.strip()]
+    for commit in commits:
+        shown = subprocess.run(
+            ["git", "show", f"{commit}:VERSION"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        source_version = shown.stdout.strip()
+        if shown.returncode != 0:
+            die(f"{rel} source_commit {commit} has no readable VERSION")
+        elif source_version != recorded:
+            die(
+                f"{rel} records readcon {recorded}, but source_commit {commit} "
+                f"records VERSION {source_version!r}"
+            )
+        else:
+            print(f"OK: {rel} records measured readcon {recorded} from {commit}")
 for rel in required:
     data = (root / rel).read_text(encoding="utf-8")
     if version not in data:
