@@ -97,7 +97,7 @@ fuzz_target!(|data: &[u8]| {
 
         let cell = [1.0f64, 1.0, 1.0];
         let angles = [90.0f64, 90.0, 90.0];
-        let builder = rkr_frame_new(
+        let mut builder = rkr_frame_new(
             cell.as_ptr(),
             angles.as_ptr(),
             bad_ptr,
@@ -131,13 +131,13 @@ fuzz_target!(|data: &[u8]| {
             let _ = rkr_frame_builder_set_string_metadata(builder, ptr::null(), ptr::null());
             let _ = rkr_frame_builder_set_metadata_json(builder, bad_ptr);
             let _ = rkr_frame_builder_set_metadata_json(builder, ptr::null());
-            let frame = rkr_frame_builder_build(builder);
+            let frame = rkr_frame_builder_build(&mut builder);
             if !frame.is_null() {
                 std::hint::black_box(rkr_frame_atom_count(frame));
                 free_rkr_frame(frame);
                 std::hint::black_box(rkr_frame_atom_count(ptr::null()));
             }
-            free_rkr_frame_builder(ptr::null_mut());
+            free_rkr_frame_builder(builder);
         }
         let _ = rkr_frame_new(
             ptr::null(),

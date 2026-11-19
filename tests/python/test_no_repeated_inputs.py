@@ -46,17 +46,17 @@ PATTERNS = (
 )
 # Error probes and the writer metadata-cache clone. Exact path and line.
 ALLOW = {
-    ("paper/cpc/scripts/referee_probes.py", 1396),
-    ("paper/cpc/scripts/referee_probes.py", 2992),
-    ("paper/cpc/scripts/referee_probes.py", 2994),
-    ("paper/cpc/scripts/referee_probes.py", 2997),
-    ("paper/cpc/scripts/referee_probes.py", 3002),
-    ("paper/cpc/scripts/referee_probes.py", 3005),
-    ("paper/cpc/scripts/referee_probes.py", 3037),
-    ("paper/cpc/scripts/referee_probes.py", 1254),
-    ("paper/cpc/scripts/referee_probes.py", 1341),
-    ("paper/cpc/scripts/referee_probes.py", 2775),
-    ("paper/cpc/scripts/referee_probes.py", 3229),
+    ("paper/cpc/scripts/referee_probes.py", 1397),
+    ("paper/cpc/scripts/referee_probes.py", 2993),
+    ("paper/cpc/scripts/referee_probes.py", 2995),
+    ("paper/cpc/scripts/referee_probes.py", 2998),
+    ("paper/cpc/scripts/referee_probes.py", 3003),
+    ("paper/cpc/scripts/referee_probes.py", 3006),
+    ("paper/cpc/scripts/referee_probes.py", 3038),
+    ("paper/cpc/scripts/referee_probes.py", 1255),
+    ("paper/cpc/scripts/referee_probes.py", 1342),
+    ("paper/cpc/scripts/referee_probes.py", 2776),
+    ("paper/cpc/scripts/referee_probes.py", 3230),
     ("benches/iterator_bench.rs", 214),
     # The formatter is timed on one frame. It does not parse a tiled file.
     ("examples/format_profile.rs", 40),

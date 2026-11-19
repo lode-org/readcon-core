@@ -100,3 +100,6 @@
         ("sphinx-all" :components ("sphinx-rst" "sphinx-static"))))
 
 (org-publish "sphinx-all" t)
+
+(unless (zerop (call-process "python3" nil t nil "docs/scripts/fix_doc_links.py"))
+  (error "docs/scripts/fix_doc_links.py failed"))

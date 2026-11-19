@@ -331,21 +331,21 @@ override is load-bearing: without it cargo-c defaults the .pc filename
 to the ``[lib]`` name (``readcon_core``), which downstream packagers check
 for at the hyphenated name.
 
-Rust library builds leave the process allocator unset. A downstream binary
-chooses its own allocator; for example, it can depend on ``mimalloc`` and
-declare its own ``#[global_allocator]``. The ``mimalloc-allocator`` feature
-is reserved for final readcon artifacts rather than rlib consumers. Using
-``default-features = false`` removes both the mimalloc dependency and
-readcon's allocator symbol.
+Rust library builds leave the process allocator unset. A downstream
+binary chooses its own allocator; for example, it can depend on
+``mimalloc`` and declare its own ``#[global_allocator]``. The
+``mimalloc-allocator`` feature is reserved for final readcon artifacts
+rather than rlib consumers. Using ``default-features = false`` removes
+both the mimalloc dependency and readcon's allocator symbol.
 
 The Meson and CMake builds write the cdylib and the static archive. The
 cdylib enables ``mimalloc-allocator``, which also enables
 ``local_dynamic_tls``, so a later ``dlopen`` does not need static TLS
-surplus. The Python feature makes the same choice for the one-object wheel.
-The static archive leaves the global allocator unset and still accepts
-``static_system_alloc`` for compatibility. A C host that links
-``libreadcon_core.a`` beside another Rust staticlib therefore cannot pass a
-mimalloc allocation to the other copy of ``std`` for a glibc free.
+surplus. The Python feature makes the same choice for the one-object
+wheel. The static archive leaves the global allocator unset and still
+accepts ``static_system_alloc`` for compatibility. A C host that links
+``libreadcon_core.a`` beside another Rust staticlib therefore cannot pass
+a mimalloc allocation to the other copy of ``std`` for a glibc free.
 
 .. _abi-stability:
 

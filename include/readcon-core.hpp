@@ -2553,8 +2553,7 @@ inline ConFrameBuilder &ConFrameBuilder::set_neb_band(uint64_t band) {
 }
 
 inline ConFrame ConFrameBuilder::build() {
-    RKRConFrame *frame = rkr_frame_builder_build(builder_handle_);
-    builder_handle_ = nullptr; // ownership transferred
+    RKRConFrame *frame = rkr_frame_builder_build(&builder_handle_);
     if (!frame) {
         throw Error::from_last(
             "Failed to build frame from builder (null handle or same-symbol mass mismatch).");

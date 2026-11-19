@@ -232,7 +232,11 @@ def release(draft: bool = False) -> dict[str, str]:
         accepted["readconcommitrole"] = rf"{RELEASE['readconcommitrole']}|{DRAFT_ROLE}"
     bad = [
         f"commit.tex and release.tex give \\{name} as {values.get(name)!r}"
-        + ("; run with --draft for a form marked draft" if name == "readconcommitrole" else "")
+        + (
+            "; run with --draft for a form marked draft"
+            if name == "readconcommitrole"
+            else ""
+        )
         for name, pattern in accepted.items()
         if not re.fullmatch(pattern, values.get(name, ""))
     ]
@@ -478,7 +482,9 @@ def render(draft: bool = False) -> tuple[dict[str, str], str]:
     repository = plain(fields["Developer's repository link"], values, labels)
     fill = {
         "packet_state": (
-            "final" if re.fullmatch(RELEASE["readconcommitrole"], named["readconcommitrole"]) else "draft"
+            "final"
+            if re.fullmatch(RELEASE["readconcommitrole"], named["readconcommitrole"])
+            else "draft"
         ),
         "title": title,
         "version": version,
@@ -607,7 +613,8 @@ def main() -> int:
         if differ:
             print(
                 f"make_packet: {', '.join(differ)} differs from what the sources give; "
-                "run python3 paper/cpc/packet/make_packet.py" + (" --draft" if args.draft else ""),
+                "run python3 paper/cpc/packet/make_packet.py"
+                + (" --draft" if args.draft else ""),
                 file=sys.stderr,
             )
             return 1

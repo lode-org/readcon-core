@@ -357,7 +357,9 @@ def source_text(source: str) -> str:
     if source in SOURCE_NAMES:
         return SOURCE_NAMES[source]
     if NAMES_FILE.search(source):
-        raise SystemExit(f"{E4.name}: the source {source!r} names a file and has no entry in SOURCE_NAMES")
+        raise SystemExit(
+            f"{E4.name}: the source {source!r} names a file and has no entry in SOURCE_NAMES"
+        )
     return tex(source)
 
 
@@ -421,8 +423,7 @@ def compare():
                 " & ".join(r"\raggedright " + c for c in out) + r" \tabularnewline"
             )
         listed = "; ".join(
-            f"{letter[s]}~" + source_text(s)
-            for s in sorted(cited, key=letter.get)
+            f"{letter[s]}~" + source_text(s) for s in sorted(cited, key=letter.get)
         )
 
         def col(share):

@@ -24,7 +24,7 @@ static struct RKRConFrame *one_atom(double x) {
         RKR_STATUS_SUCCESS) {
         die("add atom");
     }
-    struct RKRConFrame *frame = rkr_frame_builder_build(builder);
+    struct RKRConFrame *frame = rkr_frame_builder_build(&builder);
     free_rkr_frame_builder(builder);
     if (frame == NULL) {
         die("build");

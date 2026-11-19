@@ -34,11 +34,6 @@ from chemparseplot.parse.projection import (  # noqa: E402
     compute_projection_basis,
     project_to_sd,
 )
-from chemparseplot.plot.neb import (  # noqa: E402
-    mark_saddle_point,
-    plot_energy_path,
-    plot_landscape_surface,
-)
 from chemparseplot.plot.theme import (  # noqa: E402
     apply_axis_theme,
     get_theme,
@@ -260,6 +255,8 @@ def _saddle_index(energy: np.ndarray) -> int:
 
 
 def _mark_ends(ax, s, d, energy) -> None:
+    from chemparseplot.plot.neb import mark_saddle_point
+
     ax.scatter(
         s[0],
         d[0],
@@ -308,6 +305,8 @@ def _mark_ends(ax, s, d, energy) -> None:
 def _companion(
     ax, s, energy, color, marker, linestyle, label: str | None, saddle: bool = True
 ) -> None:
+    from chemparseplot.plot.neb import plot_energy_path
+
     plot_energy_path(
         ax,
         np.asarray(s, dtype=float),
@@ -344,6 +343,8 @@ def _draw_surface(
     ax, band, basis, cmap, extra_points=None, show_pts: bool = False
 ) -> object:
     """Draw one ``E(s, d)`` contour and return the filled contour set."""
+    from chemparseplot.plot.neb import plot_landscape_surface
+
     captured: dict = {}
     original = ax.contourf
 

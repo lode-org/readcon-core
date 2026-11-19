@@ -32,6 +32,14 @@ SCI = r"([-+]?\d+(?:\.\d+)?)\\times10\^\{([-+]?\d+)\}"
 RANGE = r"\text{ to }"
 KEPT_FIGURES = 4
 ROUNDED_FIGURES = 3
+# These fragments are written after sinum.py in regen_paper.py. A leftover
+# ignored copy must not change the output of a clean regeneration.
+LATE_MACROS = {
+    "db_macros.tex",
+    "host_macros.tex",
+    "mpi_macros.tex",
+    "spec_macros.tex",
+}
 
 
 def mantissa(text: str) -> str:
@@ -63,7 +71,11 @@ def num(text: str) -> str:
 
 
 def sources() -> list[Path]:
-    found = sorted(p for p in GENERATED.glob("*macros.tex") if p != OUT)
+    found = sorted(
+        p
+        for p in GENERATED.glob("*macros.tex")
+        if p != OUT and p.name not in LATE_MACROS
+    )
     return found + [GENERATED / "velocity_case.tex"]
 
 
