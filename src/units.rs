@@ -89,6 +89,19 @@ const fn unit(si_factor: f64, dim: Dimension) -> UnitValue {
     UnitValue { si_factor, dim }
 }
 
+/// CODATA 2018 values. CON-units.18 fixes bohr and hartree to these
+/// published decimal literals rather than values derived from rounded inputs.
+const CODATA2018_BOHR_M: f64 = 5.291_772_109_03e-11;
+const CODATA2018_AMU_KG: f64 = metrology::AMU;
+const CODATA2018_HARTREE_J: f64 = 4.359_744_722_207_1e-18;
+const CODATA2018_ELEMENTARY: f64 = metrology::E_CHARGE;
+const CODATA2018_AVOGADRO: f64 = metrology::N_A;
+/// CON-units.18 writes these decimals. A product of the elementary charge
+/// and a power of ten is a different binary64 value.
+const MEV_J: f64 = 1.602_176_634e-22;
+/// Thermochemical kilocalorie, exactly 4184 joule. Not a CODATA value.
+const KCAL_THERMOCHEMICAL_J: f64 = 4184.0;
+
 /// Names are lowercase and sorted. Lookup is a binary search, so the table
 /// is plain static data: no `HashMap`, and no hashbrown control bytes for
 /// Valgrind to treat as an interior pointer of a process-lifetime allocation.
@@ -99,11 +112,11 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "a0",
-        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
+        value: unit(CODATA2018_BOHR_M, Dimension::LENGTH),
     },
     BaseUnit {
         name: "amu",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "angstrom",
@@ -111,27 +124,27 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "bohr",
-        value: unit(5.291_772_109_03e-11, Dimension::LENGTH),
+        value: unit(CODATA2018_BOHR_M, Dimension::LENGTH),
     },
     BaseUnit {
         name: "da",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "dalton",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "e",
-        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+        value: unit(CODATA2018_ELEMENTARY, Dimension::CHARGE),
     },
     BaseUnit {
         name: "electron_charge",
-        value: unit(1.602_176_634e-19, Dimension::CHARGE),
+        value: unit(CODATA2018_ELEMENTARY, Dimension::CHARGE),
     },
     BaseUnit {
         name: "ev",
-        value: unit(1.602_176_634e-19, ENERGY),
+        value: unit(CODATA2018_ELEMENTARY, ENERGY),
     },
     BaseUnit {
         name: "femtosecond",
@@ -143,11 +156,11 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "ha",
-        value: unit(4.359_744_722_207_1e-18, ENERGY),
+        value: unit(CODATA2018_HARTREE_J, ENERGY),
     },
     BaseUnit {
         name: "hartree",
-        value: unit(4.359_744_722_207_1e-18, ENERGY),
+        value: unit(CODATA2018_HARTREE_J, ENERGY),
     },
     BaseUnit {
         name: "j",
@@ -159,7 +172,7 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "kcal",
-        value: unit(4184.0, ENERGY),
+        value: unit(KCAL_THERMOCHEMICAL_J, ENERGY),
     },
     BaseUnit {
         name: "kg",
@@ -187,11 +200,11 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "mev",
-        value: unit(1.602_176_634e-22, ENERGY),
+        value: unit(MEV_J, ENERGY),
     },
     BaseUnit {
         name: "mol",
-        value: unit(6.022_140_76e23, Dimension::ZERO),
+        value: unit(CODATA2018_AVOGADRO, Dimension::ZERO),
     },
     BaseUnit {
         name: "nanometer",
@@ -227,7 +240,7 @@ const BASE_UNITS: &[BaseUnit] = &[
     },
     BaseUnit {
         name: "u",
-        value: unit(1.660_539_066_60e-27, Dimension::MASS),
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "å",
@@ -626,6 +639,23 @@ pub fn canonicalize_units_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// CON-units.18: bohr and hartree use the specification's exact literals.
+    #[test]
+    fn con_units_18_uses_spec_codata_2018_literals() {
+        let bohr = 5.291_772_109_03e-11_f64;
+        let hartree = 4.359_744_722_207_1e-18_f64;
+        assert_eq!(CODATA2018_BOHR_M.to_bits(), bohr.to_bits());
+        assert_eq!(CODATA2018_HARTREE_J.to_bits(), hartree.to_bits());
+        assert_eq!(
+            parse_unit_expression("bohr").unwrap().0.to_bits(),
+            bohr.to_bits()
+        );
+        assert_eq!(
+            parse_unit_expression("hartree").unwrap().0.to_bits(),
+            hartree.to_bits()
+        );
+    }
 
     #[test]
     fn base_table_is_shared_across_calls_and_threads() {
