@@ -16,10 +16,10 @@ use readcon_core::types::ConFrame;
 fn coord_bits(frames: &[ConFrame]) -> Vec<u64> {
     let mut bits = Vec::new();
     for frame in frames {
-        for atom in &frame.atom_data {
-            bits.push(atom.x().to_bits());
-            bits.push(atom.y().to_bits());
-            bits.push(atom.z().to_bits());
+        for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
+            bits.push(frame.x_at(coord_i0).to_bits());
+            bits.push(frame.y_at(coord_i0).to_bits());
+            bits.push(frame.z_at(coord_i0).to_bits());
         }
     }
     bits

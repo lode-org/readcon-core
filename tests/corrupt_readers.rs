@@ -99,9 +99,11 @@ fn assert_complete(label: &str, frames: &[ConFrame]) {
             declared,
             "{label} frame {index} positions"
         );
-        for atom in &frame.atom_data {
+        for coord_i0 in 0..frame.atom_data.len() {
             assert!(
-                atom.x().is_finite() && atom.y().is_finite() && atom.z().is_finite(),
+                frame.x_at(coord_i0).is_finite()
+                    && frame.y_at(coord_i0).is_finite()
+                    && frame.z_at(coord_i0).is_finite(),
                 "{label} frame {index} coordinate"
             );
         }

@@ -482,7 +482,7 @@ fn float32_storage_rescale_roundtrip_keeps_atoms() {
         assert_eq!(fr.atom_data.len(), expect.len(), "{what}");
         for (i, (atom, want)) in fr.atom_data.iter().zip(&expect).enumerate() {
             let got = [
-                [atom.x(), atom.y(), atom.z()],
+                [fr.x_at(i), fr.y_at(i), fr.z_at(i)],
                 atom.velocity().unwrap(),
                 atom.force().unwrap(),
             ];

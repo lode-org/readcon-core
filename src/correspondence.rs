@@ -409,10 +409,6 @@ fn apply_permutation(frame: &ConFrame, perm: &[usize]) -> Result<ConFrame, Corre
     let mut atoms = Vec::with_capacity(n);
     for &j in perm {
         let mut atom = frame.atom_data[j].clone();
-        let p = position_of(frame, j)?;
-        atom.set_x(p[0]);
-        atom.set_y(p[1]);
-        atom.set_z(p[2]);
         overlay_sections(&mut atom, frame, j)?;
         atoms.push(atom);
     }
@@ -429,13 +425,6 @@ fn apply_permutation(frame: &ConFrame, perm: &[usize]) -> Result<ConFrame, Corre
     out.masses = permute_col(&frame.masses, perm, "masses")?;
     let ids: Vec<u64> = perm.iter().map(|&j| frame.atom_data[j].atom_id).collect();
     out.atom_ids = ndarray::Array1::from_vec(ids).into_shared();
-    // Positions were copied above. When the source stored coordinates only
-    // on the atoms, the permuted array is empty and the atoms carry xyz.
-    if frame.positions.nrows() == n {
-        for (i, atom) in out.atom_data.iter().enumerate() {
-            out.positions.set_f64_row(i, [atom.x(), atom.y(), atom.z()]);
-        }
-    }
     refresh_type_runs(&mut out);
     remap_bonds(&mut out, perm)?;
     Ok(out)
@@ -445,10 +434,6 @@ fn position_of(frame: &ConFrame, i: usize) -> Result<[f64; 3], CorrespondenceErr
     let n = frame.atom_data.len();
     if frame.positions.nrows() == n {
         return Ok(frame.positions.as_f64_row(i));
-    }
-    if frame.positions.nrows() == 0 {
-        let atom = &frame.atom_data[i];
-        return Ok([atom.x(), atom.y(), atom.z()]);
     }
     Err(CorrespondenceError::SectionLength {
         section: "positions",

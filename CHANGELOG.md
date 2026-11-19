@@ -148,6 +148,34 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Breaking
 
+- **Rust API:** `AtomDatum` stores no coordinates and no pointer.
+  `ConFrame::xyz_at`, `x_at`, `y_at`, and `z_at` copy the row of
+  `positions` at that atom's index in `atom_data`. `set_xyz_at`,
+  `set_x_at`, `set_y_at`, and `set_z_at` write that row. A store through
+  the column is the value those accessors return. Cloning a frame shares
+  the column until a write copies it. Replacing `positions` is what a
+  later accessor reads. `AtomDatum`'s `x`, `y`, and `z` getters and
+  setters are removed. `PartialEq` for `AtomDatum` ignores coordinates.
+  `AtomDatum::coords` discards its xyz arguments.
+  `con_frame_from_atom_data` takes a `coords` argument.
+  `format_coordinate_lines` takes a `coords` argument. `write_frame`
+  returns `InvalidCount` when the header atom count and the atom list
+  disagree.
+- **C ABI:** function signatures are unchanged. `rkr_frame_xyz_view` still
+  borrows the positions column. Per-atom coordinates (`CAtom` `x`/`y`/`z`)
+  are a copy of that row at export. `rkr_frame_positions_from_dlpack`
+  writes the imported rows onto the column.
+- **Python:** `ConFrame.xyz`, `atoms[i].x`, and `write_con` keep their
+  call shape. `read_con` and `iter_con` move a contiguous f64 column
+  into the NumPy array and drop the parsed column. `coords_array`
+  returns a fresh array read from that live column. `to_ase`,
+  `reorder_like`, and `minimum_image_displacements` each copy one
+  private column. `write_con` snapshots the slab when Python can
+  store into it, and borrows it otherwise. A string write copies
+  the borrowed row onto the cloned frame. Once the atom list exists,
+  writes read that list, so an edit, pop, or append keeps each atom's
+  coordinates with its metadata. Gzip and zstd fused writes read the
+  borrowed column. A float32 column is promoted into that array.
 - **Rust API:** `FrameHeader::set_lattice_vectors` now returns
   `Result<(), ParseError>` instead of `()`. It returns
   `ParseError::NonFiniteValue` for a NaN or infinite component and leaves the

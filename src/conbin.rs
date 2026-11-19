@@ -2296,8 +2296,8 @@ fn accumulate_frames(text: &str, first_frame: u64) -> Result<FrameColumns, Parse
         cells.extend_from_slice(&frame.header.boxl);
         cells.extend_from_slice(&frame.header.angles);
         any_velocity |= frame.has_velocities();
-        for atom in &frame.atom_data {
-            positions.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+        for (index, atom) in frame.atom_data.iter().enumerate() {
+            positions.extend_from_slice(&frame.xyz_at(index));
             velocities.extend_from_slice(&atom.velocity().unwrap_or([0.0; 3]));
             if let Some(row) = atom.force() {
                 any_force = true;

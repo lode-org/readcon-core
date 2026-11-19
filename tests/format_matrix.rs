@@ -194,15 +194,32 @@ fn assert_atoms(label: &str, expected: &[ConFrame], got: &[ConFrame]) {
             assert_eq!(bits(*mass_left), bits(*mass_right), "{tag} mass");
         }
         assert_eq!(left.atom_data.len(), right.atom_data.len(), "{tag} atoms");
-        for (atom_left, atom_right) in left.atom_data.iter().zip(right.atom_data.iter()) {
+        for (coord_i0, (atom_left, atom_right)) in left
+            .atom_data
+            .iter()
+            .zip(right.atom_data.iter())
+            .enumerate()
+        {
             assert_eq!(
                 atom_left.symbol.as_ref(),
                 atom_right.symbol.as_ref(),
                 "{tag} symbol"
             );
-            assert_eq!(bits(atom_left.x()), bits(atom_right.x()), "{tag} x");
-            assert_eq!(bits(atom_left.y()), bits(atom_right.y()), "{tag} y");
-            assert_eq!(bits(atom_left.z()), bits(atom_right.z()), "{tag} z");
+            assert_eq!(
+                bits(left.x_at(coord_i0)),
+                bits(right.x_at(coord_i0)),
+                "{tag} x"
+            );
+            assert_eq!(
+                bits(left.y_at(coord_i0)),
+                bits(right.y_at(coord_i0)),
+                "{tag} y"
+            );
+            assert_eq!(
+                bits(left.z_at(coord_i0)),
+                bits(right.z_at(coord_i0)),
+                "{tag} z"
+            );
             assert_eq!(atom_left.fixed(), atom_right.fixed(), "{tag} fixed");
             assert_eq!(atom_left.atom_id, atom_right.atom_id, "{tag} id");
             match (atom_left.velocity(), atom_right.velocity()) {
@@ -256,9 +273,9 @@ fn assert_c_frame(label: &str, expected: &ConFrame, c_frame: *mut CFrame) {
     assert_eq!(frame.cell, expected.header.boxl, "{label} c box");
     assert_eq!(frame.angles, expected.header.angles, "{label} c angles");
     let masses = per_atom_masses(expected);
-    for (index, (atom, c_atom)) in expected.atom_data.iter().zip(atoms.iter()).enumerate() {
+    for (index, (_atom, c_atom)) in expected.atom_data.iter().zip(atoms.iter()).enumerate() {
         let tag = format!("{label} c atom {index}");
-        assert_c_atom(&tag, atom, masses[index], c_atom);
+        assert_c_atom(&tag, expected, index, masses[index], c_atom);
     }
     unsafe { free_c_frame(c_frame) };
 }

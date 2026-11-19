@@ -70,8 +70,8 @@ pub unsafe fn mts_block_free_sys(block: *mut mts_block_t) {
 pub fn frame_positions_block(frame: &ConFrame) -> Result<TensorBlock, metatensor::Error> {
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
-    for atom in &frame.atom_data {
-        data.extend_from_slice(&[atom.x(), atom.y(), atom.z()]);
+    for index in 0..n {
+        data.extend_from_slice(&frame.xyz_at(index));
     }
     let values = Array2::from_shape_vec((n, 3), data)
         .expect("array shape mismatch when building positions block")
@@ -351,10 +351,10 @@ Energies of Component 1
         let mut frame = parsed_frame();
         let blocks = all_blocks(&frame);
         let before = blocks.each_ref().map(block_f64s);
+        frame.set_x_at(0, 42.0);
+        frame.set_y_at(0, 43.0);
+        frame.set_z_at(0, 44.0);
         let atom = &mut frame.atom_data[0];
-        atom.set_x(42.0);
-        atom.set_y(43.0);
-        atom.set_z(44.0);
         atom.set_velocity(Some([7.0; 3]));
         atom.set_force(Some([8.0; 3]));
         atom.set_energy(Some(9.0));
@@ -364,7 +364,7 @@ Energies of Component 1
     #[test]
     fn blocks_built_after_atom_writes_hold_the_atom_values() {
         let mut frame = parsed_frame();
-        frame.atom_data[0].set_x(42.0);
+        frame.set_x_at(0, 42.0);
         frame.atom_data[0].set_velocity(None);
         frame.atom_data[1].set_force(None);
         frame.atom_data[1].set_energy(Some(9.0));
@@ -376,7 +376,7 @@ Energies of Component 1
     }
 
     // Under ThreadSanitizer this reports a data race if a block's values
-    // share memory with the coordinates that `set_x` writes.
+    // share memory with the coordinates that `set_x_at` writes.
     #[test]
     fn reading_a_block_while_another_thread_moves_an_atom() {
         let mut frame = parsed_frame();
@@ -389,11 +389,11 @@ Energies of Component 1
                 }
             });
             for step in 0..1000 {
-                frame.atom_data[0].set_x(f64::from(step));
+                frame.set_x_at(0, f64::from(step));
             }
             reader.join().unwrap();
         });
-        assert_eq!(frame.atom_data[0].x(), 999.0);
+        assert_eq!(frame.x_at(0), 999.0);
         assert_eq!(block_f64s(&block), before);
     }
 }

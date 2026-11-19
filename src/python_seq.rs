@@ -734,22 +734,15 @@ impl PyConFrame {
             atom.set_y(stored[1]);
             atom.set_z(stored[2]);
         } else {
-            let atom = &mut self.store_mut().atom_data[index];
-            match axis {
-                0 => atom.set_x(value),
-                1 => atom.set_y(value),
-                2 => atom.set_z(value),
-                _ => {}
-            }
             self.write_view_component(py, index, axis, value)?;
         }
         self.note_mutated();
         Ok(())
     }
 
-    /// `read_con` keeps coordinates in a NumPy slab or an owned array.
-    /// Atom pointers usually alias that memory. Write the array as well so a
-    /// view edit is visible when the pointer addresses a different box.
+    /// `read_con` keeps coordinates in the position store, a NumPy slab, or
+    /// an owned array. Atoms store no pointer. Write that buffer so a view
+    /// edit is what a later read of `xyz` sees.
     fn write_view_component(
         &self,
         py: Python<'_>,

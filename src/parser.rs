@@ -311,9 +311,14 @@ pub(crate) fn parallel_coord_rows(
                 *((ids_ptr as *mut u64).add(row)) = atom_id;
                 *((flags_ptr as *mut [bool; 3]).add(row)) = fixed;
                 if let Some(shares) = shares.as_mut() {
-                    let slot = (xyz_ptr as *mut f64).add(row * 3);
-                    let atom =
-                        crate::types::AtomDatum::at_slot(shares.take(), slot, fixed, atom_id);
+                    let atom = crate::types::AtomDatum::coords(
+                        shares.take(),
+                        xyz[0],
+                        xyz[1],
+                        xyz[2],
+                        fixed,
+                        atom_id,
+                    );
                     (*(atoms_ptr as *mut std::mem::MaybeUninit<crate::types::AtomDatum>).add(row))
                         .write(atom);
                 }
@@ -403,7 +408,14 @@ pub(crate) fn parse_coord_run(
             *ids.add(row) = atom_id;
             *flags.add(row) = fixed;
             if let Some(shares) = shares.as_mut() {
-                let atom = crate::types::AtomDatum::at_slot(shares.take(), dest, fixed, atom_id);
+                let atom = crate::types::AtomDatum::coords(
+                    shares.take(),
+                    xyz_row[0],
+                    xyz_row[1],
+                    xyz_row[2],
+                    fixed,
+                    atom_id,
+                );
                 (*atoms.add(row)).write(atom);
             }
         }
@@ -3196,11 +3208,11 @@ where
             note_not_sequential_plain();
         }
         let sym = shares.take();
-        let index = pos_flat.len() / 3;
         pos_flat.extend_from_slice(&xyz);
-        let slot = unsafe { pos_flat.as_mut_ptr().add(index * 3) };
         ids.push(atom_id);
-        atom_data.push(AtomDatum::at_slot(sym, slot, fixed, atom_id));
+        atom_data.push(AtomDatum::coords(
+            sym, xyz[0], xyz[1], xyz[2], fixed, atom_id,
+        ));
         global_atom_idx += 1;
     }
     Ok(global_atom_idx)
@@ -5289,7 +5301,7 @@ Forces of Component 1
     }
 
     #[test]
-    fn atoms_keep_their_coordinates_when_positions_are_not_f64() {
+    fn accessors_read_the_positions_column_when_it_is_not_f64() {
         use crate::storage_dtype::ElementKind;
         let rows = [[0.5, -1.25, 3.0], [1.0e-3, 2.5e4, -7.75]];
         for &kind in ElementKind::all_hosted() {
@@ -5311,8 +5323,12 @@ Forces of Component 1
                 .expect("frame")
                 .expect("parse");
             assert_eq!(frame.positions.kind(), kind);
-            for (i, atom) in frame.atom_data.iter().enumerate() {
-                assert_eq!([atom.x(), atom.y(), atom.z()], rows[i], "{kind:?} atom {i}");
+            for i in 0..frame.atom_data.len() {
+                assert_eq!(
+                    frame.xyz_at(i),
+                    frame.positions.as_f64_row(i),
+                    "{kind:?} atom {i}"
+                );
             }
         }
     }

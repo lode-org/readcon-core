@@ -1207,9 +1207,14 @@ impl AtomTail {
 
 /// Represents the data for a single atom in a frame.
 ///
-/// Coordinates, the symbol, the fixed mask, and the id sit inline. Optional
-/// sections live in one heap tail, allocated only when a section value is set,
-/// so a coordinates-only trajectory does not store eight empty `Option`s per atom.
+/// The symbol, the fixed mask, and the id sit inline. Optional sections live
+/// in one heap tail, allocated only when a section value is set, so a
+/// coordinates-only trajectory does not store eight empty `Option`s per atom.
+///
+/// Coordinates are not stored here and this atom holds no pointer. They live
+/// in [`ConFrame::positions`]. [`ConFrame::xyz_at`] reads that column at this
+/// atom's index in [`ConFrame::atom_data`]. [`ConFrame::set_x_at`] writes the
+/// same row, so a column store and an accessor see one value.
 #[derive(Debug)]
 pub struct AtomDatum {
     /// The chemical symbol of the atom (e.g., "C", "H", "O").
@@ -1225,16 +1230,16 @@ pub struct AtomDatum {
     /// When column 5 is absent from the input, defaults to the sequential
     /// position within the frame (0, 1, 2, ...).
     pub atom_id: u64,
-    /// Three coordinates. Either the frame's position buffer or an owned box.
-    xyz: *mut f64,
-    /// Bits 0-2 are fixed flags. Bit 3 marks an owned coordinate box.
-    /// Bit 4 marks a tail that lives in the frame arena, not a `Box`.
-    /// The rest is a `HeapTail` pointer or null. `HeapTail` is 32-byte aligned.
+    /// Bits 0-2 are fixed flags. Bit 4 marks a tail that lives in the frame
+    /// arena, not a `Box`. The rest is a `HeapTail` pointer or null.
+    /// `HeapTail` is 32-byte aligned.
     tail: usize,
 }
 
-const TAIL_OWNED: usize = 0b1000;
 const TAIL_EXTERNAL: usize = 0b1_0000;
+/// Low bits that are not part of the tail pointer. Bits 0-2 are fixed
+/// flags. Bit 3 is unused. Bit 4 marks an arena tail. `HeapTail` is
+/// 32-byte aligned, so these bits are free.
 const TAIL_MASK: usize = 0b1_1111;
 
 impl AtomDatum {
@@ -1267,73 +1272,11 @@ impl AtomDatum {
         debug_assert!(ptr as usize & TAIL_MASK == 0);
         self.tail = (ptr as usize) | (self.tail & TAIL_MASK);
     }
-
-    /// Address of this atom's three coordinates.
-    ///
-    /// Parsed frames and the binding slab lay those triples out in order.
-    /// The writer uses that to format a run from one base pointer.
-    #[inline]
-    pub(crate) fn coord_ptr(&self) -> *const f64 {
-        self.xyz
-    }
-
-    #[inline]
-    pub fn x(&self) -> f64 {
-        unsafe { *self.xyz }
-    }
-    #[inline]
-    pub fn y(&self) -> f64 {
-        unsafe { *self.xyz.add(1) }
-    }
-    #[inline]
-    pub fn z(&self) -> f64 {
-        unsafe { *self.xyz.add(2) }
-    }
-    #[inline]
-    pub fn set_x(&mut self, v: f64) {
-        unsafe { *self.xyz = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-    #[inline]
-    pub fn set_y(&mut self, v: f64) {
-        unsafe { *self.xyz.add(1) = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-    #[inline]
-    pub fn set_z(&mut self, v: f64) {
-        unsafe { *self.xyz.add(2) = v }
-        crate::writer::invalidate_packed_lengths();
-    }
-
-    /// Copy coordinates that may live in Python-writable storage.
-    ///
-    /// Each element is one relaxed, untorn atomic load. The three elements
-    /// are not one transaction and may therefore come from different
-    /// instants while another thread writes the source.
-    #[cfg(feature = "python")]
-    pub(crate) fn atomic_coords(&self) -> [f64; 3] {
-        let source = self.xyz.cast_const();
-        assert_atomic_f64_alignment(source);
-        unsafe {
-            [
-                atomic_load_f64(source),
-                atomic_load_f64(source.add(1)),
-                atomic_load_f64(source.add(2)),
-            ]
-        }
-    }
-
-    fn owned_xyz(x: f64, y: f64, z: f64) -> *mut f64 {
-        Box::into_raw(Box::new([x, y, z])).cast()
-    }
 }
 
 impl PartialEq for AtomDatum {
     fn eq(&self, other: &Self) -> bool {
         self.symbol == other.symbol
-            && self.x().to_bits() == other.x().to_bits()
-            && self.y().to_bits() == other.y().to_bits()
-            && self.z().to_bits() == other.z().to_bits()
             && self.fixed() == other.fixed()
             && self.atom_id == other.atom_id
             && self.velocity() == other.velocity()
@@ -1347,9 +1290,9 @@ impl PartialEq for AtomDatum {
     }
 }
 
-// The coordinate pointer addresses the frame's position buffer, which moves
-// with the frame and is not freed by the atom. Sending a frame sends both.
-// Coordinate slots alias the frame buffer. A shared reference only reads them.
+// The tail word may address a heap section owned by this atom or by the
+// frame's column arena. The frame and the atom move together. Coordinates
+// live in the frame column, so cloning an atom copies no coordinate memory.
 unsafe impl Send for AtomDatum {}
 unsafe impl Sync for AtomDatum {}
 
@@ -1358,8 +1301,7 @@ impl Clone for AtomDatum {
         let mut cloned = Self {
             symbol: self.symbol.clone(),
             atom_id: self.atom_id,
-            xyz: Self::owned_xyz(self.x(), self.y(), self.z()),
-            tail: (self.tail & 0b111) | TAIL_OWNED,
+            tail: self.tail & 0b111,
         };
         let external = self.tail & TAIL_EXTERNAL != 0;
         let ptr = self.tail_ptr();
@@ -1382,9 +1324,6 @@ impl Clone for AtomDatum {
 
 impl Drop for AtomDatum {
     fn drop(&mut self) {
-        if self.tail & TAIL_OWNED != 0 && !self.xyz.is_null() {
-            unsafe { drop(Box::from_raw(self.xyz as *mut [f64; 3])) };
-        }
         let ptr = self.tail_ptr();
         if self.tail & TAIL_EXTERNAL == 0 && !ptr.is_null() {
             unsafe { drop(Box::from_raw(ptr)) };
@@ -1392,7 +1331,7 @@ impl Drop for AtomDatum {
     }
 }
 
-/// Drop `atoms` when every shell shares one symbol and owns no coordinate box.
+/// Drop `atoms` when every shell shares one symbol and owns no heap tail.
 ///
 /// A million atoms otherwise run a million decrements against the same
 /// symbol counter. One `fetch_sub` matches that count.
@@ -1415,7 +1354,8 @@ thread_local! {
 
 /// The next drop of this atom buffer releases its symbol counts in one step.
 ///
-/// The buffer must be one shared symbol and no owned coordinate boxes.
+/// The buffer must be one shared symbol and no heap tail. Coordinates live
+/// on the frame and are not freed per atom.
 #[cfg(any(feature = "parallel", feature = "chemfiles", test))]
 pub(crate) fn mark_uniform_symbol_drop(atoms: &[AtomDatum]) {
     if atoms.is_empty() {
@@ -1589,43 +1529,21 @@ impl Drop for ConFrame {
 
 #[cfg(feature = "python")]
 impl ConFrame {
-    /// Coordinates as one contiguous raw pointer.
+    /// This frame with a private copy of atom `i`'s coordinates.
     ///
-    /// Frame views built from a slab and parsed frames with row-major SoA
-    /// storage return this. Other layouts fall back to per-atom reads.
-    #[cfg(feature = "python")]
-    fn coord_ptr_len(&self) -> Option<(*const f64, usize)> {
-        if self.positions.kind() != crate::storage_dtype::ElementKind::Float64 {
-            return None;
-        }
-        let want = self.atom_data.len().checked_mul(3)?;
-        if self.positions.nrows().checked_mul(self.positions.ncols())? != want {
-            return None;
-        }
-        let ptr = self.positions.data_ptr();
-        if ptr.is_null() {
-            return None;
-        }
-        Some((ptr.cast::<f64>(), want))
-    }
-
-    /// This frame with atom `i` reading its coordinates at `base + 3 i`,
-    /// first copied there when `fill` is set.
-    ///
-    /// The atom vector and the metadata map cell are new. Every other
-    /// field is shared with `self`, so the same rules as
+    /// When `fill` is set, those values are also written at `base + 3 i`.
+    /// Otherwise `base` already holds them and the copy is taken from there.
+    /// The atom vector and the metadata map cell are new. Every other field
+    /// is shared with `self`, so the same rules as a bitwise copy apply.
     /// Another reader may fill the source map cell meanwhile, so that cell
     /// is never copied bit for bit; the view starts with the map the source
     /// already had, if any. The flag says whether it did.
-    unsafe fn view_onto(&self, base: *mut f64, fill: bool) -> (ConFrame, bool) {
+    ///
+    /// The view keeps a private positions column of the coordinates observed
+    /// at this call. Its atoms store none.
+    unsafe fn view_onto(&self, base: *mut f64, fill: bool, from: *const f64) -> (ConFrame, bool) {
         use std::ptr::read;
         let n_atoms = self.atom_data.len();
-        let contiguous = self.coord_ptr_len().map(|(src, _)| src);
-        if fill {
-            if let Some(src) = contiguous {
-                assert_atomic_f64_alignment(src);
-            }
-        }
         let mut raw = take_snapshot_atom_spare(n_atoms);
         unsafe {
             std::ptr::copy_nonoverlapping(
@@ -1643,25 +1561,30 @@ impl ConFrame {
             )
         };
         std::mem::forget(raw);
-        let mut atom_data = SnapshotAtomGuard(atom_data);
+        let atom_data = SnapshotAtomGuard(atom_data);
         let base_address = base as usize;
-        let contiguous_address = contiguous.map(|ptr| ptr as usize);
-        let retarget = |index: usize, atom: &mut AtomDatum| {
+        let mut copied = Vec::with_capacity(n_atoms.saturating_mul(3));
+        for index in 0..n_atoms {
             let slot = unsafe { (base_address as *mut f64).add(index * 3) };
+            let values = if !fill {
+                unsafe { [*slot, *slot.add(1), *slot.add(2)] }
+            } else if from.is_null() {
+                self.load_coords(index)
+            } else {
+                unsafe {
+                    [
+                        atomic_load_f64(from.add(index * 3)),
+                        atomic_load_f64(from.add(index * 3 + 1)),
+                        atomic_load_f64(from.add(index * 3 + 2)),
+                    ]
+                }
+            };
             if fill {
-                let source = contiguous_address.map_or_else(
-                    || atom.xyz.cast_const(),
-                    |address| unsafe { (address as *const f64).add(index * 3) },
-                );
-                assert_atomic_f64_alignment(source);
-                unsafe { atomic_copy_f64_serial(source, slot, 3) };
+                unsafe { std::ptr::copy_nonoverlapping(values.as_ptr(), slot, 3) };
             }
-            atom.xyz = slot;
-            atom.tail &= !TAIL_OWNED;
-        };
-        for (index, atom) in atom_data.0.iter_mut().enumerate() {
-            retarget(index, atom);
+            copied.extend_from_slice(&values);
         }
+        let mut atom_data = atom_data;
         let source = &self.header;
         let map = std::sync::OnceLock::new();
         let shared_map = match source.metadata.map.get() {
@@ -1692,7 +1615,7 @@ impl ConFrame {
                 sections_declared: source.sections_declared,
             }
         };
-        let view = unsafe {
+        let mut view = unsafe {
             ConFrame {
                 header,
                 atom_data: std::mem::take(&mut atom_data.0),
@@ -1711,6 +1634,12 @@ impl ConFrame {
                 sequential_plain: self.sequential_plain,
             }
         };
+        // The bitwise positions alias the source. The view keeps a private
+        // column of the coordinates copied above, and the shared handle is
+        // not dropped.
+        let owned = crate::storage_dtype::FloatArray2::from_f64_row_major(n_atoms, 3, copied);
+        let shared = std::mem::replace(&mut view.positions, owned);
+        std::mem::forget(shared);
         (view, shared_map)
     }
 }
@@ -1781,6 +1710,13 @@ impl SnapshotViewGuard {
     fn dismantle(&mut self) {
         for (slot, shared) in self.frames.iter_mut().zip(&self.shared_maps) {
             let Some(frame) = slot else { continue };
+            // The view owns its positions column. Drop it before the rest
+            // of the frame is forgotten with the source.
+            let positions = unsafe { std::ptr::read(&frame.positions) };
+            unsafe {
+                std::ptr::write(&mut frame.positions, std::mem::zeroed());
+            }
+            drop(positions);
             recycle_snapshot_atoms(&mut frame.atom_data);
             // A map parsed into the view is owned by it. A copied map is
             // still owned by the source and must not be dropped here.
@@ -1808,6 +1744,29 @@ impl Drop for SnapshotViewGuard {
 #[cfg(feature = "python")]
 impl<'a> CoordSnapshot<'a> {
     pub(crate) fn copy_of(frames: &[Option<&'a ConFrame>]) -> Self {
+        Self::copy_reading(frames, std::ptr::null())
+    }
+
+    /// `source` is a contiguous `[frame][atom][xyz]` slab Python can store
+    /// into. A null source reads each frame's positions column.
+    pub(crate) fn copy_reading(frames: &[Option<&'a ConFrame>], source: *const f64) -> Self {
+        Self::copy_reading_gap(frames, source, 0)
+    }
+
+    /// `gap_doubles` is the slab width of one missing frame.
+    ///
+    /// A `None` slot consumes that many doubles of a non-null source and
+    /// writes no view. Skipping the slot without that advance shifts every
+    /// later frame. A null source ignores the gap and reads each present
+    /// column.
+    pub(crate) fn copy_reading_gap(
+        frames: &[Option<&'a ConFrame>],
+        source: *const f64,
+        gap_doubles: usize,
+    ) -> Self {
+        if !source.is_null() {
+            assert_atomic_f64_alignment(source);
+        }
         let total: usize = frames
             .iter()
             .flatten()
@@ -1843,7 +1802,8 @@ impl<'a> CoordSnapshot<'a> {
                 fresh.as_mut_ptr()
             }
         };
-        let mut offset = 0usize;
+        let mut src_at = 0usize;
+        let mut dst_at = 0usize;
         let mut views = SnapshotViewGuard {
             frames: Vec::with_capacity(frames.len()),
             shared_maps: Vec::with_capacity(frames.len()),
@@ -1852,25 +1812,30 @@ impl<'a> CoordSnapshot<'a> {
             let Some(frame) = slot else {
                 views.frames.push(None);
                 views.shared_maps.push(false);
+                if !source.is_null() {
+                    src_at += gap_doubles;
+                }
                 continue;
             };
-            let at = unsafe { base.add(offset) };
-            if !fill && !coords_match(frame, at) {
+            let at = unsafe { base.add(dst_at) };
+            let from = if source.is_null() {
+                std::ptr::null()
+            } else {
+                unsafe { source.add(src_at) }
+            };
+            if !fill && !coords_match(frame, at, from) {
                 fresh.reserve_exact(total * 3);
                 let to = fresh.as_mut_ptr();
                 unsafe {
-                    std::ptr::copy_nonoverlapping(base, to, offset);
-                    for view in views.frames.iter_mut().flatten() {
-                        for atom in &mut view.atom_data {
-                            atom.retarget(to.offset(atom.xyz.offset_from(base)));
-                        }
-                    }
+                    std::ptr::copy_nonoverlapping(base, to, dst_at);
                 }
                 base = to;
                 fill = true;
             }
-            let (view, shared) = unsafe { frame.view_onto(base.add(offset), fill) };
-            offset += frame.atom_data.len() * 3;
+            let (view, shared) = unsafe { frame.view_onto(base.add(dst_at), fill, from) };
+            let width = frame.atom_data.len() * 3;
+            src_at += width;
+            dst_at += width;
             views.frames.push(Some(view));
             views.shared_maps.push(shared);
         }
@@ -1879,8 +1844,8 @@ impl<'a> CoordSnapshot<'a> {
         let coords = match priced {
             Some(priced) if !fill => priced,
             _ => {
-                // Every slot was written above. Moving the vector into the
-                // Arc keeps its buffer where the views point.
+                // Every slot was written above. The Arc keeps those bytes for
+                // the price key. The views' atoms already hold the same values.
                 unsafe { fresh.set_len(total * 3) };
                 Arc::new(fresh)
             }
@@ -1923,33 +1888,29 @@ impl<'a> CoordSnapshot<'a> {
 /// Whether the doubles at `priced` hold the coordinates of `frame` bit
 /// for bit.
 #[cfg(feature = "python")]
-fn coords_match(frame: &ConFrame, priced: *const f64) -> bool {
-    if let Some((left, n)) = frame.coord_ptr_len() {
-        let right = unsafe { std::slice::from_raw_parts(priced, n) };
-        assert_atomic_f64_alignment(left);
-        for (index, rhs) in right.iter().enumerate() {
-            if unsafe { atomic_load_f64(left.add(index)) }.to_bits() != rhs.to_bits() {
-                return false;
-            }
-        }
+fn coords_match(frame: &ConFrame, priced: *const f64, from: *const f64) -> bool {
+    let n = frame.atom_data.len() * 3;
+    if n == 0 {
         return true;
     }
-    let priced = unsafe { std::slice::from_raw_parts(priced, frame.atom_data.len() * 3) };
-    frame
-        .atom_data
-        .iter()
-        .zip(priced.as_chunks::<3>().0)
-        .all(|(atom, xyz)| {
-            let source = atom.xyz.cast_const();
-            assert_atomic_f64_alignment(source);
-            (unsafe { atomic_load_f64(source) }.to_bits() ^ xyz[0].to_bits())
-                | (unsafe { atomic_load_f64(source.add(1)) }.to_bits() ^ xyz[1].to_bits())
-                | (unsafe { atomic_load_f64(source.add(2)) }.to_bits() ^ xyz[2].to_bits())
+    let priced = unsafe { std::slice::from_raw_parts(priced, n) };
+    if from.is_null() {
+        return frame.atom_data.iter().enumerate().all(|(index, _)| {
+            let xyz = frame.load_coords(index);
+            let base = index * 3;
+            (xyz[0].to_bits() ^ priced[base].to_bits())
+                | (xyz[1].to_bits() ^ priced[base + 1].to_bits())
+                | (xyz[2].to_bits() ^ priced[base + 2].to_bits())
                 == 0
-        })
+        });
+    }
+    (0..n).all(|index| {
+        let value = unsafe { atomic_load_f64(from.add(index)) };
+        value.to_bits() == priced[index].to_bits()
+    })
 }
 
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
     assert!(
         ptr.cast::<std::sync::atomic::AtomicU64>().is_aligned(),
@@ -1963,18 +1924,29 @@ pub(crate) fn assert_atomic_f64_alignment(ptr: *const f64) {
 /// cross-element atomicity. Each returned element is nevertheless one complete
 /// value observed by a relaxed 64-bit atomic load. Callers must keep the
 /// allocation alive and check [`assert_atomic_f64_alignment`] first.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", test))]
 #[inline(always)]
 pub(crate) unsafe fn atomic_load_f64(ptr: *const f64) -> f64 {
     f64::from_bits(unsafe { atomic_load_bits(ptr) })
 }
 
-#[cfg(feature = "python")]
+/// Store one potentially shared `f64` without creating an `f64` reference.
+#[cfg(any(feature = "python", test))]
+#[inline(always)]
+pub(crate) unsafe fn atomic_store_f64(ptr: *mut f64, value: f64) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let atomic = unsafe { AtomicU64::from_ptr(ptr.cast::<u64>()) };
+    atomic.store(value.to_bits(), Ordering::Relaxed);
+}
+
+#[cfg(any(feature = "python", test))]
 #[inline(always)]
 unsafe fn atomic_load_bits(ptr: *const f64) -> u64 {
-    use std::sync::atomic::Ordering;
-    let atomic = ptr.cast::<std::sync::atomic::AtomicU64>();
-    unsafe { (*atomic).load(Ordering::Relaxed) }
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // `from_ptr` borrows the cell as an atomic. Callers must not also hold
+    // an `f64` reference to that cell.
+    let atomic = unsafe { AtomicU64::from_ptr(ptr.cast_mut().cast::<u64>()) };
+    atomic.load(Ordering::Relaxed)
 }
 
 /// Copy potentially shared doubles to private storage with relaxed loads.
@@ -2046,53 +2018,16 @@ impl AtomDatum {
         fixed: [bool; 3],
         atom_id: u64,
     ) -> Self {
+        // Coordinates belong in the frame column. Callers that still pass
+        // them here also write that column; the atom does not keep a copy.
+        let _ = (x, y, z);
         let mut atom = Self {
             symbol: symbol.into(),
             atom_id,
-            xyz: Self::owned_xyz(x, y, z),
-            tail: TAIL_OWNED,
-        };
-        atom.set_fixed(fixed);
-        atom
-    }
-
-    /// Coordinates live in `slot`, three contiguous `f64`s owned by the caller.
-    pub(crate) fn at_slot(
-        symbol: impl Into<Arc<str>>,
-        slot: *mut f64,
-        fixed: [bool; 3],
-        atom_id: u64,
-    ) -> Self {
-        let mut atom = Self {
-            symbol: symbol.into(),
-            atom_id,
-            xyz: slot,
             tail: 0,
         };
         atom.set_fixed(fixed);
         atom
-    }
-
-    /// Point this atom at `slot`, three contiguous `f64`s the caller owns.
-    ///
-    /// An owned coordinate box is released first. The slot is the one place
-    /// the coordinates live afterwards, so a write through the slot and a
-    /// read through the atom see the same value. The caller has put the
-    /// coordinates it wants to keep into the slot.
-    pub(crate) fn retarget(&mut self, slot: *mut f64) {
-        if self.tail & TAIL_OWNED != 0 && !self.xyz.is_null() {
-            unsafe { drop(Box::from_raw(self.xyz as *mut [f64; 3])) };
-            self.tail &= !TAIL_OWNED;
-        }
-        self.xyz = slot;
-    }
-
-    /// Copy the coordinates into an owned box that outlives the frame buffer.
-    fn own_coords(&mut self) {
-        if self.tail & TAIL_OWNED == 0 {
-            self.xyz = Self::owned_xyz(self.x(), self.y(), self.z());
-            self.tail |= TAIL_OWNED;
-        }
     }
 
     fn install(&mut self, section: AtomSections) {
@@ -2729,7 +2664,10 @@ pub fn encode_fixed_bitmask(fixed: [bool; 3]) -> u8 {
 pub struct ConFrame {
     /// The `FrameHeader` containing the frame's metadata.
     pub header: FrameHeader,
-    /// AoS projection for CON serialization and symbol/fixed metadata.
+    /// AoS records for CON serialization and symbol/fixed metadata.
+    ///
+    /// An atom stores no coordinates. [`Self::positions`] is the column
+    /// [`Self::xyz_at`] reads, at the atom's index in this list.
     pub atom_data: Vec<AtomDatum>,
     /// Arena for velocity and force column tails. Empty on a coordinate-only
     /// frame, so those atoms stay the same size as a file with no sections.
@@ -2811,18 +2749,78 @@ impl PartialEq for ConFrame {
 }
 
 impl ConFrame {
+    /// Coordinates of the atom at `index`, copied from [`Self::positions`].
+    #[inline]
+    pub fn xyz_at(&self, index: usize) -> [f64; 3] {
+        self.positions.as_f64_row(index)
+    }
+
+    /// `x` of the atom at `index`.
+    #[inline]
+    pub fn x_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[0]
+    }
+
+    /// `y` of the atom at `index`.
+    #[inline]
+    pub fn y_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[1]
+    }
+
+    /// `z` of the atom at `index`.
+    #[inline]
+    pub fn z_at(&self, index: usize) -> f64 {
+        self.xyz_at(index)[2]
+    }
+
+    /// Write one coordinate row. Accessors read this row back.
+    #[inline]
+    pub fn set_xyz_at(&mut self, index: usize, xyz: [f64; 3]) {
+        self.positions.set_f64_row(index, xyz);
+        crate::writer::invalidate_packed_lengths();
+    }
+
+    /// Write `x` of the atom at `index` into the positions column.
+    ///
+    /// A shared column is copied first, so a clone or a DLPack export of
+    /// the old allocation keeps the previous value.
+    #[inline]
+    pub fn set_x_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[0] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Write `y` of the atom at `index` into the positions column.
+    #[inline]
+    pub fn set_y_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[1] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Write `z` of the atom at `index` into the positions column.
+    #[inline]
+    pub fn set_z_at(&mut self, index: usize, value: f64) {
+        let mut xyz = self.xyz_at(index);
+        xyz[2] = value;
+        self.set_xyz_at(index, xyz);
+    }
+
+    /// Coordinates of atom `index`. Same row as [`Self::xyz_at`].
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
+    #[inline]
+    pub(crate) fn load_coords(&self, index: usize) -> [f64; 3] {
+        self.xyz_at(index)
+    }
+
     /// Apply [`crate::storage_dtype::StorageDtypes`] from metadata (or argument) to SoA fields.
     pub fn project_storage_dtypes(&mut self, dtypes: &crate::storage_dtype::StorageDtypes) {
-        // Projection replaces the column allocation. Copy slot values into
-        // owned tails and coordinates into owned boxes first so the atoms do
-        // not keep the old pointer.
+        // Projection replaces the column allocation. Section slots that
+        // address the old velocity or force column are copied into owned
+        // tails first. Coordinates are that column.
         clear_uniform_symbol_drop(&self.atom_data);
         self.materialise_section_slots();
-        if self.positions.kind() != dtypes.positions {
-            for atom in &mut self.atom_data {
-                atom.own_coords();
-            }
-        }
         self.positions.project_to(dtypes.positions);
         if self.velocities.nrows() > 0 {
             self.velocities.project_to(dtypes.velocities);
@@ -2875,10 +2873,6 @@ impl ConFrame {
         let has_spr = self.spreads.nrows() == n;
         for i in 0..n {
             let a = &mut self.atom_data[i];
-            let p = self.positions.as_f64_row(i);
-            a.set_x(p[0]);
-            a.set_y(p[1]);
-            a.set_z(p[2]);
             if has_vel {
                 a.set_velocity(Some(self.velocities.as_f64_row(i)));
             }
@@ -3046,22 +3040,6 @@ impl ConFrame {
         self.column_tails.clear();
     }
 
-    /// Copy the coordinates of every atom that addresses the positions
-    /// column into an owned box, before that column is replaced.
-    ///
-    /// Atoms bound to another buffer, such as a binding slab, stay bound.
-    fn own_coords_in_positions(&mut self) {
-        let Some(column) = self.positions.f64_slice().map(|s| s.as_ptr_range()) else {
-            return;
-        };
-        clear_uniform_symbol_drop(&self.atom_data);
-        for atom in &mut self.atom_data {
-            if column.contains(&atom.coord_ptr()) {
-                atom.own_coords();
-            }
-        }
-    }
-
     fn velocity_column_live(&self) -> bool {
         let n = self.atom_data.len();
         n > 0
@@ -3162,11 +3140,15 @@ impl ConFrame {
         let has_mm = self.atom_data.iter().any(|a| a.has_magmom());
         let has_dsp = self.atom_data.iter().any(|a| a.has_displacement());
         let has_spr = self.atom_data.iter().any(|a| a.has_spread());
-        // Only allocate positions if missing (should not happen on parse-primary path).
-        let need_pos_fill = self.positions.nrows() != n;
-        if need_pos_fill {
-            self.own_coords_in_positions();
-            self.positions = FloatArray2::zeros(dt.positions, n, 3);
+        // The column is the coordinate store. A length change keeps the
+        // rows that still have an atom and leaves a new row at zero.
+        if self.positions.nrows() != n {
+            let mut next = FloatArray2::zeros(dt.positions, n, 3);
+            let keep = self.positions.nrows().min(n);
+            for i in 0..keep {
+                next.set_f64_row(i, self.positions.as_f64_row(i));
+            }
+            self.positions = next;
         }
         if has_vel {
             if self.velocities.nrows() != n {
@@ -3228,9 +3210,6 @@ impl ConFrame {
             self.atom_ids = ndarray::ArcArray1::<u64>::zeros(n);
         }
         for (i, a) in self.atom_data.iter().enumerate() {
-            if need_pos_fill {
-                self.positions.set_f64_row(i, [a.x(), a.y(), a.z()]);
-            }
             self.atom_ids[i] = a.atom_id;
             if has_vel && let Some(v) = a.velocity() {
                 self.velocities.set_f64_row(i, v);
@@ -5154,7 +5133,8 @@ impl ConFrameBuilder {
             dt.insert_into(&mut metadata);
         }
         for (i, a) in atom_data.iter().enumerate() {
-            pos.set_f64_row(i, [a.x(), a.y(), a.z()]);
+            let row = self.positions.row(i);
+            pos.set_f64_row(i, [row[0], row[1], row[2]]);
             ids_arr[i] = a.atom_id;
             if has_vel && let Some(v) = a.velocity() {
                 vel.set_f64_row(i, v);
@@ -5283,13 +5263,17 @@ fn store_col(
 /// Build a [`ConFrame`] from header + AoS atoms, filling SoA numeric arrays.
 /// Prefer [`con_frame_from_atom_data_with_positions`] on the CON parse hot path
 /// when positions were already written into SoA during coordinate parsing.
-pub fn con_frame_from_atom_data(header: FrameHeader, atom_data: Vec<AtomDatum>) -> ConFrame {
+pub fn con_frame_from_atom_data(
+    header: FrameHeader,
+    atom_data: Vec<AtomDatum>,
+    coords: &[[f64; 3]],
+) -> ConFrame {
     let n = atom_data.len();
     use crate::storage_dtype::FloatArray2;
     let dt = header.metadata.dtypes();
     let mut pos = FloatArray2::zeros(dt.positions, n, 3);
-    for (i, a) in atom_data.iter().enumerate() {
-        pos.set_f64_row(i, [a.x(), a.y(), a.z()]);
+    for (i, row) in coords.iter().enumerate().take(n) {
+        pos.set_f64_row(i, *row);
     }
     con_frame_from_atom_data_with_positions(header, atom_data, pos)
 }
@@ -5569,25 +5553,18 @@ mod tests {
             .expect("second frame")
             .expect("parse second");
 
-        // Force the per-atom path and make its source deliberately unsuitable
-        // for AtomicU64. The first view has already pointer-read its source
-        // fields when construction of the second view panics.
-        let mut unaligned = [0_u8; 32];
-        second.atom_data[0].xyz = unsafe { unaligned.as_mut_ptr().add(1).cast::<f64>() };
-        second.atom_data[0].tail &= !TAIL_OWNED;
+        // The second frame's column has no row, so reading it panics after
+        // the first view has copied its source fields.
         second.positions = crate::storage_dtype::FloatArray2::zeros_f64(0, 3);
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = CoordSnapshot::copy_of(&[Some(&first), Some(&second)]);
         }));
-        assert!(result.is_err(), "misaligned atomic source should panic");
+        assert!(result.is_err(), "an empty coordinate column should panic");
 
-        // Restore an owned coordinate before dropping the deliberately
-        // malformed source. The first source must still own and use all of
-        // its fields; without the unwind guard the partial view drops them.
-        second.atom_data[0].xyz = AtomDatum::owned_xyz(4.0, 5.0, 6.0);
-        second.atom_data[0].tail |= TAIL_OWNED;
-        assert_eq!(first.atom_data[0].x(), 0.1234567);
+        // The first source must still own and use all of its fields; without
+        // the unwind guard the partial view drops them.
+        assert_eq!(first.x_at(0), 0.1234567);
         first.header.prebox_header.user.push_str("still owned");
         drop(first);
         drop(second);
@@ -5611,64 +5588,34 @@ mod tests {
                 .all(|atom| std::ptr::eq(Arc::as_ptr(&atom.symbol), symbol)),
             "the frame should share one symbol"
         );
-        let column = frame
-            .positions
-            .f64_slice()
-            .expect("f64 positions")
-            .as_ptr_range();
-        let column = column.start as usize..column.end as usize;
-        assert!(
-            frame
-                .atom_data
-                .iter()
-                .all(|atom| column.contains(&(atom.coord_ptr() as usize))),
-            "a parsed frame should address its position column"
-        );
+        for i in 0..frame.atom_data.len() {
+            assert_eq!(
+                frame.xyz_at(i),
+                frame.positions.as_f64_row(i),
+                "parsed atom {i} should match its positions row"
+            );
+        }
         // The piped reader and the chemfiles import mark a buffer like this.
         mark_uniform_symbol_drop(&frame.atom_data);
         assert!(bulk_drop_is_marked(&frame.atom_data));
-        let expect: Vec<[f64; 3]> = frame
-            .atom_data
-            .iter()
-            .map(|atom| [atom.x(), atom.y(), atom.z()].map(|v| v as f32 as f64))
+        let expect: Vec<[f64; 3]> = (0..frame.atom_data.len())
+            .map(|i| frame.xyz_at(i).map(|v| v as f32 as f64))
             .collect();
         let dtypes = crate::storage_dtype::StorageDtypes {
             positions: crate::storage_dtype::ElementKind::Float32,
             ..Default::default()
         };
         frame.project_storage_dtypes(&dtypes);
-        // The atoms own coordinate boxes now. The bulk drop would skip them.
+        // Projection may install owned section tails, so the bulk drop is
+        // disarmed before the column is replaced.
         assert!(
             !bulk_drop_is_marked(&frame.atom_data),
             "the projection left the bulk drop armed"
         );
-        for (i, atom) in frame.atom_data.iter().enumerate() {
-            assert!(
-                !column.contains(&(atom.coord_ptr() as usize)),
-                "atom {i} still points into the freed f64 column"
-            );
-            assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
+        for (i, row) in expect.iter().enumerate() {
+            assert_eq!(frame.xyz_at(i), *row, "atom {i}");
+            assert_eq!(frame.positions.as_f64_row(i), *row, "row {i}");
         }
-    }
-
-    #[test]
-    fn retarget_replaces_an_owned_box_with_the_slot() {
-        let mut cell = [1.0_f64, 2.0, 3.0];
-        let slot = cell.as_mut_ptr();
-        let mut atom = AtomDatum::coords("Cu", 9.0, 8.0, 7.0, [false; 3], 0);
-        assert!(atom.tail & TAIL_OWNED != 0);
-        atom.retarget(slot);
-        assert!(atom.tail & TAIL_OWNED == 0, "the box is released");
-        assert!(std::ptr::eq(atom.coord_ptr(), slot));
-        unsafe { *slot = 4.0 };
-        assert_eq!(atom.x(), 4.0, "the atom reads what the slot holds");
-        atom.set_y(5.0);
-        assert_eq!(
-            unsafe { *slot.add(1) },
-            5.0,
-            "the atom writes where the slot is"
-        );
-        assert_eq!(atom.z(), 3.0);
     }
 
     #[test]
@@ -5679,24 +5626,27 @@ mod tests {
             .expect("frame")
             .expect("parse");
         let coords = |frame: &ConFrame| -> Vec<[f64; 3]> {
-            frame
-                .atom_data
-                .iter()
-                .map(|atom| [atom.x(), atom.y(), atom.z()])
+            (0..frame.atom_data.len())
+                .map(|i| frame.xyz_at(i))
                 .collect()
         };
         let mut expect = coords(&frame);
         // Shrinking and growing the atoms both make the sync replace the
-        // positions column the parsed atoms address.
+        // positions column. A clone carries no coordinates, so the new row
+        // is zero until a column write.
         frame.atom_data.pop();
         expect.pop();
         frame.sync_arrays_from_atom_data();
         assert_eq!(coords(&frame), expect);
+        let kept = expect[0];
         let extra = frame.atom_data[0].clone();
         frame.atom_data.push(extra);
-        expect.push(expect[0]);
+        expect.push([0.0; 3]);
         frame.sync_arrays_from_atom_data();
         assert_eq!(coords(&frame), expect);
+        let last = frame.atom_data.len() - 1;
+        frame.set_xyz_at(last, kept);
+        expect[last] = kept;
         for (i, row) in expect.iter().enumerate() {
             assert_eq!(frame.positions.as_f64_row(i), *row, "row {i}");
         }
@@ -5732,17 +5682,9 @@ mod tests {
         let n = 2048;
         let symbol: Arc<str> = Arc::from("O");
         let weak = Arc::downgrade(&symbol);
-        let mut flat = vec![0.0f64; n * 3];
         bump_arc_str(&symbol, n);
         let mut atoms: Vec<AtomDatum> = (0..n)
-            .map(|i| {
-                AtomDatum::at_slot(
-                    share_arc_str(&symbol),
-                    unsafe { flat.as_mut_ptr().add(i * 3) },
-                    [false; 3],
-                    i as u64,
-                )
-            })
+            .map(|i| AtomDatum::coords(share_arc_str(&symbol), 0.0, 0.0, 0.0, [false; 3], i as u64))
             .collect();
         mark_uniform_symbol_drop(&atoms);
         drop(symbol);
@@ -6093,7 +6035,7 @@ mod tests {
         assert_eq!(frame.energy_unit(), Some("eV"));
         let to_nm = frame.conversion_factor_to("length", "nm").unwrap();
         assert!((to_nm - 0.1).abs() < 1e-12);
-        let x_nm = frame.atom_data[0].x() * to_nm;
+        let x_nm = frame.x_at(0) * to_nm;
         assert!((x_nm - 0.1).abs() < 1e-12);
     }
 
@@ -6752,5 +6694,113 @@ mod tests {
         let slot = frame.atom_data[0].velocity_slot() as usize;
         let range = frame.velocities.f64_slice().unwrap().as_ptr_range();
         assert!(range.contains(&(slot as *const f64)));
+    }
+
+    fn parsed_coords(frame: &ConFrame) -> Vec<[f64; 3]> {
+        (0..frame.atom_data.len())
+            .map(|index| frame.xyz_at(index))
+            .collect()
+    }
+
+    /// Cloning shares the positions column. A later row write copies that
+    /// column. Dropping the frame that still owns the old allocation must
+    /// not free the column the other frame reads, and the accessor reads
+    /// the row that was written.
+    #[test]
+    fn cloned_row_write_leaves_atom_coordinates_readable() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let snapshot = parsed_coords(&frame);
+        let cloned = frame.clone();
+        {
+            let row = frame.positions.f64_mut_slice().expect("f64 positions");
+            row[0] = 42.0;
+        }
+        assert_eq!(cloned.xyz_at(0), snapshot[0]);
+        drop(cloned);
+        assert_eq!(frame.xyz_at(0)[0], 42.0);
+        assert_eq!(frame.positions.as_f64_row(0)[0], 42.0);
+    }
+
+    /// Replacing the public positions field drops the old column. The
+    /// accessor reads the new column and does not touch the dropped one.
+    #[test]
+    fn replacing_positions_leaves_atom_coordinates_readable() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let n = frame.positions.nrows();
+        frame.positions = crate::storage_dtype::FloatArray2::zeros_f64(n, 3);
+        assert_eq!(frame.positions.as_f64_row(0), [0.0; 3]);
+        assert_eq!(frame.xyz_at(0), [0.0; 3]);
+    }
+
+    /// A store through the positions column is the value the accessor returns.
+    #[test]
+    fn a_column_write_is_seen_by_the_atom_accessor() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        frame.set_x_at(0, 42.0);
+        assert_eq!(frame.x_at(0), 42.0);
+        assert_eq!(frame.positions.as_f64_row(0)[0], 42.0);
+        {
+            let row = frame.positions.f64_mut_slice().expect("f64 positions");
+            row[1] = 7.0;
+        }
+        assert_eq!(frame.y_at(0), 7.0);
+    }
+
+    /// A writer storing whole `AtomicU64` values and a reader using
+    /// [`atomic_load_f64`] do not tear a double. ThreadSanitizer is the
+    /// check that the two sides do not race.
+    #[test]
+    fn a_concurrent_atomic_store_is_a_whole_double() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+        let n = 1024usize;
+        let buf = vec![0.0f64; n];
+        let ptr = buf.as_ptr();
+        assert_atomic_f64_alignment(ptr);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_writer = Arc::clone(&stop);
+        let addr = ptr as usize;
+        let writer = std::thread::spawn(move || {
+            let cells = addr as *mut u64;
+            let mut value = 1u64;
+            while !stop_writer.load(Ordering::Relaxed) {
+                for index in 0..n {
+                    unsafe {
+                        AtomicU64::from_ptr(cells.add(index)).store(value, Ordering::Relaxed);
+                    }
+                    value = value.wrapping_add(1);
+                    if value == 0 {
+                        value = 1;
+                    }
+                }
+            }
+        });
+        for _ in 0..64 {
+            for index in 0..n {
+                let loaded = unsafe { atomic_load_f64(ptr.add(index)).to_bits() };
+                let _ = loaded;
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        writer.join().expect("writer");
+        for index in 0..n {
+            let loaded = unsafe { atomic_load_f64(ptr.add(index)).to_bits() };
+            let direct = unsafe {
+                AtomicU64::from_ptr(ptr.cast_mut().cast::<u64>().add(index)).load(Ordering::Relaxed)
+            };
+            assert_eq!(loaded, direct);
+        }
     }
 }

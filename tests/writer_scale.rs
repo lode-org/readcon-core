@@ -277,9 +277,12 @@ fn wide_mapping_matches_serial_for_velocities_and_gapped_ids() {
         }
         // A short buffer goes back to the pool, then a wide format has to
         // grow it. The bytes stay the coordinate block of the serial frame.
-        let short = format_coordinate_lines(&frame.atom_data[..2]).expect("short");
+        let rows: Vec<f64> = (0..frame.atom_data.len())
+            .flat_map(|index| frame.xyz_at(index))
+            .collect();
+        let short = format_coordinate_lines(&frame.atom_data[..2], &rows[..6]).expect("short");
         recycle_format_buffer(short);
-        let lines = format_coordinate_lines(&frame.atom_data).expect("grown");
+        let lines = format_coordinate_lines(&frame.atom_data, &rows).expect("grown");
         let text = std::str::from_utf8(&serial).expect("utf8");
         let marker = "Coordinates of Component 1\n";
         let start = text.find(marker).expect("coords") + marker.len();
