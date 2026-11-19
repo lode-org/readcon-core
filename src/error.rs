@@ -57,6 +57,8 @@ pub enum ParseError {
         found_mass: f64,
         atom_index: usize,
     },
+    /// A sidecar read failed for a reason other than a missing file.
+    Io(String),
 }
 
 impl fmt::Display for ParseError {
@@ -133,6 +135,7 @@ impl fmt::Display for ParseError {
                     "atoms of type {symbol} have inconsistent masses: first {first_mass}, atom {atom_index} has {found_mass} (CON stores one mass per type)"
                 )
             }
+            ParseError::Io(msg) => write!(f, "index read failed: {msg}"),
         }
     }
 }
@@ -237,6 +240,7 @@ impl ParseError {
             ParseError::InvalidFixedFlag(_) => "InvalidFixedFlag",
             ParseError::InvalidCount(_) => "InvalidCount",
             ParseError::InvalidUnits(_) => "InvalidUnits",
+            ParseError::Io(_) => "Io",
         }
     }
 

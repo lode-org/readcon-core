@@ -7,6 +7,7 @@ use crate::types::{
 };
 use serde::de::Error as _;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::iter::Peekable;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -2366,6 +2367,34 @@ fn trim_space_tab(line: &str) -> &str {
     line.trim_matches(|c: char| c == ' ' || c == '\t')
 }
 
+/// CON-cell.7. The columnar reader and the frame reader share this check.
+/// `lattice_vectors` wins over lines 3-4 (CON-cell.1).
+pub(crate) fn reject_impossible_cell(
+    angles: [f64; 3],
+    has_lattice: bool,
+) -> Result<(), ParseError> {
+    if !has_lattice
+        && angles
+            .iter()
+            .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
+    {
+        crate::types::require_real_cell(angles)?;
+    }
+    Ok(())
+}
+
+/// True when line 2 is a JSON object that carries `lattice_vectors`.
+pub(crate) fn line_declares_lattice(line: &str) -> bool {
+    let trimmed = trim_space_tab(line);
+    if !trimmed.starts_with('{') || !trimmed.contains("lattice_vectors") {
+        return false;
+    }
+    match parse_metadata_value(trimmed) {
+        Ok(value) => value.get(crate::types::meta::LATTICE_VECTORS).is_some(),
+        Err(_) => false,
+    }
+}
+
 /// CON-line2.23. A repeated name in any object on line 2 is
 /// InvalidMetadataJson. A document this scan does not understand is left to
 /// the JSON parser, including a nesting depth past 127 (CON-line2.18).
@@ -2416,7 +2445,7 @@ fn scan_json_value(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
 
 fn scan_json_object(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
     *i += 1;
-    let mut keys: Vec<String> = Vec::new();
+    let mut keys: HashSet<String> = HashSet::new();
     loop {
         skip_json_ws(bytes, i);
         if *i >= bytes.len() {
@@ -2439,10 +2468,9 @@ fn scan_json_object(bytes: &[u8], i: &mut usize, depth: usize) -> JsonScan {
         let Some(key) = scan_json_string(bytes, i) else {
             return JsonScan::Defer;
         };
-        if keys.iter().any(|have| have == &key) {
+        if !keys.insert(key) {
             return JsonScan::Duplicate;
         }
-        keys.push(key);
         skip_json_ws(bytes, i);
         if *i >= bytes.len() || bytes[*i] != b':' {
             return JsonScan::Defer;
@@ -2543,14 +2571,31 @@ fn scan_json_string(bytes: &[u8], i: &mut usize) -> Option<String> {
             c if c < 0x80 => out.push(c as char),
             _ => {
                 *i -= 1;
-                let rest = std::str::from_utf8(&bytes[*i..]).ok()?;
-                let ch = rest.chars().next()?;
+                let (ch, width) = utf8_char_at(bytes, *i)?;
                 out.push(ch);
-                *i += ch.len_utf8();
+                *i += width;
             }
         }
     }
     None
+}
+
+/// One UTF-8 scalar at `i`. Validating the remainder of the line would
+/// rescan every later byte for each character.
+fn utf8_char_at(bytes: &[u8], i: usize) -> Option<(char, usize)> {
+    let width = match *bytes.get(i)? {
+        0xC2..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF4 => 4,
+        _ => return None,
+    };
+    let end = i.checked_add(width)?;
+    let text = std::str::from_utf8(bytes.get(i..end)?).ok()?;
+    let ch = text.chars().next()?;
+    if ch.len_utf8() != width {
+        return None;
+    }
+    Some((ch, width))
 }
 
 fn decode_json_u(bytes: &[u8], i: &mut usize) -> Option<char> {
@@ -2948,11 +2993,12 @@ pub fn parse_frame_header<'a>(
                         metadata_json_error("sections must be an array of strings")
                     })?;
                     sections.reserve(arr.len());
+                    let mut seen = HashSet::with_capacity(arr.len());
                     for entry in arr {
                         let s = entry.as_str().ok_or_else(|| {
                             metadata_json_error("sections must be an array of strings")
                         })?;
-                        if sections.iter().any(|have| have == s) {
+                        if !seen.insert(s) {
                             return Err(metadata_json_error(format!(
                                 "duplicate section name '{s}'"
                             )));
@@ -2996,17 +3042,8 @@ pub fn parse_frame_header<'a>(
 
     let boxl_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "boxl")?;
     let angles_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "angles")?;
-    // CON-cell.7. lattice_vectors wins over lines 3-4 (CON-cell.1), so a
-    // file that carries the matrix is not rejected for the angles line.
-    if !has_lattice {
-        let angles: [f64; 3] = angles_vec.as_slice().try_into().unwrap();
-        if angles
-            .iter()
-            .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
-        {
-            crate::types::require_real_cell(angles)?;
-        }
-    }
+    let angles: [f64; 3] = angles_vec.as_slice().try_into().unwrap();
+    reject_impossible_cell(angles, has_lattice)?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?

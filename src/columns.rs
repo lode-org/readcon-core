@@ -1525,6 +1525,11 @@ fn parse_one_frame(
     let boxl = parse_cell_line(box_line, "boxl")?;
     let ang_line = utf8_line(read_line(bytes, pos)?)?;
     let angles = parse_cell_line(ang_line, "angles")?;
+    let angles_arr: [f64; 3] = angles.as_slice().try_into().unwrap();
+    let has_lattice = std::str::from_utf8(meta)
+        .map(crate::parser::line_declares_lattice)
+        .unwrap_or(false);
+    crate::parser::reject_impossible_cell(angles_arr, has_lattice)?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
     skip_line(bytes, pos)?;
