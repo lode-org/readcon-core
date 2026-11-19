@@ -383,6 +383,33 @@ pub(crate) fn serialize_json_object_with_minor_raw(
     }
 }
 
+#[cfg_attr(not(feature = "rpc"), allow(dead_code))]
+pub(crate) fn serialize_json_map_with_minor_raw(
+    map: &std::collections::BTreeMap<String, serde_json::Value>,
+    minor_raw: Option<&str>,
+) -> Result<String, serde_json::Error> {
+    match minor_raw {
+        None => serde_json::to_string(map),
+        Some(digits) => {
+            let mut out = String::from("{");
+            for (idx, (k, v)) in map.iter().enumerate() {
+                if idx > 0 {
+                    out.push(',');
+                }
+                out.push_str(&serde_json::to_string(k)?);
+                out.push(':');
+                if k == meta::CON_SPEC_MINOR {
+                    out.push_str(digits);
+                } else {
+                    out.push_str(&serde_json::to_string(v)?);
+                }
+            }
+            out.push('}');
+            Ok(out)
+        }
+    }
+}
+
 // Cache equality preserves the numeric representation, including signed zero,
 // throughout nested JSON values.
 fn metadata_value_eq(a: &serde_json::Value, b: &serde_json::Value) -> bool {
