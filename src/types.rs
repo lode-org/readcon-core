@@ -5088,6 +5088,8 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
+        let has_lattice = self.metadata.contains_key(meta::LATTICE_VECTORS);
+        crate::parser::reject_impossible_cell(self.angles, has_lattice)?;
         let written_spec = match self.written_spec {
             0 => crate::CON_SPEC_VERSION,
             major if major > crate::CON_SPEC_VERSION => {

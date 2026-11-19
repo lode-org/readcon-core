@@ -2368,7 +2368,8 @@ fn trim_space_tab(line: &str) -> &str {
 }
 
 /// CON-cell.7. The columnar reader and the frame reader share this check.
-/// `lattice_vectors` wins over lines 3-4 (CON-cell.1).
+/// `lattice_vectors` wins over lines 3-4 (CON-cell.1). Lengths and angles
+/// outside (0, 180) are validate-mode checks (CON-validate.4).
 pub(crate) fn reject_impossible_cell(
     angles: [f64; 3],
     has_lattice: bool,
