@@ -425,6 +425,80 @@ fn project_storage_and_optional_sections() {
 }
 
 #[test]
+fn float32_storage_rescale_roundtrip_keeps_atoms() {
+    // A unit rescale of a frame stored as float32: scale the arrays, sync
+    // the atoms from them, then write the frame and read it back.
+    let data = std::fs::read_to_string("resources/test/tiny_cuh2_vel_forces.con").unwrap();
+    let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
+        .next()
+        .unwrap()
+        .unwrap();
+    for (i, atom) in frame.atom_data.iter_mut().enumerate() {
+        atom.set_energy(Some(-5.0 - i as f64));
+    }
+    frame.sync_arrays_from_atom_data();
+    let dt = StorageDtypes {
+        positions: ElementKind::Float32,
+        velocities: ElementKind::Float32,
+        forces: ElementKind::Float32,
+        energies: ElementKind::Float32,
+        masses: ElementKind::Float64,
+        atom_ids: ElementKind::UInt64,
+    };
+    frame.project_storage_dtypes(&dt);
+    frame.sync_atom_data_from_arrays();
+
+    let (lf, vf, ff) = (0.5, 2.0, 4.0);
+    for i in 0..frame.positions.nrows() {
+        let pos = frame.positions.as_f64_row(i).map(|v| v * lf);
+        frame.positions.set_f64_row(i, pos);
+        let vel = frame.velocities.as_f64_row(i).map(|v| v * vf);
+        frame.velocities.set_f64_row(i, vel);
+        let force = frame.forces.as_f64_row(i).map(|v| v * ff);
+        frame.forces.set_f64_row(i, force);
+    }
+    frame.sync_atom_data_from_arrays();
+    let expect: Vec<[[f64; 3]; 3]> = (0..frame.positions.nrows())
+        .map(|i| {
+            [
+                frame.positions.as_f64_row(i),
+                frame.velocities.as_f64_row(i),
+                frame.forces.as_f64_row(i),
+            ]
+        })
+        .collect();
+
+    let mut buf = Vec::new();
+    readcon_core::writer::ConFrameWriter::new(&mut buf)
+        .write_frame(&frame)
+        .unwrap();
+    let text = String::from_utf8(buf).unwrap();
+    let round = readcon_core::iterators::ConFrameIterator::new(&text)
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(round.positions.kind(), ElementKind::Float32);
+    let check = |fr: &ConFrame, what: &str| {
+        assert_eq!(fr.atom_data.len(), expect.len(), "{what}");
+        for (i, (atom, want)) in fr.atom_data.iter().zip(&expect).enumerate() {
+            let got = [
+                [atom.x(), atom.y(), atom.z()],
+                atom.velocity().unwrap(),
+                atom.force().unwrap(),
+            ];
+            for (g, w) in got.iter().flatten().zip(want.iter().flatten()) {
+                assert!(
+                    (g - w).abs() <= 1e-5 * w.abs().max(1.0),
+                    "{what} atom {i}: {got:?} != {want:?}"
+                );
+            }
+        }
+    };
+    check(&frame, "scaled");
+    check(&round, "read back");
+}
+
+#[test]
 fn project_storage_displacements_section() {
     let data = std::fs::read_to_string("resources/test/tiny_cuh2_displacements.con").unwrap();
     let mut frame = readcon_core::iterators::ConFrameIterator::new(&data)
