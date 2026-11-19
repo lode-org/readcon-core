@@ -437,12 +437,12 @@ def _frame_delta(n_atoms: int, frame: int) -> np.ndarray:
     return rng.uniform(-0.04, 0.04, size=(n_atoms, 3))
 
 
-# Cross-format v0.23.3 measured `_frame_delta` at e938ccf4. This is a
-# different campaign from bench/h2h/million/v0.23.3, whose fixture uses
-# thermal_shift. Saved rows are immutable, so this generator and its guard
-# retain the exact uniform-noise input those 85,299,756-byte rows measured.
-MILLION_CON_SHA256 = "51654ae0b729a25f0f23d7c7f3218a64cccf549eedee7102d8408642caa46068"
-MILLION_CON_BYTES = 85_299_756
+_MILLION_PIN_PATHS = sorted((BENCH / "formats" / "pins").glob("million-con-*.json"))
+if not _MILLION_PIN_PATHS:
+    raise RuntimeError("no one-million-atom CON fixture pin")
+_MILLION_PIN = json.loads(_MILLION_PIN_PATHS[-1].read_text(encoding="utf-8"))["con"]
+MILLION_CON_SHA256 = _MILLION_PIN["sha256"]
+MILLION_CON_BYTES = _MILLION_PIN["bytes"]
 MILLION_FRAME_SHA256 = (
     "9f9197bd1ce591f6af407b59f7763608566b552d36e1580e94c4024088073dc7"
 )

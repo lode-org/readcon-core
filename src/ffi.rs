@@ -45,7 +45,7 @@ pub extern "C" fn rkr_abi_stamp() -> *const c_char {
 /// `CON_SPEC_VERSION`). Both macros are emitted into the C header for
 /// the convenience of either naming convention; they always carry the
 /// same value.
-pub const RKR_CON_SPEC_VERSION: u32 = 3;
+pub const RKR_CON_SPEC_VERSION: u32 = 4;
 /// Returns the spec version at runtime (for dynamically linked consumers).
 #[unsafe(no_mangle)]
 pub extern "C" fn rkr_con_spec_version() -> u32 {
@@ -7332,7 +7332,9 @@ Coordinates of Component 1
             .to_str()
             .unwrap()
             .to_string();
-        assert!(text.contains(r#""con_spec_minor":1"#), "{text}");
+        assert!(text.contains(r#""con_spec_version":4"#), "{text}");
+        assert!(text.contains(r#""con_spec_minor":0"#), "{text}");
+        assert!(text.contains(r#""con_spec_patch":0"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);
@@ -8252,7 +8254,7 @@ Coordinates of Component 1
 
             let rewritten = unsafe { rkr_frame_binding_rewrite(first) };
             assert!(!rewritten.is_null(), "{name} binding rewrite failed");
-            assert_eq!(rkr_frame_spec_version(rewritten), 3);
+            assert_eq!(rkr_frame_spec_version(rewritten), crate::CON_SPEC_VERSION);
             let rw_meta = unsafe { rkr_frame_metadata_json(rewritten) };
             assert!(!rw_meta.is_null());
             let rw_str = unsafe { CStr::from_ptr(rw_meta) }.to_str().unwrap();
@@ -8593,7 +8595,7 @@ Coordinates of Component 1
                 "{rewritten_meta}"
             );
             assert!(
-                rewritten_meta.contains("\"time\":\"fs\""),
+                rewritten_meta.contains(crate::units::NATURAL_TIME_UNIT),
                 "{rewritten_meta}"
             );
             unsafe {
@@ -8612,11 +8614,9 @@ Coordinates of Component 1
             std::fs::write(&path, no_time).unwrap();
             let c_path = CString::new(path.to_str().unwrap()).unwrap();
             let frame = unsafe { rkr_read_first_frame(c_path.as_ptr()) };
-            assert!(frame.is_null(), "{digits}");
-            let err = unsafe { &*rkr_last_error() };
-            assert_eq!(err.code, RKRStatus::RKR_STATUS_PARSE_ERROR as i32);
-            let msg = unsafe { CStr::from_ptr(err.message) }.to_string_lossy();
-            assert!(msg.contains("InvalidUnits"), "{digits}: {msg}");
+            assert!(!frame.is_null(), "{digits}");
+            assert_eq!(rkr_frame_spec_version(frame), 3);
+            unsafe { free_rkr_frame(frame) };
 
             let mut builder = test_builder_handle();
             let json = c_string(&format!(

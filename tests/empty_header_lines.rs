@@ -78,7 +78,7 @@ fn empty_second_header_line_is_implicit_version_one() {
 
 /// A binding rewrite of an implicit spec-1 frame matches the builder.
 ///
-/// The builder emits spec 3, default units, and the three-axis fixed mask.
+/// The builder emits spec 4.0.0, default units, and the three-axis fixed mask.
 /// The Fortran writer uses `write_frame_binding`. The C rewriter uses
 /// `binding_rewrite_frame`. Both have to match that header, including the
 /// atom id column.
@@ -101,7 +101,7 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
     }
 
     let rewritten = binding_rewrite_frame(frame).unwrap();
-    assert_eq!(rewritten.header.spec_version, 3);
+    assert_eq!(rewritten.header.spec_version, 4);
     let mut rewrite_buf = Vec::new();
     {
         let mut writer = ConFrameWriter::new(&mut rewrite_buf);
@@ -136,8 +136,9 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
     let built_text = String::from_utf8(built_buf).unwrap();
     assert_eq!(binding, built_text);
     assert_eq!(rewrite, built_text);
-    assert!(binding.contains(r#""con_spec_version":3"#), "{binding}");
-    assert!(binding.contains(r#""con_spec_minor":1"#), "{binding}");
+    assert!(binding.contains(r#""con_spec_version":4"#), "{binding}");
+    assert!(binding.contains(r#""con_spec_minor":0"#), "{binding}");
+    assert!(binding.contains(r#""con_spec_patch":0"#), "{binding}");
     assert!(binding.contains("\"units\":{"), "{binding}");
     assert!(binding.contains("0.0 0.0 0.0 7 0"), "{binding}");
 }

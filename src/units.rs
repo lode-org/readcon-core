@@ -399,25 +399,22 @@ pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, Par
 
 /// Time unit that velocities in this frame are stored in (D10).
 ///
-/// Versions 1, 2, and 3.0 are the natural unit regardless of a
-/// `units.time` label (CON-units.8, CON-units.9). From minor 1,
-/// `units.time` is authoritative (CON-units.10). `override_unit`
-/// replaces that choice when it is a time expression (CON-units.15).
+/// Versions 1, 2, and every minor of major 3 are the natural unit
+/// regardless of a `units.time` label (CON-units.8, CON-units.9).
+/// Major 4 and later take `units.time` as authoritative (CON-units.10).
+/// `override_unit` replaces that choice when it is a time expression
+/// (CON-units.15).
 pub fn velocity_file_time_unit(
     spec_version: u32,
     metadata: &serde_json::Map<String, serde_json::Value>,
     override_unit: Option<&str>,
 ) -> Result<String, ParseError> {
+    if spec_version < 4 {
+        return Ok(NATURAL_TIME_UNIT.to_string());
+    }
     if let Some(unit) = override_unit {
         validate_unit_for_quantity("time", unit)?;
         return Ok(unit.to_string());
-    }
-    let minor = metadata
-        .get(crate::types::meta::CON_SPEC_MINOR)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    if spec_version < 3 || minor == 0 {
-        return Ok(NATURAL_TIME_UNIT.to_string());
     }
     let time = metadata
         .get(crate::types::meta::UNITS)
@@ -430,7 +427,7 @@ pub fn velocity_file_time_unit(
             Ok(unit.to_string())
         }
         None => Err(ParseError::InvalidUnits(
-            "v3.1 velocities require units.time".into(),
+            "major >= 4 velocities require units.time".into(),
         )),
     }
 }

@@ -320,7 +320,7 @@ fn v3_0_velocities_stay_in_the_natural_unit() {
     assert_eq!(unit, NATURAL_TIME_UNIT);
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
     let unit = velocity_file_time_unit(3, &meta, None).unwrap();
-    assert_eq!(unit, "fs");
+    assert_eq!(unit, NATURAL_TIME_UNIT);
     let scale = velocity_scale_to_natural("fs").unwrap();
     assert!((scale - 10.180505710759414).abs() < 1e-9, "{scale}");
     assert!((velocity_scale_to_natural(NATURAL_TIME_UNIT).unwrap() - 1.0).abs() < 1e-12);
@@ -590,8 +590,8 @@ fn indexed_read_covers_owned_and_mapped_files() {
 fn unit_edges_cover_override_time_and_rejected_spellings() {
     let mut meta = serde_json::Map::new();
     meta.insert("con_spec_minor".into(), serde_json::json!(1));
-    assert_eq!(velocity_file_time_unit(3, &meta, Some("ps")).unwrap(), "ps");
-    let missing = velocity_file_time_unit(3, &meta, None).unwrap_err();
+    assert_eq!(velocity_file_time_unit(4, &meta, Some("ps")).unwrap(), "ps");
+    let missing = velocity_file_time_unit(4, &meta, None).unwrap_err();
     assert_eq!(missing.class_name(), "InvalidUnits");
     assert!(missing.to_string().contains("units.time"));
 

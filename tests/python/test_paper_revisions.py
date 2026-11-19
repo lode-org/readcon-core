@@ -131,6 +131,13 @@ def _is_commit_or_tree(value: str) -> bool:
     return kind.returncode == 0 and kind.stdout.strip() in {"commit", "tree"}
 
 
+def _is_named_spec_blob(lines: list[str], value: str) -> bool:
+    if not any('"spec_blob"' in line and value in line for line in lines):
+        return False
+    kind = _git("cat-file", "-t", value)
+    return kind.returncode == 0 and kind.stdout.strip() == "blob"
+
+
 # These records name the build that was measured, not this release.
 # cpp_coords.json, cpp_vel.json and cachegrind_results.json name that
 # build's commit, ae4131ff. The others name readcon 0.17.4. settle.json
@@ -342,6 +349,8 @@ def test_paper_sources_name_real_tags_and_commits() -> None:
                 seen.add(value)
         for value in seen:
             if _is_commit_or_tree(value):
+                continue
+            if _is_named_spec_blob(lines, value):
                 continue
             if _external_pin(lines, value):
                 continue

@@ -2514,7 +2514,7 @@ impl PyConFrame {
         let atoms_are_truth = self.atoms_ready.load(std::sync::atomic::Ordering::Acquire);
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
-        // The builder writes minor 1, which requires units.time (CON-units.11).
+        // The builder writes major 4, which requires units.time (CON-units.11).
         crate::writer::stamp_legacy_velocity_time(
             &mut meta,
             self.spec_version,
@@ -3121,14 +3121,25 @@ impl SharedColumn {
 /// untorn value from that array, but different elements can come from
 /// different stores.
 #[pyfunction]
-#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None))]
+#[pyo3(signature = (path, columns, symbol="Cu", n_threads=None, spec_version=None))]
 fn write_columns(
     py: Python<'_>,
     path: &str,
     columns: &Bound<'_, PyDict>,
     symbol: &str,
     n_threads: Option<usize>,
+    spec_version: Option<u32>,
 ) -> PyResult<()> {
+    let written_spec = match spec_version {
+        None => crate::CON_SPEC_VERSION,
+        Some(version) if version == 3 || version == crate::CON_SPEC_VERSION => version,
+        Some(version) => {
+            return Err(PyValueError::new_err(format!(
+                "spec_version must be 3 or {}, not {version}",
+                crate::CON_SPEC_VERSION
+            )));
+        }
+    };
     let positions = columns
         .get_item("positions")?
         .ok_or_else(|| PyValueError::new_err("positions"))?;
