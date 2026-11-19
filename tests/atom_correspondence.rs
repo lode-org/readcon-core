@@ -193,8 +193,7 @@ fn by_id(frame: &ConFrame, id: u64) -> usize {
 }
 
 fn pos(frame: &ConFrame, i: usize) -> [f64; 3] {
-    let atom = &frame.atom_data[i];
-    [atom.x(), atom.y(), atom.z()]
+    frame.xyz_at(i)
 }
 
 #[test]
@@ -775,15 +774,11 @@ fn an_empty_frame_rebuilds_type_runs_and_rejects_a_stray_section() {
 }
 
 #[test]
-fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
+fn a_column_shift_is_the_displacement() {
     let reference = cu_h();
     let mut other = reference.clone();
-    let shifted = other.atom_data[0].x() + 0.3;
-    other.atom_data[0].set_x(shifted);
-    let kind = reference.positions.kind();
-    let mut reference = reference;
-    reference.positions = FloatArray2::zeros(kind, 0, 3);
-    other.positions = FloatArray2::zeros(kind, 0, 3);
+    let shifted = other.x_at(0) + 0.3;
+    other.set_x_at(0, shifted);
 
     let disp = minimum_image_displacements(&reference, &other, IdentityCheck::Strict).unwrap();
     assert!((disp[0][0] - 0.3).abs() < 1e-12);
@@ -791,7 +786,18 @@ fn coordinates_on_the_atoms_are_used_when_the_position_block_is_empty() {
     assert!(disp[1][0].abs() < 1e-12);
 
     let ordered = reorder_like(&reference, &other, IdentityCheck::Strict).unwrap();
-    assert_eq!(ordered.positions.nrows(), 0);
-    assert!((ordered.atom_data[0].x() - other.atom_data[0].x()).abs() < 1e-12);
+    assert!((ordered.x_at(0) - other.x_at(0)).abs() < 1e-12);
     assert_eq!(ordered.atom_data[0].atom_id, 10);
+
+    let kind = reference.positions.kind();
+    let mut empty = other;
+    empty.positions = FloatArray2::zeros(kind, 0, 3);
+    let err = minimum_image_displacements(&reference, &empty, IdentityCheck::Strict).unwrap_err();
+    assert!(matches!(
+        err,
+        CorrespondenceError::SectionLength {
+            section: "positions",
+            ..
+        }
+    ));
 }

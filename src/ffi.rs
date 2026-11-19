@@ -1533,7 +1533,14 @@ fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
             z = symbol_to_atomic_number(atoms[i].symbol.as_ref());
             last_symbol = symbol;
         }
-        out.push(catom_from_datum(&atoms[i], z, mass, has_vel, has_force));
+        out.push(catom_from_datum(
+            &atoms[i],
+            frame.xyz_at(i),
+            z,
+            mass,
+            has_vel,
+            has_force,
+        ));
         i += 1;
         mass_left -= 1;
     }
@@ -1542,6 +1549,7 @@ fn export_catoms(frame: &ConFrame) -> Vec<CAtom> {
 
 fn catom_from_datum(
     atom: &crate::types::AtomDatum,
+    xyz: [f64; 3],
     atomic_number: u64,
     mass: f64,
     has_vel: bool,
@@ -1560,9 +1568,9 @@ fn catom_from_datum(
     let fixed = atom.fixed();
     CAtom {
         atomic_number,
-        x: atom.x(),
-        y: atom.y(),
-        z: atom.z(),
+        x: xyz[0],
+        y: xyz[1],
+        z: xyz[2],
         is_fixed: atom.is_fixed(),
         fixed_x: fixed[0],
         fixed_y: fixed[1],
@@ -5757,10 +5765,11 @@ fn copy_array2_f64(
         }
         return note(RKRStatus::RKR_STATUS_SUCCESS);
     }
-    for (i, a) in frame.atom_data.iter().enumerate() {
-        dest[i * 3] = a.x();
-        dest[i * 3 + 1] = a.y();
-        dest[i * 3 + 2] = a.z();
+    for i in 0..frame.atom_data.len() {
+        let row = frame.xyz_at(i);
+        dest[i * 3] = row[0];
+        dest[i * 3 + 1] = row[1];
+        dest[i * 3 + 2] = row[2];
     }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
@@ -5973,8 +5982,8 @@ pub unsafe extern "C" fn rkr_frame_copy_atom_ids(
 fn frame_positions_arc(frame: &ConFrame) -> ndarray::ArcArray2<f64> {
     let n = frame.atom_data.len();
     let mut data = Vec::with_capacity(n * 3);
-    for a in &frame.atom_data {
-        data.extend_from_slice(&[a.x(), a.y(), a.z()]);
+    for i in 0..n {
+        data.extend_from_slice(&frame.xyz_at(i));
     }
     ndarray::ArcArray2::from_shape_vec((n, 3), data)
         .unwrap_or_else(|_| ndarray::ArcArray2::zeros((0, 3)))
@@ -6110,45 +6119,11 @@ pub unsafe extern "C" fn rkr_frame_positions_from_dlpack(
     if frame.positions.nrows() != n || frame.positions.ncols() != 3 {
         return note(RKRStatus::RKR_STATUS_VALIDATION_ERROR);
     }
-    // An exported tensor can share this column. The first row write then
-    // copies it, and the atoms that address the old column, which the
-    // tensor frees, move to the copy.
-    let old = frame
-        .positions
-        .f64_slice()
-        .map(|s| s.as_ptr_range())
-        .map(|range| range.start as usize..range.end as usize);
-    let offsets: Vec<Option<usize>> = frame
-        .atom_data
-        .iter()
-        .map(|atom| {
-            let at = atom.coord_ptr() as usize;
-            old.as_ref()
-                .filter(|range| range.contains(&at))
-                .map(|range| (at - range.start) / std::mem::size_of::<f64>())
-        })
-        .collect();
+    // The positions column is the coordinate store. The imported rows
+    // replace it, and accessors read those rows.
     for i in 0..n {
-        frame
-            .positions
-            .set_f64_row(i, [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]]);
-    }
-    let rows: Vec<[f64; 3]> = (0..n).map(|i| frame.positions.as_f64_row(i)).collect();
-    if let Some(new) = frame
-        .positions
-        .f64_mut_slice()
-        .map(|slice| slice.as_mut_ptr())
-    {
-        for (atom, offset) in frame.atom_data.iter_mut().zip(offsets) {
-            if let Some(offset) = offset {
-                atom.retarget(unsafe { new.add(offset) });
-            }
-        }
-    }
-    for (atom, row) in frame.atom_data.iter_mut().zip(rows) {
-        atom.set_x(row[0]);
-        atom.set_y(row[1]);
-        atom.set_z(row[2]);
+        let row = [vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]];
+        frame.positions.set_f64_row(i, row);
     }
     note(RKRStatus::RKR_STATUS_SUCCESS)
 }
@@ -7729,10 +7704,8 @@ Coordinates of Component 1
         // Mutate frame positions, then ingest tensor and require values restored
         {
             let fr = unsafe { &mut *(built as *mut ConFrame) };
-            for a in fr.atom_data.iter_mut() {
-                a.set_x(-99.0);
-                a.set_y(-99.0);
-                a.set_z(-99.0);
+            for i in 0..fr.atom_data.len() {
+                fr.set_xyz_at(i, [-99.0, -99.0, -99.0]);
             }
         }
         assert_eq!(
@@ -7741,9 +7714,9 @@ Coordinates of Component 1
         );
         {
             let fr = unsafe { &*(built as *const ConFrame) };
-            assert!((fr.atom_data[0].x() - 0.0).abs() < 1e-12);
-            assert!((fr.atom_data[0].y() - 0.0).abs() < 1e-12);
-            assert!((fr.atom_data[0].z() - 0.0).abs() < 1e-12);
+            assert!((fr.x_at(0) - 0.0).abs() < 1e-12);
+            assert!((fr.y_at(0) - 0.0).abs() < 1e-12);
+            assert!((fr.z_at(0) - 0.0).abs() < 1e-12);
         }
         // Re-export must match ingested coordinates (not zeros / garbage)
         let mut again: *mut RKRDLManagedTensorVersioned = std::ptr::null_mut();

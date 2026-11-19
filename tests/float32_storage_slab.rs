@@ -53,12 +53,7 @@ fn the_slab_holds_the_values_the_atoms_keep() {
             let slab = pack_position_slab(&frames, workers).expect("one atom count");
             let want: Vec<f64> = frames
                 .iter()
-                .flat_map(|frame| {
-                    frame
-                        .atom_data
-                        .iter()
-                        .flat_map(|atom| [atom.x(), atom.y(), atom.z()])
-                })
+                .flat_map(|frame| (0..frame.atom_data.len()).flat_map(|index| frame.xyz_at(index)))
                 .collect();
             assert_eq!(slab.len(), want.len());
             for (index, (got, want)) in slab.iter().zip(&want).enumerate() {

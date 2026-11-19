@@ -113,12 +113,12 @@ fn binding_rewrite_of_empty_header_matches_the_builder() {
         .prebox_header(&frame.header.prebox_header.user)
         .postbox_header(frame.header.postbox_header.clone());
     let mass = frame.header.masses_per_type[0];
-    for atom in &frame.atom_data {
+    for (coord_i0, atom) in frame.atom_data.iter().enumerate() {
         builder.add_atom(
             &atom.symbol,
-            atom.x(),
-            atom.y(),
-            atom.z(),
+            frame.x_at(coord_i0),
+            frame.y_at(coord_i0),
+            frame.z_at(coord_i0),
             atom.fixed(),
             atom.atom_id,
             mass,

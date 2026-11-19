@@ -238,10 +238,10 @@ fn snap_from_frame(frame: &ConFrame, index: usize) -> AtomSnap {
     let atom = &frame.atom_data[index];
     let [x, y, z] = if n > 0 && frame.positions.nrows() == n {
         frame.positions.as_f64_row(index)
-    } else if n == 0 {
-        [0.0; 3]
     } else {
-        [atom.x(), atom.y(), atom.z()]
+        // The column was moved into the store or a NumPy view. Callers
+        // that can see that buffer fill these in afterwards.
+        [0.0; 3]
     };
     AtomSnap {
         symbol: atom.symbol.to_string(),
@@ -650,7 +650,43 @@ impl PyConFrame {
         {
             return snap_from_datum(&atom);
         }
-        self.store_snap_unchecked(index)
+        let mut snap = self.store_snap_unchecked(index);
+        let n = self.n_atoms();
+        if n > 0 && self.store().positions.nrows() != n {
+            let xyz = self.live_xyz(py, index);
+            snap.x = xyz[0];
+            snap.y = xyz[1];
+            snap.z = xyz[2];
+        }
+        snap
+    }
+
+    /// Coordinates of one atom from the store, the slab, or the owned array.
+    fn live_xyz(&self, py: Python<'_>, index: usize) -> [f64; 3] {
+        if let Some(owned) = &self.xyz_owned
+            && let Some(xyz) = load_numpy_triple(owned.bind(py), index * 3)
+        {
+            return xyz;
+        }
+        if let Some(slab) = &self.slab
+            && let Some(xyz) = load_numpy_triple(
+                slab.bind(py),
+                (self.slab_index * self.n_atoms + index) * 3,
+            )
+        {
+            return xyz;
+        }
+        if let Some(store) = &self.store
+            && let Some(xyz) = store.get().load_triple(self.slab_index, index)
+        {
+            return xyz;
+        }
+        if let Some(frame) = &self.inner
+            && frame.positions.nrows() > index
+        {
+            return frame.xyz_at(index);
+        }
+        [0.0; 3]
     }
 
     fn store_snap_unchecked(&self, index: usize) -> AtomSnap {
@@ -866,31 +902,16 @@ impl PyConFrame {
         let dt = self.dtypes();
         let cached_value = if use_columns {
             let frame = self.store_mut();
-            if frame.positions.nrows() != n {
-                frame.positions = FloatArray2::zeros(dt.positions, n, 3);
-                for i in 0..n {
-                    let atom = &frame.atom_data[i];
-                    frame
-                        .positions
-                        .set_f64_row(i, [atom.x(), atom.y(), atom.z()]);
-                }
-            }
             let stored =
                 set_row_component(&mut frame.positions, n, index, axis, value, dt.positions);
-            let atom = &mut frame.atom_data[index];
-            atom.set_x(stored[0]);
-            atom.set_y(stored[1]);
-            atom.set_z(stored[2]);
             stored[axis]
         } else {
-            let atom = &mut self.store_mut().atom_data[index];
-            match axis {
-                0 => atom.set_x(value),
-                1 => atom.set_y(value),
-                2 => atom.set_z(value),
-                _ => {}
-            }
             self.write_view_component(py, index, axis, value)?;
+            if let Some(store) = &self.store {
+                store
+                    .get()
+                    .store_component(self.slab_index, index, axis, value);
+            }
             value
         };
         self.update_cached_atom(py, index, |atom| match axis {
@@ -903,9 +924,9 @@ impl PyConFrame {
         Ok(())
     }
 
-    /// `read_con` keeps coordinates in a NumPy slab or an owned array.
-    /// Atom pointers usually alias that memory. Write the array as well so a
-    /// view edit is visible when the pointer addresses a different box.
+    /// `read_con` keeps coordinates in the position store, a NumPy slab, or
+    /// an owned array. Atoms store no pointer. Write that buffer so a view
+    /// edit is what a later read of `xyz` sees.
     fn write_view_component(
         &self,
         py: Python<'_>,

@@ -69,8 +69,8 @@ impl Rcso {
         out.extend_from_slice(&[0u8; 3]);
         out.extend_from_slice(&0u32.to_le_bytes());
 
-        for a in &frame.atom_data {
-            for c in [a.x(), a.y(), a.z()] {
+        for index in 0..frame.atom_data.len() {
+            for c in frame.xyz_at(index) {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
@@ -239,8 +239,8 @@ mod tests {
         assert_eq!(got.natoms as usize, frame.atom_data.len());
         assert!(got.forces.is_none());
         assert!(got.velocities.is_none());
-        for (a, p) in frame.atom_data.iter().zip(&got.positions) {
-            assert_eq!([a.x(), a.y(), a.z()], *p);
+        for (index, p) in got.positions.iter().enumerate() {
+            assert_eq!(frame.xyz_at(index), *p);
         }
     }
 

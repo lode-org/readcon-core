@@ -1068,6 +1068,7 @@ impl<W: Write> ConFrameWriter<W> {
                     row.clear();
                 }
             }
+            let coord_buf = frame_coords(frame);
             let mut atom_idx_offset = 0;
             for (type_idx, &num_atoms_in_type) in frame.header.natms_per_type.iter().enumerate() {
                 let symbol = &frame.atom_data[atom_idx_offset].symbol;
@@ -1080,6 +1081,7 @@ impl<W: Write> ConFrameWriter<W> {
                     buf,
                     LineFmt { ryu, slots },
                     &frame.atom_data[atom_idx_offset..atom_idx_offset + num_atoms_in_type],
+                    &coord_buf[atom_idx_offset * 3..(atom_idx_offset + num_atoms_in_type) * 3],
                     prec,
                     spec_version,
                     self.atom_workers,
@@ -1971,38 +1973,120 @@ fn format_bufs() -> &'static std::sync::Mutex<Vec<Vec<u8>>> {
     CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
-/// Base of a contiguous `xyz` slab, three `f64`s per atom in order.
+fn xyz_from(coords: &[f64], index: usize) -> [f64; 3] {
+    let at = index * 3;
+    [coords[at], coords[at + 1], coords[at + 2]]
+}
+
+/// Slab rows a Python read moved out of `positions`.
 ///
-/// Parsed frames and the binding slab store coordinates that way. Owned
-/// boxes are separate allocations and stay on the pointer walk.
-fn coord_slab(atoms: &[crate::types::AtomDatum]) -> Option<*const f64> {
-    let n = atoms.len();
-    if n < 2 {
-        return None;
-    }
-    let base = atoms[0].coord_ptr();
-    if base.is_null() {
-        return None;
-    }
-    // Three probes. A contiguous slab (the parse buffer, the binding
-    // slab) hits all of them. Owned boxes miss the second atom.
-    let aligned = |index: usize| unsafe { atoms[index].coord_ptr() == base.add(index * 3) };
-    if aligned(1) && aligned(n / 2) && aligned(n - 1) {
-        Some(base)
-    } else {
-        None
+/// The frames sit in one `Vec`, so the address of the first and the step
+/// to the next name every row. Installed only when no Python object can
+/// store into the slab. A shared slab is snapshotted and this stays empty.
+struct BorrowedSlab {
+    #[cfg(feature = "python")]
+    id: u64,
+    base: usize,
+    width: usize,
+    first: usize,
+    stride: usize,
+    count: usize,
+}
+
+static BORROWED_SLABS: std::sync::RwLock<Vec<BorrowedSlab>> = std::sync::RwLock::new(Vec::new());
+
+#[cfg(feature = "python")]
+static NEXT_BORROW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+#[must_use = "the slab borrow ends when the guard drops"]
+#[cfg(feature = "python")]
+pub(crate) struct BorrowedCoordsGuard {
+    id: u64,
+}
+
+#[cfg(feature = "python")]
+impl Drop for BorrowedCoordsGuard {
+    fn drop(&mut self) {
+        let mut slots = BORROWED_SLABS
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        slots.retain(|slot| slot.id != self.id);
     }
 }
 
-fn load_xyz(atom: &crate::types::AtomDatum, slab: Option<*const f64>, index: usize) -> [f64; 3] {
-    if let Some(base) = slab {
-        unsafe {
-            let ptr = base.add(index * 3);
-            [*ptr, *ptr.add(1), *ptr.add(2)]
+/// Publish one rectangular slab. `first` is frame 0's address. `stride` is
+/// the step to the next frame, or 0 when there is a single frame.
+///
+/// Several writes can be in flight. Each one keeps its own row, and dropping
+/// the guard removes only that row.
+#[cfg(feature = "python")]
+pub(crate) fn install_borrowed_slab(
+    base: usize,
+    width: usize,
+    first: usize,
+    stride: usize,
+    count: usize,
+) -> BorrowedCoordsGuard {
+    let id = NEXT_BORROW.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut slots = BORROWED_SLABS
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    slots.push(BorrowedSlab {
+        id,
+        base,
+        width,
+        first,
+        stride,
+        count,
+    });
+    BorrowedCoordsGuard { id }
+}
+
+pub(crate) fn borrowed_coord_slice(frame: &ConFrame) -> Option<&[f64]> {
+    let slots = BORROWED_SLABS
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let addr = frame as *const ConFrame as usize;
+    for slot in slots.iter() {
+        if slot.width == 0 || slot.base == 0 || slot.count == 0 {
+            continue;
         }
-    } else {
-        [atom.x(), atom.y(), atom.z()]
+        let index = if addr == slot.first {
+            0
+        } else if slot.stride == 0
+            || addr < slot.first
+            || !(addr - slot.first).is_multiple_of(slot.stride)
+        {
+            continue;
+        } else {
+            (addr - slot.first) / slot.stride
+        };
+        if index >= slot.count {
+            continue;
+        }
+        let byte = slot.base + index * slot.width * std::mem::size_of::<f64>();
+        return Some(unsafe { std::slice::from_raw_parts(byte as *const f64, slot.width) });
     }
+    None
+}
+
+fn frame_coords(frame: &ConFrame) -> std::borrow::Cow<'_, [f64]> {
+    let n = frame.atom_data.len();
+    if let Some(slice) = frame.positions.f64_slice()
+        && slice.len() == n * 3
+    {
+        return std::borrow::Cow::Borrowed(slice);
+    }
+    if let Some(slice) = borrowed_coord_slice(frame)
+        && slice.len() == n * 3
+    {
+        return std::borrow::Cow::Borrowed(slice);
+    }
+    let mut owned = Vec::with_capacity(n.saturating_mul(3));
+    for index in 0..n {
+        owned.extend_from_slice(&frame.xyz_at(index));
+    }
+    std::borrow::Cow::Owned(owned)
 }
 
 struct MotionFmt<'a> {
@@ -2119,7 +2203,9 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
         return Ok(header);
     }
     let with_one = format_coord_range(frame, 0, 1);
-    let one = format_coordinate_lines(&frame.atom_data[..1])?;
+    let coords = frame_coords(frame);
+    let first = coords.get(..3).unwrap_or(&[]);
+    let one = format_coordinate_lines(&frame.atom_data[..1], first)?;
     if let Some(species) = with_one.strip_suffix(one.as_slice()) {
         header.extend_from_slice(species);
     }
@@ -2131,6 +2217,7 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
 pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
     let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
     let prec = FloatFormat::RoundTrip;
+    let coords = frame_coords(frame);
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
@@ -2147,8 +2234,7 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
                 push_component_line(&mut buf, "Coordinates of Component", type_idx);
             }
             let atoms = &frame.atom_data[from..to];
-            let slab = coord_slab(atoms);
-            for (index, atom) in atoms.iter().enumerate() {
+            for (offset, atom) in atoms.iter().enumerate() {
                 push_atom_motion(
                     &mut buf,
                     None,
@@ -2157,7 +2243,11 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
                         slots: &mut slots,
                         vel_slots: &mut vel_slots,
                     },
-                    load_xyz(atom, slab, index),
+                    [
+                        coords[(from + offset) * 3],
+                        coords[(from + offset) * 3 + 1],
+                        coords[(from + offset) * 3 + 2],
+                    ],
                     atom,
                     prec,
                     spec,
@@ -2173,7 +2263,10 @@ pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> 
 ///
 /// One pass, private buffer. Callers that split a frame across ranks write
 /// these bytes at the offset from an exclusive scan of the lengths.
-pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<u8>, WriteError> {
+pub fn format_coordinate_lines(
+    atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
+) -> Result<Vec<u8>, WriteError> {
     let mut buf = take_format_buf(atoms.len().saturating_mul(48));
     let mut ryu = ryu::Buffer::new();
     let mut slots = [FmtSlot::new(); 3];
@@ -2184,6 +2277,7 @@ pub fn format_coordinate_lines(atoms: &[crate::types::AtomDatum]) -> Result<Vec<
             slots: &mut slots,
         },
         atoms,
+        coords,
         FloatFormat::RoundTrip,
         2,
         1,
@@ -2239,52 +2333,12 @@ struct AppendOut<'a> {
     vel: Option<&'a mut Vec<u8>>,
 }
 
-fn ids_follow(atoms: &[crate::types::AtomDatum]) -> bool {
-    let Some(first) = atoms.first() else {
-        return false;
-    };
-    let origin = first.atom_id;
-    atoms
-        .iter()
-        .enumerate()
-        .all(|(index, atom)| atom.atom_id == origin + index as u64)
-}
-
-/// Coordinate rows from a contiguous slab, same bytes as [`push_xyz_line`].
-fn format_slab_rows(
-    atoms: &[crate::types::AtomDatum],
-    slab: *const f64,
-    spec_version: u32,
-) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(atoms.len().saturating_mul(24));
-    let mut ryu = ryu::Buffer::new();
-    let mut slots = [FmtSlot::new(); 3];
-    let mut ids = IdDigits::from_u64(atoms[0].atom_id);
-    for (index, atom) in atoms.iter().enumerate() {
-        let xyz = unsafe {
-            let ptr = slab.add(index * 3);
-            [*ptr, *ptr.add(1), *ptr.add(2)]
-        };
-        let mut id_buf = [0u8; 20];
-        let id_len = ids.text().len();
-        id_buf[..id_len].copy_from_slice(ids.text());
-        push_column_line(
-            &mut buf,
-            &mut ryu,
-            &mut slots,
-            xyz,
-            written_fixed_flag(atom.fixed(), spec_version),
-            &id_buf[..id_len],
-        );
-        ids.bump();
-    }
-    buf
-}
-
+#[allow(clippy::too_many_arguments)]
 fn append_coord_rows(
     buf: &mut Vec<u8>,
     fmt: LineFmt<'_>,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     prec: FloatFormat,
     spec_version: u32,
     workers: usize,
@@ -2305,6 +2359,7 @@ fn append_coord_rows(
             let vel_bytes = stream_coord_rows(
                 file,
                 atoms,
+                coords,
                 workers,
                 prec,
                 spec_version,
@@ -2318,14 +2373,7 @@ fn append_coord_rows(
         }
     }
     if workers < 2 || atoms.len() < WIDE_ATOM_GRAIN {
-        if !want_vel && prec == FloatFormat::RoundTrip && ids_follow(atoms) {
-            if let Some(slab) = coord_slab(atoms) {
-                buf.extend_from_slice(&format_slab_rows(atoms, slab, spec_version));
-                return Ok(());
-            }
-        }
         let mut vel_slots = [FmtSlot::new(); 3];
-        let slab = coord_slab(atoms);
         for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
@@ -2335,7 +2383,7 @@ fn append_coord_rows(
                     slots,
                     vel_slots: &mut vel_slots,
                 },
-                load_xyz(atom, slab, index),
+                xyz_from(coords, index),
                 atom,
                 prec,
                 spec_version,
@@ -2375,7 +2423,6 @@ fn append_coord_rows(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             bad_ids.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2388,7 +2435,7 @@ fn append_coord_rows(
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -2466,7 +2513,6 @@ fn append_coord_rows(
     {
         let _ = workers;
         let mut vel_slots = [FmtSlot::new(); 3];
-        let slab = coord_slab(atoms);
         for (index, atom) in atoms.iter().enumerate() {
             push_atom_motion(
                 buf,
@@ -2476,7 +2522,7 @@ fn append_coord_rows(
                     slots,
                     vel_slots: &mut vel_slots,
                 },
-                load_xyz(atom, slab, index),
+                xyz_from(coords, index),
                 atom,
                 prec,
                 spec_version,
@@ -2605,6 +2651,7 @@ pub(crate) fn file_is_tmpfs(file: &File) -> bool {
 fn stream_coord_pipeline(
     file: &mut File,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     workers: usize,
     prec: FloatFormat,
     spec_version: u32,
@@ -2655,7 +2702,6 @@ fn stream_coord_pipeline(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2668,7 +2714,7 @@ fn stream_coord_pipeline(
                                 slots: &mut slots_fmt,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -2754,9 +2800,11 @@ fn mapped_line_budget(prec: FloatFormat) -> usize {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn stream_coord_rows(
     file: &mut File,
     atoms: &[crate::types::AtomDatum],
+    coords: &[f64],
     workers: usize,
     prec: FloatFormat,
     spec_version: u32,
@@ -2769,7 +2817,7 @@ fn stream_coord_rows(
     let workers = workers.max(1).min(atoms.len().max(1));
     let side_copies = side_copy_workers(workers);
     if !side_copies && !force_map {
-        return stream_coord_pipeline(file, atoms, workers, prec, spec_version, want_vel);
+        return stream_coord_pipeline(file, atoms, coords, workers, prec, spec_version, want_vel);
     }
     let groups = if side_copies {
         workers.saturating_mul(8).max(workers)
@@ -2885,7 +2933,6 @@ fn stream_coord_rows(
                     } else {
                         Vec::new()
                     };
-                    let slab = coord_slab(group);
                     for (offset, atom) in group.iter().enumerate() {
                         if atom.atom_id != (start + offset) as u64 {
                             flag.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2898,7 +2945,7 @@ fn stream_coord_rows(
                                 slots: &mut slots,
                                 vel_slots: &mut vel_slots,
                             },
-                            load_xyz(atom, slab, offset),
+                            xyz_from(coords, start + offset),
                             atom,
                             prec,
                             spec_version,
@@ -5016,16 +5063,14 @@ fn packed_float_widths(frame: &ConFrame) -> usize {
     add_widths(&mut sum, &boxl);
     add_widths(&mut sum, &angles);
     add_widths(&mut sum, &frame.header.masses_per_type);
-    if let Some(base) = coord_slab(&frame.atom_data) {
-        let n = frame.atom_data.len() * 3;
-        let coords = unsafe { std::slice::from_raw_parts(base, n) };
-        add_widths(&mut sum, coords);
-    } else {
-        for atom in &frame.atom_data {
-            sum += round_trip_width(atom.x());
-            sum += round_trip_width(atom.y());
-            sum += round_trip_width(atom.z());
-        }
+    // The positions column may have been moved into a slab. `frame_coords`
+    // borrows that row; `xyz_at` would only see the empty column.
+    let coords = frame_coords(frame);
+    for index in 0..frame.atom_data.len() {
+        let at = index * 3;
+        sum += round_trip_width(coords[at]);
+        sum += round_trip_width(coords[at + 1]);
+        sum += round_trip_width(coords[at + 2]);
     }
     sum += optional_rows_width(frame.velocities.is_present().then(|| &*frame.velocities));
     sum += optional_rows_width(frame.forces.is_present().then(|| &*frame.forces));
@@ -6297,8 +6342,8 @@ mod float_format_tests {
             .map(|frame| frame.expect("parse"))
             .collect();
         let mut values = Vec::new();
-        for atom in &frames[0].atom_data {
-            values.extend([atom.x(), atom.y(), atom.z()]);
+        for index in 0..frames[0].atom_data.len() {
+            values.extend(frames[0].xyz_at(index));
         }
         for atom in &frames[0].atom_data {
             if let Some(v) = atom.velocity() {
@@ -6836,7 +6881,7 @@ mod parallel_write_tests {
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
         let before = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
         let old = before[2];
-        frames[2].atom_data[0].set_x(1.0e22);
+        frames[2].set_x_at(0, 1.0e22);
         let refs: Vec<&crate::types::ConFrame> = frames.iter().collect();
         let after = super::cached_packed_lengths(&refs, 2, None, false, true).unwrap();
         let formatted =
@@ -7138,8 +7183,8 @@ mod parallel_write_bytes {
         super::write_frame_refs_to_path(&path, &refs, 1, None, false, true).unwrap();
         let original = std::fs::read(&path).unwrap();
         let mut changed = frames[0].clone();
-        let x = changed.atom_data[0].x();
-        changed.atom_data[0].set_x(x + 0.0001);
+        let x = changed.x_at(0);
+        changed.set_x_at(0, x + 0.0001);
         let changed_refs: Vec<&crate::types::ConFrame> = vec![&changed; n];
         let spare = path.with_file_name(format!(
             "{}.rewrite",
@@ -7244,7 +7289,8 @@ mod parallel_write_bytes {
     #[test]
     fn coordinate_lines_match_the_serial_frame_body() {
         let frames = frames_from_text(&wide_text(32), Some(1)).unwrap();
-        let lines = super::format_coordinate_lines(&frames[0].atom_data).unwrap();
+        let rows = super::frame_coords(&frames[0]);
+        let lines = super::format_coordinate_lines(&frames[0].atom_data, &rows).unwrap();
         let serial = write_frames_to_vec(&frames).unwrap();
         let text = std::str::from_utf8(&serial).unwrap();
         let marker = "Coordinates of Component 1\n";
@@ -7336,7 +7382,8 @@ mod parallel_write_bytes {
     fn a_binding_header_plus_coordinate_lines_match_the_bound_writer() {
         let frame = copper_frame(4, "Cu", 63.546, |i| i as u64);
         let header = super::wide_frame_header(&frame).expect("header");
-        let coords = super::format_coordinate_lines(&frame.atom_data).expect("coords");
+        let rows = super::frame_coords(&frame);
+        let coords = super::format_coordinate_lines(&frame.atom_data, &rows).expect("coords");
         let mut full = Vec::new();
         {
             let mut writer = super::ConFrameWriter::new(&mut full);
@@ -7362,7 +7409,14 @@ mod parallel_write_bytes {
             let mut split = header.clone();
             for rank in 0..ranks {
                 let slice = &frame.atom_data[rank * share..(rank + 1) * share];
-                split.extend(super::format_coordinate_lines(slice).expect("slice"));
+                let rows = super::frame_coords(&frame);
+                split.extend(
+                    super::format_coordinate_lines(
+                        slice,
+                        &rows[rank * share * 3..(rank + 1) * share * 3],
+                    )
+                    .expect("slice"),
+                );
             }
             assert_eq!(split, full, "ranks {ranks}");
         }

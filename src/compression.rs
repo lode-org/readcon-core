@@ -2419,10 +2419,8 @@ mod tests {
     }
 
     fn coords(frame: &crate::types::ConFrame) -> Vec<f64> {
-        frame
-            .atom_data
-            .iter()
-            .flat_map(|atom| [atom.x(), atom.y(), atom.z()])
+        (0..frame.atom_data.len())
+            .flat_map(|index| frame.xyz_at(index))
             .collect()
     }
 
