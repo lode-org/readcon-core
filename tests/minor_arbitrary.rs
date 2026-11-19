@@ -209,10 +209,12 @@ fn corpus_huge_minor_files_accept_on_every_rust_read_path_and_roundtrip() {
         ConFrameWriter::new(&mut rw_bytes).write_frame(&rw).unwrap();
         let rw_str = String::from_utf8(rw_bytes).unwrap();
         let rw_reread = frames_from_text(&rw_str, None).unwrap();
-        assert_eq!(
-            rw_reread[0].header.spec_version,
+        let rewrite_major = if expected_major == 3 {
+            3
+        } else {
             readcon_core::CON_SPEC_VERSION
-        );
+        };
+        assert_eq!(rw_reread[0].header.spec_version, rewrite_major);
         assert_minor_digits(&rw_reread[0], expected_minor, name);
 
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);

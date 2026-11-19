@@ -411,3 +411,37 @@ fn accepted_corpus_rewrites_are_byte_identical() {
         .unwrap_or_else(|err| panic!("failed to run {}: {err}", script.display()));
     assert!(status.success(), "cross-binding rewrite comparison failed");
 }
+
+/// The C rewriter and the bound writer emit the same bytes, so a major-3
+/// frame keeps major 3 through both and a legacy femtosecond velocity frame
+/// moves to the current major through both.
+#[test]
+fn binding_rewrite_matches_the_bound_writer() {
+    use readcon_core::iterators::ConFrameIterator;
+    let v3 = r#"{"con_spec_version":3,"con_spec_minor":1,"units":{"length":"angstrom","energy":"eV","time":"fs"}}"#;
+    let v2 = r#"{"con_spec_version":2,"con_spec_minor":1}"#;
+    let atoms = "1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 1\n";
+    let velocities = "\nH\nVelocities of Component 1\n0.1 0 0 0 1\n";
+    for (major, line2, body) in [
+        (3, v3, atoms.to_string()),
+        (4, v3, format!("{atoms}{velocities}")),
+        (4, v2, atoms.to_string()),
+    ] {
+        let source = format!("t\n{line2}\n10 10 10\n90 90 90\n\n\n{body}");
+        let frame = ConFrameIterator::new(&source)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let rewritten = binding_rewrite_frame(&frame).expect("rewrite");
+        assert_eq!(rewritten.header.spec_version, major, "{source}");
+        let mut bound = Vec::new();
+        ConFrameWriter::new(&mut bound)
+            .write_frame_bound(&frame)
+            .expect("bound");
+        assert_eq!(
+            String::from_utf8(write_bytes(&[rewritten])).unwrap(),
+            String::from_utf8(bound).unwrap(),
+            "{source}"
+        );
+    }
+}

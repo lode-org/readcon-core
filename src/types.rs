@@ -3713,6 +3713,9 @@ pub struct ConFrameBuilder {
 
     metadata: BTreeMap<String, serde_json::Value>,
     minor_raw: Option<String>,
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. A caller that reproduces an
+    /// older file, such as the r0174 CON 3.1 payloads, sets 3.
+    written_spec: u32,
 }
 
 impl Default for ConFrameBuilder {
@@ -3745,6 +3748,7 @@ impl Default for ConFrameBuilder {
             has_spreads: false,
             metadata: BTreeMap::new(),
             minor_raw: None,
+            written_spec: 0,
         }
     }
 }
@@ -3782,6 +3786,16 @@ impl ConFrameBuilder {
     pub fn try_new(cell: [f64; 3], angles: [f64; 3]) -> Result<Self, ParseError> {
         check_cell_finite(&cell, "cell", &angles, "angles")?;
         Ok(Self::new(cell, angles))
+    }
+
+    /// Write this major version instead of [`crate::CON_SPEC_VERSION`].
+    ///
+    /// `0` writes [`crate::CON_SPEC_VERSION`]. [`Self::build`] refuses a major
+    /// above it with [`ParseError::UnsupportedVersion`], because no reader of
+    /// this crate reads that file back.
+    pub fn spec_version(&mut self, version: u32) -> &mut Self {
+        self.written_spec = version;
+        self
     }
 
     /// Sets the user-facing pre-box header line. The JSON metadata line is
@@ -5098,7 +5112,9 @@ impl ConFrameBuilder {
     ///
     /// Returns [`crate::error::ParseError::MassMismatch`] when two atoms
     /// share a symbol and their masses differ by more than
-    /// [`Self::TYPE_MASS_ABS_TOL`].
+    /// [`Self::TYPE_MASS_ABS_TOL`]. Returns
+    /// [`crate::error::ParseError::UnsupportedVersion`] when
+    /// [`Self::spec_version`] named a major above [`crate::CON_SPEC_VERSION`].
     pub fn build(self) -> Result<ConFrame, crate::error::ParseError> {
         self.build_with_permutation().map(|(frame, _perm)| frame)
     }
@@ -5135,6 +5151,13 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
+        let written_spec = match self.written_spec {
+            0 => crate::CON_SPEC_VERSION,
+            major if major > crate::CON_SPEC_VERSION => {
+                return Err(ParseError::UnsupportedVersion(major));
+            }
+            major => major,
+        };
         // Single-pass grouping: assign each atom a type index in encounter
         // order and bucket its position. The buckets preserve per-symbol
         // input order so the final flatten yields atoms grouped by type.
@@ -5285,18 +5308,21 @@ impl ConFrameBuilder {
         let sections_declared = !sections.is_empty();
         let mut metadata = self.metadata;
         // v3 writers always emit units (defaults if the caller omitted them).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::UNITS) {
+        if written_spec >= 3 && !metadata.contains_key(meta::UNITS) {
             metadata.insert(meta::UNITS.into(), crate::units::default_v3_units_json());
         }
         // The builder, not the writer, stamps the current minor and patch
         // on a major 4 frame when the caller did not set the keys (D15).
-        if crate::CON_SPEC_VERSION >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
-            metadata.insert(
-                meta::CON_SPEC_MINOR.into(),
-                serde_json::Value::from(crate::CON_SPEC_MINOR),
-            );
+        // A requested major 3 is the CON 3.1 writer: minor 1, no patch.
+        if written_spec >= 3 && !metadata.contains_key(meta::CON_SPEC_MINOR) {
+            let minor = if written_spec >= 4 {
+                crate::CON_SPEC_MINOR
+            } else {
+                1
+            };
+            metadata.insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
         }
-        if crate::CON_SPEC_VERSION >= 4 && !metadata.contains_key(meta::CON_SPEC_PATCH) {
+        if written_spec >= 4 && !metadata.contains_key(meta::CON_SPEC_PATCH) {
             metadata.insert(
                 meta::CON_SPEC_PATCH.into(),
                 serde_json::Value::from(crate::CON_SPEC_PATCH),
@@ -5304,8 +5330,9 @@ impl ConFrameBuilder {
         }
         // In-memory velocities are in the natural time unit. Major 4
         // requires units.time when a velocities section is present
-        // (CON-units.3, CON-units.11).
-        if has_vel {
+        // (CON-units.3, CON-units.11). A major 3 file keeps the time label
+        // the caller set, which for a reproduction is the historical spelling.
+        if has_vel && written_spec >= 4 {
             let time_ok = metadata
                 .get(meta::UNITS)
                 .and_then(|units| units.get("time"))
@@ -5396,7 +5423,7 @@ impl ConFrameBuilder {
             natm_types: type_order.len(),
             natms_per_type: type_counts,
             masses_per_type: type_masses,
-            spec_version: crate::CON_SPEC_VERSION,
+            spec_version: written_spec,
             metadata: FrameMeta::from_map_with_minor_raw(metadata, self.minor_raw.as_deref()),
             sections,
             strict_validation,

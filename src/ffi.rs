@@ -8234,7 +8234,12 @@ Coordinates of Component 1
 
             let rewritten = unsafe { rkr_frame_binding_rewrite(first) };
             assert!(!rewritten.is_null(), "{name} binding rewrite failed");
-            assert_eq!(rkr_frame_spec_version(rewritten), crate::CON_SPEC_VERSION);
+            let rewrite_major = if expect_major == 3 {
+                3
+            } else {
+                crate::CON_SPEC_VERSION
+            };
+            assert_eq!(rkr_frame_spec_version(rewritten), rewrite_major);
             let rw_meta = unsafe { rkr_frame_metadata_json(rewritten) };
             assert!(!rw_meta.is_null());
             let rw_str = unsafe { CStr::from_ptr(rw_meta) }.to_str().unwrap();
