@@ -158,6 +158,13 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def live_clause_coverage() -> dict:
+    """Regenerate clause coverage from this checkout without reading a record."""
+    import clause_coverage
+
+    return clause_coverage.build()
+
+
 def macros() -> dict[str, str]:
     """``\\newcommand`` values of commit.tex, release.tex and every generated macro file."""
     values: dict[str, str] = {}
@@ -1017,11 +1024,8 @@ def check_conformance() -> str:
     every = json.loads((ROOT / "data" / "every_path.json").read_text())["results"][
         "totals"
     ]
-    version = (ROOT.parents[1] / "VERSION").read_text().strip()
-    coverage_record = f"clause_coverage-{version}.json"
-    clauses = json.loads((ROOT / "data" / "spec" / coverage_record).read_text())[
-        "totals"
-    ]
+    coverage_record = "live clause regeneration"
+    clauses = live_clause_coverage()["totals"]
     mutants = json.loads(
         (ROOT / "data" / "spec" / "mutant_differential.json").read_text()
     )["totals"]

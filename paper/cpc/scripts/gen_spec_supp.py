@@ -54,6 +54,7 @@ holding '="', which org itself closes at that "=".
 
 import argparse
 import difflib
+import hashlib
 import json
 import math
 import os
@@ -573,6 +574,31 @@ def second_text_change(changes: list[dict], texts: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def measurement_record() -> dict:
+    record = json.loads(VERSIONS.read_text())
+    if VERSIONS == MEASUREMENT:
+        contents = SPEC.read_bytes()
+        spec_blob = hashlib.sha1(
+            f"blob {len(contents)}\0".encode() + contents
+        ).hexdigest()
+        overlays = [
+            path
+            for path in sorted(SPEC_DATA.glob("spec-measurement-tree-*.json"))
+            if json.loads(path.read_text(encoding="utf-8"))
+            .get("tree", {})
+            .get("spec_blob")
+            == spec_blob
+        ]
+        overlay = overlays[-1] if overlays else None
+    else:
+        overlay = None
+    if overlay is not None:
+        superseding = json.loads(overlay.read_text(encoding="utf-8"))
+        record["tree"] = superseding["tree"]
+        record["unreleased_history"] = superseding.get("history", [])
+    return record
+
+
 def release_rows(org: str) -> list[dict]:
     """The version history of a spec.org without a Release column, as a release tree ships it.
 
@@ -582,7 +608,7 @@ def release_rows(org: str) -> list[dict]:
     of that version. It is a row of its own after the version's rows, dated by the tag, and its change is
     what --measure recorded for the tag (second_text_change).
     """
-    record = json.loads(VERSIONS.read_text())
+    record = measurement_record()
     rows = history_rows(org)
     for row in rows:
         if row["version"] == "1":
@@ -600,11 +626,25 @@ def release_rows(org: str) -> list[dict]:
             None,
         )
         if first is None:
-            raise SystemExit(
-                f"no tag of {VERSIONS.relative_to(ROOT)} lists version {row['version']} "
-                f"of {row['date']}"
+            tree = record["tree"]
+            listed = any(
+                (entry["version"], entry["date"])
+                == (row["version"], row["date"])
+                for entry in record.get("unreleased_history", [])
             )
-        row["release"] = f"readcon-core {first[1:]}"
+            if (
+                not listed
+                or tree["tagged"]
+                or tree["release"] != package_version()
+            ):
+                raise SystemExit(
+                    f"no tag or superseding tree record of "
+                    f"{VERSIONS.relative_to(ROOT)} lists version "
+                    f"{row['version']} of {row['date']}"
+                )
+            row["release"] = f"readcon-core {tree['release']} (untagged)"
+        else:
+            row["release"] = f"readcon-core {first[1:]}"
     texts = dict(
         re.findall(r"^- (CON-[a-z0-9]+\.[0-9]+) :: [A-Z ]+ :: (.*)$", org, re.M)
     )
@@ -627,9 +667,13 @@ def release_rows(org: str) -> list[dict]:
                     f"{tag['tag']} added or reworded {missing}, which {SPEC.relative_to(ROOT)} "
                     "does not hold"
                 )
-            at = max(
+            matching = [
                 i for i, row in enumerate(rows) if row["version"] == newest(tag)[0]
-            )
+            ]
+            if not matching:
+                previous = tag
+                continue
+            at = max(matching)
             # The mark goes under the date, so the date column keeps the width of a bare date.
             rows.insert(
                 at + 1,
@@ -650,7 +694,7 @@ def spec_macros(org: str) -> str:
     A release-preparation tree may name the upcoming release before its tag
     exists. Any other spec.org that no release tag holds stops the build.
     """
-    record = json.loads(VERSIONS.read_text())
+    record = measurement_record()
     blob = git("hash-object", str(SPEC)).stdout.strip()
     same = next((t["tag"][1:] for t in record["tags"] if t["spec_blob"] == blob), None)
     tree = record["tree"]

@@ -220,6 +220,14 @@ if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
 else:
     print(f"PENDING: {clause_coverage} has not been measured")
+allow_exact.update(
+    path.relative_to(root).as_posix()
+    for pattern in (
+        f"clause_coverage-{version}-*.json",
+        "spec-measurement-tree-*.json",
+    )
+    for path in (root / "paper/cpc/data/spec").glob(pattern)
+)
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {

@@ -84,6 +84,17 @@ NO_BUILD = {
     "data/eon/readcon_pins.json",
     "data/peers/releases.json",
 }
+
+
+def no_build(rel: str) -> bool:
+    return rel in NO_BUILD or rel.startswith(
+        (
+            f"data/spec/clause_coverage-{VERSION}-",
+            "data/spec/spec-measurement-tree-",
+        )
+    )
+
+
 # Record directories copied verbatim from lode-org/readcon-db: their build is a readcon-db commit, not a readcon-core build.
 EXTERNAL_RECORDS = ("data/db30/", "data/db31/", "data/db32/", "data/db33/")
 HOST_BUILD_KEYS = ("readcon_core", "readcon_sha", "rustc", "python")
@@ -371,7 +382,7 @@ def is_record(rel: str) -> bool:
 
 
 def needs_build(rel: str) -> bool:
-    if rel in NO_BUILD:
+    if no_build(rel):
         return False
     path = CPC / rel
     files = [p for p in path.rglob("*") if p.is_file()] if path.is_dir() else [path]
@@ -963,7 +974,7 @@ def render() -> tuple[str, list[str]]:
     found, problems = record_places()
     for rel, places in sorted(found.items()):
         held = carrier(rel)
-        build = build_of(*held) if held and rel not in NO_BUILD else None
+        build = build_of(*held) if held and not no_build(rel) else None
         if build is None:
             if needs_build(rel):
                 problems.append(
@@ -1038,7 +1049,7 @@ def library_macros() -> str:
     named: dict[tuple[str, str], int] = {}
     for rel in found:
         held = carrier(rel)
-        build = build_of(*held) if held and rel not in NO_BUILD else None
+        build = build_of(*held) if held and not no_build(rel) else None
         if build is not None and build.digest:
             key = (build.readcon, build.digest)
             named[key] = named.get(key, 0) + 1

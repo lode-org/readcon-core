@@ -466,13 +466,13 @@ pub fn ranked_content_hash(parts: &[&[u8]]) -> u64 {
 
 /// Block hashes this slice can finish, plus the bytes that share a
 /// block with a neighbour. `offset` is the slice's position in the file.
-#[cfg(any(test, feature = "mpi"))]
+#[cfg(test)]
 pub(crate) struct SliceParts {
     pub hashed: Vec<(u64, u64)>,
     pub fragments: Vec<(u64, Vec<u8>)>,
 }
 
-#[cfg(any(test, feature = "mpi"))]
+#[cfg(test)]
 pub(crate) fn slice_block_parts(offset: u64, data: &[u8]) -> SliceParts {
     let mut hashed = Vec::new();
     let mut fragments = Vec::new();

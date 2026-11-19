@@ -18,9 +18,9 @@ names the id. A clause that no corpus file, probe or test names has its reason
 in REASONS; the script stops when such a clause has none, or when REASONS
 gives a reason for a clause that something names.
 
-    python paper/cpc/scripts/clause_coverage.py            # writes the versioned data/spec record
-    python paper/cpc/scripts/clause_coverage.py --check    # writes nothing; exits 1 if the record or the TeX differs
-    python paper/cpc/scripts/clause_coverage.py --macros   # writes only clauses_macros.tex, from the committed record
+    python paper/cpc/scripts/clause_coverage.py            # writes clauses_macros.tex from the live tree
+    python paper/cpc/scripts/clause_coverage.py --check    # compares the live regeneration without writing
+    python paper/cpc/scripts/clause_coverage.py --record   # writes the one final spec-major record
 
 It also writes clauses_macros.tex, the counts the paper prints.
 """
@@ -48,8 +48,9 @@ INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
 VERSION = (REPO / "VERSION").read_text(encoding="utf-8").strip()
-SUPERSEDES = ROOT / "data" / "spec" / "clause_coverage.json"
-OUT = ROOT / "data" / "spec" / f"clause_coverage-{VERSION}.json"
+RECORD_DIR = ROOT / "data" / "spec"
+LEGACY_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}.json"
+FINAL_RECORD = RECORD_DIR / f"clause_coverage-{VERSION}-spec-major.json"
 MACROS = ROOT / "src" / "figures" / "generated" / "clauses_macros.tex"
 
 CLAUSE = re.compile(r"^- (CON-[a-z0-9]+\.[0-9]+) :: ([A-Z ]+?) :: ", re.M)
@@ -312,11 +313,6 @@ def build() -> dict:
         "uncovered": len(entries) - len(covered),
     }
     return {
-        "supersedes": rel(SUPERSEDES),
-        "reason": (
-            f"Recounts specification coverage for readcon-core {VERSION} "
-            "without rewriting the previous measurement."
-        ),
         "script": rel(Path(__file__)),
         "spec": {"path": rel(SPEC), "sha256": sha256(SPEC), "clauses": len(entries)},
         "sources": {
@@ -341,6 +337,18 @@ def build() -> dict:
     }
 
 
+def record_for_sources() -> tuple[Path, dict]:
+    payload = build()
+    return FINAL_RECORD, {
+        "supersedes": rel(LEGACY_RECORD),
+        "reason": (
+            f"Final spec-major recount of specification coverage for "
+            f"readcon-core {VERSION}."
+        ),
+        **payload,
+    }
+
+
 def macros(record: dict) -> str:
     t = record["totals"]
     values = {
@@ -353,7 +361,7 @@ def macros(record: dict) -> str:
         "clauseTested": t["tests"],
     }
     return (
-        f"% Written by paper/cpc/scripts/clause_coverage.py from data/spec/{OUT.name}.\n"
+        "% Written by paper/cpc/scripts/clause_coverage.py from the live tree.\n"
         + "".join(
             f"\\newcommand{{\\{name}}}{{{value}}}\n" for name, value in values.items()
         )
@@ -369,8 +377,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=OUT,
-        help=f"record (default: {provenance.portable(OUT)})",
+        help="final record path (default: data/spec/clause_coverage-<version>-spec-major.json)",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -381,14 +388,16 @@ def main() -> int:
     mode.add_argument(
         "--macros",
         action="store_true",
-        help="write only the TeX, from the record at --out; the record and the library are not read again",
+        help="write only the TeX from the live tree (the default; retained for callers)",
+    )
+    mode.add_argument(
+        "--record",
+        action="store_true",
+        help="write the final record as well as the live TeX",
     )
     args = parser.parse_args()
-    if args.macros:
-        MACROS.write_text(macros(json.loads(args.out.read_text())))
-        print(f"wrote {provenance.portable(MACROS)}")
-        return 0
-    record = build()
+    generated_out, record = record_for_sources()
+    out = args.out or generated_out
     t = record["totals"]
     print(
         f"{t['clauses']} clauses: {t['covered']} named by a corpus file, probe or test "
@@ -396,10 +405,13 @@ def main() -> int:
         f"independent reader, {t['uncovered']} by nothing: {', '.join(record['uncovered'])}"
     )
     if args.check:
+        expected = [(MACROS, macros(record))]
+        if args.out is not None or out.is_file():
+            expected.append((out, text(record)))
         stale = [
             path.name
-            for path, want in ((args.out, text(record)), (MACROS, macros(record)))
-            if not path.is_file() or path.read_text() != want
+            for path, want in expected
+            if not path.is_file() or path.read_text(encoding="utf-8") != want
         ]
         if stale:
             print(
@@ -407,11 +419,17 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"{args.out.name} and {MACROS.name} match the sources")
+        print(f"{MACROS.name} and every present final record match the live sources")
         return 0
-    args.out.write_text(text(record))
-    MACROS.write_text(macros(record))
-    print(f"wrote {provenance.portable(args.out)} and {provenance.portable(MACROS)}")
+    if args.record:
+        wanted = text(record)
+        if out.is_file() and out.read_text(encoding="utf-8") != wanted:
+            sys.exit(f"refusing to overwrite committed record {rel(out)}")
+        if not out.is_file():
+            out.write_text(wanted, encoding="utf-8")
+    MACROS.write_text(macros(record), encoding="utf-8")
+    wrote = f"{provenance.portable(out)} and " if args.record else ""
+    print(f"wrote {wrote}{provenance.portable(MACROS)} from the live sources")
     return 0
 
 

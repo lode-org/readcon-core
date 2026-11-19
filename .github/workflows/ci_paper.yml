@@ -63,6 +63,9 @@ jobs:
       - name: Check paper trace regeneration
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml pytest tests/python/test_trace_check_clean_clone.py
 
+      - name: Check live clause coverage regeneration
+        run: python3 paper/cpc/scripts/clause_coverage.py --check
+
       - name: Regenerate the paper from the committed records
         run: pixi run --locked --manifest-path paper/cpc/pixi.toml cpc-regen
 

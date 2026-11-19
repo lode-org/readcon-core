@@ -394,6 +394,7 @@ fn untrimmed_builder_metadata_json_preserves_base_columns_and_rejects_unicode_ws
     }
 }
 
+/// CON-line2.14: repeated top-level minor keys are rejected.
 #[test]
 fn in_range_minor_velocities_use_the_top_level_key() {
     // Repeated top-level con_spec_minor is rejected on read (CON-line2.14),

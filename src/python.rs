@@ -5279,7 +5279,7 @@ fn write_owned_compressed(
             writer.write_frame_bound(stored_frame(frame))?;
         }
         writer.flush().map_err(crate::writer::WriteError::Io)?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(feature = "zstd"))]
     {
@@ -5291,6 +5291,7 @@ fn write_owned_compressed(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_owned_frames(
     path: &Path,
     frames: &[Option<ConFrame>],
@@ -5324,7 +5325,7 @@ fn write_owned_frames(
         ),
         OutputCodec::Plain => {
             let workers = n_threads.unwrap_or(1);
-            let refs: Vec<&ConFrame> = frames.iter().map(|slot| stored_frame(slot)).collect();
+            let refs: Vec<&ConFrame> = frames.iter().map(stored_frame).collect();
             if rewrite {
                 return crate::writer::rewrite_frame_refs_to_path(
                     path, &refs, workers, precision, canonical, true, keep_spare,
@@ -5354,6 +5355,7 @@ fn write_owned_frames(
 /// A `read_con` result still holds every frame. Format and write them
 /// under the list's read lock, without the GIL while Python cannot reach
 /// the coordinate slab. Nothing is cloned.
+#[allow(clippy::too_many_arguments)]
 fn write_stored_list(
     py: Python<'_>,
     path: &str,
@@ -5458,6 +5460,7 @@ fn detach_append_frame_refs(
     .map_err(|err| write_err_to_py(py, err))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn detach_compressed_frame_refs(
     py: Python<'_>,
     path: &str,
@@ -5761,6 +5764,7 @@ fn write_con(
 /// Collective write: every rank passes its own frames (possibly none)
 /// and the file holds them in rank order.
 #[cfg(feature = "mpi")]
+#[allow(clippy::too_many_arguments)]
 fn write_con_mpi(
     py: Python<'_>,
     path: &str,
@@ -7020,31 +7024,22 @@ fn read_conbin_columns(py: Python<'_>, path: &str, n_threads: usize) -> PyResult
     } else {
         None
     };
-    let mass_ptr = match mapped
+    let mass_ptr = mapped
         .masses_f64()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(mass) => Some((ptr(mass), mass.len())),
-        None => None,
-    };
-    let cell_ptr = match mapped.cell_f64().map_err(|e| cell_err_to_py(py, &e))? {
-        Some(cell) => Some((ptr(cell), cell.len())),
-        None => None,
-    };
-    let id_ptr = match mapped
+        .map(|mass| (ptr(mass), mass.len()));
+    let cell_ptr = mapped
+        .cell_f64()
+        .map_err(|e| cell_err_to_py(py, &e))?
+        .map(|cell| (ptr(cell), cell.len()));
+    let id_ptr = mapped
         .atom_ids()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(ids) => Some((ids.as_ptr() as usize, ids.len())),
-        None => None,
-    };
-    let mask_ptr = match mapped
+        .map(|ids| (ids.as_ptr() as usize, ids.len()));
+    let mask_ptr = mapped
         .fixed_masks()
         .map_err(|e| PyIOError::new_err(e.to_string()))?
-    {
-        Some(masks) => Some((masks.as_ptr() as usize, masks.len())),
-        None => None,
-    };
+        .map(|masks| (masks.as_ptr() as usize, masks.len()));
     let owner = Py::new(py, ConBinMapping { map: mapped.map })?;
     let base = owner.bind(py).clone();
     let dict = PyDict::new(py);
@@ -7902,10 +7897,7 @@ fn py_text_frames<'py>(
             let row = pyo3::types::PyTuple::new(py, (0..n_atoms).map(|_| py_symbol.clone_ref(py)))?
                 .unbind();
             let n_frames = text.len() / stride;
-            return Ok(pyo3::types::PyList::new(
-                py,
-                (0..n_frames).map(|_| row.clone_ref(py)),
-            )?);
+            return pyo3::types::PyList::new(py, (0..n_frames).map(|_| row.clone_ref(py)));
         }
     }
     let mut intern = std::collections::HashMap::<&str, Py<pyo3::types::PyString>>::new();
@@ -8372,7 +8364,7 @@ impl SpeciesRow {
             let this = slf.borrow();
             (this.parent.clone_ref(py), this.frame)
         };
-        frame_matches(py, &parent.bind(py), frame, other)
+        frame_matches(py, parent.bind(py), frame, other)
     }
 
     fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
@@ -9439,7 +9431,7 @@ fn pwrite_all(file: &std::fs::File, buf: &[u8], mut offset: u64) -> std::io::Res
             written += n as usize;
             offset += n as u64;
         }
-        return Ok(());
+        Ok(())
     }
     #[cfg(windows)]
     {
