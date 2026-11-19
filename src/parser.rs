@@ -1624,6 +1624,241 @@ fn max_tokens_on_line(line: &str) -> usize {
     line.len().div_ceil(2)
 }
 
+/// Matches the JSON integer grammar `0|[1-9][0-9]*` (rejects `-0`, `+`,
+/// leading zeros, fractions, and exponents).
+pub(crate) fn is_nonneg_decimal_int(token: &str) -> bool {
+    match token.as_bytes() {
+        [b'0'] => true,
+        [b'1'..=b'9', rest @ ..] => rest.iter().all(|b| b.is_ascii_digit()),
+        _ => false,
+    }
+}
+
+/// True only for oversized `0|[1-9][0-9]*` tokens that do not fit in `u64`
+/// yet `serde_json` already accepts as a finite JSON number (`<= f64::MAX`).
+/// Tokens that `serde_json` itself rejects (`number out of range`) are left
+/// untouched so the original error and column surface unchanged.
+pub(crate) fn is_substitutable_huge_minor(token: &str) -> bool {
+    is_nonneg_decimal_int(token)
+        && token.parse::<u64>().is_err()
+        && serde_json::from_str::<serde_json::Number>(token).is_ok()
+}
+
+fn skip_json_ws(bytes: &[u8], i: &mut usize) {
+    while *i < bytes.len() && matches!(bytes[*i], b' ' | b'\t' | b'\r' | b'\n') {
+        *i += 1;
+    }
+}
+
+fn scan_json_string_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes.get(start) != Some(&b'"') {
+        return None;
+    }
+    let mut i = start + 1;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if escaped {
+            escaped = false;
+        } else if b == b'\\' {
+            escaped = true;
+        } else if b == b'"' {
+            return Some(i + 1);
+        }
+        i += 1;
+    }
+    None
+}
+
+fn scan_json_value_end(bytes: &[u8], start: usize) -> Option<usize> {
+    let first = *bytes.get(start)?;
+    if first == b'"' {
+        return scan_json_string_end(bytes, start);
+    }
+    if first == b'{' || first == b'[' {
+        let mut depth = 0usize;
+        let mut i = start;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'"' => {
+                    i = scan_json_string_end(bytes, i)?;
+                    continue;
+                }
+                b'{' | b'[' => depth += 1,
+                b'}' | b']' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(i + 1);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        return None;
+    }
+    let mut i = start;
+    while i < bytes.len() && !matches!(bytes[i], b' ' | b'\t' | b'\r' | b'\n' | b',' | b'}' | b']')
+    {
+        i += 1;
+    }
+    (i > start).then_some(i)
+}
+
+fn decode_json_key(raw_quoted: &str) -> Option<std::borrow::Cow<'_, str>> {
+    if !raw_quoted.contains('\\') {
+        Some(std::borrow::Cow::Borrowed(
+            &raw_quoted[1..raw_quoted.len() - 1],
+        ))
+    } else {
+        serde_json::from_str::<String>(raw_quoted)
+            .ok()
+            .map(std::borrow::Cow::Owned)
+    }
+}
+
+fn scan_json_object_fields(
+    json: &str,
+    start: usize,
+    mut on_field: impl FnMut(&str, std::ops::Range<usize>),
+) {
+    let bytes = json.as_bytes();
+    if bytes.get(start) != Some(&b'{') {
+        return;
+    }
+    let mut i = start + 1;
+    loop {
+        skip_json_ws(bytes, &mut i);
+        if i >= bytes.len() || bytes[i] == b'}' {
+            break;
+        }
+        if bytes[i] == b',' {
+            i += 1;
+            skip_json_ws(bytes, &mut i);
+        }
+        if bytes.get(i) != Some(&b'"') {
+            break;
+        }
+        let Some(k_end) = scan_json_string_end(bytes, i) else {
+            break;
+        };
+        let raw_key = &json[i..k_end];
+        i = k_end;
+        skip_json_ws(bytes, &mut i);
+        if bytes.get(i) != Some(&b':') {
+            break;
+        }
+        i += 1;
+        skip_json_ws(bytes, &mut i);
+        let v_start = i;
+        let Some(v_end) = scan_json_value_end(bytes, v_start) else {
+            break;
+        };
+        i = v_end;
+        if let Some(key) = decode_json_key(raw_key) {
+            on_field(key.as_ref(), v_start..v_end);
+        }
+    }
+}
+
+/// Scan top-level `con_spec_minor` raw value spans from a JSON object string.
+pub(crate) fn top_level_minor_spans(json: &str) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let bytes = json.as_bytes();
+    let mut start = 0usize;
+    skip_json_ws(bytes, &mut start);
+    if bytes.get(start) != Some(&b'{') {
+        return out;
+    }
+    scan_json_object_fields(json, start, |key, span| {
+        if key == meta::CON_SPEC_MINOR {
+            out.push(span);
+        }
+    });
+    out
+}
+
+/// Returns the last raw value token for top-level `target` in `json`.
+pub(crate) fn top_level_last_raw_token<'a>(json: &'a str, target: &str) -> Option<&'a str> {
+    let bytes = json.as_bytes();
+    let mut start = 0usize;
+    skip_json_ws(bytes, &mut start);
+    if bytes.get(start) != Some(&b'{') {
+        return None;
+    }
+    let mut last: Option<std::ops::Range<usize>> = None;
+    scan_json_object_fields(json, start, |key, span| {
+        if key == target {
+            last = Some(span);
+        }
+    });
+    last.map(|span| &json[span])
+}
+
+/// Replace any serde-accepted `con_spec_minor` integer token exceeding `u64::MAX`
+/// with a valid JSON number (`0.00...0`) of the exact same byte length so
+/// `serde_json` preserves every original column and offset across the line.
+/// Returns the exact digits only when the last (effective) `con_spec_minor`
+/// token is substituted.
+pub(crate) fn sanitize_huge_con_spec_minor<'a>(
+    json: &'a str,
+    minor_spans: &[std::ops::Range<usize>],
+) -> (std::borrow::Cow<'a, str>, Option<String>) {
+    let huge_minor = minor_spans.last().and_then(|span| {
+        let tok = &json[span.clone()];
+        is_substitutable_huge_minor(tok).then(|| tok.to_owned())
+    });
+    let mut huge_spans: Vec<std::ops::Range<usize>> = minor_spans
+        .iter()
+        .filter(|span| is_substitutable_huge_minor(&json[(*span).clone()]))
+        .cloned()
+        .collect();
+    if huge_spans.is_empty() {
+        return (std::borrow::Cow::Borrowed(json), None);
+    }
+    huge_spans.sort_by_key(|s| (s.start, s.end));
+    huge_spans.dedup();
+    let mut out = String::with_capacity(json.len());
+    let mut cursor = 0usize;
+    for span in huge_spans {
+        if span.start < cursor {
+            continue;
+        }
+        out.push_str(&json[cursor..span.start]);
+        let width = span.end - span.start;
+        out.push_str("0.");
+        for _ in 2..width {
+            out.push('0');
+        }
+        cursor = span.end;
+    }
+    out.push_str(&json[cursor..]);
+    (std::borrow::Cow::Owned(out), huge_minor)
+}
+
+pub(crate) fn parse_metadata_json_object_with_raw(
+    metadata_json: &str,
+) -> Result<(serde_json::Map<String, Value>, Option<String>), serde_json::Error> {
+    let spans = top_level_minor_spans(metadata_json);
+    let (sanitized, minor_raw) = sanitize_huge_con_spec_minor(metadata_json, &spans);
+    let mut object: serde_json::Map<String, Value> = serde_json::from_str(sanitized.as_ref())?;
+    if minor_raw.is_some() {
+        object.insert(
+            meta::CON_SPEC_MINOR.into(),
+            Value::from(crate::types::SATURATED_SPEC_MINOR),
+        );
+    }
+    Ok((object, minor_raw))
+}
+
+pub(crate) fn parse_metadata_object_with_raw(
+    metadata_json: &str,
+) -> Result<(serde_json::Map<String, Value>, Option<String>), ParseError> {
+    let (object, minor_raw) = parse_metadata_json_object_with_raw(metadata_json)?;
+    validate_metadata_schema(&object)?;
+    Ok((object, minor_raw))
+}
+
 fn json_u64(value: &Value) -> Option<u64> {
     value.as_u64()
 }
@@ -2014,9 +2249,11 @@ pub fn parse_frame_header<'a>(
             // other key falls through to the general parser.
             (ver, Vec::new(), false, false)
         } else if trimmed.starts_with('{') {
-            let json_val: serde_json::Value = serde_json::from_str(trimmed)
+            let minor_spans = top_level_minor_spans(trimmed);
+            let (sanitized, huge_minor) = sanitize_huge_con_spec_minor(trimmed, &minor_spans);
+            let mut json_val: serde_json::Value = serde_json::from_str(sanitized.as_ref())
                 .map_err(|e| ParseError::InvalidMetadataJson(e.to_string()))?;
-            let json_obj = json_val.as_object().ok_or_else(|| {
+            let json_obj = json_val.as_object_mut().ok_or_else(|| {
                 ParseError::InvalidMetadataJson("expected a JSON object".to_string())
             })?;
             let ver_value = json_obj
@@ -2056,11 +2293,11 @@ pub fn parse_frame_header<'a>(
             let mut sections: Vec<String> = Vec::new();
             let mut sections_declared = false;
             let mut validate = false;
-            for (k, v) in json_obj {
+            for (k, v) in json_obj.iter() {
                 match k.as_str() {
                     meta::CON_SPEC_VERSION => {}
                     meta::CON_SPEC_MINOR => {
-                        if json_u64(v).is_none() {
+                        if huge_minor.is_none() && json_u64(v).is_none() {
                             return Err(metadata_json_error(
                                 "con_spec_minor must be a JSON integer >= 0",
                             ));
@@ -2090,6 +2327,13 @@ pub fn parse_frame_header<'a>(
                     }
                     _ => {}
                 }
+            }
+
+            if huge_minor.is_some() {
+                json_obj.insert(
+                    meta::CON_SPEC_MINOR.into(),
+                    Value::from(crate::types::SATURATED_SPEC_MINOR),
+                );
             }
 
             // Strict-mode schema check fires only when the file requested
@@ -2210,8 +2454,12 @@ fn intern_repeated_line(line: &str) -> std::sync::Arc<str> {
 fn simple_metadata_version(line: &str) -> Option<u32> {
     let bytes = line.as_bytes();
     let mut i = 0usize;
+    let saw_invalid_json_byte = std::cell::Cell::new(false);
     let skip = |i: &mut usize| {
         while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
+            if !matches!(bytes[*i], b' ' | b'\t' | b'\r' | b'\n') {
+                saw_invalid_json_byte.set(true);
+            }
             *i += 1;
         }
     };
@@ -2235,6 +2483,9 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
             if bytes[*i] == b'\\' {
                 return None;
             }
+            if bytes[*i] < 0x20 {
+                saw_invalid_json_byte.set(true);
+            }
             *i += 1;
         }
         if *i >= bytes.len() {
@@ -2244,7 +2495,7 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
         *i += 1;
         Some(text)
     };
-    let integer = |i: &mut usize| -> Option<u64> {
+    let nonneg_int_token = |i: &mut usize| -> Option<&str> {
         skip(i);
         let start = *i;
         if *i < bytes.len() && bytes[*i] == b'-' {
@@ -2256,13 +2507,15 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
         if start == *i || (bytes[start] == b'0' && *i > start + 1) {
             return None;
         }
-        std::str::from_utf8(&bytes[start..*i]).ok()?.parse().ok()
+        std::str::from_utf8(&bytes[start..*i]).ok()
     };
+    let integer = |i: &mut usize| -> Option<u64> { nonneg_int_token(i)?.parse().ok() };
     if !eat(&mut i, b'{') {
         return None;
     }
     let mut version = None;
     let mut saw_minor = false;
+    let mut saw_huge_minor = false;
     let mut length = None;
     let mut energy = None;
     let mut extra_unit = false;
@@ -2284,7 +2537,13 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
         match key {
             "con_spec_version" if version.is_none() => version = Some(integer(&mut i)?),
             "con_spec_minor" if !saw_minor => {
-                integer(&mut i)?;
+                let tok = nonneg_int_token(&mut i)?;
+                if tok.parse::<u64>().is_err() {
+                    if serde_json::from_str::<serde_json::Number>(tok).is_err() {
+                        return None;
+                    }
+                    saw_huge_minor = true;
+                }
                 saw_minor = true;
             }
             "units" if length.is_none() && energy.is_none() && !extra_unit => {
@@ -2337,6 +2596,9 @@ fn simple_metadata_version(line: &str) -> Option<u32> {
         }
         crate::units::validate_unit_for_quantity("length", length).ok()?;
         crate::units::validate_unit_for_quantity("energy", energy).ok()?;
+    }
+    if saw_huge_minor && saw_invalid_json_byte.get() {
+        return None;
     }
     Some(ver)
 }

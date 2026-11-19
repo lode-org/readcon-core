@@ -241,19 +241,31 @@ impl PartialEq for PreboxHeader {
 /// The read builds one line per frame. The map is the same object the
 /// parser used to store, and it is built on the first keyed lookup or
 /// edit rather than for every frame.
+///
+/// Generic `serde::Serialize` emits the exact unquoted integer for
+/// `con_spec_minor` values up to `u128::MAX` and returns a serialization error
+/// when `con_spec_minor > u128::MAX` (because `serde_json` is built without
+/// `arbitrary_precision`/`raw_value`); the native [`crate::writer::ConFrameWriter`]
+/// preserves arbitrary-length minors.
 #[derive(Debug, Clone)]
 pub struct FrameMeta {
     raw: std::sync::Arc<str>,
     /// `con_spec_minor`, or 0 when the line does not set it.
     ///
     /// Kept beside the line so a frame read does not build the map just to
-    /// answer the minor.
+    /// answer the minor. Values above `u64::MAX` saturate to
+    /// [`SATURATED_SPEC_MINOR`].
     minor: u64,
+    /// Exact decimal digits of `con_spec_minor` when it exceeds `u64::MAX`.
+    minor_raw: Option<Box<str>>,
     map: std::sync::OnceLock<BTreeMap<String, serde_json::Value>>,
 }
 
 impl PartialEq for FrameMeta {
     fn eq(&self, other: &Self) -> bool {
+        if self.minor_raw != other.minor_raw {
+            return false;
+        }
         if self.raw == other.raw && self.map.get().is_none() && other.map.get().is_none() {
             return true;
         }
@@ -266,6 +278,30 @@ impl serde::Serialize for FrameMeta {
     where
         S: serde::Serializer,
     {
+        if let Some(digits) = self.minor_raw.as_deref() {
+            use serde::ser::SerializeMap;
+            let minor_u128 = digits.parse::<u128>().map_err(|_| {
+                serde::ser::Error::custom(format!(
+                    "con_spec_minor {digits} exceeds u128::MAX for generic serde::Serialize"
+                ))
+            })?;
+            return self.with_map(|map| {
+                let has_minor_key = map.contains_key(meta::CON_SPEC_MINOR);
+                let len = map.len() + usize::from(!has_minor_key);
+                let mut ser = serializer.serialize_map(Some(len))?;
+                for (k, v) in map {
+                    if k == meta::CON_SPEC_MINOR {
+                        ser.serialize_entry(k, &minor_u128)?;
+                    } else {
+                        ser.serialize_entry(k, v)?;
+                    }
+                }
+                if !has_minor_key {
+                    ser.serialize_entry(meta::CON_SPEC_MINOR, &minor_u128)?;
+                }
+                ser.end()
+            });
+        }
         self.with_map(|map| serde::Serialize::serialize(map, serializer))
     }
 }
@@ -273,10 +309,11 @@ impl serde::Serialize for FrameMeta {
 impl FrameMeta {
     pub fn from_line(raw: impl Into<std::sync::Arc<str>>) -> Self {
         let raw = raw.into();
-        let minor = minor_from_line(&raw);
+        let (minor, minor_raw) = minor_from_line(&raw);
         Self {
             raw,
             minor,
+            minor_raw,
             map: std::sync::OnceLock::new(),
         }
     }
@@ -286,21 +323,99 @@ impl FrameMeta {
     }
 
     pub fn from_map(map: BTreeMap<String, serde_json::Value>) -> Self {
-        let minor = map
-            .get(meta::CON_SPEC_MINOR)
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        Self::from_map_with_minor_raw(map, None)
+    }
+
+    pub(crate) fn from_map_with_minor_raw(
+        mut map: BTreeMap<String, serde_json::Value>,
+        minor_raw: Option<&str>,
+    ) -> Self {
+        let (minor, stored_raw) = if let Some(digits) = minor_raw {
+            match digits.parse::<u64>() {
+                Ok(v) => {
+                    map.insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(v));
+                    (v, None)
+                }
+                Err(_) => {
+                    map.insert(
+                        meta::CON_SPEC_MINOR.into(),
+                        serde_json::Value::from(SATURATED_SPEC_MINOR),
+                    );
+                    (SATURATED_SPEC_MINOR, Some(Box::from(digits)))
+                }
+            }
+        } else if let Some(val) = map.get(meta::CON_SPEC_MINOR) {
+            let (minor, raw) = extract_minor_from_value(val);
+            if raw.is_some() {
+                map.insert(
+                    meta::CON_SPEC_MINOR.into(),
+                    serde_json::Value::from(SATURATED_SPEC_MINOR),
+                );
+            }
+            (minor, raw)
+        } else {
+            (0, None)
+        };
         let lock = std::sync::OnceLock::new();
         let _ = lock.set(map);
         Self {
             raw: std::sync::Arc::from(""),
             minor,
+            minor_raw: stored_raw,
             map: lock,
         }
     }
 
-    pub(crate) fn spec_minor(&self) -> u64 {
+    /// Saturating `con_spec_minor` (`0` when absent; [`SATURATED_SPEC_MINOR`]
+    /// when the file's value exceeds `u64::MAX`).
+    pub fn spec_minor(&self) -> u64 {
         self.minor
+    }
+
+    /// Exact decimal string for `con_spec_minor` (`"0"` when absent).
+    pub fn spec_minor_str(&self) -> std::borrow::Cow<'_, str> {
+        if let Some(raw) = self.minor_raw.as_deref() {
+            std::borrow::Cow::Borrowed(raw)
+        } else if self.minor == 0 {
+            std::borrow::Cow::Borrowed("0")
+        } else {
+            std::borrow::Cow::Owned(self.minor.to_string())
+        }
+    }
+
+    /// Sets `con_spec_minor` from a decimal integer string (including values > `u64::MAX`
+    /// accepted by `serde_json`).
+    pub fn set_con_spec_minor_str(&mut self, digits: &str) -> Result<(), ParseError> {
+        if !crate::parser::is_nonneg_decimal_int(digits) {
+            return Err(ParseError::InvalidMetadataJson(
+                "con_spec_minor must be a JSON integer >= 0".into(),
+            ));
+        }
+        match digits.parse::<u64>() {
+            Ok(v) => {
+                self.minor = v;
+                self.minor_raw = None;
+                self.cached_mut()
+                    .insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(v));
+            }
+            Err(_) => {
+                if let Err(e) = serde_json::from_str::<serde_json::Number>(digits) {
+                    return Err(ParseError::InvalidMetadataJson(e.to_string()));
+                }
+                self.minor = SATURATED_SPEC_MINOR;
+                self.minor_raw = Some(Box::from(digits));
+                self.cached_mut().insert(
+                    meta::CON_SPEC_MINOR.into(),
+                    serde_json::Value::from(SATURATED_SPEC_MINOR),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Exact decimal digits of `con_spec_minor` only when it exceeds `u64::MAX`.
+    pub(crate) fn huge_minor_raw(&self) -> Option<&str> {
+        self.minor_raw.as_deref()
     }
 
     pub fn empty() -> Self {
@@ -386,14 +501,27 @@ impl std::ops::Index<&str> for FrameMeta {
 }
 
 impl FrameMeta {
-    pub fn insert(&mut self, key: String, value: serde_json::Value) -> Option<serde_json::Value> {
+    pub fn insert(
+        &mut self,
+        key: String,
+        mut value: serde_json::Value,
+    ) -> Option<serde_json::Value> {
         if key == meta::CON_SPEC_MINOR {
-            self.minor = value.as_u64().unwrap_or(0);
+            let (minor, minor_raw) = extract_minor_from_value(&value);
+            self.minor = minor;
+            self.minor_raw = minor_raw;
+            if self.minor_raw.is_some() {
+                value = serde_json::Value::from(SATURATED_SPEC_MINOR);
+            }
         }
         self.cached_mut().insert(key, value)
     }
 
     pub fn remove(&mut self, key: &str) -> Option<serde_json::Value> {
+        if key == meta::CON_SPEC_MINOR {
+            self.minor = 0;
+            self.minor_raw = None;
+        }
         self.cached_mut().remove(key)
     }
 
@@ -459,12 +587,21 @@ impl<'a> IntoIterator for &'a FrameMeta {
     }
 }
 
-/// Map stored for a metadata line.
+/// Saturated minor returned when `con_spec_minor` exceeds `u64::MAX`.
 ///
-/// `con_spec_version` and `sections` stay on the header, as they do when
-/// the parser walks the object. Any other key is kept. A line that is not
-/// a JSON object is an empty map.
-fn minor_from_line(line: &str) -> u64 {
+/// Strictly greater than [`crate::CON_SPEC_MINOR`], while [`FrameMeta::spec_minor_str`]
+/// preserves the exact decimal digits for values above `u64::MAX`.
+pub const SATURATED_SPEC_MINOR: u64 = u64::MAX;
+
+fn extract_minor_from_value(value: &serde_json::Value) -> (u64, Option<Box<str>>) {
+    if let Some(v) = value.as_u64() {
+        (v, None)
+    } else {
+        (0, None)
+    }
+}
+
+fn base_minor_from_line(line: &str) -> u64 {
     let key = "\"con_spec_minor\"";
     let Some(at) = line.find(key) else {
         return 0;
@@ -475,6 +612,22 @@ fn minor_from_line(line: &str) -> u64 {
         .find(|c: char| !c.is_ascii_digit())
         .unwrap_or(rest.len());
     rest[..end].parse().unwrap_or(0)
+}
+
+/// Map stored for a metadata line.
+///
+/// `con_spec_version` and `sections` stay on the header, as they do when
+/// the parser walks the object. Any other key is kept. A line that is not
+/// a JSON object is an empty map.
+fn minor_from_line(line: &str) -> (u64, Option<Box<str>>) {
+    let trimmed = line.trim();
+    if trimmed.starts_with('{')
+        && let Some(token) = crate::parser::top_level_last_raw_token(trimmed, meta::CON_SPEC_MINOR)
+        && crate::parser::is_substitutable_huge_minor(token)
+    {
+        return (SATURATED_SPEC_MINOR, Some(Box::from(token)));
+    }
+    (base_minor_from_line(line), None)
 }
 
 struct ParsedMetaLine {
@@ -498,7 +651,9 @@ pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json:
     if trimmed == "{\"con_spec_version\":2}" || !trimmed.starts_with('{') {
         return BTreeMap::new();
     }
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+    let spans = crate::parser::top_level_minor_spans(trimmed);
+    let (sanitized, huge_minor) = crate::parser::sanitize_huge_con_spec_minor(trimmed, &spans);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(sanitized.as_ref()) else {
         return BTreeMap::new();
     };
     let Some(obj) = value.as_object() else {
@@ -508,6 +663,9 @@ pub(crate) fn metadata_map_from_line(line: &str) -> BTreeMap<String, serde_json:
     for (k, v) in obj {
         match k.as_str() {
             meta::CON_SPEC_VERSION | meta::SECTIONS => {}
+            meta::CON_SPEC_MINOR if huge_minor.is_some() => {
+                metadata.insert(k.clone(), serde_json::Value::from(SATURATED_SPEC_MINOR));
+            }
             _ => {
                 metadata.insert(k.clone(), v.clone());
             }
@@ -582,6 +740,17 @@ impl PartialEq for FrameHeader {
 /// The underlying `BTreeMap` is the source of truth -- these helpers
 /// provide ergonomic typed access without changing storage.
 impl FrameHeader {
+    /// Saturating `con_spec_minor` (`0` when absent; [`SATURATED_SPEC_MINOR`]
+    /// when the frame's minor exceeds `u64::MAX`).
+    pub fn con_spec_minor_saturating(&self) -> u64 {
+        self.metadata.spec_minor()
+    }
+
+    /// Exact decimal string for `con_spec_minor` (`"0"` when absent).
+    pub fn con_spec_minor_str(&self) -> std::borrow::Cow<'_, str> {
+        self.metadata.spec_minor_str()
+    }
+
     /// Per-frame total energy (in the units declared by the `units` key).
     pub fn energy(&self) -> Option<f64> {
         self.metadata.get(meta::ENERGY).and_then(|v| v.as_f64())
@@ -1499,6 +1668,7 @@ impl ConFrame {
                 metadata: FrameMeta {
                     raw: read(&source.metadata.raw),
                     minor: source.metadata.minor,
+                    minor_raw: read(&source.metadata.minor_raw),
                     map,
                 },
                 sections: read(&source.sections),
@@ -2628,8 +2798,9 @@ impl ConFrame {
             self.masses.project_to(dtypes.masses);
         }
         let mut map = self.header.metadata.to_map();
+        let minor_raw = self.header.metadata.huge_minor_raw().map(str::to_owned);
         dtypes.insert_into(&mut map);
-        self.header.metadata = FrameMeta::from_map(map);
+        self.header.metadata = FrameMeta::from_map_with_minor_raw(map, minor_raw.as_deref());
         self.sync_atom_data_from_arrays();
     }
 
@@ -3265,6 +3436,7 @@ pub struct ConFrameBuilder {
     has_spreads: bool,
 
     metadata: BTreeMap<String, serde_json::Value>,
+    minor_raw: Option<String>,
 }
 
 impl Default for ConFrameBuilder {
@@ -3296,6 +3468,7 @@ impl Default for ConFrameBuilder {
             spreads: ndarray::ArcArray2::<f64>::zeros((0, 3)),
             has_spreads: false,
             metadata: BTreeMap::new(),
+            minor_raw: None,
         }
     }
 }
@@ -3371,6 +3544,7 @@ impl ConFrameBuilder {
     /// The `con_spec_version` key is always set automatically.
     pub fn metadata(&mut self, m: BTreeMap<String, serde_json::Value>) -> &mut Self {
         self.metadata = m;
+        self.minor_raw = None;
         self
     }
 
@@ -3385,9 +3559,7 @@ impl ConFrameBuilder {
         &mut self,
         metadata_json: &str,
     ) -> Result<(), crate::error::ParseError> {
-        let object: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(metadata_json)?;
-        crate::parser::validate_metadata_schema(&object)?;
+        let (object, minor_raw) = crate::parser::parse_metadata_object_with_raw(metadata_json)?;
         self.metadata.clear();
         for (key, value) in object {
             if key == meta::CON_SPEC_VERSION || key == meta::SECTIONS {
@@ -3395,6 +3567,7 @@ impl ConFrameBuilder {
             }
             self.metadata.insert(key, value);
         }
+        self.minor_raw = minor_raw;
         Ok(())
     }
 
@@ -3419,11 +3592,43 @@ impl ConFrameBuilder {
     pub fn set_con_spec_minor(&mut self, minor: u32) -> &mut Self {
         self.metadata
             .insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(minor));
+        self.minor_raw = None;
         self
+    }
+
+    /// Sets `con_spec_minor` from a decimal integer string (including values > `u64::MAX`
+    /// accepted by `serde_json`).
+    pub fn set_con_spec_minor_str(&mut self, digits: &str) -> Result<&mut Self, ParseError> {
+        if !crate::parser::is_nonneg_decimal_int(digits) {
+            return Err(ParseError::InvalidMetadataJson(
+                "con_spec_minor must be a JSON integer >= 0".into(),
+            ));
+        }
+        match digits.parse::<u64>() {
+            Ok(v) => {
+                self.metadata
+                    .insert(meta::CON_SPEC_MINOR.into(), serde_json::Value::from(v));
+                self.minor_raw = None;
+            }
+            Err(_) => {
+                if let Err(e) = serde_json::from_str::<serde_json::Number>(digits) {
+                    return Err(ParseError::InvalidMetadataJson(e.to_string()));
+                }
+                self.metadata.insert(
+                    meta::CON_SPEC_MINOR.into(),
+                    serde_json::Value::from(SATURATED_SPEC_MINOR),
+                );
+                self.minor_raw = Some(digits.to_string());
+            }
+        }
+        Ok(self)
     }
 
     /// Sets a numeric metadata key.
     pub fn set_scalar_metadata(&mut self, key: &str, value: f64) -> &mut Self {
+        if key == meta::CON_SPEC_MINOR {
+            self.minor_raw = None;
+        }
         self.metadata
             .insert(key.to_string(), serde_json::Value::from(value));
         self
@@ -3431,6 +3636,9 @@ impl ConFrameBuilder {
 
     /// Sets a string metadata key.
     pub fn set_string_metadata(&mut self, key: &str, value: &str) -> &mut Self {
+        if key == meta::CON_SPEC_MINOR {
+            self.minor_raw = None;
+        }
         self.metadata
             .insert(key.to_string(), serde_json::Value::from(value));
         self
@@ -4877,7 +5085,7 @@ impl ConFrameBuilder {
             natms_per_type: type_counts,
             masses_per_type: type_masses,
             spec_version: crate::CON_SPEC_VERSION,
-            metadata: FrameMeta::from_map(metadata),
+            metadata: FrameMeta::from_map_with_minor_raw(metadata, self.minor_raw.as_deref()),
             sections,
             strict_validation,
             sections_declared,
@@ -5034,8 +5242,9 @@ pub(crate) fn con_frame_coords_only_with_ids(
     let mut header = header;
     if dt != StorageDtypes::all_f64() {
         let mut map = header.metadata.to_map();
+        let minor_raw = header.metadata.huge_minor_raw().map(str::to_owned);
         dt.insert_into(&mut map);
-        header.metadata = FrameMeta::from_map(map);
+        header.metadata = FrameMeta::from_map_with_minor_raw(map, minor_raw.as_deref());
     }
     ConFrame {
         header,
@@ -5130,8 +5339,9 @@ pub fn con_frame_from_atom_data_with_positions(
     let mut header = header;
     if dt != crate::storage_dtype::StorageDtypes::all_f64() {
         let mut map = header.metadata.to_map();
+        let minor_raw = header.metadata.huge_minor_raw().map(str::to_owned);
         dt.insert_into(&mut map);
-        header.metadata = FrameMeta::from_map(map);
+        header.metadata = FrameMeta::from_map_with_minor_raw(map, minor_raw.as_deref());
     }
     ConFrame {
         header,
