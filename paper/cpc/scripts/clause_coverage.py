@@ -131,6 +131,25 @@ REASONS.update(
         "CON-num.10": "The byte parser reports the required numeric class; no test name spells this clause.",
     }
 )
+REASONS.update(
+    {
+        "CON-file.10": "The line reader handles a final unterminated line; no corpus entry isolates this ending.",
+        "CON-file.11": "The byte parser classifies malformed text before field parsing; no test name spells this clause.",
+        "CON-line2.23": "The metadata object parser rejects duplicate names; no test name spells this clause.",
+        "CON-line2.24": "The schema is an informative artifact rather than an executable acceptance case.",
+        "CON-line2.25": "The parser has no byte-length rejection beyond the depth rule; no finite corpus can cover that absence.",
+        "CON-id.13": "The id parser applies the unsigned range before later row checks; no test name spells this ordering.",
+        "CON-section.24": "The section parser applies the specified check order; no test name spells this ordering.",
+        "CON-units.19": "The unit parser rejects trailing input; no test name spells this clause.",
+        "CON-error.5": "The parser reports the earliest line by construction; no multi-error corpus entry names this clause.",
+        "CON-profile.1": "This clause quantifies the reader rules already measured individually.",
+        "CON-profile.2": "This clause summarizes validation behavior already measured by its individual checks.",
+        "CON-profile.3": "This clause quantifies the writer rules already measured individually.",
+        "CON-profile.4": "This clause defines the corpus verdict as a whole rather than one additional case.",
+        "CON-profile.5": "This clause defines comparison with the corpus rather than one additional case.",
+        "CON-lex.1": "This clause defines lexical precedence across cases measured under their individual clause ids.",
+    }
+)
 
 
 def sha256(path: Path) -> str:

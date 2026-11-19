@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lode-org.github.io/readcon-core/schema/con-metadata.schema.json",
+  "$comment": "Informative. Specification identity 4.0.2. The numbered clauses decide acceptance. A repeated object name is rejected.",
   "title": "CON frame metadata (line 2)",
-  "description": "JSON metadata object carried on line 2 of a CON frame, spec versions 2 and 3. Unrecognized keys are permitted and MUST be preserved by parsers.",
+  "description": "Informative schema for the JSON object on line 2, versioned with specification 4.0.2. The numbered clauses decide acceptance. Unrecognized keys are permitted and MUST be preserved.",
   "type": "object",
   "required": ["con_spec_version"],
   "properties": {
     "con_spec_version": {
       "type": "integer",
-      "minimum": 2,
-      "maximum": 3,
-      "description": "Spec major of this frame. Files without JSON metadata are implicit version 1. JSON majors 0 and 1 are invalid."
+      "minimum": 0,
+      "description": "Spec major of this frame. The clauses name which majors a reader supports. Files without JSON metadata are implicit version 1."
     },
     "con_spec_minor": {
       "type": "integer",

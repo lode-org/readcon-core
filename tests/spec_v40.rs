@@ -78,6 +78,37 @@ fn major3_keeps_case_insensitive_unit_compatibility() {
     );
 }
 
+/// CON-line2.22.
+/// con_spec_patch and integer major-version fields must fit in u64. The
+/// release branch preserves its pre-existing arbitrary-size minor token.
+#[test]
+fn con_line2_22_minor_above_u64_is_metadata() {
+    let minor = r#"{"con_spec_version":2,"con_spec_minor":18446744073709551616}"#;
+    let frame = parse(&text(minor, "90 90 90", atoms())).unwrap().remove(0);
+    assert_eq!(frame.header.con_spec_minor_saturating(), u64::MAX);
+    assert_eq!(frame.header.con_spec_minor_str(), "18446744073709551616");
+    let patch = r#"{"con_spec_version":4,"con_spec_patch":18446744073709551616,"units":{"length":"angstrom","energy":"eV","mass":"amu"},"sections":[]}"#;
+    assert_eq!(
+        class_of(&text(patch, "90 90 90", atoms())),
+        "InvalidMetadataJson"
+    );
+    let version = r#"{"con_spec_version":18446744073709551616}"#;
+    assert_eq!(
+        class_of(&text(version, "90 90 90", atoms())),
+        "InvalidMetadataJson"
+    );
+}
+
+/// CON-file.2.
+/// U+FEFF at the start of a later frame is a byte-order mark.
+#[test]
+fn bom_on_a_later_frame_is_rejected() {
+    let one = text(r#"{"con_spec_version":2}"#, "90 90 90", atoms());
+    let two = format!("\u{feff}{one}");
+    let body = format!("{one}{two}");
+    assert_eq!(class_of(&body), "ValidationError");
+}
+
 /// CON-units.3, CON-units.8, CON-units.9, CON-units.10, CON-units.11, CON-units.12.
 /// Major 4 reads units.time and rejects velocities that omit it. The builder
 /// writes the natural time unit for in-memory velocities.
@@ -105,7 +136,7 @@ fn major4_time_is_authoritative() {
             .metadata
             .get("con_spec_patch")
             .and_then(|v| v.as_u64()),
-        Some(0)
+        Some(u64::from(readcon_core::CON_SPEC_PATCH))
     );
     assert_eq!(
         built

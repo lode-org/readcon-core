@@ -468,12 +468,9 @@ class TestConFrameConstructor:
         bad = bytearray(frame * 5)
         bad[-40] = 0xFF
         path.write_bytes(bytes(bad))
-        index = len(bad) - 40
         for mmap in (False, True):
-            with pytest.raises(
-                IOError, match=f"invalid utf-8 sequence of 1 bytes from index {index}$"
-            ):
-                readcon.iter_con(str(path), mmap=mmap)
+            with pytest.raises(readcon.InvalidNumberFormat, match="invalid float"):
+                list(readcon.iter_con(str(path), mmap=mmap))
 
     def test_iter_con_mmap_matches_the_default(self, tmp_path):
         with open(_resource("cuh2.con"), "rb") as fh:

@@ -508,6 +508,7 @@ fn con_frame_from_chemfiles_at(
         sections,
         strict_validation: false,
         sections_declared: velocities.is_some(),
+        ids_from_file: false,
     };
     let mut con = crate::types::con_frame_coords_only_with_ids(
         header,

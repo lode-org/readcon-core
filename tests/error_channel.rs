@@ -425,14 +425,26 @@ fn located_readers_cover_every_load_error() {
     let none = read_all_frames_located(path_for("empty-load").as_path(), Some(1)).unwrap();
     assert!(none.is_empty());
 
-    // Files at or above 64 KiB are mapped. `as_str` is then the UTF-8 check.
+    // A mapped file is parsed as bytes. A bad byte is the frame parser's
+    // ValidationError, the same verdict as a full read, not a file-level
+    // UTF-8 failure that drops the line.
     let mut bad = vec![b'\n'; 64 * 1024];
     bad[0] = 0xff;
     let bad_path = path_for("bad-utf8");
     fs::write(&bad_path, &bad).unwrap();
     let utf = read_first_frame_located(&bad_path).unwrap_err();
-    assert!(matches!(utf, LoadError::Utf8(_)), "{utf}");
-    assert!(utf.to_string().to_lowercase().contains("utf-8"), "{utf}");
+    match &utf {
+        LoadError::Parse(located) => {
+            assert_eq!(located.error.class_name(), "ValidationError");
+            assert!(
+                located.error.to_string().to_lowercase().contains("utf-8"),
+                "{located}"
+            );
+        }
+        other => panic!("expected the frame parser, got {other}"),
+    }
+    let all = read_all_frames_located(&bad_path, Some(1)).unwrap_err();
+    assert_eq!(all.to_string(), utf.to_string());
     let _ = fs::remove_file(&bad_path);
 
     let nan = format!("{}{}", one_atom("0 0 0 0 0"), one_atom("nan 0 0 0 0"));

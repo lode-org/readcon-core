@@ -696,13 +696,6 @@ impl<W: Write> ConFrameWriter<W> {
             }
             meta_obj.insert(k.clone(), v.clone());
         }
-        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
-            // D11: an invalid unit fails the write. Do not substitute a default.
-            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
-                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-            })?;
-            meta_obj.insert(meta::UNITS.into(), c);
-        }
         if spec_version >= 3 {
             match meta_obj.get(meta::UNITS) {
                 None => {
@@ -711,11 +704,22 @@ impl<W: Write> ConFrameWriter<W> {
                     )));
                 }
                 Some(u) => {
-                    crate::units::validate_v3_units_metadata(u).map_err(|e| {
-                        WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
-                    })?;
+                    crate::units::validate_units_metadata_for_version(spec_version, u).map_err(
+                        |e| {
+                            WriteError::Format(crate::error::ParseError::InvalidUnits(
+                                e.to_string(),
+                            ))
+                        },
+                    )?;
                 }
             }
+        }
+        if let Some(u) = meta_obj.get(meta::UNITS).cloned() {
+            // D11: an invalid unit fails the write. Do not substitute a default.
+            let c = crate::units::canonicalize_units_object(&u).map_err(|e| {
+                WriteError::Format(crate::error::ParseError::InvalidUnits(e.to_string()))
+            })?;
+            meta_obj.insert(meta::UNITS.into(), c);
         }
         let minor = if minor_raw.is_some() {
             crate::types::SATURATED_SPEC_MINOR
@@ -868,7 +872,10 @@ impl<W: Write> ConFrameWriter<W> {
         // The direct writer already required dense ids while pricing the
         // trajectory. Scanning them again was on the 8-thread wall.
         self.note_persistent_ids(frame)?;
-        if !self.exact_scratch {
+        // A frame read from a file keeps the ids it had, including repeats
+        // (CON-id.13). A frame built in memory must still emit unique ids
+        // (CON-id.3).
+        if !self.exact_scratch && !frame.header.ids_from_file {
             if parallel_rows {
                 // Ids are unique across the whole frame. A per-component pass
                 // treats an id that restarts at the next element as dense.
@@ -3141,6 +3148,24 @@ pub(crate) fn stamp_legacy_velocity_time(
     }
 }
 
+/// Fill the length and energy keys CON-header.3 and CON-units.1 imply.
+///
+/// An absent length is angstrom. An absent energy is eV, which is what
+/// [`crate::units::default_v3_units_json`] writes when the file had no
+/// units object. A key that is present is left alone, including an
+/// invalid one (CON-units.14).
+fn materialize_header_units(meta: &mut BTreeMap<String, Value>) {
+    let Some(serde_json::Value::Object(object)) = meta.get_mut(meta::UNITS) else {
+        return;
+    };
+    if !object.contains_key("length") {
+        object.insert("length".to_string(), Value::String("angstrom".to_string()));
+    }
+    if !object.contains_key("energy") {
+        object.insert("energy".to_string(), Value::String("eV".to_string()));
+    }
+}
+
 /// Metadata a language binding emits for `frame`, without copying atoms.
 ///
 /// [`ConFrameBuilder::build`] stamps `con_spec_minor` 1 when the key is
@@ -3160,6 +3185,10 @@ pub fn binding_metadata(frame: &ConFrame) -> BTreeMap<String, Value> {
             crate::units::default_v3_units_json(),
         );
     }
+    // A file may name units.time and still omit length. CON-header.3 reads
+    // that as angstrom. Major 3 and later also require energy (CON-units.1),
+    // the same default a missing units object already gets.
+    materialize_header_units(&mut meta);
     if !meta.contains_key(meta::CON_SPEC_MINOR) {
         meta.insert(
             meta::CON_SPEC_MINOR.to_string(),
@@ -7771,5 +7800,53 @@ Coordinates of Component 1
                 });
             }
         });
+    }
+}
+
+/// A version 2 file that names only units.time still rewrites.
+#[cfg(test)]
+mod binding_units {
+    use crate::iterators::frames_from_text;
+
+    #[test]
+    fn version_2_time_label_rewrites_at_major_4() {
+        let text = "\
+title
+{\"con_spec_version\":2,\"units\":{\"time\":\"fs\"},\"sections\":[\"velocities\"]}
+10 10 10
+90 90 90
+0 0
+0 0 0
+1
+1
+1.0
+H
+Coordinates of Component 1
+1 2 3 0 0
+
+H
+Velocities of Component 1
+0.1 0.2 0.3 0 0
+";
+        let read = frames_from_text(text, Some(1)).unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut writer = super::ConFrameWriter::new(&mut bytes);
+            writer.write_frame_bound(&read[0]).unwrap();
+            writer.flush().unwrap();
+        }
+        let written = String::from_utf8(bytes).unwrap();
+        let again = frames_from_text(&written, Some(1)).unwrap();
+        assert_eq!(again[0].header.spec_version, crate::CON_SPEC_VERSION);
+        assert_eq!(again[0].header.length_unit(), Some("angstrom"));
+        assert_eq!(again[0].header.unit_for("energy"), Some("eV"));
+        assert_eq!(
+            again[0].header.unit_for("time"),
+            Some(crate::units::NATURAL_TIME_UNIT)
+        );
+        assert_eq!(
+            again[0].atom_data[0].velocity(),
+            read[0].atom_data[0].velocity()
+        );
     }
 }

@@ -365,6 +365,7 @@ pub fn frame_from_reader(fd: con_frame_data::Reader<'_>) -> Result<ConFrame, Con
         sections,
         strict_validation: fd.get_strict_validation(),
         sections_declared: fd.get_sections_declared(),
+        ids_from_file: false,
     };
 
     Ok(con_frame_from_atom_data(header, atom_data))

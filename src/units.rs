@@ -99,13 +99,33 @@ const CODATA2018_AVOGADRO: f64 = metrology::N_A;
 /// CON-units.18 writes these decimals. A product of the elementary charge
 /// and a power of ten is a different binary64 value.
 const MEV_J: f64 = 1.602_176_634e-22;
+const MEGA_EV_J: f64 = 1.602_176_634e-13;
 /// Thermochemical kilocalorie, exactly 4184 joule. Not a CODATA value.
 const KCAL_THERMOCHEMICAL_J: f64 = 4184.0;
 
-/// Names are lowercase and sorted. Lookup is a binary search, so the table
-/// is plain static data: no `HashMap`, and no hashbrown control bytes for
-/// Valgrind to treat as an interior pointer of a process-lifetime allocation.
+/// Accepted spellings, sorted for binary search. `MeV` and `meV` are different
+/// names. There is no case fold (CON-units.16).
 const BASE_UNITS: &[BaseUnit] = &[
+    BaseUnit {
+        name: "A",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "AMU",
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "Angstrom",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "J",
+        value: unit(1.0, ENERGY),
+    },
+    BaseUnit {
+        name: "MeV",
+        value: unit(MEGA_EV_J, ENERGY),
+    },
     BaseUnit {
         name: "a",
         value: unit(1e-10, Dimension::LENGTH),
@@ -137,6 +157,10 @@ const BASE_UNITS: &[BaseUnit] = &[
     BaseUnit {
         name: "e",
         value: unit(CODATA2018_ELEMENTARY, Dimension::CHARGE),
+    },
+    BaseUnit {
+        name: "eV",
+        value: unit(CODATA2018_ELEMENTARY, ENERGY),
     },
     BaseUnit {
         name: "electron_charge",
@@ -171,6 +195,10 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(1.0, ENERGY),
     },
     BaseUnit {
+        name: "kJ",
+        value: unit(1000.0, ENERGY),
+    },
+    BaseUnit {
         name: "kcal",
         value: unit(KCAL_THERMOCHEMICAL_J, ENERGY),
     },
@@ -189,6 +217,10 @@ const BASE_UNITS: &[BaseUnit] = &[
     BaseUnit {
         name: "m",
         value: unit(1.0, Dimension::LENGTH),
+    },
+    BaseUnit {
+        name: "meV",
+        value: unit(MEV_J, ENERGY),
     },
     BaseUnit {
         name: "meter",
@@ -243,6 +275,10 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
+        name: "Å",
+        value: unit(1e-10, Dimension::LENGTH),
+    },
+    BaseUnit {
         name: "å",
         value: unit(1e-10, Dimension::LENGTH),
     },
@@ -260,17 +296,35 @@ fn lookup_base(name: &str) -> Option<&'static UnitValue> {
         .map(|index| &BASE_UNITS[index].value)
 }
 
+fn lookup_base_legacy(name: &str) -> Option<&'static UnitValue> {
+    lookup_base(name).or_else(|| {
+        BASE_UNITS
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case(name))
+            .map(|entry| &entry.value)
+    })
+}
+
 /// Parse a unit expression into SI factor and dimension.
+///
+/// ASCII spaces and tabs are removed (CON-units.17). Names are exact
+/// spellings: `MeV` is megaelectronvolt and `meV` is millielectronvolt.
 pub fn parse_unit_expression(expr: &str) -> Result<(f64, Dimension), ParseError> {
-    let s: String = expr.chars().filter(|c| !c.is_whitespace()).collect();
+    parse_unit_expression_with(expr, false)
+}
+
+fn parse_unit_expression_with(
+    expr: &str,
+    legacy_case: bool,
+) -> Result<(f64, Dimension), ParseError> {
+    let s: String = expr.chars().filter(|c| *c != ' ' && *c != '\t').collect();
     if s.is_empty() {
         return Err(ParseError::ValidationError("empty unit expression".into()));
     }
-    // CON-units.16 names are case-insensitive, including `Å`.
-    parse_expr(&s.to_lowercase())
+    parse_expr(&s, legacy_case)
 }
 
-fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
+fn parse_expr(s: &str, legacy_case: bool) -> Result<(f64, Dimension), ParseError> {
     // Split on * and / with left-associative scan; handle ^N on atoms.
     let mut factor = 1.0_f64;
     let mut dim = Dimension::ZERO;
@@ -287,7 +341,7 @@ fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
             i += 1;
             continue;
         }
-        let (atom_f, atom_d, consumed) = parse_atom(&s[i..])?;
+        let (atom_f, atom_d, consumed) = parse_atom(&s[i..], legacy_case)?;
         i += consumed;
         if pending_div {
             factor /= atom_f;
@@ -301,7 +355,7 @@ fn parse_expr(s: &str) -> Result<(f64, Dimension), ParseError> {
     Ok((factor, dim))
 }
 
-fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
+fn parse_atom(s: &str, legacy_case: bool) -> Result<(f64, Dimension, usize), ParseError> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {
         return Err(ParseError::ValidationError(
@@ -317,7 +371,7 @@ fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
                 depth -= 1;
                 if depth == 0 {
                     let inner = &s[1..j];
-                    let (f, d) = parse_expr(inner)?;
+                    let (f, d) = parse_expr(inner, legacy_case)?;
                     let mut end = j + 1;
                     let (f2, d2, extra) = apply_power(f, d, &s[end..])?;
                     end += extra;
@@ -340,8 +394,12 @@ fn parse_atom(s: &str) -> Result<(f64, Dimension, usize), ParseError> {
         )));
     }
     let name = &s[..j];
-    let base = lookup_base(name)
-        .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
+    let base = if legacy_case {
+        lookup_base_legacy(name)
+    } else {
+        lookup_base(name)
+    }
+    .ok_or_else(|| ParseError::ValidationError(format!("unknown unit '{name}'")))?;
     let mut end = j;
     let (f, d, extra) = apply_power(base.si_factor, base.dim, &s[end..])?;
     end += extra;
@@ -450,7 +508,15 @@ pub fn velocity_scale_to_natural(file_time: &str) -> Result<f64, ParseError> {
 /// Validate that `unit` has dimensions appropriate for `quantity`
 /// (`length`, `energy`, `mass`, `time`, `velocity`, `force`).
 pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), ParseError> {
-    let (_, dim) = parse_unit_expression(unit)?;
+    validate_unit_for_quantity_with(quantity, unit, false)
+}
+
+fn validate_unit_for_quantity_with(
+    quantity: &str,
+    unit: &str,
+    legacy_case: bool,
+) -> Result<(), ParseError> {
+    let (_, dim) = parse_unit_expression_with(unit, legacy_case)?;
     let expect = match quantity {
         "length" => Dimension::LENGTH,
         "time" => Dimension::TIME,
@@ -478,6 +544,15 @@ pub fn validate_unit_for_quantity(quantity: &str, unit: &str) -> Result<(), Pars
 
 /// CON v3 requires `units` object with non-empty `length` and `energy` strings.
 pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), ParseError> {
+    validate_units_metadata_for_version(3, units)
+}
+
+/// Validate the units object under the spelling rules of its CON major.
+pub fn validate_units_metadata_for_version(
+    spec_version: u32,
+    units: &serde_json::Value,
+) -> Result<(), ParseError> {
+    let legacy_case = spec_version == 3;
     let obj = units
         .as_object()
         .ok_or_else(|| ParseError::ValidationError("units must be a JSON object".into()))?;
@@ -497,7 +572,7 @@ pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), Parse
                 "units.{key} must be non-empty"
             )));
         }
-        validate_unit_for_quantity(key, s)?;
+        validate_unit_for_quantity_with(key, s, legacy_case)?;
     }
     // Optional keys if present must be valid for their quantity
     for (key, qty) in [
@@ -510,7 +585,7 @@ pub fn validate_v3_units_metadata(units: &serde_json::Value) -> Result<(), Parse
             let s = v.as_str().ok_or_else(|| {
                 ParseError::ValidationError(format!("units.{key} must be a string"))
             })?;
-            validate_unit_for_quantity(qty, s)?;
+            validate_unit_for_quantity_with(qty, s, legacy_case)?;
         }
     }
     Ok(())
@@ -529,7 +604,12 @@ pub fn default_v3_units_json() -> serde_json::Value {
 }
 
 fn preferred_atom(alias: &str) -> Option<&'static str> {
-    let lower = alias.trim().to_lowercase();
+    let trimmed = alias.trim();
+    // `MeV` must not fall through the lowercase table into `meV`.
+    if trimmed == "MeV" {
+        return Some("MeV");
+    }
+    let lower = trimmed.to_lowercase();
     Some(match lower.as_str() {
         "a" | "å" | "angstrom" | "ångstrom" => "angstrom",
         "nm" | "nanometer" | "nanometre" => "nm",

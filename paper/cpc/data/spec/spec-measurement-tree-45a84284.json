@@ -1,0 +1,23 @@
+{
+  "supersedes": "paper/cpc/data/spec/spec-measurement-tree-e1808508.json",
+  "reason": "Records the unreleased 0.24.0 tree after the CON 4 lexical clauses without changing prior measurements.",
+  "history": [
+    {
+      "version": "4.0.0",
+      "date": "2026-11-18"
+    },
+    {
+      "version": "4.0.1",
+      "date": "2026-11-18"
+    },
+    {
+      "version": "4.0.2",
+      "date": "2026-11-18"
+    }
+  ],
+  "tree": {
+    "release": "0.24.0",
+    "tagged": false,
+    "spec_blob": "45a84284d8ec640d3deb693d96f8a6af6298cf2c"
+  }
+}

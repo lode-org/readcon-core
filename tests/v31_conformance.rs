@@ -1038,7 +1038,8 @@ Coordinates of Component 1
 fn unit_vocabulary_includes_mol() {
     validate_unit_for_quantity("energy", "kcal/mol").unwrap();
     validate_unit_for_quantity("energy", "kJ/mol").unwrap();
-    validate_unit_for_quantity("energy", "KCAL/MOL").unwrap();
+    // CON-units.16 matches the listed spellings exactly. KCAL is not one of them.
+    assert!(validate_unit_for_quantity("energy", "KCAL/MOL").is_err());
     let groups = [
         (
             "length",
@@ -1079,13 +1080,10 @@ fn unit_vocabulary_includes_mol() {
         for name in names {
             validate_unit_for_quantity(quantity, name)
                 .unwrap_or_else(|err| panic!("{name}: {err}"));
-            let upper = name.to_ascii_uppercase();
-            validate_unit_for_quantity(quantity, &upper)
-                .unwrap_or_else(|err| panic!("{upper}: {err}"));
         }
     }
     parse_unit_expression("mol").unwrap();
-    parse_unit_expression("MOL").unwrap();
+    assert!(parse_unit_expression("MOL").is_err());
 }
 
 /// CON-frame.1, CON-frame.3, CON-frame.7.
