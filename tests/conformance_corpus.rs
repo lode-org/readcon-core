@@ -66,6 +66,7 @@ fn variant_name(err: &ParseError) -> &'static str {
         ParseError::InvalidCount(_) => "InvalidCount",
         ParseError::InvalidUnits(_) => "InvalidUnits",
         ParseError::UnsupportedVersion(_) => "UnsupportedVersion",
+        ParseError::Io(_) => "Io",
     }
 }
 

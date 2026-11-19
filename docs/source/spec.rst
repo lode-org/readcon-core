@@ -1043,28 +1043,33 @@ CON-lex.1 \:\: MUST
     SP             = %x20
     CR             = %x0D
     LF             = %x0A
+    FF             = %x0C
     eol            = LF / (CR LF)
+    line-end       = eol / <a CR that is the last byte of the input> / <the end of the input>
     WSP            = SP / HTAB
-    blank-char     = <a character of Unicode White_Space>
-    blank-line     = *blank-char eol
-    line-char      = <a Unicode scalar value other than CR or LF>
-    text-line      = *line-char eol
+    blank-char     = <a character of Unicode White_Space other than CR or LF>
+    blank-line     = *blank-char line-end
+    line-char      = <a Unicode scalar value other than LF, and other than a CR that is a line ending>
+    text-line      = *line-char line-end
     digit          = %x30-39
     sign           = "+" / "-"
     integer        = 1*digit
     float          = [sign] ( 1*digit ["." *digit] / "." 1*digit ) [ ( "e" / "E" ) [sign] 1*digit ]
-    float-line     = float 2*( 1*WSP float ) *WSP eol
-    count-line     = [integer *(1*WSP integer)] *WSP eol
-    json-line      = <one JSON object and nothing else> eol
+    float-line     = *WSP float 2*( 1*WSP float ) *WSP line-end
+    count-line     = *WSP [integer *(1*WSP integer)] *WSP line-end
+    mass-line      = *WSP [float *(1*WSP float)] *WSP line-end
+    json-line      = <one JSON object and nothing else> line-end
     v1-line        = text-line
-    header         = text-line (json-line / v1-line) float-line float-line text-line text-line count-line count-line count-line
-    coord-row      = float 1*WSP float 1*WSP float 1*WSP integer [1*WSP integer] *WSP eol
+    header         = text-line (json-line / v1-line) float-line float-line text-line text-line count-line count-line mass-line
+    coord-row      = *WSP float 1*WSP float 1*WSP float 1*WSP integer [1*WSP integer] *WSP line-end
     label-line     = text-line
     symbol-line    = text-line
     coord-block    = symbol-line label-line *coord-row
     section-block  = blank-line symbol-line label-line *coord-row
     frame          = header *coord-block *section-block
-    tail           = [blank-line] *(*WSP eol)
+    tail-char      = SP / HTAB / FF / <a CR that is not a line ending>
+    tail-line      = *tail-char line-end
+    tail           = [blank-line] *tail-line
     file           = *frame [tail]
 
     unit-power     = "^" ["-"] ( 1*digit ["." *digit] / "." 1*digit )
@@ -1072,6 +1077,12 @@ CON-lex.1 \:\: MUST
     unit-term      = unit-atom [unit-power] / "(" unit-expr ")" [unit-power]
     unit-expr      = unit-term *( ( "*" / "/" ) unit-term )
 
+``line-end`` is LF, CR LF, or a CR that is the last byte of the input.
+The end of the input is also a ``line-end``, and only the last line may use it, so a missing ending does not join two lines.
+A CR that is not a ``line-end`` is a character of its line, including a title and line 5.
+Line 9 is ``mass-line``, the float masses of CON-header.3, and it may be empty.
+Lines 3 and 4, line 8, the masses and a coordinate row may begin with spaces or tabs.
+After the last frame, a tail line is spaces, tabs, form feeds and carriage returns, and that last line may omit LF (CON-frame.1).
 Section blocks follow the coordinate blocks in the order of the ``sections`` array.
 A JSON object does not repeat a name.
 ``MeV`` and ``meV`` are different unit names.

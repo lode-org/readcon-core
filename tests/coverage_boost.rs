@@ -54,6 +54,7 @@ fn parse_error_display_and_from_all_variants() {
         ParseError::InvalidCount("0".into()),
         ParseError::InvalidUnits("time".into()),
         ParseError::UnsupportedVersion(0),
+        ParseError::Io("disk".into()),
     ];
     for e in &variants {
         let s = e.to_string();

@@ -318,6 +318,7 @@ fn root_index(path: &Path, write_sidecar: bool) -> Result<(FileContents, FrameIn
     // scan, and the span parser reports the file line.
     let idx = match frame_index::load_or_build(path, text, write_sidecar && mapped) {
         Ok(idx) => idx,
+        Err(crate::error::ParseError::Io(msg)) => return Err(msg),
         Err(_) => {
             let offsets = crate::iterators::frame_start_offsets(text);
             if offsets.is_empty() {
