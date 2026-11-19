@@ -232,8 +232,11 @@ def test_check_fails_on_an_org_number_without_emacs(
     assert "emacs is not on PATH" in done.stderr, done.stderr
 
 
+@pytest.mark.skipif(
+    shutil.which("emacs") is None,
+    reason="Emacs is required to export rg_main.org",
+)
 def test_check_fails_when_the_tex_is_not_the_org_export(clone: Path) -> None:
-    assert shutil.which("emacs"), "emacs is required to export rg_main.org"
     tex = clone / CPC / "src" / "rg_main.tex"
     text = tex.read_text()
     assert "geometry checkpoint" in text

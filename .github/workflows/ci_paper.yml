@@ -38,6 +38,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Install Emacs
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes emacs-nox
+
       - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           manifest-path: paper/cpc/pixi.toml
