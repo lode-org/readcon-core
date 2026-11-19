@@ -4596,7 +4596,8 @@ fn frames_from_bytes_phased_located(
 ///
 /// `None` means the frames do not share one atom count. `workers >= 2`
 /// writes disjoint frame runs. The copy is bit-identical to reading
-/// each frame's `f64` positions in order.
+/// each frame's `f64` positions in order. A frame whose positions column
+/// is projected to another type contributes the coordinates of its atoms.
 pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<Vec<f64>> {
     if frames.is_empty() {
         return None;
@@ -4625,6 +4626,16 @@ pub fn pack_position_slab(frames: &[types::ConFrame], workers: usize) -> Option<
     let write = |frame: &types::ConFrame, dest: &mut [f64]| {
         if let Some(src) = frame.positions.f64_slice() {
             dest.copy_from_slice(src);
+        } else if frame.atom_data.len() == n_atoms {
+            // A projected column holds the rounding of the values the atoms
+            // keep, and the writer spells the atoms.
+            for (atom, slot) in frame
+                .atom_data
+                .iter()
+                .zip(dest.as_chunks_mut::<3>().0.iter_mut())
+            {
+                *slot = [atom.x(), atom.y(), atom.z()];
+            }
         } else {
             for (row, slot) in dest.as_chunks_mut::<3>().0.iter_mut().enumerate() {
                 slot.copy_from_slice(&frame.positions.as_f64_row(row));

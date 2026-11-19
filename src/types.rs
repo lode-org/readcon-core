@@ -2073,14 +2073,18 @@ impl AtomDatum {
         atom
     }
 
-    /// Point this atom at `slot` after the coordinate buffer moves.
+    /// Point this atom at `slot`, three contiguous `f64`s the caller owns.
     ///
-    /// The slot is three contiguous `f64`s. An owned coordinate box is left
-    /// alone: it does not alias the frame buffer.
+    /// An owned coordinate box is released first. The slot is the one place
+    /// the coordinates live afterwards, so a write through the slot and a
+    /// read through the atom see the same value. The caller has put the
+    /// coordinates it wants to keep into the slot.
     pub(crate) fn retarget(&mut self, slot: *mut f64) {
-        if self.tail & TAIL_OWNED == 0 {
-            self.xyz = slot;
+        if self.tail & TAIL_OWNED != 0 && !self.xyz.is_null() {
+            unsafe { drop(Box::from_raw(self.xyz as *mut [f64; 3])) };
+            self.tail &= !TAIL_OWNED;
         }
+        self.xyz = slot;
     }
 
     /// Copy the coordinates into an owned box that outlives the frame buffer.
@@ -5645,6 +5649,26 @@ mod tests {
             );
             assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
         }
+    }
+
+    #[test]
+    fn retarget_replaces_an_owned_box_with_the_slot() {
+        let mut cell = [1.0_f64, 2.0, 3.0];
+        let slot = cell.as_mut_ptr();
+        let mut atom = AtomDatum::coords("Cu", 9.0, 8.0, 7.0, [false; 3], 0);
+        assert!(atom.tail & TAIL_OWNED != 0);
+        atom.retarget(slot);
+        assert!(atom.tail & TAIL_OWNED == 0, "the box is released");
+        assert!(std::ptr::eq(atom.coord_ptr(), slot));
+        unsafe { *slot = 4.0 };
+        assert_eq!(atom.x(), 4.0, "the atom reads what the slot holds");
+        atom.set_y(5.0);
+        assert_eq!(
+            unsafe { *slot.add(1) },
+            5.0,
+            "the atom writes where the slot is"
+        );
+        assert_eq!(atom.z(), 3.0);
     }
 
     #[test]
