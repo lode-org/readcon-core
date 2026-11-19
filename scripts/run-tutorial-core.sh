@@ -85,30 +85,14 @@ resolve_python() {
   return 1
 }
 
-# venv and conda roots have a marker. The parent of a system interpreter
-# does not; pointing VIRTUAL_ENV at that parent installs into the wrong prefix.
-maturin_env_root() {
-  local parent
-  parent="$(cd "$(dirname "$1")/.." && pwd)"
-  if [[ -f "$parent/pyvenv.cfg" || -d "$parent/conda-meta" ]]; then
-    echo "$parent"
-  fi
-  return 0
-}
-
-develop_readcon() {
-  local root=() env_root
-  env_root="$(maturin_env_root "$PYTHON_BIN")"
-  if [[ -n "$env_root" ]]; then
-    root=(env "VIRTUAL_ENV=$env_root")
-  else
-    # An inherited VIRTUAL_ENV belongs to a different interpreter.
-    root=(env -u VIRTUAL_ENV)
-  fi
+# A missing readcon is built as a wheel and installed into a virtualenv in
+# the scratch directory. The virtualenv sees the packages of PYTHON_BIN but
+# installs into its own prefix, so the caller's interpreter is never changed.
+run_maturin() {
   if "$PYTHON_BIN" -m maturin --version >/dev/null 2>&1; then
-    "${root[@]}" "$PYTHON_BIN" -m maturin develop --features python
+    env -u VIRTUAL_ENV "$PYTHON_BIN" -m maturin "$@"
   elif command -v maturin >/dev/null 2>&1; then
-    "${root[@]}" maturin develop --features python
+    env -u VIRTUAL_ENV maturin "$@"
   else
     echo "maturin is unavailable (not on PATH and \`$PYTHON_BIN -m maturin\` failed)" >&2
     echo "install maturin or: pixi run -e python python-build" >&2
@@ -116,11 +100,23 @@ develop_readcon() {
   fi
 }
 
+ISOLATED=""
+cleanup() {
+  if [[ -n "$ISOLATED" ]]; then
+    rm -rf "$ISOLATED"
+  fi
+}
+trap cleanup EXIT
+
 PYTHON_BIN="$(resolve_python)"
 
 if ! "$PYTHON_BIN" -c "import readcon" 2>/dev/null; then
-  echo "Building lean Python extension into $PYTHON_BIN (maturin develop --features python)..." >&2
-  develop_readcon
+  ISOLATED="$(scratch_dir)"
+  echo "Building readcon into the virtualenv $ISOLATED/venv; $PYTHON_BIN is left as it is" >&2
+  "$PYTHON_BIN" -m venv --system-site-packages "$ISOLATED/venv"
+  run_maturin build --features python --interpreter "$ISOLATED/venv/bin/python" --out "$ISOLATED/wheels"
+  "$ISOLATED/venv/bin/python" -m pip install --quiet --no-deps --no-index "$ISOLATED"/wheels/readcon-*.whl
+  PYTHON_BIN="$ISOLATED/venv/bin/python"
   "$PYTHON_BIN" -c "import readcon"
 fi
 

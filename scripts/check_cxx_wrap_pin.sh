@@ -4,7 +4,8 @@
 # scripts/record-cxx-wrap.sh packages with scripts/package-cxx.sh, then writes
 # the digest into packaging/wrapdb. This check runs that same packager. It
 # keeps the saved source-date-epoch. --fresh would replace that epoch with
-# the v$VERSION tag date and reject a pin that is already current.
+# the v$VERSION tag date and reject a pin that is already current. A
+# SOURCE_DATE_EPOCH from the caller is ignored for the same reason.
 #
 # packaging/wrapdb is not a member of the archive, so updating the pin does
 # not change the digest. A src or workflow edit does. Catch that before the
@@ -47,6 +48,12 @@ if [[ "$wrap_hash" != "$recorded" ]]; then
     structural_error \
         "wrap hash ${wrap_hash} and sidecar ${recorded} disagree"
 fi
+
+epoch="$(env -u SOURCE_DATE_EPOCH bash scripts/source-date-epoch.sh "$ROOT")"
+if [[ -n "${SOURCE_DATE_EPOCH:-}" && "$SOURCE_DATE_EPOCH" != "$epoch" ]]; then
+    echo "check_cxx_wrap_pin: ignoring SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}; using the committed epoch ${epoch}" >&2
+fi
+export SOURCE_DATE_EPOCH="$epoch"
 
 out="$(scratch_dir)"
 trap 'rm -rf "$out"' EXIT

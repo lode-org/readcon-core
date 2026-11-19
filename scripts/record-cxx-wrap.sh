@@ -6,9 +6,12 @@
 # not supply the pin. packaging/wrapdb is omitted from the archive, so
 # committing the pin does not change the digest.
 #
-# The epoch is the v$VERSION tag's committer date when that tag exists,
+# The epoch is the committed packaging/wrapdb/source-date-epoch. Without
+# that file it is the v$VERSION tag's committer date when that tag exists,
 # otherwise HEAD. It is saved next to the digest. Later package-cxx.sh
 # runs read that pin, including a shallow CI checkout of the tagged commit.
+# A SOURCE_DATE_EPOCH from the caller is ignored, so the shell that runs
+# this script cannot move the pin.
 set -euo pipefail
 # shellcheck source=scripts/scratch.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
@@ -16,7 +19,10 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-epoch="$(bash "$ROOT/scripts/source-date-epoch.sh" "$ROOT")"
+epoch="$(env -u SOURCE_DATE_EPOCH bash "$ROOT/scripts/source-date-epoch.sh" "$ROOT")"
+if [[ -n "${SOURCE_DATE_EPOCH:-}" && "$SOURCE_DATE_EPOCH" != "$epoch" ]]; then
+    echo "record-cxx-wrap: ignoring SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}; using the committed epoch ${epoch}" >&2
+fi
 export SOURCE_DATE_EPOCH="$epoch"
 
 out="$(scratch_dir)"

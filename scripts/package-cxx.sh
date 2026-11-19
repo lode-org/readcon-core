@@ -114,7 +114,9 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 cd "$PACKAGE_ROOT"
 cargo package --no-verify --package readcon-core
-CRATE_TAR="$(ls -1 "$PACKAGE_ROOT"/target/package/readcon-core-"${VERSION}".crate)"
+# cargo package writes the crate under CARGO_TARGET_DIR when that is set.
+TARGET_DIR="${CARGO_TARGET_DIR:-$PACKAGE_ROOT/target}"
+CRATE_TAR="$(ls -1 "$TARGET_DIR"/package/readcon-core-"${VERSION}".crate)"
 mkdir -p "${TMP_DIR}/crate"
 tar -C "${TMP_DIR}/crate" -xf "$CRATE_TAR"
 CRATE_DIR="$(find "${TMP_DIR}/crate" -mindepth 1 -maxdepth 1 -type d | head -1)"
