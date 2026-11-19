@@ -234,8 +234,14 @@ impl PyAtomDatum {
 }
 
 fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, Value>> {
+    py_metadata_to_json_map_with_minor(obj).map(|(metadata, _)| metadata)
+}
+
+fn py_metadata_to_json_map_with_minor(
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<(BTreeMap<String, Value>, Option<String>)> {
     if obj.is_none() {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), None));
     }
 
     let dict = obj
@@ -243,6 +249,7 @@ fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, 
         .map_err(|_| PyValueError::new_err("metadata must be a dict"))?;
 
     let mut metadata = BTreeMap::new();
+    let mut minor_raw = None;
     for (key, value) in dict.iter() {
         let key: String = key
             .extract()
@@ -253,9 +260,29 @@ fn py_metadata_to_json_map(obj: &Bound<'_, PyAny>) -> PyResult<BTreeMap<String, 
         if key == meta::LATTICE_VECTORS {
             check_lattice_vectors_object(&value)?;
         }
+        if key == meta::CON_SPEC_MINOR
+            && !value.is_instance_of::<pyo3::types::PyBool>()
+            && value.is_instance_of::<pyo3::types::PyInt>()
+            && value.extract::<u64>().is_err()
+            && value.extract::<i64>().is_err()
+        {
+            let text_any = value
+                .py()
+                .get_type::<pyo3::types::PyInt>()
+                .call_method1("__str__", (&value,))?;
+            let text = text_any.extract::<String>()?;
+            if crate::parser::is_substitutable_huge_minor(&text) {
+                minor_raw = Some(text);
+                metadata.insert(
+                    key,
+                    Value::Number(Number::from(crate::types::SATURATED_SPEC_MINOR)),
+                );
+                continue;
+            }
+        }
         metadata.insert(key, py_to_json_value(&value)?);
     }
-    Ok(metadata)
+    Ok((metadata, minor_raw))
 }
 
 /// A `lattice_vectors` entry that is a 3 by 3 array of numbers must hold
@@ -329,6 +356,20 @@ fn json_map_to_py_dict(py: Python<'_>, metadata: &BTreeMap<String, Value>) -> Py
         dict.set_item(key, json_value_to_py(py, value)?)?;
     }
     Ok(dict.unbind())
+}
+
+fn json_map_to_py_dict_with_minor(
+    py: Python<'_>,
+    metadata: &BTreeMap<String, Value>,
+    minor_raw: Option<&str>,
+) -> PyResult<Py<PyDict>> {
+    let dict = json_map_to_py_dict(py, metadata)?;
+    if let Some(digits) = minor_raw {
+        use pyo3::PyTypeInfo;
+        let py_int = pyo3::types::PyInt::type_object(py).call1((digits,))?;
+        dict.bind(py).set_item(meta::CON_SPEC_MINOR, py_int)?;
+    }
+    Ok(dict)
 }
 
 fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
@@ -420,7 +461,10 @@ impl PyConFrame {
             .map_err(|err| cell_err_to_py(py, &err))?;
         let atoms = py_atoms_to_list(py, atoms)?;
         let metadata = match metadata {
-            Some(obj) => json_map_to_py_dict(py, &py_metadata_to_json_map(obj)?)?,
+            Some(obj) => {
+                let (map, minor_raw) = py_metadata_to_json_map_with_minor(obj)?;
+                json_map_to_py_dict_with_minor(py, &map, minor_raw.as_deref())?
+            }
             None => PyDict::new(py).unbind(),
         };
         Ok(PyConFrame {
@@ -454,7 +498,8 @@ impl PyConFrame {
 
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.metadata = json_map_to_py_dict(py, &py_metadata_to_json_map(metadata)?)?;
+        let (map, minor_raw) = py_metadata_to_json_map_with_minor(metadata)?;
+        self.metadata = json_map_to_py_dict_with_minor(py, &map, minor_raw.as_deref())?;
         Ok(())
     }
 
@@ -1021,9 +1066,8 @@ impl PyConFrame {
     /// non-bool `pbc`, a 3x4 `lattice_vectors`) raise ValueError rather
     /// than silently dropping the value.
     fn set_metadata_json(&mut self, py: Python<'_>, metadata_json: &str) -> PyResult<()> {
-        let obj: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(metadata_json)
-                .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
+        let (obj, minor_raw) = crate::parser::parse_metadata_json_object_with_raw(metadata_json)
+            .map_err(|e| PyValueError::new_err(format!("invalid metadata JSON: {e}")))?;
         crate::parser::validate_metadata_schema(&obj)
             .map_err(|e| PyValueError::new_err(format!("invalid metadata: {e}")))?;
         let mut metadata = BTreeMap::new();
@@ -1033,7 +1077,7 @@ impl PyConFrame {
             }
             metadata.insert(key, value);
         }
-        self.metadata = json_map_to_py_dict(py, &metadata)?;
+        self.metadata = json_map_to_py_dict_with_minor(py, &metadata, minor_raw.as_deref())?;
         Ok(())
     }
 
@@ -1206,7 +1250,11 @@ impl PyConFrame {
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
         let metadata_map = frame.header.metadata.to_map();
-        let metadata = json_map_to_py_dict(py, &metadata_map)?;
+        let metadata = json_map_to_py_dict_with_minor(
+            py,
+            &metadata_map,
+            frame.header.metadata.huge_minor_raw(),
+        )?;
         Ok(PyConFrame {
             cell,
             angles,
@@ -1241,7 +1289,11 @@ impl PyConFrame {
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
         let metadata_map = frame.header.metadata.to_map();
-        let metadata = json_map_to_py_dict(py, &metadata_map)?;
+        let metadata = json_map_to_py_dict_with_minor(
+            py,
+            &metadata_map,
+            frame.header.metadata.huge_minor_raw(),
+        )?;
         // Coordinates live in the slab. Atom slots still alias the parse
         // buffer, so point them at this frame's row before that buffer goes.
         if n_atoms > 0 {
@@ -1361,7 +1413,8 @@ impl PyConFrame {
     }
 
     fn to_con_frame(&self, py: Python<'_>) -> PyResult<ConFrame> {
-        let mut meta = self.metadata_map(py)?;
+        let (mut meta, minor_raw) =
+            py_metadata_to_json_map_with_minor(self.metadata.bind(py).as_any())?;
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
         // The builder writes minor 1, which requires units.time (CON-units.11).
@@ -1376,6 +1429,11 @@ impl PyConFrame {
             .prebox_header(self.prebox_header[0].as_str())
             .postbox_header(self.postbox_header.clone())
             .metadata(meta);
+        if let Some(digits) = minor_raw {
+            builder
+                .set_con_spec_minor_str(&digits)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        }
 
         for py_atom in &atoms {
             let mass = py_atom.mass.unwrap_or(0.0);
