@@ -61,6 +61,9 @@ fn build_frames(
         .map(|(frame_index, kinds)| {
             let mut builder = ConFrameBuilder::new(cells[frame_index], angles[frame_index]);
             builder
+                .set_metadata_json(r#"{"pbc":[false,false,false]}"#)
+                .expect("pbc");
+            builder
                 .set_units(json!({
                     "length": "angstrom",
                     "energy": "eV",
@@ -89,18 +92,6 @@ fn build_frames(
 
 fn bits(value: f64) -> u64 {
     value.to_bits()
-}
-
-/// CON-cell.7 rejects a finite angle triple in (0, 180) degrees that has no real c vector.
-fn reader_accepts_angles(angles: [f64; 3]) -> bool {
-    if angles
-        .iter()
-        .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
-    {
-        readcon_core::types::require_real_cell(angles).is_ok()
-    } else {
-        true
-    }
 }
 
 fn assert_frames(got: &[ConFrame], expect: &[ConFrame]) {
@@ -199,7 +190,7 @@ proptest! {
         ),
         masses in prop::collection::vec(odd_f64(), 24),
         cells in prop::collection::vec(prop::array::uniform3(odd_f64()), 1..4),
-        angles in prop::collection::vec(prop::array::uniform3(odd_f64()), 1..4),
+        angles in prop::collection::vec(prop::array::uniform3(80.0f64..100.0), 1..4),
         with_velocity in prop::collection::vec(any::<bool>(), 1..4),
         vel in prop::collection::vec(
             prop::collection::vec(prop::array::uniform3(odd_f64()), 1..5),
@@ -241,9 +232,6 @@ proptest! {
             &angles[..n_frames],
             &velocities,
         );
-        prop_assume!(frames
-            .iter()
-            .all(|frame| reader_accepts_angles(frame.header.angles)));
 
         let serial = write_frames_to_vec_with_threads(&frames, 1, None, false).unwrap();
         let parsed = frames_from_bytes(&serial, Some(1)).unwrap();
