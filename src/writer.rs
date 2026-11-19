@@ -794,6 +794,24 @@ impl<W: Write> ConFrameWriter<W> {
                 "each per-type count must be >= 1".into(),
             )));
         }
+        // The component loops slice the atom list by these counts. A header
+        // that no longer matches the atoms, say after an atom was removed,
+        // is an error and not an out-of-range slice.
+        let declared = frame
+            .header
+            .natms_per_type
+            .iter()
+            .try_fold(0usize, |sum, &count| sum.checked_add(count));
+        if declared != Some(frame.atom_data.len()) {
+            return Err(WriteError::Format(crate::error::ParseError::InvalidCount(
+                format!(
+                    "natms_per_type declares {} atoms but the frame holds {}",
+                    declared
+                        .map_or_else(|| "an overflowing number of".to_string(), |n| n.to_string()),
+                    frame.atom_data.len()
+                ),
+            )));
+        }
         // A uniform trajectory either has lattice vectors on every frame
         // or on none. The first frame decides; the rest read lines 3-4.
         let (boxl, angles) = if self.keep_bound && self.bound_no_lattice == Some(true) {
