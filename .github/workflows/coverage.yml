@@ -46,6 +46,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # cargo test runs check_version_sot.sh, which reads tags and
+          # older commits. checkout@v6 does not fetch those by default.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup LLVM
         run: |
