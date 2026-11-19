@@ -2901,7 +2901,7 @@ pub fn parse_frame_header<'a>(
         }
         if ver >= 3 {
             match json_obj.get(meta::UNITS) {
-                Some(u) => crate::units::validate_v3_units_metadata(u)
+                Some(u) => crate::units::validate_units_metadata_for_version(ver, u)
                     .map_err(|e| ParseError::InvalidUnits(format!("v3 units: {e}")))?,
                 None => {
                     return Err(ParseError::InvalidUnits(
@@ -3068,6 +3068,7 @@ pub fn parse_frame_header<'a>(
         sections,
         strict_validation: validate,
         sections_declared,
+        ids_from_file: true,
     })
 }
 

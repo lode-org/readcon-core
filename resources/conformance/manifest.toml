@@ -11,144 +11,152 @@ spec = "docs/orgmode/spec.org"
 [[valid]]
 id = "v2-minimal"
 path = "valid/v2_minimal.con"
-clause = "Line 2: Metadata"
+clause = "CON-line2.1"
 notes = "Minimal v2 JSON metadata with con_spec_version."
 
 [[valid]]
 id = "v3-units"
 path = "valid/v3_units.con"
-clause = "Units (required)"
+clause = "CON-units.1"
 notes = "v3 with required length and energy units."
 
 [[valid]]
 id = "column-4-spec2-x-only"
 path = "valid/column4_spec2_x_only.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.4"
 expect_fixed = [true, false, false]
 notes = "Spec 2+ column 4 value 1 is x-only."
 
 [[valid]]
 id = "column-4-spec1-all-fixed"
 path = "valid/column4_spec1_all_fixed.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.2"
 expect_fixed = [true, true, true]
 notes = "Spec 1 column 4 value 1 is all-fixed."
 
 [[valid]]
 id = "column-4-spec2-all-fixed"
 path = "valid/column4_spec2_all_fixed.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.4"
 expect_fixed = [true, true, true]
 notes = "Spec 2+ column 4 value 7 is all-fixed."
 
 [[valid]]
 id = "column-4-spec2-y-only"
 path = "valid/column4_spec2_y_only.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.4"
 expect_fixed = [false, true, false]
 notes = "Spec 2+ column 4 value 2 is y-only."
 
 [[valid]]
 id = "column-4-spec2-xz"
 path = "valid/column4_spec2_xz.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.4"
 expect_fixed = [true, false, true]
 notes = "Spec 2+ column 4 value 5 is x+z."
 
 [[valid]]
 id = "zero-atom"
 path = "valid/zero_atom.con"
-clause = "legal zero-atom frame"
+clause = "CON-count.1"
 notes = "Type count 0 with whitespace lines 8 and 9."
 
 [[valid]]
 id = "zero-atom-eof"
 path = "valid/zero_atom_eof.con"
-clause = "legal zero-atom frame"
+clause = "CON-count.1"
 notes = "Type count 0 at end of file with lines 8 and 9 absent."
 
 [[valid]]
 id = "zero-atom-then-frame"
 path = "valid/zero_atom_then_frame.con"
-clause = "legal zero-atom frame"
+clause = "CON-count.1"
 notes = "A zero-atom frame with lines 8 and 9, then one normal frame."
 
 [[valid]]
 id = "empty-user-line"
 path = "valid/empty_user_line.con"
-clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+clause = "CON-header.4"
 notes = "Line 1 is empty and line 2 is version 2 JSON."
 
 [[valid]]
 id = "empty-user-line-two"
 path = "valid/empty_user_line_two.con"
-clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+clause = "CON-header.4"
 notes = "Two frames, each with an empty line 1."
 
 [[valid]]
 id = "empty-line2"
 path = "valid/empty_line2.con"
-clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+clause = "CON-header.4"
 notes = "Line 2 is empty, so the frame is implicit version 1."
 
 [[valid]]
 id = "empty-header-both"
 path = "valid/empty_header_both.con"
-clause = "Parsers MUST accept an empty line 1 and an empty line 2."
+clause = "CON-header.4"
 notes = "Line 1 and line 2 are both empty, so the frame is implicit version 1."
 
 [[invalid]]
 id = "missing-spec-version"
 path = "invalid/missing_spec_version.con"
-clause = "Line 2: Metadata"
+clause = "CON-line2.3"
 error = "MissingSpecVersion"
+line = 2
 notes = "JSON object on line 2 without con_spec_version."
 
 [[invalid]]
 id = "v3-missing-units"
 path = "invalid/v3_missing_units.con"
-clause = "Units (required)"
+clause = "CON-units.1"
 error = "InvalidUnits"
+line = 2
 notes = "con_spec_version 3 without units."
 
 [[invalid]]
 id = "v3-bad-units"
 path = "invalid/v3_bad_units.con"
-clause = "Units (required)"
+clause = "CON-units.1"
 error = "InvalidUnits"
+line = 2
 notes = "v3 units with swapped length/energy dimensions."
 
 [[invalid]]
 id = "column-4-out-of-range"
 path = "invalid/column4_out_of_range.con"
-clause = "Per-direction constraints (column 4)"
+clause = "CON-mask.5"
 error = "InvalidFixedFlag"
+line = 12
 notes = "column 4 value 8 is InvalidFixedFlag in every mode, including validate=true."
 
 [[invalid]]
 id = "unsupported-spec-version"
 path = "invalid/unsupported_spec_version.con"
-clause = "Line 2: Metadata"
+clause = "CON-line2.6"
 error = "UnsupportedVersion"
+line = 2
 notes = "con_spec_version 5 exceeds CON_SPEC_VERSION."
 
 [[invalid]]
 id = "unknown-section"
 path = "invalid/unknown_section.con"
-clause = "Section declaration"
+clause = "CON-section.7"
 error = "UnknownSection"
+line = 2
 notes = "Declared section name is not a reserved section."
 
 [[invalid]]
 id = "validate-true-missing-sections"
 path = "invalid/validate_true_missing_sections.con"
-clause = "Validation mode"
+clause = "CON-validate.3"
 error = "InvalidMetadataJson"
+line = 2
 notes = "validate=true requires a sections array even if empty."
 
 [[invalid]]
 id = "per-type-zero"
 path = "invalid/per_type_zero.con"
-clause = "per-type count of 0 is InvalidCount"
+clause = "CON-count.3"
 error = "InvalidCount"
+line = 8
 notes = "Type count 2 with a per-type count of 0."

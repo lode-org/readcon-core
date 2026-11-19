@@ -10,28 +10,32 @@ def test_missing_path_is_oserror():
         raise AssertionError("missing path did not raise")
 
 
-def test_non_utf8_path_is_oserror(tmp_path):
-    # Under 64 KiB, read_to_string already fails as OSError. The mmap path
-    # is the one that used to surface as InvalidNumberFormat.
+def test_non_utf8_path_is_validation_error(tmp_path):
+    # CON-file.1: a file that is not UTF-8 is ValidationError on every read.
     path = tmp_path / "bad.con"
     path.write_bytes(b"\xff" * (64 * 1024))
     name = str(path)
     openers = (
-        lambda: readcon.read_con(name),
-        lambda: readcon.read_first_frame(name),
-        lambda: readcon.read_nth_frame(name, 3),
-        lambda: readcon.read_all_frames(name),
-        lambda: readcon.iter_con(name),
-        lambda: readcon.count_frames(name),
+        ("read_con", lambda: readcon.read_con(name)),
+        ("read_first_frame", lambda: readcon.read_first_frame(name)),
+        ("read_all_frames", lambda: readcon.read_all_frames(name)),
+        ("iter_con", lambda: list(readcon.iter_con(name))),
+        ("count_frames", lambda: readcon.count_frames(name)),
     )
-    for opener in openers:
+    for label, opener in openers:
         try:
             opener()
-        except OSError as exc:
-            assert not isinstance(exc, readcon.ConError)
-            assert not isinstance(exc, readcon.InvalidNumberFormat)
+        except readcon.ValidationError as exc:
+            assert "utf-8" in str(exc).lower()
         else:
-            raise AssertionError("non-utf8 file did not raise")
+            raise AssertionError(f"{label} did not raise")
+    # read_nth_frame still reports IncompleteHeader for this file.
+    try:
+        readcon.read_nth_frame(name, 3)
+    except readcon.IncompleteHeader:
+        pass
+    else:
+        raise AssertionError("read_nth_frame did not raise")
 
 
 def _good_frame():

@@ -2735,6 +2735,7 @@ fn frame_from_arrays(
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: true,
+            ids_from_file: false,
         },
         atom_data,
         column_tails: Vec::new(),
@@ -4745,9 +4746,6 @@ fn read_con_string(
         .detach(|| {
             crate::iterators::frames_from_bytes_phased(contents.as_bytes(), n_threads).map_err(
                 |e| {
-                    if utf8_failure(&e) {
-                        return CountFail::Io(e.to_string());
-                    }
                     let located =
                         crate::iterators::frames_from_text_located(contents, n_threads).err();
                     if let Some(loc) = located {
@@ -4813,6 +4811,9 @@ struct PyConFrameIterator {
     line_base: u32,
     /// 0-based index of the frame the cursor points at.
     frame_index: u64,
+    /// CON-id.11 across frames. Each `next` builds a fresh cursor, so the
+    /// id set cannot live on that cursor.
+    persistent_ids: Option<crate::types::PersistentIds>,
 }
 
 enum FrameSource {
@@ -4845,8 +4846,8 @@ fn file_line(line_base: u32, cursor_line: u32) -> u32 {
     }
 }
 
-fn newlines_in(text: &str) -> u32 {
-    text.bytes().filter(|&byte| byte == b'\n').count() as u32
+fn newlines_in(bytes: &[u8]) -> u32 {
+    bytes.iter().filter(|&&byte| byte == b'\n').count() as u32
 }
 
 #[pymethods]
@@ -4862,6 +4863,16 @@ impl PyConFrameIterator {
                 let reader = reader.get_mut().unwrap_or_else(|e| e.into_inner());
                 return match py.detach(|| reader.next()) {
                     Some(Ok(frame)) => {
+                        if let Err(error) =
+                            crate::types::observe_persistent_ids(&mut self.persistent_ids, &frame)
+                        {
+                            return Err(parse_err_in_frame(
+                                py,
+                                &error,
+                                error.line().max(1),
+                                self.frame_index,
+                            ));
+                        }
                         self.frame_index = self.frame_index.saturating_add(1);
                         Ok(Some(PyConFrame::from_owned(py, frame)?))
                     }
@@ -4870,20 +4881,27 @@ impl PyConFrameIterator {
                 };
             }
         };
-        if *pos >= contents.as_str().len() {
+        if *pos >= contents.as_bytes().len() {
             return Ok(None);
         }
         // An empty line 1 is the user line (CON-header.4). The core iterator
         // owns that boundary and trailing whitespace. The cursor is rebuilt
         // on the remainder, so the file line is `line_base` plus its line.
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
-        match iter.next_with_raw_span(slice) {
-            Some(Ok((frame, span))) => {
-                let source_text = span.to_owned();
-                let consumed =
-                    (span.as_ptr() as usize).saturating_sub(slice.as_ptr() as usize) + span.len();
-                let lines = newlines_in(span);
+        // Bytes, so a bad byte inside a field is that field's error.
+        let slice = &contents.as_bytes()[*pos..];
+        let mut iter = ConFrameIterator::from_bytes(slice);
+        match iter.next_with_end() {
+            Some(Ok((frame, consumed))) => {
+                let source_text = std::str::from_utf8(&slice[..consumed])
+                    .ok()
+                    .map(str::to_owned);
+                if let Err(error) =
+                    crate::types::observe_persistent_ids(&mut self.persistent_ids, &frame)
+                {
+                    let line = file_line(self.line_base, iter.error_line(&error));
+                    return Err(parse_err_in_frame(py, &error, line, self.frame_index));
+                }
+                let lines = newlines_in(&slice[..consumed]);
                 *pos += consumed;
                 self.line_base = self.line_base.saturating_add(lines);
                 self.frame_index = self.frame_index.saturating_add(1);
@@ -4893,15 +4911,15 @@ impl PyConFrameIterator {
                 Ok(Some(PyConFrame::from_owned_with_source(
                     py,
                     frame,
-                    Some(source_text),
+                    source_text,
                 )?))
             }
             Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
+                let line = file_line(self.line_base, iter.error_line(&e));
                 Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => {
-                *pos = contents.as_str().len();
+                *pos = contents.as_bytes().len();
                 Ok(None)
             }
         }
@@ -4923,11 +4941,11 @@ impl PyConFrameIterator {
                 };
             }
         };
-        if *pos >= contents.as_str().len() {
+        if *pos >= contents.as_bytes().len() {
             return Ok(false);
         }
-        let slice = &contents.as_str()[*pos..];
-        let mut iter = ConFrameIterator::new(slice);
+        let slice = &contents.as_bytes()[*pos..];
+        let mut iter = ConFrameIterator::from_bytes(slice);
         match iter.forward() {
             Some(Ok(())) => {
                 let consumed = iter.byte_pos();
@@ -4941,7 +4959,7 @@ impl PyConFrameIterator {
                 Ok(true)
             }
             Some(Err(e)) => {
-                let line = file_line(self.line_base, iter.lines.line_no());
+                let line = file_line(self.line_base, iter.error_line(&e));
                 Err(parse_err_in_frame(py, &e, line, self.frame_index))
             }
             None => Ok(false),
@@ -5010,6 +5028,7 @@ fn iter_con(py: Python<'_>, path: &str, mmap: bool, stream: bool) -> PyResult<Py
         source,
         line_base: 0,
         frame_index: 0,
+        persistent_ids: None,
     })
 }
 
@@ -5027,6 +5046,7 @@ fn iter_con_string(contents: &str) -> PyResult<PyConFrameIterator> {
         ),
         line_base: 0,
         frame_index: 0,
+        persistent_ids: None,
     })
 }
 
@@ -6703,6 +6723,32 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
         crate::units::unit_conversion_factor(source, target)
             .map_err(|error| PyValueError::new_err(error.to_string()))
     };
+    let has_velocities = if frame.atoms_ready.load(std::sync::atomic::Ordering::Acquire) {
+        frame.py_atoms(py)?.iter().any(PyAtomDatum::has_velocity)
+    } else {
+        frame
+            .inner
+            .as_ref()
+            .is_some_and(|inner| inner.has_velocities())
+    };
+    if has_velocities && frame.spec_version < 4 {
+        if let Some(unit) = metadata
+            .get(meta::UNITS)
+            .and_then(|units| units.get("time"))
+            .and_then(Value::as_str)
+            .filter(|unit| !unit.is_empty())
+        {
+            // CON-units.9: the label is not applied. A unit that is not a
+            // time is ignored and does not warn. The natural spelling is the
+            // unit the numbers were already read in.
+            let warns = unit != crate::units::NATURAL_TIME_UNIT
+                && crate::units::validate_unit_for_quantity("time", unit).is_ok();
+            if warns {
+                py.import("warnings")?
+                    .call_method1("warn", (format!("units.time {unit} is not applied"),))?;
+            }
+        }
+    }
     let length_scale = scale("length", "angstrom")?;
     let energy_scale = scale("energy", "eV")?;
     let mass_scale = scale("mass", "amu")?;
@@ -7846,9 +7892,8 @@ fn class_err_to_py(
 }
 
 fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
-    if utf8_failure(err) {
-        return PyIOError::new_err(err.to_string());
-    }
+    // A bad line is ValidationError on its own line (CON-file.1). Dropping
+    // the class and the line made the entry points disagree.
     class_err_to_py(py, err.class_name(), err.to_string(), line, frame_index)
 }
 
@@ -7856,10 +7901,6 @@ fn parse_err_to_py(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64
 /// A non-finite cell error that does not name a frame names this one.
 fn parse_err_in_frame(py: Python<'_>, err: &ParseError, line: u32, frame_index: u64) -> PyErr {
     parse_err_to_py(py, &err.clone().in_frame(frame_index), line, frame_index)
-}
-
-fn utf8_failure(err: &ParseError) -> bool {
-    matches!(err, ParseError::ValidationError(msg) if msg.contains("invalid UTF-8"))
 }
 
 fn located_to_py(err: crate::error::LocatedParseError) -> PyErr {
@@ -7902,13 +7943,7 @@ fn load_err_to_py(err: crate::iterators::LoadError) -> PyErr {
     match err {
         LoadError::Io(io) => PyIOError::new_err(io.to_string()),
         LoadError::Utf8(utf) => PyIOError::new_err(utf.to_string()),
-        LoadError::Parse(located) => {
-            if utf8_failure(&located.error) {
-                PyIOError::new_err(located.error.to_string())
-            } else {
-                located_to_py(located)
-            }
-        }
+        LoadError::Parse(located) => located_to_py(located),
         LoadError::Empty => {
             Python::attach(|py| parse_err_to_py(py, &ParseError::IncompleteHeader, 1, 0))
         }
@@ -7954,11 +7989,11 @@ fn count_fail_located(located: &crate::error::LocatedParseError) -> CountFail {
 /// from the parse that failed. The line and frame are already on that
 /// error, so this does not open the path again.
 fn box_to_count_fail(err: Box<dyn std::error::Error>) -> CountFail {
-    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
-        return CountFail::Io(err.to_string());
-    }
     if let Some(located) = err.downcast_ref::<crate::error::LocatedParseError>() {
         return count_fail_located(located);
+    }
+    if err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("invalid UTF-8") {
+        return CountFail::Io(err.to_string());
     }
     if let Some(parse) = err.downcast_ref::<ParseError>() {
         return CountFail::Parse {

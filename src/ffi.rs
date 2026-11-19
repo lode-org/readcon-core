@@ -1017,16 +1017,12 @@ fn c_iterator_from_source(
     let source = Box::new(source);
     let source_ptr = Box::into_raw(source);
     let bytes = unsafe { (*source_ptr).as_slice() };
-    if !utf8_checked && std::str::from_utf8(bytes).is_err() {
-        unsafe {
-            drop(Box::from_raw(source_ptr));
-        }
-        return ptr::null_mut();
-    }
-    // SAFETY: either the caller checked these bytes or the scan above did.
-    // The iterator borrows them for as long as `source_ptr` is alive.
-    let text: &'static str = unsafe { std::str::from_utf8_unchecked(bytes) };
-    let iterator = Box::new(ConFrameIterator::new(text));
+    let _ = utf8_checked;
+    // SAFETY: the iterator borrows these bytes for as long as `source_ptr`
+    // is alive. A non-UTF-8 byte is reported when the parser reaches it
+    // (CON-file.1, CON-num.10), not by rejecting the whole buffer.
+    let bytes: &'static [u8] = unsafe { std::slice::from_raw_parts(bytes.as_ptr(), bytes.len()) };
+    let iterator = Box::new(ConFrameIterator::from_bytes(bytes));
     let c_iterator = Box::new(CConFrameIterator {
         iterator: Box::into_raw(iterator),
         file_contents: source_ptr,
@@ -1083,15 +1079,6 @@ pub unsafe extern "C" fn read_con_file_iterator(
             return ptr::null_mut();
         }
     };
-    if let Err(e) = std::str::from_utf8(owned.as_slice()) {
-        set_last_error(
-            RKRStatus::RKR_STATUS_INVALID_UTF8 as i32,
-            &e.to_string(),
-            0,
-            0,
-        );
-        return ptr::null_mut();
-    }
     c_iterator_from_source(owned, true)
 }
 
@@ -1142,11 +1129,7 @@ pub unsafe extern "C" fn read_con_buffer_iterator(
         return c_iterator_from_owned_string(String::new());
     }
     let slice = unsafe { std::slice::from_raw_parts(data, len) };
-    let contents = match std::str::from_utf8(slice) {
-        Ok(s) => s.to_owned(),
-        Err(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INVALID_UTF8),
-    };
-    c_iterator_from_owned_string(contents)
+    c_iterator_from_source(crate::compression::ByteSource::Buf(slice.to_vec()), true)
 }
 /// Reads the next frame from the iterator, returning an opaque handle.
 /// The caller OWNS the returned handle and must free it with `free_rkr_frame`.
@@ -1164,8 +1147,8 @@ pub unsafe extern "C" fn con_frame_iterator_next(
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             null_located(&located)
         }
         None => ptr::null_mut(),
@@ -1187,8 +1170,8 @@ pub unsafe extern "C" fn con_frame_iterator_forward(iterator: *mut CConFrameIter
     match iter.forward() {
         Some(Ok(())) => RKRStatus::RKR_STATUS_SUCCESS,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             note_located(&located)
         }
         None => note(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -1214,8 +1197,8 @@ pub unsafe extern "C" fn con_frame_iterator_skip(
     match iter.skip_frames(n) {
         Ok(skipped) => skipped,
         Err(e) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             note_located(&located);
             usize::MAX
         }
@@ -1240,16 +1223,16 @@ pub unsafe extern "C" fn con_frame_iterator_nth(
         Ok(skipped) if skipped == index => {}
         Ok(_) => return null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
         Err((_failed_at, e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             return null_located(&located);
         }
     }
     match iter.next() {
         Some(Ok(frame)) => Box::into_raw(Box::new(frame)) as *mut RKRConFrame,
         Some(Err(e)) => {
-            let located =
-                crate::error::LocatedParseError::new(e, iter.lines.line_no(), iter.frame_index());
+            let line = iter.error_line(&e);
+            let located = crate::error::LocatedParseError::new(e, line, iter.frame_index());
             null_located(&located)
         }
         None => null_err::<_>(RKRStatus::RKR_STATUS_INDEX_OUT_OF_BOUNDS),
@@ -7334,7 +7317,7 @@ Coordinates of Component 1
             .to_string();
         assert!(text.contains(r#""con_spec_version":4"#), "{text}");
         assert!(text.contains(r#""con_spec_minor":0"#), "{text}");
-        assert!(text.contains(r#""con_spec_patch":0"#), "{text}");
+        assert!(text.contains(r#""con_spec_patch":2"#), "{text}");
         unsafe {
             rkr_free_string(json);
             free_rkr_frame(frame);

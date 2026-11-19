@@ -509,6 +509,7 @@ fn build_ungrouped(
             sections,
             strict_validation,
             sections_declared,
+            ids_from_file: false,
         },
         atom_data,
         column_tails: Vec::new(),

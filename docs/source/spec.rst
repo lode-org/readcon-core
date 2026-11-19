@@ -14,7 +14,7 @@ Specification
 -------------
 
 Version
-    4.0.0 (major 4, minor 0, patch 0)
+    4.0.2 (major 4, minor 0, patch 2)
 
 Date
     2026-11-18
@@ -24,6 +24,9 @@ Status
 
 Reference implementation
     `readcon-core <https://github.com/lode-org/readcon-core>`_
+
+Lexical grammar
+    the normative ABNF appendix
 
 Surface grammar
     ``grammar/readcon.pest`` (included in the appendix; not the hot path)
@@ -39,6 +42,9 @@ rare-event work on eOn
 :cite:t:`goswamiNEBOrchestration2026` :cite:t:`goswamiRMSDProjections2026` :cite:t:`goswamiGaussianProcessSaddle2025` :cite:t:`chillEONSoftwareLong2014`.
 Each normative requirement has an id ``CON-<section>.<n>``.
 Where this prose and the included PEG disagree, these clauses win.
+Requirement words in uppercase follow RFC 2119 and RFC 8174
+:cite:t:`bradnerKeyWordsUse1997` :cite:t:`rfc8174`.
+Lowercase spellings of those words are not requirement words.
 
 CON-status.1 \:\: MUST
     A reader MUST accept every minor and every patch of major 4, and every minor of major 3, including minor 0 and a minor or patch it does not implement.
@@ -71,10 +77,10 @@ CON-file.1 \:\: MUST
     A CON file MUST be UTF-8. A line that is not UTF-8 MUST be ``ValidationError``, except where ``CON-num.10`` names ``InvalidNumberFormat``.
 
 CON-file.2 \:\: MUST NOT
-    A CON file MUST NOT begin with a byte-order mark. A file that does MUST be ``ValidationError``.
+    A CON file MUST NOT begin with a byte-order mark, and no frame may begin with U+FEFF. A reader MUST reject either case as ``ValidationError``.
 
 CON-file.3 \:\: MUST
-    Parsers MUST accept LF (``\n``) and CRLF (``\r\n``) line endings.
+    Parsers MUST accept LF (``\n``) and CRLF (``\r\n``) line endings. A writer MUST end each line with LF and MUST NOT use a bare CR as its line ending.
 
 CON-file.4 \:\: MUST
     Parsers MUST ignore trailing spaces and tabs on every line.
@@ -93,6 +99,12 @@ CON-file.8 \:\: MUST
 
 CON-file.9 \:\: MUST
     A CR that is the last byte of the input MUST be read as a line ending. The bytes before that CR are that line, and a line with no other bytes MUST be a blank line.
+
+CON-file.10 \:\: MUST
+    This specification does not register a media type :cite:t:`rfc6838`. A reader MUST accept a file these clauses accept whether or not a media type is supplied beside it.
+
+CON-file.11 \:\: MUST
+    A reader MUST NOT apply Unicode normalization :cite:t:`rfc3629`. A reader MUST NOT apply case folding except the ASCII case folding of label words in ``CON-file.5`` and the exact spellings of ``CON-units.16``. A float spelling is not canonical: any spelling that ``CON-num.6`` accepts is enough.
 
 .. _frame:
 
@@ -206,7 +218,7 @@ CON-line2.7 \:\: MUST
     A reader of a known major MUST accept every minor and every patch of that major, including a minor or patch it does not implement.
 
 CON-line2.8 \:\: MUST
-    Unknown keys MUST be preserved on rewrite.
+    Unknown keys MUST be preserved on rewrite as their JSON values :cite:t:`brayJavascriptObjectNotation2017`. The rewrite MUST NOT be required to preserve key order, insignificant whitespace, or the original spelling of a number, and it is not required to follow the JSON Canonicalization Scheme :cite:t:`rfc8785`. A JSON string MUST be preserved as that string. An escape that is not a JSON escape MUST be ``InvalidMetadataJson`` under ``CON-line2.2``.
 
 CON-line2.9 \:\: MUST
     ``con_spec_minor``, when present, MUST be a JSON integer >= 0.
@@ -247,6 +259,18 @@ CON-line2.20 \:\: MUST
 CON-line2.21 \:\: MUST NOT
     A JSON number that is not a finite binary64, stored under a key this document does not reserve, MUST NOT reject the frame.
 
+CON-line2.22 \:\: MUST
+    ``con_spec_minor``, ``con_spec_patch``, and any other integer version field MUST fit in an unsigned 64-bit integer. A reader MUST reject a larger value as ``InvalidMetadataJson``.
+
+CON-line2.23 \:\: MUST
+    A JSON object MUST NOT repeat a name. A repeated name, in the metadata object or in any object it contains, MUST be ``InvalidMetadataJson``. The reader MUST NOT keep one of the values.
+
+CON-line2.24 \:\: MUST
+    This schema MUST be informative. These clauses decide acceptance. The schema carries this specification identity.
+
+CON-line2.25 \:\: MUST
+    ``CON-line2.18`` is the resource limit on line 2. A reader MUST accept a frame the conformance corpus accepts. A reader MUST NOT reject a frame these clauses accept because of the byte length of the file.
+
 .. _cell:
 
 Cell
@@ -274,10 +298,10 @@ CON-cell.5 \:\: MUST
     ``lattice_vectors``, when present, MUST be three length-3 arrays of finite numbers.
 
 CON-cell.6 \:\: MUST
-    When ``lattice_vectors`` is absent, a reader MUST build ``a=(|a|, 0, 0)``, ``b=(|b| cos gamma, |b| sin gamma, 0)``, and ``c=(|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma, |c| sqrt(1 - cos^2 beta - ((cos alpha - cos beta cos gamma) / sin gamma)^2))``, with the angles converted from degrees.
+    When ``lattice_vectors`` is absent, a reader MUST build the cell from lines 3 and 4. The angles are converted from degrees to radians, ``a=(|a|, 0, 0)``, ``b=(|b| cos gamma, |b| sin gamma, 0)``, and ``c=(|c| cos beta, |c| (cos alpha - cos beta cos gamma) / sin gamma, |c| sqrt(1 - cos^2 beta - ((cos alpha - cos beta cos gamma) / sin gamma)^2))``. The square root is the z component of ``c``. A construction that is not a real cell MUST be rejected on the angles line, as ``CON-cell.7`` requires.
 
 CON-cell.7 \:\: MUST
-    When ``lattice_vectors`` is absent and each angle is in (0, 180) degrees, a reader MUST evaluate the radicand of ``c_z`` in binary64 and MUST NOT contract a multiply and an add into a fused multiply-add. With alpha, beta, and gamma the angles in radians, the operations in order are cos alpha, cos beta, cos gamma, sin gamma, cy = (cos alpha - cos beta \* cos gamma) / sin gamma, and radicand = 1 - cos beta \* cos beta - cy \* cy. A radicand greater than -1e-12 MUST be accepted, and a negative radicand in that window MUST set ``c_z`` to 0. Any other radicand MUST be ``ValidationError`` on the angles line.
+    When ``lattice_vectors`` is absent and each angle is in (0, 180) degrees, a reader MUST evaluate the radicand of ``c_z`` in binary64 and MUST NOT contract a multiply and an add into a fused multiply-add. With alpha, beta, and gamma the angles in radians, the operations in order are cos alpha, cos beta, cos gamma, sin gamma, cy = (cos alpha - cos beta \* cos gamma) / sin gamma, and radicand = 1 - cos beta \* cos beta - cy \* cy. A radicand greater than -1e-12 MUST be accepted, and a negative radicand in that window MUST set ``c_z`` to 0. Any other radicand, including a NaN radicand, MUST be ``ValidationError`` on the angles line.
 
 Counts
 ~~~~~~
@@ -422,6 +446,9 @@ CON-id.11 \:\: MUST
 CON-id.12 \:\: MUST NOT
     When ``ids_persistent`` is absent or false on every frame, a reader MUST NOT treat an id in one frame as the same atom in another frame. ``CON-id.4`` still applies inside a frame.
 
+CON-id.13 \:\: MUST
+    A read of a frame followed by a write of that frame MUST preserve each column-5 id.
+
 .. _sections:
 
 Sections
@@ -477,7 +504,7 @@ CON-section.12 \:\: MUST
     ``section_arity``, when present, MUST be an object mapping section names to integers >= 1, each the number of value fields on a data row, excluding the flag and the optional id.
 
 CON-section.13 \:\: MUST
-    An entry for a reserved section MUST equal 3 for a vector row and 1 for a scalar row, else ``InvalidVectorLength``.
+    An entry for a reserved section MUST equal 3 for a vector row and 1 for a scalar row. A reader MUST reject any other value because the row does not have the number of fields that section requires.
 
 CON-section.14 \:\: MUST
     A data row of an unknown section MUST hold that arity of value fields, then the flag, and an optional id, so the row has arity+1 or arity+2 tokens.
@@ -534,6 +561,9 @@ CON-section.22 \:\: MUST
 CON-section.23 \:\: MUST
     Two or more blank lines before a section block make the second blank line the symbol line of that section. The following line is then its label, and a label that fails ``CON-section.15`` MUST be ``IncompleteSection``.
 
+CON-section.24 \:\: MUST
+    A name MUST NOT appear twice in ``sections``. A repeated name MUST be ``InvalidMetadataJson``.
+
 .. _validation-mode:
 
 Validation mode
@@ -584,7 +614,7 @@ That expression is a time. ``units.rs`` parses it as about 10.180505710759414 fs
 eOn hard-codes 10.1805055 fs (``include/eon/ParametersOptions.h:26``).
 The relative difference is about 2e-8.
 A writer that canonicalises the expression by inserting spaces is not using the pinned spelling.
-Names below are the ones ``src/units.rs`` at f09b1af accepts for length, energy, mass, and time, compared case-insensitively.
+The conversion constants are the CODATA 2018 values :cite:t:`tiesingaCodataRecommendedValues2021` :cite:t:`bipmSI2019`. ``kcal`` is the thermochemical kilocalorie, exactly 4184 joule :cite:t:`nistSP811Conversions`, and is not a CODATA value. ``mol`` is the mole, the Avogadro constant of that edition.
 
 CON-units.1 \:\: MUST
     Major 3 and later MUST include ``units.length`` and ``units.energy`` as non-empty strings of the matching dimension.
@@ -632,10 +662,16 @@ CON-units.15 \:\: MAY
     A consumer MAY apply an explicit velocity time-unit override when a file breaks ``CON-units.8`` through ``CON-units.10``.
 
 CON-units.16 \:\: MUST
-    A reader MUST accept at least these names case-insensitively: length m, meter, metre, angstrom, a, å, nm, nanometer, bohr, a0; energy j, joule, ev, mev, hartree, ha, kcal, kj; mass kg, kilogram, u, amu, dalton, da; time s, second, fs, femtosecond, ps, picosecond, ns, nanosecond; count mol.
+    A reader MUST accept at least these spellings and MUST match them exactly. ``MeV`` is megaelectronvolt, one million times ``eV``. ``meV`` and ``mev`` are millielectronvolt. ``eV`` and ``ev`` are electronvolt. Length: ``m``, ``meter``, ``metre``, ``angstrom``, ``Angstrom``, ``A``, ``a``, ``å``, ``Å``, ``nm``, ``nanometer``, ``bohr``, ``a0``. Energy: ``J``, ``j``, ``joule``, ``eV``, ``ev``, ``meV``, ``mev``, ``MeV``, ``hartree``, ``ha``, ``kcal``, ``kJ``, ``kj``. Mass: ``kg``, ``kilogram``, ``u``, ``amu``, ``AMU``, ``dalton``, ``da``. Time: ``s``, ``second``, ``fs``, ``femtosecond``, ``ps``, ``picosecond``, ``ns``, ``nanosecond``. Count: ``mol``. A different capitalization that this list does not write out MUST be an unknown unit.
 
 CON-units.17 \:\: MUST
     A reader MUST remove ASCII spaces and tabs from a unit expression before reading that expression.
+
+CON-units.18 \:\: MUST
+    A reader MUST use the constants in the table of this section. ``bohr`` and ``a0`` are 5.29177210903e-11 metre. ``amu``, ``AMU``, ``u``, ``dalton``, and ``da`` are 1.66053906660e-27 kilogram. ``hartree`` and ``ha`` are 4.3597447222071e-18 joule. ``eV`` and ``ev`` are 1.602176634e-19 joule. ``meV`` and ``mev`` are 1.602176634e-22 joule. ``MeV`` is 1.602176634e-13 joule. ``mol`` is 6.02214076e23. ``kcal`` is 4184 joule. ``angstrom``, ``Angstrom``, ``A``, ``a``, ``å``, and ``Å`` are 1e-10 metre. ``fs`` is 1e-15 second. ``kJ`` and ``kj`` are 1000 joule.
+
+CON-units.19 \:\: MUST
+    A rewrite that emits major 4 for velocities read under ``CON-units.8`` MUST set ``units.time`` to the spelling of ``CON-units.5`` and MUST NOT keep a ``units.time`` label that ``CON-units.9`` forbids trusting. The absent ``units.length`` of that frame MUST be written as ``angstrom``, and the absent ``units.energy`` MUST be written as ``eV``.
 
 Every minor of major 3 keeps the version 3.0 rule, because a minor must not change the meaning of ``units.time``. The producers of those velocity sections wrote natural-unit numbers under an ``fs`` label. Major 4 carries the meaning version 3.1 gave that key.
 
@@ -657,10 +693,10 @@ CON-num.4 \:\: MUST NOT
     A writer MUST NOT encode an absent numeric value as a NaN. The informative annex names one implementation's in-memory sentinel.
 
 CON-num.5 \:\: MUST
-    Readers MUST convert a finite decimal token to binary64 with correct rounding.
+    Readers MUST convert a finite decimal token to binary64 with correct rounding: round to nearest, ties to even, including subnormal values :cite:t:`ieeecomputersocietyIeeeStandardFloatingpoint2019` :cite:t:`clingerHowReadFloating1990`. A token whose value is negative zero MUST be read as negative zero. A finite spelling whose magnitude is too large for a finite binary64 MUST be ``NonFiniteValue``. The reader MUST consume the whole token.
 
 CON-num.6 \:\: MUST
-    A conforming writer in its default mode MUST write each finite float so that parsing it returns the same binary64 value.
+    A conforming writer in its default mode MUST write each finite float so that parsing it returns the same binary64 value. Any such spelling is enough. A writer MUST NOT be required to use the shortest spelling. The shortest round-tripping spelling is permitted :cite:t:`steeleHowPrintFloatingpoint1990` :cite:t:`adamsRyFastFloattostring2018`.
 
 CON-num.7 \:\: MUST
     Fixed-decimal output MUST be used only when the writer is asked for it, and it need not round-trip.
@@ -669,7 +705,7 @@ CON-num.8 \:\: MUST
     A token that is not a decimal number and not a non-finite spelling MUST be ``InvalidNumberFormat``, except where ``CON-error.3`` names another class.
 
 CON-num.9 \:\: MUST
-    A row with the wrong number of fields MUST be ``InvalidVectorLength``.
+    A reader MUST reject a row that does not have the number of fields that row requires.
 
 CON-num.10 \:\: MUST
     A numeric field whose bytes are not a finite decimal token MUST be ``InvalidNumberFormat``, including when a byte of that field is not UTF-8.
@@ -715,7 +751,7 @@ A reader that stops at the first error MUST use the lowest line number, so threa
     +=============================+========================================================================================================================================================================================+
     | ``MissingSpecVersion``      | Line 2 starts with ``{`` but omits ``con_spec_version``.                                                                                                                               |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    | ``InvalidMetadataJson``     | Line 2 is malformed JSON, a reserved key has the wrong type, or ``validate`` true omits ``sections``.                                                                                  |
+    | ``InvalidMetadataJson``     | Line 2 is malformed JSON, a reserved key has the wrong type, an object repeats a name, or ``validate`` true omits ``sections``.                                                        |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     | ``NonFiniteValue``          | NaN, Inf, or a spelling of either, any mode. A cell field is named, with its frame when known.                                                                                         |
     +-----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -754,24 +790,55 @@ CON-error.3 \:\: MUST
 CON-error.4 \:\: MUST
     A reader that stops at an error MUST report the one with the lowest line number.
 
+CON-error.5 \:\: MUST
+    When one line can fail more than one check, the reader MUST report the class the clause for that line names. ``CON-error.4`` still selects the lowest line. On a count line the count class of ``CON-count.10`` precedes the field-count class of ``CON-num.9``. On the angles line, the cell check of ``CON-cell.7`` is ``ValidationError``.
+
+.. _conformance:
+
+Conformance
+-----------
+
+A product is a reader, a validating reader, a writer, a consumer, or a round trip :cite:t:`w3cTestGuidelines`.
+Optional compression is ``CON-compress.4`` and ``CON-compress.5``.
+Passing is the conformance corpus: the verdict, the class, and the line the manifest names.
+
+CON-profile.1 \:\: MUST
+    A reader MUST apply every requirement this document addresses to a reader, in every mode.
+
+CON-profile.2 \:\: MUST
+    A validating reader MUST be a reader. ``validate`` true MUST add the checks of ``CON-validate.4`` and MUST NOT relax a check that applies in every mode.
+
+CON-profile.3 \:\: MUST
+    A writer MUST apply every requirement this document addresses to a writer.
+
+CON-profile.4 \:\: MUST NOT
+    A consumer MUST NOT be required to apply a reader check. An explicit velocity time-unit override is ``CON-units.15``.
+
+CON-profile.5 \:\: MUST
+    A round trip is a read of a frame, a write of that frame, and a read of the result. The second read MUST return the same binary64 coordinates, velocities, and cell entries, the same masks, identifiers, and periodic flags, and units of the same dimension. It MUST NOT be required to return the same spelling of a float or of an unknown key.
+
 Version history
 ---------------
 
 .. table::
 
-    +---------+------------+------------------------------------------------------------------------------------------+
-    | Version |       Date | Change                                                                                   |
-    +=========+============+==========================================================================================+
-    |       1 |   original | eOn text. Column 5 present. Column 4 is 0 or 1. No JSON.                                 |
-    +---------+------------+------------------------------------------------------------------------------------------+
-    |       2 | 2026-03-25 | JSON line 2, ids, bit masks, declared sections.                                          |
-    +---------+------------+------------------------------------------------------------------------------------------+
-    |     3.0 | 2026-06-27 | ``units.length`` and ``units.energy`` MUST be present. Minor absent.                     |
-    +---------+------------+------------------------------------------------------------------------------------------+
-    |     3.1 | 2026-10-11 | Minor 1. ``units.time`` when velocities are present. Natural-unit rule.                  |
-    +---------+------------+------------------------------------------------------------------------------------------+
-    |   4.0.0 | 2026-11-18 | Major 4. ``units.time`` is authoritative. Major 3 keeps the 3.0 meaning. Patch identity. |
-    +---------+------------+------------------------------------------------------------------------------------------+
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    | Version |       Date | Change                                                                                                                    |
+    +=========+============+===========================================================================================================================+
+    |       1 |   original | eOn text. Column 5 present. Column 4 is 0 or 1. No JSON.                                                                  |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |       2 | 2026-03-25 | JSON line 2, ids, bit masks, declared sections.                                                                           |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |     3.0 | 2026-06-27 | ``units.length`` and ``units.energy`` MUST be present. Minor absent.                                                      |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |     3.1 | 2026-10-11 | Minor 1. ``units.time`` when velocities are present. Natural-unit rule.                                                   |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |   4.0.0 | 2026-11-18 | Major 4. ``units.time`` is authoritative. Major 3 keeps the 3.0 meaning. Patch identity.                                  |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |   4.0.1 | 2026-11-18 | An integer version field MUST fit in an unsigned 64-bit integer. A byte-order mark at the start of any frame is rejected. |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
+    |   4.0.2 | 2026-11-18 | Lexical grammar, object names, unit spellings, the numeric contract, and conformance classes.                             |
+    +---------+------------+---------------------------------------------------------------------------------------------------------------------------+
 
 The major version moved from 3 to 4 because the meaning of ``units.time`` changed.
 
@@ -781,7 +848,7 @@ Version 3.1 defined the new meaning in ``CON-units.10`` of that text: from minor
 
 That change altered the meaning of an existing key inside one major, so it is not a minor revision (``CON-status.5``). Major 4 carries the version 3.1 meaning: ``units.time`` is authoritative for velocities. Every minor of major 3 carries the version 3.0 meaning: velocities are ``units.length`` per the natural time unit, and ``units.time`` MUST NOT be trusted. A reader of major 3 MUST NOT apply ``units.time`` and MUST NOT reject a velocities section for a missing ``units.time``.
 
-The specification identity is major.minor.patch (``CON-status.3``). Any change to normative text increases at least the patch (``CON-status.4``). This text is 4.0.0.
+The specification identity is major.minor.patch (``CON-status.3``). Any change to normative text increases at least the patch (``CON-status.4``). This text is 4.0.2.
 
 Normative changes on 2026-10-11, by decision:
 
@@ -813,13 +880,13 @@ Normative changes on 2026-10-11, by decision:
 
 - Unknown keys are kept. Unknown sections of a newer minor MAY be skipped by ``section_arity`` (``D14``).
 
-- The major is 4. ``con_spec_minor`` is 0. ``con_spec_patch`` is 0. A same-major reader accepts every minor and every patch (``D15``).
+- The major is 4. ``con_spec_minor`` is 0. ``con_spec_patch`` is 1. A same-major reader accepts every minor and every patch (``D15``).
 
 - Gzip members and zstd frames are normative envelopes (``D16``).
 
 - Line 2 is one JSON line. Trailing space is ignored. Labels collapse spaces (``D17``).
 
-``con_spec_minor`` is the minor of that major. ``con_spec_patch`` is the patch of that minor. The builder stamps minor 0 and patch 0 on every major 4 frame it builds when the caller has not set the key. ``set_con_spec_minor`` overrides the minor before ``build``. The writer MUST NOT invent or replace ``con_spec_minor`` or ``con_spec_patch`` (D15).
+``con_spec_minor`` is the minor of that major. ``con_spec_patch`` is the patch of that minor. The builder stamps minor 0 and patch 2 on every major 4 frame it builds when the caller has not set the key. ``set_con_spec_minor`` overrides the minor before ``build``. The writer MUST NOT invent or replace ``con_spec_minor`` or ``con_spec_patch`` (D15).
 
 The media type ``chemical/x-con`` is informative, as is ``text/plain; charset=utf-8``.
 CON has no magic bytes. Identify a file by extension and by this header.
@@ -955,7 +1022,59 @@ CON-token.3 \:\: MUST
     The separators inside a line MUST be spaces or tabs.
 
 CON-token.4 \:\: MUST
-    The included PEG is informative surface syntax. A reader MUST follow this document when the PEG allows a token these clauses reject.
+    The included PEG is informative surface syntax. A reader MUST follow this document when the PEG allows a token these clauses reject. The normative lexical grammar is the ABNF appendix.
+
+.. _lexical-grammar:
+
+Appendix: lexical grammar
+-------------------------
+
+This appendix is the normative lexical grammar of the text after decompression, in ABNF :cite:t:`rfc5234` with case-sensitive strings :cite:t:`rfc7405`.
+A numbered clause decides acceptance where this grammar and a clause both speak.
+The included PEG is informative. Its semantic actions are the numbered clauses.
+Acceptance does not depend on the byte length of a file these clauses accept.
+
+CON-lex.1 \:\: MUST
+    This appendix MUST be the normative lexical grammar of the text after decompression. A numbered clause decides acceptance where this grammar and a clause both speak. The included PEG is informative, and the semantic actions are the numbered clauses.
+
+::
+
+    HTAB           = %x09
+    SP             = %x20
+    CR             = %x0D
+    LF             = %x0A
+    eol            = LF / (CR LF)
+    WSP            = SP / HTAB
+    blank-char     = <a character of Unicode White_Space>
+    blank-line     = *blank-char eol
+    line-char      = <a Unicode scalar value other than CR or LF>
+    text-line      = *line-char eol
+    digit          = %x30-39
+    sign           = "+" / "-"
+    integer        = 1*digit
+    float          = [sign] ( 1*digit ["." *digit] / "." 1*digit ) [ ( "e" / "E" ) [sign] 1*digit ]
+    float-line     = float 2*( 1*WSP float ) *WSP eol
+    count-line     = [integer *(1*WSP integer)] *WSP eol
+    json-line      = <one JSON object and nothing else> eol
+    v1-line        = text-line
+    header         = text-line (json-line / v1-line) float-line float-line text-line text-line count-line count-line count-line
+    coord-row      = float 1*WSP float 1*WSP float 1*WSP integer [1*WSP integer] *WSP eol
+    label-line     = text-line
+    symbol-line    = text-line
+    coord-block    = symbol-line label-line *coord-row
+    section-block  = blank-line symbol-line label-line *coord-row
+    frame          = header *coord-block *section-block
+    tail           = [blank-line] *(*WSP eol)
+    file           = *frame [tail]
+
+    unit-power     = "^" ["-"] ( 1*digit ["." *digit] / "." 1*digit )
+    unit-atom      = %s"m" / %s"meter" / %s"metre" / %s"angstrom" / %s"Angstrom" / %s"A" / %s"a" / %s"å" / %s"Å" / %s"nm" / %s"nanometer" / %s"bohr" / %s"a0" / %s"J" / %s"j" / %s"joule" / %s"eV" / %s"ev" / %s"meV" / %s"mev" / %s"MeV" / %s"hartree" / %s"ha" / %s"kcal" / %s"kJ" / %s"kj" / %s"kg" / %s"kilogram" / %s"u" / %s"amu" / %s"AMU" / %s"dalton" / %s"da" / %s"s" / %s"second" / %s"fs" / %s"femtosecond" / %s"ps" / %s"picosecond" / %s"ns" / %s"nanosecond" / %s"mol"
+    unit-term      = unit-atom [unit-power] / "(" unit-expr ")" [unit-power]
+    unit-expr      = unit-term *( ( "*" / "/" ) unit-term )
+
+Section blocks follow the coordinate blocks in the order of the ``sections`` array.
+A JSON object does not repeat a name.
+``MeV`` and ``meV`` are different unit names.
 
 Appendix: PEG
 -------------
@@ -1193,9 +1312,9 @@ This annex is not normative. It records names used by one implementation and key
 
 One C ABI returns an IEEE NaN from a getter when a number is absent. ``rkr_frame_energy`` does this when the frame has no ``energy`` key. That NaN is an in-memory sentinel. It is not a CON number, and ``CON-num.4`` forbids writing it to a file.
 
-The default numeric text of the reference writer is the mode that ``CON-num.6`` requires: parsing the written token returns the same binary64 value. The implementation calls that mode ``FloatFormat::RoundTrip``. A fixed-decimal mode is ``CON-num.7``.
+The default numeric text of a conforming writer is the mode that ``CON-num.6`` requires: parsing the written token returns the same binary64 value. A fixed-decimal mode is ``CON-num.7``. The C binding's writer for the default mode is ``create_writer_from_path_round_trip_c``.
 
-``InvalidVectorLength`` in ``CON-section.13`` and ``CON-num.9`` is the error class in the table above. It is not a name private to one language.
+The error table names the class a reader reports when a row does not have the number of fields that row requires, which is the failure ``CON-section.13`` and ``CON-num.9`` require.
 
 The keys ``chemfiles_atom_names``, ``chemfiles_atom_types``, and ``chemfiles_atom_properties`` are not reserved. One importer stores display names, atomic types, and per-atom properties under those keys, in that importer's atom order. A reader preserves them as unknown keys under ``CON-line2.8``. A later revision that reserves an extension namespace does so by a minor that adds keys (``CON-status.6``), and does not treat these three spellings as part of the core language.
 

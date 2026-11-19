@@ -742,6 +742,11 @@ pub struct FrameHeader {
     /// "key absent" (try blank-separator velocity detection). Cached at
     /// parse time so the section dispatch does not re-parse the JSON.
     pub(crate) sections_declared: bool,
+    /// The frame was read from a file, so a later write keeps each column-5
+    /// id, including a repeated one (CON-id.13). A frame built in memory
+    /// does not set this, and the writer still rejects a repeated id
+    /// (CON-id.3).
+    pub(crate) ids_from_file: bool,
 }
 
 impl PartialEq for FrameHeader {
@@ -1630,6 +1635,7 @@ impl ConFrame {
                 sections: read(&source.sections),
                 strict_validation: source.strict_validation,
                 sections_declared: source.sections_declared,
+                ids_from_file: source.ids_from_file,
             }
         };
         let mut view = unsafe {
@@ -5395,6 +5401,7 @@ impl ConFrameBuilder {
             sections,
             strict_validation,
             sections_declared,
+            ids_from_file: false,
         };
 
         Ok((
@@ -6127,6 +6134,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.energy(), None);
         header.set_energy(-42.5);
@@ -6148,6 +6156,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.potential_type(), None);
         header.set_potential("EMT", serde_json::json!({"cutoff": 6.0}));
@@ -6173,6 +6182,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         header.set_frame_index(5);
         header.set_time(2.5);
@@ -6304,6 +6314,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.units(), None);
         header.set_units(serde_json::json!({"length": "angstrom", "energy": "eV"}));
@@ -6327,6 +6338,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.pbc(), None);
         header.set_pbc([true, true, false]);
@@ -6348,6 +6360,7 @@ mod tests {
             sections: Vec::new(),
             strict_validation: false,
             sections_declared: false,
+            ids_from_file: false,
         };
         assert_eq!(header.lattice_vectors(), None);
         let vecs = [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 20.0]];
