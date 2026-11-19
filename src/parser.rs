@@ -1863,6 +1863,23 @@ pub(crate) fn parse_metadata_object_with_raw(
     Ok((object, minor_raw))
 }
 
+#[cfg_attr(not(feature = "rpc"), allow(dead_code))]
+pub(crate) fn parse_metadata_map_with_minor_raw(
+    metadata_json: &str,
+) -> Result<(std::collections::BTreeMap<String, Value>, Option<String>), serde_json::Error> {
+    let spans = top_level_minor_spans(metadata_json);
+    let (sanitized, minor_raw) = sanitize_huge_con_spec_minor(metadata_json, &spans);
+    let mut map: std::collections::BTreeMap<String, Value> =
+        serde_json::from_str(sanitized.as_ref())?;
+    if minor_raw.is_some() {
+        map.insert(
+            meta::CON_SPEC_MINOR.into(),
+            Value::from(crate::types::SATURATED_SPEC_MINOR),
+        );
+    }
+    Ok((map, minor_raw))
+}
+
 fn json_u64(value: &Value) -> Option<u64> {
     value.as_u64()
 }
