@@ -2790,6 +2790,22 @@ impl ConFrame {
         self.column_tails.clear();
     }
 
+    /// Copy the coordinates of every atom that addresses the positions
+    /// column into an owned box, before that column is replaced.
+    ///
+    /// Atoms bound to another buffer, such as a binding slab, stay bound.
+    fn own_coords_in_positions(&mut self) {
+        let Some(column) = self.positions.f64_slice().map(|s| s.as_ptr_range()) else {
+            return;
+        };
+        clear_uniform_symbol_drop(&self.atom_data);
+        for atom in &mut self.atom_data {
+            if column.contains(&atom.coord_ptr()) {
+                atom.own_coords();
+            }
+        }
+    }
+
     fn velocity_column_live(&self) -> bool {
         let n = self.atom_data.len();
         n > 0
@@ -2893,6 +2909,7 @@ impl ConFrame {
         // Only allocate positions if missing (should not happen on parse-primary path).
         let need_pos_fill = self.positions.nrows() != n;
         if need_pos_fill {
+            self.own_coords_in_positions();
             self.positions = FloatArray2::zeros(dt.positions, n, 3);
         }
         if has_vel {
@@ -5292,6 +5309,37 @@ mod tests {
                 "atom {i} still points into the freed f64 column"
             );
             assert_eq!([atom.x(), atom.y(), atom.z()], expect[i], "atom {i}");
+        }
+    }
+
+    #[test]
+    fn resized_atoms_leave_no_atom_in_the_replaced_column() {
+        let text = include_str!("../resources/test/tiny_cuh2.con");
+        let mut frame = crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .expect("frame")
+            .expect("parse");
+        let coords = |frame: &ConFrame| -> Vec<[f64; 3]> {
+            frame
+                .atom_data
+                .iter()
+                .map(|atom| [atom.x(), atom.y(), atom.z()])
+                .collect()
+        };
+        let mut expect = coords(&frame);
+        // Shrinking and growing the atoms both make the sync replace the
+        // positions column the parsed atoms address.
+        frame.atom_data.pop();
+        expect.pop();
+        frame.sync_arrays_from_atom_data();
+        assert_eq!(coords(&frame), expect);
+        let extra = frame.atom_data[0].clone();
+        frame.atom_data.push(extra);
+        expect.push(expect[0]);
+        frame.sync_arrays_from_atom_data();
+        assert_eq!(coords(&frame), expect);
+        for (i, row) in expect.iter().enumerate() {
+            assert_eq!(frame.positions.as_f64_row(i), *row, "row {i}");
         }
     }
 
