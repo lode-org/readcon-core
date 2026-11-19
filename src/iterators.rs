@@ -1589,14 +1589,10 @@ pub fn read_positions_with_threads(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    let block = match &contents {
-        crate::compression::FileContents::Owned(text) => {
-            fill_position_block(text.as_bytes(), num_threads)
-        }
-        crate::compression::FileContents::Mapped(map) => fill_position_block(map, num_threads),
-    }?;
-    Ok(block)
+    // Bytes, not a UTF-8 `String`. A bad numeric token is the same class the
+    // frame reader reports; rejecting the whole file as invalid UTF-8 hid it.
+    let bytes = crate::compression::read_file_bytes(path)?;
+    Ok(fill_position_block(&bytes, num_threads)?)
 }
 
 /// Masses and cell that belong with [`read_positions_with_threads`].
@@ -1639,13 +1635,62 @@ pub fn read_coord_columns(
     path: &Path,
     num_threads: Option<usize>,
 ) -> Result<CoordColumns, Box<dyn std::error::Error>> {
-    let contents = crate::compression::read_file_contents(path)?;
-    let bytes = contents.as_bytes();
-    if let Ok(Some(columns)) = certified_columns(bytes, num_threads, true) {
-        return Ok(columns);
+    let bytes = crate::compression::read_file_bytes(path)?;
+    if !persistent_ids_declared(&bytes) {
+        match certified_columns(&bytes, num_threads, true) {
+            Ok(Some(columns)) => return Ok(columns),
+            Ok(None) => {}
+            Err(err) => return Err(err.into()),
+        }
     }
-    let frames = frames_from_bytes_located(bytes, num_threads)?;
+    let frames = frames_from_bytes_located(&bytes, num_threads)?;
+    if let Some(first) = frames.first() {
+        let n_atoms = first.positions.nrows();
+        if let Some((index, _)) = frames
+            .iter()
+            .enumerate()
+            .find(|(_, frame)| frame.positions.nrows() != n_atoms)
+        {
+            return Err(error::LocatedParseError::new(
+                error::ParseError::InvalidCount(
+                    "frame atom count does not match the first frame".into(),
+                ),
+                0,
+                index as u64,
+            )
+            .into());
+        }
+    }
     Ok(columns_from_frames(&frames))
+}
+
+/// True when a frame sets `ids_persistent` to true.
+///
+/// The column walk does not apply CON-id.11. Those files use the frame parser,
+/// which does.
+fn persistent_ids_declared(bytes: &[u8]) -> bool {
+    let key = b"\"ids_persistent\"";
+    let mut start = 0;
+    while let Some(at) = bytes[start..]
+        .windows(key.len())
+        .position(|window| window == key)
+    {
+        let mut i = start + at + key.len();
+        while i < bytes.len() && matches!(bytes[i], b' ' | b'\t') {
+            i += 1;
+        }
+        if bytes.get(i) == Some(&b':') {
+            i += 1;
+            while i < bytes.len() && matches!(bytes[i], b' ' | b'\t') {
+                i += 1;
+            }
+            if i < bytes.len() && bytes[i..].starts_with(b"true") {
+                return true;
+            }
+        }
+        start += at + key.len();
+    }
+    false
 }
 
 fn certified_columns(
@@ -1971,6 +2016,11 @@ fn fill_position_block(
     bytes: &[u8],
     num_threads: Option<usize>,
 ) -> Result<PositionBlock, error::LocatedParseError> {
+    if persistent_ids_declared(bytes) {
+        // The column walk never sees CON-id.11. The frame iterator does.
+        let frames = frames_from_bytes_located(bytes, num_threads)?;
+        return Ok(columns_from_frames(&frames).block);
+    }
     match certified_columns(bytes, num_threads, false) {
         Ok(Some(columns)) => return Ok(columns.block),
         Ok(None) => {}
