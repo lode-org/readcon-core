@@ -169,7 +169,10 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
         json!({"length": "angstrom", "energy": "eV", "mass": "amu"}),
     );
     let stamped = binding_rewrite_frame(&legacy).expect("rewrite v2 units object");
-    assert_eq!(time_label(&stamped), Some(NATURAL_TIME_UNIT));
+    assert_eq!(
+        time_label(&stamped),
+        Some(readcon_core::units::HISTORICAL_NATURAL_TIME)
+    );
     assert_eq!(
         stamped
             .header
@@ -185,7 +188,10 @@ fn binding_rewrite_stamps_legacy_velocity_time_and_keeps_sections() {
     bare.header.metadata.remove(meta::UNITS);
     bare.header.metadata.remove(meta::CON_SPEC_MINOR);
     let filled = binding_rewrite_frame(&bare).expect("rewrite without units");
-    assert_eq!(time_label(&filled), Some(NATURAL_TIME_UNIT));
+    assert_eq!(
+        time_label(&filled),
+        Some(readcon_core::units::HISTORICAL_NATURAL_TIME)
+    );
 
     let mut odd = built.clone();
     odd.header.spec_version = 2;

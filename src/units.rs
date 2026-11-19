@@ -119,16 +119,20 @@ const BASE_UNITS: &[BaseUnit] = &[
         value: unit(1e-10, Dimension::LENGTH),
     },
     BaseUnit {
+        name: "Da",
+        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
+    },
+    BaseUnit {
+        name: "Ha",
+        value: unit(CODATA2018_HARTREE_J, ENERGY),
+    },
+    BaseUnit {
         name: "J",
         value: unit(1.0, ENERGY),
     },
     BaseUnit {
         name: "MeV",
         value: unit(MEGA_EV_J, ENERGY),
-    },
-    BaseUnit {
-        name: "a",
-        value: unit(1e-10, Dimension::LENGTH),
     },
     BaseUnit {
         name: "a0",
@@ -145,10 +149,6 @@ const BASE_UNITS: &[BaseUnit] = &[
     BaseUnit {
         name: "bohr",
         value: unit(CODATA2018_BOHR_M, Dimension::LENGTH),
-    },
-    BaseUnit {
-        name: "da",
-        value: unit(CODATA2018_AMU_KG, Dimension::MASS),
     },
     BaseUnit {
         name: "dalton",
@@ -177,10 +177,6 @@ const BASE_UNITS: &[BaseUnit] = &[
     BaseUnit {
         name: "fs",
         value: unit(1e-15, Dimension::TIME),
-    },
-    BaseUnit {
-        name: "ha",
-        value: unit(CODATA2018_HARTREE_J, ENERGY),
     },
     BaseUnit {
         name: "hartree",
@@ -460,8 +456,8 @@ pub fn unit_conversion_factor(from_unit: &str, to_unit: &str) -> Result<f64, Par
 /// Versions 1, 2, and every minor of major 3 are the natural unit
 /// regardless of a `units.time` label (CON-units.8, CON-units.9).
 /// Major 4 and later take `units.time` as authoritative (CON-units.10).
-/// `override_unit` replaces that choice when it is a time expression
-/// (CON-units.15).
+/// `override_unit` must not replace that assignment (CON-units.15).
+/// A value that differs from the assigned unit is `InvalidUnits`.
 pub fn velocity_file_time_unit(
     spec_version: u32,
     metadata: &serde_json::Map<String, serde_json::Value>,
@@ -470,10 +466,22 @@ pub fn velocity_file_time_unit(
     if spec_version < 4 {
         return Ok(NATURAL_TIME_UNIT.to_string());
     }
+    let assigned = assigned_velocity_time(metadata)?;
     if let Some(unit) = override_unit {
         validate_unit_for_quantity("time", unit)?;
-        return Ok(unit.to_string());
+        let both_natural = is_natural_time_spelling(unit) && is_natural_time_spelling(&assigned);
+        if unit != assigned && !both_natural {
+            return Err(ParseError::InvalidUnits(
+                "a consumer must not replace the time unit the clauses assign".into(),
+            ));
+        }
     }
+    Ok(assigned)
+}
+
+fn assigned_velocity_time(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> Result<String, ParseError> {
     let time = metadata
         .get(crate::types::meta::UNITS)
         .and_then(|u| u.get("time"))
@@ -591,9 +599,23 @@ pub fn validate_units_metadata_for_version(
     Ok(())
 }
 
-/// Default LODE units object for new v3 frames.
-/// Pinned spelling of the eOn/ASE natural time unit (CON-units.5, D10).
-pub const NATURAL_TIME_UNIT: &str = "(amu*angstrom^2/eV)^0.5";
+/// Symbol spelling of the natural time unit (CON-units.5).
+/// The historical alias `(amu*angstrom^2/eV)^0.5` is the same unit.
+pub const NATURAL_TIME_UNIT: &str = "(u*Å^2/eV)^0.5";
+
+/// The eOn and ASE spelling. It mixes a name with symbols and is accepted
+/// as an alias of [`NATURAL_TIME_UNIT`], not as the spelling a new frame uses.
+pub const HISTORICAL_NATURAL_TIME: &str = "(amu*angstrom^2/eV)^0.5";
+
+fn is_natural_time(compact: &str) -> bool {
+    compact == NATURAL_TIME_UNIT || compact == HISTORICAL_NATURAL_TIME
+}
+
+/// Both spellings of CON-units.5, ignoring ASCII spaces and tabs.
+pub fn is_natural_time_spelling(unit: &str) -> bool {
+    let compact: String = unit.chars().filter(|c| !c.is_whitespace()).collect();
+    is_natural_time(&compact)
+}
 
 pub fn default_v3_units_json() -> serde_json::Value {
     serde_json::json!({
@@ -604,28 +626,25 @@ pub fn default_v3_units_json() -> serde_json::Value {
 }
 
 fn preferred_atom(alias: &str) -> Option<&'static str> {
-    let trimmed = alias.trim();
-    // `MeV` must not fall through the lowercase table into `meV`.
-    if trimmed == "MeV" {
-        return Some("MeV");
-    }
-    let lower = trimmed.to_lowercase();
-    Some(match lower.as_str() {
-        "a" | "å" | "angstrom" | "ångstrom" => "angstrom",
-        "nm" | "nanometer" | "nanometre" => "nm",
+    // Exact spellings. `a`, `ha`, and `da` are not folded onto another unit.
+    Some(match alias {
+        "A" | "Å" | "å" | "angstrom" | "Angstrom" => "angstrom",
+        "nm" | "nanometer" => "nm",
         "m" | "meter" | "metre" => "m",
         "bohr" | "a0" => "bohr",
-        "fs" | "femtosecond" | "femtoseconds" => "fs",
-        "ps" | "picosecond" | "picoseconds" => "ps",
-        "ns" | "nanosecond" | "nanoseconds" => "ns",
-        "s" | "sec" | "second" | "seconds" => "s",
-        "ev" => "eV",
-        "mev" => "meV",
-        "hartree" | "ha" => "hartree",
-        "j" | "joule" => "J",
-        "kj" => "kJ",
+        "fs" | "femtosecond" => "fs",
+        "ps" | "picosecond" => "ps",
+        "ns" | "nanosecond" => "ns",
+        "s" | "second" => "s",
+        "eV" | "ev" => "eV",
+        "meV" | "mev" => "meV",
+        "MeV" => "MeV",
+        "hartree" | "Ha" => "hartree",
+        "J" | "j" | "joule" => "J",
+        "kJ" | "kj" => "kJ",
         "kcal" => "kcal",
-        "amu" | "u" | "dalton" | "da" => "amu",
+        "amu" | "AMU" => "amu",
+        "u" | "Da" | "dalton" => "u",
         "kg" | "kilogram" => "kg",
         "mol" => "mol",
         _ => return None,
@@ -641,7 +660,7 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
     }
     let _ = unit_conversion_factor(trimmed, trimmed)?;
     let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
-    if compact == NATURAL_TIME_UNIT {
+    if is_natural_time(&compact) {
         return Ok(NATURAL_TIME_UNIT.to_string());
     }
     let mut out = String::new();
@@ -679,10 +698,52 @@ pub fn canonicalize_unit_expression(expr: &str) -> Result<String, ParseError> {
     }
     let rendered = out.split_whitespace().collect::<Vec<_>>().join(" ");
     let rendered_compact: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
-    if rendered_compact == NATURAL_TIME_UNIT {
+    if is_natural_time(&rendered_compact) {
         return Ok(NATURAL_TIME_UNIT.to_string());
     }
     Ok(rendered)
+}
+
+/// CON-units.21. `units.velocity` does not replace the time the version rules assign.
+pub fn enforce_velocity_precedence(
+    spec_version: u32,
+    units: &serde_json::Value,
+) -> Result<(), ParseError> {
+    if spec_version < 4 {
+        return Ok(());
+    }
+    let Some(obj) = units.as_object() else {
+        return Ok(());
+    };
+    let Some(velocity) = obj.get("velocity").and_then(|value| value.as_str()) else {
+        return Ok(());
+    };
+    validate_unit_for_quantity("velocity", velocity)?;
+    let length = obj
+        .get("length")
+        .and_then(|value| value.as_str())
+        .filter(|text| !text.is_empty())
+        .unwrap_or("angstrom");
+    let time = if spec_version >= 4 {
+        match obj
+            .get("time")
+            .and_then(|value| value.as_str())
+            .filter(|text| !text.is_empty())
+        {
+            Some(unit) => unit.to_string(),
+            None => return Ok(()),
+        }
+    } else {
+        NATURAL_TIME_UNIT.to_string()
+    };
+    let quotient = format!("({length})/({time})");
+    let factor = unit_conversion_factor(velocity, &quotient)?;
+    if (factor - 1.0).abs() > 1e-9 {
+        return Err(ParseError::InvalidUnits(format!(
+            "units.velocity must equal units.length divided by the time unit, not '{velocity}'"
+        )));
+    }
+    Ok(())
 }
 
 /// Rewrite every string member. Does not require v3 `length`+`energy`.

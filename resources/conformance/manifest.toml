@@ -160,3 +160,21 @@ clause = "CON-count.3"
 error = "InvalidCount"
 line = 8
 notes = "Type count 2 with a per-type count of 0."
+
+[[valid]]
+id = "major4-minor1-widgets"
+path = "valid/major4_minor1_widgets.con"
+clause = "CON-section.11"
+notes = "Major 4 minor 1 names widgets and gives section_arity 3. The reader skips the section and stays on major 4."
+
+[[valid]]
+id = "major3-minor2-widgets"
+path = "valid/major3_minor2_widgets.con"
+clause = "CON-section.10"
+notes = "Major 3 minor 2 names widgets. Adding the section raised the minor of major 3 and did not raise the major."
+
+[[valid]]
+id = "energy-matches-rows"
+path = "valid/energy_matches_rows.con"
+clause = "CON-section.18"
+notes = "The energy key equals the sum of the energies rows."

@@ -3850,7 +3850,7 @@ impl ConFrameBuilder {
     /// Sets `metadata["units"]` from a JSON object.
     ///
     /// Aliases are rewritten to preferred names. The natural time spelling
-    /// `(amu*angstrom^2/eV)^0.5` is kept byte for byte (CON-units.5, D10).
+    /// `(u*Å^2/eV)^0.5` is the symbol spelling (CON-units.5). The older mixed spelling is the same unit.
     /// This is the builder entry that C and C++ call. [`FrameHeader::set_units`]
     /// is the same contract on a frame that already exists.
     pub fn set_units(&mut self, units: serde_json::Value) -> Result<(), crate::error::ParseError> {

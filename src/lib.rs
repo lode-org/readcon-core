@@ -136,7 +136,7 @@ pub const CON_SPEC_VERSION: u32 = 4;
 pub const CON_SPEC_MINOR: u32 = 0;
 
 /// Patch of this specification text (CON-status.3, CON-status.4).
-pub const CON_SPEC_PATCH: u32 = 2;
+pub const CON_SPEC_PATCH: u32 = 4;
 
 /// Library version string, taken from the package version at compile time.
 /// `build.rs` checks that it matches the `VERSION` file.

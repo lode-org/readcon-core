@@ -5,6 +5,7 @@ CON-status.3	MUST	The identity of this specification MUST be the triple major.mi
 CON-status.4	MUST	Any change to normative text MUST increase at least the patch component of that identity.
 CON-status.5	MUST NOT	A minor revision MUST NOT change the meaning of an existing key or of an existing section.
 CON-status.6	MAY	A minor revision MAY add keys and sections. A reader of an earlier minor of that major MUST preserve an unknown key and MUST apply =CON-section.8= and =CON-section.9= to an unknown section.
+CON-status.8	MUST	The words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL have the meanings in RFC 2119 and RFC 8174 only when every letter is uppercase. A lowercase spelling is ordinary English.
 CON-file.1	MUST	A CON file MUST be UTF-8. A line that is not UTF-8 MUST be =ValidationError=, except where =CON-num.10= names =InvalidNumberFormat=.
 CON-file.2	MUST NOT	A CON file MUST NOT begin with a byte-order mark, and no frame may begin with U+FEFF. A reader MUST reject either case as =ValidationError=.
 CON-file.3	MUST	Parsers MUST accept LF (=\n=) and CRLF (=\r\n=) line endings. A writer MUST end each line with LF and MUST NOT use a bare CR as its line ending.
@@ -13,7 +14,7 @@ CON-file.5	MUST	A label comparison MUST split both lines on ASCII spaces and tab
 CON-file.6	MUST NOT	Writers MUST NOT insert an extra blank line between frames.
 CON-file.7	MUST	A blank line MUST contain only characters of Unicode White_Space, and no other character.
 CON-file.8	MUST	A line that is not UTF-8 and is not consumed as a numeric field MUST be =ValidationError=.
-CON-file.9	MUST	A CR that is the last byte of the input MUST be read as a line ending. The bytes before that CR are that line, and a line with no other bytes MUST be a blank line.
+CON-file.9	MUST	A CR that is the last byte of the input MUST be read as a line ending, and the verdict is acceptance of that ending. =CON-file.3= defines a line ending as LF or CR LF. A final CR is the CR of a CR LF whose LF was not written, and only the last line may omit that LF. The bytes before that CR are the line. A line with no other bytes MUST be a blank line, so a trailing CR after a complete frame is the blank tail of =CON-frame.1=. It MUST NOT be read as a new frame, and it MUST NOT be read as a character of the previous line. A CR that is not the last byte is not this ending and stays in its line.
 CON-file.10	MUST	This specification does not register a media type @@rst::cite:t:`rfc6838`@@. A reader MUST accept a file these clauses accept whether or not a media type is supplied beside it.
 CON-file.11	MUST	A reader MUST NOT apply Unicode normalization @@rst::cite:t:`rfc3629`@@. A reader MUST NOT apply case folding except the ASCII case folding of label words in =CON-file.5= and the exact spellings of =CON-units.16=. A float spelling is not canonical: any spelling that =CON-num.6= accepts is enough.
 CON-frame.1	MUST	After the last complete frame, the ignored tail MUST be at most one blank line as in =CON-file.7=, followed only by lines whose bytes are spaces, tabs, form feeds, or carriage returns. Any other following line MUST be read as the next frame.
@@ -29,7 +30,7 @@ CON-header.1	MAY	Writers MAY leave lines 5 and 6 empty.
 CON-header.2	MUST	Parsers MUST preserve line 1 and lines 5 and 6.
 CON-header.3	MUST	Line 3 and the coordinate columns MUST be read in =units.length=, and line 9 in =units.mass=. Absent =units= or an absent key means angstrom and amu.
 CON-header.4	MUST	Parsers MUST accept an empty line 1 and an empty line 2. An empty line 1 is preserved. An empty line 2 is implicit version 1.
-CON-line2.1	MUST	A line 2 that starts with ={= MUST be one UTF-8 JSON object and nothing else.
+CON-line2.1	MUST	A line 2 whose first character, after leading spaces and tabs are removed, is ={= MUST be one UTF-8 JSON object and nothing else. A line that does not start that way is implicit version 1.
 CON-line2.2	MUST	Malformed JSON on that line MUST be rejected.
 CON-line2.3	MUST	A JSON object that omits =con_spec_version= MUST be rejected.
 CON-line2.4	MUST	=con_spec_version= MUST be a JSON integer, the major version, and not a string. A JSON number that is not an integer MUST be =InvalidMetadataJson=.
@@ -49,7 +50,7 @@ CON-line2.17	MUST	A reader of a known major MUST accept every patch of that majo
 CON-line2.18	MUST	A reader MUST accept line 2 when the nesting depth of its JSON value, counting the outer value, is at most 127, and MUST reject a greater depth as =InvalidMetadataJson=. That rejection MUST NOT require stack space proportional to the depth.
 CON-line2.19	MUST	A reserved key that must hold a finite number, and whose JSON number is not a finite binary64, MUST be =InvalidMetadataJson=.
 CON-line2.20	MUST	A reader MUST apply the every-mode type check of a reserved key before the checks of =CON-validate.4=. A wrong type MUST be =InvalidMetadataJson=.
-CON-line2.21	MUST NOT	A JSON number that is not a finite binary64, stored under a key this document does not reserve, MUST NOT reject the frame.
+CON-line2.21	MUST NOT	A JSON number that is not a finite binary64, stored under a key this document does not reserve, MUST NOT reject the frame. The verdict is acceptance. An unreserved key has no numeric meaning in this format, and =CON-line2.8= preserves it as a JSON value, including a number a reader cannot store as a finite binary64. Rejecting the frame would turn an extension key into a parse error. A reserved key that must hold a finite number is =CON-line2.19=, and that verdict is =InvalidMetadataJson=.
 CON-line2.22	MUST	=con_spec_minor=, =con_spec_patch=, and any other integer version field MUST fit in an unsigned 64-bit integer. A reader MUST reject a larger value as =InvalidMetadataJson=.
 CON-line2.23	MUST	A JSON object MUST NOT repeat a name. A repeated name, in the metadata object or in any object it contains, MUST be =InvalidMetadataJson=. The reader MUST NOT keep one of the values.
 CON-line2.24	MUST	This schema MUST be informative. These clauses decide acceptance. The schema carries this specification identity.
@@ -70,8 +71,9 @@ CON-count.6	MUST	The coordinate blocks MUST follow header order.
 CON-count.7	MUST	The total atom count MUST equal the sum of line 8.
 CON-count.8	MUST	Component numbers in labels MUST start at 1.
 CON-count.9	MUST	A count token MUST be an integer in 0 through 2^64-1. An integer outside that range MUST be =InvalidCount=.
-CON-count.10	MUST	On a count line, a token that is not an unsigned integer MUST be reported as =InvalidCount= before the field-count check of =CON-num.9= is applied to that line.
+CON-count.10	MUST	On a count line, a token that is not an unsigned integer MUST be reported as =InvalidCount= before the field-count check of =CON-num.9= is applied to that line. A count line is a sequence of unsigned integers. A token that is not one is not a field of that line, so the line has no field count to check. The verdict names the token. That class is =InvalidCount=, including when the line also has the wrong number of tokens.
 CON-coord.1	MUST	In every mode, the label of a coordinate block MUST equal =Coordinates of Component N= under =CON-file.5=, with N starting at 1, and any other label MUST be =ValidationError=.
+CON-coord.2	MUST	A coordinate block MUST be a symbol line, then the label of =CON-coord.1=, then one row per atom of that type.
 CON-mask.1	MUST	Column 4 MUST be an integer token with no sign and no decimal point.
 CON-mask.2	MUST	In spec 1, readers MUST treat 0 as free and 1 as fixed on x, y, and z.
 CON-mask.3	MUST	In spec 1, any other column-4 token MUST be =InvalidFixedFlag=.
@@ -79,9 +81,10 @@ CON-mask.4	MUST	In spec 2 and later, values 0 through 7 MUST be read as the bitm
 CON-mask.5	MUST	A float spelling, a sign, or a value outside the legal set MUST be =InvalidFixedFlag= in every mode, including when =validate= is absent or false.
 CON-mask.6	MUST NOT	A spec 2 or later writer MUST NOT emit 1 to mean all-fixed.
 CON-mask.7	MUST	A spec 2 or later writer MUST emit 7 for an atom fixed on x, y, and z.
+CON-mask.8	MUST	Bit 0 of column 4 MUST be x, bit 1 MUST be y, and bit 2 MUST be z. The bitmask of =CON-mask.4= is this order.
 CON-id.1	MUST	Column 5, when present, MUST be parsed as an integer in 0 through 2^64-1, and MUST NOT be parsed through binary64.
 CON-id.2	MUST NOT	Readers MUST NOT assume that ids start at 0 or at 1.
-CON-id.3	MUST	Writers MUST emit ids that are unique within the frame.
+CON-id.3	MUST	A writer MAY omit column 5. When column 5 is present, the ids MUST be unique within the frame. When it is omitted, the reader applies =CON-id.9=.
 CON-id.4	MUST	Readers MUST accept repeated ids.
 CON-id.5	MUST	The pre-grouping order of a frame MUST be ascending column-5 id when the ids are unique, and file order otherwise.
 CON-id.6	MUST	A reader MUST expose column-5 ids unchanged.
@@ -89,8 +92,8 @@ CON-id.7	MUST	A reader or consumer that returns atoms in pre-grouping order MUST
 CON-id.8	MAY	A reader MAY return atoms in file order together with their column-5 ids.
 CON-id.9	MUST	A 4-column atom line MUST use the 0-based position of that atom in the frame as its id.
 CON-id.10	MUST	=ids_persistent=, when present, MUST be a JSON boolean. Any other type MUST be =InvalidMetadataJson=.
-CON-id.11	MUST	When =ids_persistent= is true on any frame, it MUST be true on every frame, every frame MUST hold the same set of column-5 ids, and each of those ids MUST occur once in a frame. A reader MUST reject a file that breaks this rule as =ValidationError= on the last line of the frame that breaks it. A writer MUST NOT emit such a file.
-CON-id.12	MUST NOT	When =ids_persistent= is absent or false on every frame, a reader MUST NOT treat an id in one frame as the same atom in another frame. =CON-id.4= still applies inside a frame.
+CON-id.11	MUST	When =ids_persistent= is true on any frame, it MUST be true on every frame, every frame MUST hold the same set of column-5 ids, and each of those ids MUST occur once in a frame. Column 5 of a historical file is an index of one frame, so cross-frame identity is not the default. =ids_persistent= true is the file opting into that identity: the same id is the same atom in every frame. A reader MUST reject a file that breaks this rule as =ValidationError= on the last line of the frame that breaks it. A writer MUST NOT emit such a file.
+CON-id.12	MUST NOT	When =ids_persistent= is absent or false on every frame, a reader MUST NOT treat an id in one frame as the same atom in another frame. The verdict is that the reader returns the ids and does not match them across frames. =CON-id.4= still applies inside a frame.
 CON-id.13	MUST	A read of a frame followed by a write of that frame MUST preserve each column-5 id.
 CON-section.1	MUST	On disk, a section MUST be treated as present exactly when its name is listed in =sections=, aside from the legacy velocity fallback.
 CON-section.2	MUST	Exactly one blank line MUST precede each section block.
@@ -116,6 +119,7 @@ CON-section.21	MUST NOT	When =validate= is not true, a reader MUST NOT reject a 
 CON-section.22	MUST	Section blocks MUST follow the coordinate blocks in the order listed in =sections=. A label that does not match the next listed section MUST be =IncompleteSection=.
 CON-section.23	MUST	Two or more blank lines before a section block make the second blank line the symbol line of that section. The following line is then its label, and a label that fails =CON-section.15= MUST be =IncompleteSection=.
 CON-section.24	MUST	A name MUST NOT appear twice in =sections=. A repeated name MUST be =InvalidMetadataJson=.
+CON-section.25	MUST	The reserved section names MUST be =velocities=, =forces=, =energies=, =charges=, =spins=, =magmoms=, =displacements=, and =spreads=, with the labels and rows of the table in this section.
 CON-validate.1	MUST	=validate= true MUST add the checks in =CON-validate.4=.
 CON-validate.2	MUST NOT	=validate= true MUST NOT relax a check that already applies in every mode.
 CON-validate.3	MUST	When =validate= is true, =sections= MUST be present, and an empty array is legal.
@@ -123,11 +127,12 @@ CON-validate.4	MUST	In that mode, readers MUST reject a non-positive cell length
 CON-bonds.1	MUST NOT	=bonds= MUST NOT appear in =sections=.
 CON-bonds.2	MUST	With =validate= true, a malformed =bonds= entry MUST be rejected.
 CON-bonds.3	MUST	With =validate= false, unknown =bonds= shapes MUST be preserved.
+CON-bonds.4	MUST	A bond index MUST be 0-based into coordinate-block order and MUST NOT be a column-5 id. The key is legal on major 3 and MUST NOT by itself change the major.
 CON-units.1	MUST	Major 3 and later MUST include =units.length= and =units.energy= as non-empty strings of the matching dimension.
 CON-units.2	MUST	Optional =mass=, =time=, =velocity=, and =force= strings, when present, MUST have the matching dimension.
 CON-units.3	MUST	A writer of major 4 or later MUST write =units.time= whenever the frame has a velocities section.
 CON-units.4	MUST NOT	A writer MUST NOT insert =time: fs= silently when the frame does not carry a time unit.
-CON-units.5	MUST	The natural unit MUST be written with the exact spelling =(amu*angstrom^2/eV)^0.5=.
+CON-units.5	MUST	The natural unit on a frame of major 4 or later MUST be written with the exact symbol spelling =(u*Å^2/eV)^0.5=. The spelling =(amu*angstrom^2/eV)^0.5= is the same unit and MUST be accepted. A new frame of major 4 or later MUST use the symbol spelling. A writer that records this unit on a frame of major 3 or earlier MUST use the historical spelling. A reader MUST NOT treat a unit name and a unit symbol as interchangeable by changing case.
 CON-units.6	MUST NOT	Version 1 MUST NOT carry a =units= object.
 CON-units.7	MAY	Version 2 MAY carry =units=.
 CON-units.8	MUST	In versions 1 and 2, and in every minor of major 3, velocities MUST be read as =units.length= per the natural time unit, and length is angstrom when =units.length= is absent.
@@ -137,11 +142,12 @@ CON-units.11	MUST	A frame of major 4 or later with a velocities section and no =
 CON-units.12	MUST	A writer of major 4 or later asked to write velocities with no time unit MUST fail with =InvalidUnits=.
 CON-units.13	MUST	An invalid unit expression on write MUST be reported as =InvalidUnits=.
 CON-units.14	MUST NOT	Writers MUST NOT replace an invalid unit with a default.
-CON-units.15	MAY	A consumer MAY apply an explicit velocity time-unit override when a file breaks =CON-units.8= through =CON-units.10=.
-CON-units.16	MUST	A reader MUST accept at least these spellings and MUST match them exactly. =MeV= is megaelectronvolt, one million times =eV=. =meV= and =mev= are millielectronvolt. =eV= and =ev= are electronvolt. Length: =m=, =meter=, =metre=, =angstrom=, =Angstrom=, =A=, =a=, =å=, =Å=, =nm=, =nanometer=, =bohr=, =a0=. Energy: =J=, =j=, =joule=, =eV=, =ev=, =meV=, =mev=, =MeV=, =hartree=, =ha=, =kcal=, =kJ=, =kj=. Mass: =kg=, =kilogram=, =u=, =amu=, =AMU=, =dalton=, =da=. Time: =s=, =second=, =fs=, =femtosecond=, =ps=, =picosecond=, =ns=, =nanosecond=. Count: =mol=. A different capitalization that this list does not write out MUST be an unknown unit.
+CON-units.15	MUST NOT	A consumer MUST NOT replace the time unit that =CON-units.8=, =CON-units.9=, and =CON-units.10= assign. Passing a different unit MUST NOT turn a rejected frame into an accepted one.
+CON-units.16	MUST	A reader MUST accept at least these spellings and MUST match them exactly, including case, as section 5.2 of the SI Brochure requires of a unit symbol. =MeV= is megaelectronvolt, one million times =eV=. =meV= and =mev= are millielectronvolt. =eV= and =ev= are electronvolt. Length: =m=, =meter=, =metre=, =angstrom=, =Angstrom=, =A=, =å=, =Å=, =nm=, =nanometer=, =bohr=, =a0=. Energy: =J=, =j=, =joule=, =eV=, =ev=, =meV=, =mev=, =MeV=, =hartree=, =Ha=, =kcal=, =kJ=, =kj=. Mass: =kg=, =kilogram=, =u=, =Da=, =amu=, =AMU=, =dalton=. Time: =s=, =second=, =fs=, =femtosecond=, =ps=, =picosecond=, =ns=, =nanosecond=. Count: =mol=. The dalton symbol is =Da= and the name =dalton= is an alias of it. The unified atomic mass unit symbol is =u=. =amu= and =AMU= are aliases of that same constant, not a case fold of another symbol. =a= is the are and MUST NOT be read as the ångström. =ha= is the hectare and MUST NOT be read as the hartree. =da= is the deca prefix and MUST NOT be read as the dalton. =Ha= is the hartree symbol. A spelling this list does not write out MUST be an unknown unit.
 CON-units.17	MUST	A reader MUST remove ASCII spaces and tabs from a unit expression before reading that expression.
-CON-units.18	MUST	A reader MUST use the constants in the table of this section. =bohr= and =a0= are 5.29177210903e-11 metre. =amu=, =AMU=, =u=, =dalton=, and =da= are 1.66053906660e-27 kilogram. =hartree= and =ha= are 4.3597447222071e-18 joule. =eV= and =ev= are 1.602176634e-19 joule. =meV= and =mev= are 1.602176634e-22 joule. =MeV= is 1.602176634e-13 joule. =mol= is 6.02214076e23. =kcal= is 4184 joule. =angstrom=, =Angstrom=, =A=, =a=, =å=, and =Å= are 1e-10 metre. =fs= is 1e-15 second. =kJ= and =kj= are 1000 joule.
-CON-units.19	MUST	A rewrite that emits major 4 for velocities read under =CON-units.8= MUST set =units.time= to the spelling of =CON-units.5= and MUST NOT keep a =units.time= label that =CON-units.9= forbids trusting. The absent =units.length= of that frame MUST be written as =angstrom=, and the absent =units.energy= MUST be written as =eV=.
+CON-units.18	MUST	A reader MUST use the constants in the table of this section, which is the CODATA 2018 adjustment of Tiesinga et al. and not a later edition. =bohr= and =a0= are 5.29177210903e-11 metre. =amu=, =AMU=, =u=, =Da=, and =dalton= are 1.66053906660e-27 kilogram. =hartree= and =Ha= are 4.3597447222071e-18 joule. =eV= and =ev= are 1.602176634e-19 joule. =meV= and =mev= are 1.602176634e-22 joule. =MeV= is 1.602176634e-13 joule. =mol= is 6.02214076e23. =kcal= is 4184 joule exactly, the thermochemical kilocalorie. The SI Brochure does not define the calorie, and =kcal= is not one of the CODATA constants. =angstrom=, =Angstrom=, =A=, =å=, and =Å= are an angstrom, 1e-10 m. =fs= is 1e-15 second. =kJ= and =kj= are 1000 joule. The natural unit of =CON-units.5=, and every other derived constant, MUST be computed from this table and MUST equal 10.180505710759414 fs for that unit. A reader MUST convert a velocity between that unit and another time unit with these constants, and MUST NOT substitute the literal 10.1805055 fs, a separately chosen digit string, or a constant from another CODATA edition. A unit this document does not define is =InvalidUnits= under =CON-units.13=.
+CON-units.19	MUST	A rewrite that emits major 4 for velocities read under =CON-units.8= MUST set =units.time= to the symbol spelling of =CON-units.5= and MUST NOT keep a =units.time= label that =CON-units.9= forbids trusting. The absent =units.length= of that frame MUST be written as =angstrom=, and the absent =units.energy= MUST be written as =eV=.
+CON-units.21	MUST	When =units.velocity= is present, its scale MUST equal =units.length= divided by the time =CON-units.8= and =CON-units.10= assign. In major 4 that time is =units.time=. In major 3 and earlier that time is the natural unit, and =units.time= MUST NOT decide the quotient. A scale that differs MUST be =InvalidUnits=. =units.velocity= MUST NOT replace =units.time=.
 CON-num.1	MUST	Readers MUST reject NaN, Inf, Infinity, and the signed and mixed-case spellings of those words, in every numeric field and in every mode, as =NonFiniteValue=.
 CON-num.2	MUST NOT	=validate= true MUST NOT be required before a reader applies =CON-num.1=.
 CON-num.3	MUST NOT	=validate= true MUST NOT accept a non-finite value.
@@ -165,7 +171,7 @@ CON-error.5	MUST	When one line can fail more than one check, the reader MUST rep
 CON-profile.1	MUST	A reader MUST apply every requirement this document addresses to a reader, in every mode.
 CON-profile.2	MUST	A validating reader MUST be a reader. =validate= true MUST add the checks of =CON-validate.4= and MUST NOT relax a check that applies in every mode.
 CON-profile.3	MUST	A writer MUST apply every requirement this document addresses to a writer.
-CON-profile.4	MUST NOT	A consumer MUST NOT be required to apply a reader check. An explicit velocity time-unit override is =CON-units.15=.
+CON-profile.4	MUST NOT	A consumer MUST NOT be required to apply a reader check. A consumer MUST NOT replace the velocity time unit. That rule is =CON-units.15=.
 CON-profile.5	MUST	A round trip is a read of a frame, a write of that frame, and a read of the result. The second read MUST return the same binary64 coordinates, velocities, and cell entries, the same masks, identifiers, and periodic flags, and units of the same dimension. It MUST NOT be required to return the same spelling of a float or of an unknown key.
 CON-token.1	MUST	Integer tokens MUST match one or more ASCII digits, with no sign and no decimal point.
 CON-token.2	MUST	Float tokens MUST be finite decimals. A leading sign, a leading dot, and an exponent are allowed. Non-finite spellings are =CON-num.1=, not floats.

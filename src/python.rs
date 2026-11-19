@@ -6741,7 +6741,7 @@ fn ase_from_pyconframe(py: Python<'_>, frame: &PyConFrame) -> PyResult<Py<PyAny>
             // CON-units.9: the label is not applied. A unit that is not a
             // time is ignored and does not warn. The natural spelling is the
             // unit the numbers were already read in.
-            let warns = unit != crate::units::NATURAL_TIME_UNIT
+            let warns = !crate::units::is_natural_time_spelling(unit)
                 && crate::units::validate_unit_for_quantity("time", unit).is_ok();
             if warns {
                 py.import("warnings")?
