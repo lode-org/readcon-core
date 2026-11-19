@@ -1212,6 +1212,12 @@ impl PyConFrame {
         Ok(shared(slf)?.spec_version)
     }
 
+    #[setter]
+    fn set_spec_version(slf: &Bound<'_, Self>, value: u32) -> PyResult<()> {
+        exclusive(slf)?.spec_version = value;
+        Ok(())
+    }
+
     /// Sequence of this frame's `Atom` projection. Its structural edits
     /// rebuild the frame; `frame[i]` is the live view of the store.
     #[getter]
@@ -2662,6 +2668,7 @@ impl PyConFrame {
 
         let mut builder = ConFrameBuilder::new(self.cell, self.angles);
         builder
+            .spec_version(self.spec_version)
             .prebox_header(self.prebox_header[0].as_str())
             .postbox_header(self.postbox_header.clone())
             .metadata(meta);

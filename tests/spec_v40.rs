@@ -203,3 +203,22 @@ fn con_line2_21_relaxes_overflow_not_malformed_numbers() {
         );
     }
 }
+
+/// CON-line2.5. The builder writes only a major this reader reads back, so a
+/// requested major above the current one is UnsupportedVersion at build.
+#[test]
+fn builder_refuses_a_major_it_cannot_read_back() {
+    for major in [0, 1, 2, 3, 4] {
+        let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        builder.spec_version(major);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        assert!(builder.build().is_ok(), "{major}");
+    }
+    for major in [5, 99] {
+        let mut builder = ConFrameBuilder::new([10.0; 3], [90.0; 3]);
+        builder.spec_version(major);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 1, 1.0);
+        let err = builder.build().unwrap_err();
+        assert_eq!(err.class_name(), "UnsupportedVersion", "{major}");
+    }
+}

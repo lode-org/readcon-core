@@ -2091,8 +2091,21 @@ fn push_atom_motion(
 /// measurement file. Its compress path must keep that major and must not
 /// insert `con_spec_patch`, or the pinned bytes move.
 fn binding_spec(frame: &ConFrame) -> u32 {
-    if frame.header.spec_version == 3 && frame.atom_data.len() == 1_000_000 {
-        return 3;
+    // CON 3.1 payloads, including the million-atom measurement file, keep
+    // major 3. A legacy major-3 velocity file mislabeled as femtoseconds is
+    // upgraded so the binding can stamp the natural time unit authoritatively.
+    if frame.header.spec_version == 3 {
+        let legacy_fs_velocity = frame.has_velocities()
+            && frame
+                .header
+                .metadata
+                .get(meta::UNITS)
+                .and_then(|units| units.get("time"))
+                .and_then(Value::as_str)
+                == Some("fs");
+        if !legacy_fs_velocity {
+            return 3;
+        }
     }
     frame.header.spec_version.max(crate::CON_SPEC_VERSION)
 }
@@ -2197,7 +2210,7 @@ pub fn wide_frame_header(frame: &ConFrame) -> Result<Vec<u8>, WriteError> {
 /// Coordinate lines for atoms `begin..end`, including a species header when
 /// the range contains the first atom of that species.
 pub(crate) fn format_coord_range(frame: &ConFrame, begin: usize, end: usize) -> Vec<u8> {
-    let spec = frame.header.spec_version.max(crate::CON_SPEC_VERSION);
+    let spec = binding_spec(frame);
     let prec = FloatFormat::RoundTrip;
     let mut buf = Vec::with_capacity((end - begin).saturating_mul(32) + 64);
     let mut ryu = ryu::Buffer::new();
@@ -3231,14 +3244,16 @@ pub(crate) fn binding_metadata_with_minor_raw(
 /// Same bytes as a binding rewrite, without rebuilding each atom.
 pub fn binding_rewrite_frame(frame: &ConFrame) -> Result<ConFrame, crate::error::ParseError> {
     let mut out = frame.clone();
-    let (meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    let spec = binding_spec(frame);
+    let (mut meta, minor_raw) = binding_metadata_with_minor_raw(frame);
+    if spec < 4 {
+        meta.remove(meta::CON_SPEC_PATCH);
+    }
     out.header.metadata =
         crate::types::FrameMeta::from_map_with_minor_raw(meta, minor_raw.as_deref());
-    // A parsed spec 1 frame keeps line 2 as free text. The builder emits
-    // the current spec as JSON, so the rewrite does too.
-    if out.header.spec_version < crate::CON_SPEC_VERSION {
-        out.header.spec_version = crate::CON_SPEC_VERSION;
-    }
+    // A parsed spec 1 frame keeps line 2 as free text. The bound writer
+    // emits the binding major as JSON, so the rewrite does too.
+    out.header.spec_version = spec;
     Ok(out)
 }
 
