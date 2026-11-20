@@ -40,8 +40,8 @@ wheel, or a Linux/macOS tarball.
    prebuilt clib tarball:
 
    ```bash
-   cargo build --release --features chemfiles
-   # optional fat matrix: chemfiles,zstd,metatensor
+   cargo build --release --features capi,chemfiles
+   # optional fat matrix: capi,chemfiles,zstd,metatensor
    export READCON_CORE_LIB="$PWD/target/release/libreadcon_core.so"
    export JULIA_LOAD_PATH="$PWD/julia/ReadCon:$JULIA_LOAD_PATH"
    ```
@@ -86,6 +86,6 @@ Do not change the uuid after the first General registration.
 ## CI
 
 Workflow `.github/workflows/ci_julia.yml` runs when Julia is available on the
-runner: builds `libreadcon_core` with `chemfiles`, exports `READCON_CORE_LIB`,
+runner: builds `libreadcon_core` with `capi,chemfiles`, exports `READCON_CORE_LIB`,
 then `Pkg.test()`. Users without Julia should treat missing `julia` as an
 environment limit, not an API gap—the package sources and tests remain in-tree.

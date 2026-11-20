@@ -137,6 +137,12 @@ Iterators (iterators.rs)
 FFI layer (ffi.rs)
 ------------------
 
+The ``ffi`` module and all unmangled ``rkr_*`` C ABI symbols are gated behind
+the ``capi`` Cargo feature (default off, so Rust ``rlib`` consumers do not
+export duplicate ``rkr_*`` symbols when two crate versions link into one
+binary). ``cargo-c``, Meson, and CMake enable ``capi`` automatically; direct
+Cargo builds for C, C++, Julia, or Fortran pass ``--features capi``.
+
 Opaque handle pattern:
 
 ``RKRConFrame``
@@ -270,7 +276,8 @@ C ABI install layout (cargo-c)
 ------------------------------
 
 The ``[package.metadata.capi.*]`` keys in ``Cargo.toml`` drive
-`cargo-c <https://github.com/lu-zero/cargo-c>`_. Running
+`cargo-c <https://github.com/lu-zero/cargo-c>`_, which enables the ``capi``
+Cargo feature automatically. Running
 ``cargo cinstall --prefix=$PREFIX --libdir=$PREFIX/lib --library-type cdylib``
 produces:
 
