@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 
+- Reading an XYZ file through chemfiles aborted inside `rc_chemfiles_scan`
+  when the scan shim's `std::string` did not match the linked library.
+  The official Linux prebuilt archive is GCC 4.8 (an atom is 80 bytes).
+  A from-source build, a failed prebuilt download, and a distro or conda
+  library use the cxx11 string (an atom is 128 bytes). The shim now reads
+  the linked archive's symbols and uses the old string ABI only for the
+  COW archive. A C++ exception is returned as `ChemfilesImportError`
+  instead of aborting. A `links = "chemfiles"` override is honoured via
+  `DEP_CHEMFILES_INCLUDE`.
+
 - Rust library builds no longer install mimalloc as the process-wide global
   allocator. The optional `mimalloc-allocator` feature is reserved for final
   readcon artifacts, and `default-features = false` removes both the mimalloc
