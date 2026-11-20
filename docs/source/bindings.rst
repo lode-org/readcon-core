@@ -329,7 +329,8 @@ It ignores file text, metadata, atom ids, and other sections.
     For a frame from a read, ``vel``, ``frc``, ``mass_column`` and, until
     ``.atoms`` is used, the ``\*_array()`` methods other than ``coords_array()``
     are read-only views of the parsed columns: no copy, and ``.copy()`` gives
-    a writeable array.
+    a writeable array. ``symbols`` (a ``FrameSymbols``) gives every atom's
+    symbol as interned runs, without building ``atoms``.
     The constructor and ``from_ase()`` raise ``readcon.NonFiniteValue`` (a
     ``ValueError``) for a cell length or angle that is NaN or infinite, and
     for a ``lattice_vectors`` metadata matrix that holds one. The message names

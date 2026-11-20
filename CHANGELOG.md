@@ -50,6 +50,15 @@ All notable changes to this project will be documented in this file. See [conven
   `metadata` property, the `energy`-style getters, a setter or a write)
   instead of when the frame object is made. It is still one live dict per
   frame with the same contents.
+- **Python:** `ConFrame.symbols` returns the chemical symbol of every atom as
+  a `readcon.FrameSymbols`: one interned string per run of equal symbols,
+  so a parsed frame answers from its per-type counts without building the
+  `Atom` list or one string per atom. It behaves as a tuple of strings
+  (length, index, slice, iteration, equality with a list or tuple, hash,
+  pickle) and adds `tolist()`, `table()` (distinct symbols in order of first
+  use) and `ids()` (per-atom `uint32` index into `table()`). Once
+  `frame.atoms` has been built it reads the atoms, so an edited
+  `Atom.symbol` shows up.
 
 ### Bugfixes
 

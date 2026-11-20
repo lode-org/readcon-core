@@ -1011,6 +1011,33 @@ impl PyConFrame {
         Ok(Some(data.into_pyarray(py)))
     }
 
+    /// The chemical symbol of every atom as a :class:`FrameSymbols`, one
+    /// interned string per run of equal symbols. A parsed frame answers
+    /// from its per-type counts without building `atoms`; once `atoms`
+    /// exists it is read, so an edited `Atom.symbol` shows up.
+    #[getter]
+    fn symbols(&self, py: Python<'_>) -> PyResult<FrameSymbols> {
+        if let Some(frame) = self.parsed_frame() {
+            return Ok(FrameSymbols::of_parsed(py, frame));
+        }
+        let atoms = self.atoms.bind(py);
+        let mut names: Vec<(String, usize)> = Vec::new();
+        for item in atoms.iter() {
+            let atom = item.cast::<PyAtomDatum>().map_err(|_| {
+                PyTypeError::new_err("ConFrame.atoms entries must be readcon.Atom objects")
+            })?;
+            let atom = atom.borrow();
+            match names.last_mut() {
+                Some((last, count)) if *last == atom.symbol => *count += 1,
+                _ => names.push((atom.symbol.clone(), 1usize)),
+            }
+        }
+        Ok(FrameSymbols::from_runs(
+            py,
+            names.iter().map(|(name, count)| (name.as_str(), *count)),
+        ))
+    }
+
     /// Returns the per-atom atomic numbers as a numpy `[N] uint64`
     /// array, useful for filtering / one-hot encoding workflows.
     fn atom_ids_array<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u64>>> {
@@ -6805,6 +6832,7 @@ fn readcon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_pdb, m)?)?;
     m.add_class::<SpeciesFrames>()?;
     m.add_class::<SpeciesRow>()?;
+    m.add_class::<FrameSymbols>()?;
     m.add_class::<SpeciesIter>()?;
     m.add_class::<SpeciesFramesIter>()?;
     m.add_function(wrap_pyfunction!(read_extxyz, m)?)?;
@@ -7467,6 +7495,270 @@ impl SpeciesIter {
         drop(frames);
         self.index += 1;
         Some(symbol)
+    }
+}
+
+/// The chemical symbols of one frame, one interned string per run of equal
+/// symbols.
+///
+/// Behaves as a tuple of strings: ``len``, index, iteration, a slice that
+/// is a tuple, equality with a tuple, a list or another
+/// :class:`FrameSymbols`, pickle, and hash. ``table()`` is the distinct
+/// symbols in order of first use and ``ids()`` the per-atom ``uint32``
+/// index into it.
+#[pyclass(frozen, module = "readcon", name = "FrameSymbols")]
+struct FrameSymbols {
+    runs: Vec<Py<PyString>>,
+    /// Exclusive end atom of each run, increasing.
+    ends: Vec<usize>,
+}
+
+#[pyclass(module = "readcon")]
+struct FrameSymbolsIter {
+    symbols: Py<FrameSymbols>,
+    run: usize,
+    index: usize,
+}
+
+impl FrameSymbols {
+    fn from_runs<'a>(py: Python<'_>, runs: impl IntoIterator<Item = (&'a str, usize)>) -> Self {
+        let mut names: Vec<Py<PyString>> = Vec::new();
+        let mut ends: Vec<usize> = Vec::new();
+        let mut total = 0usize;
+        let mut last: Option<&str> = None;
+        for (symbol, count) in runs {
+            if count == 0 {
+                continue;
+            }
+            total += count;
+            if last == Some(symbol) {
+                *ends.last_mut().expect("a run precedes") = total;
+                continue;
+            }
+            names.push(PyString::intern(py, symbol).unbind());
+            ends.push(total);
+            last = Some(symbol);
+        }
+        Self { runs: names, ends }
+    }
+
+    fn of_parsed(py: Python<'_>, frame: &ConFrame) -> Self {
+        let counts = &frame.header.natms_per_type;
+        if counts.iter().sum::<usize>() == frame.atom_data.len() {
+            let mut start = 0usize;
+            return Self::from_runs(
+                py,
+                counts.iter().map(|&count| {
+                    let symbol = frame
+                        .atom_data
+                        .get(start)
+                        .map_or("", |atom| atom.symbol.as_ref());
+                    start += count;
+                    (symbol, count)
+                }),
+            );
+        }
+        Self::from_runs(
+            py,
+            frame
+                .atom_data
+                .iter()
+                .map(|atom| (atom.symbol.as_ref(), 1usize)),
+        )
+    }
+
+    fn len(&self) -> usize {
+        self.ends.last().copied().unwrap_or(0)
+    }
+
+    fn run_of(&self, atom: usize) -> usize {
+        self.ends.partition_point(|&end| end <= atom)
+    }
+
+    fn symbol(&self, py: Python<'_>, atom: usize) -> Py<PyString> {
+        self.runs[self.run_of(atom)].clone_ref(py)
+    }
+
+    fn as_tuple<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let mut items = Vec::with_capacity(self.len());
+        let mut start = 0usize;
+        for (name, &end) in self.runs.iter().zip(&self.ends) {
+            items.extend((start..end).map(|_| name.clone_ref(py)));
+            start = end;
+        }
+        PyTuple::new(py, items)
+    }
+
+    fn table_ids(&self, py: Python<'_>) -> PyResult<(Vec<Py<PyString>>, Vec<u32>)> {
+        let mut table: Vec<Py<PyString>> = Vec::new();
+        let mut run_ids = Vec::with_capacity(self.runs.len());
+        for name in &self.runs {
+            let text = name.bind(py).to_str()?;
+            let mut found = None;
+            for (index, known) in table.iter().enumerate() {
+                if known.bind(py).to_str()? == text {
+                    found = Some(index);
+                    break;
+                }
+            }
+            let id = match found {
+                Some(index) => index,
+                None => {
+                    table.push(name.clone_ref(py));
+                    table.len() - 1
+                }
+            };
+            run_ids.push(id as u32);
+        }
+        Ok((table, run_ids))
+    }
+}
+
+#[pymethods]
+impl FrameSymbols {
+    #[new]
+    fn new(py: Python<'_>, symbols: Vec<String>, counts: Vec<usize>) -> PyResult<Self> {
+        if symbols.len() != counts.len() {
+            return Err(PyValueError::new_err(
+                "FrameSymbols needs one count per symbol",
+            ));
+        }
+        Ok(Self::from_runs(
+            py,
+            symbols.iter().map(String::as_str).zip(counts),
+        ))
+    }
+
+    fn __len__(&self) -> usize {
+        self.len()
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let n_atoms = self.len();
+        if let Ok(index) = key.extract::<isize>() {
+            let atom = species_index(index, n_atoms)?;
+            return Ok(self.symbol(py, atom).into_any());
+        }
+        let slice = key
+            .cast::<PySlice>()
+            .map_err(|_| PyTypeError::new_err("symbol index"))?;
+        let indices = slice.indices(n_atoms as isize)?;
+        let mut items = Vec::with_capacity(indices.slicelength);
+        let mut cursor = indices.start;
+        for _ in 0..indices.slicelength {
+            items.push(self.symbol(py, species_index(cursor, n_atoms)?));
+            cursor += indices.step;
+        }
+        Ok(PyTuple::new(py, items)?.into_any().unbind())
+    }
+
+    fn __iter__(slf: &Bound<'_, Self>) -> PyResult<Py<FrameSymbolsIter>> {
+        Py::new(
+            slf.py(),
+            FrameSymbolsIter {
+                symbols: slf.clone().unbind(),
+                run: 0,
+                index: 0,
+            },
+        )
+    }
+
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let py = slf.py();
+        let this = slf.get();
+        if let Ok(theirs) = other.cast::<FrameSymbols>() {
+            let theirs = theirs.get();
+            if this.ends != theirs.ends {
+                return Ok(false);
+            }
+            for (left, right) in this.runs.iter().zip(&theirs.runs) {
+                if left.bind(py).to_str()? != right.bind(py).to_str()? {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+        if !other.is_instance_of::<PyList>() && !other.is_instance_of::<PyTuple>() {
+            return Ok(false);
+        }
+        let seq = other.cast::<PySequence>()?;
+        if seq.len()? != this.len() {
+            return Ok(false);
+        }
+        let mut start = 0usize;
+        for (name, &end) in this.runs.iter().zip(&this.ends) {
+            for atom in start..end {
+                if !PyAnyMethods::eq(&seq.get_item(atom)?, name.bind(py))? {
+                    return Ok(false);
+                }
+            }
+            start = end;
+        }
+        Ok(true)
+    }
+
+    fn __hash__(&self, py: Python<'_>) -> PyResult<isize> {
+        self.as_tuple(py)?.hash()
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!("FrameSymbols({})", self.as_tuple(py)?.repr()?))
+    }
+
+    fn __reduce__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyTuple>)> {
+        let this = slf.get();
+        let mut symbols = Vec::with_capacity(this.runs.len());
+        let mut counts = Vec::with_capacity(this.runs.len());
+        let mut start = 0usize;
+        for (name, &end) in this.runs.iter().zip(&this.ends) {
+            symbols.push(name.clone_ref(py));
+            counts.push(end - start);
+            start = end;
+        }
+        let args = PyTuple::new(py, [symbols.into_py_any(py)?, counts.into_py_any(py)?])?;
+        Ok((slf.get_type().into_any(), args))
+    }
+
+    /// The symbols as a list of strings, one per atom.
+    fn tolist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        PyList::new(py, self.as_tuple(py)?)
+    }
+
+    /// The distinct symbols in order of first use.
+    fn table<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(py, self.table_ids(py)?.0)
+    }
+
+    /// Per-atom index into `table()`, as a new `uint32` array.
+    fn ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<u32>>> {
+        let (_, run_ids) = self.table_ids(py)?;
+        let mut ids = Vec::with_capacity(self.len());
+        let mut start = 0usize;
+        for (&id, &end) in run_ids.iter().zip(&self.ends) {
+            ids.extend(std::iter::repeat_n(id, end - start));
+            start = end;
+        }
+        Ok(ids.into_pyarray(py))
+    }
+}
+
+#[pymethods]
+impl FrameSymbolsIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self, py: Python<'_>) -> Option<Py<PyString>> {
+        let symbols = self.symbols.get();
+        while self.run < symbols.ends.len() && self.index >= symbols.ends[self.run] {
+            self.run += 1;
+        }
+        let name = symbols.runs.get(self.run)?.clone_ref(py);
+        self.index += 1;
+        Some(name)
     }
 }
 
