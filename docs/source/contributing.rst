@@ -161,6 +161,10 @@ Testing
     meson setup bbdir -Dwith_tests=True -Dwith_examples=True
     meson test -C bbdir
 
+    # Loom-only model checks (nightly)
+    RUSTFLAGS="--cfg loom" cargo +nightly-2026-11-16 test --locked --lib per_process_loom:: -- --nocapture
+    RUSTFLAGS="--cfg loom" cargo +nightly-2026-11-16 test --locked --lib loom_protocol_tests:: -- --nocapture
+
     # Benchmarks
     cargo bench --features benchmark
     # or: pixi r bench
