@@ -48,7 +48,7 @@
     "blas_threads": 1
   },
   "tip_builds": {
-    "source_revision": "ec3108430b3c25323545080639e7fff6b8e05618",
+    "source_revision": "development tree after tag v0.23.2; the wheel sha256 values identify the builds",
     "tip_a_sha256": "46efb0dce504ab3026fa7995ed8f2dad4198c0dac514f59428a4026707fd4f26",
     "tip_b_sha256": "4c4d424102885087765bc9cc11e69b1f8e0c221e00330f3eea95302efc8f1639"
   },
