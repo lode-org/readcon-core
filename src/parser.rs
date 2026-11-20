@@ -1236,12 +1236,13 @@ mod per_process_loom {
         loom::model(|| {
             let current = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
             let writer_current = Arc::clone(&current);
+            let reader_current = Arc::clone(&current);
             let writer = thread::spawn(move || {
                 publish_box(&writer_current, 1, Ordering::Release, Ordering::Relaxed);
             });
             let reader = thread::spawn(move || {
                 loop {
-                    let ptr = current.load(Ordering::Acquire);
+                    let ptr = reader_current.load(Ordering::Acquire);
                     if !ptr.is_null() {
                         let observed = unsafe { (*ptr).payload.load(Ordering::Relaxed) };
                         assert_eq!(observed, 1);
@@ -1257,20 +1258,29 @@ mod per_process_loom {
     }
 
     #[test]
-    #[should_panic(expected = "relaxed publish served stale payload")]
-    fn mutation_relaxed_publish_serves_stale_payload() {
+    fn publish_slot_release_acquire_keeps_initialized_value() {
         loom::model(|| {
-            let current = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let current: Arc<AtomicPtr<super::ProcessSlot<AtomicUsize>>> =
+                Arc::new(AtomicPtr::new(std::ptr::null_mut()));
             let writer_current = Arc::clone(&current);
+            let reader_current = Arc::clone(&current);
             let writer = thread::spawn(move || {
-                publish_box(&writer_current, 1, Ordering::Relaxed, Ordering::Relaxed);
+                let value = super::publish_slot(&*writer_current, 0, 10, || {
+                    let payload = AtomicUsize::new(0);
+                    payload.store(1, Ordering::Relaxed);
+                    payload
+                });
+                assert_eq!(value.load(Ordering::Relaxed), 1);
             });
             let reader = thread::spawn(move || {
                 loop {
-                    let ptr = current.load(Ordering::Relaxed);
+                    let ptr = reader_current.load(Ordering::Acquire);
                     if !ptr.is_null() {
-                        let observed = unsafe { (*ptr).payload.load(Ordering::Relaxed) };
-                        assert_eq!(observed, 1, "relaxed publish served stale payload");
+                        let observed = unsafe { (*ptr).value.load(Ordering::Relaxed) };
+                        assert_eq!(
+                            observed, 1,
+                            "published slot did not preserve initialized value"
+                        );
                         break;
                     }
                     thread::yield_now();
@@ -1278,7 +1288,8 @@ mod per_process_loom {
             });
             writer.join().unwrap();
             reader.join().unwrap();
-            unsafe { drop(Box::from_raw(current.load(Ordering::Acquire))) };
+            let published = current.load(Ordering::Acquire);
+            unsafe { drop(Box::from_raw(published)) };
         });
     }
 
