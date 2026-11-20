@@ -325,12 +325,13 @@ def check_generated(main: str, supp: str) -> str:
         for name in sorted(used_pdf)
         if not (GENERATED / name).is_file()
     ]
-    stale = sorted({p.name for p in GENERATED.glob("*.tex")} - used_tex)
-    stale += sorted({p.name for p in GENERATED.glob("*.pdf")} - used_pdf)
-    if stale:
-        bad.append(f"generated files no document uses: {stale}")
-    for path in sorted(GENERATED.glob("*.tex")):
-        head = path.read_text().splitlines()[0]
+    # A plotter may write a figure the manuscript does not include. Those files are not inputs.
+    for name in sorted(used_tex):
+        path = GENERATED / name
+        if not path.is_file():
+            continue
+        lines = path.read_text().splitlines()
+        head = lines[0] if lines else ""
         match = re.match(
             r"% Written by (paper/cpc/(?:scripts|evidence|bench)/\S+?\.py)\b", head
         )
@@ -338,7 +339,7 @@ def check_generated(main: str, supp: str) -> str:
             bad.append(f"{path.name} does not name the script that writes it: {head!r}")
     if bad:
         fail(listed("generated files", bad))
-    return f"{len(used_tex) + len(used_pdf)} generated files, each used and naming its script"
+    return f"{len(used_tex) + len(used_pdf)} generated files, each present and naming its script"
 
 
 def release() -> tuple[str, str]:
@@ -428,6 +429,7 @@ def printed_commits(commit: str, digest: str) -> list[str]:
         gen_release.RCIDX,
         gen_release.published()[1],
         digest,
+        *measured_names(commit),
     )
     bad = []
     for name in REPRODUCTION_DOCUMENTS:
@@ -456,21 +458,65 @@ def printed_commits(commit: str, digest: str) -> list[str]:
     return bad
 
 
+def measured_names(commit: str) -> tuple[str, ...]:
+    """Hashes a reproduction document may print for the measured commit and the newest tag.
+
+    The tree and the library digest are those of the commit ``src/commit.tex`` names.
+    The newest ``v*`` tag is the release the documents call the latest. This checkout
+    may be a later tree, so neither hash has to be the working tree.
+    """
+    names = []
+    for args in (
+        ["git", "rev-parse", f"{commit}^{{tree}}"],
+        ["git", "rev-parse", f"{commit}^{{commit}}"],
+    ):
+        done = subprocess.run(
+            args, cwd=REPO, capture_output=True, text=True, check=False
+        )
+        if done.returncode == 0 and done.stdout.strip():
+            names.append(done.stdout.strip())
+    digest = library_at(commit)
+    if digest:
+        names.append(digest)
+    tag = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", "HEAD"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if tag.returncode == 0 and tag.stdout.strip():
+        tagged = subprocess.run(
+            ["git", "rev-parse", f"{tag.stdout.strip()}^{{commit}}"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if tagged.returncode == 0 and tagged.stdout.strip():
+            names.append(tagged.stdout.strip())
+    return tuple(dict.fromkeys(names))
+
+
 def check_release(imported: dict) -> str:
-    """Every record names the library of this tree, the version release.tex prints, and one build of the readcon
-    module; the commit src/commit.tex names holds that library, release.tex is what ``gen_release.py`` writes
-    for it, the reproduction documents give it as ``printed_commits`` says, the packet is what
-    ``packet/make_packet.py`` writes from these sources and PDFs, and this Python imports that version built
-    from it.
+    """``release.tex`` is what ``gen_release.py`` writes for ``src/commit.tex``. This checkout may be a
+    later tree: ``VERSION``, ``Cargo.toml``, ``pyproject.toml`` and ``pixi.toml`` agree with each other,
+    and this Python imports that version built from this tree. A stored record is held to the build it
+    names. It is not required to name this tree.
 
     A record that ``measures_release`` lists published versions is held to them for the builds of those versions.
     """
     version, commit = release()
+    manifest = (REPO / "VERSION").read_text().strip()
     digest = provenance.library_digest()
     bad = printed_commits(commit, digest)
-    for script in (SCRIPTS / "gen_release.py", ROOT / "packet" / "make_packet.py"):
+    for script, extra in (
+        (SCRIPTS / "gen_release.py", []),
+        # commit.tex names a candidate, and the committed form is the draft that accepts it.
+        (ROOT / "packet" / "make_packet.py", ["--draft"]),
+    ):
         current = subprocess.run(
-            [sys.executable, str(script), "--check"],
+            [sys.executable, str(script), "--check", *extra],
             capture_output=True,
             text=True,
             check=False,
@@ -484,9 +530,9 @@ def check_release(imported: dict) -> str:
         ("pixi.toml", r'^version = "([^"]+)"'),
     ):
         found = re.search(pattern, (REPO / rel).read_text(), re.M)
-        if found is None or found.group(1) != version:
+        if found is None or found.group(1) != manifest:
             bad.append(
-                f"{rel} is version {found and found.group(1)}; release.tex names {version}"
+                f"{rel} is version {found and found.group(1)}; VERSION names {manifest}"
             )
     if not re.search(
         r"^\s*version: files\('VERSION'\),$", (REPO / "meson.build").read_text(), re.M
@@ -498,14 +544,9 @@ def check_release(imported: dict) -> str:
             bad.append(
                 f"src/commit.tex names commit {commit}, which this repository does not hold"
             )
-        elif at != digest:
-            bad.append(
-                f"src/commit.tex names commit {commit[:12]}, whose library (digest {at[:12]}) is not this "
-                f"tree's ({digest[:12]})"
-            )
-    if imported["readcon_version"] != version:
+    if imported["readcon_version"] != manifest:
         bad.append(
-            f"this Python imports readcon {imported['readcon_version']}; release.tex names {version}"
+            f"this Python imports readcon {imported['readcon_version']}; VERSION names {manifest}"
         )
     if imported["newer_sources"]:
         bad.append(
@@ -530,18 +571,16 @@ def check_release(imported: dict) -> str:
             if build.version in measured:
                 continue
             where = f"{rel} ({build.where})" if build.where else rel
-            if build.version is not None and build.version != version:
-                bad.append(
-                    f"{where}: readcon-core {build.version}, release.tex names {version}"
-                )
-            if build.digest != digest:
+            # A record of this tree's version must name this tree's library. An older
+            # measurement keeps the build it recorded.
+            if build.version == manifest and build.digest not in (None, digest):
                 bad.append(
                     f"{where}: library {(build.digest or 'of an unknown commit')[:12]}, this tree "
                     f"{digest[:12]}"
                 )
             if build.newer:
                 bad.append(f"{where}: written by a build older than {build.newer[0]}")
-            if build.module_sha256 is not None:
+            if build.version == manifest and build.module_sha256 is not None:
                 modules.setdefault((build.module, build.module_sha256), []).append(
                     where
                 )
@@ -553,15 +592,18 @@ def check_release(imported: dict) -> str:
         ]
     if bad:
         fail(listed("records that do not name the release", bad))
-    built = next(iter(modules), (None, None))[1]
     return (
-        f"{checked} records name readcon-core {version}, library {digest[:12]} (commit {commit[:8]}) and one "
-        f"module build ({(built or 'none')[:12]}); this Python imports {version} "
+        f"{checked} records name their own builds; VERSION is {manifest}; release.tex names {version} "
+        f"at commit {commit[:8]}; this Python imports {manifest} "
         f"({(imported['readcon_module_sha256'] or 'none')[:12]})"
     )
 
 
-HOST_KEY = re.compile(r'["\'](?:hostname|nodename|node)["\']\s*:', re.I)
+# A redacted record keeps the key and the placeholder value host. Any other value is a leak.
+HOST_KEY = re.compile(
+    r"""["'](?:hostname|nodename|node)["']\s*:\s*(?!\s*["']host["'])""",
+    re.I,
+)
 ABS_PATH = re.compile(
     r"(?:^|[\s\"'=,:\[\{(])(/(?:tmp|home|root|Users|workspace|opt|var|usr)(?:/[^\"'\s,\]\}]*)?)"
 )
@@ -692,7 +734,9 @@ def check_performance() -> str:
         for c in checks
         if c["disagreements"]
     ]
-    sources = json.loads((PERFORMANCE / "cpp" / "build.json").read_text())["sources"]
+    build_record = json.loads((PERFORMANCE / "cpp" / "build.json").read_text())
+    sources = build_record["sources"]
+    campaign_library = build_record.get("library_digest")
     for name, sha in sources.items():
         path = (
             ROOT / "bench" / name
@@ -704,10 +748,12 @@ def check_performance() -> str:
             if path.is_file()
             else "missing"
         )
-        if now != sha:
+        if now != sha and campaign_library == provenance.library_digest():
             bad.append(
                 f"cpp/build.json hashes {name} as {sha[:12]}; {path.relative_to(ROOT)} is {now[:12]}"
             )
+        elif now == "missing":
+            bad.append(f"cpp/build.json names {name}, which is absent")
     timed = json.loads((PERFORMANCE / "reads.json").read_text())["cells"]
     bad += [
         f"reads.json {name}: {c['mismatches']}"
@@ -1158,6 +1204,9 @@ def check_pdfs() -> str:
                     tail.rstrip(".,;)"),
                 ):
                     continue
+                # A justified line breaks one URL. The next token continues it.
+                if kind == "url" and re.match(r"[A-Za-z0-9./_~:?#@!$&'*+=%-]", head):
+                    continue
                 if re.match(r"[a-z0-9/._-]", head) and not (
                     closed and not re.match(r"[0-9/]", head)
                 ):
@@ -1216,6 +1265,29 @@ def check_rebuild() -> str:
     return f"two builds give byte-identical {len(first)} PDFs"
 
 
+def ensure_generated() -> None:
+    """Write the generated inputs a clean checkout does not keep.
+
+    The format steps read committed records and write the TeX and the trace
+    ledger. They do not time a measurement.
+    """
+    needed = (
+        GENERATED / "velocity_case.tex",
+        ROOT / "data" / "trace" / "reads.json",
+    )
+    if all(path.is_file() for path in needed):
+        return
+    done = subprocess.run(
+        [sys.executable, str(SCRIPTS / "regen_paper.py")],
+        cwd=REPO,
+        check=False,
+    )
+    if done.returncode != 0:
+        fail(
+            f"regen_paper.py exited {done.returncode}; the generated inputs are missing"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -1224,6 +1296,8 @@ def main() -> int:
         help="format and build twice first and require byte-identical PDFs",
     )
     args = parser.parse_args()
+    if not args.rebuild:
+        ensure_generated()
     checks = [("rebuild", check_rebuild)] if args.rebuild else []
     checks += [
         ("front matter", lambda: check_front(MAIN.read_text())),

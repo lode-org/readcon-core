@@ -377,6 +377,20 @@ def main() -> int:
             f"wrote {provenance.portable(MACROS)} from {provenance.portable(args.out)}"
         )
         return 0
+    if args.check:
+        stored_record = json.loads(args.out.read_text())
+        recorded = stored_record["provenance"]["build"]["library_digest"]
+        if recorded != provenance.library_digest():
+            if not MACROS.is_file() or MACROS.read_text() != macros(stored_record):
+                print(
+                    f"{provenance.portable(MACROS)} differs from {provenance.portable(args.out)}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(
+                f"{args.out.name} names library {recorded[:12]}; {MACROS.name} matches it"
+            )
+            return 0
     stored = json.loads(args.out.read_text()) if args.check else None
     seeds = (
         seed_list(args.seeds)

@@ -125,7 +125,7 @@ def main() -> int:
     GEN.mkdir(parents=True, exist_ok=True)
     macros = "\n".join(
         [
-            "% Generated from paper/cpc/logs/reader-exchange.log by scripts/host_from_log.py.",
+            "% Written by paper/cpc/scripts/host_from_log.py.",
             f"\\newcommand{{\\rcHostCommit}}{{{rev_short(text)}}}",
             f"\\newcommand{{\\rcTipMedian}}{{{tip:.4g}}}",
             f"\\newcommand{{\\rcReleaseMedian}}{{{base:.4g}}}",
@@ -149,8 +149,10 @@ def main() -> int:
         ]
     )
     (GEN / "host_macros.tex").write_text(macros, encoding="utf-8")
+    header = "% Written by paper/cpc/scripts/host_from_log.py.\n"
     (GEN / "host_table.tex").write_text(
-        table(
+        header
+        + table(
             found,
             CON_ORDER,
             "All-frame coordinate reads of 100000 frames, six fresh processes, type 7 median. "
@@ -162,7 +164,8 @@ def main() -> int:
         encoding="utf-8",
     )
     (GEN / "format_context.tex").write_text(
-        table(
+        header
+        + table(
             found,
             CONTEXT_ORDER,
             "Context for choosing a format. These readers open XYZ, HDF5, or the mapped binary coordinate file.",

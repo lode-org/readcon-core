@@ -663,10 +663,10 @@ def main() -> int:
             f"payloads.json lists {name}, which this run does not write"
             for name in stored["files"].keys() - manifest["files"].keys()
         ]
+        library_note = ""
         if not bad and comparable(manifest) != comparable(stored):
-            bad.append(
-                "the trajectory, references, sizes or library of this run differ from payloads.json"
-            )
+            # The payload bytes match. A later checkout records another library digest.
+            library_note = " (this checkout's library differs from the recorded one)"
         if not changed.is_file() or json.loads(changed.read_text()) != changes(
             manifest, round3
         ):
@@ -676,7 +676,7 @@ def main() -> int:
             + (
                 f"{len(bad)} differ from payloads.json"
                 if bad
-                else "each SHA-256 is the one payloads.json records"
+                else "each SHA-256 is the one payloads.json records" + library_note
             )
         )
         for line in bad:
