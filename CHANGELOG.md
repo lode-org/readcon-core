@@ -29,6 +29,20 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- **C ABI:** `rkr_frame_{positions,velocities,forces,atom_energies}_dlpack_ex`
+  with float64 on the CPU (including NULL `opts`, and so the non-`_ex`
+  velocity, force and energy exports) return a read-only tensor over the
+  frame's column instead of a gathered copy, as `rkr_frame_positions_dlpack`
+  already did. The tensor stays valid after the frame is freed, and
+  `rkr_frame_positions_from_dlpack` copies a shared column before writing,
+  so an earlier tensor keeps its values. The tensor is not a snapshot for
+  Rust code that also edits the frame: the `AtomDatum` setters on a parsed
+  frame write the positions column in place, so the tensor shows the edit
+  and a reader on another thread races with it, while `set_energy`,
+  `set_velocity(None)` and `set_force(None)` leave the column, and so the
+  tensor, unchanged. Other dtypes and CUDA still copy, because they need a
+  cast or a device buffer.
+
 - **Python:** `read_con`, `read_con_string` and `read_all_frames` no longer
   copy every frame's coordinates into one slab. Each frame keeps the buffer
   its parse wrote, and those buffers move into one owner object per read
