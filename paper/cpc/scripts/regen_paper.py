@@ -119,6 +119,7 @@ FORMAT = [
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
     ["scripts/host_from_log.py"],
+    ["scripts/like_from_record.py"],
     ["scripts/db_from_log.py"],
     ["scripts/mpi_from_log.py"],
 ]

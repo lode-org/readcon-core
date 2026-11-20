@@ -153,6 +153,7 @@ rule manuscript:
         "src/figures/generated/host_table.tex",
         "src/figures/generated/layers.pdf",
         "src/figures/generated/library_macros.tex",
+        "src/figures/generated/like_section.tex",
         "src/figures/generated/memory.pdf",
         "src/figures/generated/mpi_host.pdf",
         "src/figures/generated/mpi_host_table.tex",
