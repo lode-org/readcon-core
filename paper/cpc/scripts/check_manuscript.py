@@ -17,7 +17,8 @@ file against their record, the number trace against its ledger, the version
 map against the records, the programs the format steps ran, the pixi tasks
 against the programs the Reproduction section of the supplement names, the built PDFs
 and generated files (no TODO, TBD, FIXME or XXX, no identifier split across
-lines), the references (each entry cited, each citation an entry), credit or
+lines), the references (each entry cited, each citation an entry), the version
+in VERSION against its origin tag and its version DOI, credit or
 affiliation names in the paper's files and PDFs, the source
 citations against the tree, the typeset specification against spec.org, and
 the conformance records against the verdicts the paper prints.  Every check
@@ -502,7 +503,8 @@ def check_release(imported: dict) -> str:
     """``release.tex`` is what ``gen_release.py`` writes for ``src/commit.tex``. This checkout may be a
     later tree: ``VERSION``, ``Cargo.toml``, ``pyproject.toml`` and ``pixi.toml`` agree with each other,
     and this Python imports that version built from this tree. A stored record is held to the build it
-    names. It is not required to name this tree.
+    names. It is not required to name this tree. The tag and the version DOI of ``VERSION`` are a separate
+    check.
 
     A record that ``measures_release`` lists published versions is held to them for the builds of those versions.
     """
@@ -1227,6 +1229,62 @@ def built_pdfs() -> dict[str, str]:
     }
 
 
+def version_doi(version: str) -> str:
+    """The version DOI recorded for ``version``, or an empty string when none is."""
+    path = ROOT / "data" / "version_dois.json"
+    if not path.is_file():
+        return ""
+    recorded = json.loads(path.read_text()).get(version, "")
+    return str(recorded or "")
+
+
+def origin_has_tag(tag: str) -> bool:
+    done = subprocess.run(
+        ["git", "ls-remote", "--tags", "origin", tag],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if done.returncode != 0:
+        fail(f"origin tags could not be read: {done.stderr.strip()}")
+    names = set()
+    for line in done.stdout.splitlines():
+        ref = line.split()[-1]
+        if ref.endswith("^{}"):
+            ref = ref[:-3]
+        names.add(ref.removeprefix("refs/tags/"))
+    return tag in names
+
+
+def check_version_doi() -> str:
+    """A released VERSION must name its origin tag and its version DOI.
+
+    This check does not invent either. An unreleased tip has no tag and no
+    DOI, and the submission form says it is not a release tag.
+    """
+    version = (REPO / "VERSION").read_text().strip()
+    tag = f"v{version}"
+    doi = version_doi(version)
+    tagged = origin_has_tag(tag)
+    if tagged and doi:
+        return f"{version} is tag {tag} with DOI {doi}"
+    if tagged and not doi:
+        fail(
+            f"VERSION is {version}; origin has tag {tag} and this tree has no version DOI for {version}"
+        )
+    if doi and not tagged:
+        fail(
+            f"VERSION is {version}; this tree records DOI {doi} and origin has no tag {tag}"
+        )
+    form = (ROOT / "packet" / "CPC-FORM.md").read_text()
+    if "This commit is not a release tag." not in form:
+        fail(
+            f"VERSION is {version}; origin has no tag {tag} and the form does not say this commit is not a release tag"
+        )
+    return f"{version} is not a release tag and this tree records no version DOI for it"
+
+
 def check_rebuild() -> str:
     """Format and build twice under the fixed source date; every PDF must come out byte-identical."""
     import regen_paper
@@ -1305,6 +1363,7 @@ def main() -> int:
             lambda: check_generated(MAIN.read_text(), SUPP.read_text()),
         ),
         ("release", lambda: check_release(provenance.readcon_build())),
+        ("version DOI", check_version_doi),
         ("leaks", check_leaks),
         ("restart walls", check_walls),
         ("performance records", check_performance),
