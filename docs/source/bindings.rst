@@ -568,6 +568,24 @@ Include ``readcon-core.h`` and link against ``libreadcon_core`` built with the
 ``capi`` Cargo feature (``cargo-c``, Meson, and CMake enable ``capi``
 automatically; direct Cargo builds pass ``--features capi``).
 
+Migration note (``capi`` feature gate)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Default Cargo builds no longer export unmangled C ABI symbols (``rkr_*``
+or legacy C entry points) or compile ``readcon_core::ffi``. Linking C, C++,
+Fortran, or Julia code against a library built without ``capi`` fails with
+undefined symbol link errors (for example
+``undefined reference to 'rkr_library_version'``). One-line fix:
+
+.. code:: shell
+
+    cargo build --release --features capi
+
+Combine ``capi`` with any optional feature you need (for example
+``--features capi,chemfiles`` or ``--features capi,mpi``). CMake
+(``cmake -S . -B build``), Meson (``meson setup build``), and ``cargo-c``
+(``cargo cbuild --release --features capi``) enable ``capi`` automatically.
+
 A ranked write (``rkr_mpi_write_block``) stores a fresh file. The default
 store is Parallel: one pwrite per rank at the precomputed offsets.
 ext2, ext3, ext4, XFS, and btrfs use that store. Lustre, GPFS, BeeGFS,
