@@ -150,13 +150,21 @@ pub fn frame_energies_block(frame: &ConFrame) -> Result<Option<TensorBlock>, met
     Ok(Some(TensorBlock::new(values, &samples, &[], &properties)?))
 }
 
+/// Sample labels from the atoms' `atom_id`. metatensor labels are `i32`, so
+/// an id above `i32::MAX` is an error rather than a wrapped label.
 fn build_atom_id_samples(frame: &ConFrame) -> Result<Labels, metatensor::Error> {
     let mut builder = LabelsBuilder::new(vec!["atom_id"]);
     // Prefer atom_id; fall back to row index if ids are non-unique (metatensor
     // rejects duplicate sample rows).
     let mut seen = std::collections::HashSet::new();
     for (i, atom) in frame.atom_data.iter().enumerate() {
-        let mut key = atom.atom_id as i32;
+        let mut key = i32::try_from(atom.atom_id).map_err(|_| metatensor::Error {
+            code: Some(mts_sys::MTS_INVALID_PARAMETER_ERROR),
+            message: format!(
+                "atom {i} has atom_id {}, which does not fit a metatensor i32 label",
+                atom.atom_id
+            ),
+        })?;
         if !seen.insert(key) {
             key = i as i32;
             while !seen.insert(key) {
@@ -235,6 +243,35 @@ mod tests {
         assert!(frame_velocities_block(&frame).unwrap().is_none());
         assert!(frame_forces_block(&frame).unwrap().is_none());
         assert!(frame_energies_block(&frame).unwrap().is_none());
+    }
+
+    fn frame_with_ids(ids: [u64; 2]) -> crate::types::ConFrame {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder.add_atom("Cu", 0.1, 0.2, 0.3, [false, false, false], ids[0], 63.546);
+        builder.add_atom("H", 1.1, 1.2, 1.3, [false, false, false], ids[1], 1.008);
+        builder.build().unwrap()
+    }
+
+    fn sample_ids(block: &TensorBlock) -> Vec<i32> {
+        block.samples().iter().map(|row| row[0].i32()).collect()
+    }
+
+    #[test]
+    fn atom_id_above_i32_max_is_an_error_not_a_wrapped_label() {
+        let frame = frame_with_ids([0, 1 << 32]);
+        assert_eq!(frame.atom_data[1].atom_id, 1 << 32);
+        let err = frame_positions_block(&frame).unwrap_err();
+        assert_eq!(err.code, Some(mts_sys::MTS_INVALID_PARAMETER_ERROR));
+        assert!(err.message.contains("4294967296"), "{}", err.message);
+        let wide = frame_with_ids([0, i32::MAX as u64 + 1]);
+        assert!(frame_positions_block(&wide).is_err());
+    }
+
+    #[test]
+    fn atom_ids_up_to_i32_max_are_the_sample_labels() {
+        let frame = frame_with_ids([7, i32::MAX as u64]);
+        let block = frame_positions_block(&frame).unwrap();
+        assert_eq!(sample_ids(&block), vec![7, i32::MAX]);
     }
 
     #[test]
