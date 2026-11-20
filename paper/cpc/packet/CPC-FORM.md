@@ -54,7 +54,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 |---|---|
 | `DIR/em-flat/` from `python3 paper/cpc/scripts/make_em_flat.py --out DIR` (TeX Live 2025) | `rg_main.tex` first, then `rg_main.bbl`, then every other file of the set, then the figure PDFs |
 | `paper/cpc/highlights.txt` | Highlights |
-| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `ee4ce24032b296b22907ce7c744b62dafe823168ac1c8bf2ad63aa9a98a298ce`) | Supplementary material |
+| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `af50625faae6c52ec325043dac1d140c1d915f788b82f016538cc201b03aaa21`) | Supplementary material |
 | `paper-cpc.tar.gz`, the directory `paper/cpc` (`paper/cpc/REPRO-ARCHIVE.md`) | Supplementary material |
 | `readcon-core.bundle` and `patches/` | Program files |
 | The author's cover letter | Cover letter |
