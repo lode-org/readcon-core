@@ -49,6 +49,10 @@ fn one_frame(body: &str) -> readcon_core::types::ConFrame {
 #[test]
 fn clause_index_matches_spec() {
     let script = repo_root().join("scripts/emit_clauses.py");
+    if !script.is_file() {
+        eprintln!("scripts/emit_clauses.py is not packaged in this source layout; skipping");
+        return;
+    }
     let output = Command::new("python3")
         .arg(&script)
         .arg("--check")

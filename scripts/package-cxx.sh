@@ -59,11 +59,16 @@ else
     ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 
-# cargo package rewrites [package.metadata] in an order that changed
-# after Rust 1.88. That rewrite is inside the cxx archive, so the digest
-# follows the cargo that packaged it. The v0.23.0 pin was recorded with
-# 1.88.0. Stay on that toolchain.
-export RUSTUP_TOOLCHAIN=1.88.0
+# cargo package rewrites [package.metadata] in an order that follows the
+# toolchain, and that rewrite is inside the cxx archive. Use the
+# rust-version in Cargo.toml so the digest has one source.
+msrv="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' "$ROOT_DIR/Cargo.toml")"
+toolchain="$(rustup toolchain list | awk -v v="$msrv" 'index($1, v) == 1 { print $1; exit }')"
+if [[ -z "$toolchain" ]]; then
+    echo "package-cxx: no installed toolchain for rust-version ${msrv}" >&2
+    exit 1
+fi
+export RUSTUP_TOOLCHAIN="$toolchain"
 
 # Git Bash `pwd` is /d/a/... . Windows pathlib turns that into \d\a\... and
 # drops the drive letter. cygpath -w is D:\a\..., which pathlib keeps. The
@@ -228,8 +233,12 @@ EOF
 fi
 
 # Drop crate-only trees. Keep CMake/Meson consume tests.
+# The paper, the workflows, and the scripts that build this archive are
+# not library sources, so they are not members.
 rm -rf "$DEST/tests" "$DEST/bench" "$DEST/benches" "$DEST/benchmarks" "$DEST/fuzz" \
-    "$DEST/julia" "$DEST/fortran" "$DEST/docs" "$DEST/addl" || true
+    "$DEST/julia" "$DEST/fortran" "$DEST/docs" "$DEST/addl" \
+    "$DEST/paper" "$DEST/.github" || true
+rm -f "$DEST/scripts/package-cxx.sh" "$DEST/scripts/run_doc_examples.sh" || true
 # The wrap digest names this archive. Leaving that file inside the archive
 # makes the digest change every time the file is updated.
 rm -rf "$DEST/packaging/wrapdb" || true

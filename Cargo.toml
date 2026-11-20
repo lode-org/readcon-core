@@ -22,6 +22,8 @@ exclude = [
   # the cxx archive from cargo package, so a paper edit must not change the
   # wrap digest.
   "paper/**",
+  # CI and helper scripts are not part of the published library archive.
+  "scripts/**",
 ]
 
 [lints.rust]
