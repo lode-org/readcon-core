@@ -44,7 +44,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 | Funding | Guide asks for disclosure | GFA | Section "Funding" carries the guide's sentence for research without specific funding. |
 | Generative AI in writing | Declare in a section before the references if used in writing | GFA | Section "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process", the last section before the references, in Elsevier's form. |
 | Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core 0.17.3, its measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the digest `b49c0be7352a` of that commit's library, and says the records name the libraries they ran. The version map names each of those libraries. The git bundle is `readcon-core.bundle`. Links: https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db. |
-| References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 92 references in the manuscript and 55 in the supplement; no undefined reference or citation in either pdfTeX log. |
+| References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 90 references in the manuscript and 55 in the supplement; no undefined reference or citation in either pdfTeX log. |
 | Tables | Editable, no vertical rules | GFA | 13 tables; no tabular has a vertical rule. |
 | Preprint | Sharing a preprint anywhere at any time is allowed, and a preprint is not prior publication | GFA, SHARE | The preprint is on arXiv. |
 
@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d
 Data availability names readcon-core 0.17.3, measured commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 66 pages, sha256 `603f3a11e24d7d9781b113e3f434f9b978b2dd56a7c1ded73b2e65cb4dfab6a7`.
+`rg_main.pdf` has 65 pages, sha256 `bda2bb4671bd448b6c7b31a6f9ebde1a44fdf16499f06ca1a454eb93e2e77387`.
 
 ## Form answers
 
