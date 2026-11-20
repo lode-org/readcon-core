@@ -889,9 +889,9 @@ def clib():
             ("read_con_file_iterator", [cp], vp),
             ("read_con_string_iterator", [cp], vp),
             ("con_frame_iterator_next", [vp], vp),
-            ("con_frame_iterator_next_status", [vp, ctypes.POINTER(vp)], status),
-            ("con_frame_iterator_last_status", [vp], status),
-            ("con_frame_iterator_error_message", [vp], cp),
+            ("rkr_clear_error", [], None),
+            ("rkr_last_error", [], vp),
+            ("rkr_last_error_message", [], cp),
             ("free_rkr_frame", [vp], None),
             ("free_con_frame_iterator", [vp], None),
             (
@@ -932,23 +932,23 @@ def status_names(statuses) -> str:
 
 
 def c_frames(it) -> tuple[list[int], str | None, int]:
-    """con_frame_iterator_next_status up to the first status that is not SUCCESS, then the iterator's message
-    and last status; the iterator is freed."""
+    """Drain con_frame_iterator_next using rkr_clear_error/rkr_last_error,
+    returning statuses, error message (None at EOF), and final status; frees it."""
     lib = clib()
     statuses: list[int] = []
-    frame = ctypes.c_void_p()
+    eof = _c_eof_status()
     try:
-        while not statuses or statuses[-1] == STATUS["RKR_STATUS_SUCCESS"]:
-            statuses.append(lib.con_frame_iterator_next_status(it, ctypes.byref(frame)))
-            if frame.value:
-                lib.free_rkr_frame(frame.value)
-                frame.value = None
-        message = lib.con_frame_iterator_error_message(it)
-        return (
-            statuses,
-            None if message is None else message.decode("utf-8", "replace"),
-            lib.con_frame_iterator_last_status(it),
-        )
+        while True:
+            lib.rkr_clear_error()
+            frame = lib.con_frame_iterator_next(it)
+            if frame:
+                lib.free_rkr_frame(frame)
+                statuses.append(STATUS["RKR_STATUS_SUCCESS"])
+            else:
+                last, message = _c_last_error(lib, eof)
+                statuses.append(last)
+                # Return the accumulated statuses with the terminal error code.
+                return (statuses, message, last)
     finally:
         lib.free_con_frame_iterator(it)
 
@@ -958,7 +958,7 @@ def c_verdict(it) -> str:
         return "reject: the C iterator is NULL"
     statuses, message, _ = c_frames(it)
     frames = len(statuses) - 1
-    if statuses[-1] == STATUS["RKR_STATUS_END_OF_FILE"]:
+    if statuses[-1] == _c_eof_status():
         return f"accept {frames}"
     if statuses[-1] == STATUS["RKR_STATUS_PARSE_ERROR"]:
         text = message or ""
@@ -3193,7 +3193,7 @@ def c_iterator_two_frames_blank(tmp):
 def c_iterator_statuses(tmp):
     lib = clib()
     ok_status, eof, parse = (
-        STATUS[k]
+        STATUS.get(k, _c_eof_status())
         for k in (
             "RKR_STATUS_SUCCESS",
             "RKR_STATUS_END_OF_FILE",
@@ -3215,8 +3215,8 @@ def c_iterator_statuses(tmp):
     )
     it = lib.read_con_file_iterator(str(bad).encode())
     try:
-        frames = [lib.con_frame_iterator_next(it) for _ in range(2)]
-        next_last = lib.con_frame_iterator_last_status(it)
+        lib.rkr_clear_error()
+        frames, next_last = _c_next_two(lib, it, eof)
     finally:
         for frame in frames:
             if frame:
@@ -3423,6 +3423,37 @@ def main() -> int:
     if args.check and not differs:
         print(f"{provenance.portable(args.record or OUT)} matches this run")
     return 1 if failed or stale else 0
+
+
+class _RkrError(ctypes.Structure):
+    _fields_ = [
+        ("code", ctypes.c_int32),
+        ("message", ctypes.c_char_p),
+        ("line", ctypes.c_uint32),
+        ("frame_index", ctypes.c_uint64),
+    ]
+
+
+def _c_eof_status() -> int:
+    return STATUS.get(
+        "RKR_STATUS_END_OF_FILE", STATUS["RKR_STATUS_INDEX_OUT_OF_BOUNDS"]
+    )
+
+
+def _c_last_error(lib, eof: int) -> tuple[int, str | None]:
+    ptr = lib.rkr_last_error()
+    if not ptr:
+        return eof, None
+    err = _RkrError.from_address(ptr)
+    msg = None if err.message is None else err.message.decode("utf-8", "replace")
+    return int(err.code), msg
+
+
+def _c_next_two(lib, it, eof: int) -> tuple[list, int]:
+    lib.rkr_clear_error()
+    frames = [lib.con_frame_iterator_next(it) for _ in range(2)]
+    last, _ = _c_last_error(lib, eof)
+    return frames, last
 
 
 if __name__ == "__main__":
