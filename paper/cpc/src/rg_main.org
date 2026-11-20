@@ -761,9 +761,13 @@ Memory is the high-water mark of the resident set (VmHWM) after the read minus t
 
 \subsection{Results}\label{sec:results}
 On the 100000-frame coordinate file, readcon-core at the measured commit completes the read in \rcTipMedian~s.
-That is \rcTipOverRelease{} times faster than release \rcReleaseVersion{} (\rcReleaseMedian~s) and \rcTipOverAse{} times faster than ASE \texttt{ase.io} (\rcAseMedian~s).
-It is \rcTipOverEon{} times faster than eOn 3.6.0 \texttt{loadcons} (\rcEonMedian~s).
-Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s, \rcTipOverDb{} times slower than the direct read.
+That median is not a like-for-like reader comparison.
+Release \rcReleaseVersion{} takes \rcReleaseMedian~s.
+ASE \texttt{ase.io} takes \rcAseMedian~s.
+eOn 3.6.0 \texttt{loadcons} takes \rcEonMedian~s.
+Those three build a full frame on one thread.
+Their medians are the host log, not a like-for-like comparison.
+Calling the readcon parser through the eOn C++ API takes \rcApiMedian~s, and ingesting the same file into the readcon-db store takes \rcDbMedian~s.
 Every all-frame reader matches all 100000 frames with no failure.
 The read adds \rcTipMib~MiB to the resident memory of readcon-core, against \rcAseMib~MiB for ASE, \rcChemMib~MiB for chemfiles reading XYZ and \rcOvitoMib~MiB for OVITO reading XYZ.
 
