@@ -594,6 +594,8 @@ No Rust slice is ever formed over numeric memory that Python owns and can change
 
 \section{Tensor exchange through DLPack}\label{sec:dlpack} A caller that already holds a frame reads its coordinates as a tensor without a copy.
 readcon-core exposes such tensors through DLPack \cite{dlpackDLPack2026}.
+An optional Cargo feature, off by default, also exports a frame to metatensor from Rust, from the C header and from the Fortran wrappers.
+Python and Julia have no binding for that feature \cite{bigiMetatensorMetatomicFoundational2026}.
 On the Rust builder, the methods for positions, velocities, forces, per-atom energies and masses return a borrowed float64 tensor, and the method for atom identifiers returns a borrowed uint64 tensor.
 Each borrowed tensor lives as long as the builder, and the default build places it on the CPU.
 A C caller that needs the tensor after the builder is gone takes the versioned managed tensor, and that export copies the storage.
