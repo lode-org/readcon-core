@@ -2,7 +2,7 @@
   "version": 1,
   "project": "readcon-like-for-like",
   "project_url": "https://github.com/lode-org/readcon-core",
-  "repo": ".",
+  "repo": "../../..",
   "branches": ["HEAD"],
   "environment_type": "existing",
   "pythons": ["same"],
