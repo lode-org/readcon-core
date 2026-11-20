@@ -154,8 +154,13 @@ def main() -> None:
         probe,
         True,
     )
-    path = DATA / "hcn_v31.con"
-    path.write_text(published + product + probed)
+    payload = published + product + probed
+    suffix = hashlib.sha256(payload.encode()).hexdigest()[:12]
+    path = DATA / f"hcn_v31-{suffix}.con"
+    if path.exists() and path.read_text() != payload:
+        raise SystemExit(f"refusing to overwrite record {path}")
+    if not path.exists():
+        path.write_text(payload)
     parsed = dump(path)
     loss_rows = []
     for index, frame_obj in enumerate(parsed):
@@ -178,12 +183,17 @@ def main() -> None:
                 "detail": "",
             }
         )
-    out = RESULTS / "hcn_loss.csv"
-    with out.open("w", newline="") as handle:
+    out = RESULTS / f"hcn_loss-{suffix}.csv"
+    if out.exists():
+        raise SystemExit(f"refusing to overwrite record {out}")
+    with out.open("x", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(loss_rows[0].keys()))
         writer.writeheader()
         writer.writerows(loss_rows)
-    out.with_suffix(".json").write_text(
+    metadata = out.with_suffix(".json")
+    if metadata.exists():
+        raise SystemExit(f"refusing to overwrite record {metadata}")
+    metadata.write_text(
         json.dumps(
             {
                 "rows": len(loss_rows),
