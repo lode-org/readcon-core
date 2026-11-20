@@ -155,8 +155,8 @@ fn zstd_drop_reads_back_one_frame() {
             &[coords],
             &[fixed],
             &[12.0],
-            &[[10.0, f64::MIN, -0.0]],
-            &[[90.0, f64::from_bits(1), 90.0]],
+            &[[10.0, 11.0, 12.0]],
+            &[[90.0, 90.0, 90.0]],
             &[Some(vel)],
         );
         let dir = tempfile::tempdir().unwrap();
@@ -189,8 +189,8 @@ proptest! {
             1..4,
         ),
         masses in prop::collection::vec(odd_f64(), 24),
-        cells in prop::collection::vec(prop::array::uniform3(odd_f64()), 1..4),
-        angles in prop::collection::vec(prop::array::uniform3(80.0f64..100.0), 1..4),
+        cells in prop::collection::vec(prop::array::uniform3(1.0f64..1000.0), 1..4),
+        angles in prop::collection::vec(Just([90.0, 90.0, 90.0]), 1..4),
         with_velocity in prop::collection::vec(any::<bool>(), 1..4),
         vel in prop::collection::vec(
             prop::collection::vec(prop::array::uniform3(odd_f64()), 1..5),

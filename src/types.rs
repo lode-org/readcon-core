@@ -2713,6 +2713,52 @@ pub fn require_real_cell(angles_deg: [f64; 3]) -> Result<f64, ParseError> {
     }
 }
 
+/// Check that positive lengths and angles define a real 3D cell.
+pub fn check_cell_reality(
+    lengths: &[f64; 3],
+    angles_deg: &[f64; 3],
+) -> Result<(), ParseError> {
+    if lengths
+        .iter()
+        .any(|length| !length.is_finite() || *length <= 0.0)
+        || angles_deg
+            .iter()
+            .any(|angle| !angle.is_finite() || *angle <= 0.0 || *angle >= 180.0)
+        || require_real_cell(*angles_deg).is_err()
+    {
+        return Err(ParseError::ValidationError(
+            "cell angles do not form a real cell".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate a cell read from lines 3 and 4.
+///
+/// `allow_unset` admits the signed-zero/90-degree sentinel used by
+/// explicitly nonperiodic metadata and headers with `lattice_vectors`.
+pub(crate) fn validate_read_cell(
+    lengths: &[f64; 3],
+    angles_deg: &[f64; 3],
+    allow_unset: bool,
+) -> Result<(), ParseError> {
+    if lengths.iter().any(|length| *length < 0.0) {
+        return Err(ParseError::ValidationError(
+            "cell lengths must be non-negative".to_string(),
+        ));
+    }
+    let all_zero = lengths.iter().all(|length| *length == 0.0);
+    if all_zero && *angles_deg == [90.0; 3] && allow_unset {
+        return Ok(());
+    }
+    if all_zero || lengths.contains(&0.0) {
+        return Err(ParseError::ValidationError(
+            "cell lengths must be positive".to_string(),
+        ));
+    }
+    check_cell_reality(lengths, angles_deg)
+}
+
 /// Lattice vectors from lengths `|a| |b| |c|` and angles `alpha beta gamma`
 /// in degrees (CON-cell.6, CON-cell.7).
 ///
@@ -3873,14 +3919,16 @@ impl ConFrameBuilder {
         }
     }
 
-    /// [`Self::new`] that refuses a cell with a NaN or infinite component.
+    /// [`Self::new`] that refuses a non-finite or non-real cell.
     ///
     /// # Errors
     ///
     /// [`ParseError::NonFiniteValue`] naming the field, `cell[i]` or
-    /// `angles[i]`.
+    /// `angles[i]`, or [`ParseError::ValidationError`] when the lengths and
+    /// angles do not define a real cell.
     pub fn try_new(cell: [f64; 3], angles: [f64; 3]) -> Result<Self, ParseError> {
         check_cell_finite(&cell, "cell", &angles, "angles")?;
+        check_cell_reality(&cell, &angles)?;
         Ok(Self::new(cell, angles))
     }
 
@@ -5280,8 +5328,18 @@ impl ConFrameBuilder {
                 None => err,
             });
         }
-        let has_lattice = self.metadata.contains_key(meta::LATTICE_VECTORS);
-        crate::parser::reject_impossible_cell(self.angles, has_lattice)?;
+        let pbc_all_false = self
+            .metadata
+            .get(meta::PBC)
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|pbc| {
+                pbc.len() == 3 && pbc.iter().all(|entry| entry.as_bool() == Some(false))
+            });
+        validate_read_cell(
+            &self.cell,
+            &self.angles,
+            pbc_all_false || self.metadata.contains_key(meta::LATTICE_VECTORS),
+        )?;
         let written_spec = match self.written_spec {
             0 => crate::CON_SPEC_VERSION,
             major if major > crate::CON_SPEC_VERSION => {
@@ -7580,5 +7638,29 @@ mod tests {
             assert_eq!(atom.velocity(), Some(vel), "atom v {i}");
             assert_eq!(atom.force(), Some(frc), "atom f {i}");
         }
+    }
+
+    #[test]
+    fn builder_rejects_non_real_cell_angles() {
+        let err =
+            ConFrameBuilder::try_new([10.0; 3], [10.0, 10.0, 170.0]).unwrap_err();
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("real cell"));
+    }
+
+    #[test]
+    fn builder_build_rejects_non_real_cell_angles() {
+        let mut builder =
+            ConFrameBuilder::new([10.0; 3], [10.0, 10.0, 170.0]);
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let err = builder.build().unwrap_err();
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("real cell"));
+    }
+
+    #[test]
+    fn read_cell_validation_accepts_zero_length_unset_cell() {
+        validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], true)
+            .expect("zero-length right-angle sentinel must stay valid");
     }
 }

@@ -864,11 +864,18 @@ fn peek_first_coord_line(bytes: &[u8]) -> Option<PeekedHeader> {
     skip_line(bytes, &mut pos).ok()?;
     let meta = read_line(bytes, &mut pos).ok()?;
     spec_version(meta).ok()?;
+    let allow_unset_cell = unspecified_cell_allowed(meta).ok()?;
     let stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
     let boxl = parse_line_of_n_f64(box_line, 3).ok()?;
     let ang_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
     let angles = parse_line_of_n_f64(ang_line, 3).ok()?;
+    crate::types::validate_read_cell(
+        &[boxl[0], boxl[1], boxl[2]],
+        &[angles[0], angles[1], angles[2]],
+        allow_unset_cell,
+    )
+    .ok()?;
     skip_line(bytes, &mut pos).ok()?;
     skip_line(bytes, &mut pos).ok()?;
     let types_line = utf8_line(read_line(bytes, &mut pos).ok()?).ok()?;
@@ -1551,15 +1558,17 @@ fn parse_one_frame(
     skip_line(bytes, pos)?;
     let meta = read_line(bytes, pos)?;
     let spec = spec_version(meta)?;
+    let allow_unset_cell = unspecified_cell_allowed(meta)?;
     let mut stock = stock_meta_line(meta);
     let box_line = utf8_line(read_line(bytes, pos)?)?;
     let boxl = parse_cell_line(box_line, "boxl")?;
     let ang_line = utf8_line(read_line(bytes, pos)?)?;
     let angles = parse_cell_line(ang_line, "angles")?;
-    let angles_arr: [f64; 3] = angles.as_slice().try_into().unwrap();
-    let meta_line = std::str::from_utf8(meta).unwrap_or("");
-    let has_lattice = crate::parser::line_declares_lattice(meta_line);
-    crate::parser::reject_impossible_cell(angles_arr, has_lattice)?;
+    crate::types::validate_read_cell(
+        &[boxl[0], boxl[1], boxl[2]],
+        &[angles[0], angles[1], angles[2]],
+        allow_unset_cell,
+    )?;
     out.cells.extend_from_slice(&boxl);
     out.cells.extend_from_slice(&angles);
     skip_line(bytes, pos)?;
@@ -1697,6 +1706,25 @@ fn stock_meta_line(line: &[u8]) -> bool {
         return true;
     }
     line == STOCK_V2 || line == STOCK_V3
+}
+
+fn unspecified_cell_allowed(line: &[u8]) -> Result<bool, ParseError> {
+    let line = trim_ascii(line);
+    if !line.starts_with(b"{") {
+        return Ok(false);
+    }
+    let value: serde_json::Value = serde_json::from_slice(line)
+        .map_err(|error| ParseError::InvalidMetadataJson(error.to_string()))?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| ParseError::InvalidMetadataJson("metadata must be an object".into()))?;
+    let pbc_all_false = object
+        .get("pbc")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|pbc| {
+            pbc.len() == 3 && pbc.iter().all(|entry| entry.as_bool() == Some(false))
+        });
+    Ok(pbc_all_false || object.contains_key("lattice_vectors"))
 }
 
 fn zero_atom_tail(bytes: &[u8], pos: &mut usize) -> Result<(), ParseError> {

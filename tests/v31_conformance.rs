@@ -874,7 +874,7 @@ fn near(got: f64, want: f64) -> bool {
 /// CON-cell.1, CON-cell.3, CON-cell.4, CON-cell.5, CON-cell.6.
 #[test]
 fn cell_matrix_prefers_lattice_vectors_and_builds_the_rest() {
-    let orthogonal = cell_vectors([10.0, 20.0, 30.0], [90.0, 90.0, 90.0]);
+    let orthogonal = cell_vectors([10.0, 20.0, 30.0], [90.0, 90.0, 90.0]).unwrap();
     assert!(near(orthogonal[0][0], 10.0));
     assert!(orthogonal[0][1].abs() < 1e-9 && orthogonal[0][2].abs() < 1e-9);
     assert!(orthogonal[1][0].abs() < 1e-9 && near(orthogonal[1][1], 20.0));
@@ -885,7 +885,7 @@ fn cell_matrix_prefers_lattice_vectors_and_builds_the_rest() {
     assert!(near(lengths[0], 10.0) && near(lengths[1], 20.0) && near(lengths[2], 30.0));
     assert!(angles.iter().all(|angle| near(*angle, 90.0)));
 
-    let skew = cell_vectors([10.0, 10.0, 10.0], [90.0, 90.0, 60.0]);
+    let skew = cell_vectors([10.0, 10.0, 10.0], [90.0, 90.0, 60.0]).unwrap();
     assert!(near(skew[1][0], 5.0));
     assert!(near(skew[1][1], 5.0 * 3.0_f64.sqrt()));
     assert!(skew[1][2].abs() < 1e-9);

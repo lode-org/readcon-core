@@ -30,7 +30,11 @@ use readcon_core::writer::{
 const BAD_TOKENS: [&str; 5] = ["NaN", "nan", "inf", "-inf", "Infinity"];
 
 fn frame_text(box_line: &str, angle_line: &str, atoms: usize) -> String {
-    let mut text = String::from("seed\n{\"con_spec_version\":2}\n");
+    frame_text_with_meta(r#"{"con_spec_version":2}"#, box_line, angle_line, atoms)
+}
+
+fn frame_text_with_meta(metadata: &str, box_line: &str, angle_line: &str, atoms: usize) -> String {
+    let mut text = format!("seed\n{metadata}\n");
     text.push_str(box_line);
     text.push('\n');
     text.push_str(angle_line);
@@ -206,6 +210,74 @@ fn a_cell_number_too_large_for_binary64_is_refused_as_non_finite() {
     let text = frame_text("10 1e999 12", "90 91 92", 2);
     let error = ConFrameIterator::new(&text).next().unwrap().unwrap_err();
     assert_cell_error(&error, "boxl[1]", None, "1e999");
+}
+
+fn assert_all_read_modes_reject(text: &str) {
+    let error = ConFrameIterator::new(text).next().unwrap().unwrap_err();
+    assert!(matches!(error, ParseError::ValidationError(_)), "{error}");
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_text(&dir, "bad-cell.con", text);
+    for workers in [None, Some(1), Some(2)] {
+        assert!(
+            read_all_frames_located(&path, workers).is_err(),
+            "read_all_frames_located accepted workers={workers:?}"
+        );
+        assert!(
+            read_coord_columns(&path, workers).is_err(),
+            "read_coord_columns accepted workers={workers:?}"
+        );
+        assert!(
+            read_positions_with_threads(&path, workers).is_err(),
+            "read_positions_with_threads accepted workers={workers:?}"
+        );
+    }
+    assert!(read_first_frame_located(&path).is_err());
+    assert!(read_nth_frame_located(&path, 0).is_err());
+}
+
+#[test]
+fn all_read_modes_reject_negative_lengths() {
+    assert_all_read_modes_reject(&frame_text("-1 10 10", "90 90 90", 1));
+}
+
+#[test]
+fn all_read_modes_require_explicit_nonperiodic_zero_cell() {
+    assert_all_read_modes_reject(&frame_text("0 0 0", "90 90 90", 1));
+    assert_all_read_modes_reject(&frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[true,true,true]}"#,
+        "0 0 0",
+        "90 90 90",
+        1,
+    ));
+
+    let text = frame_text_with_meta(
+        r#"{"con_spec_version":2,"pbc":[false,false,false]}"#,
+        "-0 0 -0",
+        "90 90 90",
+        1,
+    );
+    let frame = ConFrameIterator::new(&text).next().unwrap().unwrap();
+    assert_eq!(frame.header.boxl, [0.0; 3]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_text(&dir, "unset-cell.con", &text);
+    for workers in [None, Some(1), Some(2)] {
+        assert_eq!(
+            read_coord_columns(&path, workers).unwrap().cells,
+            [0.0, 0.0, 0.0, 90.0, 90.0, 90.0]
+        );
+        assert_eq!(
+            read_positions_with_threads(&path, workers)
+                .unwrap()
+                .n_frames,
+            1
+        );
+    }
+}
+
+#[test]
+fn all_read_modes_reject_impossible_angles() {
+    assert_all_read_modes_reject(&frame_text("10 10 10", "10 10 170", 1));
 }
 
 #[test]

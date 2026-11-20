@@ -6054,6 +6054,21 @@ mod later_frame_location_tests {
         }
     }
 
+    #[test]
+    fn impossible_cell_reports_line_four_without_validate() {
+        let text = "seed\n{\"con_spec_version\":2}\n10 10 10\n10 10 170\n0 0\n0 0 0\n1\n1\n1.0\nH\nCoordinates of Component 1\n0 0 0 0 0\n";
+        for threads in [Some(1usize), Some(2)] {
+            let err = frames_from_text_located(text, threads).unwrap_err();
+            assert_eq!(
+                err.error.class_name(),
+                "ValidationError",
+                "{threads:?}: {err}"
+            );
+            assert_eq!(err.frame_index, 0, "{threads:?}: {err}");
+            assert_eq!(err.line, 4, "{threads:?}: {err}");
+        }
+    }
+
     /// Several spans after the first frame fail. Serial collection keeps
     /// the earliest slot. The parallel position reader must report that
     /// same line and frame index.

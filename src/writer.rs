@@ -746,6 +746,10 @@ impl<W: Write> ConFrameWriter<W> {
         // frame, before this call takes any state of the writer.
         crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
             .map_err(|error| WriteError::Format(error.in_frame(self.frame_number)))?;
+        if !line34_unspecified_cell_allowed(frame, &boxl, &angles) {
+            crate::types::check_cell_reality(&boxl, &angles)
+                .map_err(|error| WriteError::Format(error.in_frame(self.frame_number)))?;
+        }
         self.frame_number += 1;
         #[cfg(feature = "parallel")]
         let parallel_rows = self.atom_workers >= 2 && frame.atom_data.len() >= WIDE_ATOM_GRAIN;
@@ -2132,6 +2136,9 @@ fn binding_header_bytes_at(frame: &ConFrame, spec: u32) -> Result<Vec<u8>, Write
     let (boxl, angles) = written_box(frame);
     crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
         .map_err(WriteError::Format)?;
+    if !line34_unspecified_cell_allowed(frame, &boxl, &angles) {
+        crate::types::check_cell_reality(&boxl, &angles).map_err(WriteError::Format)?;
+    }
     let prec = FloatFormat::RoundTrip;
     let mut buf = Vec::with_capacity(256);
     push_str_line(&mut buf, &frame.header.prebox_header.user);
@@ -5170,6 +5177,12 @@ fn written_box(frame: &ConFrame) -> ([f64; 3], [f64; 3]) {
     }
 }
 
+fn line34_unspecified_cell_allowed(frame: &ConFrame, boxl: &[f64; 3], angles: &[f64; 3]) -> bool {
+    boxl.iter().all(|length| *length == 0.0)
+        && *angles == [90.0, 90.0, 90.0]
+        && frame.header.pbc_effective() == [false, false, false]
+}
+
 /// Refuses, before any byte is formatted or file created, a frame whose
 /// written cell is NaN or infinite. The error names the frame by its index in
 /// `frames`, which the formatting workers of a parallel write cannot know.
@@ -5178,12 +5191,13 @@ fn written_box(frame: &ConFrame) -> ([f64; 3], [f64; 3]) {
 /// without one reads its lattice vectors, which decide the written cell.
 pub(crate) fn check_frames_cell_finite(frames: &[&ConFrame]) -> Result<(), WriteError> {
     for (index, frame) in frames.iter().enumerate() {
-        if frame.header.check_cell_finite().is_ok() {
-            continue;
-        }
         let (boxl, angles) = written_box(frame);
         crate::types::check_cell_finite(&boxl, "boxl", &angles, "angles")
             .map_err(|error| WriteError::Format(error.in_frame(index as u64)))?;
+        if !line34_unspecified_cell_allowed(frame, &boxl, &angles) {
+            crate::types::check_cell_reality(&boxl, &angles)
+                .map_err(|error| WriteError::Format(error.in_frame(index as u64)))?;
+        }
     }
     Ok(())
 }
@@ -6713,6 +6727,21 @@ mod publish_on_every_host {
         write_frame_refs_to_path(&path, &frames, 1, None, false, false).unwrap();
         assert!(PUBLISH_FILE_SYNC_CALLS.load(Ordering::Relaxed) > file_before);
         assert!(PUBLISH_DIR_SYNC_CALLS.load(Ordering::Relaxed) > dir_before);
+    }
+
+    #[test]
+    fn path_writer_rejects_non_real_cell_geometry() {
+        let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
+        builder
+            .add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0)
+            .with_force([0.0, 0.0, 0.0]);
+        let mut frame = builder.build().unwrap();
+        frame.header.angles = [10.0, 10.0, 170.0];
+        let frames = [&frame];
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("non-real-cell.con");
+        let err = write_frame_refs_to_path(&path, &frames, 1, None, false, false).unwrap_err();
+        assert!(err.to_string().contains("real cell"), "{err}");
     }
 }
 

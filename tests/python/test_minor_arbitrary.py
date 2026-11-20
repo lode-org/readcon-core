@@ -767,6 +767,17 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     huge_minor_diffs = []
     con4_diffs = []
     manifest_diffs = []
+    cell_reality_diffs = []
+    cell_reality_rejections = {
+        "f26_cell_10_10_170.con",
+        "gram_170_v1.con",
+        "gram_170_v2.con",
+        "gram_170_v30.con",
+        "gram_170_v31_validate.con",
+        "gram_60_60_120.con",
+        "gram_60_60_120_1.con",
+        "gram_60_60_120_1_validate.con",
+    }
     for name, expected in c31_oracle.items():
         p = str(corpus_dir / name)
         if name in ("d14_minor_2pow64.con", "v2_minor_2pow64.con"):
@@ -792,6 +803,15 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
             assert labels[name] == "accept", name
             with pytest.raises(readcon.InvalidUnits, match=con21_rejects[name]):
                 readcon.read_con(p)
+            continue
+        if name in cell_reality_rejections:
+            assert expected["status"] == "ok"
+            with pytest.raises(
+                readcon.ValidationError,
+                match="cell angles do not form a real cell",
+            ):
+                readcon.read_con(p)
+            cell_reality_diffs.append(name)
             continue
         if name.endswith(".zst"):
             frames = readcon.read_con(p)
@@ -826,6 +846,7 @@ def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     assert sorted(huge_minor_diffs) == ["d14_minor_2pow64.con", "v2_minor_2pow64.con"]
     assert sorted(con4_diffs) == sorted(con4_accepts)
     assert len(manifest_diffs) == 26
+    assert set(cell_reality_diffs) == cell_reality_rejections
 
 
 @pytest.mark.parametrize(

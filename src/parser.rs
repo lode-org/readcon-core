@@ -3758,35 +3758,6 @@ fn trim_space_tab(line: &str) -> &str {
     line.trim_matches(|c: char| c == ' ' || c == '\t')
 }
 
-/// CON-cell.7. The columnar reader and the frame reader share this check.
-/// `lattice_vectors` wins over lines 3-4 (CON-cell.1). Lengths and angles
-/// outside (0, 180) are validate-mode checks (CON-validate.4).
-pub(crate) fn reject_impossible_cell(
-    angles: [f64; 3],
-    has_lattice: bool,
-) -> Result<(), ParseError> {
-    if !has_lattice
-        && angles
-            .iter()
-            .all(|angle| angle.is_finite() && *angle > 0.0 && *angle < 180.0)
-    {
-        crate::types::require_real_cell(angles)?;
-    }
-    Ok(())
-}
-
-/// True when line 2 is a JSON object that carries `lattice_vectors`.
-pub(crate) fn line_declares_lattice(line: &str) -> bool {
-    let trimmed = trim_space_tab(line);
-    if !trimmed.starts_with('{') || !trimmed.contains("lattice_vectors") {
-        return false;
-    }
-    match parse_metadata_value(trimmed) {
-        Ok(value) => value.get(crate::types::meta::LATTICE_VECTORS).is_some(),
-        Err(_) => false,
-    }
-}
-
 /// CON-line2.23. A repeated name in any object on line 2 is
 /// InvalidMetadataJson. A document this scan does not understand is left to
 /// the JSON parser, including a nesting depth past 127 (CON-line2.18).
@@ -4291,17 +4262,23 @@ pub fn parse_frame_header<'a>(
     // One JSON object and nothing else (CON-line2.1). Only spaces and tabs
     // are ignored around the object (CON-file.4).
     let trimmed = trim_space_tab(prebox2_raw);
-    let (spec_version, sections, validate, sections_declared, has_lattice) = if trimmed
-        == "{\"con_spec_version\":2}"
+    let (
+        spec_version,
+        sections,
+        validate,
+        sections_declared,
+        pbc_all_false,
+        has_lattice,
+    ) = if trimmed == "{\"con_spec_version\":2}"
     {
         // The line written by every stock trajectory. Same object the
         // JSON parser would build: major 2, no extra keys.
-        (2, Vec::new(), false, false, false)
+        (2, Vec::new(), false, false, false, false)
     } else if let Some(ver) = simple_metadata_version(trimmed) {
         // A header whose only keys are the spec version, an optional
         // minor, and a units object. Every byte is still read. Any
         // other key falls through to the general parser.
-        (ver, Vec::new(), false, false, false)
+        (ver, Vec::new(), false, false, false, false)
     } else if trimmed.starts_with('{') {
         let minor_spans = top_level_minor_spans(trimmed);
         if minor_spans.len() > 1 {
@@ -4357,6 +4334,7 @@ pub fn parse_frame_header<'a>(
         let mut sections: Vec<String> = Vec::new();
         let mut sections_declared = false;
         let mut validate = false;
+        let mut pbc_all_false = false;
         let mut has_lattice = false;
         for (k, v) in json_obj.iter() {
             match k.as_str() {
@@ -4384,7 +4362,13 @@ pub fn parse_frame_header<'a>(
                     validate_lattice_vectors_metadata(v)?;
                     has_lattice = true;
                 }
-                meta::PBC => validate_pbc_metadata(v)?,
+                meta::PBC => {
+                    validate_pbc_metadata(v)?;
+                    pbc_all_false = v.as_array().is_some_and(|values| {
+                        values.len() == 3
+                            && values.iter().all(|value| value.as_bool() == Some(false))
+                    });
+                }
                 meta::ENERGY => validate_metadata_number(k, v)?,
                 meta::SECTION_ARITY => {
                     validate_section_arity_value(v)?;
@@ -4435,17 +4419,29 @@ pub fn parse_frame_header<'a>(
         note_declared_velocities(has_declared_velocities);
         debug_assert_eq!(declared_velocities(), has_declared_velocities);
 
-        (ver, sections, validate, sections_declared, has_lattice)
+        (
+            ver,
+            sections,
+            validate,
+            sections_declared,
+            pbc_all_false,
+            has_lattice,
+        )
     } else {
         // Legacy file: no JSON metadata line.
-        (1_u32, Vec::new(), false, false, false)
+        (1_u32, Vec::new(), false, false, false, false)
     };
     let prebox2 = prebox2_raw.to_string();
 
     let boxl_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "boxl")?;
     let angles_vec = parse_cell_line(lines.next().ok_or(ParseError::IncompleteHeader)?, "angles")?;
+    let boxl: [f64; 3] = boxl_vec.as_slice().try_into().unwrap();
     let angles: [f64; 3] = angles_vec.as_slice().try_into().unwrap();
-    reject_impossible_cell(angles, has_lattice)?;
+    crate::types::validate_read_cell(
+        &boxl,
+        &angles,
+        pbc_all_false || has_lattice,
+    )?;
     let postbox1 = lines
         .next()
         .ok_or(ParseError::IncompleteHeader)?
