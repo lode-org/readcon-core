@@ -192,7 +192,7 @@ name = "rust_usage"
 
 [[example]]
 name = "mpi_smoke"
-required-features = ["mpi"]
+required-features = ["mpi", "capi"]
 
 [[example]]
 name = "mpi_read_check"
@@ -249,6 +249,34 @@ required-features = ["rpc", "benchmark"]
 [[test]]
 name = "default_read_threads"
 required-features = ["parallel"]
+
+[[test]]
+name = "cell_finite_cpp"
+required-features = ["capi"]
+
+[[test]]
+name = "ffi_atom_sections"
+required-features = ["capi"]
+
+[[test]]
+name = "ffi_builder_bulk"
+required-features = ["capi"]
+
+[[test]]
+name = "ffi_compressed_writer"
+required-features = ["capi"]
+
+[[test]]
+name = "ffi_writer_roundtrip"
+required-features = ["capi"]
+
+[[test]]
+name = "positions_shared_column"
+required-features = ["capi"]
+
+[[test]]
+name = "zero_copy_exports"
+required-features = ["capi"]
 
 [[bench]]
 name = "iterator_bench"

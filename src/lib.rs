@@ -62,6 +62,7 @@ pub mod distrib_write;
 pub mod error;
 pub mod extxyz_scan;
 mod fast_dec;
+#[cfg(feature = "capi")]
 pub mod ffi;
 pub mod frame_index;
 #[cfg(feature = "grammar")]
@@ -130,6 +131,13 @@ pub const CON_SPEC_MINOR: u32 = 1;
 /// `build.rs` checks that it matches the `VERSION` file.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Breaking-change major for the public C ABI (also carried on RPC stamps).
+pub const RKR_ABI_VERSION_MAJOR: u32 = 2;
+/// Additive-change minor for the public C ABI (also carried on RPC stamps).
+pub const RKR_ABI_VERSION_MINOR: u32 = 0;
+/// Layout revision for opaque handles and exported records.
+pub const RKR_ABI_LAYOUT_REVISION: u32 = 0;
+
 pub use correspondence::{
     CorrespondenceError, IdentityCheck, atom_id_permutation, check_atom_id_consistency,
     minimum_image_delta, minimum_image_displacements, reorder_like,
@@ -142,6 +150,7 @@ mod tests {
     #[test]
     fn test_spec_version_is_current() {
         assert_eq!(CON_SPEC_VERSION, 3);
+        #[cfg(feature = "capi")]
         assert_eq!(ffi::RKR_CON_SPEC_VERSION, CON_SPEC_VERSION);
     }
 

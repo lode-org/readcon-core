@@ -12,15 +12,18 @@
 
 #![cfg(all(unix, feature = "parallel", not(tsan_run)))]
 
+#[cfg(feature = "capi")]
 use readcon_core::ffi::{free_rkr_frame_array, rkr_read_all_frames_n_threads};
 use readcon_core::iterators::{
     read_all_frames_indexed, read_all_frames_located, read_all_frames_phased,
 };
 use readcon_core::writer::write_frames_to_vec_with_threads;
+#[cfg(feature = "capi")]
 use std::ffi::CString;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "capi")]
 fn ffi_read(path: &Path, threads: usize) -> usize {
     let c_path = CString::new(path.to_str().expect("utf8 path")).expect("c path");
     let mut count = 0usize;
@@ -31,10 +34,11 @@ fn ffi_read(path: &Path, threads: usize) -> usize {
 }
 
 /// Frame counts of the threaded reads, then the length of a threaded write.
-fn threaded_calls(path: &Path, threads: usize) -> [usize; 5] {
+fn threaded_calls(path: &Path, threads: usize) -> Vec<usize> {
     let frames = read_all_frames_located(path, Some(threads)).expect("located");
-    [
+    vec![
         frames.len(),
+        #[cfg(feature = "capi")]
         ffi_read(path, threads),
         read_all_frames_indexed(path, Some(threads))
             .expect("indexed")
@@ -61,7 +65,14 @@ fn a_forked_child_reads_with_threads() {
     let written = write_frames_to_vec_with_threads(&serial, 1, None, false)
         .expect("serial write")
         .len();
-    let expect = [n, n, n, n, written];
+    let expect = vec![
+        n,
+        #[cfg(feature = "capi")]
+        n,
+        n,
+        n,
+        written,
+    ];
     assert_eq!(threaded_calls(&path, 2), expect);
 
     let pid = unsafe { libc::fork() };
