@@ -72,3 +72,41 @@ The Snakemake file runs `run_bench.py` and then `run_asv.py`. `asv run` uses `be
 | readcon_positions_all | coords-only | 8 | al_eam_md | 0.021012 | 0.002637 |  |  |
 
 Full values are in `results/summary.csv`. Per-repeat times are in `results/samples.csv`.
+
+## r3
+
+A second campaign wrote `results/r3-rows.csv`, `results/r3-samples.csv`, and `results/r3-summary.csv`. It did not change the rows above. `synthetic` and `cuh2_band` use `n` 6. `al_eam_md` uses `n` 12. The first six repeats interleave every arm and input; the next six continue `al_eam_md` only. `al_eam_md` was regenerated with `make_al_md.py` and matched the pinned sha256. Ratios are over `readcon_tip_a`. Coordinate-only rows have no ratio. The r3 `eon_svn_cxx` rows time the source hash inside each call. The SVN timer includes the start of a second process.
+
+| arm | work | threads | input | median_s | iqr_s | ratio_over_tip | aa_ratio |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| readcon_tip_a | full-frame | 1 | synthetic | 5.682638 | 0.729537 | 1 | 0.941194 |
+| readcon_tip_b | full-frame | 1 | synthetic | 5.348462 | 0.921489 | 0.941194 | 0.941194 |
+| readcon_release | full-frame | 1 | synthetic | 5.125558 | 0.396924 | 0.901968 | 0.941194 |
+| ase | full-frame | 1 | synthetic | 13.084091 | 0.868704 | 2.302468 | 0.941194 |
+| eon_svn_cxx | full-frame | 1 | synthetic | 2.748723 | 0.157217 | 0.483705 | 0.941194 |
+| eon_legacy_python | full-frame | 1 | synthetic | 6.290727 | 0.292022 | 1.107008 | 0.941194 |
+| readcon_positions_1 | coords-only | 1 | synthetic | 0.204737 | 0.032362 |  |  |
+| readcon_positions_all | coords-only | 8 | synthetic | 0.032881 | 0.000447 |  |  |
+| readcon_tip_a | full-frame | 1 | cuh2_band | 0.001238 | 0.000123 | 1 | 1.029872 |
+| readcon_tip_b | full-frame | 1 | cuh2_band | 0.001275 | 0.000162 | 1.029872 | 1.029872 |
+| readcon_release | full-frame | 1 | cuh2_band | 0.001175 | 0.000050 | 0.948624 | 1.029872 |
+| ase | full-frame | 1 | cuh2_band | 0.002905 | 0.000286 | 2.345978 | 1.029872 |
+| eon_svn_cxx | full-frame | 1 | cuh2_band | 0.015490 | 0.000412 |  | 1.029872 |
+| eon_legacy_python | full-frame | 1 | cuh2_band | 0.001859 | 0.000205 | 1.501161 | 1.029872 |
+| readcon_positions_1 | coords-only | 1 | cuh2_band | 0.000732 | 0.000055 |  |  |
+| readcon_positions_all | coords-only | 8 | cuh2_band | 0.001771 | 0.000129 |  |  |
+| readcon_tip_a | full-frame | 1 | al_eam_md | 0.543299 | 0.028835 | 1 | 1.001120 |
+| readcon_tip_b | full-frame | 1 | al_eam_md | 0.543907 | 0.043854 | 1.001120 | 1.001120 |
+| readcon_release | full-frame | 1 | al_eam_md | 0.501152 | 0.045510 | 0.922424 | 1.001120 |
+| ase | full-frame | 1 | al_eam_md | 0.849719 | 0.051739 | 1.564000 | 1.001120 |
+| eon_svn_cxx | full-frame | 1 | al_eam_md | 0.408146 | 0.029768 | 0.751237 | 1.001120 |
+| eon_legacy_python | full-frame | 1 | al_eam_md | 0.756168 | 0.047811 | 1.391809 | 1.001120 |
+| readcon_positions_1 | coords-only | 1 | al_eam_md | 0.036152 | 0.002406 |  |  |
+| readcon_positions_all | coords-only | 8 | al_eam_md | 0.020277 | 0.002655 |  |  |
+
+The `eon_svn_cxx` `cuh2_band` row is not like-for-like because the source
+hash was timed inside each call. Its historical unequal-work quotient is
+12.509741; `r3-summary.csv` retains the full value only in
+`historical_unequal_ratio`, outside `ratio_over_tip`.
+
+Full values are in `results/r3-summary.csv`. Per-repeat times are in `results/r3-samples.csv`.
