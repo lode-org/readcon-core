@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import site
 import subprocess
 import sys
 
@@ -55,9 +56,12 @@ def main() -> int:
     name = arms.machine_hash()[:12]
     home = WORK / "asv-home"
     machine_file(home, name, cores)
+    # HOME is redirected so the machine file is not the login home.
+    # Record the user site first; it is derived from HOME.
+    user_site = site.getusersitepackages()
     base = os.environ.copy()
     base["HOME"] = str(home)
-    base["PYTHONPATH"] = os.pathsep.join((str(prefix), str(eon_root)))
+    base["PYTHONPATH"] = os.pathsep.join((str(prefix), str(eon_root), user_site))
     base["OMP_NUM_THREADS"] = "1"
     base["MKL_NUM_THREADS"] = "1"
     base["OPENBLAS_NUM_THREADS"] = "1"
