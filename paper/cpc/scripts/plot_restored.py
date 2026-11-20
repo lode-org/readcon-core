@@ -405,46 +405,70 @@ def weak_figure() -> None:
     save(fig, "mpi_weak")
 
 
+DB_FRAMES = "1000"
+
+
+def _db_rows(rows, name: str, label, **where) -> list[dict[str, str]]:
+    """The rows of one store size that match ``where``, one for each label."""
+    found = [
+        row for row in rows if all(row[key] == want for key, want in where.items())
+    ]
+    if not found:
+        raise SystemExit(f"{name}: no row matches {where}")
+    labels = [label(row) for row in found]
+    if len(set(labels)) != len(labels):
+        raise SystemExit(f"{name}: {where} leaves repeated labels {labels}")
+    return found
+
+
 def db_plots() -> None:
     summary = list(csv.DictReader((DATA / "db" / "summary.csv").open()))
-    ingest = [
-        row
-        for row in summary
-        if row["kind"] == "frames_per_s" and row["n_frames"] == "1000"
-    ]
+    ingest = _db_rows(
+        summary,
+        "db_ingest_throughput",
+        lambda row: row["system"],
+        kind="frames_per_s",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_ingest_throughput",
         [row["system"] for row in ingest],
         [float(row["median"]) for row in ingest],
         "median frames per second",
     )
-    bandwidth = [
-        row
-        for row in summary
-        if row["kind"] == "mb_per_s" and row["n_frames"] == "1000"
-    ]
+    bandwidth = _db_rows(
+        summary,
+        "db_ingest_bandwidth",
+        lambda row: row["system"],
+        kind="mb_per_s",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_ingest_bandwidth",
         [row["system"] for row in bandwidth],
         [float(row["median"]) for row in bandwidth],
         "median MB/s",
     )
-    queries = [
-        row
-        for row in summary
-        if row["kind"] == "query_s" and row["query"] == "composition"
-    ]
+    queries = _db_rows(
+        summary,
+        "db_query_latency",
+        lambda row: f"{row['system']} {row['cache']}",
+        kind="query_s",
+        query="composition",
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_query_latency",
         [f"{row['system']} {row['cache']}" for row in queries],
         [float(row["median"]) for row in queries],
         "median seconds",
     )
-    sizes = [
-        row
-        for row in csv.DictReader((DATA / "db" / "sizes.csv").open())
-        if row["n_frames"] == "1000"
-    ]
+    sizes = _db_rows(
+        list(csv.DictReader((DATA / "db" / "sizes.csv").open())),
+        "db_disk_footprint",
+        lambda row: row["store"],
+        n_frames=DB_FRAMES,
+    )
     bars(
         "db_disk_footprint",
         [row["store"] for row in sizes],
