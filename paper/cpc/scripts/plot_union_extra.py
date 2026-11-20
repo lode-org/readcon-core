@@ -251,8 +251,7 @@ CON_LABELS = {
 }
 # Full frames on the calling thread. The tip arm is coordinates on every
 # core, and readcon-db is a store read, so neither is a ratio against these.
-# eOn stays off this ratio plot. The host log does not settle a comparison
-# with the SVN-era C++ reader or with eon/fileio.py.
+# eOn stays off this ratio plot. The points are the main-branch read and ASE.
 LIKE_ARMS = (
     "readcon_base",
     "ase_eon",
