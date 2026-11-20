@@ -388,8 +388,10 @@ def _check_version(arm: str, version: str) -> None:
         fail(f"ase version {version}")
     if arm == "eon_legacy_python" and version != PINS["eon_reader"]["commit"]:
         fail(f"eon_legacy_python version {version}")
-    if arm == "eon_svn_cxx" and version != str(PINS["eon_svn_cxx"]["revision"]):
-        fail(f"eon_svn_cxx version {version}")
+    if arm in {"eon_svn_cxx", "eon_svn_binary"} and version != str(
+        PINS["eon_svn_cxx"]["revision"]
+    ):
+        fail(f"{arm} version {version}")
     if arm.startswith("readcon_tip") or arm.startswith("readcon_positions"):
         if version == PINS["readcon_release"]["version"] or not version:
             fail(f"{arm} loaded version {version}")

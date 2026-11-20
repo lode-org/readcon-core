@@ -221,6 +221,14 @@ def ensure_eon_svn() -> Path:
     return binary
 
 
+def svn_binary() -> Path:
+    """The driver built by ``ensure_eon_svn``. No hash walk."""
+    binary = WORK / "eon_svn_cxx"
+    if not binary.is_file():
+        raise RuntimeError("svn client binary is not built")
+    return binary
+
+
 def _fetch_eigen_tree(url: str, folder: Path) -> None:
     import re
 
@@ -305,9 +313,9 @@ def prepare(arm: str) -> str:
 
         _PREPARED.add("eon_legacy_python")
         return PINS["eon_reader"]["commit"]
-    if arm == "eon_svn_cxx":
-        ensure_eon_svn()
-        _PREPARED.add("eon_svn_cxx")
+    if arm in {"eon_svn_cxx", "eon_svn_binary"}:
+        svn_binary()
+        _PREPARED.add(arm)
         return str(PINS["eon_svn_cxx"]["revision"])
     raise RuntimeError(arm)
 
@@ -321,6 +329,9 @@ def run_arm(arm: str, path: str, threads: int):
         return _full_eon(path)
     if arm == "eon_svn_cxx":
         return _full_eon_svn(path)
+    if arm == "eon_svn_binary":
+        payload, _seconds = measure_eon_binary(path)
+        return payload
     if arm in {"readcon_positions_1", "readcon_positions_all"}:
         return _coords_readcon(path, threads)
     raise RuntimeError(arm)
@@ -436,8 +447,8 @@ def _full_eon(path: str) -> list[dict]:
     return built
 
 
-def _full_eon_svn(path: str) -> list[dict]:
-    binary = ensure_eon_svn()
+def _run_svn_binary(path: str) -> bytes:
+    binary = svn_binary()
     completed = subprocess.run(
         [str(binary), path],
         capture_output=True,
@@ -446,7 +457,21 @@ def _full_eon_svn(path: str) -> list[dict]:
     if completed.returncode != 0:
         detail = completed.stderr.decode("utf-8", "replace")[-400:]
         raise RuntimeError(detail or f"eon_svn_cxx exited {completed.returncode}")
-    return _parse_eon_svn(completed.stdout)
+    return completed.stdout
+
+
+def _full_eon_svn(path: str) -> list[dict]:
+    return _parse_eon_svn(_run_svn_binary(path))
+
+
+def measure_eon_binary(path: str) -> tuple[list[dict], float]:
+    """Binary wall time, then the Python rebuild outside that clock."""
+    import time
+
+    started = time.perf_counter()
+    blob = _run_svn_binary(path)
+    seconds = time.perf_counter() - started
+    return _parse_eon_svn(blob), seconds
 
 
 _SVN_SYMBOLS = (

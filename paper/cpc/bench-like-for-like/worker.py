@@ -23,9 +23,12 @@ def main() -> int:
     version = arms.prepare(arm)
     print("READY", flush=True)
     sys.stdin.readline()
-    started = time.perf_counter()
-    payload = arms.run_arm(arm, path, threads)
-    seconds = time.perf_counter() - started
+    if arm == "eon_svn_binary":
+        payload, seconds = arms.measure_eon_binary(path)
+    else:
+        started = time.perf_counter()
+        payload = arms.run_arm(arm, path, threads)
+        seconds = time.perf_counter() - started
     n_frames, n_atoms, checksum = arms.digest(arm, payload)
     print(
         json.dumps(
