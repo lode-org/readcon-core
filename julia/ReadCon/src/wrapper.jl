@@ -577,7 +577,260 @@ function _ensure_natural_time(metadata_json::AbstractString)
         metadata_json[nextind(metadata_json, close):end]
 end
 
+const _DUPLICATE_CON_SPEC_MINOR = "duplicate con_spec_minor key"
+
+function _is_nonneg_decimal_int(token::AbstractString)
+    n = ncodeunits(token)
+    n == 0 && return false
+    b0 = codeunit(token, 1)
+    if b0 == UInt8('0')
+        return n == 1
+    end
+    UInt8('1') <= b0 <= UInt8('9') || return false
+    for i in 2:n
+        b = codeunit(token, i)
+        UInt8('0') <= b <= UInt8('9') || return false
+    end
+    return true
+end
+
+# Same gate as Rust `is_substitutable_huge_minor`: JSON integer grammar,
+# does not fit in UInt64, and parses as a finite binary64 value.
+# serde_json accepts an integer that rounds to a finite Float64, including
+# values above floatmax(Float64) up to the half-ULP midpoint.
+function _substitutable_huge_minor(token::AbstractString)
+    _is_nonneg_decimal_int(token) || return false
+    tryparse(UInt64, token) !== nothing && return false
+    x = tryparse(Float64, token)
+    return x !== nothing && isfinite(x)
+end
+
+function _json_ws(b::UInt8)
+    return b == UInt8(' ') || b == UInt8('\t') || b == UInt8('\r') || b == UInt8('\n')
+end
+
+function _skip_json_ws(bytes::Vector{UInt8}, i::Int)
+    n = length(bytes)
+    while i <= n && _json_ws(bytes[i])
+        i += 1
+    end
+    return i
+end
+
+function _scan_json_string_end(bytes::Vector{UInt8}, start::Int)
+    (start <= length(bytes) && bytes[start] == UInt8('"')) || return nothing
+    i = start + 1
+    n = length(bytes)
+    escaped = false
+    while i <= n
+        b = bytes[i]
+        if escaped
+            escaped = false
+        elseif b == UInt8('\\')
+            escaped = true
+        elseif b == UInt8('"')
+            return i + 1
+        end
+        i += 1
+    end
+    return nothing
+end
+
+function _value_boundary(b::UInt8)
+    return _json_ws(b) || b == UInt8(',') || b == UInt8('}') || b == UInt8(']')
+end
+
+function _scan_json_value_end(bytes::Vector{UInt8}, start::Int)
+    start <= length(bytes) || return nothing
+    first = bytes[start]
+    if first == UInt8('"')
+        return _scan_json_string_end(bytes, start)
+    end
+    if first == UInt8('{') || first == UInt8('[')
+        depth = 0
+        i = start
+        n = length(bytes)
+        while i <= n
+            b = bytes[i]
+            if b == UInt8('"')
+                nxt = _scan_json_string_end(bytes, i)
+                nxt === nothing && return nothing
+                i = nxt
+                continue
+            elseif b == UInt8('{') || b == UInt8('[')
+                depth += 1
+            elseif b == UInt8('}') || b == UInt8(']')
+                depth -= 1
+                depth == 0 && return i + 1
+            end
+            i += 1
+        end
+        return nothing
+    end
+    i = start
+    n = length(bytes)
+    while i <= n && !_value_boundary(bytes[i])
+        i += 1
+    end
+    return i > start ? i : nothing
+end
+
+function _hex_nibble(b::UInt8)
+    if UInt8('0') <= b <= UInt8('9')
+        return Int(b - UInt8('0'))
+    elseif UInt8('a') <= b <= UInt8('f')
+        return Int(b - UInt8('a')) + 10
+    elseif UInt8('A') <= b <= UInt8('F')
+        return Int(b - UInt8('A')) + 10
+    end
+    return nothing
+end
+
+# Decode a quoted JSON key. Invalid escapes yield nothing and that field is
+# skipped, matching the Rust scanner.
+function _decode_json_key(raw::AbstractString)
+    n = ncodeunits(raw)
+    n < 2 && return nothing
+    codeunit(raw, 1) == UInt8('"') || return nothing
+    codeunit(raw, n) == UInt8('"') || return nothing
+    if !occursin('\\', raw)
+        return raw[nextind(raw, 1):prevind(raw, n)]
+    end
+    out = UInt8[]
+    i = 2
+    last = n - 1
+    while i <= last
+        b = codeunit(raw, i)
+        if b != UInt8('\\')
+            push!(out, b)
+            i += 1
+            continue
+        end
+        i += 1
+        i > last && return nothing
+        e = codeunit(raw, i)
+        if e == UInt8('"') || e == UInt8('\\') || e == UInt8('/')
+            push!(out, e)
+        elseif e == UInt8('b')
+            push!(out, 0x08)
+        elseif e == UInt8('f')
+            push!(out, 0x0c)
+        elseif e == UInt8('n')
+            push!(out, 0x0a)
+        elseif e == UInt8('r')
+            push!(out, 0x0d)
+        elseif e == UInt8('t')
+            push!(out, 0x09)
+        elseif e == UInt8('u')
+            i + 4 > last && return nothing
+            cp = 0
+            for k in 1:4
+                nib = _hex_nibble(codeunit(raw, i + k))
+                nib === nothing && return nothing
+                cp = cp * 16 + nib
+            end
+            i += 4
+            if 0xD800 <= cp <= 0xDBFF
+                nxt = i + 1
+                if nxt + 5 > last || codeunit(raw, nxt) != UInt8('\\') || codeunit(raw, nxt + 1) != UInt8('u')
+                    return nothing
+                end
+                lo = 0
+                for k in 2:5
+                    nib = _hex_nibble(codeunit(raw, nxt + k))
+                    nib === nothing && return nothing
+                    lo = lo * 16 + nib
+                end
+                0xDC00 <= lo <= 0xDFFF || return nothing
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00)
+                i = nxt + 5
+            elseif 0xDC00 <= cp <= 0xDFFF
+                return nothing
+            end
+            append!(out, transcode(UInt8, string(Char(cp))))
+        else
+            return nothing
+        end
+        i += 1
+    end
+    return String(out)
+end
+
+# Raw top-level `con_spec_minor` value tokens, in order. Nested keys are ignored.
+function _top_level_minor_tokens(json::AbstractString)
+    bytes = Vector{UInt8}(codeunits(json))
+    i = _skip_json_ws(bytes, 1)
+    tokens = String[]
+    (i <= length(bytes) && bytes[i] == UInt8('{')) || return tokens
+    i += 1
+    while true
+        i = _skip_json_ws(bytes, i)
+        if i > length(bytes) || bytes[i] == UInt8('}')
+            break
+        end
+        if bytes[i] == UInt8(',')
+            i += 1
+            i = _skip_json_ws(bytes, i)
+        end
+        if i > length(bytes) || bytes[i] != UInt8('"')
+            break
+        end
+        k_end = _scan_json_string_end(bytes, i)
+        k_end === nothing && break
+        raw_key = String(bytes[i:(k_end - 1)])
+        i = k_end
+        i = _skip_json_ws(bytes, i)
+        if i > length(bytes) || bytes[i] != UInt8(':')
+            break
+        end
+        i += 1
+        i = _skip_json_ws(bytes, i)
+        v_end = _scan_json_value_end(bytes, i)
+        v_end === nothing && break
+        raw_val = String(bytes[i:(v_end - 1)])
+        if _decode_json_key(raw_key) == "con_spec_minor"
+            push!(tokens, raw_val)
+        end
+        i = v_end
+    end
+    return tokens
+end
+
+# Rust `base_minor_from_line`: first literal `"con_spec_minor"` anywhere,
+# then the following digits, or 0 when they do not fit in UInt64.
+function _base_minor_u64(metadata_json::AbstractString)
+    key = "\"con_spec_minor\""
+    at = findfirst(key, metadata_json)
+    at === nothing && return UInt64(0)
+    rest = metadata_json[nextind(metadata_json, last(at)):end]
+    rest = lstrip(rest)
+    if startswith(rest, ':')
+        rest = lstrip(rest[nextind(rest, 1):end])
+    end
+    end_at = findfirst(c -> !('0' <= c <= '9'), rest)
+    digits = end_at === nothing ? rest : rest[begin:prevind(rest, end_at)]
+    parsed = tryparse(UInt64, digits)
+    return parsed === nothing ? UInt64(0) : parsed
+end
+
+function _reject_duplicate_con_spec_minor(metadata_json::AbstractString)
+    if length(_top_level_minor_tokens(metadata_json)) > 1
+        error(_DUPLICATE_CON_SPEC_MINOR)
+    end
+    return nothing
+end
+
 function _json_u64(metadata_json::AbstractString, key::AbstractString)
+    if key == "con_spec_minor"
+        tokens = _top_level_minor_tokens(metadata_json)
+        if length(tokens) > 1
+            error(_DUPLICATE_CON_SPEC_MINOR)
+        end
+        if !isempty(tokens) && _substitutable_huge_minor(tokens[end])
+            return typemax(UInt64)
+        end
+        return _base_minor_u64(metadata_json)
+    end
     m = match(Regex("\"$(key)\"\\s*:\\s*(\\d+)"), metadata_json)
     m === nothing && return UInt64(0)
     return parse(UInt64, m.captures[1])
@@ -621,6 +874,7 @@ function _legacy_velocity_units(frame::ConFrame)
 end
 
 function _build_frame_handle(frame::ConFrame)
+    _reject_duplicate_con_spec_minor(frame.metadata_json)
     cell = Float64[frame.cell...]
     angles = Float64[frame.angles...]
     builder = ccall(
