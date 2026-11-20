@@ -197,6 +197,7 @@ impl ConFrame {
 mod tests {
     use super::*;
     use crate::types::ConFrameBuilder;
+    use metatensor::data::{DLDevice, DLPackVersion};
 
     fn small_frame() -> crate::types::ConFrame {
         let mut builder = ConFrameBuilder::new([10.0, 10.0, 10.0], [90.0, 90.0, 90.0]);
@@ -287,5 +288,112 @@ mod tests {
             mts_sys::MTS_SUCCESS
         );
         unsafe { mts_block_free_sys(ptr) };
+    }
+
+    fn parsed_frame() -> crate::types::ConFrame {
+        let text = "\
+PRE
+{\"con_spec_version\":2,\"sections\":[\"velocities\",\"forces\",\"energies\"]}
+10 10 10
+90 90 90
+0 0
+0 0 0
+1
+2
+1.0
+H
+Coordinates of Component 1
+0.1 0.2 0.3 0 0
+1.1 1.2 1.3 0 1
+
+H
+Velocities of Component 1
+1.0 0.0 0.0 0 0
+0.0 1.0 0.0 0 1
+
+H
+Forces of Component 1
+0.5 0.0 0.0 0 0
+0.0 0.5 0.0 0 1
+
+H
+Energies of Component 1
+-0.42 0 0
+0.13 0 1
+";
+        crate::iterators::ConFrameIterator::new(text)
+            .next()
+            .unwrap()
+            .unwrap()
+    }
+
+    fn block_f64s(block: &TensorBlock) -> Vec<f64> {
+        let tensor = block
+            .values()
+            .as_dlpack(DLDevice::cpu(), None, DLPackVersion::current())
+            .unwrap();
+        let len = tensor.shape().iter().product::<i64>() as usize;
+        let data = tensor.data_ptr::<f64>().unwrap();
+        unsafe { std::slice::from_raw_parts(data, len) }.to_vec()
+    }
+
+    fn all_blocks(frame: &crate::types::ConFrame) -> [TensorBlock; 4] {
+        [
+            frame_positions_block(frame).unwrap(),
+            frame_velocities_block(frame).unwrap().unwrap(),
+            frame_forces_block(frame).unwrap().unwrap(),
+            frame_energies_block(frame).unwrap().unwrap(),
+        ]
+    }
+
+    #[test]
+    fn blocks_keep_their_values_when_the_atoms_change() {
+        let mut frame = parsed_frame();
+        let blocks = all_blocks(&frame);
+        let before = blocks.each_ref().map(block_f64s);
+        let atom = &mut frame.atom_data[0];
+        atom.set_x(42.0);
+        atom.set_y(43.0);
+        atom.set_z(44.0);
+        atom.set_velocity(Some([7.0; 3]));
+        atom.set_force(Some([8.0; 3]));
+        atom.set_energy(Some(9.0));
+        assert_eq!(blocks.each_ref().map(block_f64s), before);
+    }
+
+    #[test]
+    fn blocks_built_after_atom_writes_hold_the_atom_values() {
+        let mut frame = parsed_frame();
+        frame.atom_data[0].set_x(42.0);
+        frame.atom_data[0].set_velocity(None);
+        frame.atom_data[1].set_force(None);
+        frame.atom_data[1].set_energy(Some(9.0));
+        let [positions, velocities, forces, energies] = all_blocks(&frame).map(|b| block_f64s(&b));
+        assert_eq!(positions, [42.0, 0.2, 0.3, 1.1, 1.2, 1.3]);
+        assert_eq!(velocities, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
+        assert_eq!(forces, [0.5, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(energies, [-0.42, 9.0]);
+    }
+
+    // Under ThreadSanitizer this reports a data race if a block's values
+    // share memory with the coordinates that `set_x` writes.
+    #[test]
+    fn reading_a_block_while_another_thread_moves_an_atom() {
+        let mut frame = parsed_frame();
+        let block = frame_positions_block(&frame).unwrap();
+        let before = block_f64s(&block);
+        std::thread::scope(|scope| {
+            let reader = scope.spawn(|| {
+                for _ in 0..1000 {
+                    assert_eq!(block_f64s(&block), before);
+                }
+            });
+            for step in 0..1000 {
+                frame.atom_data[0].set_x(f64::from(step));
+            }
+            reader.join().unwrap();
+        });
+        assert_eq!(frame.atom_data[0].x(), 999.0);
+        assert_eq!(block_f64s(&block), before);
     }
 }
