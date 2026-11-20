@@ -111,32 +111,44 @@ def dlpack() -> None:
 
 
 def toc() -> None:
-    """The graphical abstract: the uninterrupted climbing-image band and its CON 3.1 resume."""
-    bands = DATA / "failure" / "bands"
-    full = band_energy(bands / "uninterrupted.npz")
-    resumed = band_energy(bands / "CON_3_1__shortest_round_trip.npz")
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.plot(
-        range(len(full)),
-        full - full[0],
-        color=TEAL,
-        marker="o",
-        label="uninterrupted band",
+    """Schematic graphical abstract. The words are readcon and competitors. No digits."""
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+
+    fig, ax = plt.subplots(figsize=(5, 3.2))
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    for origin, label in ((0.06, "readcon"), (0.56, "competitors")):
+        ax.add_patch(
+            FancyBboxPatch(
+                (origin, 0.28),
+                0.38,
+                0.44,
+                boxstyle="round,pad=0.02,rounding_size=0.04",
+                facecolor=TEAL if label == "readcon" else CORAL,
+                edgecolor=BLACK,
+                linewidth=0.8,
+            )
+        )
+        ax.text(
+            origin + 0.19,
+            0.50,
+            label,
+            ha="center",
+            va="center",
+            color="white",
+            fontsize=12,
+        )
+    ax.add_patch(
+        FancyArrowPatch(
+            (0.46, 0.50),
+            (0.54, 0.50),
+            arrowstyle="-|>",
+            mutation_scale=14,
+            color=BLACK,
+            linewidth=0.8,
+        )
     )
-    ax.plot(
-        range(len(resumed)),
-        resumed - resumed[0],
-        linestyle="none",
-        marker="x",
-        markersize=9,
-        color=CORAL,
-        label="resumed from CON 3.1",
-    )
-    ax.set_xlabel("image")
-    ax.set_ylabel("energy above the first image (eV)")
-    ax.legend(frameon=False)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
     save(fig, "toc")
 
 
