@@ -46,5 +46,42 @@
     "warmup_discard": false,
     "threads_full_frame": 1,
     "blas_threads": 1
+  },
+  "tip_builds": {
+    "source_revision": "ec3108430b3c25323545080639e7fff6b8e05618",
+    "tip_a_sha256": "46efb0dce504ab3026fa7995ed8f2dad4198c0dac514f59428a4026707fd4f26",
+    "tip_b_sha256": "4c4d424102885087765bc9cc11e69b1f8e0c221e00330f3eea95302efc8f1639"
+  },
+  "simulation": {
+    "name": "al_eam_md",
+    "kind": "simulation output",
+    "n_frames": 1000,
+    "n_atoms": 500,
+    "bytes": 38202999,
+    "sha256": "037d3cede6e70b821125a3c8145c93e05b41d5672120fc6fa472e51bc2fb5604",
+    "path": "work/al_eam_md.con",
+    "kept_out_of_git": true,
+    "provenance": {
+      "system": "FCC aluminum, cubic cell, lattice 4.05 angstrom, repeated 5x5x5",
+      "potential": "rgpot 3.7.0 EAMAlPot",
+      "integrator": "ASE 3.29.0 VelocityVerlet",
+      "timestep_fs": 2.0,
+      "temperature_K": 300.0,
+      "seed": 20261120,
+      "initial_momenta": "thermalize_momenta at 300 K with numpy Generator seed 20261120, then center-of-mass momentum removed",
+      "frames": "the configuration after each of 1000 steps",
+      "command": "python3 make_al_md.py",
+      "energy_first_eV": -1658.91839456,
+      "energy_last_eV": -1658.90148162,
+      "energy_drift_eV": 0.01691294
+    }
+  },
+  "simulation_protocol": {
+    "repeats": 12,
+    "schedule": "ABBA-rotated",
+    "percentile": "type-7 linear",
+    "warmup_discard": false,
+    "threads_full_frame": 1,
+    "blas_threads": 1
   }
 }

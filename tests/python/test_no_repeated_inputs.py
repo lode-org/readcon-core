@@ -65,6 +65,8 @@ ALLOW = {
     ("benches/h5md_vs_con.py", 164),
     # A checksum of the cell over the frames. It writes no input.
     ("paper/cpc/bench/make_payloads.py", 441),
+    # A 5x5x5 supercell, then Velocity Verlet. It does not tile one frame.
+    ("paper/cpc/bench-like-for-like/make_al_md.py", 50),
 }
 
 
