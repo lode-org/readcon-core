@@ -350,6 +350,12 @@ fn py_to_json_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     )))
 }
 
+fn filled_lock<T>(py: Python<'_>, value: T) -> pyo3::sync::PyOnceLock<T> {
+    let lock = pyo3::sync::PyOnceLock::new();
+    let _ = lock.set(py, value);
+    lock
+}
+
 fn json_map_to_py_dict(py: Python<'_>, metadata: &BTreeMap<String, Value>) -> PyResult<Py<PyDict>> {
     let dict = PyDict::new(py);
     for (key, value) in metadata {
@@ -737,7 +743,8 @@ pub struct PyConFrame {
     atoms_init: std::sync::Mutex<()>,
     #[pyo3(get)]
     pub spec_version: u32,
-    metadata: Py<PyDict>,
+    /// Built from `inner`'s header on first use when the frame was parsed.
+    metadata: pyo3::sync::PyOnceLock<Py<PyDict>>,
     /// Rust SoA when this frame came from the parser. The positions
     /// column is empty: coordinates live in `xyz_owned`, `slab` or `store`.
     inner: Option<ConFrame>,
@@ -786,7 +793,7 @@ impl PyConFrame {
             atoms,
             atoms_ready: std::sync::atomic::AtomicBool::new(true),
             atoms_init: std::sync::Mutex::new(()),
-            metadata,
+            metadata: filled_lock(py, metadata),
             inner: None,
             n_atoms: 0,
             slab: None,
@@ -804,14 +811,15 @@ impl PyConFrame {
     }
 
     #[getter]
-    fn metadata(&self, py: Python<'_>) -> Py<PyDict> {
-        self.metadata.clone_ref(py)
+    fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        self.meta(py).map(|dict| dict.clone().unbind())
     }
 
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, metadata: &Bound<'_, PyAny>) -> PyResult<()> {
         let (map, minor_raw) = py_metadata_to_json_map_with_minor(metadata)?;
-        self.metadata = json_map_to_py_dict_with_minor(py, &map, minor_raw.as_deref())?;
+        let dict = json_map_to_py_dict_with_minor(py, &map, minor_raw.as_deref())?;
+        self.metadata = filled_lock(py, dict);
         Ok(())
     }
 
@@ -1369,7 +1377,7 @@ impl PyConFrame {
     /// Potential type string (e.g. "EMT"), or None.
     #[getter]
     fn potential_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
-        let dict = self.metadata.bind(py);
+        let dict = self.meta(py)?;
         let Some(potential) = dict.get_item(meta::POTENTIAL)? else {
             return Ok(None);
         };
@@ -1410,7 +1418,7 @@ impl PyConFrame {
     /// the library is built with the ``chemfiles`` feature.
     #[getter]
     fn bonds(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
-        let dict = self.metadata.bind(py);
+        let dict = self.meta(py)?;
         let Some(raw) = dict.get_item(meta::BONDS)? else {
             return Ok(Vec::new());
         };
@@ -1489,7 +1497,8 @@ impl PyConFrame {
             }
             metadata.insert(key, value);
         }
-        self.metadata = json_map_to_py_dict_with_minor(py, &metadata, minor_raw.as_deref())?;
+        let dict = json_map_to_py_dict_with_minor(py, &metadata, minor_raw.as_deref())?;
+        self.metadata = filled_lock(py, dict);
         Ok(())
     }
 
@@ -1497,15 +1506,14 @@ impl PyConFrame {
     fn set_scalar_metadata(&mut self, py: Python<'_>, key: &str, value: f64) -> PyResult<()> {
         let number = Number::from_f64(value)
             .ok_or_else(|| PyValueError::new_err("metadata floats must be finite"))?;
-        self.metadata
-            .bind(py)
+        self.meta(py)?
             .set_item(key, json_value_to_py(py, &Value::Number(number))?)?;
         Ok(())
     }
 
     /// Set a string metadata key.
     fn set_string_metadata(&mut self, py: Python<'_>, key: &str, value: &str) -> PyResult<()> {
-        self.metadata.bind(py).set_item(key, value)?;
+        self.meta(py)?.set_item(key, value)?;
         Ok(())
     }
 
@@ -1516,7 +1524,7 @@ impl PyConFrame {
 
     /// Set the zero-based frame index metadata.
     fn set_frame_index(&mut self, py: Python<'_>, idx: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item(meta::FRAME_INDEX, idx)?;
+        self.meta(py)?.set_item(meta::FRAME_INDEX, idx)?;
         Ok(())
     }
 
@@ -1532,13 +1540,13 @@ impl PyConFrame {
 
     /// Set the NEB bead index metadata.
     fn set_neb_bead(&mut self, py: Python<'_>, bead: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item(meta::NEB_BEAD, bead)?;
+        self.meta(py)?.set_item(meta::NEB_BEAD, bead)?;
         Ok(())
     }
 
     /// Set the NEB band index metadata.
     fn set_neb_band(&mut self, py: Python<'_>, band: u64) -> PyResult<()> {
-        self.metadata.bind(py).set_item(meta::NEB_BAND, band)?;
+        self.meta(py)?.set_item(meta::NEB_BAND, band)?;
         Ok(())
     }
 
@@ -1685,12 +1693,6 @@ impl PyConFrame {
         ];
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
-        let metadata_map = frame.header.metadata.to_map();
-        let metadata = json_map_to_py_dict_with_minor(
-            py,
-            &metadata_map,
-            frame.header.metadata.huge_minor_raw(),
-        )?;
         Ok(PyConFrame {
             cell,
             angles,
@@ -1700,7 +1702,7 @@ impl PyConFrame {
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
             atoms_init: std::sync::Mutex::new(()),
             spec_version,
-            metadata,
+            metadata: pyo3::sync::PyOnceLock::new(),
             inner: Some(frame),
             n_atoms,
             slab: None,
@@ -1726,12 +1728,6 @@ impl PyConFrame {
         ];
         let postbox_header = frame.header.postbox_header.clone();
         let spec_version = frame.header.spec_version;
-        let metadata_map = frame.header.metadata.to_map();
-        let metadata = json_map_to_py_dict_with_minor(
-            py,
-            &metadata_map,
-            frame.header.metadata.huge_minor_raw(),
-        )?;
         // Coordinates live in the slab. Atom slots still alias the parse
         // buffer, so point them at this frame's row before that buffer goes.
         if n_atoms > 0 {
@@ -1755,7 +1751,7 @@ impl PyConFrame {
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
             atoms_init: std::sync::Mutex::new(()),
             spec_version,
-            metadata,
+            metadata: pyo3::sync::PyOnceLock::new(),
             inner: Some(frame),
             n_atoms,
             slab: Some(slab),
@@ -1779,11 +1775,6 @@ impl PyConFrame {
             frame.header.prebox_header.user.clone(),
             frame.header.prebox_header.metadata_line().to_string(),
         ];
-        let metadata = json_map_to_py_dict_with_minor(
-            py,
-            &frame.header.metadata.to_map(),
-            frame.header.metadata.huge_minor_raw(),
-        )?;
         Ok(PyConFrame {
             cell: frame.header.boxl,
             angles: frame.header.angles,
@@ -1793,7 +1784,7 @@ impl PyConFrame {
             atoms_ready: std::sync::atomic::AtomicBool::new(false),
             atoms_init: std::sync::Mutex::new(()),
             spec_version: frame.header.spec_version,
-            metadata,
+            metadata: pyo3::sync::PyOnceLock::new(),
             inner: Some(frame),
             n_atoms,
             slab: None,
@@ -1866,14 +1857,26 @@ impl PyConFrame {
             .collect()
     }
 
+    fn meta<'py>(&self, py: Python<'py>) -> PyResult<&Bound<'py, PyDict>> {
+        let dict = self.metadata.get_or_try_init(py, || match &self.inner {
+            Some(frame) => json_map_to_py_dict_with_minor(
+                py,
+                &frame.header.metadata.to_map(),
+                frame.header.metadata.huge_minor_raw(),
+            ),
+            None => Ok(PyDict::new(py).unbind()),
+        })?;
+        Ok(dict.bind(py))
+    }
+
     fn metadata_map(&self, py: Python<'_>) -> PyResult<BTreeMap<String, Value>> {
-        py_metadata_to_json_map(self.metadata.bind(py).as_any())
+        py_metadata_to_json_map(self.meta(py)?.as_any())
     }
 
     /// Extract an `Option<f64>` metadata value directly from the underlying
     /// PyDict, without round-tripping through serde_json::Value.
     fn metadata_get_f64(&self, py: Python<'_>, key: &str) -> PyResult<Option<f64>> {
-        let dict = self.metadata.bind(py);
+        let dict = self.meta(py)?;
         match dict.get_item(key)? {
             Some(value) if !value.is_none() => Ok(Some(value.extract::<f64>()?)),
             _ => Ok(None),
@@ -1883,7 +1886,7 @@ impl PyConFrame {
     /// Extract an `Option<u64>` metadata value directly from the underlying
     /// PyDict, without round-tripping through serde_json::Value.
     fn metadata_get_u64(&self, py: Python<'_>, key: &str) -> PyResult<Option<u64>> {
-        let dict = self.metadata.bind(py);
+        let dict = self.meta(py)?;
         match dict.get_item(key)? {
             Some(value) if !value.is_none() => Ok(Some(value.extract::<u64>()?)),
             _ => Ok(None),
@@ -1891,8 +1894,7 @@ impl PyConFrame {
     }
 
     fn to_con_frame(&self, py: Python<'_>) -> PyResult<ConFrame> {
-        let (mut meta, minor_raw) =
-            py_metadata_to_json_map_with_minor(self.metadata.bind(py).as_any())?;
+        let (mut meta, minor_raw) = py_metadata_to_json_map_with_minor(self.meta(py)?.as_any())?;
         let atoms = self.py_atoms(py)?;
         // v1 and v2 velocities are in the natural time unit (CON-units.8).
         // The builder writes minor 1, which requires units.time (CON-units.11).
@@ -5809,7 +5811,7 @@ fn pyconframe_from_ase(py: Python<'_>, ase_atoms: &Bound<'_, PyAny>) -> PyResult
         atoms_ready: std::sync::atomic::AtomicBool::new(true),
         atoms_init: std::sync::Mutex::new(()),
         spec_version: crate::CON_SPEC_VERSION,
-        metadata: metadata.unbind(),
+        metadata: filled_lock(py, metadata.unbind()),
         inner: None,
         n_atoms,
         slab: None,
