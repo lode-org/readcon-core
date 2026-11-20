@@ -311,10 +311,13 @@ class HostAndLaunch(unittest.TestCase):
         self.assertEqual(derived["benchmark_dir"], "benches/weak_asv")
         self.assertEqual(derived["build_command"], pr["build_command"])
 
-    def test_asv_class_uses_the_ladder_and_six_repeats(self) -> None:
+    def test_asv_class_uses_the_ladder_six_repeats_and_out_of_band_setup(
+        self,
+    ) -> None:
         self.assertEqual(tuple(threads.TimeWeakThreads.params), weak.DEFAULT_LADDER)
         self.assertEqual(threads.TimeWeakThreads.repeat, 6)
-        self.assertNotIn("setup", threads.TimeWeakThreads.__dict__)
+        self.assertIn("setup", threads.TimeWeakThreads.__dict__)
+        self.assertIn("teardown", threads.TimeWeakThreads.__dict__)
         self.assertNotIn("number", threads.TimeWeakThreads.__dict__)
 
     def test_refusing_the_campaign_writes_a_headed_log(self) -> None:
