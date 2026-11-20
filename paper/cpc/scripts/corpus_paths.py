@@ -10,9 +10,9 @@ of the CON 3.1 corpus (data/corpus31/manifest.toml) is read
   copy, iter_con(mmap=True) on the mapped copy, iter_con(stream=True), the
   stream reader, on the plain and gzip copies, and count_frames on the
   plain, mapped and gzip copies;
-- by the C library in its default build, which has no Rayon and parses on
-  one thread at every setting, and built with parallel, as the release
-  archives build it: read_con_buffer_iterator,
+- by the C library built with ``capi`` (no Rayon, parses on one thread at
+  every setting) and built with ``capi,parallel``, as the release archives
+  build it: read_con_buffer_iterator,
   rkr_read_all_frames_n_threads on the plain, mapped and gzip copies at 1, 2
   and 8 threads and 0 (the default), read_con_file_iterator on the plain
   copy, and rkr_count_frames on the plain, mapped and gzip copies.
@@ -106,8 +106,8 @@ PAD = (
 )
 BUILDS = {
     "wheel": ("Python module", ["python", "zstd", "parallel"]),
-    "clib": ("C library, default build", []),
-    "clib_parallel": ("C library with parallel", ["parallel"]),
+    "clib": ("C library, capi build", ["capi"]),
+    "clib_parallel": ("C library with parallel", ["capi", "parallel"]),
 }
 # Each entry point of a build: the copy it reads and whether it takes a thread setting.
 ENTRIES = {
@@ -336,6 +336,12 @@ def wheel_child(jobs: list[dict]) -> dict:
 
 def clib_child(build: str, library: Path, jobs: list[dict]) -> dict:
     lib = ctypes.CDLL(str(library))
+    if not hasattr(lib, "rkr_read_all_frames_n_threads"):
+        task = "cpc-clib-parallel" if build == "clib_parallel" else "cpc-clib"
+        raise SystemExit(
+            f"{library} lacks C ABI symbol rkr_read_all_frames_n_threads; "
+            f"rebuild with pixi run {task} (--features capi)"
+        )
     vp, cp, size = ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t
     for name, args, res in (
         ("read_con_buffer_iterator", [vp, size], vp),
@@ -571,7 +577,7 @@ def table(record: dict) -> str:
         r"reads the others.",
         r"The C library has no zstd in either build and rejects the \cpathsZstdFiles{} zstd files in the plain "
         r"file, file iterator and frame count rows with the message that names the feature, as it documents.",
-        r"The default build has no Rayon and parses on one thread at every setting, and the release archives "
+        r"The serial \texttt{capi} build has no Rayon and parses on one thread at every setting, and the release archives "
         r"contain the parallel build.}",
         r"\label{tab:corpus-paths}",
         r"\resizebox{\textwidth}{!}{%",

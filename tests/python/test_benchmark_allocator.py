@@ -127,12 +127,15 @@ def test_non_example_timed_build_routes_select_benchmark() -> None:
 
     bench = ROOT / "paper" / "cpc" / "bench"
     assert "benchmark" in _assigned_literal(bench / "cachegrind.py", "FEATURES")
-    assert "benchmark" in _assigned_literal(bench / "cpp_reads.py", "FEATURES")
+    cpp_reads_features = _assigned_literal(bench / "cpp_reads.py", "FEATURES")
+    assert "benchmark" in cpp_reads_features
+    assert "capi" in cpp_reads_features
     assert 'features = ["parallel", "benchmark"]' in (
         bench / "binary_formats.py"
     ).read_text(encoding="utf-8")
     h2h = (bench / "h2h.py").read_text(encoding="utf-8")
-    assert h2h.count('"parallel,benchmark"') == 2
+    assert h2h.count('"parallel,benchmark"') == 1
+    assert h2h.count('"capi,parallel,benchmark"') == 1
 
     manifests = sorted(bench.glob("*/Cargo.toml"))
     dependencies = []

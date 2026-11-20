@@ -878,7 +878,7 @@ def clib():
         stale = built_stale(LIB)
         if stale:
             raise Unavailable(stale)
-        lib = ctypes.CDLL(str(LIB))
+        lib = _load_clib(LIB)
         vp, cp, status, double = (
             ctypes.c_void_p,
             ctypes.c_char_p,
@@ -3454,6 +3454,19 @@ def _c_next_two(lib, it, eof: int) -> tuple[list, int]:
     frames = [lib.con_frame_iterator_next(it) for _ in range(2)]
     last, _ = _c_last_error(lib, eof)
     return frames, last
+
+
+def _load_clib(path: Path):
+    lib = ctypes.CDLL(str(path))
+    if not hasattr(lib, "rkr_read_all_frames") or not hasattr(
+        lib, "read_con_file_iterator"
+    ):
+        raise Unavailable(
+            f"{provenance.portable(path)} lacks C ABI symbols; "
+            "rebuild with pixi run -e default cpc-clib "
+            "(cargo build --release --features capi,benchmark)"
+        )
+    return lib
 
 
 if __name__ == "__main__":

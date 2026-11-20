@@ -562,7 +562,15 @@ def _library() -> Path:
 
 
 def _c_null(path: Path) -> bool:
-    lib = ctypes.CDLL(str(_library()))
+    lib_path = _library()
+    lib = ctypes.CDLL(str(lib_path))
+    if not hasattr(lib, "read_con_file_iterator") or not hasattr(
+        lib, "rkr_read_all_frames"
+    ):
+        raise SystemExit(
+            f"{lib_path} lacks C ABI symbols; "
+            "rebuild with cargo build --release --features capi,benchmark"
+        )
     lib.read_con_file_iterator.argtypes = [ctypes.c_char_p]
     lib.read_con_file_iterator.restype = ctypes.c_void_p
     lib.con_frame_iterator_next.argtypes = [ctypes.c_void_p]

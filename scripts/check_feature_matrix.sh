@@ -4,7 +4,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 FEATURES="${FEATURES:?set FEATURES=...}"
 PROFILE="${PROFILE:-release}"
-LIB="$ROOT/target/$PROFILE/libreadcon_core.so"
+TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+LIB="${LIB:-$TARGET_DIR/$PROFILE/libreadcon_core.so}"
 # shellcheck disable=SC2086
 cargo build --"$PROFILE" --features ${FEATURES}
 
@@ -34,14 +35,14 @@ for s in create_writer_from_path_c create_writer_gzip_c create_writer_zstd_c \
 done
 
 if [[ "$FEATURES" == *metatensor* ]]; then
-  if [[ ! -f "$ROOT/target/$PROFILE/readcon-metatensor.env" ]]; then
+  if [[ ! -f "$TARGET_DIR/$PROFILE/readcon-metatensor.env" ]]; then
     # If build.rs ran before metatensor-sys finished installing, rerun it
     # now that build/metatensor-sys/<hash>/out exists.
     touch "$ROOT/build.rs"
     # shellcheck disable=SC2086
     cargo build --"$PROFILE" --features ${FEATURES}
   fi
-  test -f "$ROOT/target/$PROFILE/readcon-metatensor.env"
+  test -f "$TARGET_DIR/$PROFILE/readcon-metatensor.env"
   echo "  ok readcon-metatensor.env"
 fi
 

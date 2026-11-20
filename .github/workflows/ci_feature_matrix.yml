@@ -18,13 +18,13 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - chemfiles-from-sources
-          - chemfiles-from-sources,zstd
-          - chemfiles-from-sources,metatensor
-          - chemfiles-from-sources,zstd,metatensor
-          - grammar
-          - chemfiles-from-sources,grammar
-          - parallel
+          - capi,chemfiles-from-sources
+          - capi,chemfiles-from-sources,zstd
+          - capi,chemfiles-from-sources,metatensor
+          - capi,chemfiles-from-sources,zstd,metatensor
+          - capi,grammar
+          - capi,chemfiles-from-sources,grammar
+          - capi,parallel
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -37,5 +37,5 @@ jobs:
         # shellcheck disable=SC2086
         run: cargo test --release --features ${{ matrix.features }} --lib
       - name: Parallel library tests
-        if: matrix.features == 'parallel'
+        if: matrix.features == 'capi,parallel'
         run: cargo test --lib --features parallel

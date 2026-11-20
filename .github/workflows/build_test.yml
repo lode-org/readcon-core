@@ -54,6 +54,9 @@ jobs:
       - name: Run Rust tests
         run: cargo test
 
+      - name: Run Rust tests (C ABI)
+        run: cargo test --features capi
+
       - name: Parallel library tests
         run: cargo test --lib --features parallel
 
