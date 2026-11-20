@@ -47,7 +47,17 @@
     (when (symbolp types)
       (setq types (list types)))
     (apply orig datum types rest))
-  (advice-add 'org-element-lineage :around #'readcon-org96-lineage))
+  (advice-add 'org-element-lineage :around #'readcon-org96-lineage)
+  ;; ox-rst 20250428.534 passes INFO as a fourth argument. Org 9.3 on
+  ;; Ubuntu 22.04 takes three, so drop INFO for an Org that cannot accept it.
+  (require 'ox)
+  (let ((max-args (cdr (func-arity 'org-export-custom-protocol-maybe))))
+    (when (and (integerp max-args) (< max-args 4))
+      (advice-add 'org-export-custom-protocol-maybe :around
+                  (lambda (orig link desc backend &optional _info)
+                    (funcall orig link desc backend)))))
+  ;; Org 9.3 exports code blocks with tab indentation; docs/source uses spaces.
+  (setq-default indent-tabs-mode nil))
 
 (require 'ox-rst)
 (require 'ox-publish)
