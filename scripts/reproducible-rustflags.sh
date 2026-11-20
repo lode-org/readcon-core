@@ -89,6 +89,8 @@ reproducible_rustflags() {
             return 0
         fi
         if [[ "$path" == *\\* ]]; then
+            # A single-quoted backslash is the literal Windows separator.
+            # shellcheck disable=SC1003
             sep='\'
             REPRO_PAIRS+=("${path}${sep}"$'\t'"${label}/")
             REPRO_PAIRS+=("${path//\\//}/"$'\t'"${label}/")
@@ -163,11 +165,11 @@ for path, label in rows:
             add_flag "-C"
             add_flag "link-arg=/PDBALTPATH:%_PDB%"
             case " ${CFLAGS:-} " in
-                *" /Brepro "*|*" /Brepro") ;;
+                *" /Brepro "*) ;;
                 *) CFLAGS="${CFLAGS:+$CFLAGS }/Brepro" ;;
             esac
             case " ${CXXFLAGS:-} " in
-                *" /Brepro "*|*" /Brepro") ;;
+                *" /Brepro "*) ;;
                 *) CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }/Brepro" ;;
             esac
             export CFLAGS CXXFLAGS
