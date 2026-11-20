@@ -635,5 +635,26 @@ def test_concurrent_read_con_string_of_one_str(tmp_path):
     assert not errors
 
 
+# --- read_coords ----------------------------------------------------------------
+
+
+def test_read_coords_arrays_are_the_moved_parse_buffers(tmp_path):
+    path = _big_con(tmp_path / "big.con", n_atoms=1000, n_frames=3)
+    before = _copies()
+    coords = readcon.read_coords(path)
+    frames = readcon.read_con(path)
+    for name in ("positions", "masses", "cell", "atom_ids", "fixed"):
+        array = coords[name]
+        assert not array.flags.owndata, name
+        assert type(array.base).__name__ == "PySliceContainer", name
+        assert array.base is not coords["positions"].base or name == "positions"
+    assert coords["positions"].shape == (3, 1000, 3)
+    for index, frame in enumerate(frames):
+        assert coords["positions"][index].tobytes() == frame.xyz.tobytes()
+    assert coords["species"] == [[("Cu", 500), ("H", 500)]]
+    if before is not None:
+        assert _copies() == before
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
