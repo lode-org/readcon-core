@@ -68,7 +68,7 @@ def test_measurement_exemption_requires_a_record_directory() -> None:
 def test_named_commits_and_tags_exist() -> None:
     macros = _macros()
     assert macros["readconversion"] == "0.17.3"
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
     assert macros["readconversion"] == macros["rcMeasuredVersion"]
     assert "v0.17.4" not in (CPC / "release.tex").read_text(encoding="utf-8")
     if not _tags():
@@ -364,7 +364,7 @@ def test_measured_commit_matches_its_cargo_and_spec() -> None:
     assert spec.returncode == 0
     assert spec.stdout.strip().startswith(macros["rcMeasuredSpecBlob"])
     assert macros["rcMeasuredVersion"] == macros["readconversion"]
-    assert macros["readconcommitrole"] == "candidate commit"
+    assert macros["readconcommitrole"] == "measured commit"
 
 
 def test_recorded_tags_match_git() -> None:

@@ -433,7 +433,8 @@ Software is cited by version, following the principles for research software \ci
 The DLPack export of readcon-core is a dense tensor without labels, and labeled, block-sparse atomistic data are the subject of metatensor \cite{bigiMetatensorMetatomicFoundational2026}.
 
 Table~\ref{tab:format-context} is context for choosing a format, and readcon reads neither XYZ nor HDF5.
-\input{figures/generated/host_macros} h5py reads the same frames in \rcHdfMedian~s against readcon's \rcTipMedian~s on the coordinate file.
+\input{figures/generated/host_macros} h5py reads an HDF5 coordinate array in \rcHdfMedian~s.
+The readcon coordinate median on the CON file is \rcTipMedian~s on 8 cores, so the two are not one comparison.
 The mapped binary coordinate file reads those frames in \rcConbinMedian~s.
 The chemfiles row copies each frame out of the trajectory iterator, and that copy matches 100000 of 100000 frames.
 
