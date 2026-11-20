@@ -85,7 +85,7 @@ Elsevier%
 \input{figures/generated/library_macros}
 % A value from a macro printed to a fixed number of significant figures.
 \newcommand{\sigfig}[2]{\num[round-mode=figures,round-precision=#1]{#2}}
-\newcommand{\DOIPENDING}{The version DOI for this commit is not minted.}
+\newcommand{\DOIPENDING}{This commit has no version DOI.}
 \newcommand{\rcAITool}{Cursor, routing between Claude Opus 5.5, GPT-5.6 Sol and Grok 4.7}
 % Import labels from the supplement without its \\bibcite entries (same keys in both aux files).
 % The supplement's captions contain generated macros, so those macros are defined first.
@@ -925,7 +925,7 @@ The specification and the conformance corpus of CON 3.1 belong to no single simu
 
 \FloatBarrier \section*{Data availability}\label{sec:data} The source code of readcon-core is developed at \url{https://github.com/lode-org/readcon-core}, and its releases are archived under the Zenodo concept record \cite{goswamiReadconcoreConConvel2026} \begin{center} \url{https://doi.org/10.5281/zenodo.18753567} \end{center} \DOIPENDING
 This paper describes readcon-core~\readconversion{}.
-The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
+The latest release tag is v\rcLatestTag{} at commit {\ttfamily\expandafter\seqsplit\expandafter{\rcLatestTagCommit}}.
 The deposited timing records name the measured commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
 That commit is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 The supplementary material holds that commit with its whole history as the git bundle readcon-core.bundle, and the scripts, records and TeX sources of this paper as the archive paper-cpc.tar.gz.

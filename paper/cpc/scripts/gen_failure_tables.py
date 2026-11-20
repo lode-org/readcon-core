@@ -313,7 +313,10 @@ def versions():
             "accept, natural unit": "accept (natural)",
             "accept, keep key": "accept, keep",
         }.get(r["rule"], r["rule"])
-        body.append(" & ".join([tex(r["variant"]), tex(rule), py, r["c_abi"]]) + r" \\")
+        variant = {
+            "missing version": "header without con\\_spec\\_version",
+        }.get(r["variant"], tex(r["variant"]))
+        body.append(" & ".join([variant, tex(rule), py, r["c_abi"]]) + r" \\")
     t = (
         r"""\begin{table}[tbp]
 \centering
