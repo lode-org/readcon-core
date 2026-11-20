@@ -268,13 +268,18 @@ recorded_results = {
     "bench/fidelity/results/timing.json",
     "bench/h2h/versions.json",
     "paper/cpc/data/claisen/readcon-build.json",
-    "paper/cpc/data/spec/version_drift.json",
     "paper/cpc/data/spec/corpus_recount.json",
     "paper/cpc/data/spec/corpus_recount-2.json",
     *(
         later.relative_to(root).as_posix()
         for later in sorted((root / "paper/cpc/data/spec").glob("corpus_recount-*.json"))
     ),
+}
+# Historical validation campaigns retain the versions that were actually
+# exercised. They are neither release metadata nor placeholders for the next
+# tag.
+historical_records = {
+    "paper/cpc/data/spec/version_drift.json",
 }
 skip_dirs = {
     ".git",
@@ -333,7 +338,9 @@ for raw in listed.split(b"\0"):
         rel in allow_exact
         or rel in recorded_results
         or rel in measured_campaigns
-        or rel.startswith("docs/source/") and rel.endswith(".rst")
+        or rel in historical_records
+        or rel.startswith("docs/source/")
+        and rel.endswith(".rst")
     ):
         continue
     try:
@@ -476,6 +483,16 @@ for rel in sorted(recorded_results):
                 die(f"{named} must record readcon {recorded}, found {named_found}")
             else:
                 print(f"OK: {named} records measured readcon {recorded} via {rel}")
+
+for rel in sorted(historical_records):
+    payload = json.loads((root / rel).read_text(encoding="utf-8"))
+    readers = payload.get("readers")
+    if not isinstance(readers, list) or not readers or not all(
+        isinstance(value, str) and measured.fullmatch(value) for value in readers
+    ):
+        die(f"{rel} must retain a non-empty list of measured reader versions")
+    else:
+        print(f"OK: {rel} retains historical reader versions")
 for rel in required:
     data = (root / rel).read_text(encoding="utf-8")
     if version not in data:

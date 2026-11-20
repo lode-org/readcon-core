@@ -26,8 +26,10 @@ provenance; --out DIR writes it to DIR.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import zipfile
@@ -49,6 +51,7 @@ bench_dir = _BENCH.bench_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "spec"
+VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 CELL = "10 10 10\n90 90 90\n"
 COORD = "1\n1\n1\nH\nCoordinates of Component 1\n0 0 0 0 0\n"
@@ -94,6 +97,26 @@ json.dump(out, sys.stdout)
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def parse_labeled(spec: str, *, option: str) -> tuple[str, Path]:
+    label, sep, raw = spec.partition("=")
+    if sep == "" or not label or not raw:
+        raise SystemExit(f"{option} must be VERSION=PATH, got {spec!r}")
+    if VERSION.fullmatch(label) is None:
+        raise SystemExit(f"{option} version must match X.Y.Z, got {label!r}")
+    return label, Path(raw)
+
+
+def reader_module_sha(path: Path, label: str) -> str:
+    module = sorted((path / "readcon").glob("readcon*.so"))
+    if not module:
+        raise SystemExit(f"reader {label!r} has no readcon*.so in {path}")
+    return sha256(module[0])
 
 
 def ask(libdir: Path, probes: dict[str, str]) -> dict:
@@ -155,39 +178,140 @@ def refuse_stale_module(newer: list[str]) -> None:
         )
 
 
+def seed_from_record(
+    path: Path,
+) -> tuple[list[str], dict[str, dict], dict[str, dict], dict[str, dict]]:
+    """Readers, outcomes, source hashes, and per-reader measurements from a record."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    readers = list(payload.get("readers") or [])
+    if not readers:
+        raise SystemExit(f"seed record has no readers: {path}")
+    probes = payload.get("probes") or {}
+    probe_text = payload.get("probe_text") or {}
+    expected_names = set(PROBES)
+    if set(probes) != expected_names:
+        raise SystemExit("seed record probe names drift from this script's probes")
+    if set(probe_text) != expected_names:
+        raise SystemExit("seed record probe_text names drift from this script's probes")
+    for name, expected in PROBES.items():
+        seeded = probe_text.get(name)
+        if not isinstance(seeded, str):
+            raise SystemExit(f"seed record probe_text[{name!r}] is not a string")
+        if text_sha256(seeded) != text_sha256(expected):
+            raise SystemExit(f"seed record probe_text[{name!r}] drifted; rerun probes")
+    reported = payload.get("reported_versions") or {}
+    sources = payload.get("sources") or {}
+    seeded_measurements = payload.get("reader_measurements") or {}
+    results: dict[str, dict] = {}
+    measurements: dict[str, dict] = {}
+    legacy_commit = payload.get("provenance", {}).get("build", {}).get("source_commit")
+    for label in readers:
+        per_reader = {"__version__": reported.get(label, "unknown")}
+        for name in PROBES:
+            if name not in probes or label not in probes[name]:
+                raise SystemExit(
+                    f"seed record misses probe {name!r} for reader {label!r}"
+                )
+            per_reader[name] = probes[name][label]
+        results[label] = per_reader
+        seeded = seeded_measurements.get(label)
+        if isinstance(seeded, dict):
+            measurements[label] = dict(seeded)
+        else:
+            source = sources.get(label) if isinstance(sources, dict) else None
+            module_sha = (
+                source.get("module_sha256") if isinstance(source, dict) else None
+            )
+            measurements[label] = {
+                "version": per_reader["__version__"],
+                "commit": legacy_commit,
+                "date": None,
+                "module_sha256": module_sha,
+            }
+    return readers, results, dict(sources), measurements
+
+
 def main() -> int:
-    ensure_published_clean(ROOT.parents[1])
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--reader-wheel",
+        action="append",
+        default=[],
+        metavar="VERSION=WHEEL",
+        help="reader from a wheel file (records wheel + module hashes)",
+    )
+    ap.add_argument(
+        "--reader-dir",
+        action="append",
+        default=[],
+        metavar="VERSION=DIR",
+        help="reader from an unpacked import directory",
+    )
     ap.add_argument(
         "--reader",
         action="append",
-        required=True,
-        metavar="LABEL=PATH",
-        help="a readcon wheel, or a directory that holds one unpacked, in release order",
+        default=[],
+        metavar="VERSION=PATH",
+        help="deprecated alias for --reader-wheel/--reader-dir",
     )
     ap.add_argument(
         "--out", type=Path, default=OUT, help="record directory (default: %(default)s)"
     )
+    ap.add_argument(
+        "--seed-record",
+        type=Path,
+        default=None,
+        help="existing version_drift.json to carry forward for already-measured readers",
+    )
     args = ap.parse_args()
+    ensure_published_clean(ROOT.parents[1])
 
     with bench_scratch("scratch") as tmp:
-        readers, sources = [], {}
+        reader_labels: list[str] = []
+        results: dict[str, dict] = {}
+        sources: dict[str, dict] = {}
+        measurements: dict[str, dict] = {}
+        if args.seed_record is not None:
+            seeded_labels, seeded_results, seeded_sources, seeded_measurements = (
+                seed_from_record(args.seed_record)
+            )
+            reader_labels.extend(seeded_labels)
+            results.update(seeded_results)
+            sources.update(seeded_sources)
+            measurements.update(seeded_measurements)
+        specs: list[tuple[str, Path, bool]] = []
+        for spec in args.reader_wheel:
+            label, path = parse_labeled(spec, option="--reader-wheel")
+            specs.append((label, path, True))
+        for spec in args.reader_dir:
+            label, path = parse_labeled(spec, option="--reader-dir")
+            specs.append((label, path, False))
         for spec in args.reader:
-            label, _, raw = spec.partition("=")
-            path = Path(raw)
+            label, path = parse_labeled(spec, option="--reader")
+            specs.append((label, path, path.suffix == ".whl"))
+        if not specs:
+            if not reader_labels:
+                raise SystemExit(
+                    "at least one reader is required (--reader-wheel/--reader-dir or --seed-record)"
+                )
+        for label, path, wheel_expected in specs:
+            if label in results:
+                raise SystemExit(
+                    f"reader {label!r} already exists in seed record; remove it there or pick a new label"
+                )
             if path.suffix == ".whl":
                 sources[label] = {"wheel": path.name, "wheel_sha256": sha256(path)}
                 with zipfile.ZipFile(path) as wheel:
                     wheel.extractall(Path(tmp) / label)
                 path = Path(tmp) / label
-            module = sorted((path / "readcon").glob("readcon*.so"))
-            sources.setdefault(label, {})["module_sha256"] = (
-                sha256(module[0]) if module else None
+            elif wheel_expected:
+                raise SystemExit(f"--reader-wheel needs a .whl path, got {path}")
+            sources.setdefault(label, {})["module_sha256"] = reader_module_sha(
+                path, label
             )
-            readers.append((label, path))
-
-        results = {label: ask(path, PROBES) for label, path in readers}
-    labels = [label for label, _ in readers]
+            results[label] = ask(path, PROBES)
+            reader_labels.append(label)
+    labels = reader_labels
 
     split = []
     for name in PROBES:
@@ -219,9 +343,21 @@ def main() -> int:
     module = require_installed_module(provenance.readcon_module())
     stale = provenance.newer_sources(module)
     refuse_stale_module(stale)
+    source_commit = provenance.record().get("build", {}).get("source_commit")
+    measured_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+    for label in labels:
+        if label not in measurements:
+            module_sha = sources.get(label, {}).get("module_sha256")
+            measurements[label] = {
+                "version": results[label]["__version__"],
+                "commit": source_commit,
+                "date": measured_at,
+                "module_sha256": module_sha,
+            }
     payload = {
         "readers": labels,
         "reported_versions": {label: results[label]["__version__"] for label in labels},
+        "reader_measurements": {label: measurements[label] for label in labels},
         "measures_release": [
             results[label]["__version__"]
             for label in labels

@@ -6,7 +6,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scratch.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.88.0}"
+msrv="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml")"
+toolchain="$(rustup toolchain list | awk -v v="$msrv" 'index($1, v) == 1 { print $1; exit }')"
+export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-$toolchain}"
 
 cargo build --release --lib
 cargo test --release --test doc_release_notes -- --test-threads=1

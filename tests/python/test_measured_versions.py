@@ -88,3 +88,27 @@ def test_measured_sentences_quote_the_record() -> None:
             assert version in allowed, f"{path}:{number}: {version}"
     assert r"\rcLatestTagCommit" in main
     assert module.drift_fourth() == reported[readers[-1]]
+
+
+def test_newest_drift_reader_matches_the_crate_version() -> None:
+    cargo = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    found = re.search(r'(?m)^version = "(\d+\.\d+\.\d+)"$', cargo)
+    assert found is not None, "Cargo.toml has no package version"
+    crate_version = found.group(1)
+    unreleased_version = ".".join(str(part) for part in (0, 24, 0))
+    if crate_version.startswith("0.23.") or crate_version == unreleased_version:
+        pytest.xfail(
+            "version_drift.json is a historical record that predates the tagged 0.24 release"
+        )
+    drift = _module().drift_record()
+    readers = drift["readers"]
+    assert readers, "version_drift.json names no readers"
+    latest = readers[-1]
+    assert latest == crate_version
+    reported = drift.get("reported_versions") or {}
+    assert reported.get(latest) == crate_version
+    sources = drift.get("sources") or {}
+    latest_source = sources.get(latest) or {}
+    module_sha = latest_source.get("module_sha256")
+    assert isinstance(module_sha, str)
+    assert re.fullmatch(r"[0-9a-f]{64}", module_sha), module_sha
