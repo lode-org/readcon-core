@@ -22,6 +22,8 @@ Coordinate-only, not used in the ratio column:
 
 `synthetic` is the modulo pattern from `paper/cpc/scripts/bench_readers.py` (`reference`), 100000 frames of 32 Cu atoms. `cuh2_band` is `resources/examples/cuh2_band.con`. Its sha256 is in `pins.json`.
 
+`al_eam_md` is simulation output. The CON files shipped in readcon-core, lode-org/readcon-db, TheochemUI/eOn, and the HaoZeke/anneal-paper-data dataset are single geometries or short bands. `make_al_md.py` runs 1000 Velocity Verlet steps of a 500-atom FCC aluminum cell (lattice 4.05 angstrom, 5x5x5) with rgpot 3.7.0 `EAMAlPot` and writes one frame after each step. The file is `work/al_eam_md.con`. It is larger than 5 MB, so it stays out of git. Frame count, atom count, sha256, and the generating command are in `pins.json`. The synthetic and `cuh2_band` rows stay as first measured. The aluminum rows use 12 repeats.
+
 Before the timed repeats, one equal-work pass compares frame count, atom count, and the sha256 of the little-endian float64 positions. A mismatch aborts the run. That pass is not a timed repeat and is not dropped from the six repeats.
 
 ## Protocol
