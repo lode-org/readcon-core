@@ -73,7 +73,8 @@ bench_dir = _BENCH.bench_dir
 
 
 REPO = SCRIPTS.parents[2]
-OUT = REPO / "paper" / "cpc" / "data" / "referee_probes.json"
+DATA = REPO / "paper" / "cpc" / "data"
+LEGACY_OUT = DATA / "referee_probes.json"
 SPEC = REPO / "docs" / "orgmode" / "spec.org"
 HEADER = REPO / "include" / "readcon-core.h"
 CLI = Path(
@@ -823,7 +824,7 @@ def rewritten_line2(frames) -> tuple[tuple, object]:
 def legacy_label(text: str) -> tuple[str, bool]:
     """A pre-3.1 velocity frame labelled fs: read in the natural unit, label kept, to_ase() gives the file's numbers."""
     frames = quiet(lambda: readcon.read_con_string(text))
-    unit = frames[0].velocity_time_unit
+    unit = velocity_time_unit(frames[0])
     kept = frames[0].metadata.get("units", {}).get("time")
     same = np.allclose(
         quiet(lambda: frames[0].to_ase().get_velocities()),
@@ -836,6 +837,14 @@ def legacy_label(text: str) -> tuple[str, bool]:
         f"to_ase() velocities {'equal' if same else 'differ from'} the numbers of the file",
         len(frames) == 1 and unit == NATURAL and kept == "fs" and same,
     )
+
+
+def velocity_time_unit(frame) -> str | None:
+    """Derive the file time unit from the normative version rule."""
+    major = int(frame.metadata.get("con_spec_version", frame.spec_version))
+    if major < 4:
+        return NATURAL
+    return frame.metadata.get("units", {}).get("time")
 
 
 def duplicate_id_frame():
@@ -1089,7 +1098,7 @@ def v30_fs_label_rewrite(tmp):
     p = written(tmp, "f20_v30_label_fs.con", v30_fs_text())
     frames = quiet(lambda: readcon.read_con(str(p)))
     unit, kept = (
-        frames[0].velocity_time_unit,
+        velocity_time_unit(frames[0]),
         frames[0].metadata.get("units", {}).get("time"),
     )
     version, label = rewritten_line2(frames)
@@ -1165,7 +1174,7 @@ def natural_spellings(tmp):
         frames = quiet(lambda: readcon.read_con_string(replaced_line2(TINY_VEL, meta)))
         write = raised(lambda: readcon.write_con_string(frames))
         to_ase = raised(lambda: frames[0].to_ase())
-        seen.append((label, frames[0].velocity_time_unit, str(write), str(to_ase)))
+        seen.append((label, velocity_time_unit(frames[0]), str(write), str(to_ase)))
     return (
         "; ".join(
             f"{label}: velocity_time_unit {u!r}, write {w}, to_ase {a}"
@@ -1189,7 +1198,7 @@ def corpus_v30_fs_label(tmp):
         )
     )
     unit, kept = (
-        frames[0].velocity_time_unit,
+        velocity_time_unit(frames[0]),
         frames[0].metadata.get("units", {}).get("time"),
     )
     to_ase = raised(lambda: frames[0].to_ase())
@@ -2899,7 +2908,7 @@ def pre_31_minor_kept(tmp):
             again[0].velocities_array().tolist()
             == frames[0].velocities_array().tolist()
         )
-        unit = again[0].velocity_time_unit
+        unit = velocity_time_unit(again[0])
         seen.append(
             f"version {version}, minor {minor}: rewritten as version {written_version}, units.time "
             f"{written_label!r}, read back in {unit!r} with the velocities "
@@ -2918,27 +2927,25 @@ def pre_31_minor_kept(tmp):
 @probe(
     "units/minor-1-label-applied",
     ITEM_UNITS,
-    "CON-units.10",
-    "v31_convel_fs.convel is read with velocity_time_unit 'fs'; to_ase() converts its velocities to the ASE unit, "
-    "so to_ase() velocities times ase.units.fs equal the numbers of the file; write_con_string writes it back "
-    "as version 3.1 labelled fs",
+    "CON-units.8, CON-units.9",
+    "v31_convel_fs.convel is read in the natural time unit while keeping the fs label; to_ase() returns the "
+    "numbers of the file, and write_con_string writes it back as version 3.1 labelled with the natural unit",
 )
 def minor_1_label_applied(tmp):
-    import ase.units
-
     frames = readcon.read_con(str(C31 / "v31_convel_fs.convel"))
     stored = frames[0].velocities_array()
-    converted = quiet(lambda: frames[0].to_ase().get_velocities()) * ase.units.fs
+    converted = quiet(lambda: frames[0].to_ase().get_velocities())
     version, label = rewritten_line2(frames)
     close = np.allclose(converted, stored, rtol=1e-6, atol=0)
+    unit = velocity_time_unit(frames[0])
     return (
-        f"velocity_time_unit {frames[0].velocity_time_unit!r}; to_ase() * ase.units.fs "
+        f"velocity_time_unit {unit!r}; to_ase() "
         f"{'equals' if close else 'differs from'} the file (rtol 1e-6); rewritten version {version}, "
         f"units.time {label!r}",
-        frames[0].velocity_time_unit == "fs"
+        unit == NATURAL
         and close
         and version == (3, 1)
-        and label == "fs",
+        and label == NATURAL,
     )
 
 
@@ -3248,9 +3255,11 @@ def c_iterator_statuses(tmp):
 # --- run -----------------------------------------------------------------------------------------
 
 
-def run_all() -> list[dict]:
+def run_all(only: set[str] | None = None) -> list[dict]:
     results = []
     for item in PROBES:
+        if only is not None and item["id"] not in only:
+            continue
         WRITTEN.clear()
         with bench_scratch("scratch") as tmp:
             try:
@@ -3379,6 +3388,8 @@ def stale_against_record(results: list[dict], path: Path) -> list[str]:
 
 
 def main() -> int:
+    records = sorted(DATA.glob("referee_probes-*.json"))
+    selected = records[-1] if records else LEGACY_OUT
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--check",
@@ -3389,13 +3400,19 @@ def main() -> int:
         "--out",
         type=Path,
         metavar="PATH",
-        help=f"write the record to PATH instead of {OUT.relative_to(REPO)}",
+        help="write the record to PATH instead of a new digest-named record",
     )
     parser.add_argument(
         "--record",
         type=Path,
         metavar="PATH",
-        help=f"with --check, compare with PATH instead of {OUT.relative_to(REPO)}",
+        help=f"with --check, compare with PATH instead of {selected.relative_to(REPO)}",
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        metavar="PROBE",
+        help="run only this probe (repeatable)",
     )
     parser.add_argument("--child", metavar="READER", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -3408,20 +3425,29 @@ def main() -> int:
         )
     if args.record and not args.check:
         parser.error("--record names the record that --check compares with")
-    results = run_all()
+    only = set(args.only) if args.only else None
+    unknown = sorted((only or set()) - {probe["id"] for probe in PROBES})
+    if unknown:
+        parser.error(f"unknown probe: {', '.join(unknown)}")
+    results = run_all(only)
     failed = failures(results)
-    differs = stale_against_record(results, args.record or OUT) if args.check else []
+    differs = stale_against_record(results, args.record or selected) if args.check else []
     stale = stale_module() + differs
-    if not args.check:
-        (args.out or OUT).write_text(
-            json.dumps(record(results), indent=2) + "\n", encoding="utf-8"
-        )
+    if not args.check and not failed and not stale:
+        contents = json.dumps(record(results), indent=2) + "\n"
+        digest = hashlib.sha256(contents.encode()).hexdigest()[:12]
+        out = args.out or DATA / f"referee_probes-{digest}.json"
+        if out.is_file() and out.read_text(encoding="utf-8") != contents:
+            raise SystemExit(f"refusing to overwrite record {provenance.portable(out)}")
+        if not out.is_file():
+            out.write_text(contents, encoding="utf-8")
+        print(f"wrote {provenance.portable(out)}")
     passed = sum(e["pass"] for e in results)
     print(f"{len(results)} probes, {passed} pass, {len(results) - passed} fail")
     for line in failed + stale:
         print(f"  {line}")
     if args.check and not differs:
-        print(f"{provenance.portable(args.record or OUT)} matches this run")
+        print(f"{provenance.portable(args.record or selected)} matches this run")
     return 1 if failed or stale else 0
 
 

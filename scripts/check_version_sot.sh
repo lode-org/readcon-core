@@ -228,6 +228,10 @@ allow_exact.update(
     )
     for path in (root / "paper/cpc/data/spec").glob(pattern)
 )
+allow_exact.update(
+    path.relative_to(root).as_posix()
+    for path in (root / "paper/cpc/data").glob("referee_probes-*.json")
+)
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {

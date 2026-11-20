@@ -43,7 +43,8 @@ REPO = provenance.REPO
 SPEC = REPO / "docs" / "orgmode" / "spec.org"
 CORPUS31 = ROOT / "data" / "corpus31" / "manifest.toml"
 CONFORMANCE = REPO / "resources" / "conformance" / "manifest.toml"
-PROBES = ROOT / "data" / "referee_probes.json"
+PROBE_RECORDS = sorted((ROOT / "data").glob("referee_probes-*.json"))
+PROBES = PROBE_RECORDS[-1] if PROBE_RECORDS else ROOT / "data" / "referee_probes.json"
 INDEP = ROOT / "scripts" / "indep_reader.py"
 TEST_ROOTS = ("tests", "src")
 SKIP_DIRS = {"target", "build", "__pycache__"}
@@ -185,9 +186,15 @@ def conformance() -> dict[str, set[str]]:
 
 
 def probes() -> dict[str, set[str]]:
+    record = json.loads(PROBES.read_text())
+    failed = record.get("summary", {}).get("failed_probes")
+    if failed:
+        sys.exit(
+            f"{rel(PROBES)} is not a passing probe record: {', '.join(failed[:5])}"
+        )
     return {
         probe["id"]: ids_in(probe.get("rule", ""))
-        for probe in json.loads(PROBES.read_text())["probes"]
+        for probe in record["probes"]
     }
 
 
