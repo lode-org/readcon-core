@@ -216,6 +216,25 @@ def test_iterators_and_single_reads_move_the_parse_buffer():
         assert _copies() == before
 
 
+def test_a_multi_frame_read_packs_no_coordinate_slab(tmp_path):
+    path = _big_con(tmp_path / "big.con", n_frames=4)
+    before = _copies()
+    frames = readcon.read_con(path)
+    views = [frame.xyz for frame in frames]
+    owner = views[0].base
+    assert type(owner).__name__ == "_PositionStore"
+    assert not isinstance(owner, np.ndarray)
+    assert all(view.base is owner for view in views)
+    for left, right in zip(views, views[1:]):
+        assert not np.shares_memory(left, right)
+    if before is not None:
+        assert _copies() == before
+        # `columns()` is the one request that packs the frames into a slab.
+        slab = readcon.read_con(path).columns()["positions"]
+        assert slab.shape == (4, N_BIG, 3)
+        assert _copies() == before + 4
+
+
 def test_coords_array_is_one_fresh_numpy_buffer(tmp_path):
     path = _big_con(tmp_path / "big.con")
     frame = readcon.read_con(path)[0]
@@ -226,6 +245,47 @@ def test_coords_array_is_one_fresh_numpy_buffer(tmp_path):
         assert first.tobytes() == frame.xyz.tobytes()
         assert N_BIG * 3 * 8 <= _peak_bytes(frame.coords_array) < N_BIG * 3 * 8 * 5 // 4
         frame.atoms
+
+
+def _live_blocks(body):
+    gc.collect()
+    tracemalloc.start()
+    try:
+        before = tracemalloc.get_traced_memory()
+        kept = body()
+        after = tracemalloc.get_traced_memory()
+        blocks = sum(
+            stat.count for stat in tracemalloc.take_snapshot().statistics("filename")
+        )
+        return blocks, after[0] - before[0], kept
+    finally:
+        tracemalloc.stop()
+
+
+def _first_access(frame):
+    return (
+        [getattr(frame, name) for name in FLAGS],
+        _views(frame),
+        frame.xyz,
+        frame.symbols,
+        frame.metadata,
+        len(frame),
+    )
+
+
+def test_first_column_access_builds_nothing_per_atom(tmp_path):
+    small, big = 200, 20000
+    counts = {}
+    for n in (small, big):
+        frame = readcon.read_con(_sections_con(tmp_path / f"s{n}.con", n))[0]
+        counts[n] = _live_blocks(lambda: _first_access(frame))[:2]
+    (small_blocks, small_bytes), (big_blocks, big_bytes) = counts[small], counts[big]
+    assert big_blocks - small_blocks < 64
+    assert big_bytes - small_bytes < (big - small) * 8 // 4
+    # The detector sees `.atoms`, which is one Python object per atom.
+    frame = readcon.read_con(_sections_con(tmp_path / "control.con", big))[0]
+    atom_blocks = _live_blocks(lambda: frame.atoms)[0]
+    assert atom_blocks >= big > 100 * big_blocks
 
 
 def test_concurrent_frame_reads_see_the_same_bits():

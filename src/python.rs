@@ -3095,6 +3095,9 @@ impl ConFrameList {
                     .unbind()
                 } else {
                     // Frames in separate parse buffers are packed once.
+                    for _ in 0..packed.n_frames {
+                        count_binding_copy();
+                    }
                     let values = std::mem::take(&mut packed.positions);
                     let slab = slab_from_values(py, values, packed.n_frames, packed.n_atoms)?;
                     let base = slab.bind(py).data();
