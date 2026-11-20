@@ -163,12 +163,17 @@ def test_every_python_read_path_accepts_and_roundtrips_arbitrary_minor(
 
     out_path = tmp_path / f"out_{name}"
     readcon.write_con(str(out_path), frames)
-    assert readcon.read_con(str(out_path))[0].metadata["con_spec_minor"] == expected_minor
+    assert (
+        readcon.read_con(str(out_path))[0].metadata["con_spec_minor"] == expected_minor
+    )
 
     # Materialized (.atoms accessed) write_con_string also preserves exact digits.
     _ = frames[0].atoms
     rewritten_mat = readcon.write_con_string(frames)
-    assert readcon.read_con_string(rewritten_mat)[0].metadata["con_spec_minor"] == expected_minor
+    assert (
+        readcon.read_con_string(rewritten_mat)[0].metadata["con_spec_minor"]
+        == expected_minor
+    )
 
     # Direct ConFrame construction and set_metadata / set_metadata_json round-trip.
     manual = readcon.ConFrame(
@@ -394,9 +399,15 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
 
     # B2: set_metadata_json does not trim, preserving exact line/column and rejecting Unicode WS.
     for bad, want_sub in (
-        ('\n{"con_spec_version":2,"x":1e999}', "number out of range at line 2 column 31"),
+        (
+            '\n{"con_spec_version":2,"x":1e999}',
+            "number out of range at line 2 column 31",
+        ),
         ('\n\n{"con_spec_version":2,"x":,}', "expected value at line 3 column 27"),
-        ('  {"con_spec_version":2,"x":1e999}', "number out of range at line 1 column 33"),
+        (
+            '  {"con_spec_version":2,"x":1e999}',
+            "number out of range at line 1 column 33",
+        ),
         ('\u00a0{"con_spec_version":2}', "expected value at line 1 column 1"),
         ('{"con_spec_version":2}\u2028', "trailing characters at line 1 column 23"),
         ('{"con_spec_version":2}\u2003', "trailing characters at line 1 column 23"),
@@ -492,7 +503,10 @@ def test_python_v5_b1_b2_b3_b4_base_parity():
 
 def test_differential_against_committed_base_oracle_in_python():
     oracle = json.loads(BASE_ORACLE_PATH.read_text(encoding="utf-8"))
-    assert oracle["provenance"]["base_commit"] == "9aff911e809390163d2d7b08671145ad99f24496"
+    assert (
+        oracle["provenance"]["base_commit"]
+        == "9aff911e809390163d2d7b08671145ad99f24496"
+    )
 
     # 1. All 70 tracked corpus files match the committed BASE oracle.
     tracked = oracle["tracked_corpus"]
@@ -517,7 +531,9 @@ def test_differential_against_committed_base_oracle_in_python():
             assert str(exc_info.value) == expected["error_message"], rel
 
     # 2. All 105 adversarial lines: only standalone plain-valid 2^64+1 and 40-digit flip from BASE err to ok.
-    plain_valid_2pow64_plus_1 = f'{{"con_spec_version":2,"con_spec_minor":{TWO_POW_64_PLUS_1}}}'
+    plain_valid_2pow64_plus_1 = (
+        f'{{"con_spec_version":2,"con_spec_minor":{TWO_POW_64_PLUS_1}}}'
+    )
     plain_valid_40 = f'{{"con_spec_version":2,"con_spec_minor":{FORTY_DIGITS}}}'
     adv_huge_diffs = []
     assert len(oracle["adversarial_lines"]) == 105
@@ -528,7 +544,11 @@ def test_differential_against_committed_base_oracle_in_python():
             assert entry["status"] == "err"
             frames = readcon.read_con_string(txt)
             assert len(frames) == 1
-            want = TWO_POW_64_PLUS_1 if line2 == plain_valid_2pow64_plus_1 else FORTY_DIGITS
+            want = (
+                TWO_POW_64_PLUS_1
+                if line2 == plain_valid_2pow64_plus_1
+                else FORTY_DIGITS
+            )
             assert frames[0].metadata["con_spec_minor"] == want
             adv_huge_diffs.append(line2)
             continue
@@ -553,7 +573,10 @@ def test_differential_against_committed_base_oracle_in_python():
 def test_corpus31_differential_against_base_oracle_in_python(tmp_path):
     pytest.importorskip("zstandard")
     oracle = json.loads(BASE_ORACLE_PATH.read_text(encoding="utf-8"))
-    assert oracle["provenance"]["base_commit"] == "9aff911e809390163d2d7b08671145ad99f24496"
+    assert (
+        oracle["provenance"]["base_commit"]
+        == "9aff911e809390163d2d7b08671145ad99f24496"
+    )
 
     # All 143 corpus31 files: only d14_minor_2pow64.con and v2_minor_2pow64.con
     # change from BASE rejection to accepted 2^64 (plus zstd files which Python enables).
