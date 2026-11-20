@@ -98,6 +98,7 @@ RECORD_NAMES = (
     (r"bench/results/r0174/", "Timing campaign r0174"),
     (r"bench/results/velocity_case\.json", "Velocity case"),
     (r"bench/results/hcn_loss\.csv", "HCN loss measurement"),
+    (r"data/limiter-r15/", "Limiter r15 read ladder"),
     (r"data/corpus_crosscheck\.json", "Corpus cross-check"),
     (r"data/corpus_paths\.json", "Corpus read paths"),
     (r"data/corpus31-results\.json", "CON 3.1 corpus results"),
