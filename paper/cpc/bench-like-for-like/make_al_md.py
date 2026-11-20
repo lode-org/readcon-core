@@ -47,7 +47,9 @@ def main() -> int:
         raise SystemExit(f"rgpot {rgpot.__version__} != {RGPOT_VERSION}")
     if ase.__version__ != ASE_VERSION:
         raise SystemExit(f"ase {ase.__version__} != {ASE_VERSION}")
-    atoms = bulk("Al", "fcc", a=LATTICE_A, cubic=True).repeat(REPEAT)
+    # The product is the 5x5x5 supercell. Each saved image is one MD step.
+    cell = bulk("Al", "fcc", a=LATTICE_A, cubic=True)
+    atoms = cell * REPEAT
     if len(atoms) < 100:
         raise SystemExit(f"atom count {len(atoms)} is below the hundreds")
     atoms.calc = RgpotCalculator("eam_al")
