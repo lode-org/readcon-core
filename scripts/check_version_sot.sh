@@ -220,6 +220,11 @@ if (root / clause_coverage).is_file():
     allow_exact.add(clause_coverage)
 else:
     print(f"PENDING: {clause_coverage} has not been measured")
+clause_recount = f"paper/cpc/data/spec/clause_coverage-{version}-recount.json"
+if (root / clause_recount).is_file():
+    allow_exact.add(clause_recount)
+else:
+    print(f"PENDING: {clause_recount} has not been measured")
 # Measured campaigns keep the package version they were timed with.
 # A later release must not rewrite that field to VERSION.
 recorded_results = {

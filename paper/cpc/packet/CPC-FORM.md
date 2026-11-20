@@ -27,11 +27,11 @@ build of the paper, for readcon-core 0.17.3, candidate commit `5e1430ddf6da5d2b0
 | System | Editorial Manager, `editorialmanager.com/comphy` | GFA, TPL, EM | Start from the "Submit your article" button on the journal page and confirm the route there. |
 | Article type | CPiP: programs archived in the CPC Program Library on Mendeley Data under an approved licence | GFA | Computer Programs in Physics: the paper has a Program Summary and describes a program. |
 | Licence | One of MIT, Apache-2.0, BSD 2/3-clause, GPLv2/3, LGPL, MPL-2.0, CeCILL, CeCILL-B, CC BY 4.0, CC0 1.0, CC BY-NC 3.0 | GFA | MIT, the Program Summary's licensing provision. |
-| Program Summary | Immediately after the abstract. Fields: Program title; CPC Library link (Technical Editor); Developer's repository link; Licensing provisions; Programming language; Supplementary material; Nature of problem, Solution method, Additional comments (each in the 50 to 250 word range the guide gives); References | GFA, TPL | All fields, in the CPC order, after the abstract. Word counts: Nature of problem 161, Solution method 211, Additional comments 121. |
+| Program Summary | Immediately after the abstract. Fields: Program title; CPC Library link (Technical Editor); Developer's repository link; Licensing provisions; Programming language; Supplementary material; Nature of problem, Solution method, Additional comments (each in the 50 to 250 word range the guide gives); References | GFA, TPL | All fields, in the CPC order, after the abstract. Word counts: Nature of problem 175, Solution method 220, Additional comments 122. |
 | Program files | Compressed archive with source, README (file layout, install, run), sample input and output of one full test run, manual if needed. Upload at "Attach Files". | GFA, TPL | `readcon-core.bundle`, the git bundle that holds the candidate commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f` with its whole history (`git clone readcon-core.bundle` checks it out), and `patches/`, a patch series that `git am --keep-cr` applies on commit `d0b7d3c7` in that clone to give the tree of that commit. The commit descends from `d0b7d3c7`, the head of pull request 80 to the main branch after the published release 0.17.3 (tag v0.17.3 at commit `12ca800b`), and its change log lists every change since 0.17.3 under 0.17.3. This commit is not a release tag. |
 | Source format | Editable source, `.tex` for LaTeX. A PDF is not a source file. | GFA | The LaTeX sources of `paper/cpc/src`. |
 | EM LaTeX build | No subfolders. `.tex`, `.bbl` and support files as item type Manuscript, images as Figure. Order: `.tex`, bibliography, styles, figures. | EMTEX | `make_em_flat.py` writes the flat set (Packet files below). |
-| Abstract | At most 250 words, stands alone, define uncommon abbreviations at first use | GFA | 160 words by `check_manuscript.py`'s count. |
+| Abstract | At most 250 words, stands alone, define uncommon abbreviations at first use | GFA | 208 words by `check_manuscript.py`'s count. |
 | Keywords | 1 to 7 | GFA | 5: geometry checkpoint; file format specification; saddle search; conformance corpus; nudged elastic band. |
 | Highlights | 3 to 5 bullets, each at most 85 characters with spaces, separate editable file with "highlights" in the name | GFA | 5 bullets of 76, 81, 79, 85, 83 characters in `paper/cpc/highlights.txt`, the same text as the highlights of `rg_main.tex`. |
 | Graphical abstract | Not mentioned in the CPC guide | GFA | `rg_main.tex` has a graphical abstract; upload it in the graphical abstract slot. |
@@ -44,7 +44,7 @@ build of the paper, for readcon-core 0.17.3, candidate commit `5e1430ddf6da5d2b0
 | Funding | Guide asks for disclosure | GFA | Section "Funding" carries the guide's sentence for research without specific funding. |
 | Generative AI in writing | Declare in a section before the references if used in writing | GFA | Section "Declaration of generative AI and AI-assisted technologies in the manuscript preparation process", the last section before the references, in Elsevier's form. |
 | Data availability | Option C: deposit, cite and link data, plus a data statement at submission | GFA | Section "Data availability" names readcon-core 0.17.3, its candidate commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, the digest `b49c0be7352a` of its library and the git bundle `readcon-core.bundle` of the supplementary material, and links https://github.com/lode-org/readcon-core, https://doi.org/10.5281/zenodo.18753567, https://github.com/lode-org/readcon-db. |
-| References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 79 references in the manuscript and 56 in the supplement; no undefined reference or citation in either pdfTeX log. |
+| References | Numbered, elsarticle-num, software cited with identifier | GFA | elsarticle-num; 91 references in the manuscript and 55 in the supplement; no undefined reference or citation in either pdfTeX log. |
 | Tables | Editable, no vertical rules | GFA | 11 tables; no tabular has a vertical rule. |
 | Preprint | Sharing a preprint anywhere at any time is allowed, and a preprint is not prior publication | GFA, SHARE | The preprint is on arXiv. |
 
@@ -54,7 +54,7 @@ build of the paper, for readcon-core 0.17.3, candidate commit `5e1430ddf6da5d2b0
 |---|---|
 | `DIR/em-flat/` from `python3 paper/cpc/scripts/make_em_flat.py --out DIR` (TeX Live 2025) | `rg_main.tex` first, then `rg_main.bbl`, then every other file of the set, then the figure PDFs |
 | `paper/cpc/highlights.txt` | Highlights |
-| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `e34d7c2a9500e0c514b23963f40363817ffc0cbb9ef185a9f6e644372adfd5d6`) | Supplementary material |
+| `paper/cpc/src/rg_supp.pdf` (66 pages, sha256 `19910adddca1e8e2c40349cffc4f4f4633c6baea9ded145c0a404e064fdbe182`) | Supplementary material |
 | `paper-cpc.tar.gz`, the directory `paper/cpc` (`paper/cpc/REPRO-ARCHIVE.md`) | Supplementary material |
 | `readcon-core.bundle` and `patches/` | Program files |
 | The author's cover letter | Cover letter |
@@ -65,7 +65,7 @@ build of the paper, for readcon-core 0.17.3, candidate commit `5e1430ddf6da5d2b0
 Data availability names readcon-core 0.17.3, candidate commit `5e1430ddf6da5d2b0d4652f47dce889e7895598f`, which
 `readcon-core.bundle` holds with its whole history, and links the concept record https://doi.org/10.5281/zenodo.18753567
 of readcon-core. This commit is not a release tag.
-`rg_main.pdf` has 62 pages, sha256 `02d2f241a3d9842d13a74387954290bd55c237bcee11d6d8e1cff256ad5df037`.
+`rg_main.pdf` has 64 pages, sha256 `4bdcc7b0799a507e7e97c93eef02164d710ea4b89ab14f277c6e2bfcefe432a2`.
 
 ## Form answers
 
@@ -76,11 +76,11 @@ of readcon-core. This commit is not a release tag.
 **Authors:** Rohit Goswami (corresponding), TurtleTech ehf., Fornhaga 24, 107 Reykjavík, Iceland. Email rgoswami@ieee.org. ORCID 0000-0002-2393-8056.
 The author enters the phone number in EM.
 
-**Abstract:** plain text, 1054 characters, 159 words (`check_manuscript.py` counts
-160 in the TeX source, limit 250). Macros expanded: `\corpusFiles` = 165, `\dlpackAtoms` = 65536, `\dlpackRatio` = 0.461, `\eFivePrefactorRatioFree` = 36.8.
+**Abstract:** plain text, 1251 characters, 207 words (`check_manuscript.py` counts
+208 in the TeX source, limit 250). Macros expanded: `\corpusFiles` = 165, `\dlpackAtoms` = 65536, `\dlpackRatio` = 0.461, `\eFivePrefactorRatioFree` = 36.8.
 
 ```
-Resuming saddle-point and rare-event searches across atomistic simulation codes requires checkpoints that preserve per-component atomic constraints, atom identifiers, velocity time units, and binary64 coordinates. CON is a text geometry format used across many codes. Here, we present readcon-core and the CON 3.1 specification, which formalize and extend it. On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the adatom height constraint changes the prefactor by a factor of 37. A borrowed DLPack view of 65536 atomic positions takes 0.461 times the cost of an explicit copy, the median of six runs. A second-line JSON header declares the grammar version and physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and readers for a given major version accept later minor revisions. Two conformance corpora of 165 legal and illegal files specify reader behavior, and every Python and C read path in readcon-core matches every corpus verdict.
+Saddle-point and rare-event searches are often stopped and resumed, sometimes in a different code from the one that started them. The geometry file used for the restart then has to keep the per-component atomic constraints, the atom identifiers, the time unit of the velocities and the binary64 coordinates. CON is a text geometry format used in eOn, ASE and other codes, and it has had no specification. The CON 3.1 specification formalizes and extends it, and readcon-core is its reference reader and writer. A JSON header on the second line of each frame declares the grammar version and the physical units, each coordinate row stores a three-bit constraint mask and an atom identifier, and a reader of a given major version accepts later minor revisions. Two conformance corpora of 165 legal and illegal files fix what a conforming reader returns, and every Python and C read path in readcon-core returns the verdict of every corpus file. On a platinum slab, a climbing-image band resumed from CON 3.1 reproduces the uninterrupted band exactly, whereas dropping the height constraint of the adatom changes the prefactor by a factor of 37. A borrowed DLPack view of 65536 atomic positions costs 0.461 times an explicit copy, the median of six runs.
 ```
 
 **Keywords:** geometry checkpoint; file format specification; saddle search; conformance corpus; nudged elastic band
