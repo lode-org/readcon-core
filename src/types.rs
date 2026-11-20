@@ -7659,6 +7659,24 @@ mod tests {
     }
 
     #[test]
+    fn builder_accepts_an_explicitly_nonperiodic_zero_cell() {
+        let mut builder = ConFrameBuilder::new([0.0; 3], [90.0; 3]);
+        builder
+            .set_metadata_json(r#"{"pbc":[false,false,false]}"#)
+            .unwrap();
+        builder.add_atom("H", 0.0, 0.0, 0.0, [false; 3], 0, 1.0);
+        let frame = builder.build().unwrap();
+        assert_eq!(frame.header.boxl, [0.0; 3]);
+    }
+
+    #[test]
+    fn check_cell_reality_rejects_impossible_angles() {
+        let err = check_cell_reality(&[10.0, 10.0, 10.0], &[10.0, 10.0, 170.0]).unwrap_err();
+        assert!(matches!(err, ParseError::ValidationError(_)));
+        assert!(err.to_string().contains("real cell"));
+    }
+
+    #[test]
     fn read_cell_validation_accepts_zero_length_unset_cell() {
         validate_read_cell(&[-0.0, 0.0, -0.0], &[90.0; 3], true)
             .expect("zero-length right-angle sentinel must stay valid");
