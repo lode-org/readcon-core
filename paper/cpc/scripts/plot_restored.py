@@ -76,6 +76,7 @@ def bars(name: str, labels, values, ylabel: str, colors=None) -> None:
 
 
 def dlpack() -> None:
+    """Median of the recorded repeats of each arm, with the type 7 interquartile range."""
     view, copy = [], []
     record = Path(os.environ.get("DLPACK_COST_RECORD", str(DATA / "dlpack_cost.txt")))
     for line in record.read_text().splitlines():
@@ -83,29 +84,27 @@ def dlpack() -> None:
             parts = line.split()
             view.append(int(parts[3]) / 1e3)
             copy.append(int(parts[5]) / 1e3)
+    if not view or len(view) != len(copy):
+        raise SystemExit(f"{record}: no repeats, or unequal view and copy repeats")
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
-    x = np.arange(len(view))
-    ax.bar(
-        x - 0.18,
-        view,
-        width=0.36,
-        color=TEAL,
-        edgecolor=BLACK,
-        linewidth=0.4,
-        label="DLPack view",
-    )
-    ax.bar(
-        x + 0.18,
-        copy,
-        width=0.36,
-        color=CORAL,
-        edgecolor=BLACK,
-        linewidth=0.4,
-        label="explicit copy",
-    )
-    ax.set_xlabel("repeat")
-    ax.set_ylabel("time (microseconds)")
-    ax.legend(frameon=False)
+    for x, values, color, label in (
+        (0, view, TEAL, "DLPack view"),
+        (1, copy, CORAL, "explicit copy"),
+    ):
+        low, median, high = np.percentile(values, [25, 50, 75], method="linear")
+        ax.bar(
+            x,
+            median,
+            width=0.5,
+            color=color,
+            edgecolor=BLACK,
+            linewidth=0.4,
+            label=label,
+            yerr=[[median - low], [high - median]],
+            error_kw={"ecolor": BLACK, "capsize": 4, "linewidth": 0.8},
+        )
+    ax.set_xticks([0, 1], ["DLPack view", "explicit copy"])
+    ax.set_ylabel(f"time (microseconds), median of {len(view)} repeats")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "dlpack")
