@@ -564,7 +564,9 @@ Version and spec queries
 C API
 ~~~~~
 
-Include ``readcon-core.h`` and link against ``libreadcon_core``.
+Include ``readcon-core.h`` and link against ``libreadcon_core`` built with the
+``capi`` Cargo feature (``cargo-c``, Meson, and CMake enable ``capi``
+automatically; direct Cargo builds pass ``--features capi``).
 
 A ranked write (``rkr_mpi_write_block``) stores a fresh file. The default
 store is Parallel: one pwrite per rank at the precomputed offsets.
@@ -847,15 +849,15 @@ header into ``readcon-core.h``; two headers, one pointer ABI.
 
 .. table::
 
-    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
-    | Variant | Cargo                                                      | ``libreadcon_core.so`` symbols                  | C header                                                      | Fortran module                                                                    | Link ``libmetatensor`` |
-    +=========+============================================================+=================================================+===============================================================+===================================================================================+========================+
-    | Lean    | default / ``chemfiles`` only                               | symbols **always linked** (stubs)               | ``READCON_CORE_HAS_METATENSOR`` optional (capability only)    | C decls always present; runtime ****``RKR_STATUS_FEATURE_DISABLED`` (``-11``)**** | no real blocks         |
-    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
-    | Fat     | ``--features metatensor`` (often ``chemfiles,metatensor``) | export all four blocks + ``rkr_mts_block_free`` | ``readcon-metatensor.h`` sets ``READCON_CORE_HAS_METATENSOR`` | full TensorBlock transfer                                                         | **yes**                |
-    +---------+------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
+    +---------+----------------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
+    | Variant | Cargo                                                                | ``libreadcon_core.so`` symbols                  | C header                                                      | Fortran module                                                                    | Link ``libmetatensor`` |
+    +=========+======================================================================+=================================================+===============================================================+===================================================================================+========================+
+    | Lean    | ``--features capi`` / ``capi,chemfiles``                             | symbols **always linked** (stubs)               | ``READCON_CORE_HAS_METATENSOR`` optional (capability only)    | C decls always present; runtime ****``RKR_STATUS_FEATURE_DISABLED`` (``-11``)**** | no real blocks         |
+    +---------+----------------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
+    | Fat     | ``--features capi,metatensor`` (often ``capi,chemfiles,metatensor``) | export all four blocks + ``rkr_mts_block_free`` | ``readcon-metatensor.h`` sets ``READCON_CORE_HAS_METATENSOR`` | full TensorBlock transfer                                                         | **yes**                |
+    +---------+----------------------------------------------------------------------+-------------------------------------------------+---------------------------------------------------------------+-----------------------------------------------------------------------------------+------------------------+
 
-After a fat ``cargo build --features metatensor``, ``build.rs`` writes
+After a fat ``cargo build --features capi,metatensor``, ``build.rs`` writes
 ``target/<profile>/readcon-metatensor.env`` (``READCON_METATENSOR_INCLUDE``,
 ``READCON_METATENSOR_LIB_DIR``) and adds link-search / ``-lmetatensor`` / rpath.
 ``scripts/run_fortran_tests.sh`` **sources** that file (with a glob fallback).
@@ -936,7 +938,7 @@ Sample labels ``atom_id``; properties ``xyz`` (0/1/2) or single ``energy``. No f
 
 .. code:: bash
 
-    cargo build --release --features chemfiles,metatensor
+    cargo build --release --features capi,chemfiles,metatensor
     set -a && source target/release/readcon-metatensor.env && set +a
     gcc -I include -I "$READCON_METATENSOR_INCLUDE" examples/c_metatensor_sample.c \
       -L target/release -L "$READCON_METATENSOR_LIB_DIR" \
@@ -951,7 +953,7 @@ Sample labels ``atom_id``; properties ``xyz`` (0/1/2) or single ``energy``. No f
        rkr_mts_block_free(block); */
 
 **CI / tests:** Rust ``metatensor_`` lib tests (C ABI + transfer). Fortran workflow
-runs lean (``chemfiles``) and fat (``chemfiles,metatensor``) via
+runs lean (``capi,chemfiles``) and fat (``capi,chemfiles,metatensor``) via
 ``scripts/run_fortran_tests.sh``. Fortran suite does **not** call chemfiles C++
 on CI (SIGFPE under gfortran traps); chemfiles stays on Rust CI. Python/Julia:
 no first-class TensorBlock helpers (matrix ``n/a``); use C or Rust.
@@ -1027,11 +1029,11 @@ Wrappers in ``fortran/ReadCon/src/readcon.f90`` over ``include/readcon-core.h``
 
 .. code:: bash
 
-    # Lean (chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)
-    READCON_FORTRAN_FEATURES=chemfiles scripts/run_fortran_tests.sh
+    # Lean (capi,chemfiles only): metatensor Fortran helpers return RKR_STATUS_FEATURE_DISABLED (-11)
+    READCON_FORTRAN_FEATURES=capi,chemfiles scripts/run_fortran_tests.sh
 
     # Fat: real mts_block_t* path (-cpp -DREADCON_HAS_METATENSOR + libmetatensor)
-    READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
+    READCON_FORTRAN_FEATURES=capi,chemfiles,metatensor scripts/run_fortran_tests.sh
 
 .. code:: fortran
 

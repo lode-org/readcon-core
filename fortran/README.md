@@ -36,8 +36,8 @@ A file whose cell holds one makes `it%next()` and `read_first_frame` return an i
 
 ```bash
 # From repo root — sets READCON_CORE_ROOT, always passes -cpp
-READCON_FORTRAN_FEATURES=chemfiles scripts/run_fortran_tests.sh
-READCON_FORTRAN_FEATURES=chemfiles,metatensor scripts/run_fortran_tests.sh
+READCON_FORTRAN_FEATURES=capi,chemfiles scripts/run_fortran_tests.sh
+READCON_FORTRAN_FEATURES=capi,chemfiles,metatensor scripts/run_fortran_tests.sh
 # test_conformance_goldens locks resources/conformance against golden/*.json
 ```
 
@@ -106,10 +106,10 @@ transposed into `pos(3,n)`).
 
 | Build | Cargo features | Fortran flags | Link | Helper behaviour |
 |-------|----------------|---------------|------|------------------|
-| **Lean** | `chemfiles` (no `metatensor`) | `-cpp` only | no `libmetatensor` | status **`RKR_STATUS_FEATURE_DISABLED` (-11)**, null block |
-| **Fat** | `chemfiles,metatensor` | `-cpp -DREADCON_HAS_METATENSOR` | `libmetatensor` + paths from env | real blocks / `SECTION_ABSENT` (-8) |
+| **Lean** | `capi,chemfiles` (no `metatensor`) | `-cpp` only | no `libmetatensor` | status **`RKR_STATUS_FEATURE_DISABLED` (-11)**, null block |
+| **Fat** | `capi,chemfiles,metatensor` | `-cpp -DREADCON_HAS_METATENSOR` | `libmetatensor` + paths from env | real blocks / `SECTION_ABSENT` (-8) |
 
-After `cargo build --release --features metatensor`, source **`target/release/readcon-metatensor.env`** (`READCON_METATENSOR_INCLUDE`, `READCON_METATENSOR_LIB_DIR`). `scripts/run_fortran_tests.sh` does this automatically for fat runs.
+After `cargo build --release --features capi,metatensor`, source **`target/release/readcon-metatensor.env`** (`READCON_METATENSOR_INCLUDE`, `READCON_METATENSOR_LIB_DIR`). `scripts/run_fortran_tests.sh` does this automatically for fat runs.
 
 | Helper | C symbol | Shape / status |
 |--------|----------|----------------|
@@ -123,7 +123,7 @@ C consumers: prefer `include/readcon-metatensor.h` (`metatensor.h` **first**). I
 
 ## Chemfiles (feature-enabled lib)
 
-Build with `cargo build --release --features chemfiles`, then:
+Build with `cargo build --release --features capi,chemfiles`, then:
 
 ```fortran
 fr = read_chemfiles_first("water.xyz")
