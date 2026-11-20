@@ -188,6 +188,10 @@ MEASUREMENT_RECORDS = frozenset(
         "paper/cpc/src/figures/generated/version_map.tex",
         # Names the readcon-core version of the library digest most of those records name.
         "paper/cpc/src/figures/generated/library_macros.tex",
+        # The like-for-like harness names the revisions it measured.
+        # Origin does not have those commits, so this clone cannot resolve them.
+        "paper/cpc/bench-like-for-like/README.md",
+        "paper/cpc/bench-like-for-like/pins.json",
         # The readcon-db db31 campaign records, copied verbatim from
         # lode-org/readcon-db ff1210e3. Each names the measured readcon-db
         # commit a584a288 and the commits it was compared against, not a tag
