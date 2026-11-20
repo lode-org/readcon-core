@@ -10,9 +10,9 @@ Full-frame, one thread (`RAYON_NUM_THREADS=1`, `n_threads=1`, OpenMP/MKL/OpenBLA
 - `readcon_release`: the PyPI wheel recorded in `pins.json`.
 - `ase`: `ase.io.read(path, index=':', format='eon')`.
 - `eon_legacy_python`: `loadcons` from eOn's Python fileio at the commit in `pins.json`, before that module delegated CON parsing to readcon. The rows below record this arm as `eon`.
-- `eon_svn_cxx`: `Matter::con2matter` from the eOn SVN client at the revision in `pins.json`. The client reads one frame per call, so the driver loops that `FILE` reader until only whitespace is left. Periodic boundaries start on and would rewrite coordinates into the minimum image; the driver calls `deactivatePeriodicBoundaries` first so the checksum is the parsed positions.
+- `eon_svn_cxx`: `Matter::con2matter` from the eOn SVN client at the revision in `pins.json`. The client reads one frame per call, so the driver loops that `FILE` reader until only whitespace is left. Periodic boundaries start on and would rewrite coordinates into the minimum image; the driver calls `deactivatePeriodicBoundaries` first so the checksum is the parsed positions. Per frame, `con2matter` stores two header lines, parses the three cell lengths and three angles, stores two more header lines, and parses the component count, the atom count of each component, and one mass per component. For each component it turns the symbol into an atomic number, skips the next line, and reads `x y z` plus one integer fixed flag. It does not read velocities or forces. The driver recomputes the three angles from the box vectors and copies the mass, atomic number, fixed flag, and positions. The Python side maps the atomic number through the client's symbol table and copies the one fixed flag onto all three axes. `read_con` on the readcon arms returns the symbol and the three fixed flags directly; the harness copies those, the mass, the coordinates, and the cell lengths and angles. The SVN arm's clock also includes `ensure_eon_svn`, which hashes the pinned sources and the Eigen tree before spawning the binary. The split of that clock is under r4.
 
-Each full-frame arm builds positions, cell, symbols, masses, and fixed flags for every frame.
+Each full-frame arm builds positions, cell, symbols, masses, and fixed flags for every frame. The SVN arm's symbol and fixed flags are the lookup and the expanded flag above, not a second parse of those fields.
 
 Coordinate-only, not used in the ratio column:
 
@@ -110,3 +110,40 @@ hash was timed inside each call. Its historical unequal-work quotient is
 `historical_unequal_ratio`, outside `ratio_over_tip`.
 
 Full values are in `results/r3-summary.csv`. Per-repeat times are in `results/r3-samples.csv`.
+
+## r4
+
+`synthetic` and `cuh2_band` were measured again at `n` 12, on the same pinned files, tip wheels, release wheel, and eOn revisions. `al_eam_md` was not remeasured; its `n` 12 rows stay in the r3 files. The arm order is the same ABBA rotation. Single-thread arms use `taskset -c 0` and one thread for Rayon and for the BLAS libraries. No repeat was discarded. Checksums match the r3 rows for both inputs. Ratios are over `readcon_tip_a`.
+
+| arm | work | threads | input | median_s | iqr_s | ratio_over_tip | aa_ratio |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| readcon_tip_a | full-frame | 1 | synthetic | 4.894836 | 0.209594 | 1 | 0.958632 |
+| readcon_tip_b | full-frame | 1 | synthetic | 4.692345 | 0.141615 | 0.958632 | 0.958632 |
+| readcon_release | full-frame | 1 | synthetic | 4.700546 | 0.154412 | 0.960307 | 0.958632 |
+| ase | full-frame | 1 | synthetic | 12.619416 | 0.434115 | 2.578108 | 0.958632 |
+| eon_svn_cxx | full-frame | 1 | synthetic | 2.660744 | 0.041397 | 0.543582 | 0.958632 |
+| eon_legacy_python | full-frame | 1 | synthetic | 5.982422 | 0.098501 | 1.222190 | 0.958632 |
+| readcon_positions_1 | coords-only | 1 | synthetic | 0.200997 | 0.038604 |  |  |
+| readcon_positions_all | coords-only | 8 | synthetic | 0.027451 | 0.008264 |  |  |
+| readcon_tip_a | full-frame | 1 | cuh2_band | 0.001186 | 0.000054 | 1 | 1.025915 |
+| readcon_tip_b | full-frame | 1 | cuh2_band | 0.001217 | 0.000136 | 1.025915 | 1.025915 |
+| readcon_release | full-frame | 1 | cuh2_band | 0.001180 | 0.000109 | 0.994729 | 1.025915 |
+| ase | full-frame | 1 | cuh2_band | 0.002680 | 0.000131 | 2.259222 | 1.025915 |
+| eon_svn_cxx | full-frame | 1 | cuh2_band | 0.015214 | 0.000160 | 12.824452 | 1.025915 |
+| eon_legacy_python | full-frame | 1 | cuh2_band | 0.001665 | 0.000055 | 1.403531 | 1.025915 |
+| readcon_positions_1 | coords-only | 1 | cuh2_band | 0.000660 | 0.000057 |  |  |
+| readcon_positions_all | coords-only | 8 | cuh2_band | 0.001899 | 0.000666 |  |  |
+
+The A/A band for an input is the closed interval between the `readcon_tip_a` and `readcon_tip_b` medians. A release median outside that interval is marked in `results/r4-compare.csv`. The rank test is a two-sided Mann-Whitney U on the twelve repeat times (`scipy.stats.mannwhitneyu`, method `auto`).
+
+| input | source | A/A ratio | A/A p | release ratio | release p | release outside A/A band |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| synthetic | r4 | 0.958632 | 0.010193 | 0.960307 | 0.030383 | no |
+| cuh2_band | r4 | 1.025915 | 0.099877 | 0.994729 | 0.435731 | yes |
+| al_eam_md | r3 | 1.001120 | 0.839860 | 0.922424 | 0.005108 | yes |
+
+On synthetic the release median (4.700546 s) lies between the two tip medians (4.692345 s and 4.894836 s), so the release-vs-tip gap is inside the A/A band. The two rank tests both separate `readcon_tip_a` from the other build and from release; release is not a shift beyond that band. On `cuh2_band` the release median is 6.25 microseconds below the lower tip median, which the flag calls outside, and the rank test does not separate those samples (p 0.435731). The release ratio is closer to 1 than the A/A ratio is. On `al_eam_md` the release median is below both tip medians and the rank test separates them (p 0.005108); that gap is outside the A/A band. Those aluminum times are the r3 samples, not a new run.
+
+The SVN clock on `cuh2_band` is not the four-frame parse. After the campaign, twelve repeats on cpu 0 with the thread variables at 1 timed the pieces of `_full_eon_svn`. The pin-check median is 0.014059 s. Starting the binary with no path, which exits before parsing, is 0.001178 s. The binary on `cuh2_band` is 0.001749 s, and the Python rebuild of that output is 0.000231 s. The whole call, pin check included, is 0.015942 s, next to the campaign arm median of 0.015214 s. The pin check is most of the 12.82 ratio. On `synthetic` the same pin check is inside a 2.597 s whole call (binary 1.734 s, Python rebuild 0.833 s), next to the campaign arm median of 2.661 s, which is 0.544 times the tip. There the time is the parse and the rebuild.
+
+Full values are in `results/r4-summary.csv`, `results/r4-compare.csv`, and `results/r4-overhead.csv`. Per-repeat times are in `results/r4-samples.csv`.
