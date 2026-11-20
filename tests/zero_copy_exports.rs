@@ -197,3 +197,56 @@ fn a_rust_set_x_on_a_parsed_frame_shows_in_an_earlier_export() {
         free_rkr_frame(handle);
     }
 }
+
+#[test]
+fn concurrent_exports_of_one_frame_share_its_columns() {
+    let frame = frame(0.0);
+    let columns = exports(&frame).map(|(f, column, len)| (f, column as usize, len));
+    let handle = Box::into_raw(Box::new(frame)) as usize;
+    let barrier = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                barrier.wait();
+                for _ in 0..200 {
+                    for (f, column, len) in columns {
+                        let t = export(handle as *const RKRConFrame, f, ptr::null());
+                        assert_eq!(data(t) as usize, column);
+                        assert_eq!(values(t, len).len(), len);
+                        unsafe { rkr_dlpack_delete(t) };
+                    }
+                }
+            });
+        }
+    });
+    unsafe { free_rkr_frame(handle as *mut RKRConFrame) };
+}
+
+#[test]
+fn concurrent_exports_of_one_locked_array_share_its_buffer() {
+    use readcon_core::array::Array;
+    let array = std::sync::Arc::new(std::sync::RwLock::new(
+        ndarray::ArrayD::from_shape_vec(ndarray::IxDyn(&[4, 3]), (0..12).map(f64::from).collect())
+            .unwrap(),
+    ));
+    let buffer = array.read().unwrap().as_ptr() as usize;
+    let barrier = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                barrier.wait();
+                for _ in 0..200 {
+                    let tensor = array
+                        .as_dlpack(
+                            dlpk::sys::DLDevice::cpu(),
+                            None,
+                            dlpk::sys::DLPackVersion::current(),
+                        )
+                        .unwrap();
+                    assert_eq!(tensor.data_ptr::<f64>().unwrap() as usize, buffer);
+                }
+            });
+        }
+    });
+    array.try_write().expect("every export was deleted")[[0, 0]] = 1.0;
+}
