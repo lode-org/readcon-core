@@ -216,6 +216,7 @@ fn sidecar_with_a_dropped_or_extra_offset_is_rescanned() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(feature = "capi")]
 #[test]
 fn null_handle_len_records_null_argument() {
     use readcon_core::ffi::{rkr_last_error_message, rkr_trajectory_len};

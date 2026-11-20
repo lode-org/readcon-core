@@ -46,6 +46,7 @@ pub fn block_owner(n_frames: usize, n_ranks: usize, i: usize) -> Option<usize> {
 ///
 /// # Safety
 /// `start` and `end` must be null or valid for writes.
+#[cfg(feature = "capi")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rkr_block_range(
     n_frames: u64,
@@ -156,6 +157,7 @@ mod with_mpi {
     ///
     /// # Safety
     /// MPI must be initialized; `size` and `rank` must be valid for writes.
+    #[cfg(feature = "capi")]
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn rkr_mpi_comm_info_f(
         comm_f: ffi::RSMPI_Fint,

@@ -278,7 +278,10 @@ fn is_fresh(path: &Path) -> bool {
 }
 
 fn usable(path: &Path, python_extension: bool) -> bool {
-    path.is_file() && is_fresh(path) && exports_symbol(path, "PyInit_readcon") == python_extension
+    path.is_file()
+        && is_fresh(path)
+        && exports_symbol(path, "PyInit_readcon") == python_extension
+        && (python_extension || exports_symbol(path, "rkr_library_version"))
 }
 
 fn cargo_lib(target_dir: &Path, features: &[&str]) -> PathBuf {
@@ -315,7 +318,7 @@ fn binding_libraries() -> (PathBuf, PathBuf) {
     } else if usable(&plain_side, false) {
         plain_side
     } else {
-        cargo_lib(&plain_dir, &[])
+        cargo_lib(&plain_dir, &["capi"])
     };
     let python = if usable(&debug, true) {
         debug
@@ -351,13 +354,13 @@ fn mpi_library() -> Option<PathBuf> {
     let dir = root.join("target/binding-mpi");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&root)
-        .args(["build", "--lib", "--features", "mpi", "--target-dir"])
+        .args(["build", "--lib", "--features", "capi,mpi", "--target-dir"])
         .arg(&dir)
         .env("MPICC", "mpicc");
     let status = cmd
         .status()
-        .unwrap_or_else(|err| panic!("cargo build --features mpi failed to start: {err}"));
-    assert!(status.success(), "cargo build --features mpi failed");
+        .unwrap_or_else(|err| panic!("cargo build --features capi,mpi failed to start: {err}"));
+    assert!(status.success(), "cargo build --features capi,mpi failed");
     let lib = dir.join("debug/libreadcon_core.so");
     assert!(
         lib.is_file() && exports_symbol(&lib, "rkr_mpi_write_block_f"),

@@ -11,12 +11,7 @@ use std::ptr;
 //=============================================================================
 // Version & Spec Constants (exported as #define by cbindgen)
 //=============================================================================
-/// Breaking-change major for the public C ABI.
-pub const RKR_ABI_VERSION_MAJOR: u32 = 2;
-/// Additive-change minor for the public C ABI.
-pub const RKR_ABI_VERSION_MINOR: u32 = 0;
-/// Layout revision for opaque handles and exported records.
-pub const RKR_ABI_LAYOUT_REVISION: u32 = 0;
+pub use crate::{RKR_ABI_LAYOUT_REVISION, RKR_ABI_VERSION_MAJOR, RKR_ABI_VERSION_MINOR};
 
 /// Returns the breaking-change major for the public C ABI.
 #[unsafe(no_mangle)]

@@ -240,13 +240,16 @@ fn a_smaller_indexed_frame_reuses_the_atom_spare() {
     let small = indexed(dir.path(), "small.con.gz", &copper(8));
     let loaded = read_con(&wide, 8).expect("wide");
     assert_eq!(loaded[0].atom_data.len(), 1200);
-    let c_frame = unsafe {
-        readcon_core::ffi::rkr_frame_to_c_frame(
-            &loaded[0] as *const ConFrame as *const readcon_core::ffi::RKRConFrame,
-        )
-    };
-    assert!(!c_frame.is_null());
-    unsafe { readcon_core::ffi::free_c_frame(c_frame) };
+    #[cfg(feature = "capi")]
+    {
+        let c_frame = unsafe {
+            readcon_core::ffi::rkr_frame_to_c_frame(
+                &loaded[0] as *const ConFrame as *const readcon_core::ffi::RKRConFrame,
+            )
+        };
+        assert!(!c_frame.is_null());
+        unsafe { readcon_core::ffi::free_c_frame(c_frame) };
+    }
     drop(loaded);
     let loaded = read_con(&small, 8).expect("small");
     assert_eq!(loaded[0].atom_data.len(), 8);
