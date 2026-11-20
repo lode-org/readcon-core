@@ -37,13 +37,21 @@ if [[ "$wrap_hash" != "$recorded" ]]; then
     die "wrap source_hash ${wrap_hash} and sha256 sidecar ${recorded} disagree"
 fi
 
-out="$(scratch_dir)"
-trap 'rm -rf "$out"' EXIT
-bash scripts/package-cxx.sh "$out" >/dev/null
-packaged="$(tr -d '[:space:]' < "${out}/${archive}.sha256")"
+work="$(scratch_dir)"
+trap 'rm -rf "$work"' EXIT
+first="$work/first"
+second="$work/second"
+bash scripts/package-cxx.sh "$first" >/dev/null
+bash scripts/package-cxx.sh "$second" >/dev/null
+packaged="$(tr -d '[:space:]' < "${first}/${archive}.sha256")"
+repeated="$(tr -d '[:space:]' < "${second}/${archive}.sha256")"
+
+if [[ "$packaged" != "$repeated" ]]; then
+    die "two cxx archive rebuilds differ: ${packaged} != ${repeated}"
+fi
 
 if [[ "$packaged" == "$recorded" ]]; then
-    echo "OK: cxx wrap pin ${recorded} matches the packaged tree"
+    echo "OK: two cxx rebuilds and wrap pin agree at ${recorded}"
     exit 0
 fi
 
