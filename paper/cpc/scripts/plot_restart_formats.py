@@ -103,7 +103,7 @@ def main():
     bar.solids.set_rasterized(False)
     bar.ax.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%.2f"))
     pf._theme_axes([ax], theme)
-    pf._save(fig, "restart_formats", None, width_cm=pf.SINGLE_CM)
+    pf._save(fig, "restart_formats_surface", None, width_cm=pf.SINGLE_CM)
 
 
 if __name__ == "__main__":

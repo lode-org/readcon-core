@@ -183,8 +183,6 @@ def timing_and_fairness() -> None:
         "h5py",
         "mda_h5md",
     ]
-    values = [med(key) for key in keys]
-    bars("timing", labels, values, "median wall time (s)")
     ratios = [med("readcon") / med(key) for key in keys[1:]]
     bars("fairness_ratios", labels[1:], ratios, "readcon median / peer median")
     rate_labels = [
@@ -584,9 +582,6 @@ def landscapes() -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "ase_mask")
-    # Morse restart energies are not in this npz set. Plot the held band again
-    # under the restart name only when a Morse record is absent, and keep the
-    # existing restart.pdf when this function is not asked to replace it.
     fig, ax = plt.subplots(figsize=(7.0, 3.2))
     velocity = json.loads((DATA / "novel" / "velocity.json").read_text())
     norms = np.array(velocity["atom_norm_A"])
@@ -596,71 +591,6 @@ def landscapes() -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     save(fig, "velocity_mislabel")
-
-
-def architecture() -> None:
-    fig, ax = plt.subplots(figsize=(7.0, 3.6))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 6)
-    ax.axis("off")
-    boxes = [
-        (0.4, 4.2, "C"),
-        (2.6, 4.2, "C++"),
-        (4.8, 4.2, "Julia"),
-        (7.0, 4.2, "Fortran"),
-        (3.6, 2.2, "Rust core"),
-        (3.6, 0.4, "Python / NumPy"),
-    ]
-    for (x, y, text), color in zip(boxes, CYCLE + (TEAL,)):
-        ax.add_patch(plt.Rectangle((x, y), 2.0, 1.0, facecolor=color, edgecolor=BLACK))
-        ax.text(
-            x + 1.0,
-            y + 0.5,
-            text,
-            ha="center",
-            va="center",
-            color="white" if color != SUNSHINE else BLACK,
-        )
-    save(fig, "architecture")
-
-
-def structures() -> None:
-    """Three orthographic views. xyzrender is used when it imports."""
-    try:
-        import xyzrender  # noqa: F401
-
-        used = "xyzrender"
-    except Exception:
-        used = "orthographic"
-    survey = OUT / "survey_frame.con"
-    band = DATA / "failure" / "bands" / "uninterrupted.npz"
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.6))
-    # Survey frame coordinates are the fifth field group of each atom line.
-    coords = []
-    for line in survey.read_text().splitlines():
-        parts = line.split()
-        if len(parts) >= 4:
-            try:
-                coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
-            except ValueError:
-                continue
-    coords = np.array(coords) if coords else np.zeros((1, 3))
-    panels = [
-        coords,
-        np.load(band)["pos"][len(np.load(band)["pos"]) // 2],
-        np.load(band)["pos"][0],
-    ]
-    titles = ["survey", "band middle", "band end"]
-    for ax, xyz, title, color in zip(axes, panels, titles, CYCLE):
-        ax.scatter(
-            xyz[:, 0], xyz[:, 1], s=18, c=color, edgecolors=BLACK, linewidths=0.3
-        )
-        ax.set_aspect("equal")
-        ax.set_title(title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-    fig.suptitle(used, fontsize=8)
-    save(fig, "structures")
 
 
 def main() -> None:
