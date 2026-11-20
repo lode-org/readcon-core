@@ -209,22 +209,46 @@ def timing_and_fairness() -> None:
     bars("roofline", rate_labels, rates, "frames per second")
 
 
-def mpi_plots() -> None:
+MPI_STRONG_SERIES = (
+    ("read", "con-100k-disk"),
+    ("read", "con-1e6-disk"),
+    ("read", "convel-disk"),
+    ("write", "con-100k-disk"),
+    ("write", "con-1e6-disk"),
+)
+
+
+def mpi_strong() -> None:
+    """Speedup against one rank for the named series of ``data/mpi/strong.csv``.
+
+    The record holds more series than the palette has colours. Five of the
+    sixteen series are named here. A named series that the record lacks is
+    an error.
+    """
     rows = list(csv.DictReader((DATA / "mpi" / "strong.csv").open()))
-    fig, ax = plt.subplots(figsize=(7.0, 3.2))
-    series = {}
+    series: dict[tuple[str, str], list[tuple[int, float]]] = {}
     for row in rows:
         if row["system"] != "readcon-core":
             continue
-        series.setdefault(f"{row['operation']} {row['mode']}", []).append(
+        series.setdefault((row["operation"], row["mode"]), []).append(
             (int(row["ranks"]), float(row["seconds"]))
         )
-    for (label, points), color in zip(series.items(), CYCLE):
-        points.sort()
+    missing = [key for key in MPI_STRONG_SERIES if key not in series]
+    if missing:
+        raise SystemExit(f"data/mpi/strong.csv has no series {missing}")
+    fig, ax = plt.subplots(figsize=(7.0, 3.2))
+    for key, color in zip(MPI_STRONG_SERIES, CYCLE):
+        points = sorted(series[key])
         ranks, seconds = zip(*points)
+        if ranks[0] != 1:
+            raise SystemExit(f"data/mpi/strong.csv series {key} has no one-rank row")
         base = seconds[0]
         ax.plot(
-            ranks, [base / s for s in seconds], marker="o", color=color, label=label
+            ranks,
+            [base / s for s in seconds],
+            marker="o",
+            color=color,
+            label=" ".join(key),
         )
     ax.plot([1, 8], [1, 8], color=BLACK, linewidth=0.6, linestyle="--")
     ax.set_xlabel("ranks")
@@ -620,7 +644,7 @@ def main() -> None:
         dlpack,
         toc,
         timing_and_fairness,
-        mpi_plots,
+        mpi_strong,
         weak_figure,
         db_plots,
         anatomy_and_errors,
