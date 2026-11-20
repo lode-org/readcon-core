@@ -114,6 +114,7 @@ FORMAT = [
     ["scripts/plot_perf.py"],
     ["scripts/gen_spec_supp.py", "--as-is"],
     ["scripts/plot_figures.py"],
+    ["scripts/plot_restart_ruhi.py"],
     ["scripts/plot_restart_formats.py"],
     ["scripts/plot_structures.py"],
     ["scripts/plot_supp.py"],
