@@ -42,19 +42,26 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
-      - name: Install Meson, Ninja, Valgrind
+      - name: Install Meson, Ninja, Valgrind, OpenMPI, and Cap'n Proto
         run: |
           python -m pip install meson ninja
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends valgrind libc6-dbg --fix-missing
+          sudo apt-get install -y --no-install-recommends \
+            valgrind libc6-dbg \
+            openmpi-bin libopenmpi-dev libclang-dev clang \
+            capnproto libcapnp-dev --fix-missing
 
       - name: C/C++ distribution gate
         run: bash scripts/check-cxx-dist.sh
 
       - name: Run Rust tests
+        env:
+          READCON_REQUIRE_TOOLS: "1"
         run: cargo test
 
       - name: Run Rust tests (C ABI)
+        env:
+          READCON_REQUIRE_TOOLS: "1"
         run: cargo test --features capi
 
       - name: Parallel library tests
