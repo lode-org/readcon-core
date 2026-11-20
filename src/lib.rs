@@ -84,6 +84,8 @@ pub mod rcso;
 pub mod storage_dtype;
 pub mod stream;
 pub mod trajectory;
+#[cfg(tsan_run)]
+mod tsan_canary;
 pub mod types;
 pub mod units;
 pub mod writer;

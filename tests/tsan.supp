@@ -1,6 +1,82 @@
-# Internal free-threaded CPython race with no readcon frames, reproduced on
-# CPython 3.14.10t:
+# Internal free-threaded CPython race. No readcon frame is on the stack.
+# Observed by tests/python/tsan_writer_stress.py under LD_PRELOAD of
+# libtsan.so.2, halt_on_error=0, on both interpreters:
+#
+# CPython 3.13.18 experimental free-threading:
+#   WARNING: ThreadSanitizer: data race
+#     Write of size 8 at 0x727000011000 by main thread:
+#       #0 free
+#       #1 _Py_HandlePending
+#     Previous write of size 8 at 0x727000011000 by thread T3:
+#       #0 malloc
+#       #1 _Py_brc_queue_object
+#     Thread T3 created by main thread at:
+#       #0 pthread_create
+#       #1 do_start_joinable_thread
+#   SUMMARY: ThreadSanitizer: data race python3.13t in _Py_HandlePending
+#
+# CPython 3.14.10 free-threading, the same pair. The previous write was
+# on Thread-3, still _Py_brc_queue_object, and the summary was
+# _Py_HandlePending. One rule names that function. A second rule for
+# _Py_brc_queue_object is not added.
 # https://github.com/python/cpython/issues/116910
 # https://github.com/python/cpython/issues/112536
 # https://github.com/python/cpython/issues/108219
 race:^_Py_HandlePending$
+
+# CPython 3.14.10 free-threading, tests/python/test_gil_free_threads.py,
+# 15 passed, halt_on_error=0, no suppression file. Two reports, both
+# between ThreadPoolExecutor threads, and neither stack has a readcon
+# frame. The test fills its only dict on the main thread before the
+# pool starts. Workers return tuples and do not write a shared dict.
+#
+# WARNING: ThreadSanitizer: data race
+#   Read of size 8 by thread T140:
+#     #0 memcpy
+#     #2 dictresize python3.14t
+#   Previous write of size 8 by thread T137:
+#     #0 memset
+#     #2 dictresize python3.14t
+#   Thread T140 'ThreadPoolExecu' created by main thread at:
+#     #0 pthread_create
+#     #1 do_start_joinable_thread
+#   Thread T137 'ThreadPoolExecu' created by main thread at:
+#     #0 pthread_create
+#     #1 do_start_joinable_thread
+# SUMMARY: ThreadSanitizer: data race in memcpy
+#
+# The second report is the same pair with memcpy on both sides
+# (threads T1465 and T1460), again only dictresize in python3.14t.
+race:^dictresize$
+
+# CPython free-threading. free from _PyObject_ClearFreeLists races malloc
+# from _Py_brc_queue_object. No readcon frame:
+#
+# WARNING: ThreadSanitizer: data race
+#   Write of size 8 by thread T11:
+#     #0 free
+#     #1 _PyObject_ClearFreeLists libpython3.14t.so
+#   Previous write of size 8 by thread T16:
+#     #0 malloc
+#     #1 _Py_brc_queue_object libpython3.14t.so
+#   Thread T11 'Thread-2 (initi' created by main thread at:
+#     #0 pthread_create
+#     #1 do_start_joinable_thread
+#   Thread T16 'Thread-7 (initi' created by main thread at:
+#     #0 pthread_create
+#     #1 do_start_joinable_thread
+# SUMMARY: ThreadSanitizer: data race in free
+#
+# The top frame is the interceptor. The rule names the CPython function
+# on the stack, the same way `_Py_HandlePending` does. It does not name
+# `free`, and it does not name `_Py_brc_queue_object`. A race whose
+# stack does not contain `_PyObject_ClearFreeLists` is not suppressed,
+# so a readcon frame stays visible.
+race:^_PyObject_ClearFreeLists$
+
+# The same object-stack merge, when a build's debug info names the
+# inlined function. This libpython has no `merge_queued_objects` symbol
+# (`nm` on libpython3.13t.so.1.0 and libpython3.14t.so.1.0). The pattern
+# is the function, so it cannot match a readcon frame. A stack that
+# does not name it is unaffected.
+race:^merge_queued_objects$
