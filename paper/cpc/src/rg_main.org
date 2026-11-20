@@ -918,10 +918,11 @@ The latest release tag is v\rcLatestTag{} at commit \texttt{\rcLatestTagCommit}.
 The deposited timing records name the measured commit {\ttfamily\expandafter\seqsplit\expandafter{\readconcommit}}.
 That commit is readcon-core~\rcMeasuredVersion{} and is not a release tag.
 The supplementary material holds that commit with its whole history as the git bundle readcon-core.bundle, and the scripts, records and TeX sources of this paper as the archive paper-cpc.tar.gz.
-Rebuild the library from that commit with \texttt{cargo build -{}-release}.
+Rebuild that commit with \texttt{cargo build -{}-release}, which builds the Rust library and the command-line program \texttt{readcon-core}.
+\texttt{-{}-features capi} adds the shared and static C libraries, and \texttt{-{}-features capi,zstd,parallel} adds compression and parallelism.
 
 Two commits of the main branch carry parts of the measured reader: \texttt{\readconpbccommit} gives the Python binding one periodic flag per cell vector, and \texttt{\readconrcidxcommit} (pull request~\readconrcidxpr) adds the frame index.
-In a checkout of that commit, \texttt{cargo build -{}-release} builds the Rust library, the shared and static C libraries and the command-line program \texttt{readcon-core}, and \texttt{-{}-features zstd,parallel} adds the two features.
+In a checkout of that commit, \texttt{cargo build -{}-release} builds the Rust library and the command-line program \texttt{readcon-core}, \texttt{-{}-features capi} adds the shared and static C libraries, and \texttt{-{}-features capi,zstd,parallel} adds compression and parallelism.
 \texttt{meson setup build} and \texttt{meson compile -C build} build the C libraries with their headers and a pkg-config file, and \texttt{python3 -m pip install .} builds and installs the Python module with both features.
 Cargo, pip and conda fetch the dependencies that the lock files of the library and of the paper environment pin, and the getting-started page of the documentation lists the CMake, Julia and Fortran commands \cite{readconDocsInstall}.
 readcon-core is distributed under the Massachusetts Institute of Technology (MIT) license, and the repository also carries the CON reader of eOn as a reference under the BSD 3-clause license of the eOn Development Team, which no build uses.
