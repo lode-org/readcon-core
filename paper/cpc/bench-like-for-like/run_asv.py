@@ -52,6 +52,10 @@ def main() -> int:
     prefix = WORK / "prefix-tip-a"
     if not prefix.is_dir():
         raise SystemExit("tip-a prefix is missing")
+    revision = subprocess.check_output(
+        ["git", "-C", str(arms.REPO), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
     cores = arms.nproc()
     name = arms.machine_hash()[:12]
     home = WORK / "asv-home"
@@ -85,6 +89,8 @@ def main() -> int:
             "spawn",
             "--machine",
             name,
+            "--set-commit-hash",
+            revision,
             "-b",
             "FullFrame|CoordsOne",
         ],
@@ -105,6 +111,8 @@ def main() -> int:
             "spawn",
             "--machine",
             name,
+            "--set-commit-hash",
+            revision,
             "-b",
             "CoordsAll",
         ],
